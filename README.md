@@ -13,3 +13,6 @@ We need an additional binary which we can offload the heavy lifting to and use t
  right location: models folder and also the libonnxruntime file depending on the platform
 - once we can get these things sorted we are in a good position to run and package
 the binary 
+
+## We are not going to parallelize anything, we are proud of being lazy
+- fix the speed etc when we hit issues with it

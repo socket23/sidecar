@@ -1,5 +1,6 @@
 use sidecar::embedder::Embedder;
 use sidecar::embedder::LocalEmbedder;
+use sidecar::git::get_last_commit_timestamp;
 use std::{env, path::Path};
 
 #[tokio::main]
@@ -9,10 +10,16 @@ async fn main() {
 
     // Now we try to create the embedder and see if thats working
     let current_path = env::current_dir().unwrap();
+    // Checking that the embedding logic is also working
     let embedder = LocalEmbedder::new(&current_path.join("models/all-MiniLM-L6-v2/")).unwrap();
     let result = embedder.embed("hello world!").unwrap();
     dbg!(result.len());
     dbg!(result);
+
+    // Checking that the last commit timestamp is working
+    let last_commit_timestamp =
+        get_last_commit_timestamp("/Users/skcd/scratch/sidecar", "src/embedder.rs").await;
+    dbg!(last_commit_timestamp.unwrap());
 }
 
 fn init_ort_dylib() {

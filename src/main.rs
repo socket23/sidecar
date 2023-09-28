@@ -1,4 +1,6 @@
-use sidecar::{embedder::embedder::LocalEmbedder, git::get_last_commit_timestamp};
+use sidecar::{
+    embedder::embedder::Embedder, embedder::embedder::LocalEmbedder, git::get_last_commit_timestamp,
+};
 use std::env;
 
 #[tokio::main]

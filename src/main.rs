@@ -1,7 +1,5 @@
-use sidecar::embedder::Embedder;
-use sidecar::embedder::LocalEmbedder;
-use sidecar::git::get_last_commit_timestamp;
-use std::{env, path::Path};
+use sidecar::{embedder::embedder::LocalEmbedder, git::get_last_commit_timestamp};
+use std::env;
 
 #[tokio::main]
 async fn main() {

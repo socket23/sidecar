@@ -1,10 +1,12 @@
 {
     "cSpell.words": [
+        "appender",
         "codestory",
         "embedder",
         "regexes",
         "revwalk",
-        "tanvity"
+        "tanvity",
+        "webserver"
     ],
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml"

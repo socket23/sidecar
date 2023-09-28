@@ -1,17 +1,15 @@
 use once_cell::sync::OnceCell;
-use tracing_subscriber::{
-    filter::{LevelFilter, Targets},
-    fmt,
-    prelude::*,
-};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use crate::application::config::configuration::Configuration;
 
 static LOGGER_GUARD: OnceCell<tracing_appender::non_blocking::WorkerGuard> = OnceCell::new();
 
-pub fn tracing_subscribe(config: Configuration) -> bool {
-    let env_filter_layer = fmt::layer();
-    let file_appender = tracing_appender::rolling::daily(config.log_dir(), "bloop.log");
+pub fn tracing_subscribe(config: &Configuration) -> bool {
+    let env_filter_layer = fmt::layer()
+        // Disable the hyper logs or else its a lot of log spam
+        .with_filter(EnvFilter::from_default_env().add_directive("hyper=off".parse().unwrap()));
+    let file_appender = tracing_appender::rolling::daily(config.log_dir(), "codestory.log");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     _ = LOGGER_GUARD.set(guard);
     let log_writer_layer = fmt::layer().with_writer(non_blocking).with_ansi(false);

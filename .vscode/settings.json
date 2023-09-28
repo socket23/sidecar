@@ -1,6 +1,11 @@
 {
     "cSpell.words": [
         "embedder",
-        "revwalk"
+        "regexes",
+        "revwalk",
+        "tanvity"
+    ],
+    "rust-analyzer.linkedProjects": [
+        "./Cargo.toml"
     ]
 }

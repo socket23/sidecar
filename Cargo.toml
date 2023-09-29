@@ -41,6 +41,9 @@ tower-http = { version = "0.4.1", features = ["auth", "cors", "catch-panic", "fs
 thiserror = "1.0.49"
 gix = "0.54.1"
 rand = "0.8.5"
+flume = "0.11.0"
+rayon = "1.8.0"
+either = "1.9.0"
 
 [build-dependencies]
 fs_extra = "1.3.0"

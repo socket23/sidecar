@@ -19,7 +19,8 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn initialize(config: Configuration) -> Self {
+    pub async fn initialize(mut config: Configuration) -> Self {
+        config.state_source.set_default_dir(&config.index_dir);
         Self { config }
     }
 

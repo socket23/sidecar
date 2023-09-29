@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
+use crate::repo::state::StateSource;
+
 #[derive(Serialize, Deserialize, Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Configuration {
@@ -25,6 +27,10 @@ pub struct Configuration {
     #[serde(default = "default_host")]
     /// Bind the webserver to `<port>`
     pub host: String,
+
+    #[clap(flatten)]
+    #[serde(default)]
+    pub state_source: StateSource,
 }
 
 impl Configuration {

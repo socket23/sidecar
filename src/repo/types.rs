@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 // Types of repo
@@ -41,4 +43,13 @@ pub enum SyncStatus {
 
     /// Successfully indexed
     Done,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Repository {
+    pub disk_path: PathBuf,
+    pub sync_status: SyncStatus,
+    pub last_commit_unix_secs: u64,
+    pub last_index_unix_secs: u64,
+    pub most_common_lang: Option<String>,
 }

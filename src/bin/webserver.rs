@@ -1,7 +1,7 @@
 // This is where we will create the default webserver for running the binary
 // locally
 
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::Extension;
 use clap::Parser;
 use sidecar::application::{application::Application, config::configuration::Configuration};

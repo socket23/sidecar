@@ -1,9 +1,11 @@
 {
     "cSpell.words": [
         "appender",
+        "canonicalize",
         "codestory",
         "embedder",
         "regexes",
+        "reporef",
         "revwalk",
         "tanvity",
         "webserver"

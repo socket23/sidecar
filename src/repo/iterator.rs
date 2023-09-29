@@ -65,7 +65,7 @@ fn should_index<P: AsRef<Path>>(p: &P) -> bool {
                     .iter()
                     .filter_map(|source| match Regex::new(source) {
                         Ok(r) => Some(r),
-                        Err(e) => None,
+                        Err(_) => None,
                     })
                     .collect();
 

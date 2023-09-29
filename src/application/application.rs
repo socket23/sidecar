@@ -9,6 +9,8 @@ use tracing_subscriber::{
     prelude::*,
 };
 
+use crate::repo::state::RepositoryPool;
+
 use super::{config::configuration::Configuration, logging::tracing::tracing_subscribe};
 
 static LOGGER_INSTALLED: OnceCell<bool> = OnceCell::new();
@@ -16,12 +18,14 @@ static LOGGER_INSTALLED: OnceCell<bool> = OnceCell::new();
 #[derive(Debug, Clone)]
 pub struct Application {
     pub config: Configuration,
+    pub repo_pool: RepositoryPool,
 }
 
 impl Application {
-    pub async fn initialize(mut config: Configuration) -> Self {
+    pub async fn initialize(mut config: Configuration) -> anyhow::Result<Self> {
         config.state_source.set_default_dir(&config.index_dir);
-        Self { config }
+        let repo_pool = config.state_source.initialize_pool()?;
+        Ok(Self { config, repo_pool })
     }
 
     pub fn install_logging(config: &Configuration) {

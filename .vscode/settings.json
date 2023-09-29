@@ -4,6 +4,7 @@
         "canonicalize",
         "codestory",
         "embedder",
+        "notifyqueue",
         "regexes",
         "reporef",
         "revwalk",

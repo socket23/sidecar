@@ -1,6 +1,16 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::SystemTime,
+};
 
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug)]
+pub struct RepoMetadata {
+    // keep track of the last commit timestamp here and nothing else for now
+    pub last_commit_unix_secs: Option<u64>,
+}
 
 // Types of repo
 #[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Debug)]
@@ -26,6 +36,10 @@ impl RepoRef {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn is_local(&self) -> bool {
+        matches!(self.backend, Backend::Local)
     }
 }
 
@@ -110,4 +124,18 @@ impl Repository {
             most_common_lang: None,
         }
     }
+
+    pub(crate) fn sync_done_with(&mut self, metadata: Arc<RepoMetadata>) {
+        self.last_index_unix_secs = get_unix_time(SystemTime::now());
+        self.last_commit_unix_secs = metadata.last_commit_unix_secs.unwrap_or(0);
+        self.most_common_lang = Some("not_set".to_owned());
+
+        self.sync_status = SyncStatus::Done;
+    }
+}
+
+fn get_unix_time(time: SystemTime) -> u64 {
+    time.duration_since(SystemTime::UNIX_EPOCH)
+        .expect("system time error")
+        .as_secs()
 }

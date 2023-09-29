@@ -31,6 +31,11 @@ pub struct Configuration {
     #[clap(flatten)]
     #[serde(default)]
     pub state_source: StateSource,
+
+    #[clap(short, long, default_value_t = default_parallelism())]
+    #[serde(default = "default_parallelism")]
+    /// Maximum number of parallel background threads
+    pub max_threads: usize,
 }
 
 impl Configuration {
@@ -57,4 +62,8 @@ fn default_model_dir() -> PathBuf {
 
 fn default_host() -> String {
     "127.0.0.1".to_owned()
+}
+
+pub fn default_parallelism() -> usize {
+    std::thread::available_parallelism().unwrap().get()
 }

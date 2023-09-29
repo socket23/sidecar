@@ -5,6 +5,8 @@ which might be present here
 
 use std::path::{Path, PathBuf};
 
+use ignore::WalkBuilder;
+
 use super::iterator::should_index_entry;
 
 pub const AVG_LINE_LEN: u64 = 30;
@@ -18,7 +20,7 @@ pub struct FileWalker {
 impl FileWalker {
     pub fn index_directory(dir: impl AsRef<Path>) -> FileWalker {
         // note: this WILL observe .gitignore files for the respective repos.
-        let walker = ignore::WalkBuilder::new(&dir)
+        let walker = WalkBuilder::new(&dir)
             .standard_filters(true)
             .hidden(false)
             .filter_entry(should_index_entry)

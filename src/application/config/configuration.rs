@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -36,12 +36,28 @@ pub struct Configuration {
     #[serde(default = "default_parallelism")]
     /// Maximum number of parallel background threads
     pub max_threads: usize,
+
+    #[clap(short, long, default_value_t = default_buffer_size())]
+    #[serde(default = "default_buffer_size")]
+    /// Size of memory to use for file indexes
+    pub buffer_size: usize,
 }
 
 impl Configuration {
     /// Directory where logs are written to
     pub fn log_dir(&self) -> PathBuf {
         self.index_dir.join("logs")
+    }
+
+    pub fn index_version_mismatch(&self) -> bool {
+        // let current: String = read_file_or_default(self.version_file.as_ref().unwrap()).unwrap();
+
+        // !current.is_empty() && current != SCHEMA_VERSION
+        false
+    }
+
+    pub fn index_path(&self, name: impl AsRef<Path>) -> impl AsRef<Path> {
+        self.index_dir.join(name)
     }
 }
 
@@ -66,4 +82,8 @@ fn default_host() -> String {
 
 pub fn default_parallelism() -> usize {
     std::thread::available_parallelism().unwrap().get()
+}
+
+const fn default_buffer_size() -> usize {
+    100_000_000
 }

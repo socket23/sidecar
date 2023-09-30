@@ -3,6 +3,52 @@ use regex::Regex;
 use smallvec::SmallVec;
 use std::{collections::HashMap, path::Path};
 
+use crate::application::background::SyncPipes;
+
+pub trait FileSource {
+    fn len(&self) -> usize;
+    fn for_each(self, signal: &SyncPipes, iterator: impl Fn(RepoDirectoryEntry) + Sync + Send);
+}
+
+impl RepoDirectoryEntry {
+    pub fn path(&self) -> Option<&str> {
+        match self {
+            Self::File(file) => Some(file.path.as_str()),
+            Self::Dir(dir) => Some(dir.path.as_str()),
+            Self::Other => None,
+        }
+    }
+
+    pub fn buffer(&self) -> Option<&str> {
+        match self {
+            Self::File(file) => Some(file.buffer.as_str()),
+            _ => None,
+        }
+    }
+}
+
+pub struct RepositoryDirectory {
+    pub path: String,
+}
+
+pub struct RepositoryFile {
+    pub path: String,
+    pub buffer: String,
+}
+
+pub enum RepoDirectoryEntry {
+    Dir(RepositoryDirectory),
+    File(RepositoryFile),
+    Other,
+}
+
+#[derive(Hash, Eq, PartialEq)]
+pub enum FileType {
+    File,
+    Directory,
+    NotTracked,
+}
+
 pub fn should_index_entry(de: &ignore::DirEntry) -> bool {
     should_index(&de.path())
 }

@@ -7,10 +7,12 @@ use axum::Extension;
 use clap::Parser;
 use sidecar::{
     application::{application::Application, config::configuration::Configuration},
-    webserver::repos,
+    repo::types::{Backend, RepoRef},
+    webserver::repos::{self, RepoParams},
 };
 use std::net::SocketAddr;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
+use tracing::debug;
 
 pub type Router<S = Application> = axum::Router<S>;
 
@@ -59,6 +61,7 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
 fn repo_router() -> Router {
     use axum::routing::*;
     Router::new()
+        // 127.0.0.1:42424/api/repo/sync?backend=local&name=/Users/skcd/scratch/ide
         .route("/sync", get(sidecar::webserver::repos::sync))
         .route("/status", get(sidecar::webserver::repos::index_status))
 }

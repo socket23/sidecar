@@ -3096,6 +3096,7 @@ name = "sidecar"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "axum",
  "clap",

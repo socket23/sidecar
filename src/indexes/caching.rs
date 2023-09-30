@@ -12,15 +12,70 @@ use serde::Serialize;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
+// Indexes might require their own keys, we know tantivy is fucked because
+// it expects a key which is unique to the doc schema which you put in...
+// so if we query it with the wrong schema it blows in your face :|
+// for now we care about tantivy so lets get that working
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct CacheKeys {
+    tantivy: String,
+}
+
+impl CacheKeys {
+    pub fn tantivy(&self) -> &str {
+        &self.tantivy
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Eq)]
+pub struct FreshValue<T> {
+    // default value is `false` on deserialize
+    pub(crate) fresh: bool,
+    pub(crate) value: T,
+}
+
+impl<T: Default> FreshValue<T> {
+    fn fresh_default() -> Self {
+        Self {
+            fresh: true,
+            value: Default::default(),
+        }
+    }
+}
+
+impl<T> PartialEq for FreshValue<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.value.eq(&other.value)
+    }
+}
+
+impl<T> FreshValue<T> {
+    fn stale(value: T) -> Self {
+        Self {
+            fresh: false,
+            value,
+        }
+    }
+}
+
+impl<T> From<T> for FreshValue<T> {
+    fn from(value: T) -> Self {
+        Self { fresh: true, value }
+    }
+}
+
 /// This is the storage for the underlying struct which we will use to store
 /// anything and everything
-pub struct FSStorage<T: Serialize + DeserializeOwned> {
+pub struct FSStorage<T: Serialize + DeserializeOwned + PartialEq> {
     source: T,
     path: PathBuf,
     write_lock: Mutex<()>,
 }
 
-impl<T: Serialize + DeserializeOwned> FSStorage<T> {
+impl<T: Serialize + DeserializeOwned + PartialEq> FSStorage<T> {
     pub fn new(source: T, path: PathBuf) -> Self {
         Self {
             source,

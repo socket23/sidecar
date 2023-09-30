@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{fs, path::Path};
 
 use anyhow::Context;
@@ -11,13 +12,17 @@ use tantivy::{
     DocAddress, Document, IndexReader, IndexWriter, Score,
 };
 use tokio::sync::RwLock;
+use tracing::debug;
 
+use crate::application::config::configuration::Configuration;
+use crate::repo::state::RepositoryPool;
 use crate::{
     application::background::SyncPipes,
     repo::types::{RepoMetadata, RepoRef, Repository},
 };
 
 use super::query::Query;
+use super::schema::File;
 
 /// A wrapper around `tantivy::IndexReader`.
 ///
@@ -156,4 +161,62 @@ impl<T: Indexable> Indexer<T> {
 pub struct SearchResults<'a, T> {
     pub docs: Box<dyn Iterator<Item = T> + Sync + Send + 'a>,
     pub metadata: MultiFruit,
+}
+
+pub struct Indexes {
+    pub file: Indexer<File>,
+    write_mutex: tokio::sync::Mutex<()>,
+}
+
+impl Indexes {
+    pub async fn new(repo_pool: RepositoryPool, config: Arc<Configuration>) -> Result<Self> {
+        // Figure out how to do version mismatch
+        // if config.state_source.index_version_mismatch() {
+        //     // we don't support old schemas, and tantivy will hard
+        //     // error if we try to open a db with a different schema.
+        //     std::fs::remove_dir_all(config.index_path("repo"))?;
+        //     std::fs::remove_dir_all(config.index_path("content"))?;
+
+        //     let mut refs = vec![];
+        //     // knocking out our current file caches will force re-indexing qdrant
+        //     repo_pool.for_each(|reporef, repo| {
+        //         refs.push(reporef.to_owned());
+        //         repo.last_index_unix_secs = 0;
+        //     });
+
+        //     for reporef in refs {
+        //         FileCache::for_repo(&sql, semantic.as_ref(), &reporef)
+        //             .delete()
+        //             .await?;
+        //     }
+
+        //     if let Some(ref semantic) = semantic {
+        //         semantic.reset_collection_blocking().await?;
+        //     }
+        // }
+        // config.source.save_index_version()?;
+
+        Ok(Self {
+            file: Indexer::create(
+                File::new(),
+                config.index_path("content").as_ref(),
+                config.buffer_size,
+                config.max_threads,
+            )?,
+            write_mutex: Default::default(),
+        })
+    }
+
+    // pub async fn writers(&self) -> Result<GlobalWriteHandle<'_>> {
+    //     unimplemented!("Indexes::writers");
+    //     // let id: u64 = rand::random();
+    //     // debug!(id, "waiting for other writers to finish");
+    //     // let _write_lock = self.write_mutex.lock().await;
+    //     // debug!(id, "lock acquired");
+
+    //     // Ok(GlobalWriteHandle {
+    //     //     handles: vec![self.repo.write_handle()?, self.file.write_handle()?],
+    //     //     _write_lock,
+    //     // })
+    // }
 }

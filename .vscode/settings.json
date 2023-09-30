@@ -12,7 +12,8 @@
         "reporef",
         "revwalk",
         "tanvity",
-        "webserver"
+        "webserver",
+        "yolo"
     ],
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml"

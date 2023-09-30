@@ -4,12 +4,13 @@ use std::{
     time::SystemTime,
 };
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub struct RepoMetadata {
     // keep track of the last commit timestamp here and nothing else for now
-    pub last_commit_unix_secs: Option<u64>,
+    pub last_commit_unix_secs: Option<i64>,
 }
 
 // Types of repo
@@ -81,6 +82,9 @@ pub enum SyncStatus {
 
     /// Removed from the index
     Removed,
+
+    /// This was removed from the remote url, so yolo
+    RemoteRemoved,
 }
 
 impl SyncStatus {
@@ -93,7 +97,7 @@ impl SyncStatus {
 pub struct Repository {
     pub disk_path: PathBuf,
     pub sync_status: SyncStatus,
-    pub last_commit_unix_secs: u64,
+    pub last_commit_unix_secs: i64,
     pub last_index_unix_secs: u64,
     pub most_common_lang: Option<String>,
 }
@@ -131,6 +135,20 @@ impl Repository {
         self.most_common_lang = Some("not_set".to_owned());
 
         self.sync_status = SyncStatus::Done;
+    }
+
+    /// Pre-scan the repository to provide supporting metadata for a
+    /// new indexing operation
+    pub async fn get_repo_metadata(&self) -> Arc<RepoMetadata> {
+        let last_commit_unix_secs = gix::open(&self.disk_path)
+            .context("failed to open git repo")
+            .and_then(|repo| Ok(repo.head()?.peel_to_commit_in_place()?.time()?.seconds))
+            .ok();
+
+        RepoMetadata {
+            last_commit_unix_secs,
+        }
+        .into()
     }
 }
 

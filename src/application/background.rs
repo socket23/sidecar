@@ -16,6 +16,8 @@ use crate::repo::state::RepoError;
 use crate::repo::types::RepoMetadata;
 use crate::repo::types::Repository;
 use crate::repo::types::{RepoRef, SyncStatus};
+use crate::webserver::repos::QueueState;
+use crate::webserver::repos::QueuedRepoStatus;
 
 use super::application::Application;
 use super::config::configuration::Configuration;
@@ -47,6 +49,86 @@ pub struct SyncQueue {
 
     /// Report progress from indexing runs
     pub(crate) progress: ProgressStream,
+}
+
+impl SyncQueue {
+    pub fn start(config: Arc<Configuration>) -> Self {
+        let (progress, _) = tokio::sync::broadcast::channel(config.max_threads * 2);
+
+        let instance = Self {
+            tickets: Arc::new(Semaphore::new(config.max_threads)),
+            runner: BackgroundExecutor::start(config.clone()),
+            active: Default::default(),
+            queue: Default::default(),
+            progress,
+        };
+
+        {
+            let instance = instance.clone();
+
+            // We spawn the queue handler on the background executor
+            instance.runner.clone().spawn(async move {
+                while let (Ok(permit), next) = tokio::join!(
+                    instance.tickets.clone().acquire_owned(),
+                    instance
+                        .queue
+                        .pop_if(|h| !instance.active.contains(&h.reporef))
+                ) {
+                    let active = Arc::clone(&instance.active);
+                    match active
+                        .insert_async(next.reporef.clone(), next.clone())
+                        .await
+                    {
+                        Ok(_) => {
+                            tokio::task::spawn(async move {
+                                info!(?next.reporef, "indexing");
+
+                                let result = next.run(permit).await;
+                                _ = active.remove(&next.reporef);
+
+                                debug!(?result, "sync finished");
+                            });
+                        }
+                        Err((_, next)) => {
+                            // this shouldn't happen, but we can handle it gracefully
+                            instance.queue.push(next).await
+                        }
+                    };
+                }
+            });
+        }
+
+        instance
+    }
+
+    pub fn bind(&self, app: Application) -> BoundSyncQueue {
+        BoundSyncQueue(app, self.clone())
+    }
+
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Progress> {
+        self.progress.subscribe()
+    }
+
+    pub(crate) async fn read_queue(&self) -> Vec<QueuedRepoStatus> {
+        let mut output = vec![];
+        self.active
+            .scan_async(|_, handle| {
+                output.push(QueuedRepoStatus {
+                    reporef: handle.reporef.clone(),
+                    state: QueueState::Active,
+                });
+            })
+            .await;
+
+        for handle in self.queue.get_list().await {
+            output.push(QueuedRepoStatus {
+                reporef: handle.reporef.clone(),
+                state: QueueState::Queued,
+            });
+        }
+
+        output
+    }
 }
 
 /// Asynchronous queue with await semantics for popping the front
@@ -118,7 +200,86 @@ pub struct BackgroundExecutor {
     sender: flume::Sender<Task>,
 }
 
-// pub struct BoundSyncQueue(pub(crate) Application, pub(crate) SyncQueue);
+// This is bound the to the application and the sync queue which will run things
+// in the background.
+pub struct BoundSyncQueue(pub(crate) Application, pub(crate) SyncQueue);
+
+impl BoundSyncQueue {
+    /// Enqueue repos for syncing with the current configuration.
+    ///
+    /// Skips any repositories in the list which are already queued or being synced.
+    /// Returns the number of new repositories queued for syncing.
+    pub(crate) async fn enqueue_sync(self, repositories: Vec<RepoRef>) -> usize {
+        let mut num_queued = 0;
+
+        for reporef in repositories {
+            if self.1.queue.contains(&reporef).await || self.1.active.contains(&reporef) {
+                continue;
+            }
+
+            info!(?reporef, "queueing for sync");
+            let handle = SyncHandle::new(self.0.clone(), reporef, self.1.progress.clone()).await;
+            self.1.queue.push(handle).await;
+            num_queued += 1;
+        }
+
+        num_queued
+    }
+
+    /// Block until the repository sync & index process is complete.
+    ///
+    /// Returns the new status.
+    pub(crate) async fn block_until_synced(self, reporef: RepoRef) -> anyhow::Result<SyncStatus> {
+        let handle = SyncHandle::new(self.0.clone(), reporef, self.1.progress.clone()).await;
+        let finished = handle.notify_done();
+        self.1.queue.push(handle).await;
+        Ok(finished.recv_async().await?)
+    }
+
+    pub(crate) async fn remove(self, reporef: RepoRef) -> Option<()> {
+        let active = self
+            .1
+            .active
+            .update_async(&reporef, |_, v| {
+                v.pipes.remove();
+                v.set_status(|_| SyncStatus::Removed);
+            })
+            .await;
+
+        if active.is_none() {
+            self.0
+                .repo_pool
+                .update_async(&reporef, |_k, v| v.mark_removed())
+                .await?;
+
+            self.enqueue_sync(vec![reporef]).await;
+        }
+
+        Some(())
+    }
+
+    pub(crate) async fn cancel(&self, reporef: RepoRef) {
+        self.1
+            .active
+            .update_async(&reporef, |_, v| {
+                v.set_status(|_| SyncStatus::Cancelling);
+                v.pipes.cancel();
+            })
+            .await;
+    }
+
+    pub(crate) async fn startup_scan(self) -> anyhow::Result<()> {
+        let Self(Application { repo_pool, .. }, _) = &self;
+
+        let mut repos = vec![];
+        repo_pool.scan_async(|k, _| repos.push(k.clone())).await;
+
+        self.enqueue_sync(repos).await;
+
+        Ok(())
+    }
+}
+
 impl BackgroundExecutor {
     fn start(config: Arc<Configuration>) -> Self {
         let (sender, receiver) = flume::unbounded();
@@ -183,6 +344,8 @@ impl BackgroundExecutor {
 enum ControlEvent {
     /// Cancel whatever's happening, and return
     Cancel,
+    /// Remove, is when the user has asked us to remove it for whatever reason
+    Remove,
 }
 
 pub struct SyncPipes {
@@ -215,22 +378,31 @@ impl SyncPipes {
     }
 
     pub(crate) fn is_cancelled(&self) -> bool {
-        use ControlEvent::*;
-        matches!(self.event.read().unwrap().as_ref(), Some(Cancel))
+        matches!(
+            self.event.read().unwrap().as_ref(),
+            Some(ControlEvent::Cancel)
+        )
     }
 
     pub(crate) fn is_removed(&self) -> bool {
-        matches!(self.event.read().unwrap().as_ref(), Some(Remove))
+        matches!(
+            self.event.read().unwrap().as_ref(),
+            Some(ControlEvent::Remove)
+        )
     }
 
     pub(crate) fn cancel(&self) {
         *self.event.write().unwrap() = Some(ControlEvent::Cancel);
     }
+
+    pub(crate) fn remove(&self) {
+        *self.event.write().unwrap() = Some(ControlEvent::Remove);
+    }
 }
 
-pub(crate) struct SyncHandle {
-    pub(crate) reporef: RepoRef,
-    pub(super) pipes: SyncPipes,
+pub struct SyncHandle {
+    pub reporef: RepoRef,
+    pub pipes: SyncPipes,
     app: Application,
     exited: flume::Sender<SyncStatus>,
     exit_signal: flume::Receiver<SyncStatus>,

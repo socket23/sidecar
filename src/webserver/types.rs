@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use axum::Json;
 use std::borrow::Cow;
 
@@ -16,6 +17,90 @@ pub(crate) enum Response<'a> {
 impl<T: ApiResponse + Send + Sync + 'static> From<T> for Response<'static> {
     fn from(value: T) -> Self {
         Self::Ok(Box::new(value))
+    }
+}
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+#[derive(Debug)]
+pub struct Error {
+    status: StatusCode,
+    body: EndpointError<'static>,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.body.message)
+    }
+}
+
+impl Error {
+    fn new(kind: ErrorKind, message: impl Into<Cow<'static, str>>) -> Error {
+        let status = match kind {
+            ErrorKind::Configuration
+            | ErrorKind::Unknown
+            | ErrorKind::UpstreamService
+            | ErrorKind::Internal
+            | ErrorKind::Custom => StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorKind::User => StatusCode::BAD_REQUEST,
+            ErrorKind::NotFound => StatusCode::NOT_FOUND,
+        };
+
+        let body = EndpointError {
+            kind,
+            message: message.into(),
+        };
+
+        Error { status, body }
+    }
+
+    fn with_status(mut self, status_code: StatusCode) -> Self {
+        self.status = status_code;
+        self
+    }
+
+    fn internal<S: std::fmt::Display>(message: S) -> Self {
+        Error {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            body: EndpointError {
+                kind: ErrorKind::Internal,
+                message: message.to_string().into(),
+            },
+        }
+    }
+
+    fn user<S: std::fmt::Display>(message: S) -> Self {
+        Error {
+            status: StatusCode::BAD_REQUEST,
+            body: EndpointError {
+                kind: ErrorKind::User,
+                message: message.to_string().into(),
+            },
+        }
+    }
+
+    fn not_found<S: std::fmt::Display>(message: S) -> Self {
+        Error {
+            status: StatusCode::NOT_FOUND,
+            body: EndpointError {
+                kind: ErrorKind::NotFound,
+                message: message.to_string().into(),
+            },
+        }
+    }
+
+    fn unauthorized<S: std::fmt::Display>(message: S) -> Self {
+        Error {
+            status: StatusCode::UNAUTHORIZED,
+            body: EndpointError {
+                kind: ErrorKind::User,
+                message: message.to_string().into(),
+            },
+        }
+    }
+
+    fn message(&self) -> &str {
+        self.body.message.as_ref()
     }
 }
 

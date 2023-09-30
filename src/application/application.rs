@@ -13,15 +13,24 @@ use tracing_subscriber::{
 
 use crate::repo::state::RepositoryPool;
 
-use super::{config::configuration::Configuration, logging::tracing::tracing_subscribe};
+use super::{
+    background::{BoundSyncQueue, SyncQueue},
+    config::configuration::Configuration,
+    logging::tracing::tracing_subscribe,
+};
 
 static LOGGER_INSTALLED: OnceCell<bool> = OnceCell::new();
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Application {
-    pub config: Configuration,
+    // Arc here because its shared by many things and is the consistent state
+    // for the application
+    pub config: Arc<Configuration>,
     pub repo_pool: RepositoryPool,
     // pub indexes: Arc<Indexes>,
+    /// Background & maintenance tasks are executed on a separate
+    /// executor
+    sync_queue: SyncQueue,
 }
 
 impl Application {
@@ -29,7 +38,13 @@ impl Application {
         config.max_threads = config.max_threads.max(minimum_parallelism());
         config.state_source.set_default_dir(&config.index_dir);
         let repo_pool = config.state_source.initialize_pool()?;
-        Ok(Self { config, repo_pool })
+        let config = Arc::new(config);
+        let sync_queue = SyncQueue::start(config.clone());
+        Ok(Self {
+            config,
+            repo_pool,
+            sync_queue,
+        })
     }
 
     pub fn install_logging(config: &Configuration) {
@@ -46,6 +61,10 @@ impl Application {
         };
 
         LOGGER_INSTALLED.set(true).unwrap();
+    }
+
+    pub fn write_index(&self) -> BoundSyncQueue {
+        self.sync_queue.bind(self.clone())
     }
 }
 

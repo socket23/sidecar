@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use std::{fs, path::Path};
 
@@ -14,8 +15,9 @@ use tantivy::{
 use tokio::sync::RwLock;
 use tracing::debug;
 
+use crate::application::background::SyncHandle;
 use crate::application::config::configuration::Configuration;
-use crate::repo::state::RepositoryPool;
+use crate::repo::state::{RepoError, RepositoryPool};
 use crate::{
     application::background::SyncPipes,
     repo::types::{RepoMetadata, RepoRef, Repository},
@@ -53,11 +55,49 @@ pub trait Indexable: Send + Sync {
     fn schema(&self) -> Schema;
 }
 
+// This is the inner most index write handle, so we can use this to index the
+// inner caller and make that work
+// the writer here is the tantivy writer which we need to use
 pub struct IndexWriteHandle<'a> {
     source: &'a dyn Indexable,
     index: &'a tantivy::Index,
     reader: &'a RwLock<IndexReader>,
     writer: IndexWriter,
+}
+
+impl<'a> IndexWriteHandle<'a> {
+    pub async fn refresh_reader(&self) -> Result<()> {
+        *self.reader.write().await = self.index.reader()?;
+        Ok(())
+    }
+
+    pub fn delete(&self, repo: &Repository) {
+        self.source.delete_by_repo(&self.writer, repo)
+    }
+
+    pub async fn index(
+        &self,
+        reporef: &RepoRef,
+        repo: &Repository,
+        metadata: &RepoMetadata,
+        progress: &SyncPipes,
+    ) -> Result<()> {
+        self.source
+            .index_repository(reporef, repo, metadata, &self.writer, progress)
+            .await
+    }
+
+    pub async fn commit(&mut self) -> Result<()> {
+        self.writer.commit()?;
+        self.refresh_reader().await?;
+
+        Ok(())
+    }
+
+    pub fn rollback(&mut self) -> Result<()> {
+        self.writer.rollback()?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -158,6 +198,55 @@ impl<T: Indexable> Indexer<T> {
     }
 }
 
+pub type WriteHandleForIndexersRef<'a> = [IndexWriteHandle<'a>];
+
+pub struct WriteHandleForIndexers<'a> {
+    handles: Vec<IndexWriteHandle<'a>>,
+    _write_lock: tokio::sync::MutexGuard<'a, ()>,
+}
+
+impl<'a> Deref for WriteHandleForIndexers<'a> {
+    type Target = WriteHandleForIndexersRef<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handles
+    }
+}
+
+impl<'a> WriteHandleForIndexers<'a> {
+    pub async fn commit(self) -> Result<()> {
+        for mut handle in self.handles {
+            handle.commit().await?
+        }
+
+        Ok(())
+    }
+
+    pub async fn index(
+        &self,
+        sync_handle: &SyncHandle,
+        repo: &Repository,
+    ) -> Result<Arc<RepoMetadata>, RepoError> {
+        let metadata = repo.get_repo_metadata().await;
+
+        futures::future::join_all(self.handles.iter().map(|handle| {
+            handle.index(&sync_handle.reporef, repo, &metadata, sync_handle.pipes())
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(metadata)
+    }
+
+    pub fn rollback(self) -> Result<()> {
+        for mut handle in self.handles {
+            handle.rollback()?;
+        }
+        Ok(())
+    }
+}
+
 pub struct SearchResults<'a, T> {
     pub docs: Box<dyn Iterator<Item = T> + Sync + Send + 'a>,
     pub metadata: MultiFruit,
@@ -207,16 +296,15 @@ impl Indexes {
         })
     }
 
-    // pub async fn writers(&self) -> Result<GlobalWriteHandle<'_>> {
-    //     unimplemented!("Indexes::writers");
-    //     // let id: u64 = rand::random();
-    //     // debug!(id, "waiting for other writers to finish");
-    //     // let _write_lock = self.write_mutex.lock().await;
-    //     // debug!(id, "lock acquired");
+    pub async fn writers(&self) -> Result<WriteHandleForIndexers<'_>> {
+        let id: u64 = rand::random();
+        debug!(id, "waiting for other writers to finish");
+        let _write_lock = self.write_mutex.lock().await;
+        debug!(id, "lock acquired");
 
-    //     // Ok(GlobalWriteHandle {
-    //     //     handles: vec![self.repo.write_handle()?, self.file.write_handle()?],
-    //     //     _write_lock,
-    //     // })
-    // }
+        Ok(WriteHandleForIndexers {
+            handles: vec![self.file.write_handle()?],
+            _write_lock,
+        })
+    }
 }

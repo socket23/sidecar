@@ -363,7 +363,7 @@ impl SyncPipes {
         }
     }
 
-    pub(crate) fn index_percent(&self, current: u8) {
+    pub fn index_percent(&self, current: u8) {
         _ = self.progress.send(Progress {
             reporef: self.reporef.clone(),
             event: ProgressEvent::IndexPercent(current),
@@ -528,88 +528,86 @@ impl SyncHandle {
             return Err(SyncError::Cancelled);
         }
 
-        unimplemented!("TODO(codestory): Finish this up later on");
+        let indexed = self.index().await;
+        let status = match indexed {
+            Ok(Either::Left(status)) => Some(status),
+            Ok(Either::Right(state)) => {
+                self.app
+                    .repo_pool
+                    .update(&self.reporef, |_k, repo| repo.sync_done_with(state));
 
-        // let indexed = self.index().await;
-        // let status = match indexed {
-        //     Ok(Either::Left(status)) => Some(status),
-        //     Ok(Either::Right(state)) => {
-        //         self.app
-        //             .repo_pool
-        //             .update(&self.reporef, |_k, repo| repo.sync_done_with(state));
+                // technically `sync_done_with` does this, but we want to send notifications
+                self.set_status(|_| SyncStatus::Done)
+            }
+            Err(SyncError::Cancelled) => self.set_status(|_| SyncStatus::Cancelled),
+            Err(err) => {
+                error!(?err, ?self.reporef, "failed to index repository");
+                self.set_status(|_| SyncStatus::Error {
+                    message: err.to_string(),
+                })
+            }
+        };
 
-        //         // technically `sync_done_with` does this, but we want to send notifications
-        //         self.set_status(|_| SyncStatus::Done)
-        //     }
-        //     Err(SyncError::Cancelled) => self.set_status(|_| SyncStatus::Cancelled),
-        //     Err(err) => {
-        //         error!(?err, ?self.reporef, "failed to index repository");
-        //         self.set_status(|_| SyncStatus::Error {
-        //             message: err.to_string(),
-        //         })
-        //     }
-        // };
-
-        // Ok(status.expect("failed to update repo status"))
+        Ok(status.expect("failed to update repo status"))
     }
 
     // TODO(codestory): Implement this once we have information about the indexes
-    // async fn index(&self) -> Result<Either<SyncStatus, Arc<RepoMetadata>>> {
-    //     use SyncStatus::*;
-    //     let Application {
-    //         ref indexes,
-    //         ref repo_pool,
-    //         ..
-    //     } = self.app;
+    async fn index(&self) -> Result<Either<SyncStatus, Arc<RepoMetadata>>> {
+        use SyncStatus::*;
+        let Application {
+            ref indexes,
+            ref repo_pool,
+            ..
+        } = self.app;
 
-    //     let writers = indexes.writers().await.map_err(SyncError::Tantivy)?;
-    //     let repo = {
-    //         let mut orig = repo_pool
-    //             .read_async(&self.reporef, |_k, v| v.clone())
-    //             .await
-    //             .unwrap();
+        let writers = indexes.writers().await.map_err(SyncError::Tantivy)?;
+        let repo = {
+            let mut orig = repo_pool
+                .read_async(&self.reporef, |_k, v| v.clone())
+                .await
+                .unwrap();
 
-    //         // if let Some(ref bf) = self.new_branch_filters {
-    //         //     orig.branch_filter = bf.patch(orig.branch_filter.as_ref());
-    //         // }
-    //         orig
-    //     };
+            // if let Some(ref bf) = self.new_branch_filters {
+            //     orig.branch_filter = bf.patch(orig.branch_filter.as_ref());
+            // }
+            orig
+        };
 
-    //     let indexed = match repo.sync_status {
-    //         current @ (Uninitialized | Syncing | Indexing) => return Ok(Either::Left(current)),
-    //         Removed => either::Left(SyncStatus::Removed),
-    //         RemoteRemoved => {
-    //             // Note we don't clean up here, leave the
-    //             // barebones behind.
-    //             //
-    //             // This is to be able to report to the user that
-    //             // something happened, and let them clean up in a
-    //             // subsequent action.
-    //             return Ok(Either::Left(RemoteRemoved));
-    //         }
-    //         _ => {
-    //             self.set_status(|_| Indexing).unwrap();
-    //             writers.index(self, &repo).await.map(Either::Right)
-    //         }
-    //     };
+        let indexed = match repo.sync_status {
+            current @ (Uninitialized | Syncing | Indexing) => return Ok(Either::Left(current)),
+            Removed => return Ok(either::Left(SyncStatus::Removed)),
+            RemoteRemoved => {
+                // Note we don't clean up here, leave the
+                // bare bones behind.
+                //
+                // This is to be able to report to the user that
+                // something happened, and let them clean up in a
+                // subsequent action.
+                return Ok(Either::Left(RemoteRemoved));
+            }
+            _ => {
+                self.set_status(|_| Indexing).unwrap();
+                writers.index(self, &repo).await.map(Either::Right)
+            }
+        };
 
-    //     match indexed {
-    //         Ok(_) => {
-    //             writers.commit().await.map_err(SyncError::Tantivy)?;
-    //             indexed.map_err(SyncError::Indexing)
-    //         }
-    //         // Err(_) if self.pipes.is_removed() => self.delete_repo(&repo, writers).await,
-    //         Err(_) if self.pipes.is_cancelled() => {
-    //             writers.rollback().map_err(SyncError::Tantivy)?;
-    //             debug!(?self.reporef, "index cancelled by user");
-    //             Err(SyncError::Cancelled)
-    //         }
-    //         Err(err) => {
-    //             writers.rollback().map_err(SyncError::Tantivy)?;
-    //             Err(SyncError::Indexing(err))
-    //         }
-    //     }
-    // }
+        match indexed {
+            Ok(_) => {
+                writers.commit().await.map_err(SyncError::Tantivy)?;
+                indexed.map_err(SyncError::Indexing)
+            }
+            // Err(_) if self.pipes.is_removed() => self.delete_repo(&repo, writers).await,
+            Err(_) if self.pipes.is_cancelled() => {
+                writers.rollback().map_err(SyncError::Tantivy)?;
+                debug!(?self.reporef, "index cancelled by user");
+                Err(SyncError::Cancelled)
+            }
+            Err(err) => {
+                writers.rollback().map_err(SyncError::Tantivy)?;
+                Err(SyncError::Indexing(err))
+            }
+        }
+    }
 
     // async fn delete_repo(
     //     &self,
@@ -763,7 +761,7 @@ impl SyncHandle {
     //     Ok(())
     // }
 
-    pub(crate) fn pipes(&self) -> &SyncPipes {
+    pub fn pipes(&self) -> &SyncPipes {
         &self.pipes
     }
 
@@ -779,29 +777,5 @@ impl SyncHandle {
         debug!(?self.reporef, ?new_status, "new status");
         self.pipes.status(new_status.clone());
         Some(new_status)
-    }
-
-    async fn sync_lock(&self) -> std::result::Result<Repository, SyncError> {
-        let repo = self
-            .app
-            .repo_pool
-            .update_async(&self.reporef, |_k, repo| {
-                if repo.sync_status == SyncStatus::Syncing {
-                    Err(SyncError::SyncInProgress)
-                } else {
-                    repo.sync_status = SyncStatus::Syncing;
-                    Ok(repo.clone())
-                }
-            })
-            .await;
-
-        if let Some(Ok(repo)) = repo {
-            let new_status = repo.sync_status.clone();
-            debug!(?self.reporef, ?new_status, "new status");
-            self.pipes.status(new_status);
-            Ok(repo)
-        } else {
-            repo.expect("repo was already deleted")
-        }
     }
 }

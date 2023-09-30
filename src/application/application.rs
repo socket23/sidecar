@@ -11,7 +11,7 @@ use tracing_subscriber::{
     prelude::*,
 };
 
-use crate::repo::state::RepositoryPool;
+use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
 use super::{
     background::{BoundSyncQueue, SyncQueue},
@@ -27,7 +27,7 @@ pub struct Application {
     // for the application
     pub config: Arc<Configuration>,
     pub repo_pool: RepositoryPool,
-    // pub indexes: Arc<Indexes>,
+    pub indexes: Arc<Indexes>,
     /// Background & maintenance tasks are executed on a separate
     /// executor
     pub sync_queue: SyncQueue,
@@ -41,8 +41,9 @@ impl Application {
         let config = Arc::new(config);
         let sync_queue = SyncQueue::start(config.clone());
         Ok(Self {
-            config,
-            repo_pool,
+            config: config.clone(),
+            repo_pool: repo_pool.clone(),
+            indexes: Indexes::new(repo_pool, config).await?.into(),
             sync_queue,
         })
     }

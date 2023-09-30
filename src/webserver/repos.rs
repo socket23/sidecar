@@ -6,7 +6,7 @@ use std::time::Duration;
 use axum::{
     extract::{Query, State},
     response::{sse, IntoResponse, Sse},
-    Extension, Router,
+    Extension,
 };
 use serde::{Deserialize, Serialize};
 

@@ -209,7 +209,7 @@ impl BoundSyncQueue {
     ///
     /// Skips any repositories in the list which are already queued or being synced.
     /// Returns the number of new repositories queued for syncing.
-    pub(crate) async fn enqueue_sync(self, repositories: Vec<RepoRef>) -> usize {
+    pub async fn enqueue_sync(self, repositories: Vec<RepoRef>) -> usize {
         let mut num_queued = 0;
 
         for reporef in repositories {

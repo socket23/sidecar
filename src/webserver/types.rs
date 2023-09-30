@@ -1,4 +1,5 @@
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::Json;
 use std::borrow::Cow;
 
@@ -31,6 +32,12 @@ pub struct Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.body.message)
+    }
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> axum::response::Response {
+        (self.status, Json(Response::from(self.body))).into_response()
     }
 }
 
@@ -112,6 +119,12 @@ pub struct EndpointError<'a> {
 
     /// A context aware message describing the error
     message: Cow<'a, str>,
+}
+
+impl<'a> From<EndpointError<'a>> for Response<'a> {
+    fn from(value: EndpointError<'a>) -> Self {
+        Self::Error(value)
+    }
 }
 
 /// The kind of an error

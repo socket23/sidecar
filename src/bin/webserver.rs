@@ -5,7 +5,10 @@ use anyhow::Result;
 use axum::routing::get;
 use axum::Extension;
 use clap::Parser;
-use sidecar::application::{application::Application, config::configuration::Configuration};
+use sidecar::{
+    application::{application::Application, config::configuration::Configuration},
+    webserver::repos,
+};
 use std::net::SocketAddr;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
 
@@ -33,10 +36,13 @@ async fn main() -> Result<()> {
 // that for scoring
 pub async fn start(app: Application) -> anyhow::Result<()> {
     let bind = SocketAddr::new(app.config.host.parse()?, app.config.port);
-    let api = Router::new().route("/config", get(sidecar::webserver::config::get));
+    let api = Router::new()
+        .route("/config", get(sidecar::webserver::config::get))
+        .nest("/repo", repo_router());
 
     let api = api
         .layer(Extension(app.clone()))
+        .with_state(app.clone())
         .with_state(app.clone())
         .layer(CorsLayer::permissive())
         .layer(CatchPanicLayer::new());
@@ -48,4 +54,9 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+fn repo_router() -> Router {
+    use axum::routing::*;
+    Router::new().route("/sync", get(sidecar::webserver::repos::sync))
 }

@@ -31,6 +31,7 @@ impl Indexable for File {
         writer: &IndexWriter,
         pipes: &SyncPipes,
     ) -> Result<()> {
+        // TODO(skcd): Pick up from here and get the indexing with tantivy done
         unimplemented!("File::index_repository");
         // let file_cache = Arc::new(FileCache::for_repo(
         //     &self.sql,

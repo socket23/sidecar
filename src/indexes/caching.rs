@@ -12,6 +12,8 @@ use serde::Serialize;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
+use crate::repo::types::RepoRef;
+
 // Indexes might require their own keys, we know tantivy is fucked because
 // it expects a key which is unique to the doc schema which you put in...
 // so if we query it with the wrong schema it blows in your face :|
@@ -19,11 +21,18 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct CacheKeys {
     tantivy: String,
+    // We also want to store the file content hash as a cache key, so we can
+    // evict the ones which we are no longer interested in
+    file_content_hash: String,
 }
 
 impl CacheKeys {
     pub fn tantivy(&self) -> &str {
         &self.tantivy
+    }
+
+    pub fn file_content_hash(&self) -> &str {
+        &self.file_content_hash
     }
 }
 
@@ -69,6 +78,9 @@ impl<T> From<T> for FreshValue<T> {
 
 /// This is the storage for the underlying struct which we will use to store
 /// anything and everything
+/// TODO(skcd): It might be better to setup the sqlite db here instead and kick
+/// things off. I don't think going down the route of doing fs based stuff is
+/// really that good a thing....
 pub struct FSStorage<T: Serialize + DeserializeOwned + PartialEq> {
     source: T,
     path: PathBuf,
@@ -94,5 +106,20 @@ impl<T: Serialize + DeserializeOwned + PartialEq> FSStorage<T> {
         let data = serde_json::to_vec(&self.source)?;
         file.write_all(&data).await?;
         Ok(())
+    }
+}
+
+// This is where we maintain a cache of the file and have a storage layer
+// backing up the cache and everything happening here
+pub struct FileCache<'a, T: Serialize + DeserializeOwned + PartialEq> {
+    storage: &'a FSStorage<T>,
+    reporef: &'a RepoRef,
+    // semantic: Option<&'a Semantic>,
+    // embed_queue: EmbedQueue,
+}
+
+impl<'a, T: Serialize + DeserializeOwned + PartialEq> FileCache<'a, T> {
+    pub fn for_repo(storage: &'a FSStorage<T>, reporef: &'a RepoRef) -> Self {
+        Self { storage, reporef }
     }
 }

@@ -58,5 +58,7 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
 
 fn repo_router() -> Router {
     use axum::routing::*;
-    Router::new().route("/sync", get(sidecar::webserver::repos::sync))
+    Router::new()
+        .route("/sync", get(sidecar::webserver::repos::sync))
+        .route("/status", get(sidecar::webserver::repos::index_status))
 }

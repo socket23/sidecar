@@ -1,9 +1,11 @@
 // This is the place where we handle all the routes with respect to the repos
 // and how we are going to index them.
 
+use std::time::Duration;
+
 use axum::{
     extract::{Query, State},
-    response::IntoResponse,
+    response::{sse, IntoResponse, Sse},
     Extension, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -73,4 +75,24 @@ pub async fn sync(
     let num_queued = app.write_index().enqueue_sync(vec![repo]).await;
 
     Ok(json(ReposResponse::SyncQueued))
+}
+
+/// Get a stream of status notifications about the indexing of each repository
+/// This endpoint opens an SSE stream
+//
+pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoResponse {
+    let mut receiver = app.sync_queue.subscribe();
+
+    Sse::new(async_stream::stream! {
+        while let Ok(event) = receiver.recv().await {
+            yield sse::Event::default().json_data(event).map_err(|err| {
+                <_ as Into<Box<dyn std::error::Error + Send + Sync>>>::into(err)
+            });
+        }
+    })
+    .keep_alive(
+        sse::KeepAlive::new()
+            .interval(Duration::from_secs(2))
+            .event(sse::Event::default().event("heartbeat")),
+    )
 }

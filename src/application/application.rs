@@ -30,7 +30,7 @@ pub struct Application {
     // pub indexes: Arc<Indexes>,
     /// Background & maintenance tasks are executed on a separate
     /// executor
-    sync_queue: SyncQueue,
+    pub sync_queue: SyncQueue,
 }
 
 impl Application {

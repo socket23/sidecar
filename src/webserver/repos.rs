@@ -71,8 +71,8 @@ pub async fn sync(
 ) -> Result<impl IntoResponse> {
     // TODO: We can refactor `repo_pool` to also hold queued repos, instead of doing a calculation
     // like this which is prone to timing issues.
-    let num_repos = app.repo_pool.len();
-    let num_queued = app.write_index().enqueue_sync(vec![repo_ref]).await;
+    let _ = app.repo_pool.len();
+    let _ = app.write_index().enqueue_sync(vec![repo_ref]).await;
 
     Ok(json(ReposResponse::SyncQueued))
 }

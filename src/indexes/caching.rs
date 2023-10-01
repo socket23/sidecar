@@ -4,6 +4,10 @@
 // Now the way we want to go about doing this:
 // we use a fs based system and wrap it in a lock so we are okay with things
 
+use scc::hash_map::Entry;
+use sqlx::Sqlite;
+use std::collections::HashSet;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -29,6 +33,10 @@ pub struct CacheKeys {
 }
 
 impl CacheKeys {
+    pub fn new(tantivy: String) -> Self {
+        Self { tantivy }
+    }
+
     pub fn tantivy(&self) -> &str {
         &self.tantivy
     }
@@ -116,6 +124,35 @@ pub struct FileCacheSnapshot<'a> {
     parent: &'a FileCache<'a>,
 }
 
+impl<'a> Deref for FileCacheSnapshot<'a> {
+    type Target = scc::HashMap<CacheKeys, FreshValue<()>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
+}
+
+impl<'a> FileCacheSnapshot<'a> {
+    pub fn parent(&self) -> &'a FileCache<'a> {
+        self.parent
+    }
+
+    pub fn is_fresh(&self, keys: &CacheKeys) -> bool {
+        match self.snapshot.entry(keys.clone()) {
+            Entry::Occupied(mut val) => {
+                val.get_mut().fresh = true;
+
+                true
+            }
+            Entry::Vacant(val) => {
+                _ = val.insert_entry(FreshValue::fresh_default());
+
+                false
+            }
+        }
+    }
+}
+
 // This is where we maintain a cache of the file and have a storage layer
 // backing up the cache and everything happening here
 pub struct FileCache<'a> {
@@ -156,5 +193,99 @@ impl<'a> FileCache<'a> {
             snapshot: output.into(),
             parent: self,
         }
+    }
+
+    async fn delete_files(&self, tx: &mut sqlx::Transaction<'_, Sqlite>) -> anyhow::Result<()> {
+        let repo_str = self.reporef.to_string();
+        sqlx::query! {
+            "DELETE FROM file_cache \
+                 WHERE repo_ref = ?",
+            repo_str
+        }
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn synchronize(
+        &'a self,
+        cache: FileCacheSnapshot<'a>,
+        _delete_tantivy: impl Fn(&str),
+    ) -> anyhow::Result<()> {
+        let mut tx = self.sqlite.begin().await?;
+        self.delete_files(&mut tx).await?;
+
+        // files that are no longer tracked by the git index are to be removed
+        // from the tantivy & qdrant indices
+        // let qdrant_stale = {
+        //     let mut semantic_fresh = HashSet::new();
+        //     let mut semantic_all = HashSet::new();
+
+        //     cache.retain(|k, v| {
+        //         // check if it's already in to avoid unnecessary copies
+        //         if v.fresh && !semantic_fresh.contains(k.semantic()) {
+        //             semantic_fresh.insert(k.semantic().to_string());
+        //         }
+
+        //         if !semantic_all.contains(k.semantic()) {
+        //             semantic_all.insert(k.semantic().to_string());
+        //         }
+
+        //         // just call the passed closure for tantivy
+        //         if !v.fresh {
+        //             delete_tantivy(k.tantivy())
+        //         }
+
+        //         v.fresh
+        //     });
+
+        //     semantic_all
+        //         .difference(&semantic_fresh)
+        //         .cloned()
+        //         .collect::<Vec<_>>()
+        // };
+
+        // generate a transaction to push the remaining entries
+        // into the sql cache
+        {
+            let mut next = cache.first_occupied_entry_async().await;
+            while let Some(entry) = next {
+                let key = entry.key();
+                let tantivy_key = key.tantivy().to_owned();
+                let repo_str = self.reporef.to_string();
+                sqlx::query!(
+                    "INSERT INTO file_cache \
+		 (repo_ref, tantivy_cache_key) \
+                 VALUES (?, ?)",
+                    repo_str,
+                    tantivy_key,
+                )
+                .execute(&mut *tx)
+                .await?;
+
+                next = entry.next();
+            }
+
+            tx.commit().await?;
+        }
+
+        // batch-delete points from qdrant index
+        // if !qdrant_stale.is_empty() {
+        //     if let Some(semantic) = self.semantic {
+        //         let semantic = semantic.clone();
+        //         let reporef = self.reporef.to_string();
+        //         tokio::spawn(async move {
+        //             semantic
+        //                 .delete_points_for_hash(reporef.as_str(), qdrant_stale.into_iter())
+        //                 .await;
+        //         });
+        //     }
+        // }
+
+        // make sure we generate & commit all remaining embeddings
+        // self.batched_embed_or_flush_queue(true).await?;
+
+        Ok(())
     }
 }

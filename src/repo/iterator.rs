@@ -53,7 +53,7 @@ pub fn should_index_entry(de: &ignore::DirEntry) -> bool {
     should_index(&de.path())
 }
 
-fn should_index<P: AsRef<Path>>(p: &P) -> bool {
+pub fn should_index<P: AsRef<Path>>(p: &P) -> bool {
     let path = p.as_ref();
 
     // TODO: Make this more robust

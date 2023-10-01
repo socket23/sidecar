@@ -47,6 +47,16 @@ impl RepoRef {
     pub fn backend(&self) -> &Backend {
         &self.backend
     }
+
+    pub fn indexed_name(&self) -> String {
+        match self.backend {
+            Backend::Local => Path::new(&self.name)
+                .file_name()
+                .expect("last component is `..`")
+                .to_string_lossy()
+                .into(),
+        }
+    }
 }
 
 impl<P: AsRef<Path>> From<&P> for RepoRef {

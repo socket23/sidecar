@@ -11,6 +11,7 @@
         "reindex",
         "reporef",
         "revwalk",
+        "sqlx",
         "tanvity",
         "webserver",
         "yolo"

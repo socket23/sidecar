@@ -16,3 +16,7 @@ the binary
 
 ## We are not going to parallelize anything, we are proud of being lazy
 - fix the speed etc when we hit issues with it
+
+## How to install sqlx and migrations
+- for sqlx install it using `cargo install sqlx`
+- and then for the migrations which are present in the ./migrations folder where we have Cargo.toml, we need to add migrations using `sqlx migrate add {blah}`

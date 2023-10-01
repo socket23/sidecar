@@ -20,9 +20,6 @@ use tokenizers::Tokenizer;
 
 pub type Embedding = Vec<f32>;
 
-#[cfg(feature = "ee")]
-pub use crate::ee::embedder::*;
-
 #[derive(Default)]
 pub struct EmbedQueue {
     log: scc::Queue<Mutex<Option<EmbedChunk>>>,

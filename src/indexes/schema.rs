@@ -3,6 +3,8 @@ use tantivy::schema::{
     STRING,
 };
 
+use crate::db::sqlite::SqlDb;
+
 /// A schema for indexing all files and directories, linked to a
 /// single repository on disk.
 #[derive(Clone)]
@@ -11,6 +13,8 @@ pub struct File {
     // pub(super) semantic: Option<Semantic>,
     /// Unique ID for the file in a repo
     pub unique_hash: Field,
+
+    pub sql: SqlDb,
 
     /// Path to the root of the repo on disk
     pub repo_disk_path: Field,
@@ -56,7 +60,7 @@ pub struct File {
 }
 
 impl File {
-    pub fn new() -> Self {
+    pub fn new(sql: SqlDb) -> Self {
         let mut builder = tantivy::schema::SchemaBuilder::new();
         let trigram = TextOptions::default().set_stored().set_indexing_options(
             TextFieldIndexing::default()
@@ -96,6 +100,7 @@ impl File {
         let commit_frequency = builder.add_u64_field("commit_frequency", FAST);
 
         Self {
+            sql,
             repo_disk_path,
             relative_path,
             unique_hash,

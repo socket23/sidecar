@@ -17,6 +17,7 @@ use tracing::debug;
 
 use crate::application::background::SyncHandle;
 use crate::application::config::configuration::Configuration;
+use crate::db::sqlite::SqlDb;
 use crate::repo::state::{RepoError, RepositoryPool};
 use crate::{
     application::background::SyncPipes,
@@ -258,7 +259,11 @@ pub struct Indexes {
 }
 
 impl Indexes {
-    pub async fn new(repo_pool: RepositoryPool, config: Arc<Configuration>) -> Result<Self> {
+    pub async fn new(
+        repo_pool: RepositoryPool,
+        sql_db: SqlDb,
+        config: Arc<Configuration>,
+    ) -> Result<Self> {
         // Figure out how to do version mismatch
         // if config.state_source.index_version_mismatch() {
         //     // we don't support old schemas, and tantivy will hard
@@ -287,7 +292,7 @@ impl Indexes {
 
         Ok(Self {
             file: Indexer::create(
-                File::new(),
+                File::new(sql_db),
                 config.index_path("content").as_ref(),
                 config.buffer_size,
                 config.max_threads,

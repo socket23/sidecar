@@ -46,7 +46,9 @@ impl Application {
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
-            indexes: Indexes::new(repo_pool, config).await?.into(),
+            indexes: Indexes::new(repo_pool, sql_db.clone(), config)
+                .await?
+                .into(),
             sync_queue,
             sql: sql_db,
         })

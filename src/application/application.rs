@@ -11,6 +11,7 @@ use tracing_subscriber::{
     prelude::*,
 };
 
+use crate::db::sqlite::{self, SqlDb};
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
 use super::{
@@ -31,6 +32,7 @@ pub struct Application {
     /// Background & maintenance tasks are executed on a separate
     /// executor
     pub sync_queue: SyncQueue,
+    pub sql: SqlDb,
 }
 
 impl Application {
@@ -40,11 +42,13 @@ impl Application {
         let repo_pool = config.state_source.initialize_pool()?;
         let config = Arc::new(config);
         let sync_queue = SyncQueue::start(config.clone());
+        let sql_db = Arc::new(sqlite::init(config.clone()).await?);
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
             indexes: Indexes::new(repo_pool, config).await?.into(),
             sync_queue,
+            sql: sql_db,
         })
     }
 

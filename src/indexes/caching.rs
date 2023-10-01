@@ -88,9 +88,6 @@ impl<T> From<T> for FreshValue<T> {
 
 /// This is the storage for the underlying struct which we will use to store
 /// anything and everything
-/// TODO(skcd): It might be better to setup the sqlite db here instead and kick
-/// things off. I don't think going down the route of doing fs based stuff is
-/// really that good a thing....
 pub struct FSStorage<T: Serialize + DeserializeOwned + PartialEq> {
     source: T,
     path: PathBuf,

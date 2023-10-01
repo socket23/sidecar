@@ -1,9 +1,15 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 use smallvec::SmallVec;
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
-use crate::application::background::SyncPipes;
+use crate::{
+    application::background::SyncPipes,
+    indexes::{caching::CacheKeys, schema::File},
+};
 
 pub trait FileSource {
     fn len(&self) -> usize;
@@ -33,6 +39,7 @@ pub struct RepositoryDirectory {
 
 pub struct RepositoryFile {
     pub path: String,
+    pub pathbuf: PathBuf,
     pub buffer: String,
 }
 

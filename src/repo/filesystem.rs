@@ -76,6 +76,7 @@ impl FileSource for FileWalker {
                     Some(RepoDirectoryEntry::File(RepositoryFile {
                         buffer,
                         path: entry_disk_path.to_string_lossy().to_string(),
+                        pathbuf: entry_disk_path,
                     }))
                 } else if entry_disk_path.is_dir() {
                     Some(RepoDirectoryEntry::Dir(RepositoryDirectory {
@@ -259,7 +260,7 @@ impl FileSource for GitWalker {
         use rayon::prelude::*;
         self.entries
             .into_par_iter()
-            .filter_map(|((path, kind, oid), branches)| {
+            .filter_map(|((path, kind, oid), _)| {
                 let git = self.git.to_thread_local();
                 let Ok(Some(object)) = git.try_find_object(oid) else {
                     return None;
@@ -272,7 +273,11 @@ impl FileSource for GitWalker {
                 let entry = match kind {
                     FileType::File => {
                         let buffer = String::from_utf8_lossy(&object.data).to_string();
-                        RepoDirectoryEntry::File(RepositoryFile { path, buffer })
+                        RepoDirectoryEntry::File(RepositoryFile {
+                            path: path.to_owned(),
+                            buffer,
+                            pathbuf: PathBuf::from(path),
+                        })
                     }
                     FileType::Directory => RepoDirectoryEntry::Dir(RepositoryDirectory { path }),
                     FileType::NotTracked => return None,

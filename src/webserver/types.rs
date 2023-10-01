@@ -140,7 +140,6 @@ pub enum ErrorKind {
     UpstreamService,
     Internal,
 
-    // TODO: allow construction of detailed custom kinds
     #[doc(hidden)]
     Custom,
 }

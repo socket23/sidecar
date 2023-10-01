@@ -56,7 +56,6 @@ pub fn should_index_entry(de: &ignore::DirEntry) -> bool {
 pub fn should_index<P: AsRef<Path>>(p: &P) -> bool {
     let path = p.as_ref();
 
-    // TODO: Make this more robust
     if path.components().any(|c| c.as_os_str() == ".git") {
         return false;
     }

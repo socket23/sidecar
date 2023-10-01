@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT tantivy_cache_key FROM file_cache WHERE repo_ref = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "tantivy_cache_key",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aea9f23f59f07971ec443979330c8433c195047e347999bc8db1f27736e88de0"
+}

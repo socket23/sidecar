@@ -12,6 +12,7 @@ use serde::Serialize;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
+use crate::db::sqlite::SqlDb;
 use crate::repo::types::RepoRef;
 
 // Indexes might require their own keys, we know tantivy is fucked because
@@ -111,15 +112,15 @@ impl<T: Serialize + DeserializeOwned + PartialEq> FSStorage<T> {
 
 // This is where we maintain a cache of the file and have a storage layer
 // backing up the cache and everything happening here
-pub struct FileCache<'a, T: Serialize + DeserializeOwned + PartialEq> {
-    storage: &'a FSStorage<T>,
+pub struct FileCache<'a> {
+    sqlite: &'a SqlDb,
     reporef: &'a RepoRef,
     // semantic: Option<&'a Semantic>,
     // embed_queue: EmbedQueue,
 }
 
-impl<'a, T: Serialize + DeserializeOwned + PartialEq> FileCache<'a, T> {
-    pub fn for_repo(storage: &'a FSStorage<T>, reporef: &'a RepoRef) -> Self {
-        Self { storage, reporef }
+impl<'a> FileCache<'a> {
+    pub fn for_repo(sqlite: &'a SqlDb, reporef: &'a RepoRef) -> Self {
+        Self { sqlite, reporef }
     }
 }

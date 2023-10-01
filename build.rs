@@ -8,6 +8,8 @@ fn main() {
     println!("{:?}", env::current_dir());
     // Copy over the model files to where the binary gets generated at
     // copy_model_files();
+    // This will run the migrations scripts for the sqlx
+    println!("cargo:rerun-if-changed=migrations");
     println!("cargo:rerun-if-changed=src");
 }
 

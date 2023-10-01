@@ -7,6 +7,9 @@ use std::{path::Path, sync::Arc};
 
 use crate::application::config::configuration::Configuration;
 
+// Arcing it up so we can share it across threads
+pub type SqlDb = Arc<SqlitePool>;
+
 pub async fn init(config: Arc<Configuration>) -> Result<SqlitePool> {
     let data_dir = config.index_dir.to_string_lossy().to_owned();
 

@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -24,8 +25,8 @@ pub enum Backend {
 // Repository identifier
 #[derive(Hash, Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct RepoRef {
-    pub backend: Backend,
-    pub name: String,
+    backend: Backend,
+    name: String,
 }
 
 impl RepoRef {
@@ -42,6 +43,10 @@ impl RepoRef {
     pub fn is_local(&self) -> bool {
         matches!(self.backend, Backend::Local)
     }
+
+    pub fn backend(&self) -> &Backend {
+        &self.backend
+    }
 }
 
 impl<P: AsRef<Path>> From<&P> for RepoRef {
@@ -49,6 +54,14 @@ impl<P: AsRef<Path>> From<&P> for RepoRef {
         RepoRef {
             backend: Backend::Local,
             name: path.as_ref().to_string_lossy().to_string(),
+        }
+    }
+}
+
+impl Display for RepoRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.backend() {
+            Backend::Local => write!(f, "local/{}", self.name()),
         }
     }
 }

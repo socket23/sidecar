@@ -5,6 +5,7 @@
 // we use a fs based system and wrap it in a lock so we are okay with things
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use serde::de::DeserializeOwned;
@@ -19,12 +20,12 @@ use crate::repo::types::RepoRef;
 // it expects a key which is unique to the doc schema which you put in...
 // so if we query it with the wrong schema it blows in your face :|
 // for now we care about tantivy so lets get that working
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct CacheKeys {
     tantivy: String,
-    // We also want to store the file content hash as a cache key, so we can
-    // evict the ones which we are no longer interested in
-    file_content_hash: String,
+    // // We also want to store the file content hash as a cache key, so we can
+    // // evict the ones which we are no longer interested in
+    // file_content_hash: String,
 }
 
 impl CacheKeys {
@@ -32,9 +33,9 @@ impl CacheKeys {
         &self.tantivy
     }
 
-    pub fn file_content_hash(&self) -> &str {
-        &self.file_content_hash
-    }
+    // pub fn file_content_hash(&self) -> &str {
+    //     &self.file_content_hash
+    // }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Eq)]
@@ -110,6 +111,11 @@ impl<T: Serialize + DeserializeOwned + PartialEq> FSStorage<T> {
     }
 }
 
+pub struct FileCacheSnapshot<'a> {
+    snapshot: Arc<scc::HashMap<CacheKeys, FreshValue<()>>>,
+    parent: &'a FileCache<'a>,
+}
+
 // This is where we maintain a cache of the file and have a storage layer
 // backing up the cache and everything happening here
 pub struct FileCache<'a> {
@@ -122,5 +128,33 @@ pub struct FileCache<'a> {
 impl<'a> FileCache<'a> {
     pub fn for_repo(sqlite: &'a SqlDb, reporef: &'a RepoRef) -> Self {
         Self { sqlite, reporef }
+    }
+
+    // Retrieve a file-level snapshot of the cache for the repository in scope.
+    pub(crate) async fn retrieve(&'a self) -> FileCacheSnapshot<'a> {
+        let repo_str = self.reporef.to_string();
+        let rows = sqlx::query! {
+            "SELECT tantivy_cache_key FROM file_cache \
+             WHERE repo_ref = ?",
+            repo_str,
+        }
+        .fetch_all(self.sqlite.as_ref())
+        .await;
+
+        let output = scc::HashMap::default();
+        for row in rows.into_iter().flatten() {
+            let tantivy_cache_key = row.tantivy_cache_key;
+            _ = output.insert(
+                CacheKeys {
+                    tantivy: tantivy_cache_key,
+                },
+                FreshValue::stale(()),
+            );
+        }
+
+        FileCacheSnapshot {
+            snapshot: output.into(),
+            parent: self,
+        }
     }
 }

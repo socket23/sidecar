@@ -37,7 +37,6 @@ pub struct File {
     /// a flat list of every symbol's text, for searching, e.g.:
     /// ["File", "Repo", "worker"]
     pub symbols: Field,
-    pub symbol_locations: Field,
 
     /// fast fields for scoring
     pub lang: Field,
@@ -109,7 +108,6 @@ impl File {
             content,
             line_end_indices,
             symbols,
-            symbol_locations,
             lang,
             avg_line_length,
             last_commit_unix_seconds,

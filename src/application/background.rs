@@ -562,7 +562,7 @@ impl SyncHandle {
 
         let writers = indexes.writers().await.map_err(SyncError::Tantivy)?;
         let repo = {
-            let mut orig = repo_pool
+            let orig = repo_pool
                 .read_async(&self.reporef, |_k, v| v.clone())
                 .await
                 .unwrap();

@@ -89,7 +89,7 @@ impl File {
             BytesOptions::default().set_stored().set_indexed() | FAST,
         );
         let avg_line_length = builder.add_f64_field("line_length", FAST);
-        let last_commit_unix_seconds = builder.add_u64_field("last_commit_unix_seconds", FAST);
+        let last_commit_unix_seconds = builder.add_i64_field("last_commit_unix_seconds", FAST);
 
         let raw_content = builder.add_bytes_field("raw_content", FAST);
         let raw_repo_name = builder.add_bytes_field("raw_repo_name", FAST);

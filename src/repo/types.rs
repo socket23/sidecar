@@ -28,8 +28,8 @@ pub enum Backend {
 // Repository identifier
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub struct RepoRef {
-    backend: Backend,
-    name: String,
+    pub backend: Backend,
+    pub name: String,
 }
 
 impl RepoRef {

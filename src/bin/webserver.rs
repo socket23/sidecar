@@ -61,7 +61,7 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
 fn repo_router() -> Router {
     use axum::routing::*;
     Router::new()
-        // 127.0.0.1:42424/api/repo/sync?backend=local&name=/Users/skcd/scratch/ide
+        // 127.0.0.1:42424/api/repo/sync?backend=local/{path_absolute}
         .route("/sync", get(sidecar::webserver::repos::sync))
         .route("/status", get(sidecar::webserver::repos::index_status))
 }

@@ -12,7 +12,7 @@ use sidecar::{
 };
 use std::net::SocketAddr;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
-use tracing::debug;
+use tracing::info;
 
 pub type Router<S = Application> = axum::Router<S>;
 
@@ -24,8 +24,8 @@ async fn main() -> Result<()> {
 
     // We initialize the logging here
     let application = Application::initialize(configuration).await?;
+    info!("CodeStory 🚀");
     let _ = start(application).await;
-    println!("Hello world! application");
     Ok(())
 }
 

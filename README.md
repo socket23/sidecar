@@ -22,3 +22,7 @@ the binary
 - and then for the migrations which are present in the ./migrations folder where we have Cargo.toml, we need to add migrations using `sqlx migrate add {blah}`
 - you can use the following command to do the migrations etc:
 - cargo sqlx prepare --database-url=sqlite://codestory.db
+
+## Qdrant binary and where to download
+- To download the binaries, you can visit this: https://github.com/qdrant/qdrant/releases/tag/v1.2.0
+- download from here and update the binary where required

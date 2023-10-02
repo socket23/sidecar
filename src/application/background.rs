@@ -41,6 +41,12 @@ pub enum ProgressEvent {
 type ProgressStream = tokio::sync::broadcast::Sender<Progress>;
 
 #[derive(Clone)]
+pub struct ProgressStreamWithContext {
+    sender: ProgressStream,
+    context: String,
+}
+
+#[derive(Clone)]
 pub struct SyncQueue {
     runner: BackgroundExecutor,
     active: Arc<scc::HashMap<RepoRef, Arc<SyncHandle>>>,
@@ -48,19 +54,26 @@ pub struct SyncQueue {
     pub(crate) queue: Arc<NotifyQueue>,
 
     /// Report progress from indexing runs
-    pub(crate) progress: ProgressStream,
+    pub(crate) progress: ProgressStreamWithContext,
 }
 
 impl SyncQueue {
     pub fn start(config: Arc<Configuration>) -> Self {
         let (progress, _) = tokio::sync::broadcast::channel(config.max_threads * 2);
 
+        let rand_id: u64 = rand::random();
+
+        let progress_stream_with_context = ProgressStreamWithContext {
+            sender: progress,
+            context: format!("sync-queue-{}", rand_id),
+        };
+
         let instance = Self {
             tickets: Arc::new(Semaphore::new(config.max_threads)),
             runner: BackgroundExecutor::start(config.clone()),
             active: Default::default(),
             queue: Default::default(),
-            progress,
+            progress: progress_stream_with_context,
         };
 
         {
@@ -106,7 +119,11 @@ impl SyncQueue {
     }
 
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Progress> {
-        self.progress.subscribe()
+        self.progress.sender.subscribe()
+    }
+
+    pub fn get_progress_context(&self) -> &str {
+        &self.progress.context
     }
 
     pub async fn read_queue(&self) -> Vec<QueuedRepoStatus> {
@@ -350,12 +367,12 @@ enum ControlEvent {
 
 pub struct SyncPipes {
     reporef: RepoRef,
-    progress: ProgressStream,
+    progress: ProgressStreamWithContext,
     event: RwLock<Option<ControlEvent>>,
 }
 
 impl SyncPipes {
-    pub(super) fn new(reporef: RepoRef, progress: ProgressStream) -> Self {
+    pub(super) fn new(reporef: RepoRef, progress: ProgressStreamWithContext) -> Self {
         Self {
             reporef,
             progress,
@@ -364,14 +381,16 @@ impl SyncPipes {
     }
 
     pub fn index_percent(&self, current: u8) {
-        _ = self.progress.send(Progress {
+        let context = &self.progress.context;
+        debug!(?current, ?context, "index percent");
+        _ = self.progress.sender.send(Progress {
             reporef: self.reporef.clone(),
             event: ProgressEvent::IndexPercent(current),
         });
     }
 
     pub(crate) fn status(&self, new: SyncStatus) {
-        _ = self.progress.send(Progress {
+        _ = self.progress.sender.send(Progress {
             reporef: self.reporef.clone(),
             event: ProgressEvent::StatusChange(new),
         });
@@ -469,7 +488,11 @@ impl Drop for SyncHandle {
 /// This is the handler for syncing and make sure that we can lock things properly
 /// and not run it over the budget
 impl SyncHandle {
-    pub async fn new(app: Application, reporef: RepoRef, status: ProgressStream) -> Arc<Self> {
+    pub async fn new(
+        app: Application,
+        reporef: RepoRef,
+        status: ProgressStreamWithContext,
+    ) -> Arc<Self> {
         let (exited, exit_signal) = flume::bounded(1);
         let pipes = SyncPipes::new(reporef.clone(), status);
         let current = app
@@ -574,6 +597,8 @@ impl SyncHandle {
             orig
         };
 
+        let instant = std::time::Instant::now();
+
         let indexed = match repo.sync_status {
             current @ (Uninitialized | Syncing | Indexing) => return Ok(Either::Left(current)),
             Removed => return Ok(either::Left(SyncStatus::Removed)),
@@ -592,9 +617,15 @@ impl SyncHandle {
             }
         };
 
+        let time_taken = instant.elapsed();
+
+        debug!(?self.reporef, ?time_taken, "indexing finished");
+
         match indexed {
             Ok(_) => {
+                debug!("committing index");
                 writers.commit().await.map_err(SyncError::Tantivy)?;
+                debug!("finished commiting index");
                 indexed.map_err(SyncError::Indexing)
             }
             // Err(_) if self.pipes.is_removed() => self.delete_repo(&repo, writers).await,

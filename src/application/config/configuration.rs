@@ -41,6 +41,11 @@ pub struct Configuration {
     #[serde(default = "default_buffer_size")]
     /// Size of memory to use for file indexes
     pub buffer_size: usize,
+
+    /// Qdrant url here can be mentioned if we are running it remotely or have
+    /// it running on its own process
+    #[clap(short, long)]
+    pub qdrant_url: Option<String>,
 }
 
 impl Configuration {
@@ -58,6 +63,10 @@ impl Configuration {
 
     pub fn index_path(&self, name: impl AsRef<Path>) -> impl AsRef<Path> {
         self.index_dir.join(name)
+    }
+
+    pub fn qdrant_storage(&self) -> PathBuf {
+        self.index_dir.join("qdrant_storage")
     }
 }
 

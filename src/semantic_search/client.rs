@@ -20,6 +20,7 @@ use crate::{
 
 const EMBEDDING_DIM: usize = 384;
 
+#[derive(Clone)]
 pub struct SemanticClient {
     embedder: Arc<dyn Embedder>,
     search_client: Arc<QdrantClient>,

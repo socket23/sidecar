@@ -11,7 +11,10 @@ use tracing_subscriber::{
     prelude::*,
 };
 
-use crate::db::sqlite::{self, SqlDb};
+use crate::{
+    db::sqlite::{self, SqlDb},
+    semantic_search::client::SemanticClient,
+};
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
 use super::{
@@ -44,10 +47,11 @@ impl Application {
         let config = Arc::new(config);
         let sync_queue = SyncQueue::start(config.clone());
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
+        let semantic_client = SemanticClient::new(config.clone()).await;
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
-            indexes: Indexes::new(repo_pool, sql_db.clone(), config)
+            indexes: Indexes::new(repo_pool, sql_db.clone(), semantic_client, config)
                 .await?
                 .into(),
             sync_queue,

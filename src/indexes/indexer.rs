@@ -19,6 +19,7 @@ use crate::application::background::SyncHandle;
 use crate::application::config::configuration::Configuration;
 use crate::db::sqlite::SqlDb;
 use crate::repo::state::{RepoError, RepositoryPool};
+use crate::semantic_search::client::SemanticClient;
 use crate::{
     application::background::SyncPipes,
     repo::types::{RepoMetadata, RepoRef, Repository},
@@ -264,6 +265,7 @@ impl Indexes {
     pub async fn new(
         repo_pool: RepositoryPool,
         sql_db: SqlDb,
+        semantic: Option<SemanticClient>,
         config: Arc<Configuration>,
     ) -> Result<Self> {
         // Figure out how to do version mismatch
@@ -294,7 +296,7 @@ impl Indexes {
 
         Ok(Self {
             file: Indexer::create(
-                File::new(sql_db),
+                File::new(sql_db, semantic),
                 config.index_path("content").as_ref(),
                 config.buffer_size,
                 config.max_threads,

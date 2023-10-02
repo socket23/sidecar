@@ -3,14 +3,14 @@ use tantivy::schema::{
     STRING,
 };
 
-use crate::db::sqlite::SqlDb;
+use crate::{db::sqlite::SqlDb, semantic_search::client::SemanticClient};
 
 /// A schema for indexing all files and directories, linked to a
 /// single repository on disk.
 #[derive(Clone)]
 pub struct File {
     pub schema: Schema,
-    // pub(super) semantic: Option<Semantic>,
+    pub(super) semantic: Option<SemanticClient>,
     /// Unique ID for the file in a repo
     pub unique_hash: Field,
 
@@ -57,7 +57,7 @@ pub struct File {
 }
 
 impl File {
-    pub fn new(sql: SqlDb) -> Self {
+    pub fn new(sql: SqlDb, semantic: Option<SemanticClient>) -> Self {
         let mut builder = tantivy::schema::SchemaBuilder::new();
         let trigram = TextOptions::default().set_stored().set_indexing_options(
             TextFieldIndexing::default()
@@ -98,6 +98,7 @@ impl File {
 
         Self {
             sql,
+            semantic,
             repo_disk_path,
             relative_path,
             unique_hash,

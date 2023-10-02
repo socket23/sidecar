@@ -3,7 +3,7 @@ use std::env;
 /// with the client to power our semantic search and everything else which is
 /// required.
 use std::fs::write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{fs::create_dir_all, process::Child, sync::Arc};
 
 use anyhow::Result;

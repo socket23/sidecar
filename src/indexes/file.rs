@@ -9,7 +9,7 @@ use std::{
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use tantivy::{doc, schema::Schema, IndexWriter, Term};
-use tracing::{info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::repo::{
     filesystem::MAX_LINE_COUNT,
@@ -85,6 +85,7 @@ impl Indexable for File {
                 pipes.index_percent(((completed as f32 / count as f32) * 100f32) as u8);
 
                 let entry_disk_path = dir_entry.path().unwrap().to_owned();
+                debug!(entry_disk_path, "processing entry for indexing");
                 let relative_path = {
                     let entry_srcpath = PathBuf::from(&entry_disk_path);
                     entry_srcpath
@@ -104,6 +105,7 @@ impl Indexable for File {
                     cache,
                 };
 
+                trace!(entry_disk_path, "queueing entry");
                 if let Err(err) = self.worker(dir_entry, workload, writer) {
                     warn!(%err, entry_disk_path, "indexing failed; skipping");
                 }
@@ -166,7 +168,7 @@ impl File {
     ) -> Result<()> {
         let cache_keys = workload.cache_keys(&dir_entry);
         let last_commit = workload.repo_metadata.last_commit_unix_secs.unwrap_or(0);
-
+        trace!("processing file");
         match dir_entry {
             _ if workload.cache.is_fresh(&cache_keys) => {
                 info!("fresh; skipping");

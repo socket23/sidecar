@@ -66,13 +66,13 @@ impl ApiResponse for ReposResponse {}
 
 /// Synchronize a repo by its id
 pub async fn sync(
-    Query(repo_ref): Query<RepoRef>,
+    Query(RepoParams { repo }): Query<RepoParams>,
     State(app): State<Application>,
 ) -> Result<impl IntoResponse> {
     // TODO: We can refactor `repo_pool` to also hold queued repos, instead of doing a calculation
     // like this which is prone to timing issues.
     let _ = app.repo_pool.len();
-    let _ = app.write_index().enqueue_sync(vec![repo_ref]).await;
+    let _ = app.write_index().enqueue_sync(vec![repo]).await;
 
     Ok(json(ReposResponse::SyncQueued))
 }

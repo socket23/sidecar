@@ -39,6 +39,7 @@ impl Application {
     pub async fn initialize(mut config: Configuration) -> anyhow::Result<Self> {
         config.max_threads = config.max_threads.max(minimum_parallelism());
         config.state_source.set_default_dir(&config.index_dir);
+        debug!(?config, "effective configuration");
         let repo_pool = config.state_source.initialize_pool()?;
         let config = Arc::new(config);
         let sync_queue = SyncQueue::start(config.clone());

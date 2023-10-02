@@ -1,12 +1,15 @@
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
     time::SystemTime,
 };
 
 use anyhow::Context;
-use serde::{Deserialize, Serialize};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+
+use super::state::RepoError;
 
 #[derive(Debug)]
 pub struct RepoMetadata {
@@ -23,13 +26,34 @@ pub enum Backend {
 }
 
 // Repository identifier
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub struct RepoRef {
     backend: Backend,
     name: String,
 }
 
 impl RepoRef {
+    pub fn new(backend: Backend, name: &(impl AsRef<str> + ?Sized)) -> Result<Self, RepoError> {
+        let path = Path::new(name.as_ref());
+
+        if !path.is_absolute() {
+            return Err(RepoError::NonAbsoluteLocal);
+        }
+
+        for component in path.components() {
+            use std::path::Component::*;
+            match component {
+                CurDir | ParentDir => return Err(RepoError::InvalidPath),
+                _ => continue,
+            }
+        }
+
+        Ok(RepoRef {
+            backend,
+            name: name.as_ref().to_owned(),
+        })
+    }
+
     pub fn local_path(&self) -> Option<PathBuf> {
         match self.backend {
             Backend::Local => Some(PathBuf::from(&self.name)),
@@ -73,6 +97,40 @@ impl Display for RepoRef {
         match self.backend() {
             Backend::Local => write!(f, "local/{}", self.name()),
         }
+    }
+}
+
+impl FromStr for RepoRef {
+    type Err = RepoError;
+
+    fn from_str(refstr: &str) -> Result<Self, Self::Err> {
+        match refstr.trim_start_matches('/').split_once('/') {
+            // // github.com/...
+            // Some(("github.com", name)) => RepoRef::new(Backend::Github, name),
+            // local/...
+            Some(("local", name)) => RepoRef::new(Backend::Local, name),
+            _ => Err(RepoError::InvalidBackend),
+        }
+    }
+}
+
+impl Serialize for RepoRef {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for RepoRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).and_then(|s| {
+            RepoRef::from_str(s.as_str()).map_err(|e| D::Error::custom(e.to_string()))
+        })
     }
 }
 
@@ -122,7 +180,6 @@ pub struct Repository {
     pub sync_status: SyncStatus,
     pub last_commit_unix_secs: i64,
     pub last_index_unix_secs: u64,
-    pub most_common_lang: Option<String>,
 }
 
 impl Repository {
@@ -148,14 +205,12 @@ impl Repository {
             last_index_unix_secs: 0,
             last_commit_unix_secs: 0,
             disk_path,
-            most_common_lang: None,
         }
     }
 
     pub(crate) fn sync_done_with(&mut self, metadata: Arc<RepoMetadata>) {
         self.last_index_unix_secs = get_unix_time(SystemTime::now());
         self.last_commit_unix_secs = metadata.last_commit_unix_secs.unwrap_or(0);
-        self.most_common_lang = Some("not_set".to_owned());
 
         self.sync_status = SyncStatus::Done;
     }

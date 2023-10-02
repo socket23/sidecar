@@ -4,9 +4,11 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use std::fmt::Debug;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tracing::debug;
 
 use super::types::{RepoRef, Repository};
 
@@ -35,6 +37,8 @@ pub enum RepoError {
         #[from]
         error: serde_json::Error,
     },
+    #[error("Invalid backend found")]
+    InvalidBackend,
 }
 
 #[derive(Serialize, Deserialize, Args, Debug, Clone, Default, PartialEq)]
@@ -212,13 +216,15 @@ fn gather_repo_roots(
     output
 }
 
-pub fn pretty_write_file<T: Serialize + ?Sized>(
+pub fn pretty_write_file<T: Serialize + ?Sized + Debug>(
     path: impl AsRef<Path>,
     val: &T,
 ) -> Result<(), RepoError> {
     let tmpfile = path
         .as_ref()
         .with_extension(format!("new.{}", rand::thread_rng().gen_range(0..=9999)));
+
+    debug!(?tmpfile, ?val, "writing to file");
 
     let file = {
         let mut tries = 0;

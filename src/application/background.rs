@@ -25,9 +25,9 @@ use super::config::configuration::Configuration;
 #[derive(serde::Serialize, Clone)]
 pub struct Progress {
     #[serde(rename = "ref")]
-    reporef: RepoRef,
+    pub reporef: RepoRef,
     #[serde(rename = "ev")]
-    event: ProgressEvent,
+    pub event: ProgressEvent,
 }
 
 #[derive(serde::Serialize, Clone)]

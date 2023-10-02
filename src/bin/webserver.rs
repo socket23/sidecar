@@ -63,3 +63,8 @@ fn repo_router() -> Router {
         // Gives back the status of the queue
         .route("/queue", get(sidecar::webserver::repos::queue_status))
 }
+
+// TODO(skcd): Now we have to do the following: start the qdrant binary
+// and also setup the client properly so we can use qdrant, we can also not do
+// this and keep going with raw embedding search and make it happen, but this
+// will be better in the long term (and also its not too difficult)

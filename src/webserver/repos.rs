@@ -96,3 +96,8 @@ pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoRe
             .event(sse::Event::default().event("heartbeat")),
     )
 }
+
+/// Get the status of the queue which we are processing
+pub async fn queue_status(State(app): State<Application>) -> impl IntoResponse {
+    json(ReposResponse::SyncQueue(app.sync_queue.read_queue().await))
+}

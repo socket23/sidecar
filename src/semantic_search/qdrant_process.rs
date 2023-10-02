@@ -1,3 +1,4 @@
+use std::env;
 /// We want to keep the qdrant binary running here so we can use that along
 /// with the client to power our semantic search and everything else which is
 /// required.
@@ -49,10 +50,14 @@ impl QdrantServerProcess {
         )
         .unwrap();
 
-        // TODO(skcd): What should be the name of the binary here? we need to
-        // figure out
-        let command = relative_command_path("qdrant_mac").expect("bad bundle");
-        let child = Some(run_command(&command, &qdrant_location));
+        let qdrant_binary_directory = configuration
+            .qdrant_binary_directory
+            .clone()
+            .expect("qdrant binary directory should be present");
+        let binary_name = get_qdrant_binary_name().expect("qdrant binary to be present");
+        let binary_path = qdrant_binary_directory.join(binary_name);
+
+        let child = Some(run_command(&binary_path, &qdrant_location));
 
         Ok(Self {
             child,
@@ -61,18 +66,13 @@ impl QdrantServerProcess {
     }
 }
 
-fn relative_command_path(command: impl AsRef<str>) -> Option<PathBuf> {
-    let cmd = if cfg!(windows) {
-        format!("{}.exe", command.as_ref())
+fn get_qdrant_binary_name() -> Option<String> {
+    let os = env::consts::OS;
+    if os == "macos" {
+        Some("qdrant_mac".to_owned())
     } else {
-        command.as_ref().into()
-    };
-
-    std::env::current_exe()
-        .ok()?
-        .parent()
-        .map(|dir| dir.join(cmd))
-        .filter(|path| path.is_file())
+        None
+    }
 }
 
 #[cfg(unix)]

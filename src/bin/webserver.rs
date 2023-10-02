@@ -64,4 +64,6 @@ fn repo_router() -> Router {
         // 127.0.0.1:42424/api/repo/sync?backend=local/{path_absolute}
         .route("/sync", get(sidecar::webserver::repos::sync))
         .route("/status", get(sidecar::webserver::repos::index_status))
+        // Gives back the status of the queue
+        .route("/queue", get(sidecar::webserver::repos::queue_status))
 }

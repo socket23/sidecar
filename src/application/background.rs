@@ -81,12 +81,12 @@ impl SyncQueue {
                     {
                         Ok(_) => {
                             tokio::task::spawn(async move {
-                                info!(?next.reporef, "indexing");
+                                info!(?next.reporef, "starting indexing of repository");
 
                                 let result = next.run(permit).await;
                                 _ = active.remove(&next.reporef);
 
-                                debug!(?result, "sync finished");
+                                debug!(?result, "indexing finished for repository");
                             });
                         }
                         Err((_, next)) => {
@@ -109,7 +109,7 @@ impl SyncQueue {
         self.progress.subscribe()
     }
 
-    pub(crate) async fn read_queue(&self) -> Vec<QueuedRepoStatus> {
+    pub async fn read_queue(&self) -> Vec<QueuedRepoStatus> {
         let mut output = vec![];
         self.active
             .scan_async(|_, handle| {
@@ -364,6 +364,7 @@ impl SyncPipes {
     }
 
     pub fn index_percent(&self, current: u8) {
+        debug!(?current, ?self.reporef, "indexing percentage");
         _ = self.progress.send(Progress {
             reporef: self.reporef.clone(),
             event: ProgressEvent::IndexPercent(current),
@@ -551,7 +552,6 @@ impl SyncHandle {
         Ok(status.expect("failed to update repo status"))
     }
 
-    // TODO(codestory): Implement this once we have information about the indexes
     async fn index(&self) -> Result<Either<SyncStatus, Arc<RepoMetadata>>> {
         use SyncStatus::*;
         let Application {

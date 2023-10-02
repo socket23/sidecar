@@ -8,7 +8,11 @@ static LOGGER_GUARD: OnceCell<tracing_appender::non_blocking::WorkerGuard> = Onc
 pub fn tracing_subscribe(config: &Configuration) -> bool {
     let env_filter_layer = fmt::layer()
         // Disable the hyper logs or else its a lot of log spam
-        .with_filter(EnvFilter::from_default_env().add_directive("hyper=off".parse().unwrap()));
+        .with_filter(
+            EnvFilter::from_default_env()
+                .add_directive("hyper=off".parse().unwrap())
+                .add_directive("debug".parse().unwrap()),
+        );
     let file_appender = tracing_appender::rolling::daily(config.log_dir(), "codestory.log");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     _ = LOGGER_GUARD.set(guard);

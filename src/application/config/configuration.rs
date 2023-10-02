@@ -56,6 +56,12 @@ pub struct Configuration {
     /// required for ort
     #[clap(short, long)]
     pub dylib_directory: Option<PathBuf>,
+
+    /// Qdrant allows us to create collections and we need to provide it a default
+    /// value to start with
+    #[clap(short, long, default_value_t = default_collection_name())]
+    #[serde(default = "default_collection_name")]
+    pub collection_name: String,
 }
 
 impl Configuration {
@@ -105,4 +111,8 @@ pub fn default_parallelism() -> usize {
 
 const fn default_buffer_size() -> usize {
     100_000_000
+}
+
+fn default_collection_name() -> String {
+    "codestory".to_owned()
 }

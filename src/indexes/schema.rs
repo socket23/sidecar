@@ -33,9 +33,8 @@ pub struct File {
 
     pub content: Field,
     pub line_end_indices: Field,
-
-    /// a flat list of every symbol's text, for searching, e.g.:
-    /// ["File", "Repo", "worker"]
+    // / a flat list of every symbol's text, for searching, e.g.:
+    // / ["File", "Repo", "worker"]
     pub symbols: Field,
 
     /// fast fields for scoring
@@ -53,8 +52,7 @@ pub struct File {
 
     /// Whether this entry is a file or a directory
     pub is_directory: Field,
-
-    /// How many commits have been made to this file in last 2 weeks
+    // How many commits have been made to this file in last 2 weeks
     pub commit_frequency: Field,
 }
 
@@ -105,18 +103,18 @@ impl File {
             unique_hash,
             repo_ref,
             repo_name,
+            last_commit_unix_seconds,
+            schema: builder.build(),
+            raw_repo_name,
+            raw_relative_path,
+            is_directory,
             content,
             line_end_indices,
             symbols,
             lang,
             avg_line_length,
-            last_commit_unix_seconds,
-            schema: builder.build(),
             raw_content,
-            raw_repo_name,
-            raw_relative_path,
             branches,
-            is_directory,
             commit_frequency,
         }
     }

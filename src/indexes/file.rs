@@ -276,14 +276,14 @@ impl RepositoryFile {
             schema.relative_path => relative_path_str,
             schema.repo_ref => repo_ref.as_str(),
             schema.repo_name => *repo_name,
+            schema.last_commit_unix_seconds => last_commit,
+            schema.is_directory => false,
             schema.content => self.buffer,
             schema.line_end_indices => line_end_indices,
             schema.lang => language.as_bytes(),
             schema.avg_line_length => lines_avg,
-            schema.last_commit_unix_seconds => last_commit,
             schema.symbols => String::default(),
             schema.branches => "HEAD".to_owned(),
-            schema.is_directory => false,
         ))
     }
 }
@@ -317,11 +317,11 @@ impl RepositoryDirectory {
                 schema.repo_ref => repo_ref.as_str(),
                 schema.repo_name => *repo_name,
                 schema.last_commit_unix_seconds => last_commit,
-                schema.branches => "HEAD".to_owned(),
                 schema.is_directory => true,
                 schema.unique_hash => cache_keys.tantivy(),
 
-                // nulls
+                // TODO(skcd): Add these later on
+                schema.branches => "HEAD".to_owned(),
                 schema.raw_content => Vec::<u8>::default(),
                 schema.content => String::default(),
                 schema.line_end_indices => Vec::<u8>::default(),

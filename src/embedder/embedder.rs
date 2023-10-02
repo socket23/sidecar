@@ -77,7 +77,7 @@ impl LocalEmbedder {
     pub fn new(model_dir: &Path) -> anyhow::Result<Self> {
         let environment = Arc::new(
             Environment::builder()
-                .with_name("Encode")
+                .with_name("encoding")
                 .with_log_level(LoggingLevel::Warning)
                 .with_execution_providers([ExecutionProvider::cpu()])
                 .with_telemetry(false)

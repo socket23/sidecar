@@ -4,5 +4,6 @@ pub mod embedder;
 pub mod git;
 pub mod indexes;
 pub mod repo;
+pub mod semantic_search;
 pub mod state;
 pub mod webserver;

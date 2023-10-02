@@ -29,13 +29,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-// TODO(skcd): Create a new endpoint here which can start the sync for the
-// whole repo and make that work
-// you will also figure out how to keep the state and everything here by doing
-// that.
-// once that's done, we also need to change the indexing logic so we use the
-// most frequently edited files first and then the rest (very important) and use
-// that for scoring
+// TODO(skcd): Add routes here which can do the following:
+// - when a file changes, it should still be logged and tracked
+// - when a file is opened, it should be tracked over here too
 pub async fn start(app: Application) -> anyhow::Result<()> {
     let bind = SocketAddr::new(app.config.host.parse()?, app.config.port);
     let api = Router::new()

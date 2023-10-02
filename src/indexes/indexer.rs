@@ -237,6 +237,8 @@ impl<'a> WriteHandleForIndexers<'a> {
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
 
+        debug!("writerhandleforindexers finished");
+
         Ok(metadata)
     }
 

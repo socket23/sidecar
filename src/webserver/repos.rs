@@ -82,6 +82,7 @@ pub async fn sync(
 //
 pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoResponse {
     let mut receiver = app.sync_queue.subscribe();
+    let progress_context = app.sync_queue.get_progress_context().to_owned();
 
     Sse::new(async_stream::stream! {
         while let Ok(event) = receiver.recv().await {
@@ -93,7 +94,7 @@ pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoRe
     .keep_alive(
         sse::KeepAlive::new()
             .interval(Duration::from_secs(2))
-            .event(sse::Event::default().event("keep_alive")),
+            .event(sse::Event::default().event(format!("keep_alive {}", progress_context))),
     )
 }
 

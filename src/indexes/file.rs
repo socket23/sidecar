@@ -82,7 +82,6 @@ impl Indexable for File {
             let cache = &cache;
             move |dir_entry: RepoDirectoryEntry| {
                 let completed = processed.fetch_add(1, Ordering::Relaxed);
-                pipes.index_percent(((completed as f32 / count as f32) * 100f32) as u8);
 
                 let entry_disk_path = dir_entry.path().unwrap().to_owned();
                 debug!(entry_disk_path, "processing entry for indexing");
@@ -109,7 +108,8 @@ impl Indexable for File {
                 if let Err(err) = self.worker(dir_entry, workload, writer) {
                     warn!(%err, entry_disk_path, "indexing failed; skipping");
                 }
-
+                debug!(entry_disk_path, "indexing processed; finished");
+                pipes.index_percent(((completed as f32 / count as f32) * 100f32) as u8);
                 // TODO(codestory): Enable embedding queue later on
                 // if let Err(err) = cache.parent().process_embedding_queue() {
                 //     warn!(?err, "failed to commit embeddings");

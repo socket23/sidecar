@@ -625,7 +625,7 @@ impl SyncHandle {
             Ok(_) => {
                 debug!("committing index");
                 writers.commit().await.map_err(SyncError::Tantivy)?;
-                debug!("finished commiting index");
+                debug!("finished committing index");
                 indexed.map_err(SyncError::Indexing)
             }
             // Err(_) if self.pipes.is_removed() => self.delete_repo(&repo, writers).await,

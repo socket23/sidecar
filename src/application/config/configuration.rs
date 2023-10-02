@@ -46,6 +46,11 @@ pub struct Configuration {
     /// it running on its own process
     #[clap(short, long)]
     pub qdrant_url: Option<String>,
+
+    /// The folder where the qdrant binary is present so we can start the server
+    /// and power the qdrant client
+    #[clap(short, long)]
+    pub qdrant_binary_directory: Option<PathBuf>,
 }
 
 impl Configuration {

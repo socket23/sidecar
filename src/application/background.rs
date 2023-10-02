@@ -364,7 +364,6 @@ impl SyncPipes {
     }
 
     pub fn index_percent(&self, current: u8) {
-        debug!(?current, ?self.reporef, "indexing percentage");
         _ = self.progress.send(Progress {
             reporef: self.reporef.clone(),
             event: ProgressEvent::IndexPercent(current),
@@ -467,6 +466,8 @@ impl Drop for SyncHandle {
     }
 }
 
+/// This is the handler for syncing and make sure that we can lock things properly
+/// and not run it over the budget
 impl SyncHandle {
     pub async fn new(app: Application, reporef: RepoRef, status: ProgressStream) -> Arc<Self> {
         let (exited, exit_signal) = flume::bounded(1);

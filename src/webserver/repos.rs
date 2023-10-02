@@ -93,7 +93,7 @@ pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoRe
     .keep_alive(
         sse::KeepAlive::new()
             .interval(Duration::from_secs(2))
-            .event(sse::Event::default().event("heartbeat")),
+            .event(sse::Event::default().event("keep_alive")),
     )
 }
 

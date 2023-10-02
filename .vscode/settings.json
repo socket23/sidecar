@@ -3,6 +3,7 @@
         "appender",
         "canonicalize",
         "codestory",
+        "dylib",
         "embedder",
         "Mmap",
         "Ngram",

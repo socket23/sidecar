@@ -51,6 +51,11 @@ pub struct Configuration {
     /// and power the qdrant client
     #[clap(short, long)]
     pub qdrant_binary_directory: Option<PathBuf>,
+
+    /// The location for the dylib directory where we have the runtime binaries
+    /// required for ort
+    #[clap(short, long)]
+    pub dylib_directory: Option<PathBuf>,
 }
 
 impl Configuration {

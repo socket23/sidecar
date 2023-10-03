@@ -287,4 +287,8 @@ impl<'a> FileCache<'a> {
     }
 
     // TODO(skcd): Start processing the chunks here
+    // We have to process the chunks here and keep cache properly
+    pub async fn process_chunks(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }

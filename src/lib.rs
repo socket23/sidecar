@@ -1,4 +1,5 @@
 pub mod application;
+pub mod chunking;
 pub mod db;
 pub mod embedder;
 pub mod git;

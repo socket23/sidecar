@@ -288,6 +288,10 @@ impl<'a> FileCache<'a> {
 
     // TODO(skcd): Start processing the chunks here
     // We have to process the chunks here and keep cache properly
+    // We want to track this iteration of the sync with a unique handle
+    // so the next time we try t sync we give it a new id and resync the whole repo
+    // so the main problem here we have to solve for is what kind of new id can we
+    // use for the sync, given there can be incremental syncs too.
     pub async fn process_chunks(&self) -> anyhow::Result<()> {
         Ok(())
     }

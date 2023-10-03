@@ -7,7 +7,7 @@ use super::{
 
 fn naive_chunker(buffer: &str, line_count: usize, overlap: usize) -> Vec<String> {
     let mut chunks: Vec<String> = vec![];
-    let mut current_chunk = buffer
+    let current_chunk = buffer
         .lines()
         .into_iter()
         .map(|line| line.to_owned())

@@ -14,7 +14,7 @@ use tracing_subscriber::{
 use crate::{
     chunking::languages::TSLanguageParsing,
     db::sqlite::{self, SqlDb},
-    semantic_search::{client::SemanticClient, qdrant_process::QdrantServerProcess},
+    semantic_search::client::SemanticClient,
 };
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
@@ -40,9 +40,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn initialize(
-        mut config: Configuration,
-    ) -> anyhow::Result<(Self, Arc<Configuration>)> {
+    pub async fn initialize(mut config: Configuration) -> anyhow::Result<Self> {
         config.max_threads = config.max_threads.max(minimum_parallelism());
         // Setting the directory for the state and where we will be storing
         // things
@@ -54,18 +52,16 @@ impl Application {
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
         let language_parsing = TSLanguageParsing::init();
         let semantic_client = SemanticClient::new(config.clone(), language_parsing).await;
-        Ok((
-            Self {
-                config: config.clone(),
-                repo_pool: repo_pool.clone(),
-                indexes: Indexes::new(repo_pool, sql_db.clone(), semantic_client, config.clone())
-                    .await?
-                    .into(),
-                sync_queue,
-                sql: sql_db,
-            },
-            config.clone(),
-        ))
+        debug!("semantic client presence: {}", semantic_client.is_some());
+        Ok(Self {
+            config: config.clone(),
+            repo_pool: repo_pool.clone(),
+            indexes: Indexes::new(repo_pool, sql_db.clone(), semantic_client, config.clone())
+                .await?
+                .into(),
+            sync_queue,
+            sql: sql_db,
+        })
     }
 
     pub fn install_logging(config: &Configuration) {

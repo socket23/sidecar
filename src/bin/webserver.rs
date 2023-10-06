@@ -19,18 +19,20 @@ pub type Router<S = Application> = axum::Router<S>;
 async fn main() -> Result<()> {
     info!("CodeStory 🚀");
     let configuration = Configuration::parse();
+
+    // Star the qdrant server and make sure that it has started up
+    let _qdrant_process = QdrantServerProcess::initialize(&configuration).await?;
+    // HC the process here to make sure that it has started up
+    wait_for_qdrant().await;
+    debug!("qdrant server started");
+
     // We get the logging setup first
     debug!("installing logging to local file");
     Application::install_logging(&configuration);
 
     // We initialize the logging here
-    let (application, configuration) = Application::initialize(configuration).await?;
+    let application = Application::initialize(configuration).await?;
     debug!("initialized application");
-
-    // Star the qdrant server and make sure that it has started up
-    let _qdrant_process = QdrantServerProcess::initialize(configuration.clone()).await?;
-    // HC the process here to make sure that it has started up
-    wait_for_qdrant().await;
 
     // Start the webserver
     let _ = start(application).await;

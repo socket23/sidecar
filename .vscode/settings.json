@@ -4,6 +4,7 @@
         "canonicalize",
         "chunker",
         "codestory",
+        "Devs",
         "dylib",
         "embedder",
         "getrlimit",

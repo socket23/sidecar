@@ -14,7 +14,7 @@ use tracing_subscriber::{
 use crate::{
     chunking::languages::TSLanguageParsing,
     db::sqlite::{self, SqlDb},
-    semantic_search::client::SemanticClient,
+    semantic_search::{client::SemanticClient, qdrant_process::QdrantServerProcess},
 };
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
@@ -40,25 +40,32 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn initialize(mut config: Configuration) -> anyhow::Result<Self> {
+    pub async fn initialize(
+        mut config: Configuration,
+    ) -> anyhow::Result<(Self, Arc<Configuration>)> {
         config.max_threads = config.max_threads.max(minimum_parallelism());
+        // Setting the directory for the state and where we will be storing
+        // things
         config.state_source.set_default_dir(&config.index_dir);
-        debug!(?config, "effective configuration");
+        debug!(?config, "configuration after loading");
         let repo_pool = config.state_source.initialize_pool()?;
         let config = Arc::new(config);
         let sync_queue = SyncQueue::start(config.clone());
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
         let language_parsing = TSLanguageParsing::init();
         let semantic_client = SemanticClient::new(config.clone(), language_parsing).await;
-        Ok(Self {
-            config: config.clone(),
-            repo_pool: repo_pool.clone(),
-            indexes: Indexes::new(repo_pool, sql_db.clone(), semantic_client, config)
-                .await?
-                .into(),
-            sync_queue,
-            sql: sql_db,
-        })
+        Ok((
+            Self {
+                config: config.clone(),
+                repo_pool: repo_pool.clone(),
+                indexes: Indexes::new(repo_pool, sql_db.clone(), semantic_client, config.clone())
+                    .await?
+                    .into(),
+                sync_queue,
+                sql: sql_db,
+            },
+            config.clone(),
+        ))
     }
 
     pub fn install_logging(config: &Configuration) {

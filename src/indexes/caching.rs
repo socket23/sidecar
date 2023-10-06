@@ -605,7 +605,6 @@ impl<'a> ChunkCache<'a> {
 
         match self.cache_to_commit_hash.entry(id) {
             scc::hash_map::Entry::Occupied(mut existing) => {
-                let key = existing.key();
                 // The existing commit hash does not match the new commit hash,
                 // so we need to update things
                 if existing.get().value != commit_hash {
@@ -624,7 +623,6 @@ impl<'a> ChunkCache<'a> {
                 *existing.get_mut() = commit_hash.into();
             }
             scc::hash_map::Entry::Vacant(vacant) => {
-                let key = vacant.key();
                 self.new_sql
                     .write()
                     .unwrap()

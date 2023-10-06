@@ -7,8 +7,7 @@ use axum::Extension;
 use clap::Parser;
 use sidecar::{
     application::{application::Application, config::configuration::Configuration},
-    repo::types::{Backend, RepoRef},
-    webserver::repos::{self, RepoParams},
+    semantic_search::qdrant_process::{wait_for_qdrant, QdrantServerProcess},
 };
 use std::net::SocketAddr;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
@@ -18,13 +17,20 @@ pub type Router<S = Application> = axum::Router<S>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    info!("CodeStory 🚀");
     let configuration = Configuration::parse();
     // We get the logging setup first
     Application::install_logging(&configuration);
 
     // We initialize the logging here
-    let application = Application::initialize(configuration).await?;
-    info!("CodeStory 🚀");
+    let (application, configuration) = Application::initialize(configuration).await?;
+
+    // Star the qdrant server and make sure that it has started up
+    let _qdrant_process = QdrantServerProcess::initialize(configuration.clone()).await?;
+    // HC the process here to make sure that it has started up
+    wait_for_qdrant().await;
+
+    // Start the webserver
     let _ = start(application).await;
     Ok(())
 }

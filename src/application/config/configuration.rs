@@ -47,7 +47,7 @@ pub struct Configuration {
 
     /// Qdrant url here can be mentioned if we are running it remotely or have
     /// it running on its own process
-    #[clap(short, long)]
+    #[clap(long)]
     pub qdrant_url: Option<String>,
 
     /// The folder where the qdrant binary is present so we can start the server
@@ -76,13 +76,6 @@ impl Configuration {
     /// Directory where logs are written to
     pub fn log_dir(&self) -> PathBuf {
         self.index_dir.join("logs")
-    }
-
-    pub fn index_version_mismatch(&self) -> bool {
-        // let current: String = read_file_or_default(self.version_file.as_ref().unwrap()).unwrap();
-
-        // !current.is_empty() && current != SCHEMA_VERSION
-        false
     }
 
     pub fn index_path(&self, name: impl AsRef<Path>) -> impl AsRef<Path> {

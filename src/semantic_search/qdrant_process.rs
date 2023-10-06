@@ -7,6 +7,7 @@ use std::path::Path;
 use std::{fs::create_dir_all, process::Child, sync::Arc};
 
 use anyhow::Result;
+use tracing::debug;
 
 use crate::application::config::configuration::Configuration;
 
@@ -18,6 +19,7 @@ pub struct QdrantServerProcess {
 /// This will drop the child process and when it exits, it will kill the process
 impl Drop for QdrantServerProcess {
     fn drop(&mut self) {
+        debug!("Dropping QdrantServerProcess");
         if let Some(mut child) = self.child.take() {
             child.kill().unwrap();
         }

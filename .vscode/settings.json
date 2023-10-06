@@ -23,6 +23,7 @@
         "RLIMIT",
         "setrlimit",
         "sqlx",
+        "srcpath",
         "tanvity",
         "webserver",
         "yolo"

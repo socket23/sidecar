@@ -132,7 +132,7 @@ impl Indexable for File {
                     repo_metadata,
                     cache,
                     // figure out what to pass here
-                    commit_hash: "skcd_you_fucked_up".to_owned(),
+                    commit_hash: repo_metadata.commit_hash.clone(),
                 };
 
                 trace!(entry_disk_path, "queueing entry");

@@ -149,13 +149,13 @@ async fn periodic_repo_poll(app: Application, reporef: RepoRef) -> Option<()> {
             return None;
         }
 
-        debug!("checking if sync in progress");
+        debug!("checking if sync in progress for re-indexing");
         if let Err(err) = app.write_index().block_until_synced(reporef.clone()).await {
             error!(?err, ?reporef, "sync failed");
             return None;
         }
 
-        debug!("sync done");
+        debug!("sync done for re-indexing");
         let (updated, status) = check_repo(&app, &reporef)?;
         if !status.indexable() {
             warn!(?status, ?reporef, "monitoring stopped");

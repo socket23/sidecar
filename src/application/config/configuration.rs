@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    num::NonZeroUsize,
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -62,6 +65,11 @@ pub struct Configuration {
     #[clap(short, long, default_value_t = default_collection_name())]
     #[serde(default = "default_collection_name")]
     pub collection_name: String,
+
+    #[clap(long, default_value_t = interactive_batch_size())]
+    #[serde(default = "interactive_batch_size")]
+    /// Batch size for batched embeddings
+    pub embedding_batch_len: NonZeroUsize,
 }
 
 impl Configuration {
@@ -115,4 +123,8 @@ const fn default_buffer_size() -> usize {
 
 fn default_collection_name() -> String {
     "codestory".to_owned()
+}
+
+fn interactive_batch_size() -> NonZeroUsize {
+    NonZeroUsize::new(1).unwrap()
 }

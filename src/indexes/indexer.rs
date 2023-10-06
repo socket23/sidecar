@@ -25,6 +25,7 @@ use crate::{
     repo::types::{RepoMetadata, RepoRef, Repository},
 };
 
+use super::caching::FileCache;
 use super::query::Query;
 use super::schema::File;
 
@@ -269,30 +270,30 @@ impl Indexes {
         config: Arc<Configuration>,
     ) -> Result<Self> {
         // Figure out how to do version mismatch
-        // if config.state_source.index_version_mismatch() {
-        //     // we don't support old schemas, and tantivy will hard
-        //     // error if we try to open a db with a different schema.
-        //     std::fs::remove_dir_all(config.index_path("repo"))?;
-        //     std::fs::remove_dir_all(config.index_path("content"))?;
+        if config.state_source.index_version_mismatch() {
+            // we don't support old schemas, and tantivy will hard
+            // error if we try to open a db with a different schema.
+            std::fs::remove_dir_all(config.index_path("repo"))?;
+            std::fs::remove_dir_all(config.index_path("content"))?;
 
-        //     let mut refs = vec![];
-        //     // knocking out our current file caches will force re-indexing qdrant
-        //     repo_pool.for_each(|reporef, repo| {
-        //         refs.push(reporef.to_owned());
-        //         repo.last_index_unix_secs = 0;
-        //     });
+            let mut refs = vec![];
+            // knocking out our current file caches will force re-indexing qdrant
+            repo_pool.for_each(|reporef, repo| {
+                refs.push(reporef.to_owned());
+                repo.last_index_unix_secs = 0;
+            });
 
-        //     for reporef in refs {
-        //         FileCache::for_repo(&sql, semantic.as_ref(), &reporef)
-        //             .delete()
-        //             .await?;
-        //     }
+            for reporef in refs {
+                FileCache::for_repo(&sql_db, &reporef, semantic.as_ref())
+                    .delete()
+                    .await?;
+            }
 
-        //     if let Some(ref semantic) = semantic {
-        //         semantic.reset_collection_blocking().await?;
-        //     }
-        // }
-        // config.source.save_index_version()?;
+            if let Some(ref semantic) = semantic {
+                semantic.delete_collection().await?;
+            }
+        }
+        config.state_source.save_index_version()?;
 
         Ok(Self {
             file: Indexer::create(

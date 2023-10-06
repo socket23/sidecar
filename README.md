@@ -26,3 +26,19 @@ the binary
 ## Qdrant binary and where to download
 - To download the binaries, you can visit this: https://github.com/qdrant/qdrant/releases/tag/v1.2.0
 - download from here and update the binary where required
+
+
+## What keys are important here?
+- We need to have a single key which can map back to the semantic algorithm we are using, cause tantivy is sensitive to changes
+ in the keys
+- Then we need a key to identify the file using the file path (we can use that to lookup everything about a file and update things)
+- Lastly we also need a key which can be used to track the commit hash associated with the repo when we are indexing
+- And another key which is the hash of the file content in the file, this will be useful to make sure that we can see if things have changed or not and decide accordingly
+
+Database structure:
+file_cache: file_path, repo_ref, tantivy_cache_key, file_hash
+chunk_cache: file_path, repo_ref, chunk_hash, line_start, line_end, tantivy_cache_key
+
+
+## What are the important files where we need to rebuild the database again?
+- semantic_search/schema.rs is one of them

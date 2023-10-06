@@ -9,6 +9,7 @@ use std::{
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use tantivy::{doc, schema::Schema, IndexWriter, Term};
+use tokio::runtime::Handle;
 use tracing::{debug, info, trace, warn};
 
 use crate::repo::{
@@ -39,9 +40,13 @@ struct Workload<'a> {
     repo_ref: String,
     relative_path: PathBuf,
     normalized_path: PathBuf,
+    commit_hash: String,
 }
 
 impl<'a> Workload<'a> {
+    // These cache keys are important as they also encode information about the
+    // the file path in the cache, which implies that for each file we will have
+    // a unique cache key.
     fn cache_keys(&self, dir_entry: &RepoDirectoryEntry) -> CacheKeys {
         let semantic_hash = {
             let mut hash = blake3::Hasher::new();
@@ -58,7 +63,27 @@ impl<'a> Workload<'a> {
             hash.finalize().to_hex().to_string()
         };
 
-        CacheKeys::new(tantivy_hash)
+        // We get a unique hash for the file content
+        let file_content_hash = match dir_entry.buffer() {
+            Some(content) => {
+                let mut hash = blake3::Hasher::new();
+                hash.update(content.as_bytes())
+                    .finalize()
+                    .to_hex()
+                    .to_string()
+            }
+            None => "no_content_hash".to_owned(),
+        };
+
+        CacheKeys::new(
+            tantivy_hash,
+            semantic_hash,
+            self.commit_hash.to_owned(),
+            self.normalized_path
+                .to_str()
+                .map_or("mangled_path".to_owned(), |path| path.to_owned()),
+            file_content_hash,
+        )
     }
 }
 
@@ -73,7 +98,11 @@ impl Indexable for File {
         pipes: &SyncPipes,
     ) -> Result<()> {
         // TODO(skcd): Implement this
-        let file_cache = Arc::new(FileCache::for_repo(&self.sql, reporef));
+        let file_cache = Arc::new(FileCache::for_repo(
+            &self.sql,
+            reporef,
+            self.semantic.as_ref(),
+        ));
         let cache = file_cache.retrieve().await;
         let repo_name = reporef.indexed_name();
         let processed = &AtomicU64::new(0);
@@ -102,6 +131,8 @@ impl Indexable for File {
                     normalized_path,
                     repo_metadata,
                     cache,
+                    // figure out what to pass here
+                    commit_hash: "skcd_you_fucked_up".to_owned(),
                 };
 
                 trace!(entry_disk_path, "queueing entry");
@@ -109,11 +140,11 @@ impl Indexable for File {
                     warn!(%err, entry_disk_path, "indexing failed; skipping");
                 }
                 debug!(entry_disk_path, "indexing processed; finished");
+
+                if let Err(err) = cache.parent().process_embedding_queue() {
+                    warn!(?err, "failed to commit embeddings");
+                }
                 pipes.index_percent(((completed as f32 / count as f32) * 100f32) as u8);
-                // TODO(codestory): Enable embedding queue later on
-                // if let Err(err) = cache.parent().process_embedding_queue() {
-                //     warn!(?err, "failed to commit embeddings");
-                // }
             }
         };
 
@@ -247,25 +278,30 @@ impl RepositoryFile {
             .map(|detection| detection.language().to_ascii_lowercase())
             .unwrap_or("not_detected_language".to_owned());
 
-        // TODO(skcd): Process the semantic layer here, and then process the semantic
-        // backend and do the embedding
-        // if schema.semantic.is_some() {
-        //     tokio::task::block_in_place(|| {
-        //         Handle::current().block_on(async {
-        //             file_cache
-        //                 .process_semantic(
-        //                     cache_keys,
-        //                     repo_name,
-        //                     repo_ref,
-        //                     &relative_path_str,
-        //                     &self.buffer,
-        //                     lang_str,
-        //                     &self.branches,
-        //                 )
-        //                 .await;
-        //         })
-        //     });
-        // }
+        let file_extension = self
+            .pathbuf
+            .extension()
+            .map(|extension| extension.to_str())
+            .flatten();
+
+        if schema.semantic.is_some() {
+            tokio::task::block_in_place(|| {
+                Handle::current().block_on(async {
+                    let _ = file_cache
+                        .process_chunks(
+                            cache_keys,
+                            repo_name,
+                            repo_ref,
+                            &relative_path_str,
+                            &self.buffer,
+                            &language,
+                            &[],
+                            file_extension,
+                        )
+                        .await;
+                })
+            });
+        }
 
         Some(doc!(
             schema.raw_content => self.buffer.as_bytes(),

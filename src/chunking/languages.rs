@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use super::{
     javascript::javascript_language_config, rust::rust_language_config,
     typescript::typescript_language_config,
@@ -26,13 +24,13 @@ fn naive_chunker(buffer: &str, line_count: usize, overlap: usize) -> Vec<String>
 /// We are going to use tree-sitter to parse the code and get the chunks for the
 /// code. we are going to use the algo sweep uses for tree-sitter
 ///
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TSLanguageConfig {
     /// A list of language names that can be processed by these scope queries
     /// e.g.: ["Typescript", "TSX"], ["Rust"]
     pub language_ids: &'static [&'static str],
 
-    /// Extensions that can help classify the file: .rs, .rb, .cabal
+    /// Extensions that can help classify the file: rs, js, tx, py, etc
     pub file_extensions: &'static [&'static str],
 
     /// tree-sitter grammar for this language
@@ -49,6 +47,7 @@ impl TSLanguageConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct TSLanguageParsing {
     configs: Vec<TSLanguageConfig>,
 }
@@ -66,45 +65,47 @@ impl TSLanguageParsing {
 
     /// We will use this to chunk the file to pieces which can be used for
     /// searching
-    pub async fn chunk_file(&self, file_path: &Path) -> Vec<Span> {
-        let file_extension = file_path.extension();
-        let file_content = tokio::fs::read_to_string(file_path).await.unwrap();
+    pub fn chunk_file(
+        &self,
+        file_path: &str,
+        buffer: &str,
+        file_extension: Option<&str>,
+    ) -> Vec<Span> {
         if file_extension.is_none() {
             // We use naive chunker here which just splits on the number
             // of lines
-            let chunks = naive_chunker(&file_content, 30, 15);
+            let chunks = naive_chunker(buffer, 30, 15);
             let mut snippets: Vec<Span> = Default::default();
-            chunks.iter().enumerate().for_each(|(i, _chunk)| {
+            chunks.into_iter().enumerate().for_each(|(i, chunk)| {
                 let start = i * 30;
                 let end = (i + 1) * 30;
-                snippets.push(Span::new(start, end, None));
+                snippets.push(Span::new(start, end, None, Some(chunk)));
             });
             return snippets;
         }
         // We try to find which language config we should use for this file
-        let language_config_maybe = self.configs.iter().find(|config| {
-            config
-                .file_extensions
-                .contains(&file_extension.unwrap().to_str().unwrap())
-        });
+        let language_config_maybe = self
+            .configs
+            .iter()
+            .find(|config| config.file_extensions.contains(&file_extension.unwrap()));
         if let Some(language_config) = language_config_maybe {
             // We use tree-sitter to parse the file and get the chunks
             // for the file
             let language = language_config.grammar;
             let mut parser = tree_sitter::Parser::new();
             parser.set_language(language()).unwrap();
-            let buffer = std::fs::read_to_string(file_path).unwrap();
-            let tree = parser.parse(&buffer, None).unwrap();
-            let chunks = chunk_tree(&tree, language_config, 256, 30, &buffer);
+            let tree = parser.parse(buffer.as_bytes(), None).unwrap();
+            // we allow for 1500 characters and 100 character coalesce
+            let chunks = chunk_tree(&tree, language_config, 1500, 100, &buffer);
             chunks
         } else {
             // use naive chunker here which just splits the file into parts
-            let chunks = naive_chunker(&file_content, 30, 15);
+            let chunks = naive_chunker(buffer, 30, 15);
             let mut snippets: Vec<Span> = Default::default();
-            chunks.iter().enumerate().for_each(|(i, _chunk)| {
+            chunks.into_iter().enumerate().for_each(|(i, chunk)| {
                 let start = i * 30;
                 let end = (i + 1) * 30;
-                snippets.push(Span::new(start, end, None));
+                snippets.push(Span::new(start, end, None, Some(chunk)));
             });
             snippets
         }
@@ -116,14 +117,16 @@ pub struct Span {
     pub start: usize,
     pub end: usize,
     pub language: Option<String>,
+    pub data: Option<String>,
 }
 
 impl Span {
-    fn new(start: usize, end: usize, language: Option<String>) -> Self {
+    fn new(start: usize, end: usize, language: Option<String>, data: Option<String>) -> Self {
         Self {
             start,
             end,
             language,
+            data,
         }
     }
 
@@ -138,13 +141,23 @@ fn chunk_node(
     max_chars: usize,
 ) -> Vec<Span> {
     let mut chunks: Vec<Span> = vec![];
-    let mut current_chunk = Span::new(node.start_byte(), node.end_byte(), language.get_language());
+    let mut current_chunk = Span::new(
+        node.start_byte(),
+        node.start_byte(),
+        language.get_language(),
+        None,
+    );
     let mut node_walker = node.walk();
     let current_node_children = node.children(&mut node_walker);
     for child in current_node_children {
         if child.end_byte() - child.start_byte() > max_chars {
             chunks.push(current_chunk.clone());
-            current_chunk = Span::new(child.end_byte(), child.end_byte(), language.get_language());
+            current_chunk = Span::new(
+                child.end_byte(),
+                child.end_byte(),
+                language.get_language(),
+                None,
+            );
             chunks.extend(chunk_node(child, language, max_chars));
         } else if child.end_byte() - child.start_byte() + current_chunk.len() > max_chars {
             chunks.push(current_chunk.clone());
@@ -152,6 +165,7 @@ fn chunk_node(
                 child.start_byte(),
                 child.end_byte(),
                 language.get_language(),
+                None,
             );
         } else {
             current_chunk.end = child.end_byte();
@@ -194,21 +208,26 @@ pub fn chunk_tree(
         return Default::default();
     }
     if chunks.len() < 2 {
-        return vec![Span::new(0, chunks[0].end, language.get_language())];
+        return vec![Span::new(0, chunks[0].end, language.get_language(), None)];
     }
     for (prev, curr) in chunks.to_vec().iter_mut().zip(chunks.iter_mut().skip(1)) {
         prev.end = curr.start;
     }
 
     let mut new_chunks: Vec<Span> = Default::default();
-    let mut current_chunk = Span::new(0, 0, language.get_language());
+    let mut current_chunk = Span::new(0, 0, language.get_language(), None);
     for chunk in chunks.iter() {
-        current_chunk = Span::new(current_chunk.start, chunk.end, language.get_language());
+        current_chunk = Span::new(
+            current_chunk.start,
+            chunk.end,
+            language.get_language(),
+            None,
+        );
         if non_whitespace_len(buffer_content[current_chunk.start..current_chunk.end].trim())
             > coalesce
         {
             new_chunks.push(current_chunk.clone());
-            current_chunk = Span::new(chunk.end, chunk.end, language.get_language());
+            current_chunk = Span::new(chunk.end, chunk.end, language.get_language(), None);
         }
     }
 
@@ -223,7 +242,7 @@ pub fn chunk_tree(
         .map(|chunk| {
             let start_line = get_line_number(chunk.start, split_lines.as_slice());
             let end_line = get_line_number(chunk.end, split_lines.as_slice());
-            Span::new(start_line, end_line, language.get_language())
+            Span::new(start_line, end_line, language.get_language(), None)
         })
         .filter(|span| span.len() > 0)
         .collect::<Vec<Span>>();
@@ -236,5 +255,18 @@ pub fn chunk_tree(
         line_chunks.pop();
     }
 
+    let split_buffer = buffer_content.split("\n").collect::<Vec<_>>();
+
     line_chunks
+        .into_iter()
+        .map(|line_chunk| {
+            let data: String = split_buffer[line_chunk.start..line_chunk.end].join("\n");
+            Span {
+                start: line_chunk.start,
+                end: line_chunk.end,
+                language: line_chunk.language,
+                data: Some(data),
+            }
+        })
+        .collect::<Vec<_>>()
 }

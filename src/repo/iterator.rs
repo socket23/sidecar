@@ -31,6 +31,10 @@ impl RepoDirectoryEntry {
             _ => None,
         }
     }
+
+    pub fn is_file(&self) -> bool {
+        matches!(self, RepoDirectoryEntry::File(_))
+    }
 }
 
 pub struct RepositoryDirectory {

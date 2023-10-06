@@ -54,6 +54,9 @@ pub struct File {
     pub is_directory: Field,
     // How many commits have been made to this file in last 2 weeks
     pub commit_frequency: Field,
+
+    // The commit hash for this file
+    pub commit_hash: Field,
 }
 
 impl File {
@@ -77,8 +80,6 @@ impl File {
             builder.add_bytes_field("line_end_indices", BytesOptions::default().set_stored());
 
         let symbols = builder.add_text_field("symbols", trigram.clone());
-        let symbol_locations =
-            builder.add_bytes_field("symbol_locations", BytesOptions::default().set_stored());
 
         let branches = builder.add_text_field("branches", trigram);
 
@@ -95,6 +96,7 @@ impl File {
 
         let is_directory = builder.add_bool_field("is_directory", FAST);
         let commit_frequency = builder.add_u64_field("commit_frequency", FAST);
+        let commit_hash = builder.add_text_field("commit_hash", STRING);
 
         Self {
             sql,
@@ -117,6 +119,7 @@ impl File {
             raw_content,
             branches,
             commit_frequency,
+            commit_hash,
         }
     }
 }

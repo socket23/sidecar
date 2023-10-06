@@ -12,6 +12,7 @@ use tracing_subscriber::{
 };
 
 use crate::{
+    chunking::languages::TSLanguageParsing,
     db::sqlite::{self, SqlDb},
     semantic_search::client::SemanticClient,
 };
@@ -47,7 +48,8 @@ impl Application {
         let config = Arc::new(config);
         let sync_queue = SyncQueue::start(config.clone());
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
-        let semantic_client = SemanticClient::new(config.clone()).await;
+        let language_parsing = TSLanguageParsing::init();
+        let semantic_client = SemanticClient::new(config.clone(), language_parsing).await;
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),

@@ -14,6 +14,8 @@ use super::types::{RepoRef, Repository};
 
 pub type RepositoryPool = Arc<scc::HashMap<RepoRef, Repository>>;
 
+include!(concat!(env!("OUT_DIR"), "/version_hash.rs"));
+
 #[derive(thiserror::Error, Debug)]
 pub enum RepoError {
     #[error("No source file found")]
@@ -49,6 +51,9 @@ pub struct StateSource {
     // state file where we store the status of each repository
     #[serde(default)]
     repo_state_file: Option<PathBuf>,
+
+    #[serde(default)]
+    binary_version_hash: Option<PathBuf>,
 }
 
 impl StateSource {
@@ -57,6 +62,9 @@ impl StateSource {
 
         self.repo_state_file
             .get_or_insert_with(|| dir.join("repo_state"));
+
+        self.binary_version_hash
+            .get_or_insert_with(|| dir.join("binary_version_hash"));
 
         self.directory.get_or_insert_with(|| {
             let target = dir.join("local_cache");
@@ -138,6 +146,20 @@ impl StateSource {
             None => Err(RepoError::NoSourceGiven),
             Some(ref path) => pretty_write_file(path, pool.as_ref()),
         }
+    }
+
+    pub fn index_version_mismatch(&self) -> bool {
+        let current: String =
+            read_file_or_default(self.binary_version_hash.as_ref().unwrap()).unwrap();
+
+        !current.is_empty() && current != BINARY_VERSION_HASH
+    }
+
+    pub fn save_index_version(&self) -> Result<(), RepoError> {
+        pretty_write_file(
+            self.binary_version_hash.as_ref().unwrap(),
+            BINARY_VERSION_HASH,
+        )
     }
 }
 

@@ -76,6 +76,8 @@ fn repo_router() -> Router {
         .route("/status", get(sidecar::webserver::repos::index_status))
         // Gives back the status of the queue
         .route("/queue", get(sidecar::webserver::repos::queue_status))
+        // Gives back the repos we know about
+        .route("/repo_list", get(sidecar::webserver::repos::repo_status))
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

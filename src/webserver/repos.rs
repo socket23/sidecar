@@ -1,7 +1,7 @@
 // This is the place where we handle all the routes with respect to the repos
 // and how we are going to index them.
 
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use axum::{
     extract::{Query, State},
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     application::application::Application,
-    repo::types::{Backend, RepoRef, SyncStatus},
+    repo::types::{Backend, RepoRef, Repository, SyncStatus},
 };
 
 use super::types::{json, ApiResponse, Result};
@@ -64,6 +64,13 @@ pub struct RepoParams {
 
 impl ApiResponse for ReposResponse {}
 
+#[derive(Deserialize, Serialize)]
+pub struct RepoStatus {
+    pub repo_map: HashMap<RepoRef, Repository>,
+}
+
+impl ApiResponse for RepoStatus {}
+
 /// Synchronize a repo by its id
 pub async fn sync(
     Query(RepoParams { repo }): Query<RepoParams>,
@@ -101,4 +108,15 @@ pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoRe
 /// Get the status of the queue which we are processing
 pub async fn queue_status(State(app): State<Application>) -> impl IntoResponse {
     json(ReposResponse::SyncQueue(app.sync_queue.read_queue().await))
+}
+
+// Get the status of the various repositories
+pub async fn repo_status(State(app): State<Application>) -> impl IntoResponse {
+    let mut repo_map: HashMap<_, _> = Default::default();
+    app.repo_pool
+        .scan_async(|repo_name, state| {
+            repo_map.insert(repo_name.clone(), state.clone());
+        })
+        .await;
+    json(RepoStatus { repo_map })
 }

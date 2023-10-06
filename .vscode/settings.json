@@ -4,6 +4,7 @@
         "canonicalize",
         "chunker",
         "codestory",
+        "debouncer",
         "Devs",
         "dylib",
         "embedder",

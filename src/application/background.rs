@@ -285,7 +285,7 @@ impl BoundSyncQueue {
             .await;
     }
 
-    pub(crate) async fn startup_scan(self) -> anyhow::Result<()> {
+    pub async fn startup_scan(self) -> anyhow::Result<()> {
         let Self(Application { repo_pool, .. }, _) = &self;
 
         let mut repos = vec![];

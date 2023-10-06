@@ -7,11 +7,12 @@ use axum::Extension;
 use clap::Parser;
 use sidecar::{
     application::{application::Application, config::configuration::Configuration},
+    bg_poll::background_polling::poll_repo_updates,
     semantic_search::qdrant_process::{wait_for_qdrant, QdrantServerProcess},
 };
 use std::net::SocketAddr;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 pub type Router<S = Application> = axum::Router<S>;
 
@@ -35,7 +36,24 @@ async fn main() -> Result<()> {
     debug!("initialized application");
 
     // Start the webserver
-    let _ = start(application).await;
+    let _ = run(application).await;
+    Ok(())
+}
+
+pub async fn run(application: Application) -> Result<()> {
+    let mut joins = tokio::task::JoinSet::new();
+
+    tokio::spawn(poll_repo_updates(application.clone()));
+
+    joins.spawn(start(application));
+
+    while let Some(result) = joins.join_next().await {
+        if let Ok(Err(err)) = result {
+            error!(?err, "sidecar failed");
+            return Err(err);
+        }
+    }
+
     Ok(())
 }
 

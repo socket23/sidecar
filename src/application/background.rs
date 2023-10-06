@@ -590,10 +590,6 @@ impl SyncHandle {
                 .read_async(&self.reporef, |_k, v| v.clone())
                 .await
                 .unwrap();
-
-            // if let Some(ref bf) = self.new_branch_filters {
-            //     orig.branch_filter = bf.patch(orig.branch_filter.as_ref());
-            // }
             orig
         };
 

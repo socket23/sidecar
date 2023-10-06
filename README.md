@@ -45,4 +45,8 @@ chunk_cache: file_path, repo_ref, chunk_hash, line_start, line_end, tantivy_cach
 
 ## How to start the binary?
 - I am using this command as we also need to provide the qdrant binary
-`./target/debug/webserver --qdrant-binary-directory /Users/skcd/scratch/sidecar/qdrant`
+`./target/debug/webserver --qdrant-binary-directory /Users/skcd/scratch/sidecar/qdrant --dylib-directory /Users/skcd/scratch/sidecar/onnxruntime/ --model-dir /Users/skcd/scratch/sidecar/models/all-MiniLM-L6-v2/ --qdrant-url http://127.0.0.1:6334`
+- For large repos we have to set the ulimit on the shell where the binary will be running manually by using ulimit -n 16535 or similar
+
+## Gotcha's
+- If qdrant explodes while indexing, you might need to increase the ulimit on your machine. You can do that by running: sudo ulimit -n 16535

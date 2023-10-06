@@ -77,12 +77,12 @@ fn run_command(command: &Path, qdrant_dir: &Path) -> Child {
     use nix::sys::resource::{getrlimit, setrlimit, Resource};
     use tracing::error;
     match getrlimit(Resource::RLIMIT_NOFILE) {
-        Ok((current_soft, current_hard)) if current_hard < 4096 => {
-            if let Err(err) = setrlimit(Resource::RLIMIT_NOFILE, 2048, 4096) {
+        Ok((current_soft, current_hard)) if current_hard < 16535 => {
+            if let Err(err) = setrlimit(Resource::RLIMIT_NOFILE, 2048, 16535) {
                 error!(
                     ?err,
                     new_soft = 2048,
-                    new_hard = 4096,
+                    new_hard = 16535,
                     current_soft,
                     current_hard,
                     "failed to set rlimit/nofile"

@@ -30,7 +30,7 @@ storage:
     deleted_threshold: 0.2
 
     # The minimal number of vectors in a segment, required to perform segment optimization
-    vacuum_min_vector_number: 1000
+    vacuum_min_vector_number: 10000
 
     # Target amount of segments optimizer will try to keep.
     # Real amount of segments may vary depending on multiple parameters:

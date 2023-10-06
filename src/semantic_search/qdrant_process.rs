@@ -4,7 +4,7 @@ use std::env;
 /// required.
 use std::fs::write;
 use std::path::Path;
-use std::{fs::create_dir_all, process::Child, sync::Arc};
+use std::{fs::create_dir_all, process::Child};
 
 use anyhow::Result;
 use tracing::info;
@@ -13,7 +13,6 @@ use crate::application::config::configuration::Configuration;
 
 pub struct QdrantServerProcess {
     child: Option<Child>,
-    _configuration: Arc<Configuration>,
 }
 
 /// This will drop the child process and when it exits, it will kill the process
@@ -29,7 +28,7 @@ impl Drop for QdrantServerProcess {
 impl QdrantServerProcess {
     /// If we already have the qdrant server running, we don't have to start
     /// our own process
-    pub async fn initialize(configuration: Arc<Configuration>) -> Result<Self> {
+    pub async fn initialize(configuration: &Configuration) -> Result<Self> {
         let qdrant_location = configuration.qdrant_storage();
         let qd_config_dir = qdrant_location.join("config");
         // Create the directory if it does not exist
@@ -58,10 +57,7 @@ impl QdrantServerProcess {
 
         info!("qdrant process started");
 
-        Ok(Self {
-            child,
-            _configuration: configuration,
-        })
+        Ok(Self { child })
     }
 }
 
@@ -81,12 +77,12 @@ fn run_command(command: &Path, qdrant_dir: &Path) -> Child {
     use nix::sys::resource::{getrlimit, setrlimit, Resource};
     use tracing::error;
     match getrlimit(Resource::RLIMIT_NOFILE) {
-        Ok((current_soft, current_hard)) if current_hard < 2048 => {
-            if let Err(err) = setrlimit(Resource::RLIMIT_NOFILE, 1024, 2048) {
+        Ok((current_soft, current_hard)) if current_hard < 4096 => {
+            if let Err(err) = setrlimit(Resource::RLIMIT_NOFILE, 2048, 4096) {
                 error!(
                     ?err,
-                    new_soft = 1024,
-                    new_hard = 2048,
+                    new_soft = 2048,
+                    new_hard = 4096,
                     current_soft,
                     current_hard,
                     "failed to set rlimit/nofile"

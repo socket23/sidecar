@@ -13,7 +13,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use anyhow::Result;
 use serde::de::DeserializeOwned;
@@ -268,6 +268,7 @@ impl<'a> FileCache<'a> {
         cache: FileCacheSnapshot<'a>,
         delete_tantivy: impl Fn(&str),
     ) -> anyhow::Result<()> {
+        debug!(?self.reporef, "synchronizing file cache");
         let mut tx = self.sqlite.begin().await?;
         // First we clean-up our cache here by calling delete files
         self.delete_files(&mut tx).await?;
@@ -357,6 +358,7 @@ impl<'a> FileCache<'a> {
 
     async fn batched_embed_or_flush_queue(&self, flush: bool) -> anyhow::Result<()> {
         let Some(semantic) = self.semantic else {
+            debug!(?self.reporef, "no semantic search client configured");
             return Ok(());
         };
 
@@ -383,6 +385,7 @@ impl<'a> FileCache<'a> {
     ) -> Result<Vec<PointStruct>, anyhow::Error> {
         let batch_size = semantic.get_embedding_queue_size();
         let log = &self.embed_queue;
+        debug!(?batch_size, ?self.reporef, "embedding queue");
         let mut output = vec![];
 
         loop {

@@ -13,7 +13,7 @@ use qdrant_client::{
 };
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::ParallelIterator;
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::{
     application::config::configuration::Configuration,
@@ -38,14 +38,11 @@ impl SemanticClient {
         config: Arc<Configuration>,
         language_parsing: TSLanguageParsing,
     ) -> Option<Self> {
-        if config.qdrant_url.is_none() {
-            return None;
-        }
-        let qdrant_config = config
-            .qdrant_url
-            .as_ref()
-            .map(|url| QdrantClientConfig::from_url(&url));
-        let qdrant_client = QdrantClient::new(qdrant_config).expect("client creation to not fail");
+        let qdrant_config = QdrantClientConfig::from_url(&config.qdrant_url);
+        let qdrant_client =
+            QdrantClient::new(Some(qdrant_config)).expect("client creation to not fail");
+
+        debug!("qdrant client created");
 
         match qdrant_client.has_collection(&config.collection_name).await {
             Ok(false) => {
@@ -62,22 +59,21 @@ impl SemanticClient {
                 assert!(result);
             }
             Ok(true) => {}
-            Err(_) => return None,
+            Err(e) => {
+                error!("{}", e.to_string());
+                return None;
+            }
         }
 
         // TODO(skcd): we might want to create some indexes here, but we can
         // figure that out as we keep hacking
 
-        let dylib_directory = config.dylib_directory.as_ref();
-
-        if dylib_directory.is_none() {
-            return None;
-        }
-
         // Now we first need to set the ort library up properly
-        init_ort_dylib(dylib_directory.expect("is_none check above"));
+        debug!("initializing ort dylib");
+        init_ort_dylib(&config.dylib_directory);
         let embedder = LocalEmbedder::new(&config.model_dir);
         if embedder.is_err() {
+            debug!("embedder creation failed");
             return None;
         }
         Some(Self {

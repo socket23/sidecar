@@ -16,6 +16,9 @@ use super::state::RepoError;
 pub struct RepoMetadata {
     // keep track of the last commit timestamp here and nothing else for now
     pub last_commit_unix_secs: Option<i64>,
+
+    // The commit hash we indexed on
+    pub commit_hash: String,
 }
 
 // Types of repo
@@ -225,8 +228,15 @@ impl Repository {
             .and_then(|repo| Ok(repo.head()?.peel_to_commit_in_place()?.time()?.seconds))
             .ok();
 
+        // This is the commit hash which we want to use
+        let commit_hash = gix::open(&self.disk_path)
+            .context("failed to open git repo")
+            .and_then(|repo| Ok(repo.head()?.peel_to_commit_in_place()?.id().to_string()))
+            .ok();
+
         RepoMetadata {
             last_commit_unix_secs,
+            commit_hash: commit_hash.unwrap_or("not_found".to_owned()),
         }
         .into()
     }

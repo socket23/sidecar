@@ -15,11 +15,26 @@ pub(super) struct ConfigResponse {
     model_dir: String,
 }
 
+#[derive(Serialize, Debug)]
+pub(super) struct ReachTheDevsResponse {
+    response: String,
+}
+
 impl ApiResponse for ConfigResponse {}
+
+impl ApiResponse for ReachTheDevsResponse {}
 
 pub async fn get(State(app): State<Application>) -> impl IntoResponse {
     json(ConfigResponse {
         response: "hello skcd".to_owned(),
         model_dir: app.config.model_dir.to_str().unwrap().to_owned(),
+    })
+}
+
+pub async fn reach_the_devs() -> impl IntoResponse {
+    json(ReachTheDevsResponse {
+        response: r#"
+        You made it here! Reach out to skcd@codestory.ai or ghost@codestory.ai, we would love to talk to you about joining codestory's hacker first dev team
+        "#.to_owned(),
     })
 }

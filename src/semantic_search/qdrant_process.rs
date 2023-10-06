@@ -7,7 +7,7 @@ use std::path::Path;
 use std::{fs::create_dir_all, process::Child, sync::Arc};
 
 use anyhow::Result;
-use tracing::debug;
+use tracing::info;
 
 use crate::application::config::configuration::Configuration;
 
@@ -19,7 +19,7 @@ pub struct QdrantServerProcess {
 /// This will drop the child process and when it exits, it will kill the process
 impl Drop for QdrantServerProcess {
     fn drop(&mut self) {
-        debug!("Dropping QdrantServerProcess");
+        info!("Dropping QdrantServerProcess");
         if let Some(mut child) = self.child.take() {
             child.kill().unwrap();
         }
@@ -30,12 +30,6 @@ impl QdrantServerProcess {
     /// If we already have the qdrant server running, we don't have to start
     /// our own process
     pub async fn initialize(configuration: Arc<Configuration>) -> Result<Self> {
-        if configuration.qdrant_storage().exists() {
-            return Ok(Self {
-                child: None,
-                _configuration: configuration,
-            });
-        }
         let qdrant_location = configuration.qdrant_storage();
         let qd_config_dir = qdrant_location.join("config");
         // Create the directory if it does not exist
@@ -57,9 +51,12 @@ impl QdrantServerProcess {
             .clone()
             .expect("qdrant binary directory should be present");
         let binary_name = get_qdrant_binary_name().expect("qdrant binary to be present");
+        info!(?binary_name, "qdrant binary name");
         let binary_path = qdrant_binary_directory.join(binary_name);
 
         let child = Some(run_command(&binary_path, &qdrant_location));
+
+        info!("qdrant process started");
 
         Ok(Self {
             child,
@@ -82,7 +79,7 @@ fn run_command(command: &Path, qdrant_dir: &Path) -> Child {
     use std::process::Command;
 
     use nix::sys::resource::{getrlimit, setrlimit, Resource};
-    use tracing::{error, info};
+    use tracing::error;
     match getrlimit(Resource::RLIMIT_NOFILE) {
         Ok((current_soft, current_hard)) if current_hard < 2048 => {
             if let Err(err) = setrlimit(Resource::RLIMIT_NOFILE, 1024, 2048) {
@@ -105,6 +102,7 @@ fn run_command(command: &Path, qdrant_dir: &Path) -> Child {
     }
 
     // nix::sys::resource::setrlimit().unwrap();
+    info!(?command, ?qdrant_dir, "qdrant process");
     Command::new(command)
         .current_dir(qdrant_dir)
         .spawn()
@@ -131,10 +129,12 @@ pub async fn wait_for_qdrant() {
         QdrantClient::new(Some(QdrantClientConfig::from_url("http://127.0.0.1:6334"))).unwrap();
 
     for _ in 0..60 {
+        info!("pinging qdrant server");
         if qdrant.health_check().await.is_ok() {
+            info!("success, qdrant server alive");
             return;
         }
-
+        info!("qdrant server not alive, sleeping for 1 second");
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 

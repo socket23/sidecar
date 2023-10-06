@@ -11,7 +11,7 @@ use sidecar::{
 };
 use std::net::SocketAddr;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
-use tracing::info;
+use tracing::{debug, info};
 
 pub type Router<S = Application> = axum::Router<S>;
 
@@ -20,10 +20,12 @@ async fn main() -> Result<()> {
     info!("CodeStory 🚀");
     let configuration = Configuration::parse();
     // We get the logging setup first
+    debug!("installing logging to local file");
     Application::install_logging(&configuration);
 
     // We initialize the logging here
     let (application, configuration) = Application::initialize(configuration).await?;
+    debug!("initialized application");
 
     // Star the qdrant server and make sure that it has started up
     let _qdrant_process = QdrantServerProcess::initialize(configuration.clone()).await?;
@@ -42,6 +44,10 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
     let bind = SocketAddr::new(app.config.host.parse()?, app.config.port);
     let api = Router::new()
         .route("/config", get(sidecar::webserver::config::get))
+        .route(
+            "/reach_the_devs",
+            get(sidecar::webserver::config::reach_the_devs),
+        )
         .nest("/repo", repo_router());
 
     let api = api

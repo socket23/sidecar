@@ -56,7 +56,6 @@ impl Indexer<File> {
         &self,
         repo_ref: &RepoRef,
         query_str: &str,
-        branch: Option<&str>,
         limit: usize,
     ) -> impl Iterator<Item = FileDocument> + '_ {
         // lifted from query::compiler

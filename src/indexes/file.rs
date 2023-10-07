@@ -255,7 +255,6 @@ impl RepositoryFile {
             repo_name,
             repo_disk_path,
             repo_ref,
-            normalized_path,
             ..
         } = workload;
 

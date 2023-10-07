@@ -75,6 +75,16 @@ impl<'a> Workload<'a> {
             None => "no_content_hash".to_owned(),
         };
 
+        let file_path = dir_entry.path();
+
+        debug!(
+            ?tantivy_hash,
+            ?semantic_hash,
+            ?file_content_hash,
+            ?file_path,
+            "cache keys"
+        );
+
         CacheKeys::new(
             tantivy_hash,
             semantic_hash,
@@ -202,7 +212,7 @@ impl File {
         trace!("processing file");
         match dir_entry {
             _ if workload.cache.is_fresh(&cache_keys) => {
-                info!("fresh; skipping");
+                info!("cache is new, skipping for now {:?}", dir_entry.path());
                 return Ok(());
             }
             RepoDirectoryEntry::Dir(dir) => {

@@ -14,6 +14,7 @@ use qdrant_client::{
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::ParallelIterator;
 use tracing::{debug, error};
+use tracing_subscriber::field::debug;
 
 use crate::{
     application::config::configuration::Configuration,
@@ -138,7 +139,10 @@ impl SemanticClient {
         let spans = self
             .language_parsing
             .chunk_file(relative_path, buffer, file_extension);
-        debug!(chunk_count = spans.len(), "found chunks");
+        debug!(chunk_count = spans.len(), relative_path, "found chunks");
+        spans.iter().for_each(|span| {
+            debug!(?span, relative_path, "span content");
+        });
 
         spans
             .into_par_iter()

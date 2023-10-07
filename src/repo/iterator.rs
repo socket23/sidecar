@@ -37,16 +37,19 @@ impl RepoDirectoryEntry {
     }
 }
 
+#[derive(Debug)]
 pub struct RepositoryDirectory {
     pub path: String,
 }
 
+#[derive(Debug)]
 pub struct RepositoryFile {
     pub path: String,
     pub pathbuf: PathBuf,
     pub buffer: String,
 }
 
+#[derive(Debug)]
 pub enum RepoDirectoryEntry {
     Dir(RepositoryDirectory),
     File(RepositoryFile),

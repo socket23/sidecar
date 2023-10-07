@@ -208,7 +208,12 @@ pub fn chunk_tree(
         return Default::default();
     }
     if chunks.len() < 2 {
-        return vec![Span::new(0, chunks[0].end, language.get_language(), None)];
+        return vec![Span::new(
+            0,
+            chunks[0].end,
+            language.get_language(),
+            Some(buffer_content.to_owned()),
+        )];
     }
     for (prev, curr) in chunks.to_vec().iter_mut().zip(chunks.iter_mut().skip(1)) {
         prev.end = curr.start;

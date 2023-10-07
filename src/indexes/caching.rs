@@ -171,10 +171,10 @@ impl<'a> FileCacheSnapshot<'a> {
         match self.snapshot.entry(keys.clone()) {
             Entry::Occupied(mut val) => {
                 val.get_mut().fresh = true;
-
                 true
             }
             Entry::Vacant(val) => {
+                debug!(?keys, "inserting fresh value in File Cache Snapshot");
                 _ = val.insert_entry(FreshValue::fresh_default());
 
                 false

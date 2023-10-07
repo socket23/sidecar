@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod application;
 pub mod bg_poll;
 pub mod chunking;

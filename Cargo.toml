@@ -60,6 +60,7 @@ pest = "2.7.4"
 pest_derive = "2.7.4"
 fuzzy-matcher = "0.3.7"
 uuid = "1.4.1"
+compact_str = "0.7.1"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = [ "resource" ] }

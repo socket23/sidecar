@@ -33,6 +33,7 @@ pub struct Application {
     pub config: Arc<Configuration>,
     pub repo_pool: RepositoryPool,
     pub indexes: Arc<Indexes>,
+    pub semantic_client: Option<SemanticClient>,
     /// Background & maintenance tasks are executed on a separate
     /// executor
     pub sync_queue: SyncQueue,
@@ -56,6 +57,7 @@ impl Application {
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
+            semantic_client: semantic_client.clone(),
             indexes: Indexes::new(repo_pool, sql_db.clone(), semantic_client, config.clone())
                 .await?
                 .into(),

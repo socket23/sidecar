@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
+use tiktoken_rs::ChatCompletionRequestMessage;
 use tracing::debug;
 
 use crate::{
-    application::application::Application, indexes::indexer::FileDocument, repo::types::RepoRef,
+    agent::llm_funcs::llm::FunctionCall, application::application::Application,
+    indexes::indexer::FileDocument, repo::types::RepoRef,
 };
 
-use super::llm_funcs::LlmClient;
+use super::{
+    llm_funcs::{self, LlmClient},
+    model,
+};
 
 #[derive(Clone)]
 pub struct ConversationMessage {
@@ -28,6 +33,10 @@ pub struct ConversationMessage {
     user_selected_code_span: Vec<CodeSpan>,
     // The files which are open in the editor
     open_files: Vec<String>,
+    // The status of this conversation
+    conversation_state: ConversationState,
+    // Final answer which is going to get stored here
+    answer: Option<String>,
 }
 
 impl ConversationMessage {
@@ -42,6 +51,8 @@ impl ConversationMessage {
             code_spans: vec![],
             user_selected_code_span: vec![],
             open_files: vec![],
+            conversation_state: ConversationState::Started,
+            answer: None,
         }
     }
 
@@ -51,6 +62,14 @@ impl ConversationMessage {
 
     pub fn add_code_spans(&mut self, code_span: CodeSpan) {
         self.code_spans.push(code_span);
+    }
+
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    pub fn answer(&self) -> Option<String> {
+        self.answer.clone()
     }
 }
 
@@ -108,6 +127,16 @@ pub enum AgentStep {
     },
 }
 
+impl AgentStep {
+    pub fn get_response(&self) -> String {
+        match self {
+            AgentStep::Path { response, .. } => response.to_owned(),
+            AgentStep::Code { response, .. } => response.to_owned(),
+            AgentStep::Proc { response, .. } => response.to_owned(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum AgentAction {
     Query(String),
@@ -120,11 +149,10 @@ pub enum AgentAction {
 #[derive(Clone)]
 pub struct Agent {
     pub application: Application,
-    reporef: RepoRef,
-    session_id: uuid::Uuid,
-    conversation_state: ConversationState,
+    pub reporef: RepoRef,
+    pub session_id: uuid::Uuid,
     pub conversation_messages: Vec<ConversationMessage>,
-    llm_client: Arc<LlmClient>,
+    pub llm_client: Arc<LlmClient>,
 }
 
 #[derive(Clone)]
@@ -151,30 +179,6 @@ pub enum ConversationState {
 }
 
 impl Agent {
-    pub fn prepare_for_search(
-        application: Application,
-        reporef: RepoRef,
-        session_id: uuid::Uuid,
-        query: &str,
-        llm_client: Arc<LlmClient>,
-    ) -> Self {
-        // We will take care of the search here, and use that for the next steps
-        let conversation_message = ConversationMessage::search_message(
-            uuid::Uuid::new_v4(),
-            AgentState::Search,
-            query.to_owned(),
-        );
-        let agent = Agent {
-            application,
-            reporef,
-            session_id,
-            conversation_state: ConversationState::Pending,
-            conversation_messages: vec![conversation_message],
-            llm_client,
-        };
-        agent
-    }
-
     pub fn get_llm_client(&self) -> Arc<LlmClient> {
         self.llm_client.clone()
     }
@@ -223,4 +227,122 @@ impl Agent {
             i
         }
     }
+
+    /// The full history of messages, including intermediate function calls
+    fn history(&self) -> anyhow::Result<Vec<llm_funcs::llm::Message>> {
+        const ANSWER_MAX_HISTORY_SIZE: usize = 3;
+        const FUNCTION_CALL_INSTRUCTION: &str = "Call a function. Do not answer";
+
+        let history = self
+            .conversation_messages
+            .iter()
+            .rev()
+            .take(ANSWER_MAX_HISTORY_SIZE)
+            .rev()
+            .try_fold(Vec::new(), |mut acc, e| -> anyhow::Result<_> {
+                let query = llm_funcs::llm::Message::user(e.query());
+
+                let steps = e.steps_taken.iter().flat_map(|s| {
+                    let (name, arguments) = match s {
+                        AgentStep::Path { query, .. } => (
+                            "path".to_owned(),
+                            format!("{{\n \"query\": \"{query}\"\n}}"),
+                        ),
+                        AgentStep::Code { query, .. } => (
+                            "code".to_owned(),
+                            format!("{{\n \"query\": \"{query}\"\n}}"),
+                        ),
+                        AgentStep::Proc { query, paths, .. } => (
+                            "proc".to_owned(),
+                            format!(
+                                "{{\n \"paths\": [{}],\n \"query\": \"{query}\"\n}}",
+                                paths
+                                    .iter()
+                                    .map(|path| self
+                                        .paths()
+                                        .position(|p| p == path)
+                                        .unwrap()
+                                        .to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
+                        ),
+                    };
+
+                    vec![
+                        llm_funcs::llm::Message::function_call(FunctionCall {
+                            name: name.clone(),
+                            arguments,
+                        }),
+                        llm_funcs::llm::Message::function_return(name.to_owned(), s.get_response()),
+                        llm_funcs::llm::Message::user(FUNCTION_CALL_INSTRUCTION),
+                    ]
+                });
+
+                let answer = match e.answer() {
+                    // NB: We intentionally discard the summary as it is redundant.
+                    Some(answer) => Some(llm_funcs::llm::Message::function_return(
+                        "none".to_owned(),
+                        answer,
+                    )),
+                    None => None,
+                };
+
+                acc.extend(
+                    std::iter::once(query)
+                        .chain(vec![llm_funcs::llm::Message::user(
+                            FUNCTION_CALL_INSTRUCTION,
+                        )])
+                        .chain(steps)
+                        .chain(answer.into_iter()),
+                );
+                Ok(acc)
+            })?;
+        Ok(history)
+    }
+}
+
+fn trim_history(
+    mut history: Vec<llm_funcs::llm::Message>,
+    model: model::AnswerModel,
+) -> anyhow::Result<Vec<llm_funcs::llm::Message>> {
+    const HIDDEN: &str = "[HIDDEN]";
+
+    let mut tiktoken_msgs: Vec<ChatCompletionRequestMessage> =
+        history.iter().map(|m| m.into()).collect::<Vec<_>>();
+
+    while tiktoken_rs::get_chat_completion_max_tokens(model.tokenizer, &tiktoken_msgs)?
+        < model.history_tokens_limit
+    {
+        let _ = history
+            .iter_mut()
+            .zip(tiktoken_msgs.iter_mut())
+            .position(|(m, tm)| match m {
+                llm_funcs::llm::Message::PlainText {
+                    role,
+                    ref mut content,
+                } => {
+                    if role == &llm_funcs::llm::Role::Assistant && content != HIDDEN {
+                        *content = HIDDEN.into();
+                        tm.content = Some(HIDDEN.into());
+                        true
+                    } else {
+                        false
+                    }
+                }
+                llm_funcs::llm::Message::FunctionReturn {
+                    role: _,
+                    name: _,
+                    ref mut content,
+                } if content != HIDDEN => {
+                    *content = HIDDEN.into();
+                    tm.content = Some(HIDDEN.into());
+                    true
+                }
+                _ => false,
+            })
+            .ok_or_else(|| anyhow::anyhow!("could not find message to trim"))?;
+    }
+
+    Ok(history)
 }

@@ -1,15 +1,22 @@
-use crate::agent::{
-    llm_funcs::{
-        self,
-        llm::{self, Message},
+use crate::{
+    agent::{
+        llm_funcs::{
+            self,
+            llm::{self, Message},
+        },
+        prompts,
+        types::{AgentStep, CodeSpan},
     },
-    prompts,
-    types::{AgentStep, CodeSpan},
+    application::application::Application,
+    repo::types::RepoRef,
 };
 
 /// Here we allow the agent to perform search and answer workflow related questions
 /// we will later use this for code planning and also code editing
-use super::types::Agent;
+use super::{
+    llm_funcs::LlmClient,
+    types::{Agent, AgentState, ConversationMessage},
+};
 
 use anyhow::anyhow;
 use anyhow::Context;
@@ -18,12 +25,58 @@ use futures::StreamExt;
 use tiktoken_rs::CoreBPE;
 use tracing::{debug, info};
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 const PATH_LIMIT: u64 = 30;
 const PATH_LIMIT_USIZE: usize = 30;
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchAction {
+    /// A user-provided query.
+    Query(String),
+
+    Path {
+        query: String,
+    },
+    #[serde(rename = "none")]
+    Answer {
+        paths: Vec<usize>,
+    },
+    Code {
+        query: String,
+    },
+    Proc {
+        query: String,
+        paths: Vec<usize>,
+    },
+}
+
 impl Agent {
+    pub fn prepare_for_search(
+        application: Application,
+        reporef: RepoRef,
+        session_id: uuid::Uuid,
+        query: &str,
+        llm_client: Arc<LlmClient>,
+        conversation_id: uuid::Uuid,
+    ) -> Self {
+        // We will take care of the search here, and use that for the next steps
+        let conversation_message = ConversationMessage::search_message(
+            conversation_id,
+            AgentState::Search,
+            query.to_owned(),
+        );
+        let agent = Agent {
+            application,
+            reporef,
+            session_id,
+            conversation_messages: vec![conversation_message],
+            llm_client,
+        };
+        agent
+    }
+
     pub async fn path_search(&mut self, query: &str) -> Result<String> {
         // Here we first take the user query and perform a lexical search
         // on all the paths which are present

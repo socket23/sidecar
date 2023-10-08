@@ -194,13 +194,14 @@ impl LlmClient {
         messages: Vec<llm::Message>,
         functions: Vec<llm::Function>,
         temperature: f32,
+        frequency_penalty: Option<f32>,
     ) -> anyhow::Result<String> {
         let client = match model {
             llm::OpenAIModel::GPT4 => &self.gpt4_client,
             llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
             llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
         };
-        let request = self.create_request(messages, functions, temperature);
+        let request = self.create_request(messages, functions, temperature, frequency_penalty);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -243,6 +244,7 @@ impl LlmClient {
         messages: Vec<llm::Message>,
         functions: Vec<llm::Function>,
         temperature: f32,
+        frequency_penalty: Option<f32>,
     ) -> CreateChatCompletionRequest {
         let request_messages: Vec<_> = messages
             .into_iter()
@@ -291,12 +293,23 @@ impl LlmClient {
                     .unwrap()
             })
             .collect();
-        CreateChatCompletionRequestArgs::default()
-            .messages(request_messages)
-            .functions(function_calling)
-            .temperature(temperature)
-            .stream(true)
-            .build()
-            .expect("chat_completion_request_builder to not fail")
+        if let Some(frequency_penalty) = frequency_penalty {
+            CreateChatCompletionRequestArgs::default()
+                .messages(request_messages)
+                .functions(function_calling)
+                .temperature(temperature)
+                .stream(true)
+                .frequency_penalty(frequency_penalty)
+                .build()
+                .unwrap()
+        } else {
+            CreateChatCompletionRequestArgs::default()
+                .messages(request_messages)
+                .functions(function_calling)
+                .temperature(temperature)
+                .stream(true)
+                .build()
+                .unwrap()
+        }
     }
 }

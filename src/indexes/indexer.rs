@@ -6,6 +6,7 @@ use std::{fs, path::Path};
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
+use rayon::prelude::IntoParallelIterator;
 use smallvec::SmallVec;
 use tantivy::collector::TopDocs;
 use tantivy::query::{BooleanQuery, Query as TantivyQuery, TermQuery};
@@ -143,6 +144,40 @@ impl Indexer<File> {
             })
             .filter(|doc| !doc.relative_path.ends_with('/')) // omit directories
             .take(limit)
+    }
+
+    pub async fn get_by_path(
+        &self,
+        path: &str,
+        reporef: &RepoRef,
+    ) -> anyhow::Result<Option<FileDocument>> {
+        let reader = self.reader.read().await;
+        let searcher = reader.searcher();
+        // get the tantivy query here and search for it
+        let relative_path = Box::new(TermQuery::new(
+            Term::from_field_text(self.source.relative_path, path),
+            IndexRecordOption::Basic,
+        ));
+        let repo_path = Box::new(TermQuery::new(
+            Term::from_field_text(self.source.repo_ref, &reporef.to_string()),
+            IndexRecordOption::Basic,
+        ));
+        let query = BooleanQuery::intersection(vec![relative_path, repo_path]);
+        // Now we use the query along with the searcher and get back the results
+        let container = TopDocs::with_limit(1);
+        let results = searcher
+            .search(&query, &container)
+            .expect("search_index to not fail");
+
+        match results.as_slice() {
+            [] => Ok(None),
+            [(_, doc_address)] => {
+                let doc = searcher.doc(*doc_address).expect("doc to exist");
+                let file_doc = FileReader.read_document(&self.source, doc);
+                Ok(Some(file_doc))
+            }
+            _ => Err(anyhow::anyhow!("too many results for path: {}", path)),
+        }
     }
 }
 
@@ -298,6 +333,7 @@ pub struct FileDocument {
     pub relative_path: String,
     pub repo_name: String,
     pub repo_ref: String,
+    pub content: String,
 }
 
 pub struct FileReader;
@@ -307,11 +343,13 @@ impl FileReader {
         let relative_path = get_text_field(&doc, schema.relative_path);
         let repo_ref = get_text_field(&doc, schema.repo_ref);
         let repo_name = get_text_field(&doc, schema.repo_name);
+        let content = get_text_field(&doc, schema.content);
 
         FileDocument {
             relative_path,
             repo_name,
             repo_ref,
+            content,
         }
     }
 }

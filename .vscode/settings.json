@@ -8,6 +8,7 @@
         "Devs",
         "dylib",
         "embedder",
+        "funcs",
         "getrlimit",
         "Hasher",
         "Mmap",
@@ -26,6 +27,7 @@
         "sqlx",
         "srcpath",
         "tanvity",
+        "tiktoken",
         "webserver",
         "yolo"
     ],

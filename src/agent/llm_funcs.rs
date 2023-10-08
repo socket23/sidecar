@@ -10,6 +10,7 @@ use async_openai::types::FunctionCall;
 use async_openai::Client;
 use color_eyre::owo_colors::colors::css::Azure;
 use futures::StreamExt;
+use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 use tracing::warn;
 
 use std::sync::Arc;
@@ -147,6 +148,32 @@ impl llm::Message {
             content: content.to_owned(),
         }
     }
+
+    pub fn user(content: &str) -> Self {
+        llm::Message::PlainText {
+            role: llm::Role::User,
+            content: content.to_owned(),
+        }
+    }
+
+    pub fn function_call(function_call: llm::FunctionCall) -> Self {
+        // This is where the assistant ends up calling the function
+        llm::Message::FunctionCall {
+            role: llm::Role::Assistant,
+            function_call,
+            content: (),
+        }
+    }
+
+    pub fn function_return(name: String, content: String) -> Self {
+        // This is where we assume that the function is the one returning
+        // the answer to the agent
+        llm::Message::FunctionReturn {
+            role: llm::Role::Function,
+            name,
+            content,
+        }
+    }
 }
 
 impl From<&llm::Role> for async_openai::types::Role {
@@ -156,6 +183,55 @@ impl From<&llm::Role> for async_openai::types::Role {
             llm::Role::System => async_openai::types::Role::System,
             llm::Role::Assistant => async_openai::types::Role::Assistant,
             llm::Role::Function => async_openai::types::Role::Function,
+        }
+    }
+}
+
+impl llm::Role {
+    pub fn to_string(&self) -> String {
+        match self {
+            llm::Role::Assistant => "assistant".to_owned(),
+            llm::Role::Function => "function".to_owned(),
+            llm::Role::System => "system".to_owned(),
+            llm::Role::User => "user".to_owned(),
+        }
+    }
+}
+
+impl From<&llm::Message> for tiktoken_rs::ChatCompletionRequestMessage {
+    fn from(m: &llm::Message) -> tiktoken_rs::ChatCompletionRequestMessage {
+        match m {
+            llm::Message::PlainText { role, content } => {
+                tiktoken_rs::ChatCompletionRequestMessage {
+                    role: role.to_string(),
+                    content: Some(content.to_owned()),
+                    name: None,
+                    function_call: None,
+                }
+            }
+            llm::Message::FunctionReturn {
+                role,
+                name,
+                content,
+            } => tiktoken_rs::ChatCompletionRequestMessage {
+                role: role.to_string(),
+                content: None,
+                name: Some(name.clone()),
+                function_call: Some(tiktoken_rs_FunctionCall {
+                    name: name.to_owned(),
+                    arguments: content.to_owned(),
+                }),
+            },
+            llm::Message::FunctionCall {
+                role,
+                function_call,
+                content: _,
+            } => tiktoken_rs::ChatCompletionRequestMessage {
+                role: role.to_string(),
+                content: serde_json::to_string(&function_call).ok(),
+                name: None,
+                function_call: None,
+            },
         }
     }
 }

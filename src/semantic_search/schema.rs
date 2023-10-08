@@ -4,8 +4,8 @@
 use qdrant_client::{
     prelude::QdrantClient,
     qdrant::{
-        vectors_config, CollectionOperationResponse, CreateCollection, Distance, VectorParams,
-        VectorsConfig,
+        vectors_config, CollectionOperationResponse, CreateCollection, Distance, ScoredPoint,
+        VectorParams, VectorsConfig,
     },
 };
 

@@ -7,8 +7,10 @@ use qdrant_client::{
     client::QdrantClient,
     prelude::QdrantClientConfig,
     qdrant::{
-        r#match::MatchValue, vectors_config, CollectionOperationResponse, CreateCollection,
-        Distance, FieldCondition, Filter, Match, VectorParams, VectorsConfig,
+        r#match::MatchValue, vectors_config, with_payload_selector, with_vectors_selector,
+        CollectionOperationResponse, Condition, CreateCollection, Distance, FieldCondition, Filter,
+        Match, ScoredPoint, SearchPoints, VectorParams, VectorsConfig, WithPayloadSelector,
+        WithVectorsSelector,
     },
 };
 use rayon::iter::IntoParallelIterator;
@@ -20,6 +22,7 @@ use crate::{
     application::config::configuration::Configuration,
     chunking::languages::TSLanguageParsing,
     embedder::embedder::{Embedder, LocalEmbedder},
+    repo::types::RepoRef,
 };
 
 use super::schema::Payload;
@@ -177,6 +180,85 @@ impl SemanticClient {
             .await?;
         Ok(())
     }
+
+    pub async fn search<'a>(
+        &self,
+        query: &'a str,
+        reporef: &'a RepoRef,
+        limit: u64,
+        offset: u64,
+        threshold: f32,
+        get_more: bool,
+    ) -> anyhow::Result<Vec<Payload>> {
+        let vector = self.embedder.embed(&query)?;
+
+        // TODO: Remove the need for `retrieve_more`. It's here because:
+        // In /q `limit` is the maximum number of results returned (the actual number will often be lower due to deduplication)
+        // In /answer we want to retrieve `limit` results exactly
+        let results = self
+            .search_with(
+                query,
+                reporef,
+                vector.clone(),
+                if get_more { limit * 2 } else { limit }, // Retrieve double `limit` and deduplicate
+                offset,
+                threshold,
+            )
+            .await
+            .map(|raw| {
+                raw.into_iter()
+                    .map(Payload::from_qdrant)
+                    .collect::<Vec<_>>()
+            })?;
+        // We should also deduplicate things here, when required
+        // TODO(skcd): deduplicate the snippets here and also rank them properly
+        // with how much more relevant they are
+        Ok(results)
+    }
+
+    pub async fn search_with<'a>(
+        &self,
+        query: &'a str,
+        reporef: &'a RepoRef,
+        vector: Vec<f32>,
+        limit: u64,
+        offset: u64,
+        threshold: f32,
+    ) -> anyhow::Result<Vec<ScoredPoint>> {
+        let response = self
+            .qdrant_client()
+            .search_points(&SearchPoints {
+                limit,
+                vector,
+                collection_name: self.config.collection_name.to_string(),
+                offset: Some(offset),
+                score_threshold: Some(threshold),
+                with_payload: Some(WithPayloadSelector {
+                    selector_options: Some(with_payload_selector::SelectorOptions::Enable(true)),
+                }),
+                filter: Some(Filter {
+                    must: build_conditions(query, reporef),
+                    ..Default::default()
+                }),
+                with_vectors: Some(WithVectorsSelector {
+                    selector_options: Some(with_vectors_selector::SelectorOptions::Enable(true)),
+                }),
+                ..Default::default()
+            })
+            .await?;
+
+        Ok(response.result)
+    }
+}
+
+fn build_conditions<'a>(parsed_query: &'a str, reporef: &'a RepoRef) -> Vec<Condition> {
+    vec![Filter {
+        must: vec![make_kv_keyword_filter("repo_ref", &reporef.to_string()).into()],
+        ..Default::default()
+    }]
+    .into_iter()
+    .map(Into::into)
+    .collect()
 }
 
 fn make_kv_keyword_filter(key: &str, value: &str) -> FieldCondition {

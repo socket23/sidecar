@@ -13,24 +13,11 @@ use sidecar::posthog::client::Event as PosthogEvent;
 // we should not be using that and instead fork it and create our own
 fn main() -> anyhow::Result<()> {
     let posthog_client = posthog_client();
-    let (sender, receiver) = flume::unbounded::<PosthogEvent>();
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap()
         .block_on(async { main_func(posthog_client).await })
-}
-
-async fn send_events(
-    posthog_client: PosthogClient,
-    receiver: flume::Receiver<PosthogEvent>,
-) -> anyhow::Result<()> {
-    let mut events = receiver.into_stream();
-    while let Some(event) = events.next().await {
-        let capture_status = posthog_client.capture(event).await;
-        dbg!(capture_status);
-    }
-    Ok(())
 }
 
 async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
@@ -46,7 +33,6 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
 
     let event = PosthogEvent::new("rust_event", "skcd_testing");
     let capture_status = posthog_client.capture(event).await;
-    dbg!(capture_status);
 
     let client = Client::with_config(azure_config);
 

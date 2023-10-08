@@ -70,6 +70,10 @@ pub struct Configuration {
     #[serde(default = "interactive_batch_size")]
     /// Batch size for batched embeddings
     pub embedding_batch_len: NonZeroUsize,
+
+    #[clap(long)]
+    #[serde(default = "default_user_id")]
+    user_id: String,
 }
 
 impl Configuration {
@@ -98,10 +102,6 @@ fn default_port() -> u16 {
     42424
 }
 
-fn default_model_dir() -> PathBuf {
-    "models".into()
-}
-
 fn default_host() -> String {
     "127.0.0.1".to_owned()
 }
@@ -124,4 +124,8 @@ fn interactive_batch_size() -> NonZeroUsize {
 
 fn default_qdrant_url() -> String {
     "http://127.0.0.1:6334".to_owned()
+}
+
+fn default_user_id() -> String {
+    "codestory".to_owned()
 }

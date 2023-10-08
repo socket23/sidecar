@@ -6,8 +6,33 @@ use async_openai::types::Role;
 use async_openai::Client;
 use futures::StreamExt;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+// Note: This does not work as posthog uses an internal blocking reqwest client
+// we should not be using that and instead fork it and create our own
+fn main() -> anyhow::Result<()> {
+    dbg!("first");
+    let posthog_client = posthog_client();
+    dbg!("second");
+    let (sender, receiver) = flume::unbounded::<posthog_rs::Event>();
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async { main_func(posthog_client).await })
+}
+
+async fn send_events(
+    posthog_client: posthog_rs::Client,
+    receiver: flume::Receiver<posthog_rs::Event>,
+) -> anyhow::Result<()> {
+    let mut events = receiver.into_stream();
+    while let Some(event) = events.next().await {
+        let capture_status = posthog_client.capture(event);
+        dbg!(capture_status);
+    }
+    Ok(())
+}
+
+async fn main_func(posthog_client: posthog_rs::Client) -> anyhow::Result<()> {
     let api_base = "https://codestory-gpt4.openai.azure.com".to_owned();
     let api_key = "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned();
     let api_version = "2023-08-01-preview".to_owned();
@@ -17,6 +42,10 @@ async fn main() -> anyhow::Result<()> {
         .with_api_key(api_key)
         .with_api_version(api_version)
         .with_deployment_id(deployment_id);
+
+    let event = posthog_rs::Event::new("rust_event", "skcd_testing");
+    // let capture_status = posthog_client.capture(event);
+    // dbg!(capture_status);
 
     let client = Client::with_config(azure_config);
 
@@ -47,4 +76,8 @@ async fn main() -> anyhow::Result<()> {
         .await;
 
     Ok(())
+}
+
+fn posthog_client() -> posthog_rs::Client {
+    posthog_rs::client("phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB")
 }

@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use crate::{application::application::Application, repo::types::RepoRef};
+use tracing::debug;
+
+use crate::{
+    application::application::Application, indexes::indexer::FileDocument, repo::types::RepoRef,
+};
 
 use super::llm_funcs::LlmClient;
 
@@ -187,11 +191,22 @@ impl Agent {
             .expect("There should be a conversation message")
     }
 
-    fn paths(&self) -> impl Iterator<Item = &str> {
+    pub fn paths(&self) -> impl Iterator<Item = &str> {
         self.conversation_messages
             .iter()
             .flat_map(|e| e.file_paths.iter())
             .map(String::as_str)
+    }
+
+    pub async fn get_file_content(&self, path: &str) -> anyhow::Result<Option<FileDocument>> {
+        debug!(%self.reporef, path, %self.session_id, "executing file search");
+        let file_reader = self
+            .application
+            .indexes
+            .file
+            .get_by_path(path, &self.reporef)
+            .await;
+        file_reader
     }
 
     pub fn get_path_alias(&mut self, path: &str) -> usize {

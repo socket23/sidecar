@@ -24,8 +24,6 @@ pub struct ConversationMessage {
     steps_taken: Vec<AgentStep>,
     // The state of the agent
     agent_state: AgentState,
-    // The action which the agent is going to take
-    agent_action: AgentAction,
     // The file paths we are interested in, can be populated via search or after
     // asking for more context
     file_paths: Vec<String>,
@@ -45,7 +43,6 @@ impl ConversationMessage {
     pub fn search_message(id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
         Self {
             id,
-            agent_action: AgentAction::Query(query.to_owned()),
             query,
             steps_taken: vec![],
             agent_state,

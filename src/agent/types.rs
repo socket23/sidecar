@@ -122,6 +122,7 @@ impl ConversationMessage {
             open_files,
             conversation_state,
         }.execute(&mut *tx).await?;
+        let _ = tx.commit().await?;
         Ok(())
     }
 }

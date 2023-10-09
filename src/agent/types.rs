@@ -15,7 +15,7 @@ use super::{
     search::stop_words,
 };
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConversationMessage {
     id: uuid::Uuid,
     // The query which the user has asked
@@ -76,7 +76,7 @@ impl ConversationMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CodeSpan {
     pub file_path: String,
     pub alias: usize,
@@ -113,7 +113,7 @@ impl std::fmt::Display for CodeSpan {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub enum AgentStep {
     Path {
         query: String,
@@ -185,7 +185,7 @@ pub struct Agent {
     pub model: model::AnswerModel,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub enum AgentState {
     // We will end up doing a search
     Search,
@@ -201,7 +201,7 @@ pub enum AgentState {
     Finish,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub enum ConversationState {
     Pending,
     Started,

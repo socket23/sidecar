@@ -50,9 +50,9 @@ impl FromStr for AnswerModel {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         #[allow(clippy::wildcard_in_or_patterns)]
         match s {
-            "gpt-4" => Ok(GPT_4),
-            "gpt-4-32k" => Ok(GPT_4_32K),
-            "gpt-3.5-turbo-16k" | _ => Ok(GPT_3_5_TURBO_16K),
+            "gpt-4-0613" => Ok(GPT_4),
+            "gpt-4-32k-0613" => Ok(GPT_4_32K),
+            "gpt-3.5-turbo-16k-0613" | _ => Ok(GPT_3_5_TURBO_16K),
         }
     }
 }

@@ -43,6 +43,9 @@ chunk_cache: file_path, repo_ref, chunk_hash, line_start, line_end, tantivy_cach
 ## What are the important files where we need to rebuild the database again?
 - semantic_search/schema.rs is one of them
 
+## Where do we get the stopwords from?
+- https://github.com/aneesha/RAKE/blob/master/SmartStoplist.txt here's where we are getting the list from
+
 ## How to start the binary?
 - I am using this command as we also need to provide the qdrant binary
 `./target/debug/webserver --qdrant-binary-directory /Users/skcd/scratch/sidecar/qdrant --dylib-directory /Users/skcd/scratch/sidecar/onnxruntime/ --model-dir /Users/skcd/scratch/sidecar/models/all-MiniLM-L6-v2/ --qdrant-url http://127.0.0.1:6334`

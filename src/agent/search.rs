@@ -23,6 +23,8 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use futures::StreamExt;
+use once_cell::sync::OnceCell;
+use rake::StopWords;
 use tiktoken_rs::CoreBPE;
 use tracing::{debug, info};
 
@@ -31,6 +33,19 @@ use std::{
     ops::Range,
     sync::Arc,
 };
+
+static STOPWORDS: OnceCell<StopWords> = OnceCell::new();
+static STOP_WORDS_LIST: &str = include_str!("stopwords.txt");
+
+pub fn stop_words() -> &'static StopWords {
+    STOPWORDS.get_or_init(|| {
+        let mut sw = StopWords::new();
+        for w in STOP_WORDS_LIST.lines() {
+            sw.insert(w.to_string());
+        }
+        sw
+    })
+}
 
 const PATH_LIMIT: u64 = 30;
 const PATH_LIMIT_USIZE: usize = 30;

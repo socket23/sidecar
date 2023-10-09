@@ -65,6 +65,7 @@ async-openai = "0.14.3"
 reqwest = "0.11.22"
 chrono = { version = "0.4.31", features = ["serde"] }
 tiktoken-rs = "0.5.4"
+rake = "0.3.3"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = [ "resource" ] }

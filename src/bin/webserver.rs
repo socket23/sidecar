@@ -69,7 +69,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
             "/reach_the_devs",
             get(sidecar::webserver::config::reach_the_devs),
         )
-        .nest("/repo", repo_router());
+        .nest("/repo", repo_router())
+        .nest("/agent", agent_router());
 
     let api = api
         .layer(Extension(app.clone()))
@@ -97,6 +98,14 @@ fn repo_router() -> Router {
         .route("/queue", get(sidecar::webserver::repos::queue_status))
         // Gives back the repos we know about
         .route("/repo_list", get(sidecar::webserver::repos::repo_status))
+}
+
+fn agent_router() -> Router {
+    use axum::routing::*;
+    Router::new().route(
+        "/search_agent",
+        get(sidecar::webserver::agent::search_agent),
+    )
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

@@ -5,6 +5,7 @@ use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::Role;
 use async_openai::Client;
 use futures::StreamExt;
+use sidecar::agent::prompts;
 use sidecar::posthog::client::client;
 use sidecar::posthog::client::Client as PosthogClient;
 use sidecar::posthog::client::Event as PosthogEvent;
@@ -21,6 +22,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
+    // try invoking it with the llm client
+    llm_request().await;
+
+    // these are with the api keys
     let api_base = "https://codestory-gpt4.openai.azure.com".to_owned();
     let api_key = "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned();
     let api_version = "2023-08-01-preview".to_owned();
@@ -67,4 +72,27 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
 
 fn posthog_client() -> PosthogClient {
     client("phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB")
+}
+
+async fn llm_request() {
+    use sidecar::agent::llm_funcs::LlmClient;
+
+    let client = LlmClient::codestory_infra();
+
+    let messages = vec![sidecar::agent::llm_funcs::llm::Message::system(
+        "chose one of the functions when the user wants to do code search with the keywords: sentence transformers",
+    )];
+    let functions = serde_json::from_value::<Vec<sidecar::agent::llm_funcs::llm::Function>>(
+        prompts::functions(false), // Only add proc if there are paths in context
+    )
+    .unwrap();
+    let response = client
+        .stream_function_call(
+            sidecar::agent::llm_funcs::llm::OpenAIModel::GPT4,
+            messages,
+            functions,
+            0.0,
+            None,
+        )
+        .await;
 }

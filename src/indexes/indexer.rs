@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use rayon::prelude::IntoParallelIterator;
 use smallvec::SmallVec;
 use tantivy::collector::TopDocs;
-use tantivy::query::{BooleanQuery, Query as TantivyQuery, TermQuery};
+use tantivy::query::{BooleanQuery, Query as TantivyQuery, QueryParser, TermQuery};
 use tantivy::schema::{Field, IndexRecordOption, Value};
 use tantivy::{
     collector::{Collector, MultiFruit},
@@ -153,16 +153,17 @@ impl Indexer<File> {
     ) -> anyhow::Result<Option<FileDocument>> {
         let reader = self.reader.read().await;
         let searcher = reader.searcher();
+        let file_index = searcher.index();
         // get the tantivy query here and search for it
-        let relative_path = Box::new(TermQuery::new(
-            Term::from_field_text(self.source.relative_path, path),
-            IndexRecordOption::Basic,
-        ));
-        let repo_path = Box::new(TermQuery::new(
-            Term::from_field_text(self.source.repo_ref, &reporef.to_string()),
-            IndexRecordOption::Basic,
-        ));
-        let query = BooleanQuery::intersection(vec![relative_path, repo_path]);
+        let query_parser = QueryParser::for_index(
+            file_index,
+            vec![self.source.repo_ref, self.source.relative_path],
+        );
+
+        let query_string = format!(r#"repo_ref:"{reporef}" AND relative_path:"{path}""#);
+        let query = query_parser
+            .parse_query(&query_string)
+            .expect("failed to parse tantivy query");
         // Now we use the query along with the searcher and get back the results
         let container = TopDocs::with_limit(1);
         let results = searcher

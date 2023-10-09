@@ -131,6 +131,7 @@ impl Indexable for File {
                         .map(ToOwned::to_owned)
                         .unwrap_or(entry_srcpath)
                 };
+                debug!(?relative_path, "relative_path for indexing");
                 let normalized_path = repo.disk_path.join(&relative_path);
 
                 let workload = Workload {

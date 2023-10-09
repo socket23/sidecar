@@ -264,7 +264,7 @@ impl Agent {
     /// The full history of messages, including intermediate function calls
     fn history(&self) -> anyhow::Result<Vec<llm_funcs::llm::Message>> {
         const ANSWER_MAX_HISTORY_SIZE: usize = 3;
-        const FUNCTION_CALL_INSTRUCTION: &str = "Call a function. Do not answer";
+        const FUNCTION_CALL_INSTRUCTION: &str = "CALL A FUNCTION!. Do not answer";
 
         let history = self
             .conversation_messages
@@ -382,7 +382,10 @@ impl Agent {
                         }
                     };
 
-                    self.code_search(&keywords).await?;
+                    debug!(%self.session_id, %keywords, "extracted keywords from query");
+
+                    let response = self.code_search(&keywords).await;
+                    debug!(?response, "code search response");
                 }
                 query.clone()
             }

@@ -4,6 +4,7 @@ use axum::response::IntoResponse;
 use axum::{extract::Query, Extension};
 /// We will invoke the agent to get the answer, we are moving to an agent based work
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::agent::llm_funcs::LlmClient;
 use crate::agent::types::{Agent, ConversationMessage};
@@ -45,9 +46,17 @@ pub async fn search_agent(
         llm_client,
         conversation_id,
     );
-    let _ = agent
-        .iterate(crate::agent::types::AgentAction::Query(query.to_owned()))
-        .await;
+
+    let mut action = crate::agent::types::AgentAction::Query(query.to_owned());
+
+    loop {
+        let new_action = agent.iterate(action).await;
+        if let Ok(Some(new_action)) = new_action {
+            action = new_action;
+        } else {
+            break;
+        }
+    }
     let last_message = agent.get_last_conversation_message();
     let answer = last_message.answer().to_owned();
     Ok(json(SearchResponse {

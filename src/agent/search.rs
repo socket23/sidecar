@@ -213,6 +213,8 @@ impl Agent {
             last_exchange.add_code_spans(code_chunk.clone());
         }
 
+        debug!("code search results length: {}", code_snippets.len());
+
         let response = code_snippets
             .iter()
             .filter(|c| !c.is_empty())
@@ -297,6 +299,7 @@ impl Agent {
             // Buffer file loading to load multiple paths at once
             .buffered(10)
             .map(|result| async {
+                debug!("are we here in proc: {:?}", result);
                 let (lines, path) = result?;
 
                 // The unwraps here should never fail, we generated this string above to always
@@ -326,6 +329,8 @@ impl Agent {
                         Some(0.2),
                     )
                     .await?;
+
+                debug!("response from gpt3.5: {:?}", json);
 
                 #[derive(
                     serde::Deserialize,

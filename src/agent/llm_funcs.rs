@@ -1,22 +1,18 @@
 /// We define all the helper stuff required here for the LLM to be able to do
 /// things.
 use async_openai::config::AzureConfig;
-use async_openai::config::Config;
+use async_openai::types::ChatCompletionFunctionCall;
 use async_openai::types::ChatCompletionFunctionsArgs;
 use async_openai::types::ChatCompletionRequestMessageArgs;
 use async_openai::types::CreateChatCompletionRequest;
 use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
-use color_eyre::owo_colors::colors::css::Azure;
 use futures::StreamExt;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
+use tracing::debug;
+use tracing::error;
 use tracing::warn;
-
-use std::sync::Arc;
-
-use self::llm::Function;
-use self::llm::Message;
 
 pub mod llm {
     use std::collections::HashMap;
@@ -131,18 +127,18 @@ pub mod llm {
     impl OpenAIModel {
         pub fn model_name(&self) -> String {
             match self {
-                OpenAIModel::GPT3_5_16k => "gpt-3.5-turbo-16k".to_owned(),
-                OpenAIModel::GPT4 => "gpt-4".to_owned(),
-                OpenAIModel::GPT4_32k => "gpt-4-32k".to_owned(),
+                OpenAIModel::GPT3_5_16k => "gpt-3.5-turbo-16k-0613".to_owned(),
+                OpenAIModel::GPT4 => "gpt-4-0613".to_owned(),
+                OpenAIModel::GPT4_32k => "gpt-4-32k-0613".to_owned(),
             }
         }
 
         pub fn get_model(model_name: &str) -> anyhow::Result<OpenAIModel> {
-            if model_name == "gpt-3.5-turbo-16k" {
+            if model_name == "gpt-3.5-turbo-16k-0613" {
                 Ok(OpenAIModel::GPT3_5_16k)
-            } else if model_name == "gpt-4" {
+            } else if model_name == "gpt-4-0613" {
                 Ok(OpenAIModel::GPT4)
-            } else if model_name == "gpt-4-32k" {
+            } else if model_name == "gpt-4-32k-0613" {
                 Ok(OpenAIModel::GPT4_32k)
             } else {
                 Err(anyhow::anyhow!("unknown model name"))
@@ -227,12 +223,9 @@ impl From<&llm::Message> for tiktoken_rs::ChatCompletionRequestMessage {
                 content,
             } => tiktoken_rs::ChatCompletionRequestMessage {
                 role: role.to_string(),
-                content: None,
+                content: Some(content.to_owned()),
                 name: Some(name.clone()),
-                function_call: Some(tiktoken_rs_FunctionCall {
-                    name: name.to_owned(),
-                    arguments: content.to_owned(),
-                }),
+                function_call: None,
             },
             llm::Message::FunctionCall {
                 role,
@@ -240,9 +233,16 @@ impl From<&llm::Message> for tiktoken_rs::ChatCompletionRequestMessage {
                 content: _,
             } => tiktoken_rs::ChatCompletionRequestMessage {
                 role: role.to_string(),
-                content: serde_json::to_string(&function_call).ok(),
+                content: None,
                 name: None,
-                function_call: None,
+                function_call: Some(tiktoken_rs_FunctionCall {
+                    name: function_call
+                        .name
+                        .as_ref()
+                        .expect("function_name to exist for function_call")
+                        .to_owned(),
+                    arguments: function_call.arguments.to_owned(),
+                }),
             },
         }
     }
@@ -332,47 +332,80 @@ impl LlmClient {
         frequency_penalty: Option<f32>,
     ) -> anyhow::Result<Option<llm::FunctionCall>> {
         let client = self.get_model(&model);
-        let request =
+        let mut request =
             self.create_request(messages, Some(functions), temperature, frequency_penalty);
 
         let mut final_function_call = llm::FunctionCall::default();
 
+        debug!("stream_function_call");
+
         const TOTAL_CHAT_RETRIES: usize = 5;
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
-            let stream = client.chat().create_stream(request.clone()).await;
-            if stream.is_err() {
-                continue 'retry_loop;
-            }
-            let unwrap_stream = stream.expect("is_err check above to work");
-            tokio::pin!(unwrap_stream);
-
-            loop {
-                match unwrap_stream.next().await {
-                    None => break,
-                    Some(Ok(mut s)) => {
-                        if s.choices.is_empty() {
-                            continue 'retry_loop;
-                        }
-                        let function_call_data = s.choices.remove(0).delta.function_call;
-                        // When we are streaming the function call, we get the arguments
-                        // streamed along with the name, so we have to collect it properly
-                        if let Some(function_call_data) = function_call_data {
-                            final_function_call.name =
-                                final_function_call.name.or(function_call_data.name);
-                            if let Some(function_call_data_arguments) = function_call_data.arguments
-                            {
-                                final_function_call.arguments += &function_call_data_arguments;
-                            }
-                        }
+            let mut cloned_request = request.clone();
+            cloned_request.stream = Some(false);
+            let data = client.chat().create(cloned_request).await;
+            match data {
+                Ok(mut data_okay) => {
+                    debug!("chat create response is okay");
+                    debug!("chat response everywhere {:?}", data_okay.choices);
+                    let message = data_okay.choices.remove(0).message;
+                    let function_call = message.function_call;
+                    debug!("whats the function call here {:?}", function_call);
+                    let data = message.content;
+                    if let Some(function_call) = function_call {
+                        final_function_call.name = Some(function_call.name);
+                        final_function_call.arguments = function_call.arguments;
+                        return Ok(Some(final_function_call));
                     }
-                    Some(Err(e)) => {
-                        warn!(?e, "openai stream error, retrying");
-                        continue 'retry_loop;
-                    }
+                    // if let Some(data) = data {
+                    //     debug!("whats the content here {}", data);
+                    //     if let Ok(serialised_data)
+                    //     return Ok(Some(serde_json::from_str(&data)?));
+                    // }
+                    request.temperature = Some(0.1);
+                    continue 'retry_loop;
+                }
+                Err(e) => {
+                    debug!("errored out with client create");
+                    error!(?e);
+                    continue 'retry_loop;
                 }
             }
+            // // debug!("stream function calling response {:?}", data);
+            // let stream = client.chat().create_stream(request.clone()).await;
+            // if stream.is_err() {
+            //     continue 'retry_loop;
+            // }
+            // let unwrap_stream = stream.expect("is_err check above to work");
+            // tokio::pin!(unwrap_stream);
+
+            // loop {
+            //     match unwrap_stream.next().await {
+            //         None => break,
+            //         Some(Ok(mut s)) => {
+            //             if s.choices.is_empty() {
+            //                 continue 'retry_loop;
+            //             }
+            //             debug!(?s.choices, "choices");
+            //             let function_call_data = s.choices.remove(0).delta.function_call;
+            //             // When we are streaming the function call, we get the arguments
+            //             // streamed along with the name, so we have to collect it properly
+            //             if let Some(function_call_data) = function_call_data {
+            //                 final_function_call.name =
+            //                     final_function_call.name.or(function_call_data.name);
+            //                 if let Some(function_call_data_arguments) = function_call_data.arguments
+            //                 {
+            //                     final_function_call.arguments += &function_call_data_arguments;
+            //                 }
+            //             }
+            //         }
+            //         Some(Err(e)) => {
+            //             warn!(?e, "openai stream error, retrying");
+            //             continue 'retry_loop;
+            //         }
+            //     }
         }
-        Ok(Some(final_function_call))
+        Ok(None)
     }
 
     fn get_model(&self, model: &llm::OpenAIModel) -> &Client<AzureConfig> {
@@ -407,9 +440,14 @@ impl LlmClient {
                     content: _,
                 } => ChatCompletionRequestMessageArgs::default()
                     .role::<async_openai::types::Role>((&role).into())
-                    .content(
-                        serde_json::to_string(&function_call).expect("parsing_should_not_fail"),
-                    )
+                    .function_call(FunctionCall {
+                        name: function_call
+                            .name
+                            .as_ref()
+                            .expect("function_name to exist for function call")
+                            .to_owned(),
+                        arguments: function_call.arguments,
+                    })
                     .build()
                     .unwrap(),
                 llm::Message::FunctionReturn {
@@ -418,16 +456,14 @@ impl LlmClient {
                     content,
                 } => ChatCompletionRequestMessageArgs::default()
                     .role::<async_openai::types::Role>((&role).into())
-                    .function_call(FunctionCall {
-                        name,
-                        arguments: content,
-                    })
+                    .name(name)
+                    .content(content)
                     .build()
                     .unwrap(),
             })
             .collect();
         let mut request_builder_args = CreateChatCompletionRequestArgs::default();
-        let request_args_builder = request_builder_args
+        let mut request_args_builder = request_builder_args
             .messages(request_messages)
             .temperature(temperature)
             .stream(true);
@@ -446,10 +482,12 @@ impl LlmClient {
                         .unwrap()
                 })
                 .collect();
-            request_args_builder.functions(function_calling);
+            request_args_builder = request_args_builder
+                .functions(function_calling)
+                .function_call(ChatCompletionFunctionCall::String("auto".to_owned()));
         }
         if let Some(frequency_penalty) = frequency_penalty {
-            request_args_builder.frequency_penalty(frequency_penalty);
+            request_args_builder = request_args_builder.frequency_penalty(frequency_penalty);
         }
         request_args_builder.build().unwrap()
     }

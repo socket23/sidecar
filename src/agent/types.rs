@@ -5,7 +5,7 @@ use tiktoken_rs::ChatCompletionRequestMessage;
 use tracing::{debug, info};
 
 use crate::{
-    agent::llm_funcs::llm::FunctionCall, application::application::Application,
+    agent::llm_funcs::llm::FunctionCall, application::application::Application, db::sqlite::SqlDb,
     indexes::indexer::FileDocument, repo::types::RepoRef,
 };
 
@@ -17,7 +17,9 @@ use super::{
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConversationMessage {
-    id: uuid::Uuid,
+    message_id: uuid::Uuid,
+    // We also want to store the session id here so we can load it and save it
+    session_id: uuid::Uuid,
     // The query which the user has asked
     query: String,
     // The steps which the agent has taken up until now
@@ -37,12 +39,21 @@ pub struct ConversationMessage {
     conversation_state: ConversationState,
     // Final answer which is going to get stored here
     answer: Option<String>,
+    // Last updated
+    last_updated: u64,
+    // Created at
+    created_at: u64,
 }
 
 impl ConversationMessage {
-    pub fn search_message(id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
+    pub fn search_message(session_id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         Self {
-            id,
+            message_id: uuid::Uuid::new_v4(),
+            session_id,
             query,
             steps_taken: vec![],
             agent_state,
@@ -52,6 +63,8 @@ impl ConversationMessage {
             open_files: vec![],
             conversation_state: ConversationState::Started,
             answer: None,
+            created_at: current_time,
+            last_updated: current_time,
         }
     }
 
@@ -73,6 +86,43 @@ impl ConversationMessage {
 
     pub fn set_answer(&mut self, answer: String) {
         self.answer = Some(answer);
+    }
+
+    pub async fn save_to_db(&self, db: SqlDb) -> anyhow::Result<()> {
+        debug!(%self.session_id, %self.message_id, "saving conversation message to db");
+        let mut tx = db.begin().await?;
+        let message_id = self.message_id.to_string();
+        let query = self.query.to_owned();
+        let answer = self.answer.clone();
+        let created_at = self.created_at as i64;
+        let last_updated = self.last_updated as i64;
+        let session_id = self.session_id.to_string();
+        let steps_taken = serde_json::to_string(&self.steps_taken)?;
+        let agent_state = serde_json::to_string(&self.agent_state)?;
+        let file_paths = serde_json::to_string(&self.file_paths)?;
+        let code_spans = serde_json::to_string(&self.code_spans)?;
+        let user_selected_code_span = serde_json::to_string(&self.user_selected_code_span)?;
+        let open_files = serde_json::to_string(&self.open_files)?;
+        let conversation_state = serde_json::to_string(&self.conversation_state)?;
+        sqlx::query! {
+            "INSERT INTO agent_conversation_message \
+            (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            message_id,
+            query,
+            answer,
+            created_at,
+            last_updated,
+            session_id,
+            steps_taken,
+            agent_state,
+            file_paths,
+            code_spans,
+            user_selected_code_span,
+            open_files,
+            conversation_state,
+        }.execute(&mut *tx).await?;
+        Ok(())
     }
 }
 
@@ -183,6 +233,7 @@ pub struct Agent {
     pub conversation_messages: Vec<ConversationMessage>,
     pub llm_client: Arc<LlmClient>,
     pub model: model::AnswerModel,
+    pub sql_db: SqlDb,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -388,6 +439,11 @@ impl Agent {
             }
         };
 
+        // We also retroactively save the last conversation to the database
+        if let Some(last_conversation) = self.conversation_messages.last() {
+            let _ = last_conversation.save_to_db(self.sql_db.clone()).await;
+        }
+
         let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
             prompts::functions(self.paths().next().is_some()), // Only add proc if there are paths in context
         )
@@ -462,4 +518,21 @@ fn trim_history(
     }
 
     Ok(history)
+}
+
+impl Drop for Agent {
+    fn drop(&mut self) {
+        // Now we will try to save all the conversations to the database
+        let db = self.sql_db.clone();
+        let conversation_messages = self.conversation_messages.to_vec();
+        // This will save all the pending conversations to the database
+        tokio::spawn(async move {
+            use futures::StreamExt;
+            futures::stream::iter(conversation_messages)
+                .map(|conversation| (conversation, db.clone()))
+                .map(|(conversation, db)| async move { conversation.save_to_db(db.clone()).await })
+                .collect::<Vec<_>>()
+                .await;
+        });
+    }
 }

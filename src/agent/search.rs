@@ -8,6 +8,7 @@ use crate::{
         types::{AgentStep, CodeSpan},
     },
     application::application::Application,
+    db::sqlite::SqlDb,
     repo::types::RepoRef,
 };
 
@@ -80,6 +81,7 @@ impl Agent {
         query: &str,
         llm_client: Arc<LlmClient>,
         conversation_id: uuid::Uuid,
+        sql_db: SqlDb,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
         let conversation_message = ConversationMessage::search_message(
@@ -94,6 +96,7 @@ impl Agent {
             conversation_messages: vec![conversation_message],
             llm_client,
             model: model::GPT_4,
+            sql_db,
         };
         agent
     }

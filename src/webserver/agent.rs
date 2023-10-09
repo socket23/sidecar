@@ -38,6 +38,7 @@ pub async fn search_agent(
     let session_id = uuid::Uuid::new_v4();
     let llm_client = Arc::new(LlmClient::codestory_infra());
     let conversation_id = uuid::Uuid::new_v4();
+    let sql_db = app.sql.clone();
     let mut agent = Agent::prepare_for_search(
         app,
         reporef,
@@ -45,6 +46,7 @@ pub async fn search_agent(
         &query,
         llm_client,
         conversation_id,
+        sql_db,
     );
 
     let mut action = crate::agent::types::AgentAction::Query(query.to_owned());

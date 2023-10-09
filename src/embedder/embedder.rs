@@ -80,7 +80,6 @@ impl LocalEmbedder {
                 .with_name("encoding")
                 .with_log_level(LoggingLevel::Warning)
                 .with_execution_providers([ExecutionProvider::cpu()])
-                .with_telemetry(false)
                 .build()?,
         );
 

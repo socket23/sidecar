@@ -23,7 +23,7 @@ pub mod llm {
 
     #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct FunctionCall {
-        pub name: String,
+        pub name: Option<String>,
         pub arguments: String,
     }
 
@@ -284,11 +284,7 @@ impl LlmClient {
         temperature: f32,
         frequency_penalty: Option<f32>,
     ) -> anyhow::Result<String> {
-        let client = match model {
-            llm::OpenAIModel::GPT4 => &self.gpt4_client,
-            llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
-            llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
-        };
+        let client = self.get_model(&model);
         let request = self.create_request(messages, functions, temperature, frequency_penalty);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
@@ -325,6 +321,67 @@ impl LlmClient {
         Err(anyhow::anyhow!(
             "failed to get response from openai".to_owned()
         ))
+    }
+
+    pub async fn stream_function_call(
+        &self,
+        model: llm::OpenAIModel,
+        messages: Vec<llm::Message>,
+        functions: Vec<llm::Function>,
+        temperature: f32,
+        frequency_penalty: Option<f32>,
+    ) -> anyhow::Result<Option<llm::FunctionCall>> {
+        let client = self.get_model(&model);
+        let request =
+            self.create_request(messages, Some(functions), temperature, frequency_penalty);
+
+        let mut final_function_call = llm::FunctionCall::default();
+
+        const TOTAL_CHAT_RETRIES: usize = 5;
+        'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
+            let stream = client.chat().create_stream(request.clone()).await;
+            if stream.is_err() {
+                continue 'retry_loop;
+            }
+            let unwrap_stream = stream.expect("is_err check above to work");
+            tokio::pin!(unwrap_stream);
+
+            loop {
+                match unwrap_stream.next().await {
+                    None => break,
+                    Some(Ok(mut s)) => {
+                        if s.choices.is_empty() {
+                            continue 'retry_loop;
+                        }
+                        let function_call_data = s.choices.remove(0).delta.function_call;
+                        // When we are streaming the function call, we get the arguments
+                        // streamed along with the name, so we have to collect it properly
+                        if let Some(function_call_data) = function_call_data {
+                            final_function_call.name =
+                                final_function_call.name.or(function_call_data.name);
+                            if let Some(function_call_data_arguments) = function_call_data.arguments
+                            {
+                                final_function_call.arguments += &function_call_data_arguments;
+                            }
+                        }
+                    }
+                    Some(Err(e)) => {
+                        warn!(?e, "openai stream error, retrying");
+                        continue 'retry_loop;
+                    }
+                }
+            }
+        }
+        Ok(Some(final_function_call))
+    }
+
+    fn get_model(&self, model: &llm::OpenAIModel) -> &Client<AzureConfig> {
+        let client = match model {
+            llm::OpenAIModel::GPT4 => &self.gpt4_client,
+            llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
+            llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
+        };
+        client
     }
 
     fn create_request(

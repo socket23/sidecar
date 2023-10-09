@@ -26,6 +26,7 @@
         "setrlimit",
         "sqlx",
         "srcpath",
+        "STOPWORDS",
         "tanvity",
         "tiktoken",
         "webserver",

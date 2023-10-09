@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tracing::{debug, info};
 
@@ -11,6 +12,7 @@ use crate::{
 use super::{
     llm_funcs::{self, LlmClient},
     model, prompts,
+    search::stop_words,
 };
 
 #[derive(Clone)]
@@ -164,7 +166,13 @@ pub enum AgentAction {
 impl AgentAction {
     pub fn from_gpt_response(call: &FunctionCall) -> anyhow::Result<Self> {
         let mut map = serde_json::Map::new();
-        map.insert(call.name.clone(), serde_json::from_str(&call.arguments)?);
+        map.insert(
+            call.name
+                .as_ref()
+                .expect("function_name to be present in function_call")
+                .to_owned(),
+            serde_json::from_str(&call.arguments)?,
+        );
 
         Ok(serde_json::from_value(serde_json::Value::Object(map))?)
     }
@@ -296,7 +304,7 @@ impl Agent {
 
                     vec![
                         llm_funcs::llm::Message::function_call(FunctionCall {
-                            name: name.clone(),
+                            name: Some(name.to_owned()),
                             arguments,
                         }),
                         llm_funcs::llm::Message::function_return(name.to_owned(), s.get_response()),
@@ -352,6 +360,30 @@ impl Agent {
             }
             AgentAction::Query(query) => {
                 // just log here for now
+                let cloned_query = query.clone();
+                // we want to do a search anyways here using the keywords, so we
+                // have some kind of context
+                // Always make a code search for the user query on the first exchange
+                if self.conversation_messages.len() == 1 {
+                    // Extract keywords from the query
+                    let keywords = {
+                        let sw = stop_words();
+                        let r = Rake::new(sw.clone());
+                        let keywords = r.run(&cloned_query);
+
+                        if keywords.is_empty() {
+                            cloned_query.to_owned()
+                        } else {
+                            keywords
+                                .iter()
+                                .map(|k| k.keyword.clone())
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        }
+                    };
+
+                    self.code_search(&keywords).await?;
+                }
                 query.clone()
             }
         };
@@ -370,24 +402,20 @@ impl Agent {
 
         let response = self
             .get_llm_client()
-            .stream_response(
+            .stream_function_call(
                 llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?,
                 trimmed_history,
-                Some(functions),
+                functions,
                 0.0,
                 None,
             )
             .await?;
 
-        dbg!(response);
-
-        // Now that we will be here, we have to figure out how to get the function
-        // which needs to be run from the choices we are getting from the llm
-        // response
-
-        // To get the next thing here, we will have to look at the history
-        // and them trim it down
-        Ok(None)
+        if let Some(response) = response {
+            AgentAction::from_gpt_response(&response).map(|response| Some(response))
+        } else {
+            Ok(None)
+        }
     }
 }
 

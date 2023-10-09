@@ -15,6 +15,7 @@ use crate::{
 /// we will later use this for code planning and also code editing
 use super::{
     llm_funcs::LlmClient,
+    model,
     types::{Agent, AgentState, ConversationMessage},
 };
 
@@ -25,7 +26,11 @@ use futures::StreamExt;
 use tiktoken_rs::CoreBPE;
 use tracing::{debug, info};
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+    sync::Arc,
+};
 
 const PATH_LIMIT: u64 = 30;
 const PATH_LIMIT_USIZE: usize = 30;
@@ -73,6 +78,7 @@ impl Agent {
             session_id,
             conversation_messages: vec![conversation_message],
             llm_client,
+            model: model::GPT_4,
         };
         agent
     }
@@ -220,7 +226,7 @@ impl Agent {
 
         let response = self
             .get_llm_client()
-            .stream_response(llm::OpenAIModel::GPT3_5_16k, prompt, vec![], 0.0, None)
+            .stream_response(llm::OpenAIModel::GPT3_5_16k, prompt, None, 0.0, None)
             .await?;
 
         debug!("hyde response");
@@ -300,7 +306,7 @@ impl Agent {
                     .stream_response(
                         llm_funcs::llm::OpenAIModel::GPT3_5_16k,
                         vec![llm_funcs::llm::Message::system(&prompt)],
-                        vec![],
+                        None,
                         0.0,
                         Some(0.2),
                     )
@@ -425,6 +431,256 @@ impl Agent {
 
         Ok(response)
     }
+
+    pub async fn answer(&mut self, path_aliases: &[usize]) -> Result<String> {
+        let context = self.answer_context(path_aliases).await?;
+        let system_prompt = prompts::answer_article_prompt(path_aliases.len() != 1, &context);
+        let system_message = llm_funcs::llm::Message::system(&system_prompt);
+        let messages = Some(system_message).into_iter().collect::<Vec<_>>();
+
+        let reply = self
+            .llm_client
+            .clone()
+            .stream_response(
+                llm::OpenAIModel::get_model(self.model.model_name)?,
+                messages,
+                None,
+                0.0,
+                None,
+            )
+            .await?;
+
+        let last_message = self.get_last_conversation_message();
+        last_message.set_answer(reply.to_owned());
+
+        Ok(reply)
+    }
+
+    async fn answer_context(&mut self, aliases: &[usize]) -> Result<String> {
+        // Here we create the context for the answer, using the aliases and also
+        // using the code spans which we have
+        let paths = self.paths().collect::<Vec<_>>();
+        let mut prompt = "".to_owned();
+        let mut aliases = aliases
+            .iter()
+            .copied()
+            .filter(|alias| *alias < paths.len())
+            .collect::<Vec<_>>();
+
+        aliases.sort();
+        aliases.dedup();
+
+        if !aliases.is_empty() {
+            prompt += "##### PATHS #####\n";
+
+            for alias in &aliases {
+                let path = &paths[*alias];
+                prompt += &format!("{path}\n");
+            }
+        }
+
+        let code_spans = self.dedup_code_spans(aliases.as_slice()).await;
+
+        // Sometimes, there are just too many code chunks in the context, and deduplication still
+        // doesn't trim enough chunks. So, we enforce a hard limit here that stops adding tokens
+        // early if we reach a heuristic limit.
+        let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
+        let mut remaining_prompt_tokens =
+            tiktoken_rs::get_completion_max_tokens(self.model.tokenizer, &prompt)?;
+
+        // Select as many recent chunks as possible
+        let mut recent_chunks = Vec::new();
+        for code_span in code_spans.iter().rev() {
+            let snippet = code_span
+                .data
+                .lines()
+                .enumerate()
+                .map(|(i, line)| format!("{} {line}\n", i + code_span.start_line as usize + 1))
+                .collect::<String>();
+
+            let formatted_snippet = format!("### {} ###\n{snippet}\n\n", code_span.file_path);
+
+            let snippet_tokens = bpe.encode_ordinary(&formatted_snippet).len();
+
+            if snippet_tokens >= remaining_prompt_tokens - self.model.prompt_tokens_limit {
+                info!("breaking at {} tokens", remaining_prompt_tokens);
+                break;
+            }
+
+            recent_chunks.push((code_span.clone(), formatted_snippet));
+
+            remaining_prompt_tokens -= snippet_tokens;
+            debug!("{}", remaining_prompt_tokens);
+        }
+
+        // group recent chunks by path alias
+        let mut recent_chunks_by_alias: HashMap<_, _> =
+            recent_chunks
+                .into_iter()
+                .fold(HashMap::new(), |mut map, item| {
+                    map.entry(item.0.alias).or_insert_with(Vec::new).push(item);
+                    map
+                });
+
+        // write the header if we have atleast one chunk
+        if !recent_chunks_by_alias.values().all(Vec::is_empty) {
+            prompt += "\n##### CODE CHUNKS #####\n\n";
+        }
+
+        // sort by alias, then sort by lines
+        let mut aliases = recent_chunks_by_alias.keys().copied().collect::<Vec<_>>();
+        aliases.sort();
+
+        for alias in aliases {
+            let chunks = recent_chunks_by_alias.get_mut(&alias).unwrap();
+            chunks.sort_by(|a, b| a.0.start_line.cmp(&b.0.start_line));
+            for (_, formatted_snippet) in chunks {
+                prompt += formatted_snippet;
+            }
+        }
+
+        Ok(prompt)
+    }
+
+    async fn dedup_code_spans(&mut self, aliases: &[usize]) -> Vec<CodeSpan> {
+        debug!(?aliases, "deduping code spans");
+
+        /// The ratio of code tokens to context size.
+        ///
+        /// Making this closure to 1 means that more of the context is taken up by source code.
+        const CONTEXT_CODE_RATIO: f32 = 0.5;
+
+        let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer).unwrap();
+        let context_size = tiktoken_rs::model::get_context_size(self.model.tokenizer);
+        let max_tokens = (context_size as f32 * CONTEXT_CODE_RATIO) as usize;
+
+        // Note: The end line number here is *not* inclusive.
+        let mut spans_by_path = HashMap::<_, Vec<_>>::new();
+        for code_span in self
+            .code_spans()
+            .into_iter()
+            .filter(|code_span| aliases.contains(&code_span.alias))
+        {
+            spans_by_path
+                .entry(code_span.file_path.clone())
+                .or_default()
+                .push(code_span.start_line..code_span.end_line);
+        }
+
+        debug!(?spans_by_path, "expanding code spans");
+
+        let self_ = &*self;
+        // Map of path -> line list
+        let lines_by_file = futures::stream::iter(&mut spans_by_path)
+            .then(|(path, spans)| async move {
+                spans.sort_by_key(|c| c.start);
+
+                let lines = self_
+                    .get_file_content(path)
+                    .await
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("path did not exist in the index: {path}"))
+                    .content
+                    .lines()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>();
+
+                (path.clone(), lines)
+            })
+            .collect::<HashMap<_, _>>()
+            .await;
+
+        // Total number of lines to try and expand by, per loop iteration.
+        const TOTAL_LINE_INC: usize = 100;
+
+        // We keep track of whether any spans were changed below, so that we know when to break
+        // out of this loop.
+        let mut changed = true;
+
+        while !spans_by_path.is_empty() && changed {
+            changed = false;
+
+            let tokens = spans_by_path
+                .iter()
+                .flat_map(|(path, spans)| spans.iter().map(move |s| (path, s)))
+                .map(|(path, span)| {
+                    let line_start = span.start as usize;
+                    let line_end = span.end as usize;
+                    let range = line_start..line_end;
+                    let snippet = lines_by_file.get(path).unwrap()[range].join("\n");
+                    bpe.encode_ordinary(&snippet).len()
+                })
+                .sum::<usize>();
+
+            // First, we grow the spans if possible.
+            if tokens < max_tokens {
+                // NB: We divide TOTAL_LINE_INC by 2, because we expand in 2 directions.
+                let range_step = (TOTAL_LINE_INC / 2)
+                    / spans_by_path
+                        .values()
+                        .map(|spans| spans.len())
+                        .sum::<usize>()
+                        .max(1);
+
+                let range_step = range_step.max(1);
+
+                for (path, span) in spans_by_path
+                    .iter_mut()
+                    .flat_map(|(path, spans)| spans.iter_mut().map(move |s| (path, s)))
+                {
+                    let file_lines = lines_by_file.get(path.as_str()).unwrap().len();
+
+                    let old_span = span.clone();
+
+                    span.start = span.start.saturating_sub(range_step as u64);
+
+                    // Expand the end line forwards, capping at the total number of lines.
+                    span.end += range_step as u64;
+                    span.end = span.end.min(file_lines as u64);
+
+                    if *span != old_span {
+                        changed = true;
+                    }
+                }
+            }
+
+            // Next, we merge any overlapping spans.
+            for spans in spans_by_path.values_mut() {
+                *spans = std::mem::take(spans)
+                    .into_iter()
+                    .fold(Vec::new(), |mut a, next| {
+                        // There is some rightward drift here, which could be fixed once if-let
+                        // chains are stabilized.
+                        if let Some(prev) = a.last_mut() {
+                            if let Some(next) = merge_overlapping(prev, next) {
+                                a.push(next);
+                            } else {
+                                changed = true;
+                            }
+                        } else {
+                            a.push(next);
+                        }
+
+                        a
+                    });
+            }
+        }
+
+        debug!(?spans_by_path, "expanded spans");
+
+        spans_by_path
+            .into_iter()
+            .flat_map(|(path, spans)| spans.into_iter().map(move |s| (path.clone(), s)))
+            .map(|(path, span)| {
+                let line_start = span.start as usize;
+                let line_end = span.end as usize;
+                let snippet = lines_by_file.get(&path).unwrap()[line_start..line_end].join("\n");
+
+                let path_alias = self.get_path_alias(&path);
+                CodeSpan::new(path, path_alias, span.start, span.end, snippet)
+            })
+            .collect()
+    }
 }
 
 fn trim_lines_by_tokens(lines: Vec<String>, bpe: CoreBPE, max_tokens: usize) -> Vec<String> {
@@ -445,4 +701,17 @@ fn trim_lines_by_tokens(lines: Vec<String>, bpe: CoreBPE, max_tokens: usize) -> 
     }
 
     trimmed_lines
+}
+
+fn merge_overlapping(a: &mut Range<u64>, b: Range<u64>) -> Option<Range<u64>> {
+    if a.end >= b.start {
+        // `b` might be contained in `a`, which allows us to discard it.
+        if a.end < b.end {
+            a.end = b.end;
+        }
+
+        None
+    } else {
+        Some(b)
+    }
 }

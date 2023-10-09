@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tiktoken_rs::ChatCompletionRequestMessage;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::{
     agent::llm_funcs::llm::FunctionCall, application::application::Application,
@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     llm_funcs::{self, LlmClient},
-    model,
+    model, prompts,
 };
 
 #[derive(Clone)]
@@ -71,15 +71,19 @@ impl ConversationMessage {
     pub fn answer(&self) -> Option<String> {
         self.answer.clone()
     }
+
+    pub fn set_answer(&mut self, answer: String) {
+        self.answer = Some(answer);
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CodeSpan {
-    file_path: String,
+    pub file_path: String,
     pub alias: usize,
     pub start_line: u64,
-    end_line: u64,
-    data: String,
+    pub end_line: u64,
+    pub data: String,
 }
 
 impl CodeSpan {
@@ -137,13 +141,33 @@ impl AgentStep {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum AgentAction {
     Query(String),
-    Path { query: String },
-    Code { query: String },
-    Proc { query: String, paths: Vec<String> },
-    Answer { paths: Vec<String> },
+    Path {
+        query: String,
+    },
+    Code {
+        query: String,
+    },
+    Proc {
+        query: String,
+        paths: Vec<usize>,
+    },
+    #[serde(rename = "none")]
+    Answer {
+        paths: Vec<usize>,
+    },
+}
+
+impl AgentAction {
+    pub fn from_gpt_response(call: &FunctionCall) -> anyhow::Result<Self> {
+        let mut map = serde_json::Map::new();
+        map.insert(call.name.clone(), serde_json::from_str(&call.arguments)?);
+
+        Ok(serde_json::from_value(serde_json::Value::Object(map))?)
+    }
 }
 
 #[derive(Clone)]
@@ -153,6 +177,7 @@ pub struct Agent {
     pub session_id: uuid::Uuid,
     pub conversation_messages: Vec<ConversationMessage>,
     pub llm_client: Arc<LlmClient>,
+    pub model: model::AnswerModel,
 }
 
 #[derive(Clone)]
@@ -299,6 +324,70 @@ impl Agent {
                 Ok(acc)
             })?;
         Ok(history)
+    }
+
+    pub fn code_spans(&self) -> Vec<CodeSpan> {
+        self.conversation_messages
+            .iter()
+            .flat_map(|e| e.code_spans.clone())
+            .collect()
+    }
+
+    pub async fn iterate(&mut self, action: AgentAction) -> anyhow::Result<Option<AgentAction>> {
+        // Now we will go about iterating over the action and figure out what the
+        // next best action should be
+        match action {
+            AgentAction::Answer { paths } => {
+                // here we can finally answer after we do some merging on the spans
+                // and also look at the history to provide more context
+                let answer = self.answer(paths.as_slice()).await?;
+                info!(%self.session_id, "conversation finished");
+                info!(%self.session_id, answer, "answer");
+                return Ok(None);
+            }
+            AgentAction::Code { query } => self.code_search(&query).await?,
+            AgentAction::Path { query } => self.path_search(&query).await?,
+            AgentAction::Proc { query, paths } => {
+                self.process_files(&query, paths.as_slice()).await?
+            }
+            AgentAction::Query(query) => {
+                // just log here for now
+                query.clone()
+            }
+        };
+
+        let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
+            prompts::functions(self.paths().next().is_some()), // Only add proc if there are paths in context
+        )
+        .unwrap();
+
+        let mut history = vec![llm_funcs::llm::Message::system(&prompts::system(
+            self.paths(),
+        ))];
+        history.extend(self.history()?);
+
+        let trimmed_history = trim_history(history.clone(), self.model.clone())?;
+
+        let response = self
+            .get_llm_client()
+            .stream_response(
+                llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?,
+                trimmed_history,
+                Some(functions),
+                0.0,
+                None,
+            )
+            .await?;
+
+        dbg!(response);
+
+        // Now that we will be here, we have to figure out how to get the function
+        // which needs to be run from the choices we are getting from the llm
+        // response
+
+        // To get the next thing here, we will have to look at the history
+        // and them trim it down
+        Ok(None)
     }
 }
 

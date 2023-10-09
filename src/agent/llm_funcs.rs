@@ -136,6 +136,18 @@ pub mod llm {
                 OpenAIModel::GPT4_32k => "gpt-4-32k".to_owned(),
             }
         }
+
+        pub fn get_model(model_name: &str) -> anyhow::Result<OpenAIModel> {
+            if model_name == "gpt-3.5-turbo-16k" {
+                Ok(OpenAIModel::GPT3_5_16k)
+            } else if model_name == "gpt-4" {
+                Ok(OpenAIModel::GPT4)
+            } else if model_name == "gpt-4-32k" {
+                Ok(OpenAIModel::GPT4_32k)
+            } else {
+                Err(anyhow::anyhow!("unknown model name"))
+            }
+        }
     }
 
     pub type Result = std::result::Result<String, Error>;
@@ -268,7 +280,7 @@ impl LlmClient {
         &self,
         model: llm::OpenAIModel,
         messages: Vec<llm::Message>,
-        functions: Vec<llm::Function>,
+        functions: Option<Vec<llm::Function>>,
         temperature: f32,
         frequency_penalty: Option<f32>,
     ) -> anyhow::Result<String> {
@@ -318,7 +330,7 @@ impl LlmClient {
     fn create_request(
         &self,
         messages: Vec<llm::Message>,
-        functions: Vec<llm::Function>,
+        functions: Option<Vec<llm::Function>>,
         temperature: f32,
         frequency_penalty: Option<f32>,
     ) -> CreateChatCompletionRequest {
@@ -335,13 +347,12 @@ impl LlmClient {
                 llm::Message::FunctionCall {
                     role,
                     function_call,
-                    content,
+                    content: _,
                 } => ChatCompletionRequestMessageArgs::default()
                     .role::<async_openai::types::Role>((&role).into())
-                    .function_call(FunctionCall {
-                        name: function_call.name,
-                        arguments: function_call.arguments,
-                    })
+                    .content(
+                        serde_json::to_string(&function_call).expect("parsing_should_not_fail"),
+                    )
                     .build()
                     .unwrap(),
                 llm::Message::FunctionReturn {
@@ -350,42 +361,39 @@ impl LlmClient {
                     content,
                 } => ChatCompletionRequestMessageArgs::default()
                     .role::<async_openai::types::Role>((&role).into())
-                    .content(content)
+                    .function_call(FunctionCall {
+                        name,
+                        arguments: content,
+                    })
                     .build()
                     .unwrap(),
             })
             .collect();
-        let function_calling: Vec<_> = functions
-            .into_iter()
-            .map(|function| {
-                ChatCompletionFunctionsArgs::default()
-                    .name(function.name)
-                    .description(function.description)
-                    .parameters(
-                        serde_json::to_value(function.parameters)
-                            .expect("serde_json::unable_to_convert"),
-                    )
-                    .build()
-                    .unwrap()
-            })
-            .collect();
-        if let Some(frequency_penalty) = frequency_penalty {
-            CreateChatCompletionRequestArgs::default()
-                .messages(request_messages)
-                .functions(function_calling)
-                .temperature(temperature)
-                .stream(true)
-                .frequency_penalty(frequency_penalty)
-                .build()
-                .unwrap()
-        } else {
-            CreateChatCompletionRequestArgs::default()
-                .messages(request_messages)
-                .functions(function_calling)
-                .temperature(temperature)
-                .stream(true)
-                .build()
-                .unwrap()
+        let mut request_builder_args = CreateChatCompletionRequestArgs::default();
+        let request_args_builder = request_builder_args
+            .messages(request_messages)
+            .temperature(temperature)
+            .stream(true);
+        if let Some(functions) = functions {
+            let function_calling: Vec<_> = functions
+                .into_iter()
+                .map(|function| {
+                    ChatCompletionFunctionsArgs::default()
+                        .name(function.name)
+                        .description(function.description)
+                        .parameters(
+                            serde_json::to_value(function.parameters)
+                                .expect("serde_json::unable_to_convert"),
+                        )
+                        .build()
+                        .unwrap()
+                })
+                .collect();
+            request_args_builder.functions(function_calling);
         }
+        if let Some(frequency_penalty) = frequency_penalty {
+            request_args_builder.frequency_penalty(frequency_penalty);
+        }
+        request_args_builder.build().unwrap()
     }
 }

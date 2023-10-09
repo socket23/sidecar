@@ -502,11 +502,13 @@ impl Indexes {
         semantic: Option<SemanticClient>,
         config: Arc<Configuration>,
     ) -> Result<Self> {
+        debug!("creating indexes");
         // Figure out how to do version mismatch
         if config.state_source.index_version_mismatch() {
+            debug!("deleting cache because of mismatch with tantivy");
             // we don't support old schemas, and tantivy will hard
             // error if we try to open a db with a different schema.
-            std::fs::remove_dir_all(config.index_path("repo"))?;
+            // std::fs::remove_dir_all(config.index_path("repo"))?;
             std::fs::remove_dir_all(config.index_path("content"))?;
 
             let mut refs = vec![];
@@ -527,6 +529,8 @@ impl Indexes {
             }
         }
         config.state_source.save_index_version()?;
+
+        debug!("indexes created");
 
         Ok(Self {
             file: Indexer::create(

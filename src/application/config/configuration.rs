@@ -71,7 +71,7 @@ pub struct Configuration {
     /// Batch size for batched embeddings
     pub embedding_batch_len: NonZeroUsize,
 
-    #[clap(long)]
+    #[clap(long, default_value_t = default_user_id())]
     #[serde(default = "default_user_id")]
     user_id: String,
 }

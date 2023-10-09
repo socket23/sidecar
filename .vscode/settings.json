@@ -28,6 +28,7 @@
         "srcpath",
         "STOPWORDS",
         "tanvity",
+        "thiserror",
         "tiktoken",
         "webserver",
         "yolo"

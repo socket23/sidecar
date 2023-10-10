@@ -402,6 +402,15 @@ impl Agent {
                 let answer = self.answer(paths.as_slice()).await?;
                 info!(%self.session_id, "conversation finished");
                 info!(%self.session_id, answer, "answer");
+                // We should make it an atomic operation where whenever we update
+                // the conversation, we send an update on the stream and also
+                // save it to the db
+                if let Some(last_conversation) = self.conversation_messages.last() {
+                    // save the conversation to the DB
+                    let _ = last_conversation.save_to_db(self.sql_db.clone()).await;
+                    // send it over the sender
+                    let _ = self.sender.send(last_conversation.clone()).await;
+                }
                 return Ok(None);
             }
             AgentAction::Code { query } => self.code_search(&query).await?,

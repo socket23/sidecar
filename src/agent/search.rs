@@ -27,6 +27,7 @@ use futures::StreamExt;
 use once_cell::sync::OnceCell;
 use rake::StopWords;
 use tiktoken_rs::CoreBPE;
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, info};
 
 use std::{
@@ -82,6 +83,7 @@ impl Agent {
         llm_client: Arc<LlmClient>,
         conversation_id: uuid::Uuid,
         sql_db: SqlDb,
+        sender: Sender<ConversationMessage>,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
         let conversation_message = ConversationMessage::search_message(
@@ -97,6 +99,7 @@ impl Agent {
             llm_client,
             model: model::GPT_4,
             sql_db,
+            sender,
         };
         agent
     }

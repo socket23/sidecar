@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, info};
 
 use crate::{
@@ -235,6 +236,7 @@ pub struct Agent {
     pub llm_client: Arc<LlmClient>,
     pub model: model::AnswerModel,
     pub sql_db: SqlDb,
+    pub sender: Sender<ConversationMessage>,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -442,7 +444,10 @@ impl Agent {
 
         // We also retroactively save the last conversation to the database
         if let Some(last_conversation) = self.conversation_messages.last() {
+            // save the conversation to the DB
             let _ = last_conversation.save_to_db(self.sql_db.clone()).await;
+            // send it over the sender
+            let _ = self.sender.send(last_conversation.clone()).await;
         }
 
         let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(

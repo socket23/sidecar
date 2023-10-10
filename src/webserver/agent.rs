@@ -154,13 +154,5 @@ pub async fn search_agent(
 
     let stream = init_stream.chain(answer_stream).chain(done_stream);
 
-    Ok(Sse::new(Box::pin(stream)).keep_alive(
-        sse::KeepAlive::new()
-            .interval(Duration::from_secs(1))
-            .event(
-                sse::Event::default()
-                    .json_data(json!({"keep_alive": "true", "session_id": session_id}))
-                    .expect("keep_alive deserialization to work"),
-            ),
-    ))
+    Ok(Sse::new(Box::pin(stream)))
 }

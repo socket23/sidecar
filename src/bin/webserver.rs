@@ -44,7 +44,9 @@ pub async fn run(application: Application) -> Result<()> {
     let mut joins = tokio::task::JoinSet::new();
 
     // Start background tasks here
-    tokio::spawn(poll_repo_updates(application.clone()));
+    if application.config.enable_background_polling {
+        tokio::spawn(poll_repo_updates(application.clone()));
+    }
 
     joins.spawn(start(application));
 

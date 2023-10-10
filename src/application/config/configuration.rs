@@ -4,6 +4,7 @@ use std::{
 };
 
 use clap::Parser;
+use gix::config::boolean;
 use serde::{Deserialize, Serialize};
 
 use crate::repo::state::StateSource;
@@ -74,6 +75,12 @@ pub struct Configuration {
     #[clap(long, default_value_t = default_user_id())]
     #[serde(default = "default_user_id")]
     user_id: String,
+
+    /// If we should poll the local repo for updates auto-magically. Disabled
+    /// by default, until we figure out the delta sync method where we only
+    /// reindex the files which have changed
+    #[clap(long)]
+    pub enable_background_polling: bool,
 }
 
 impl Configuration {

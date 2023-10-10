@@ -108,8 +108,8 @@ pub async fn search_agent(
             // If we have some elements which are still present in the stream, we
             // return them here so as to not loose things in case the timeout got triggered
             // this is basically draining the stream properly
-            while let Some(Some(exchange)) = conversation_message_stream.next().now_or_never() {
-                yield exchange;
+            while let Some(Some(conversation_message)) = conversation_message_stream.next().now_or_never() {
+                yield conversation_message;
             }
 
             match next {
@@ -121,28 +121,38 @@ pub async fn search_agent(
         result?;
     };
 
-    let init_stream = futures::stream::once(async move {
-        Ok(sse::Event::default()
-            .json_data(json!({
-                "session_id": session_id,
-            }))
-            // This should never happen, so we force an unwrap.
-            .expect("failed to serialize initialization object"))
-    });
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    // let init_stream = futures::stream::once(async move {
+    //     Ok(sse::Event::default()
+    //         .json_data(json!({
+    //             "session_id": session_id,
+    //         }))
+    //         // This should never happen, so we force an unwrap.
+    //         .expect("failed to serialize initialization object"))
+    // });
 
     // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
     let answer_stream = conversation_message_stream.map(
         |conversation_message: anyhow::Result<ConversationMessage>| {
             sse::Event::default()
-                .json_data(conversation_message.map_err(|e| e.to_string()))
+                .json_data(conversation_message.expect("should not fail deserialization"))
                 .map_err(anyhow::Error::new)
         },
     );
 
-    let done_stream =
-        futures::stream::once(async { Ok(sse::Event::default().data("[CODESTORY_DONE]")) });
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    // let done_stream = futures::stream::once(async move {
+    //     Ok(sse::Event::default()
+    //         .json_data(json!(
+    //             {"done": "[CODESTORY_DONE]".to_owned(),
+    //             "session_id": session_id,
+    //         }))
+    //         .expect("failed to send done object"))
+    // });
 
-    let stream = init_stream.chain(answer_stream).chain(done_stream);
+    // let stream = init_stream.chain(answer_stream).chain(done_stream);
 
-    Ok(Sse::new(Box::pin(stream)))
+    Ok(Sse::new(Box::pin(answer_stream)))
 }

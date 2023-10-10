@@ -123,14 +123,14 @@ pub async fn search_agent(
 
     // TODO(skcd): Re-introduce this again when we have a better way to manage
     // server side events on the client side
-    // let init_stream = futures::stream::once(async move {
-    //     Ok(sse::Event::default()
-    //         .json_data(json!({
-    //             "session_id": session_id,
-    //         }))
-    //         // This should never happen, so we force an unwrap.
-    //         .expect("failed to serialize initialization object"))
-    // });
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": session_id,
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
 
     // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
     let answer_stream = conversation_message_stream.map(
@@ -143,16 +143,24 @@ pub async fn search_agent(
 
     // TODO(skcd): Re-introduce this again when we have a better way to manage
     // server side events on the client side
-    // let done_stream = futures::stream::once(async move {
-    //     Ok(sse::Event::default()
-    //         .json_data(json!(
-    //             {"done": "[CODESTORY_DONE]".to_owned(),
-    //             "session_id": session_id,
-    //         }))
-    //         .expect("failed to send done object"))
-    // });
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": session_id,
+            }))
+            .expect("failed to send done object"))
+    });
 
-    // let stream = init_stream.chain(answer_stream).chain(done_stream);
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
 
-    Ok(Sse::new(Box::pin(answer_stream)))
+    Ok(Sse::new(Box::pin(stream)).keep_alive(
+        sse::KeepAlive::new()
+            .interval(Duration::from_secs(1))
+            .event(
+                sse::Event::default()
+                    .json_data(json!({"keep_alive": "true", "session_id": session_id}))
+                    .expect("keep_alive deserialization to work"),
+            ),
+    ))
 }

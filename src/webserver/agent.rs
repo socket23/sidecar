@@ -20,7 +20,6 @@ use crate::agent::types::ConversationMessage;
 use crate::application::application::Application;
 use crate::repo::types::RepoRef;
 
-use super::types::json;
 use super::types::ApiResponse;
 use super::types::Result;
 

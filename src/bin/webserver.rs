@@ -65,7 +65,7 @@ pub async fn run(application: Application) -> Result<()> {
 // - when a file is opened, it should be tracked over here too
 pub async fn start(app: Application) -> anyhow::Result<()> {
     let bind = SocketAddr::new(app.config.host.parse()?, app.config.port);
-    let api = Router::new()
+    let mut api = Router::new()
         .route("/config", get(sidecar::webserver::config::get))
         .route(
             "/reach_the_devs",
@@ -73,6 +73,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         )
         .nest("/repo", repo_router())
         .nest("/agent", agent_router());
+
+    api = api.route("/health", get(sidecar::webserver::health::health));
 
     let api = api
         .layer(Extension(app.clone()))

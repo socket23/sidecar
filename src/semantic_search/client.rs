@@ -16,7 +16,6 @@ use qdrant_client::{
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::ParallelIterator;
 use tracing::{debug, error};
-use tracing_subscriber::field::debug;
 
 use crate::{
     application::config::configuration::Configuration,
@@ -248,6 +247,11 @@ impl SemanticClient {
             .await?;
 
         Ok(response.result)
+    }
+
+    pub async fn health_check(&self) -> anyhow::Result<()> {
+        self.qdrant_client().health_check().await?;
+        Ok(())
     }
 }
 

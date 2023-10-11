@@ -135,6 +135,7 @@ pub struct CodeSpan {
     pub start_line: u64,
     pub end_line: u64,
     pub data: String,
+    pub score: Option<f32>,
 }
 
 impl CodeSpan {
@@ -144,6 +145,7 @@ impl CodeSpan {
         start_line: u64,
         end_line: u64,
         data: String,
+        score: Option<f32>,
     ) -> Self {
         Self {
             file_path,
@@ -151,6 +153,7 @@ impl CodeSpan {
             start_line,
             end_line,
             data,
+            score,
         }
     }
 
@@ -170,10 +173,12 @@ pub enum AgentStep {
     Path {
         query: String,
         response: String,
+        paths: Vec<String>,
     },
     Code {
         query: String,
         response: String,
+        code_snippets: Vec<CodeSpan>,
     },
     Proc {
         query: String,

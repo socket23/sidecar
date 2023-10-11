@@ -259,7 +259,7 @@ impl RepositoryFile {
             ..
         } = workload;
 
-        let relative_path_str = format!("{}/", relative_path.to_string_lossy());
+        let relative_path_str = format!("{}", relative_path.to_string_lossy());
         #[cfg(windows)]
         let relative_path_str = relative_path_str.replace('\\', "/");
 

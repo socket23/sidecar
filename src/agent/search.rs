@@ -153,6 +153,10 @@ impl Agent {
         last_exchange.add_agent_step(super::types::AgentStep::Path {
             query: query.to_owned(),
             response: response.to_owned(),
+            paths: paths
+                .into_iter()
+                .map(|path_with_alias| path_with_alias.1)
+                .collect(),
         });
 
         Ok(response)
@@ -202,6 +206,7 @@ impl Agent {
                     result.start_line,
                     result.end_line,
                     result.text,
+                    result.score,
                 );
                 code_span
             })
@@ -234,6 +239,10 @@ impl Agent {
         last_exchange.add_agent_step(super::types::AgentStep::Code {
             query: query.to_owned(),
             response: response.to_owned(),
+            code_snippets: code_snippets
+                .into_iter()
+                .filter(|code_snippet| !code_snippet.is_empty())
+                .collect(),
         });
 
         // Now that we have done the code search, we need to figure out what we
@@ -429,6 +438,7 @@ impl Agent {
                         c.range.start.try_into().unwrap(),
                         c.range.end.try_into().unwrap(),
                         c.code,
+                        None,
                     )
                 })
             })
@@ -703,7 +713,7 @@ impl Agent {
                 let snippet = lines_by_file.get(&path).unwrap()[line_start..line_end].join("\n");
 
                 let path_alias = self.get_path_alias(&path);
-                CodeSpan::new(path, path_alias, span.start, span.end, snippet)
+                CodeSpan::new(path, path_alias, span.start, span.end, snippet, None)
             })
             .collect()
     }

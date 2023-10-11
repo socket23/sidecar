@@ -71,6 +71,7 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
             "/reach_the_devs",
             get(sidecar::webserver::config::reach_the_devs),
         )
+        .route("/version", get(sidecar::webserver::config::version))
         .nest("/repo", repo_router())
         .nest("/agent", agent_router());
 

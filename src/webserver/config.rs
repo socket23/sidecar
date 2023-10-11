@@ -5,6 +5,7 @@ use axum::{extract::State, response::IntoResponse};
 use serde::Serialize;
 
 use crate::application::application::Application;
+use crate::state::BINARY_VERSION_HASH;
 
 use super::types::json;
 use super::types::ApiResponse;
@@ -20,14 +21,27 @@ pub(super) struct ReachTheDevsResponse {
     response: String,
 }
 
+#[derive(Serialize, Debug)]
+pub(super) struct VersionResponse {
+    version_hash: String,
+}
+
 impl ApiResponse for ConfigResponse {}
 
 impl ApiResponse for ReachTheDevsResponse {}
 
+impl ApiResponse for VersionResponse {}
+
 pub async fn get(State(app): State<Application>) -> impl IntoResponse {
     json(ConfigResponse {
-        response: "hello skcd".to_owned(),
+        response: "hello_skcd".to_owned(),
         model_dir: app.config.model_dir.to_str().unwrap().to_owned(),
+    })
+}
+
+pub async fn version(State(app): State<Application>) -> impl IntoResponse {
+    json(VersionResponse {
+        version_hash: BINARY_VERSION_HASH.to_owned(),
     })
 }
 

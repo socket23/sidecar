@@ -418,6 +418,8 @@ mod tests {
 
     #[test]
     fn test_naive_chunker() {
+        // The test buffer has a total length of 128, with a chunk of size 30
+        // and overlap of 15 we get 9 chunks, its easy maths. ceil(128/15) == 9
         let chunks = naive_chunker(get_naive_chunking_test_string(), 30, 15);
         assert_eq!(chunks.len(), 9);
     }

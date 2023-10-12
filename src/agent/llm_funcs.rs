@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 /// We define all the helper stuff required here for the LLM to be able to do
 /// things.
 use async_openai::config::AzureConfig;
@@ -8,11 +10,14 @@ use async_openai::types::CreateChatCompletionRequest;
 use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
+use futures::Stream;
 use futures::StreamExt;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
+
+use super::types::Answer;
 
 pub mod llm {
     use std::collections::HashMap;
@@ -274,6 +279,61 @@ impl LlmClient {
             gpt432k_client: Client::with_config(gpt4_32k_config),
             gpt3_5_client: Client::with_config(gpt3_5_config),
         }
+    }
+
+    pub async fn stream_response(
+        &self,
+        model: llm::OpenAIModel,
+        messages: Vec<llm::Message>,
+        functions: Option<Vec<llm::Function>>,
+        temperature: f32,
+        frequency_penalty: Option<f32>,
+        sender: tokio::sync::mpsc::UnboundedSender<Answer>,
+    ) -> anyhow::Result<String> {
+        let client = self.get_model(&model);
+        let request = self.create_request(messages, functions, temperature, frequency_penalty);
+
+        const TOTAL_CHAT_RETRIES: usize = 5;
+
+        'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
+            let mut buf = String::new();
+            let stream = client.chat().create_stream(request.clone()).await;
+            if stream.is_err() {
+                continue 'retry_loop;
+            }
+            let unwrap_stream = stream.expect("is_err check above to work");
+            tokio::pin!(unwrap_stream);
+
+            loop {
+                match unwrap_stream.next().await {
+                    None => break,
+                    Some(Ok(s)) => {
+                        let delta = &s
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.delta.content.clone())
+                            .flatten()
+                            .unwrap_or("".to_owned());
+                        buf += delta;
+                        sender
+                            .send(Answer {
+                                answer_up_until_now: buf.to_owned(),
+                                delta: Some(delta.to_owned()),
+                            })
+                            .expect("sending answer should not fail");
+                    }
+                    Some(Err(e)) => {
+                        warn!(?e, "openai stream error, retrying");
+                        continue 'retry_loop;
+                    }
+                }
+            }
+
+            return Ok(buf);
+        }
+        Err(anyhow::anyhow!(
+            "failed to get response from openai".to_owned()
+        ))
     }
 
     pub async fn response(

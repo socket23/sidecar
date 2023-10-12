@@ -96,10 +96,34 @@ impl ConversationMessage {
     }
 
     pub fn set_answer(&mut self, answer: String) {
+        // It's important that we mark the conversation as finished
+        self.conversation_state = ConversationState::Finished;
         self.answer = Some(Answer {
             answer_up_until_now: answer,
             delta: None,
         });
+    }
+
+    pub fn answer_update(session_id: uuid::Uuid, answer_update: Answer) -> Self {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self {
+            message_id: uuid::Uuid::new_v4(),
+            session_id,
+            query: String::new(),
+            steps_taken: vec![],
+            agent_state: AgentState::Finish,
+            file_paths: vec![],
+            code_spans: vec![],
+            user_selected_code_span: vec![],
+            open_files: vec![],
+            conversation_state: ConversationState::StreamingAnswer,
+            answer: Some(answer_update),
+            created_at: current_time,
+            last_updated: current_time,
+        }
     }
 
     pub async fn save_to_db(&self, db: SqlDb) -> anyhow::Result<()> {
@@ -280,6 +304,7 @@ pub enum AgentState {
 pub enum ConversationState {
     Pending,
     Started,
+    StreamingAnswer,
     Finished,
 }
 
@@ -413,14 +438,18 @@ impl Agent {
             .collect()
     }
 
-    pub async fn iterate(&mut self, action: AgentAction) -> anyhow::Result<Option<AgentAction>> {
+    pub async fn iterate(
+        &mut self,
+        action: AgentAction,
+        answer_sender: tokio::sync::mpsc::UnboundedSender<Answer>,
+    ) -> anyhow::Result<Option<AgentAction>> {
         // Now we will go about iterating over the action and figure out what the
         // next best action should be
         match action {
             AgentAction::Answer { paths } => {
                 // here we can finally answer after we do some merging on the spans
                 // and also look at the history to provide more context
-                let answer = self.answer(paths.as_slice()).await?;
+                let answer = self.answer(paths.as_slice(), answer_sender).await?;
                 info!(%self.session_id, "conversation finished");
                 info!(%self.session_id, answer, "answer");
                 // We should make it an atomic operation where whenever we update

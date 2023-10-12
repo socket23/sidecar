@@ -189,6 +189,7 @@ pub fn chunk_tree(
 ) -> Vec<Span> {
     let mut chunks: Vec<Span> = vec![];
     let root_node = tree.root_node();
+    let split_lines = buffer_content.split("\n").collect::<Vec<_>>();
     chunks = chunk_node(root_node, language, max_characters_per_chunk);
 
     if chunks.len() == 0 {
@@ -197,7 +198,7 @@ pub fn chunk_tree(
     if chunks.len() < 2 {
         return vec![Span::new(
             0,
-            chunks[0].end,
+            get_line_number(chunks[0].end, split_lines.as_slice()),
             language.get_language(),
             Some(buffer_content.to_owned()),
         )];
@@ -226,8 +227,6 @@ pub fn chunk_tree(
     if current_chunk.len() > 0 {
         new_chunks.push(current_chunk.clone());
     }
-
-    let split_lines = buffer_content.split("\n").collect::<Vec<_>>();
 
     let mut line_chunks = new_chunks
         .iter()

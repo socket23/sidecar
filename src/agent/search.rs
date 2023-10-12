@@ -345,7 +345,7 @@ impl Agent {
                     )
                     .await?;
 
-                debug!("response from gpt3.5: {:?}", json);
+                debug!("response from gpt3.5 for path {:?}: {:?}", path, json);
 
                 #[derive(
                     serde::Deserialize,

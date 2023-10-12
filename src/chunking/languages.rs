@@ -3,21 +3,20 @@ use super::{
     typescript::typescript_language_config,
 };
 
-fn naive_chunker(buffer: &str, line_count: usize, overlap: usize) -> Vec<String> {
-    let mut chunks: Vec<String> = vec![];
+fn naive_chunker(buffer: &str, line_count: usize, overlap: usize) -> Vec<Span> {
+    let mut chunks: Vec<Span> = vec![];
     let current_chunk = buffer
         .lines()
         .into_iter()
         .map(|line| line.to_owned())
         .collect::<Vec<_>>();
     let chunk_length = current_chunk.len();
-    dbg!(chunk_length);
     let mut start = 0;
     while start < chunk_length {
         let end = (start + line_count).min(chunk_length);
-        dbg!(start, end);
         let chunk = current_chunk[start..end].to_owned();
-        chunks.push(chunk.join("\n"));
+        let span = Span::new(start, end, None, Some(chunk.join("\n")));
+        chunks.push(span);
         start += line_count - overlap;
     }
     chunks
@@ -76,14 +75,7 @@ impl TSLanguageParsing {
         if file_extension.is_none() {
             // We use naive chunker here which just splits on the number
             // of lines
-            let chunks = naive_chunker(buffer, 30, 15);
-            let mut snippets: Vec<Span> = Default::default();
-            chunks.into_iter().enumerate().for_each(|(i, chunk)| {
-                let start = i * 30;
-                let end = (i + 1) * 30;
-                snippets.push(Span::new(start, end, None, Some(chunk)));
-            });
-            return snippets;
+            return naive_chunker(buffer, 30, 15);
         }
         // We try to find which language config we should use for this file
         let language_config_maybe = self
@@ -102,14 +94,7 @@ impl TSLanguageParsing {
             chunks
         } else {
             // use naive chunker here which just splits the file into parts
-            let chunks = naive_chunker(buffer, 30, 15);
-            let mut snippets: Vec<Span> = Default::default();
-            chunks.into_iter().enumerate().for_each(|(i, chunk)| {
-                let start = i * 30;
-                let end = (i + 1) * 30;
-                snippets.push(Span::new(start, end, None, Some(chunk)));
-            });
-            snippets
+            return naive_chunker(buffer, 30, 15);
         }
     }
 }

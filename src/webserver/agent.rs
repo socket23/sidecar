@@ -1,6 +1,7 @@
 use axum::response::sse;
 use axum::response::Sse;
 use futures::future::Either;
+use futures::select;
 use futures::stream;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -60,6 +61,8 @@ pub async fn search_agent(
     // Process the events in parallel here
     let conversation_message_stream = async_stream::try_stream! {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let (answer_sender, answer_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut answer_receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(answer_receiver);
         let mut conversation_message_stream = tokio_stream::wrappers::ReceiverStream::new(receiver);
 
         let mut agent = Agent::prepare_for_search(
@@ -82,27 +85,35 @@ pub async fn search_agent(
 
             use futures::future::FutureExt;
 
-            let left_stream = (&mut conversation_message_stream).map(Either::Left);
-            let right_stream = agent
-                .iterate(action)
+            let conversation_message_stream_left = (&mut conversation_message_stream).map(Either::Left);
+            // map the agent conversation update stream to right::left
+            let agent_conversation_update_stream_right = agent
+                .iterate(action, answer_sender.clone())
                 .into_stream()
-                .map(Either::Right);
+                .map(|answer| Either::Right(Either::Left(answer)));
+            // map the agent answer stream to right::right
+            let agent_answer_delta_stream_left = (&mut answer_receiver_stream).map(|answer| Either::Right(Either::Right(answer)));
 
             let timeout = Duration::from_secs(TIMEOUT_SECS);
-
             let mut next = None;
             for await item in tokio_stream::StreamExt::timeout(
-                stream::select(left_stream, right_stream),
+                stream::select(conversation_message_stream_left, stream::select(agent_conversation_update_stream_right, agent_answer_delta_stream_left)),
                 timeout,
             ) {
                 match item {
                     Ok(Either::Left(conversation_message)) => yield conversation_message,
-                    Ok(Either::Right(next_action)) => match next_action {
+                    Ok(Either::Right(Either::Left(next_action))) => match next_action {
                         Ok(n) => break next = n,
                         Err(e) => {
                             break 'outer Err(anyhow::anyhow!(e))
                         },
                     },
+                    Ok(Either::Right(Either::Right(answer_update))) => {
+                        // We are going to send the answer update in the same
+                        // way as we send the answer
+                        let conversation_message = ConversationMessage::answer_update(session_id, answer_update);
+                        yield conversation_message
+                    }
                     Err(_) => break 'outer Err(anyhow::anyhow!("timeout")),
                 }
             }
@@ -112,6 +123,12 @@ pub async fn search_agent(
             // this is basically draining the stream properly
             while let Some(Some(conversation_message)) = conversation_message_stream.next().now_or_never() {
                 yield conversation_message;
+            }
+
+            // yield the answer from the answer stream so we can send incremental updates here
+            while let Some(Some(answer_update)) = answer_receiver_stream.next().now_or_never() {
+                let conversation_message = ConversationMessage::answer_update(session_id, answer_update);
+                yield conversation_message
             }
 
             match next {

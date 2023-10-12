@@ -17,7 +17,7 @@ use crate::{
 use super::{
     llm_funcs::LlmClient,
     model,
-    types::{Agent, AgentState, ConversationMessage},
+    types::{Agent, AgentState, Answer, ConversationMessage},
 };
 
 use anyhow::anyhow;
@@ -33,6 +33,7 @@ use tracing::{debug, info};
 use std::{
     collections::{HashMap, HashSet},
     ops::Range,
+    path::Path,
     sync::Arc,
 };
 
@@ -468,21 +469,35 @@ impl Agent {
         Ok(response)
     }
 
-    pub async fn answer(&mut self, path_aliases: &[usize]) -> Result<String> {
+    pub async fn answer(
+        &mut self,
+        path_aliases: &[usize],
+        sender: tokio::sync::mpsc::UnboundedSender<Answer>,
+    ) -> Result<String> {
         let context = self.answer_context(path_aliases).await?;
-        let system_prompt = prompts::answer_article_prompt(path_aliases.len() != 1, &context);
+        dbg!("Whats the context", context.clone());
+        let system_prompt = prompts::answer_article_prompt(
+            path_aliases.len() != 1,
+            &context,
+            &self
+                .reporef()
+                .local_path()
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_default(),
+        );
         let system_message = llm_funcs::llm::Message::system(&system_prompt);
         let messages = Some(system_message).into_iter().collect::<Vec<_>>();
 
         let reply = self
             .llm_client
             .clone()
-            .response(
+            .stream_response(
                 llm::OpenAIModel::get_model(self.model.model_name)?,
                 messages,
                 None,
                 0.0,
                 None,
+                sender,
             )
             .await?;
 
@@ -492,9 +507,25 @@ impl Agent {
         Ok(reply)
     }
 
+    fn get_absolute_path(&self, reporef: &RepoRef, path: &str) -> String {
+        let repo_location = reporef.local_path();
+        match repo_location {
+            Some(ref repo_location) => Path::new(&repo_location)
+                .join(Path::new(path))
+                .to_string_lossy()
+                .to_string(),
+            None => {
+                // We don't have a repo location, so we just use the path
+                path.to_string()
+            }
+        }
+    }
+
     async fn answer_context(&mut self, aliases: &[usize]) -> Result<String> {
         // Here we create the context for the answer, using the aliases and also
         // using the code spans which we have
+        // We change the paths here to be absolute so the LLM can stream that
+        // properly
         let paths = self.paths().collect::<Vec<_>>();
         let mut prompt = "".to_owned();
         let mut aliases = aliases
@@ -511,7 +542,9 @@ impl Agent {
 
             for alias in &aliases {
                 let path = &paths[*alias];
-                prompt += &format!("{path}\n");
+                // Now we try to get the absolute path here
+                let path_for_prompt = self.get_absolute_path(self.reporef(), path);
+                prompt += &format!("{path_for_prompt}\n");
             }
         }
 
@@ -534,7 +567,10 @@ impl Agent {
                 .map(|(i, line)| format!("{} {line}\n", i + code_span.start_line as usize + 1))
                 .collect::<String>();
 
-            let formatted_snippet = format!("### {} ###\n{snippet}\n\n", code_span.file_path);
+            let formatted_snippet = format!(
+                "### {} ###\n{snippet}\n\n",
+                self.get_absolute_path(self.reporef(), &code_span.file_path)
+            );
 
             let snippet_tokens = bpe.encode_ordinary(&formatted_snippet).len();
 
@@ -617,7 +653,9 @@ impl Agent {
                     .unwrap()
                     .unwrap_or_else(|| panic!("path did not exist in the index: {path}"))
                     .content
-                    .lines()
+                    // we should be using .lines here instead, but this is okay
+                    // for now
+                    .split("\n")
                     .map(str::to_owned)
                     .collect::<Vec<_>>();
 

@@ -186,24 +186,24 @@ A: "#
     )
 }
 
-pub fn answer_article_prompt(multi: bool, context: &str) -> String {
+pub fn answer_article_prompt(multi: bool, context: &str, location: &str) -> String {
     // Return different prompts depending on whether there is one or many aliases
     let one_prompt = format!(
         r#"{context}#####
 
 A user is looking at the code above, your job is to answer their query.
 
-Your output will be interpreted as bloop-markdown which renders with the following rules:
-- Inline code must be expressed as a link to the correct line of code using the URL format: `[bar](src/foo.rs#L50)` or `[bar](src/foo.rs#L50-L54)`
+Your output will be interpreted as codestory-markdown which renders with the following rules:
+- Inline code must be expressed as a link to the correct line of code using the URL format: `[bar]({location}src/foo.rs#L50)` or `[bar]({location}src/foo.rs#L50-L54)`
 - Do NOT output bare symbols. ALL symbols must include a link
-  - E.g. Do not simply write `Bar`, write [`Bar`](src/bar.rs#L100-L105).
-  - E.g. Do not simply write "Foos are functions that create `Foo` values out of thin air." Instead, write: "Foos are functions that create [`Foo`](src/foo.rs#L80-L120) values out of thin air."
+  - E.g. Do not simply write `Bar`, write [`Bar`]({location}src/bar.rs#L100-L105).
+  - E.g. Do not simply write "Foos are functions that create `Foo` values out of thin air." Instead, write: "Foos are functions that create [`Foo`]({location}src/foo.rs#L80-L120) values out of thin air."
 - Only internal links to the current file work
 - Basic markdown text formatting rules are allowed
 
 Here is an example response:
 
-A function [`openCanOfBeans`](src/beans/open.py#L7-L19) is defined. This function is used to handle the opening of beans. It includes the variable [`openCanOfBeans`](src/beans/open.py#L9) which is used to store the value of the tin opener.
+A function [`openCanOfBeans`]({location}src/beans/open.py#L7-L19) is defined. This function is used to handle the opening of beans. It includes the variable [`openCanOfBeans`]({location}src/beans/open.py#L9) which is used to store the value of the tin opener.
 "#
     );
 
@@ -217,20 +217,20 @@ When referring to code, you must provide an example in a code block.
 
 Respect these rules at all times:
 - Link ALL paths AND code symbols (functions, methods, fields, classes, structs, types, variables, values, definitions, directories, etc) by embedding them in a markdown link, with the URL corresponding to the full path, and the anchor following the form `LX` or `LX-LY`, where X represents the starting line number, and Y represents the ending line number, if the reference is more than one line.
-  - For example, to refer to lines 50 to 78 in a sentence, respond with something like: The compiler is initialized in [`src/foo.rs`](src/foo.rs#L50-L78)
-  - For example, to refer to the `new` function on a struct, respond with something like: The [`new`](src/bar.rs#L26-53) function initializes the struct
-  - For example, to refer to the `foo` field on a struct and link a single line, respond with something like: The [`foo`](src/foo.rs#L138) field contains foos. Do not respond with something like [`foo`](src/foo.rs#L138-L138)
-  - For example, to refer to a folder `foo`, respond with something like: The files can be found in [`foo`](path/to/foo/) folder
+  - For example, to refer to lines 50 to 78 in a sentence, respond with something like: The compiler is initialized in [`src/foo.rs`]({location}src/foo.rs#L50-L78)
+  - For example, to refer to the `new` function on a struct, respond with something like: The [`new`]({location}src/bar.rs#L26-53) function initializes the struct
+  - For example, to refer to the `foo` field on a struct and link a single line, respond with something like: The [`foo`]({location}src/foo.rs#L138) field contains foos. Do not respond with something like [`foo`]({location}src/foo.rs#L138-L138)
+  - For example, to refer to a folder `foo`, respond with something like: The files can be found in [`foo`]({location}path/to/foo/) folder
 - Do not print out line numbers directly, only in a link
 - Do not refer to more lines than necessary when creating a line range, be precise
 - Do NOT output bare symbols. ALL symbols must include a link
-  - E.g. Do not simply write `Bar`, write [`Bar`](src/bar.rs#L100-L105).
-  - E.g. Do not simply write "Foos are functions that create `Foo` values out of thin air." Instead, write: "Foos are functions that create [`Foo`](src/foo.rs#L80-L120) values out of thin air."
+  - E.g. Do not simply write `Bar`, write [`Bar`]({location}src/bar.rs#L100-L105).
+  - E.g. Do not simply write "Foos are functions that create `Foo` values out of thin air." Instead, write: "Foos are functions that create [`Foo`]({location}src/foo.rs#L80-L120) values out of thin air."
 - Link all fields
-  - E.g. Do not simply write: "It has one main field: `foo`." Instead, write: "It has one main field: [`foo`](src/foo.rs#L193)."
+  - E.g. Do not simply write: "It has one main field: `foo`." Instead, write: "It has one main field: [`foo`]({location}src/foo.rs#L193)."
 - Do NOT link external urls not present in the context, do NOT link urls from the internet
 - Link all symbols, even when there are multiple in one sentence
-  - E.g. Do not simply write: "Bars are [`Foo`]( that return a list filled with `Bar` variants." Instead, write: "Bars are functions that return a list filled with [`Bar`](src/bar.rs#L38-L57) variants."
+  - E.g. Do not simply write: "Bars are [`Foo`]( that return a list filled with `Bar` variants." Instead, write: "Bars are functions that return a list filled with [`Bar`]({location}src/bar.rs#L38-L57) variants."
   - If you do not have enough information needed to answer the query, do not make up an answer. Instead respond only with a footnote that asks the user for more information, e.g. `assistant: I'm sorry, I couldn't find what you were looking for, could you provide more information?`
 - Code blocks MUST be displayed to the user using XML in the following formats:
   - Do NOT output plain markdown blocks, the user CANNOT see them

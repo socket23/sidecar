@@ -258,7 +258,7 @@ impl Agent {
 
         let response = self
             .get_llm_client()
-            .stream_response(llm::OpenAIModel::GPT3_5_16k, prompt, None, 0.0, None)
+            .response(llm::OpenAIModel::GPT3_5_16k, prompt, None, 0.0, None)
             .await?;
 
         debug!("hyde response");
@@ -336,7 +336,7 @@ impl Agent {
 
                 let json = self
                     .get_llm_client()
-                    .stream_response(
+                    .response(
                         llm_funcs::llm::OpenAIModel::GPT3_5_16k,
                         vec![llm_funcs::llm::Message::system(&prompt)],
                         None,
@@ -477,7 +477,7 @@ impl Agent {
         let reply = self
             .llm_client
             .clone()
-            .stream_response(
+            .response(
                 llm::OpenAIModel::get_model(self.model.model_name)?,
                 messages,
                 None,

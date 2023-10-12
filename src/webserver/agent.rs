@@ -6,6 +6,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::error;
 
 use axum::response::IntoResponse;
 use axum::{extract::Query, Extension};
@@ -98,7 +99,9 @@ pub async fn search_agent(
                     Ok(Either::Left(conversation_message)) => yield conversation_message,
                     Ok(Either::Right(next_action)) => match next_action {
                         Ok(n) => break next = n,
-                        Err(e) => break 'outer Err(anyhow::anyhow!(e)),
+                        Err(e) => {
+                            break 'outer Err(anyhow::anyhow!(e))
+                        },
                     },
                     Err(_) => break 'outer Err(anyhow::anyhow!("timeout")),
                 }
@@ -134,6 +137,10 @@ pub async fn search_agent(
     // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
     let answer_stream = conversation_message_stream.map(
         |conversation_message: anyhow::Result<ConversationMessage>| {
+            dbg!(conversation_message.is_err());
+            if let Err(e) = &conversation_message {
+                error!("error in conversation message stream: {}", e);
+            }
             sse::Event::default()
                 .json_data(conversation_message.expect("should not fail deserialization"))
                 .map_err(anyhow::Error::new)

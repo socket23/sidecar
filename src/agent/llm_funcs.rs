@@ -351,17 +351,11 @@ impl LlmClient {
                     let message = data_okay.choices.remove(0).message;
                     let function_call = message.function_call;
                     debug!("whats the function call here {:?}", function_call);
-                    let data = message.content;
                     if let Some(function_call) = function_call {
                         final_function_call.name = Some(function_call.name);
                         final_function_call.arguments = function_call.arguments;
                         return Ok(Some(final_function_call));
                     }
-                    // if let Some(data) = data {
-                    //     debug!("whats the content here {}", data);
-                    //     if let Ok(serialised_data)
-                    //     return Ok(Some(serde_json::from_str(&data)?));
-                    // }
                     request.temperature = Some(0.1);
                     continue 'retry_loop;
                 }

@@ -17,6 +17,16 @@ use super::{
 };
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct Answer {
+    // This is the answer up-until now
+    pub answer_up_until_now: String,
+    // This is the delta between the previously sent answer and the current one
+    // when streaming we often times want to send the delta so we can show
+    // the output in a streaming fashion
+    pub delta: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConversationMessage {
     message_id: uuid::Uuid,
     // We also want to store the session id here so we can load it and save it
@@ -39,7 +49,7 @@ pub struct ConversationMessage {
     // The status of this conversation
     conversation_state: ConversationState,
     // Final answer which is going to get stored here
-    answer: Option<String>,
+    answer: Option<Answer>,
     // Last updated
     last_updated: u64,
     // Created at
@@ -81,12 +91,15 @@ impl ConversationMessage {
         &self.query
     }
 
-    pub fn answer(&self) -> Option<String> {
+    pub fn answer(&self) -> Option<Answer> {
         self.answer.clone()
     }
 
     pub fn set_answer(&mut self, answer: String) {
-        self.answer = Some(answer);
+        self.answer = Some(Answer {
+            answer_up_until_now: answer,
+            delta: None,
+        });
     }
 
     pub async fn save_to_db(&self, db: SqlDb) -> anyhow::Result<()> {
@@ -94,7 +107,10 @@ impl ConversationMessage {
         let mut tx = db.begin().await?;
         let message_id = self.message_id.to_string();
         let query = self.query.to_owned();
-        let answer = self.answer.clone();
+        let answer = self
+            .answer
+            .as_ref()
+            .map(|answer| answer.answer_up_until_now.to_owned());
         let created_at = self.created_at as i64;
         let last_updated = self.last_updated as i64;
         let session_id = self.session_id.to_string();
@@ -372,7 +388,7 @@ impl Agent {
                     // NB: We intentionally discard the summary as it is redundant.
                     Some(answer) => Some(llm_funcs::llm::Message::function_return(
                         "none".to_owned(),
-                        answer,
+                        answer.answer_up_until_now,
                     )),
                     None => None,
                 };

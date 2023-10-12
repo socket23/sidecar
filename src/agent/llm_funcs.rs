@@ -276,7 +276,7 @@ impl LlmClient {
         }
     }
 
-    pub async fn stream_response(
+    pub async fn response(
         &self,
         model: llm::OpenAIModel,
         messages: Vec<llm::Message>,

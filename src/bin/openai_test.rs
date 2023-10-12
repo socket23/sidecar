@@ -86,7 +86,7 @@ async fn llm_request() {
         prompts::functions(false), // Only add proc if there are paths in context
     )
     .unwrap();
-    let response = client
+    let _ = client
         .stream_function_call(
             sidecar::agent::llm_funcs::llm::OpenAIModel::GPT4,
             messages,

@@ -398,6 +398,7 @@ impl LlmClient {
         let mut final_function_call = llm::FunctionCall::default();
 
         debug!("stream_function_call");
+        dbg!(request.clone());
 
         const TOTAL_CHAT_RETRIES: usize = 5;
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {

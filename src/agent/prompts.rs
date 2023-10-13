@@ -146,17 +146,13 @@ pub fn system_sematic_search<'a>(paths: impl IntoIterator<Item = &'a str>) -> St
     }
 
     system_prompt.push_str(
-        r#"Your job is to choose the best action. Call functions to find information that will help answer the user's query. Call functions.none when you have enough information to answer. Follow these rules at all times:
+        r#"Your job is to choose the best action. Call functions to find information that will help answer the user's query. Follow these rules at all times:
 
 - ALWAYS call a function, DO NOT answer the question directly, even if the query is not in English
 - DO NOT call a function that you've used before with the same arguments
 - DO NOT assume the structure of the codebase, or the existence of files or folders
 - Your queries to functions.code or functions.path should be significantly different to previous queries
-- Call functions.none with paths that you are confident will help answer the user's query
 - If the user query is general (e.g. 'What does this do?', 'What is this repo?') look for READMEs, documentation and entry points in the code (main files, index files, api files etc.)
-- If the user is referring to, or asking for, information that is in your history, call functions.none
-- If after attempting to gather information you are still unsure how to answer the query, call functions.none
-- If the query is a greeting, or neither a question nor an instruction, call functions.none
 - When calling functions.code your query should consist of keywords. E.g. if the user says 'What does contextmanager do?', your query should be 'contextmanager'. If the user says 'How is contextmanager used in app', your query should be 'contextmanager app'. If the user says 'What is in the src directory', your query should be 'src'
 - When calling functions.path your query should be a single term (no whitespace). E.g. if the user says 'Where is the query parser?', your query should be 'parser'. If the users says 'What's in the auth dir?', your query should be 'auth'
 - If the output of a function is empty, try calling the function again with DIFFERENT arguments OR try calling a different function

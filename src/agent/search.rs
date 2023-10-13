@@ -105,6 +105,34 @@ impl Agent {
         agent
     }
 
+    pub fn prepare_for_semantic_search(
+        application: Application,
+        reporef: RepoRef,
+        session_id: uuid::Uuid,
+        query: &str,
+        llm_client: Arc<LlmClient>,
+        conversation_id: uuid::Uuid,
+        sql_db: SqlDb,
+        sender: Sender<ConversationMessage>,
+    ) -> Self {
+        let conversation_message = ConversationMessage::semantic_search(
+            conversation_id,
+            AgentState::SemanticSearch,
+            query.to_owned(),
+        );
+        let agent = Agent {
+            application,
+            reporef,
+            session_id,
+            conversation_messages: vec![conversation_message],
+            llm_client,
+            model: model::GPT_4,
+            sql_db,
+            sender,
+        };
+        agent
+    }
+
     pub async fn path_search(&mut self, query: &str) -> Result<String> {
         // Here we first take the user query and perform a lexical search
         // on all the paths which are present

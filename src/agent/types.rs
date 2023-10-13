@@ -6,8 +6,11 @@ use tokio::sync::mpsc::Sender;
 use tracing::{debug, info};
 
 use crate::{
-    agent::llm_funcs::llm::FunctionCall, application::application::Application, db::sqlite::SqlDb,
-    indexes::indexer::FileDocument, repo::types::RepoRef,
+    agent::{llm_funcs::llm::FunctionCall, prompts::path_function},
+    application::application::Application,
+    db::sqlite::SqlDb,
+    indexes::indexer::FileDocument,
+    repo::types::RepoRef,
 };
 
 use super::{
@@ -58,6 +61,28 @@ pub struct ConversationMessage {
 
 impl ConversationMessage {
     pub fn search_message(session_id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self {
+            message_id: uuid::Uuid::new_v4(),
+            session_id,
+            query,
+            steps_taken: vec![],
+            agent_state,
+            file_paths: vec![],
+            code_spans: vec![],
+            user_selected_code_span: vec![],
+            open_files: vec![],
+            conversation_state: ConversationState::Started,
+            answer: None,
+            created_at: current_time,
+            last_updated: current_time,
+        }
+    }
+
+    pub fn semantic_search(session_id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -168,7 +193,7 @@ impl ConversationMessage {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct CodeSpan {
     pub file_path: String,
     pub alias: usize,
@@ -298,6 +323,8 @@ pub enum AgentState {
     FixSignals,
     // We finish up the work of the agent
     Finish,
+    // If we are performing semantic search, we should be over here
+    SemanticSearch,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -514,7 +541,7 @@ impl Agent {
         )
         .unwrap();
 
-        let mut history = vec![llm_funcs::llm::Message::system(&prompts::system(
+        let mut history = vec![llm_funcs::llm::Message::system(&prompts::system_search(
             self.paths(),
         ))];
         history.extend(self.history()?);
@@ -537,6 +564,77 @@ impl Agent {
         } else {
             Ok(None)
         }
+    }
+
+    pub async fn semantic_search(&mut self) -> anyhow::Result<Vec<CodeSpan>> {
+        let model = llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?;
+        // Get or create the history from the conversation before so we can better
+        // select
+        let mut history = vec![llm_funcs::llm::Message::system(
+            &prompts::system_sematic_search(self.paths()),
+        )];
+        history.extend(self.history()?);
+        let trimmed_history = trim_history(history.clone(), self.model.clone())?;
+
+        let path_search_function =
+            serde_json::from_value::<llm_funcs::llm::Function>(prompts::path_function()).unwrap();
+        let response = self
+            .get_llm_client()
+            .stream_function_call(
+                model,
+                trimmed_history,
+                vec![path_search_function],
+                0.0,
+                None,
+            )
+            .await?;
+        dbg!(response.clone());
+        let path_function_call = if let Some(response) = response {
+            AgentAction::from_gpt_response(&response).map(|response| Some(response))
+        } else {
+            Ok(None)
+        };
+        // At this point when we perform the search using the path function first
+        // so we can do lexical search first
+        if let Ok(Some(AgentAction::Path { query })) = path_function_call {
+            self.path_search(&query).await.expect("path search to work");
+        }
+
+        // Now we go here and perform a semantic search with the paths we have
+        let semantic_search_function =
+            serde_json::from_value::<llm_funcs::llm::Function>(prompts::code_function()).unwrap();
+
+        let mut history = vec![llm_funcs::llm::Message::system(
+            &prompts::system_sematic_search(self.paths()),
+        )];
+        history.extend(self.history()?);
+
+        let trimmed_history = trim_history(history.clone(), self.model.clone())?;
+
+        let semantic_search_query = self
+            .get_llm_client()
+            .stream_function_call(
+                llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?,
+                trimmed_history,
+                vec![semantic_search_function],
+                0.0,
+                None,
+            )
+            .await?;
+        dbg!(semantic_search_query.clone());
+        let semantic_search_query = if let Some(response) = semantic_search_query {
+            AgentAction::from_gpt_response(&response).map(|response| Some(response))
+        } else {
+            Ok(None)
+        };
+
+        if let Ok(Some(AgentAction::Code { query })) = semantic_search_query {
+            self.code_search(&query).await.expect("code search to work");
+        }
+
+        // At this point we have the code snippets, and we can return this back
+        // from this function
+        Ok(self.get_last_conversation_message().code_spans.to_vec())
     }
 }
 

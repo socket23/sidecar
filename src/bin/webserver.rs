@@ -107,10 +107,15 @@ fn repo_router() -> Router {
 
 fn agent_router() -> Router {
     use axum::routing::*;
-    Router::new().route(
-        "/search_agent",
-        get(sidecar::webserver::agent::search_agent),
-    )
+    Router::new()
+        .route(
+            "/search_agent",
+            get(sidecar::webserver::agent::search_agent),
+        )
+        .route(
+            "/semantic_search",
+            get(sidecar::webserver::agent::semantic_search),
+        )
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

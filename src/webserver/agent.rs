@@ -1,7 +1,7 @@
+use super::types::json;
 use axum::response::sse;
 use axum::response::Sse;
 use futures::future::Either;
-use futures::select;
 use futures::stream;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -18,6 +18,7 @@ use serde_json::json;
 use crate::agent::llm_funcs::LlmClient;
 use crate::agent::types::Agent;
 use crate::agent::types::AgentAction;
+use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::application::application::Application;
 use crate::repo::types::RepoRef;
@@ -178,4 +179,55 @@ pub async fn search_agent(
     let stream = init_stream.chain(answer_stream).chain(done_stream);
 
     Ok(Sse::new(Box::pin(stream)))
+}
+
+// TODO(skcd): Add write files and other things here
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct SemanticSearchQuery {
+    pub query: String,
+    pub reporef: RepoRef,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct SemanticSearchResponse {
+    session_id: uuid::Uuid,
+    query: String,
+    code_spans: Vec<CodeSpan>,
+}
+
+impl ApiResponse for SemanticSearchResponse {}
+
+pub async fn semantic_search(
+    Query(SemanticSearchQuery { query, reporef }): Query<SemanticSearchQuery>,
+    Extension(app): Extension<Application>,
+) -> Result<impl IntoResponse> {
+    // The best thing to do here is the following right now:
+    // lexical search on the paths of the code
+    // and then semantic search on the chunks we have from the file
+    // we return at this point, because the latency is too high, and this is
+    // okay as it is
+    let session_id = uuid::Uuid::new_v4();
+    let llm_client = Arc::new(LlmClient::codestory_infra());
+    let conversation_id = uuid::Uuid::new_v4();
+    let sql_db = app.sql.clone();
+    let (sender, _) = tokio::sync::mpsc::channel(100);
+    let mut agent = Agent::prepare_for_semantic_search(
+        app,
+        reporef,
+        session_id,
+        &query,
+        llm_client,
+        conversation_id,
+        sql_db,
+        sender,
+    );
+    let code_spans = agent
+        .semantic_search()
+        .await
+        .expect("semantic_search to not fail");
+    Ok(json(SemanticSearchResponse {
+        session_id,
+        query,
+        code_spans,
+    }))
 }

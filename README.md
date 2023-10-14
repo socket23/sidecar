@@ -20,6 +20,7 @@ the binary
 ## How to install sqlx and migrations
 - for sqlx install it using `cargo install sqlx`
 - and then for the migrations which are present in the ./migrations folder where we have Cargo.toml, we need to add migrations using `sqlx migrate add {blah}`
+- after making the edits to the file remember to run this: cargo `sqlx migrate run --database-url=sqlite://codestory.db`
 - you can use the following command to do the migrations etc:
 - cargo sqlx prepare --database-url=sqlite://codestory.db
 

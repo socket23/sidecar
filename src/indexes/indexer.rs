@@ -23,6 +23,7 @@ use tracing::debug;
 
 use crate::application::background::SyncHandle;
 use crate::application::config::configuration::Configuration;
+use crate::chunking::languages::TSLanguageParsing;
 use crate::db::sqlite::SqlDb;
 use crate::repo::state::{RepoError, RepositoryPool};
 use crate::semantic_search::client::SemanticClient;
@@ -33,7 +34,7 @@ use crate::{
 
 use super::caching::FileCache;
 use super::query::{case_permutations, trigrams, Query};
-use super::schema::File;
+use super::schema::{CodeSnippet, CodeSnippetTokenizer, File};
 
 /// A wrapper around `tantivy::IndexReader`.
 ///
@@ -386,6 +387,25 @@ impl<T: Indexable> Indexer<T> {
         Ok(index)
     }
 
+    fn init_code_index(schema: Schema, path: &Path, threads: usize) -> Result<tantivy::Index> {
+        fs::create_dir_all(path).context("failed to create index dir")?;
+
+        let mut index =
+            tantivy::Index::open_or_create(tantivy::directory::MmapDirectory::open(path)?, schema)?;
+
+        index.set_default_multithread_executor()?;
+        index.set_multithread_executor(threads)?;
+        // register the default ngram tokenizer and also the code snippet one
+        index
+            .tokenizers()
+            .register("default", NgramTokenizer::new(1, 3, false)?);
+        index
+            .tokenizers()
+            .register("code_snippet", CodeSnippetTokenizer {});
+
+        Ok(index)
+    }
+
     /// Create an index using `source` at the specified path.
     pub fn create(source: T, path: &Path, buffer_size: usize, threads: usize) -> Result<Self> {
         let index = Self::init_index(source.schema(), path, threads)?;
@@ -396,6 +416,25 @@ impl<T: Indexable> Indexer<T> {
             source,
             reindex_threads: threads,
             reindex_buffer_size: buffer_size,
+        };
+
+        Ok(instance)
+    }
+
+    pub fn create_for_code_snippets(
+        source: T,
+        path: &Path,
+        buffer_size: usize,
+        threads: usize,
+    ) -> Result<Self> {
+        let index = Self::init_code_index(source.schema(), path, threads)?;
+        let reader = index.reader()?.into();
+        let instance = Self {
+            reader,
+            index,
+            source,
+            reindex_buffer_size: buffer_size,
+            reindex_threads: threads,
         };
 
         Ok(instance)
@@ -493,6 +532,7 @@ pub struct SearchResults<'a, T> {
 
 pub struct Indexes {
     pub file: Indexer<File>,
+    pub code_snippet: Indexer<CodeSnippet>,
     write_mutex: tokio::sync::Mutex<()>,
 }
 
@@ -502,6 +542,7 @@ impl Indexes {
         sql_db: SqlDb,
         semantic: Option<SemanticClient>,
         config: Arc<Configuration>,
+        language_parsing: Arc<TSLanguageParsing>,
     ) -> Result<Self> {
         debug!("creating indexes");
         // Figure out how to do version mismatch
@@ -535,8 +576,14 @@ impl Indexes {
 
         Ok(Self {
             file: Indexer::create(
-                File::new(sql_db, semantic),
+                File::new(sql_db.clone(), semantic),
                 config.index_path("content").as_ref(),
+                config.buffer_size,
+                config.max_threads,
+            )?,
+            code_snippet: Indexer::create_for_code_snippets(
+                CodeSnippet::new(sql_db, language_parsing),
+                config.index_path("code_snippets").as_ref(),
                 config.buffer_size,
                 config.max_threads,
             )?,

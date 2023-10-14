@@ -33,13 +33,13 @@ pub struct SemanticClient {
     embedder: Arc<dyn Embedder>,
     search_client: Arc<QdrantClient>,
     config: Arc<Configuration>,
-    language_parsing: TSLanguageParsing,
+    language_parsing: Arc<TSLanguageParsing>,
 }
 
 impl SemanticClient {
     pub async fn new(
         config: Arc<Configuration>,
-        language_parsing: TSLanguageParsing,
+        language_parsing: Arc<TSLanguageParsing>,
     ) -> Option<Self> {
         let qdrant_config = QdrantClientConfig::from_url(&config.qdrant_url);
         let qdrant_client =

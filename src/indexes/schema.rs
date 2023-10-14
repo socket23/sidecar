@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use regex::Regex;
 use tantivy::schema::{
     BytesOptions, Field, IndexRecordOption, Schema, TextFieldIndexing, TextOptions, FAST, STORED,
@@ -5,6 +7,7 @@ use tantivy::schema::{
 };
 use tantivy::tokenizer::{Token, TokenStream, Tokenizer};
 
+use crate::chunking::languages::TSLanguageParsing;
 use crate::{db::sqlite::SqlDb, semantic_search::client::SemanticClient};
 
 /// A schema for indexing all files and directories, linked to a
@@ -131,9 +134,10 @@ impl File {
 #[derive(Clone)]
 pub struct CodeSnippet {
     pub schema: Schema,
-    pub(super) semantic: Option<SemanticClient>,
     /// Unique ID for the file in a repo
     pub unique_hash: Field,
+
+    pub language_parsing: Arc<TSLanguageParsing>,
 
     pub sql: SqlDb,
 
@@ -176,11 +180,13 @@ pub struct CodeSnippet {
 }
 
 impl CodeSnippet {
-    pub fn new(sql: SqlDb, semantic: Option<SemanticClient>) -> Self {
+    pub fn new(sql: SqlDb, language_parsing: Arc<TSLanguageParsing>) -> Self {
         let mut builder = tantivy::schema::SchemaBuilder::new();
         let trigram = TextOptions::default().set_stored().set_indexing_options(
             TextFieldIndexing::default()
-                .set_tokenizer("default")
+                // We get the code_snippet tokenizer from the custom
+                // tokenizer we are setting
+                .set_tokenizer("code_snippet")
                 .set_index_option(IndexRecordOption::WithFreqsAndPositions),
         );
 
@@ -210,7 +216,7 @@ impl CodeSnippet {
 
         Self {
             sql,
-            semantic,
+            language_parsing,
             repo_disk_path,
             relative_path,
             unique_hash,
@@ -232,10 +238,10 @@ impl CodeSnippet {
 }
 
 #[derive(Clone)]
-struct CodeSnippetTokenizer {}
+pub struct CodeSnippetTokenizer {}
 
 #[derive(Clone)]
-struct CodeSnippetTokenizerStream<'a> {
+pub struct CodeSnippetTokenizerStream<'a> {
     /// input
     _text: &'a str,
     /// current position

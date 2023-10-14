@@ -44,6 +44,30 @@ struct Workload<'a> {
 }
 
 impl<'a> Workload<'a> {
+    pub fn new(
+        cache: &'a FileCacheSnapshot<'a>,
+        repo_disk_path: &'a Path,
+        repo_name: &'a str,
+        repo_metadata: &'a RepoMetadata,
+        repo_ref: String,
+        relative_path: PathBuf,
+        normalized_path: PathBuf,
+        commit_hash: String,
+    ) -> Self {
+        Self {
+            cache,
+            repo_disk_path,
+            repo_name,
+            repo_metadata,
+            repo_ref,
+            relative_path,
+            normalized_path,
+            commit_hash,
+        }
+    }
+}
+
+impl<'a> Workload<'a> {
     // These cache keys are important as they also encode information about the
     // the file path in the cache, which implies that for each file we will have
     // a unique cache key.

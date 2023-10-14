@@ -24,9 +24,40 @@ use uuid::Uuid;
 
 use crate::db::sqlite::SqlDb;
 use crate::embedder::embedder::{EmbedChunk, EmbedQueue};
+use crate::repo;
 use crate::repo::types::RepoRef;
 use crate::semantic_search::client::SemanticClient;
 use crate::semantic_search::schema::Payload;
+
+/// The extra information here which we need for the code snippet is the line_start
+/// and the line_end
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+pub struct CodeSnippetCacheKeys {
+    tantivy: String,
+    commit_hash: String,
+    file_path: String,
+    content_hash: String,
+}
+
+impl CodeSnippetCacheKeys {
+    pub fn new(
+        tantivy: String,
+        commit_hash: String,
+        file_path: String,
+        content_hash: String,
+    ) -> Self {
+        Self {
+            tantivy,
+            commit_hash,
+            file_path,
+            content_hash,
+        }
+    }
+
+    pub fn tantivy(&self) -> &str {
+        &self.tantivy
+    }
+}
 
 // Indexes might require their own keys, we know tantivy is fucked because
 // it expects a key which is unique to the doc schema which you put in...
@@ -812,5 +843,158 @@ impl<'a> ChunkCache<'a> {
             Uuid::from_bytes(bytes).to_string()
         };
         id
+    }
+}
+
+/// Here we are going to create snapshots and cache for the code snippets which
+/// we will also use as a lexical search input
+
+pub struct CodeSnippetCacheSnapshot<'a> {
+    snapshot: Arc<scc::HashMap<CodeSnippetCacheKeys, FreshValue<()>>>,
+    parent: &'a CodeSnippetCache<'a>,
+}
+
+impl<'a> Deref for CodeSnippetCacheSnapshot<'a> {
+    type Target = scc::HashMap<CodeSnippetCacheKeys, FreshValue<()>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
+}
+
+impl<'a> CodeSnippetCacheSnapshot<'a> {
+    pub fn parent(&self) -> &'a CodeSnippetCache<'a> {
+        self.parent
+    }
+
+    pub fn is_fresh(&self, keys: &CodeSnippetCacheKeys) -> bool {
+        match self.snapshot.entry(keys.clone()) {
+            Entry::Occupied(mut val) => {
+                val.get_mut().fresh = true;
+                true
+            }
+            Entry::Vacant(val) => {
+                debug!(
+                    ?keys,
+                    "inserting fresh value in the code snippet snapshot cache"
+                );
+                _ = val.insert_entry(FreshValue::fresh_default());
+                false
+            }
+        }
+    }
+}
+
+pub struct CodeSnippetCache<'a> {
+    sqlite: &'a SqlDb,
+    reporef: &'a RepoRef,
+}
+
+impl<'a> CodeSnippetCache<'a> {
+    pub fn for_repo(sqlite: &'a SqlDb, reporef: &'a RepoRef) -> Self {
+        Self { sqlite, reporef }
+    }
+
+    pub(crate) async fn retrieve(&'a self) -> CodeSnippetCacheSnapshot<'a> {
+        let repo_str = self.reporef.to_string();
+        let rows = sqlx::query! {
+            "SELECT tantivy_cache_key, content_hash, file_path, commit_hash FROM code_snippet_cache \
+             WHERE repo_ref = ?",
+             repo_str,
+        }
+        .fetch_all(self.sqlite.as_ref())
+        .await;
+
+        let output = scc::HashMap::default();
+        for row in rows.into_iter().flatten() {
+            let tantivy_cache_key = row.tantivy_cache_key;
+            _ = output.insert(
+                CodeSnippetCacheKeys {
+                    tantivy: tantivy_cache_key,
+                    commit_hash: row.commit_hash,
+                    file_path: row.file_path,
+                    content_hash: row.content_hash,
+                },
+                FreshValue::stale(()),
+            );
+        }
+
+        CodeSnippetCacheSnapshot {
+            snapshot: output.into(),
+            parent: self,
+        }
+    }
+
+    async fn delete_files(&self, tx: &mut sqlx::Transaction<'_, Sqlite>) -> anyhow::Result<()> {
+        let repo_str = self.reporef.to_string();
+        sqlx::query! {
+            "DELETE FROM code_snippet_cache \
+                 WHERE repo_ref = ?",
+            repo_str
+        }
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn synchronize(
+        &'a self,
+        cache: CodeSnippetCacheSnapshot<'a>,
+        delete_tantivy: impl Fn(&str),
+    ) -> anyhow::Result<()> {
+        debug!(?self.reporef, "synchronizing code snippet cache");
+        let mut tx = self.sqlite.begin().await?;
+
+        self.delete_files(&mut tx).await?;
+
+        // Now we try to get the files which are no longer tracked by git index
+        // and remove them from tantivy
+        {
+            cache.retain(|k, v| {
+                if !v.fresh {
+                    delete_tantivy(k.tantivy());
+                }
+                v.fresh
+            });
+        }
+
+        // generate a transaction to push the remaining entries
+        {
+            let mut next = cache.first_occupied_entry_async().await;
+            while let Some(entry) = next {
+                let key = entry.key();
+                let tantivy_key = key.tantivy.to_owned();
+                let commit_hash = key.commit_hash.to_owned();
+                let file_path = key.file_path.to_owned();
+                let content_hash = key.content_hash.to_owned();
+                let repo_str = self.reporef.to_string();
+                sqlx::query!(
+                    "INSERT INTO code_snippet_cache \
+                    (repo_ref, tantivy_cache_key, commit_hash, file_path, content_hash) \
+                         VALUES (?, ?, ?, ?, ?)",
+                    repo_str,
+                    tantivy_key,
+                    commit_hash,
+                    file_path,
+                    content_hash,
+                )
+                .execute(&mut *tx)
+                .await?;
+
+                next = entry.next();
+            }
+
+            tx.commit().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn delete(&self) -> Result<()> {
+        // for deleting we have to do the following:
+        // - 1. cleanup the code snippet cache
+        let mut tx = self.sqlite.begin().await?;
+        self.delete_files(&mut tx).await?;
+        Ok(())
     }
 }

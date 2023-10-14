@@ -51,16 +51,22 @@ impl Application {
         let config = Arc::new(config);
         let sync_queue = SyncQueue::start(config.clone());
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
-        let language_parsing = TSLanguageParsing::init();
-        let semantic_client = SemanticClient::new(config.clone(), language_parsing).await;
+        let language_parsing = Arc::new(TSLanguageParsing::init());
+        let semantic_client = SemanticClient::new(config.clone(), language_parsing.clone()).await;
         debug!("semantic client presence: {}", semantic_client.is_some());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
             semantic_client: semantic_client.clone(),
-            indexes: Indexes::new(repo_pool, sql_db.clone(), semantic_client, config.clone())
-                .await?
-                .into(),
+            indexes: Indexes::new(
+                repo_pool,
+                sql_db.clone(),
+                semantic_client,
+                config.clone(),
+                language_parsing,
+            )
+            .await?
+            .into(),
             sync_queue,
             sql: sql_db,
         })

@@ -279,3 +279,31 @@ pub async fn lexical_search(
         repo: reporef,
     }))
 }
+
+// Here we are going to provide a hybrid search index which combines both the
+// lexical and the semantic search together
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct HybridSearchQuery {
+    query: String,
+    repo: RepoRef,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct HybridSearchResponse {
+    session_id: uuid::Uuid,
+    query: String,
+    code_spans: Vec<CodeSpan>,
+}
+
+impl ApiResponse for HybridSearchResponse {}
+
+pub async fn hybrid_search(
+    axumQuery(HybridSearchQuery { query, repo }): axumQuery<HybridSearchQuery>,
+    Extension(app): Extension<Application>,
+) -> Result<impl IntoResponse> {
+    Ok(json(HybridSearchResponse {
+        session_id: uuid::Uuid::new_v4(),
+        query,
+        code_spans: vec![],
+    }))
+}

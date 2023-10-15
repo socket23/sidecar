@@ -5,12 +5,22 @@ use futures::future::Either;
 use futures::stream;
 use futures::FutureExt;
 use futures::StreamExt;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tantivy::collector::TopDocs;
+use tantivy::query::BooleanQuery;
+use tantivy::query::Query;
+use tantivy::query::Query as TantivyQuery;
+use tantivy::query::QueryParser;
+use tantivy::query::TermQuery;
+use tantivy::schema::IndexRecordOption;
+use tantivy::Term;
+use tracing::debug;
 use tracing::error;
 
 use axum::response::IntoResponse;
-use axum::{extract::Query, Extension};
+use axum::{extract::Query as axumQuery, Extension};
 /// We will invoke the agent to get the answer, we are moving to an agent based work
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -21,6 +31,11 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::application::application::Application;
+use crate::indexes::code_snippet::CodeSnippetDocument;
+use crate::indexes::code_snippet::CodeSnippetReader;
+use crate::indexes::query::case_permutations;
+use crate::indexes::query::trigrams;
+use crate::indexes::schema::CodeSnippetTokenizer;
 use crate::repo::types::RepoRef;
 
 use super::types::ApiResponse;
@@ -51,7 +66,7 @@ pub enum SearchEvents {
 }
 
 pub async fn search_agent(
-    Query(SearchInformation { query, reporef }): Query<SearchInformation>,
+    axumQuery(SearchInformation { query, reporef }): axumQuery<SearchInformation>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -198,7 +213,7 @@ pub struct SemanticSearchResponse {
 impl ApiResponse for SemanticSearchResponse {}
 
 pub async fn semantic_search(
-    Query(SemanticSearchQuery { query, reporef }): Query<SemanticSearchQuery>,
+    axumQuery(SemanticSearchQuery { query, reporef }): axumQuery<SemanticSearchQuery>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     // The best thing to do here is the following right now:
@@ -229,5 +244,38 @@ pub async fn semantic_search(
         session_id,
         query,
         code_spans,
+    }))
+}
+
+// Here we are experimenting with lexical search:
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct SearchQuery {
+    query: String,
+    repo: RepoRef,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct SearchResponseForLexicalSearch {
+    code_documents: Vec<CodeSnippetDocument>,
+    repo: RepoRef,
+}
+
+impl ApiResponse for SearchResponseForLexicalSearch {}
+
+impl ApiResponse for SearchQuery {}
+
+pub async fn lexical_search(
+    axumQuery(SemanticSearchQuery { query, reporef }): axumQuery<SemanticSearchQuery>,
+    Extension(app): Extension<Application>,
+) -> Result<impl IntoResponse> {
+    let documents = app
+        .indexes
+        .code_snippet
+        .lexical_search(&reporef, &query, 10)
+        .await
+        .expect("lexical search to not fail");
+    Ok(json(SearchResponseForLexicalSearch {
+        code_documents: documents,
+        repo: reporef,
     }))
 }

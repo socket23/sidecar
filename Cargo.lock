@@ -4089,6 +4089,7 @@ dependencies = [
  "directories",
  "either",
  "erased-serde",
+ "fancy-regex",
  "flume",
  "fs_extra",
  "futures",

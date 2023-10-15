@@ -21,9 +21,34 @@ use crate::{
 
 use super::{
     caching::{CodeSnippetCache, CodeSnippetCacheKeys, CodeSnippetCacheSnapshot},
-    indexer::Indexable,
+    indexer::{get_text_field, Indexable},
     schema::CodeSnippet,
 };
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSnippetDocument {
+    pub repo_disk_path: String,
+    pub repo_name: String,
+    pub repo_ref: String,
+    pub content: String,
+}
+
+pub struct CodeSnippetReader;
+
+impl CodeSnippetReader {
+    pub fn read_document(schema: &CodeSnippet, doc: tantivy::Document) -> CodeSnippetDocument {
+        let path = get_text_field(&doc, schema.relative_path);
+        let repo_ref = get_text_field(&doc, schema.repo_ref);
+        let content = get_text_field(&doc, schema.content);
+
+        CodeSnippetDocument {
+            repo_disk_path: path,
+            repo_name: "".to_owned(),
+            repo_ref,
+            content,
+        }
+    }
+}
 
 pub struct Workload<'a> {
     cache: &'a CodeSnippetCacheSnapshot<'a>,

@@ -25,6 +25,7 @@ use crate::application::background::SyncHandle;
 use crate::application::config::configuration::Configuration;
 use crate::chunking::languages::TSLanguageParsing;
 use crate::db::sqlite::SqlDb;
+use crate::indexes::code_snippet::CodeSnippetReader;
 use crate::repo::state::{RepoError, RepositoryPool};
 use crate::semantic_search::client::SemanticClient;
 use crate::{
@@ -33,6 +34,7 @@ use crate::{
 };
 
 use super::caching::FileCache;
+use super::code_snippet::{self, CodeSnippetDocument};
 use super::query::{case_permutations, trigrams, Query};
 use super::schema::{CodeSnippet, CodeSnippetTokenizer, File};
 
@@ -45,6 +47,51 @@ pub struct Indexer<T> {
     pub reader: RwLock<IndexReader>,
     pub reindex_buffer_size: usize,
     pub reindex_threads: usize,
+}
+
+impl Indexer<CodeSnippet> {
+    pub async fn lexical_search(
+        &self,
+        repo_ref: &RepoRef,
+        query_str: &str,
+        limit: usize,
+    ) -> Result<Vec<CodeSnippetDocument>> {
+        let reader = self.reader.read().await;
+        let searcher = reader.searcher();
+        let collector = TopDocs::with_limit(5 * limit);
+        let code_snippet_source = &self.source;
+        let query_parser = QueryParser::for_index(
+            searcher.index(),
+            vec![code_snippet_source.repo_ref, code_snippet_source.content],
+        );
+        let tokens = CodeSnippetTokenizer::tokenize_call(query_str);
+        let mut query_string = tokens
+            .iter()
+            .map(|token| format!(r#"content:"{}""#, token.text))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let repo_ref_str = repo_ref.to_string();
+        query_string = query_string + " AND " + &format!(r#"repo_ref:{repo_ref_str}"#);
+        let query = query_parser.parse_query(query_string.as_str())?;
+        let top_docs = searcher.search(&query, &collector)?;
+        let mut documents_with_score = top_docs
+            .into_iter()
+            .map(|doc| {
+                let retrieved_doc = searcher
+                    .doc(doc.1)
+                    .expect("failed to get document by address");
+                (
+                    doc.0,
+                    CodeSnippetReader::read_document(&self.source, retrieved_doc),
+                )
+            })
+            .collect::<Vec<_>>();
+        documents_with_score.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        Ok(documents_with_score
+            .into_iter()
+            .map(|document_with_score| document_with_score.1)
+            .collect::<Vec<_>>())
+    }
 }
 
 impl Indexer<File> {
@@ -103,6 +150,15 @@ impl Indexer<File> {
                 (doc, count)
             })
             .collect::<Vec<_>>();
+        hits.sort_by(|(this_doc, this_count), (other_doc, other_count)| {
+            let order_count_desc = other_count.cmp(this_count);
+            let order_path_asc = this_doc
+                .relative_path
+                .as_str()
+                .cmp(other_doc.relative_path.as_str());
+
+            order_count_desc.then(order_path_asc)
+        });
 
         // order hits in
         // - decsending order of number of matched trigrams
@@ -356,7 +412,7 @@ impl FileReader {
     }
 }
 
-fn get_text_field(doc: &tantivy::Document, field: Field) -> String {
+pub fn get_text_field(doc: &tantivy::Document, field: Field) -> String {
     doc.get_first(field).unwrap().as_text().unwrap().to_owned()
 }
 
@@ -598,7 +654,7 @@ impl Indexes {
         debug!(id, "lock acquired");
 
         Ok(WriteHandleForIndexers {
-            handles: vec![self.file.write_handle()?],
+            handles: vec![self.file.write_handle()?, self.code_snippet.write_handle()?],
             _write_lock,
         })
     }

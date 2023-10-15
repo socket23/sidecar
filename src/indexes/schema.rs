@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use regex::Regex;
+use fancy_regex::Regex;
 use tantivy::schema::{
     BytesOptions, Field, IndexRecordOption, Schema, TextFieldIndexing, TextOptions, FAST, STORED,
     STRING,
@@ -182,7 +182,7 @@ pub struct CodeSnippet {
 impl CodeSnippet {
     pub fn new(sql: SqlDb, language_parsing: Arc<TSLanguageParsing>) -> Self {
         let mut builder = tantivy::schema::SchemaBuilder::new();
-        let trigram = TextOptions::default().set_stored().set_indexing_options(
+        let code_snippet_tokenizer = TextOptions::default().set_stored().set_indexing_options(
             TextFieldIndexing::default()
                 // We get the code_snippet tokenizer from the custom
                 // tokenizer we are setting
@@ -192,12 +192,12 @@ impl CodeSnippet {
 
         let unique_hash = builder.add_text_field("unique_hash", STRING | STORED);
 
-        let repo_disk_path = builder.add_text_field("repo_disk_path", STRING);
+        let repo_disk_path = dbg!(builder.add_text_field("repo_disk_path", STRING));
         let repo_ref = builder.add_text_field("repo_ref", STRING | STORED);
-        let repo_name = builder.add_text_field("repo_name", trigram.clone());
-        let relative_path = builder.add_text_field("relative_path", trigram.clone());
+        let repo_name = builder.add_text_field("repo_name", code_snippet_tokenizer.clone());
+        let relative_path = builder.add_text_field("relative_path", code_snippet_tokenizer.clone());
 
-        let content = builder.add_text_field("content", trigram.clone());
+        let content = builder.add_text_field("content", code_snippet_tokenizer.clone());
 
         let lang = builder.add_bytes_field(
             "lang",
@@ -245,7 +245,7 @@ pub struct CodeSnippetTokenizerStream<'a> {
     /// input
     _text: &'a str,
     /// current position
-    position: usize,
+    position: Option<usize>,
     // What are the processed tokens for this text
     tokens: Vec<Token>,
 }
@@ -257,20 +257,32 @@ impl Tokenizer for CodeSnippetTokenizer {
         let tokens = get_code_tokens_for_string(text);
         CodeSnippetTokenizerStream {
             _text: text,
-            position: 0,
+            // we start with none here because the comparisons are all with
+            // usize, so its better to just say None to represent -1
+            position: None,
             tokens,
         }
+    }
+}
+
+impl CodeSnippetTokenizer {
+    pub fn tokenize_call(query: &str) -> Vec<Token> {
+        let tokens = get_code_tokens_for_string(query);
+        tokens
     }
 }
 
 impl<'a> TokenStream for CodeSnippetTokenizerStream<'a> {
     /// advances to the next token or returns false if there is no token here
     fn advance(&mut self) -> bool {
-        if self.position > self.tokens.len() {
+        self.position = match self.position {
+            Some(position) => Some(position + 1),
+            None => Some(0),
+        };
+        if self.position.expect("check above converts it to Some") >= self.tokens.len() {
             return false;
         }
         // otherwise we increment the counter here
-        self.position = self.position + 1;
         true
     }
 
@@ -278,14 +290,14 @@ impl<'a> TokenStream for CodeSnippetTokenizerStream<'a> {
     fn token(&self) -> &tantivy::tokenizer::Token {
         // We know its unsafe but this will never crash because we are extremely
         // careful when taking the position into account
-        &self.tokens[self.position]
+        &self.tokens[self.position.expect("token is always called after advance")]
     }
 
     /// Returns a mutable reference to the current token.
     fn token_mut(&mut self) -> &mut tantivy::tokenizer::Token {
         // same comment as fn token, this won't crash as we are going to be
         // extremely careful with the way we handle position
-        &mut self.tokens[self.position]
+        &mut self.tokens[self.position.expect("token is always called after advance")]
     }
 }
 
@@ -301,7 +313,7 @@ fn tokenize_call(code: &str) -> Vec<Token> {
     let mut valid_tokens = Vec::new();
 
     for m in re.find_iter(code) {
-        let text = m.as_str();
+        let text = m.expect("regex_parsing to not fail").as_str();
 
         if text.contains('_') {
             // snake_case
@@ -321,7 +333,10 @@ fn tokenize_call(code: &str) -> Vec<Token> {
         } else if text.chars().any(|c| c.is_uppercase()) {
             // PascalCase and camelCase
             let camel_re = Regex::new(r"[A-Z][a-z]+|[a-z]+|[A-Z]+(?=[A-Z]|$)").unwrap();
-            let parts: Vec<&str> = camel_re.find_iter(text).map(|mat| mat.as_str()).collect();
+            let parts: Vec<&str> = camel_re
+                .find_iter(text)
+                .map(|mat| mat.expect("regex parsing to not fail").as_str())
+                .collect();
             for part in parts {
                 if check_valid_token(part) {
                     valid_tokens.push(Token {

@@ -1,6 +1,4 @@
-use sidecar::{
-    embedder::embedder::Embedder, embedder::embedder::LocalEmbedder, git::get_last_commit_timestamp,
-};
+use sidecar::{embedder::embedder::Embedder, embedder::embedder::LocalEmbedder};
 use std::env;
 
 #[tokio::main]
@@ -15,11 +13,6 @@ async fn main() {
     let result = embedder.embed("hello world!").unwrap();
     dbg!(result.len());
     dbg!(result);
-
-    // Checking that the last commit timestamp is working
-    let last_commit_timestamp =
-        get_last_commit_timestamp("/Users/skcd/scratch/sidecar", "src/embedder.rs").await;
-    dbg!(last_commit_timestamp.unwrap());
 }
 
 fn init_ort_dylib() {

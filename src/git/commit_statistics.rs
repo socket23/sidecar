@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
-use crate::repo::types::{Backend, RepoRef};
+use crate::{
+    db::sqlite::SqlDb, git::commit_statistics, repo::types::RepoRef, webserver::config::get,
+};
 use anyhow::Context;
+use futures::{stream, StreamExt};
 use gix::{
     bstr::ByteSlice,
     diff::blob::{sink::Counter, UnifiedDiffBuilder},
@@ -9,14 +12,16 @@ use gix::{
     objs::tree::EntryMode,
     Commit, Id,
 };
+use sqlx::Sqlite;
+use tracing::debug;
 
 /// getting statistics out of git commits
 
 #[derive(Debug, Default)]
 pub struct CommitStatistics {
     author: Option<String>,
-    file_insertions: usize,
-    file_deletions: usize,
+    file_insertions: i64,
+    file_deletions: i64,
     title: String,
     body: Option<String>,
     git_diff: String,
@@ -28,6 +33,65 @@ pub struct CommitStatistics {
     // This is the repo-reference which we will use to tag the repository
     // as unique
     repo_ref: String,
+}
+
+impl CommitStatistics {
+    async fn save_to_db(&self, tx: &mut sqlx::Transaction<'_, Sqlite>) -> anyhow::Result<()> {
+        let repo_str = self.repo_ref.to_string();
+        let files_modified_list = self
+            .files_modified
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        sqlx::query! {
+            "insert into git_log_statistics (repo_ref, commit_hash, author_email, commit_timestamp, files_changed, title, body, lines_insertions, lines_deletions, git_diff, file_insertions, file_deletions) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            repo_str,
+            self.commit_hash,
+            self.author,
+            self.commit_timestamp,
+            files_modified_list,
+            self.title,
+            self.body,
+            self.line_insertions,
+            self.line_deletions,
+            self.git_diff,
+            self.file_insertions,
+            self.file_deletions,
+        }.execute(&mut **tx).await?;
+        Ok(())
+    }
+
+    async fn save_file_statistics_to_db(
+        &self,
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+    ) -> anyhow::Result<()> {
+        let repo_str = self.repo_ref.to_string();
+        for file_path in self.files_modified.iter() {
+            sqlx::query! {
+                "insert into file_git_commit_statistics (repo_ref, file_path, commit_hash, commit_timestamp) \
+                VALUES (?, ?, ?, ?)",
+                repo_str, file_path, self.commit_hash, self.commit_timestamp,
+            }.execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn cleanup_for_repo(
+        reporef: &RepoRef,
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+    ) -> anyhow::Result<()> {
+        let repo_str = reporef.to_string();
+        sqlx::query! {
+            "DELETE FROM git_log_statistics \
+            WHERE repo_ref = ?",
+           repo_str,
+        }
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
 }
 
 struct GitCommitIterator<'a> {
@@ -197,7 +261,7 @@ fn add_diff(
     commit_statistics.git_diff += "\n";
 }
 
-pub fn get_commit_statistics_for_local_checkout(
+fn get_commit_statistics_for_local_checkout(
     repo_ref: RepoRef,
 ) -> anyhow::Result<Vec<CommitStatistics>> {
     // This only works for the local path right now, but thats fine
@@ -219,4 +283,42 @@ pub fn get_commit_statistics_for_local_checkout(
     }
     .take(300)
     .collect::<Vec<_>>())
+}
+
+// This is the main function which is exposed to the indexing backend, we are
+// going to rely on it to get the statistical information about the various
+// files and use that to power the cosine similarity
+pub async fn git_commit_statistics(repo_ref: &RepoRef, db: SqlDb) -> anyhow::Result<()> {
+    // First we cleanup whatever is there in there about the repo
+    let start_time = std::time::Instant::now();
+    debug!("getting git commit statistics for repo: {}", repo_ref);
+    let commit_statistics = {
+        let cloned_repo_ref = repo_ref.clone();
+        tokio::task::spawn_blocking(|| get_commit_statistics_for_local_checkout(cloned_repo_ref))
+            .await
+            .context("tokio::thread error")?
+    }
+    .context("commit_fetch failed")?;
+    dbg!(
+        "finished git commit statistics for repo: {}, took time: {}",
+        repo_ref,
+        start_time.elapsed().as_secs()
+    );
+
+    // start a new transaction right now
+    let mut tx = db.begin().await?;
+    CommitStatistics::cleanup_for_repo(repo_ref, &mut tx).await?;
+
+    // First insert all the commit statistics to the sqlite db
+    // we do this one after the other because of the way transactions work
+    for commit_statistic in commit_statistics.iter() {
+        let _ = commit_statistic.save_to_db(&mut tx).await;
+    }
+
+    // Second push the file statistics for each file to the db
+    // we do this one at a time again because of the way transactions work
+    for commit_statistic in commit_statistics.into_iter() {
+        let _ = commit_statistic.save_file_statistics_to_db(&mut tx).await;
+    }
+    Ok(())
 }

@@ -3,6 +3,7 @@
         "appender",
         "bigram",
         "bigrams",
+        "bstr",
         "canonicalize",
         "chunker",
         "codestory",

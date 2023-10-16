@@ -1,20 +1,20 @@
 use std::collections::HashSet;
 
+use crate::repo::types::{Backend, RepoRef};
 use anyhow::Context;
 use gix::{
     bstr::ByteSlice,
-    credentials::helper::Action,
     diff::blob::{sink::Counter, UnifiedDiffBuilder},
+    object::blob::diff::Platform,
     objs::tree::EntryMode,
     Commit, Id,
 };
-use sidecar::repo::types::{Backend, RepoRef};
 
 /// getting statistics out of git commits
 
 #[derive(Debug, Default)]
 pub struct CommitStatistics {
-    author: String,
+    author: Option<String>,
     file_insertions: usize,
     file_deletions: usize,
     title: String,
@@ -34,7 +34,7 @@ struct GitCommitIterator<'a> {
 struct CommitError;
 
 impl std::fmt::Display for CommitError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unreachable!("commit error should not happen");
     }
 }
@@ -66,6 +66,11 @@ impl<'a> Iterator for GitCommitIterator<'a> {
             title: commit_title,
             ..Default::default()
         };
+        commit_statistics.author = self
+            .commit
+            .author()
+            .map(|author| author.name.to_string())
+            .ok();
 
         _ = self
             .commit
@@ -92,11 +97,25 @@ impl<'a> Iterator for GitCommitIterator<'a> {
                         if matches!(entry_mode, EntryMode::Blob) =>
                     {
                         commit_statistics.file_insertions += 1;
+                        add_diff(
+                            &location,
+                            &ext.as_deref(),
+                            "".into(),
+                            id.object().unwrap().data.as_bstr().to_str_lossy(),
+                            &mut commit_statistics,
+                        );
                     }
                     gix::object::tree::diff::change::Event::Deletion { entry_mode, id }
                         if matches!(entry_mode, EntryMode::Blob) =>
                     {
                         commit_statistics.file_deletions += 1;
+                        add_diff(
+                            &location,
+                            &ext.as_deref(),
+                            id.object().unwrap().data.as_bstr().to_str_lossy(),
+                            "".into(),
+                            &mut commit_statistics,
+                        );
                     }
                     gix::object::tree::diff::change::Event::Modification {
                         previous_entry_mode,
@@ -104,16 +123,24 @@ impl<'a> Iterator for GitCommitIterator<'a> {
                         entry_mode,
                         id,
                     } if matches!(entry_mode, EntryMode::Blob)
-                        && matches!(previous_entry_mode, EntryMode::Blob) => {}
+                        && matches!(previous_entry_mode, EntryMode::Blob) =>
+                    {
+                        let platform = Platform::from_ids(previous_id, id).unwrap();
+                        let old = platform.old.data.as_bstr().to_str_lossy();
+                        let new = platform.new.data.as_bstr().to_str_lossy();
+                        add_diff(&location, &ext.as_deref(), old, new, &mut commit_statistics);
+                    }
                     gix::object::tree::diff::change::Event::Rewrite {
-                        source_location,
-                        source_entry_mode,
                         source_id,
-                        diff,
                         entry_mode,
                         id,
-                        copy,
-                    } if matches!(entry_mode, EntryMode::Blob) => {}
+                        ..
+                    } if matches!(entry_mode, EntryMode::Blob) => {
+                        let platform = Platform::from_ids(source_id, id).unwrap();
+                        let old = platform.old.data.as_bstr().to_str_lossy();
+                        let new = platform.new.data.as_bstr().to_str_lossy();
+                        add_diff(&location, &ext.as_deref(), old, new, &mut commit_statistics);
+                    }
                     _ => {}
                 }
 
@@ -149,7 +176,9 @@ fn add_diff(
         Counter::new(UnifiedDiffBuilder::new(&input)),
     );
 
-    if let Some(ext) = extension {
+    if let Some(_) = extension {
+        // Here we have to guard against the extensions which we know we don't
+        // care about
         commit_statistics.line_insertions += &diff.removals;
         commit_statistics.line_deletions += &diff.insertions;
     }
@@ -179,19 +208,4 @@ pub fn get_commit_statistics_for_local_checkout(
     }
     .take(300)
     .collect::<Vec<_>>())
-}
-
-#[tokio::main]
-async fn main() {
-    let reporef = RepoRef::new(Backend::Local, "/Users/skcd/scratch/ide").expect("this to work");
-    // Here we will try to run the code and see if we can figure something out
-    // start a new tokio task and mark this as blocking because it uses a lot of
-    // IO
-    let results = {
-        let reporef_cloned = reporef.clone();
-        tokio::task::spawn_blocking(|| get_commit_statistics_for_local_checkout(reporef))
-            .await
-            .context("threads error")
-    };
-    dbg!(results);
 }

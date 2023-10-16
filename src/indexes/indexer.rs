@@ -112,7 +112,7 @@ impl Indexer<CodeSnippet> {
             });
 
         documents_with_score.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-        Ok(documents_with_score)
+        Ok(documents_with_score.into_iter().take(limit).collect())
     }
 }
 

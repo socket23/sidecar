@@ -193,7 +193,7 @@ impl Agent {
     }
 
     pub async fn code_search_with_lexical(&mut self, query: &str) -> Result<Vec<CodeSpan>> {
-        const CODE_SEARCH_LIMIT: u64 = 30;
+        const CODE_SEARCH_LIMIT: u64 = 10;
         if self.application.semantic_client.is_none() {
             return Ok(vec![]);
         }
@@ -245,8 +245,6 @@ impl Agent {
         let git_log_score =
             GitLogScore::generate_git_log_score(self.reporef.clone(), self.application.sql.clone())
                 .await;
-
-        dbg!(git_log_score.clone());
 
         let mut code_snippets_semantic = results_semantic
             .into_iter()
@@ -331,7 +329,14 @@ impl Agent {
             });
         code_snippets_semantic.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
 
-        Ok(code_snippets_semantic)
+        Ok(code_snippets_semantic
+            .into_iter()
+            .take(
+                (CODE_SEARCH_LIMIT * 2)
+                    .try_into()
+                    .expect("20u64 to usize should not fail"),
+            )
+            .collect())
     }
 
     pub async fn code_search(&mut self, query: &str) -> Result<String> {

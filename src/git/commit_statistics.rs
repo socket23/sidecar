@@ -310,18 +310,48 @@ pub async fn git_commit_statistics(repo_ref: RepoRef, db: SqlDb) -> anyhow::Resu
 
     // start a new transaction right now
     let mut tx = db.begin().await?;
-    CommitStatistics::cleanup_for_repo(repo_ref, &mut tx).await?;
+    CommitStatistics::cleanup_for_repo(repo_ref.clone(), &mut tx).await?;
 
     // First insert all the commit statistics to the sqlite db
     // we do this one after the other because of the way transactions work
     for commit_statistic in commit_statistics.iter() {
-        let _ = commit_statistic.save_to_db(&mut tx).await;
+        let repo_str = repo_ref.to_string();
+        let files_modified_list = commit_statistic
+            .files_modified
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let _ = sqlx::query! {
+            "insert into git_log_statistics (repo_ref, commit_hash, author_email, commit_timestamp, files_changed, title, body, lines_insertions, lines_deletions, git_diff, file_insertions, file_deletions) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            repo_str,
+            commit_statistic.commit_hash,
+            commit_statistic.author,
+            commit_statistic.commit_timestamp,
+            files_modified_list,
+            commit_statistic.title,
+            commit_statistic.body,
+            commit_statistic.line_insertions,
+            commit_statistic.line_deletions,
+            commit_statistic.git_diff,
+            commit_statistic.file_insertions,
+            commit_statistic.file_deletions,
+        }.execute(&mut *tx).await?;
     }
 
     // Second push the file statistics for each file to the db
     // we do this one at a time again because of the way transactions work
     for commit_statistic in commit_statistics.into_iter() {
-        let _ = commit_statistic.save_file_statistics_to_db(&mut tx).await;
+        let repo_str = repo_ref.to_string();
+        for file_path in commit_statistic.files_modified.iter() {
+            sqlx::query! {
+                "insert into file_git_commit_statistics (repo_ref, file_path, commit_hash, commit_timestamp) \
+                VALUES (?, ?, ?, ?)",
+                repo_str, file_path, commit_statistic.commit_hash, commit_statistic.commit_timestamp,
+            }.execute(&mut *tx).await?;
+        }
     }
+    tx.commit().await?;
     Ok(())
 }

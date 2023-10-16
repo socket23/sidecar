@@ -27,5 +27,5 @@ CREATE TABLE file_git_commit_statistics (
     -- The primary key here is on top of the repo_ref and the
     -- file_path as well, so we can get all the commits it is part
     --- of
-    PRIMARY KEY (repo_ref, file_path)
+    PRIMARY KEY (repo_ref, file_path, commit_hash)
 );

@@ -211,8 +211,8 @@ impl CodeSnippet {
 
         let commit_frequency = builder.add_u64_field("commit_frequency", FAST);
         let commit_hash = builder.add_text_field("commit_hash", STRING);
-        let start_line = builder.add_u64_field("start_line", FAST);
-        let end_line = builder.add_u64_field("end_line", FAST);
+        let start_line = builder.add_u64_field("start_line", FAST | STORED);
+        let end_line = builder.add_u64_field("end_line", FAST | STORED);
 
         Self {
             sql,

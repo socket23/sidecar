@@ -23,11 +23,17 @@ pub struct CommitStatistics {
     files_modified: HashSet<String>,
     line_insertions: u32,
     line_deletions: u32,
+    commit_timestamp: i64,
+    commit_hash: String,
+    // This is the repo-reference which we will use to tag the repository
+    // as unique
+    repo_ref: String,
 }
 
 struct GitCommitIterator<'a> {
     commit: Commit<'a>,
     parent: Option<Id<'a>>,
+    repo_ref: &'a RepoRef,
 }
 
 #[derive(Debug)]
@@ -71,6 +77,10 @@ impl<'a> Iterator for GitCommitIterator<'a> {
             .author()
             .map(|author| author.name.to_string())
             .ok();
+        // This is the commit timestamp from the unix epoch
+        commit_statistics.commit_timestamp = self.commit.time().unwrap().seconds;
+        commit_statistics.commit_hash = self.commit.id().to_string();
+        commit_statistics.repo_ref = self.repo_ref.to_string();
 
         _ = self
             .commit
@@ -205,6 +215,7 @@ pub fn get_commit_statistics_for_local_checkout(
     Ok(GitCommitIterator {
         commit: head_commit,
         parent,
+        repo_ref: &repo_ref,
     }
     .take(300)
     .collect::<Vec<_>>())

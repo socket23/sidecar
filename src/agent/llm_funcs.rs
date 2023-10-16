@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 /// We define all the helper stuff required here for the LLM to be able to do
 /// things.
 use async_openai::config::AzureConfig;
@@ -10,7 +8,6 @@ use async_openai::types::CreateChatCompletionRequest;
 use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
-use futures::Stream;
 use futures::StreamExt;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 use tracing::debug;
@@ -397,9 +394,6 @@ impl LlmClient {
 
         let mut final_function_call = llm::FunctionCall::default();
 
-        debug!("stream_function_call");
-        dbg!(request.clone());
-
         const TOTAL_CHAT_RETRIES: usize = 5;
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut cloned_request = request.clone();
@@ -407,11 +401,8 @@ impl LlmClient {
             let data = client.chat().create(cloned_request).await;
             match data {
                 Ok(mut data_okay) => {
-                    debug!("chat create response is okay");
-                    debug!("chat response everywhere {:?}", data_okay.choices);
                     let message = data_okay.choices.remove(0).message;
                     let function_call = message.function_call;
-                    debug!("whats the function call here {:?}", function_call);
                     if let Some(function_call) = function_call {
                         final_function_call.name = Some(function_call.name);
                         final_function_call.arguments = function_call.arguments;
@@ -426,39 +417,6 @@ impl LlmClient {
                     continue 'retry_loop;
                 }
             }
-            // // debug!("stream function calling response {:?}", data);
-            // let stream = client.chat().create_stream(request.clone()).await;
-            // if stream.is_err() {
-            //     continue 'retry_loop;
-            // }
-            // let unwrap_stream = stream.expect("is_err check above to work");
-            // tokio::pin!(unwrap_stream);
-
-            // loop {
-            //     match unwrap_stream.next().await {
-            //         None => break,
-            //         Some(Ok(mut s)) => {
-            //             if s.choices.is_empty() {
-            //                 continue 'retry_loop;
-            //             }
-            //             debug!(?s.choices, "choices");
-            //             let function_call_data = s.choices.remove(0).delta.function_call;
-            //             // When we are streaming the function call, we get the arguments
-            //             // streamed along with the name, so we have to collect it properly
-            //             if let Some(function_call_data) = function_call_data {
-            //                 final_function_call.name =
-            //                     final_function_call.name.or(function_call_data.name);
-            //                 if let Some(function_call_data_arguments) = function_call_data.arguments
-            //                 {
-            //                     final_function_call.arguments += &function_call_data_arguments;
-            //                 }
-            //             }
-            //         }
-            //         Some(Err(e)) => {
-            //             warn!(?e, "openai stream error, retrying");
-            //             continue 'retry_loop;
-            //         }
-            //     }
         }
         Ok(None)
     }

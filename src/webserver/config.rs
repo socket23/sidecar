@@ -39,7 +39,7 @@ pub async fn get(State(app): State<Application>) -> impl IntoResponse {
     })
 }
 
-pub async fn version(State(app): State<Application>) -> impl IntoResponse {
+pub async fn version(State(_): State<Application>) -> impl IntoResponse {
     json(VersionResponse {
         version_hash: BINARY_VERSION_HASH.to_owned(),
     })

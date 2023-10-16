@@ -192,10 +192,52 @@ impl Agent {
         Ok(response)
     }
 
-    pub async fn code_search_with_lexical(&mut self, query: &str) -> Result<Vec<CodeSpan>> {
+    fn save_code_snippets_response(
+        &mut self,
+        query: &str,
+        code_snippets: Vec<CodeSpan>,
+    ) -> anyhow::Result<String> {
+        for code_snippet in code_snippets
+            .iter()
+            .filter(|code_snippet| !code_snippet.is_empty())
+        {
+            // Update the last conversation context with the code snippets which
+            // we got here
+            let last_exchange = self.get_last_conversation_message();
+            last_exchange.add_code_spans(code_snippet.clone());
+        }
+
+        debug!("code search results length: {}", code_snippets.len());
+
+        let response = code_snippets
+            .iter()
+            .filter(|c| !c.is_empty())
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        // Now we want to also update the step of the exchange to highlight that
+        // we did a search here
+        let last_exchange = self.get_last_conversation_message();
+        last_exchange.add_agent_step(super::types::AgentStep::Code {
+            query: query.to_owned(),
+            response: response.to_owned(),
+            code_snippets: code_snippets
+                .into_iter()
+                .filter(|code_snippet| !code_snippet.is_empty())
+                .collect(),
+        });
+
+        // Now that we have done the code search, we need to figure out what we
+        // can do next with all the snippets, some ideas here include dedup and
+        // also to join snippets together
+        Ok(response)
+    }
+
+    pub async fn code_search_hybrid(&mut self, query: &str) -> Result<Vec<CodeSpan>> {
         const CODE_SEARCH_LIMIT: u64 = 10;
         if self.application.semantic_client.is_none() {
-            return Ok(vec![]);
+            return Err(anyhow::anyhow!("no semantic client defined"));
         }
         let mut results_semantic = self
             .application
@@ -339,7 +381,15 @@ impl Agent {
             .collect())
     }
 
+    /// This code search combines semantic + lexical + git log score
+    /// to generate the code snippets which are the most relevant
     pub async fn code_search(&mut self, query: &str) -> Result<String> {
+        let code_snippets = self.code_search_hybrid(query).await?;
+        self.save_code_snippets_response(query, code_snippets)
+    }
+
+    /// This just uses the semantic search and nothing else
+    pub async fn code_search_pure_semantic(&mut self, query: &str) -> Result<String> {
         const CODE_SEARCH_LIMIT: u64 = 10;
         // If we don't have semantic client we skip this one
         if self.application.semantic_client.is_none() {
@@ -391,41 +441,7 @@ impl Agent {
 
         code_snippets.sort_by(|a, b| a.alias.cmp(&b.alias).then(a.start_line.cmp(&b.start_line)));
 
-        for code_chunk in code_snippets
-            .iter()
-            .filter(|code_snippet| !code_snippet.is_empty())
-        {
-            // Update the last conversation context with the code snippets which
-            // we got here
-            let last_exchange = self.get_last_conversation_message();
-            last_exchange.add_code_spans(code_chunk.clone());
-        }
-
-        debug!("code search results length: {}", code_snippets.len());
-
-        let response = code_snippets
-            .iter()
-            .filter(|c| !c.is_empty())
-            .map(|c| c.to_string())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-
-        // Now we want to also update the step of the exchange to highlight that
-        // we did a search here
-        let last_exchange = self.get_last_conversation_message();
-        last_exchange.add_agent_step(super::types::AgentStep::Code {
-            query: query.to_owned(),
-            response: response.to_owned(),
-            code_snippets: code_snippets
-                .into_iter()
-                .filter(|code_snippet| !code_snippet.is_empty())
-                .collect(),
-        });
-
-        // Now that we have done the code search, we need to figure out what we
-        // can do next with all the snippets, some ideas here include dedup and
-        // also to join snippets together
-        Ok(response)
+        self.save_code_snippets_response(query, code_snippets)
     }
 
     async fn hyde(&self, query: &str) -> Result<Vec<String>> {
@@ -651,7 +667,6 @@ impl Agent {
         sender: tokio::sync::mpsc::UnboundedSender<Answer>,
     ) -> Result<String> {
         let context = self.answer_context(path_aliases).await?;
-        dbg!("Whats the context", context.clone());
         let system_prompt = prompts::answer_article_prompt(
             path_aliases.len() != 1,
             &context,

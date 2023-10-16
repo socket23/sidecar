@@ -6,11 +6,8 @@ use tokio::sync::mpsc::Sender;
 use tracing::{debug, info};
 
 use crate::{
-    agent::{llm_funcs::llm::FunctionCall, prompts::path_function},
-    application::application::Application,
-    db::sqlite::SqlDb,
-    indexes::indexer::FileDocument,
-    repo::types::RepoRef,
+    agent::llm_funcs::llm::FunctionCall, application::application::Application, db::sqlite::SqlDb,
+    indexes::indexer::FileDocument, repo::types::RepoRef,
 };
 
 use super::{
@@ -592,7 +589,6 @@ impl Agent {
                 None,
             )
             .await?;
-        dbg!(response.clone());
         let path_function_call = if let Some(response) = response {
             AgentAction::from_gpt_response(&response).map(|response| Some(response))
         } else {
@@ -625,7 +621,6 @@ impl Agent {
                 None,
             )
             .await?;
-        dbg!(semantic_search_query.clone());
         let semantic_search_query = if let Some(response) = semantic_search_query {
             AgentAction::from_gpt_response(&response).map(|response| Some(response))
         } else {

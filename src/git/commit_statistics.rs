@@ -1,10 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{
-    db::sqlite::SqlDb, git::commit_statistics, repo::types::RepoRef, webserver::config::get,
-};
+use crate::{db::sqlite::SqlDb, repo::types::RepoRef};
 use anyhow::Context;
-use futures::{stream, StreamExt};
 use gix::{
     bstr::ByteSlice,
     diff::blob::{sink::Counter, UnifiedDiffBuilder},
@@ -281,7 +278,6 @@ pub async fn git_commit_statistics(repo_ref: RepoRef, db: SqlDb) -> anyhow::Resu
     // we do this one after the other because of the way transactions work
     for commit_statistic in commit_statistics.iter() {
         let repo_str = repo_ref.to_string();
-        dbg!(commit_statistic);
         let files_modified_list = commit_statistic
             .files_modified
             .iter()

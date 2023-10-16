@@ -3,20 +3,9 @@ use axum::response::sse;
 use axum::response::Sse;
 use futures::future::Either;
 use futures::stream;
-use futures::FutureExt;
 use futures::StreamExt;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tantivy::collector::TopDocs;
-use tantivy::query::BooleanQuery;
-use tantivy::query::Query;
-use tantivy::query::Query as TantivyQuery;
-use tantivy::query::QueryParser;
-use tantivy::query::TermQuery;
-use tantivy::schema::IndexRecordOption;
-use tantivy::Term;
-use tracing::debug;
 use tracing::error;
 
 use axum::response::IntoResponse;
@@ -32,10 +21,6 @@ use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::application::application::Application;
 use crate::indexes::code_snippet::CodeSnippetDocument;
-use crate::indexes::code_snippet::CodeSnippetReader;
-use crate::indexes::query::case_permutations;
-use crate::indexes::query::trigrams;
-use crate::indexes::schema::CodeSnippetTokenizer;
 use crate::repo::types::RepoRef;
 
 use super::types::ApiResponse;
@@ -170,7 +155,6 @@ pub async fn search_agent(
     // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
     let answer_stream = conversation_message_stream.map(
         |conversation_message: anyhow::Result<ConversationMessage>| {
-            dbg!(conversation_message.is_err());
             if let Err(e) = &conversation_message {
                 error!("error in conversation message stream: {}", e);
             }
@@ -326,10 +310,7 @@ pub async fn hybrid_search(
         sql_db,
         sender,
     );
-    let hybrid_search_results = agent
-        .code_search_with_lexical(&query)
-        .await
-        .unwrap_or(vec![]);
+    let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
     Ok(json(HybridSearchResponse {
         session_id: uuid::Uuid::new_v4(),
         query,

@@ -4,7 +4,6 @@ use std::{
 };
 
 use clap::Parser;
-use gix::config::boolean;
 use serde::{Deserialize, Serialize};
 
 use crate::repo::state::StateSource;

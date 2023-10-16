@@ -93,8 +93,6 @@ fn run(args: Args) -> anyhow::Result<()> {
         max_parents = 1;
     }
 
-    dbg!(&args.paths);
-
     let mut log_iter: Box<dyn Iterator<Item = Result<LogEntryInfo, _>>> = Box::new(
         repo.rev_walk([commit.id])
             .sorting(sorting)

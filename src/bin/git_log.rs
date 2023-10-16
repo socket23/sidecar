@@ -106,7 +106,7 @@ fn run(args: Args) -> anyhow::Result<()> {
                     // if the list of paths is empty the filter passes.
                     // if paths are provided check that any one of them are
                     // in fact relevant for the current commit.
-                    (args.paths.is_empty() || args.paths.iter().any(|path| {
+                    (true || args.paths.is_empty() || args.paths.iter().any(|path| {
                         // TODO: should make use of the `git2::DiffOptions`
                         //       counterpart in gix for a set of files and also to
                         //       generate diffs. When ready, also make paths resistant
@@ -146,6 +146,8 @@ fn run(args: Args) -> anyhow::Result<()> {
                 let info = info?;
                 let commit = info.object()?;
                 let commit_ref = commit.decode()?;
+                let changes = commit.tree().unwrap().changes();
+                let commit_tree = commit_ref.tree();
                 Ok(LogEntryInfo {
                     commit_id: commit.id().to_hex().to_string(),
                     parents: info

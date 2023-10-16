@@ -111,6 +111,7 @@ impl Indexer<CodeSnippet> {
                         + 0.5;
             });
 
+        documents_with_score.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
         Ok(documents_with_score)
     }
 }

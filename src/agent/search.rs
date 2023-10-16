@@ -246,6 +246,8 @@ impl Agent {
             GitLogScore::generate_git_log_score(self.reporef.clone(), self.application.sql.clone())
                 .await;
 
+        dbg!(git_log_score.clone());
+
         let mut code_snippets_semantic = results_semantic
             .into_iter()
             .map(|result| {
@@ -263,22 +265,26 @@ impl Agent {
             })
             .collect::<Vec<_>>();
 
-        let code_snippets_lexical_score: HashMap<String, f32> = lexical_search_code_snippets
-            .into_iter()
-            .map(|lexical_code_snippet| {
-                let path_alias = self.get_path_alias(&lexical_code_snippet.relative_path);
-                // convert it to a code snippet here
-                let code_span = CodeSpan::new(
-                    lexical_code_snippet.relative_path,
-                    path_alias,
-                    lexical_code_snippet.line_start,
-                    lexical_code_snippet.line_end,
-                    lexical_code_snippet.content,
-                    Some(lexical_code_snippet.score),
-                );
-                (code_span.get_unique_key(), lexical_code_snippet.score)
-            })
-            .collect();
+        let code_snippets_lexical_score: HashMap<String, (f32, CodeSpan)> =
+            lexical_search_code_snippets
+                .into_iter()
+                .map(|lexical_code_snippet| {
+                    let path_alias = self.get_path_alias(&lexical_code_snippet.relative_path);
+                    // convert it to a code snippet here
+                    let code_span = CodeSpan::new(
+                        lexical_code_snippet.relative_path,
+                        path_alias,
+                        lexical_code_snippet.line_start,
+                        lexical_code_snippet.line_end,
+                        lexical_code_snippet.content,
+                        Some(lexical_code_snippet.score),
+                    );
+                    (
+                        code_span.get_unique_key(),
+                        (lexical_code_snippet.score, code_span),
+                    )
+                })
+                .collect();
 
         // Now that we have the git log score, lets use that to score the results
         // Lets first get the lexical scores for the code snippets which we are getting from the search
@@ -287,7 +293,10 @@ impl Agent {
             .map(|mut code_snippet| {
                 let unique_key = code_snippet.get_unique_key();
                 // If we don't get anything here we just return 0.3
-                let lexical_score = code_snippets_lexical_score.get(&unique_key).unwrap_or(&0.3);
+                let lexical_score = code_snippets_lexical_score
+                    .get(&unique_key)
+                    .map(|v| &v.0)
+                    .unwrap_or(&0.3);
                 let git_log_score = git_log_score.get_score_for_file(&code_snippet.file_path);
                 if let Some(semantic_score) = code_snippet.score {
                     code_snippet.score = Some(semantic_score + 2.5 * lexical_score + git_log_score);
@@ -297,6 +306,30 @@ impl Agent {
                 code_snippet
             })
             .collect::<Vec<_>>();
+
+        // We should always include the results from the lexical search, since
+        // we have hits for the keywords so they are worth a lot of points
+        let code_snippet_semantic_keys: HashSet<String> = code_snippets_semantic
+            .iter()
+            .map(|c| c.get_unique_key())
+            .collect();
+        // Now check with the lexical set which are not included in the result
+        // and add them
+        code_snippets_lexical_score
+            .into_iter()
+            .for_each(|(_, mut code_snippet_with_score)| {
+                // if we don't have it, it makes sense to add the results here and give
+                // it a semantic score of 0.3 or something (which is our threshold)
+                let unique_key_for_code_snippet = code_snippet_with_score.1.get_unique_key();
+                if !code_snippet_semantic_keys.contains(&unique_key_for_code_snippet) {
+                    let git_log_score =
+                        git_log_score.get_score_for_file(&code_snippet_with_score.1.file_path);
+                    code_snippet_with_score.1.score =
+                        Some(0.3 + git_log_score + 2.5 * code_snippet_with_score.0);
+                    code_snippets_semantic.push(code_snippet_with_score.1);
+                }
+            });
+        code_snippets_semantic.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
 
         Ok(code_snippets_semantic)
     }

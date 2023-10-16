@@ -15,6 +15,8 @@ use gix::{
 use sqlx::Sqlite;
 use tracing::{debug, error};
 
+const COMMIT_EXCLUDE_EXTENSIONS_FROM_DIFF: [&str; 5] = ["db", "png", "onnx", "dylib", "lock"];
+
 #[derive(Debug, Default)]
 pub struct CommitStatistics {
     author: Option<String>,
@@ -193,6 +195,12 @@ fn add_diff(
     new: std::borrow::Cow<'_, str>,
     commit_statistics: &mut CommitStatistics,
 ) {
+    if extension
+        .map(|extension| COMMIT_EXCLUDE_EXTENSIONS_FROM_DIFF.contains(&extension))
+        .unwrap_or(false)
+    {
+        return;
+    }
     let input = gix::diff::blob::intern::InternedInput::new(old.as_ref(), new.as_ref());
     commit_statistics.git_diff += &format!(
         r#"diff --git a/{location} b/{location}"

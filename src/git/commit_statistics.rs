@@ -79,7 +79,7 @@ impl CommitStatistics {
     }
 
     pub async fn cleanup_for_repo(
-        reporef: &RepoRef,
+        reporef: RepoRef,
         tx: &mut sqlx::Transaction<'_, Sqlite>,
     ) -> anyhow::Result<()> {
         let repo_str = reporef.to_string();
@@ -288,10 +288,13 @@ fn get_commit_statistics_for_local_checkout(
 // This is the main function which is exposed to the indexing backend, we are
 // going to rely on it to get the statistical information about the various
 // files and use that to power the cosine similarity
-pub async fn git_commit_statistics(repo_ref: &RepoRef, db: SqlDb) -> anyhow::Result<()> {
+pub async fn git_commit_statistics(repo_ref: RepoRef, db: SqlDb) -> anyhow::Result<()> {
     // First we cleanup whatever is there in there about the repo
     let start_time = std::time::Instant::now();
-    debug!("getting git commit statistics for repo: {}", repo_ref);
+    debug!(
+        "getting git commit statistics for repo: {}",
+        repo_ref.to_string()
+    );
     let commit_statistics = {
         let cloned_repo_ref = repo_ref.clone();
         tokio::task::spawn_blocking(|| get_commit_statistics_for_local_checkout(cloned_repo_ref))
@@ -301,7 +304,7 @@ pub async fn git_commit_statistics(repo_ref: &RepoRef, db: SqlDb) -> anyhow::Res
     .context("commit_fetch failed")?;
     dbg!(
         "finished git commit statistics for repo: {}, took time: {}",
-        repo_ref,
+        repo_ref.to_string(),
         start_time.elapsed().as_secs()
     );
 

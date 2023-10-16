@@ -21,16 +21,19 @@ use crate::{
 
 use super::{
     caching::{CodeSnippetCache, CodeSnippetCacheKeys, CodeSnippetCacheSnapshot},
-    indexer::{get_text_field, Indexable},
+    indexer::{get_text_field, get_u64_field, Indexable},
     schema::CodeSnippet,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSnippetDocument {
-    pub repo_disk_path: String,
+    pub relative_path: String,
     pub repo_name: String,
     pub repo_ref: String,
     pub content: String,
+    pub line_start: u64,
+    pub line_end: u64,
+    pub score: f32,
 }
 
 pub struct CodeSnippetReader;
@@ -40,13 +43,28 @@ impl CodeSnippetReader {
         let path = get_text_field(&doc, schema.relative_path);
         let repo_ref = get_text_field(&doc, schema.repo_ref);
         let content = get_text_field(&doc, schema.content);
+        let line_start = get_u64_field(&doc, schema.start_line);
+        let line_end = get_u64_field(&doc, schema.end_line);
 
         CodeSnippetDocument {
-            repo_disk_path: path,
+            relative_path: path,
             repo_name: "".to_owned(),
             repo_ref,
             content,
+            line_start,
+            line_end,
+            score: 0.0,
         }
+    }
+
+    pub fn read_document_with_score(
+        schema: &CodeSnippet,
+        doc: tantivy::Document,
+        score: f32,
+    ) -> CodeSnippetDocument {
+        let mut code_snippet_doc = Self::read_document(schema, doc);
+        code_snippet_doc.score = score;
+        code_snippet_doc
     }
 }
 

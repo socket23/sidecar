@@ -80,17 +80,38 @@ impl Indexer<CodeSnippet> {
                 let retrieved_doc = searcher
                     .doc(doc.1)
                     .expect("failed to get document by address");
-                (
-                    doc.0,
-                    CodeSnippetReader::read_document(&self.source, retrieved_doc),
-                )
+                CodeSnippetReader::read_document_with_score(&self.source, retrieved_doc, doc.0)
             })
             .collect::<Vec<_>>();
-        documents_with_score.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-        Ok(documents_with_score
-            .into_iter()
-            .map(|document_with_score| document_with_score.1)
-            .collect::<Vec<_>>())
+        documents_with_score.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        if documents_with_score.is_empty() {
+            return Ok(Default::default());
+        }
+        // Here we will also reduce the score to be in a range from 0.5 -> 1 for the
+        // lexical search
+        let max_score = documents_with_score
+            .iter()
+            .map(|lexical_search_snippet| lexical_search_snippet.score)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        let mut min_score = documents_with_score
+            .iter()
+            .map(|lexical_search_snippet| lexical_search_snippet.score)
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        if min_score == max_score {
+            min_score = 0.0;
+        }
+        // Now relativize the scores in this range
+        documents_with_score
+            .iter_mut()
+            .for_each(|lexical_search_snippet| {
+                lexical_search_snippet.score =
+                    (lexical_search_snippet.score - min_score) / (max_score - min_score) * 0.5
+                        + 0.5;
+            });
+
+        Ok(documents_with_score)
     }
 }
 
@@ -414,6 +435,10 @@ impl FileReader {
 
 pub fn get_text_field(doc: &tantivy::Document, field: Field) -> String {
     doc.get_first(field).unwrap().as_text().unwrap().to_owned()
+}
+
+pub fn get_u64_field(doc: &tantivy::Document, field: Field) -> u64 {
+    doc.get_first(field).unwrap().as_u64().unwrap().to_owned()
 }
 
 impl<T: Indexable> Indexer<T> {

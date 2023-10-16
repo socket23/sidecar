@@ -553,6 +553,22 @@ impl SyncHandle {
             return Err(SyncError::Cancelled);
         }
 
+        let repository = repo_pool
+            .read_async(&self.reporef, |_k, v| v.clone())
+            .await
+            .unwrap();
+
+        let git_statistics = if repository.last_index_unix_secs == 0 {
+            let db = self.app.sql.clone();
+            let reporef = self.reporef.clone();
+
+            Some(tokio::task::spawn(
+                crate::git::commit_statistics::git_commit_statistics(reporef.clone(), db),
+            ))
+        } else {
+            None
+        };
+
         let indexed = self.index().await;
         let status = match indexed {
             Ok(Either::Left(status)) => Some(status),
@@ -560,6 +576,13 @@ impl SyncHandle {
                 self.app
                     .repo_pool
                     .update(&self.reporef, |_k, repo| repo.sync_done_with(state));
+
+                // Log here if getting git_statistics failed
+                if let Some(git_statistics) = git_statistics {
+                    if let Err(err) = git_statistics.await {
+                        error!(?err, "failed to get git statistics");
+                    }
+                }
 
                 // technically `sync_done_with` does this, but we want to send notifications
                 self.set_status(|_| SyncStatus::Done)

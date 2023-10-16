@@ -9,6 +9,7 @@ use crate::{
     },
     application::application::Application,
     db::sqlite::SqlDb,
+    git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
 };
 
@@ -189,6 +190,115 @@ impl Agent {
         });
 
         Ok(response)
+    }
+
+    pub async fn code_search_with_lexical(&mut self, query: &str) -> Result<Vec<CodeSpan>> {
+        const CODE_SEARCH_LIMIT: u64 = 30;
+        if self.application.semantic_client.is_none() {
+            return Ok(vec![]);
+        }
+        let mut results_semantic = self
+            .application
+            .semantic_client
+            .as_ref()
+            .expect("is_none to hold")
+            .search(query, self.reporef(), CODE_SEARCH_LIMIT, 0, 0.0, true)
+            .await?;
+        let hyde_snippets = self.hyde(query).await?;
+        if !hyde_snippets.is_empty() {
+            let hyde_snippets = hyde_snippets.first().unwrap();
+            let hyde_search = self
+                .application
+                .semantic_client
+                .as_ref()
+                .expect("is_none to hold")
+                .search(
+                    hyde_snippets,
+                    self.reporef(),
+                    CODE_SEARCH_LIMIT,
+                    0,
+                    0.3,
+                    true,
+                )
+                .await?;
+            results_semantic.extend(hyde_search);
+        }
+
+        // Now we do a lexical search as well this is to help figure out which
+        // snippets are relevant
+        let lexical_search_code_snippets = self
+            .application
+            .indexes
+            .code_snippet
+            .lexical_search(
+                self.reporef(),
+                query,
+                CODE_SEARCH_LIMIT
+                    .try_into()
+                    .expect("conversion to not fail"),
+            )
+            .await
+            .unwrap_or(vec![]);
+
+        // Now we get the statistics from the git log and use that for scoring
+        // as well
+        let git_log_score =
+            GitLogScore::generate_git_log_score(self.reporef.clone(), self.application.sql.clone())
+                .await;
+
+        let mut code_snippets_semantic = results_semantic
+            .into_iter()
+            .map(|result| {
+                let path_alias = self.get_path_alias(&result.relative_path);
+                // convert it to a code snippet here
+                let code_span = CodeSpan::new(
+                    result.relative_path,
+                    path_alias,
+                    result.start_line,
+                    result.end_line,
+                    result.text,
+                    result.score,
+                );
+                code_span
+            })
+            .collect::<Vec<_>>();
+
+        let code_snippets_lexical_score: HashMap<String, f32> = lexical_search_code_snippets
+            .into_iter()
+            .map(|lexical_code_snippet| {
+                let path_alias = self.get_path_alias(&lexical_code_snippet.relative_path);
+                // convert it to a code snippet here
+                let code_span = CodeSpan::new(
+                    lexical_code_snippet.relative_path,
+                    path_alias,
+                    lexical_code_snippet.line_start,
+                    lexical_code_snippet.line_end,
+                    lexical_code_snippet.content,
+                    Some(lexical_code_snippet.score),
+                );
+                (code_span.get_unique_key(), lexical_code_snippet.score)
+            })
+            .collect();
+
+        // Now that we have the git log score, lets use that to score the results
+        // Lets first get the lexical scores for the code snippets which we are getting from the search
+        code_snippets_semantic = code_snippets_semantic
+            .into_iter()
+            .map(|mut code_snippet| {
+                let unique_key = code_snippet.get_unique_key();
+                // If we don't get anything here we just return 0.3
+                let lexical_score = code_snippets_lexical_score.get(&unique_key).unwrap_or(&0.3);
+                let git_log_score = git_log_score.get_score_for_file(&code_snippet.file_path);
+                if let Some(semantic_score) = code_snippet.score {
+                    code_snippet.score = Some(semantic_score + 2.5 * lexical_score + git_log_score);
+                } else {
+                    code_snippet.score = Some(2.5 * lexical_score + git_log_score);
+                }
+                code_snippet
+            })
+            .collect::<Vec<_>>();
+
+        Ok(code_snippets_semantic)
     }
 
     pub async fn code_search(&mut self, query: &str) -> Result<String> {

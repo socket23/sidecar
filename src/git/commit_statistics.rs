@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     db::sqlite::SqlDb, git::commit_statistics, repo::types::RepoRef, webserver::config::get,
@@ -13,9 +13,7 @@ use gix::{
     Commit, Id,
 };
 use sqlx::Sqlite;
-use tracing::debug;
-
-/// getting statistics out of git commits
+use tracing::{debug, error};
 
 #[derive(Debug, Default)]
 pub struct CommitStatistics {
@@ -36,48 +34,6 @@ pub struct CommitStatistics {
 }
 
 impl CommitStatistics {
-    async fn save_to_db(&self, tx: &mut sqlx::Transaction<'_, Sqlite>) -> anyhow::Result<()> {
-        let repo_str = self.repo_ref.to_string();
-        let files_modified_list = self
-            .files_modified
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        sqlx::query! {
-            "insert into git_log_statistics (repo_ref, commit_hash, author_email, commit_timestamp, files_changed, title, body, lines_insertions, lines_deletions, git_diff, file_insertions, file_deletions) \
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            repo_str,
-            self.commit_hash,
-            self.author,
-            self.commit_timestamp,
-            files_modified_list,
-            self.title,
-            self.body,
-            self.line_insertions,
-            self.line_deletions,
-            self.git_diff,
-            self.file_insertions,
-            self.file_deletions,
-        }.execute(&mut **tx).await?;
-        Ok(())
-    }
-
-    async fn save_file_statistics_to_db(
-        &self,
-        tx: &mut sqlx::Transaction<'_, Sqlite>,
-    ) -> anyhow::Result<()> {
-        let repo_str = self.repo_ref.to_string();
-        for file_path in self.files_modified.iter() {
-            sqlx::query! {
-                "insert into file_git_commit_statistics (repo_ref, file_path, commit_hash, commit_timestamp) \
-                VALUES (?, ?, ?, ?)",
-                repo_str, file_path, self.commit_hash, self.commit_timestamp,
-            }.execute(&mut **tx).await?;
-        }
-        Ok(())
-    }
-
     pub async fn cleanup_for_repo(
         reporef: RepoRef,
         tx: &mut sqlx::Transaction<'_, Sqlite>,
@@ -302,10 +258,11 @@ pub async fn git_commit_statistics(repo_ref: RepoRef, db: SqlDb) -> anyhow::Resu
             .context("tokio::thread error")?
     }
     .context("commit_fetch failed")?;
-    dbg!(
-        "finished git commit statistics for repo: {}, took time: {}",
+    debug!(
+        "finished git commit statistics for repo: {}, took time: {}, found: {}",
         repo_ref.to_string(),
-        start_time.elapsed().as_secs()
+        start_time.elapsed().as_secs(),
+        commit_statistics.len(),
     );
 
     // start a new transaction right now
@@ -316,6 +273,7 @@ pub async fn git_commit_statistics(repo_ref: RepoRef, db: SqlDb) -> anyhow::Resu
     // we do this one after the other because of the way transactions work
     for commit_statistic in commit_statistics.iter() {
         let repo_str = repo_ref.to_string();
+        dbg!(commit_statistic);
         let files_modified_list = commit_statistic
             .files_modified
             .iter()
@@ -354,4 +312,139 @@ pub async fn git_commit_statistics(repo_ref: RepoRef, db: SqlDb) -> anyhow::Resu
     }
     tx.commit().await?;
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct GitLogScore {
+    pub repo_ref: RepoRef,
+    pub file_to_score: HashMap<String, f32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitLogFileInformation {
+    file_path: String,
+    commit_hash: String,
+    commit_timestamp: i64,
+}
+
+impl GitLogScore {
+    pub fn get_score_for_file(&self, relative_file_path: &str) -> f32 {
+        // If we don't have data about the file we should just mark it with the
+        // lowest score since it's probably an older file or not relevant given
+        // we are querying the last 300 commits
+        // If it's not present we just return 1/len(files_to_score) as the weight here
+        self.file_to_score
+            .get(relative_file_path)
+            .map(|v| v.clone())
+            .unwrap_or((1.0 as f32) / (self.file_to_score.len() as f32))
+    }
+
+    pub async fn generate_git_log_score(repo_ref: RepoRef, db: SqlDb) -> Self {
+        // First we want to load all the file statistics for the repo which are
+        // located in the git-log
+        let repo_ref_str = repo_ref.to_string();
+        let results = sqlx::query_as! {
+            GitLogFileInformation,
+            "SELECT file_path, commit_hash, commit_timestamp FROM file_git_commit_statistics WHERE repo_ref = ?",
+            repo_ref_str,
+        }.fetch_all(db.as_ref()).await.context("failed to fetch from sql db");
+
+        if let Err(e) = results {
+            // If there is an error, return the empty module
+            error!("failed to fetch from sql db: {}", e);
+            return Self {
+                repo_ref: repo_ref.clone(),
+                file_to_score: HashMap::new(),
+            };
+        }
+
+        let results_vec = results.expect("err check above to work");
+        let mut num_commits_for_file: HashMap<String, usize> = HashMap::new();
+        let mut last_commit_timestamp_for_file: HashMap<String, i64> = HashMap::new();
+        for git_file_statistic in results_vec.into_iter() {
+            let file_path = git_file_statistic.file_path;
+            let commit_timestamp = git_file_statistic.commit_timestamp;
+            // update the commit count for the file
+            num_commits_for_file
+                .entry(file_path.clone())
+                .and_modify(|count| *count += 1)
+                .or_insert(1);
+            // Now we check the timestamp and keep the latest one
+            last_commit_timestamp_for_file
+                .entry(file_path.clone())
+                .and_modify(|timestamp| {
+                    if *timestamp < commit_timestamp {
+                        *timestamp = commit_timestamp;
+                    }
+                })
+                .or_insert(commit_timestamp);
+        }
+
+        // Now we want to convert the values into a percentile value so its relative
+        // to the total score
+        let commit_score_for_file = get_sorted_position_as_score(num_commits_for_file);
+        let last_commit_timestamp_score_for_file =
+            get_sorted_position_as_score(last_commit_timestamp_for_file);
+
+        // Now we try to get the combined score for all the files
+        let files = commit_score_for_file.keys().collect::<HashSet<_>>();
+        // Now go over both generated scores and just add them up, if its not
+        // present use the 1 / len(files) as the score
+        let mut file_to_score: HashMap<String, usize> = HashMap::new();
+        for file in files.iter() {
+            let commit_score = commit_score_for_file
+                .get(*file)
+                .map(|v| v.clone())
+                .unwrap_or(1);
+            let last_commit_timestamp_score = last_commit_timestamp_score_for_file
+                .get(*file)
+                .map(|v| v.clone())
+                .unwrap_or(1);
+            // The 1 here is the score coming from the line count
+            file_to_score.insert(
+                file.to_string(),
+                1 + commit_score + last_commit_timestamp_score,
+            );
+        }
+
+        // Now we sort the score and then make it relative with position / len(files)
+        // which gives us the percentile score
+        Self {
+            repo_ref: repo_ref.clone(),
+            file_to_score: get_sorted_position_as_score(file_to_score)
+                .into_iter()
+                .map(|(key, value)| (key, (value as f32 / files.len() as f32)))
+                .collect(),
+        }
+    }
+}
+
+fn get_sorted_position_as_score<T: std::clone::Clone + Ord + std::hash::Hash>(
+    hashed_values: HashMap<String, T>,
+) -> HashMap<String, usize> {
+    let mut values: Vec<T> = hashed_values
+        .values()
+        .map(|v| v.clone())
+        .into_iter()
+        .collect();
+    // Now that values are sorted we can go about creating the percentile score
+    values.sort();
+    let hashed_values_percentile: HashMap<T, usize> = values
+        .into_iter()
+        .enumerate()
+        .map(|(index, value)| (value, index))
+        .collect();
+    // Now we assign the percentile score to the initial hashed values
+    hashed_values
+        .into_iter()
+        .map(|(key, value)| {
+            (
+                key,
+                hashed_values_percentile
+                    .get(&value)
+                    .map(|v| v.clone())
+                    .expect("value should be present"),
+            )
+        })
+        .collect()
 }

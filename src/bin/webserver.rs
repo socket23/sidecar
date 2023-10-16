@@ -122,6 +122,10 @@ fn agent_router() -> Router {
             "/lexical_search",
             get(sidecar::webserver::agent::lexical_search),
         )
+        .route(
+            "/hybrid_search",
+            get(sidecar::webserver::agent::hybrid_search),
+        )
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

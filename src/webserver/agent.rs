@@ -297,13 +297,42 @@ pub struct HybridSearchResponse {
 
 impl ApiResponse for HybridSearchResponse {}
 
+/// What's hybrid search? Hybrid search combines the best things about both semantic
+/// and lexical search along with statistics from the git log to generate the
+/// best code spans which are relevant
 pub async fn hybrid_search(
     axumQuery(HybridSearchQuery { query, repo }): axumQuery<HybridSearchQuery>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    // Here we want to do the following:
+    // - do a semantic search (normalize it to a score between 0.5 -> 1)
+    // - do a lexical search (normalize it to a score between 0.5 -> 1)
+    // - get statistics from the git log (normalize it to a score between 0.5 -> 1)
+    // hand-waving the numbers here for whatever works for now
+    // - final score -> git_log_score * 4 + lexical_search * 2.5 + semantic_search_score
+    // - combine the score as following
+    let session_id = uuid::Uuid::new_v4();
+    let llm_client = Arc::new(LlmClient::codestory_infra());
+    let conversation_id = uuid::Uuid::new_v4();
+    let sql_db = app.sql.clone();
+    let (sender, _) = tokio::sync::mpsc::channel(100);
+    let mut agent = Agent::prepare_for_semantic_search(
+        app,
+        repo,
+        session_id,
+        &query,
+        llm_client,
+        conversation_id,
+        sql_db,
+        sender,
+    );
+    let hybrid_search_results = agent
+        .code_search_with_lexical(&query)
+        .await
+        .unwrap_or(vec![]);
     Ok(json(HybridSearchResponse {
         session_id: uuid::Uuid::new_v4(),
         query,
-        code_spans: vec![],
+        code_spans: hybrid_search_results,
     }))
 }

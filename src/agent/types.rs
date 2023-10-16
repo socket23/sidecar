@@ -225,6 +225,10 @@ impl CodeSpan {
     pub fn is_empty(&self) -> bool {
         self.data.trim().is_empty()
     }
+
+    pub fn get_unique_key(&self) -> String {
+        format!("{}:{}-{}", self.file_path, self.start_line, self.end_line)
+    }
 }
 
 impl std::fmt::Display for CodeSpan {

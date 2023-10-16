@@ -4,12 +4,7 @@
 use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
-use tracing::{debug, error, info, warn, Level};
-use tracing_subscriber::{
-    filter::{LevelFilter, Targets},
-    fmt,
-    prelude::*,
-};
+use tracing::{debug, warn};
 
 use crate::{
     chunking::languages::TSLanguageParsing,

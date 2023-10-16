@@ -24,7 +24,6 @@ use uuid::Uuid;
 
 use crate::db::sqlite::SqlDb;
 use crate::embedder::embedder::{EmbedChunk, EmbedQueue};
-use crate::repo;
 use crate::repo::types::RepoRef;
 use crate::semantic_search::client::SemanticClient;
 use crate::semantic_search::schema::Payload;

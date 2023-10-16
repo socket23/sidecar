@@ -6,18 +6,17 @@ use std::{fs, path::Path};
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
-use rayon::prelude::IntoParallelIterator;
 use smallvec::SmallVec;
 use tantivy::collector::TopDocs;
 use tantivy::query::{BooleanQuery, Query as TantivyQuery, QueryParser, TermQuery};
-use tantivy::schema::{Field, IndexRecordOption, Value};
+use tantivy::schema::{Field, IndexRecordOption};
+use tantivy::Term;
 use tantivy::{
     collector::{Collector, MultiFruit},
     schema::Schema,
     tokenizer::NgramTokenizer,
     DocAddress, Document, IndexReader, IndexWriter, Score,
 };
-use tantivy::{Index, Term};
 use tokio::sync::RwLock;
 use tracing::debug;
 
@@ -34,7 +33,7 @@ use crate::{
 };
 
 use super::caching::FileCache;
-use super::code_snippet::{self, CodeSnippetDocument};
+use super::code_snippet::CodeSnippetDocument;
 use super::query::{case_permutations, trigrams, Query};
 use super::schema::{CodeSnippet, CodeSnippetTokenizer, File};
 

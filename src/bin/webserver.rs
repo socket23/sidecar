@@ -8,11 +8,9 @@ use clap::Parser;
 use sidecar::{
     application::{application::Application, config::configuration::Configuration},
     bg_poll::background_polling::poll_repo_updates,
-    repo::types::RepoRef,
     semantic_search::qdrant_process::{wait_for_qdrant, QdrantServerProcess},
 };
 use std::net::SocketAddr;
-use tantivy::{collector::TopDocs, query::QueryParser, tokenizer::TokenizerManager};
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
 use tracing::{debug, error, info};
 

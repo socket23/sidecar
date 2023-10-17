@@ -10,7 +10,10 @@ use sidecar::{
     bg_poll::background_polling::poll_repo_updates,
     semantic_search::qdrant_process::{wait_for_qdrant, QdrantServerProcess},
 };
+use signal_hook::consts::signal::SIGINT;
+use signal_hook::iterator::Signals;
 use std::net::SocketAddr;
+use tokio::sync::oneshot;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
 use tracing::{debug, error, info};
 
@@ -22,7 +25,7 @@ async fn main() -> Result<()> {
     let configuration = Configuration::parse();
 
     // Star the qdrant server and make sure that it has started up
-    let _qdrant_process = QdrantServerProcess::initialize(&configuration).await?;
+    let qdrant_process = QdrantServerProcess::initialize(&configuration).await?;
     // HC the process here to make sure that it has started up
     wait_for_qdrant().await;
     debug!("qdrant server started");
@@ -31,12 +34,37 @@ async fn main() -> Result<()> {
     debug!("installing logging to local file");
     Application::install_logging(&configuration);
 
+    // Create a oneshot channel
+    let (tx, rx) = oneshot::channel();
+
+    // Spawn a task to listen for signals
+    tokio::spawn(async move {
+        let mut signals = Signals::new(&[SIGINT]).unwrap();
+        for _ in signals.forever() {
+            let _ = tx.send(());
+            return;
+        }
+    });
+
     // We initialize the logging here
     let application = Application::initialize(configuration).await?;
     debug!("initialized application");
 
-    // Start the webserver
-    let _ = run(application).await;
+    // Main logic
+    tokio::select! {
+        // Start the webserver
+        _ = run(application) => {
+            // Your server logic
+        }
+        _ = rx => {
+            // Signal received, this block will be executed.
+            // Drop happens automatically when variables go out of scope.
+            debug!("Signal received, cleaning up...");
+            // We drop the qdrant process explicitly to not leave anything behind
+            drop(qdrant_process);
+        }
+    }
+
     Ok(())
 }
 

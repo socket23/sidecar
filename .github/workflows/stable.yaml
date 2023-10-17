@@ -1,0 +1,8 @@
+name: stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      new_release:
+        type: boolean
+        description: Force new Release

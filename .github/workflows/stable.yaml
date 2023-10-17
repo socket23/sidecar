@@ -6,3 +6,5 @@ on:
       new_release:
         type: boolean
         description: Force new Release
+
+jobs:

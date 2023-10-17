@@ -1,4 +1,4 @@
-name: Sidecar build for linux
+name: Sidecar build for mac
 
 on:
   workflow_run:

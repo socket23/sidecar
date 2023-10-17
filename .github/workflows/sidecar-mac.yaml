@@ -1,10 +1,8 @@
 name: Sidecar build for mac
 
 on:
-  workflow_run:
-    workflows: ["stable"]
-    types:
-      - completed
+  workflow_dispatch:
+
 
 jobs:
   build:

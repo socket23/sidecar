@@ -108,6 +108,7 @@ fn run_command(command: &Path, qdrant_dir: &Path) -> Child {
 #[cfg(windows)]
 fn run_command(command: &Path, qdrant_dir: &Path) -> Child {
     use std::os::windows::process::CommandExt;
+    use std::process::Command;
 
     Command::new(command)
         .current_dir(qdrant_dir)

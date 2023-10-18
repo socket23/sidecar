@@ -22,9 +22,8 @@ jobs:
         ./package_windows.sh
     
     - name: Run 7z action
-      uses: edgarrc/action-7z@v1
-      with:
-        args: 7z a -t7z "sidecar_test.7z" "onnxruntime/ qdrant/ models/"
+      run: |
+        7z a -t7z "sidecar_test.7z" "onnxruntime/ qdrant/ models/"
 
     # Install gcp skcd
     - name: Setup GCP SDK

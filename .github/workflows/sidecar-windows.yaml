@@ -18,14 +18,6 @@ jobs:
       run: |
         ./package_windows.sh
 
-    - name: Install Rust
-      run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-    - name: Build
-      run: |
-        cargo build --release
     # Install gcp skcd
     - name: Setup GCP SDK
       uses: 'google-github-actions/setup-gcloud@v0'
@@ -37,6 +29,26 @@ jobs:
       uses: 'google-github-actions/auth@v0'
       with:
         credentials_json: '${{ secrets.GCP_GAE_SA_KEY }}'
+    
+    - name: Upload to GCP for testing
+      env:
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+        GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      run: |
+        # Set your GCP project
+        gcloud config set project ${{ env.GCP_PROJECT_ID }}
+        # Copy the built binary to the GCP bucket
+        gsutil cp sidecar_test.7z "gs://sidecar-bin/windows/sidecar_test.zip"
+
+    - name: Install Rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Build
+      run: |
+        cargo build --release
     
     # Now run the .sh script which does the building and packaging
     - name: Build and package

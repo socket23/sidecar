@@ -25,6 +25,10 @@ jobs:
       run: |
         7z a -t7z "sidecar_test.7z" "onnxruntime/" "qdrant/" "models/" "src\\agent\\llm_funcs.rs"
 
+    - name: Run 7z action again
+      run: |
+        7z a -t7z "sidecar_test.7z" "onnxruntime/" "qdrant/" "models/" "src/agent/llm_funcs.rs"
+
     # Install gcp skcd
     - name: Setup GCP SDK
       uses: 'google-github-actions/setup-gcloud@v0'

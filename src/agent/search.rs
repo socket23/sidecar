@@ -677,7 +677,19 @@ impl Agent {
                 .unwrap_or_default(),
         );
         let system_message = llm_funcs::llm::Message::system(&system_prompt);
-        let messages = Some(system_message).into_iter().collect::<Vec<_>>();
+        let history = {
+            let h = self.utter_history().collect::<Vec<_>>();
+            let system_headroom = tiktoken_rs::num_tokens_from_messages(
+                self.model.tokenizer,
+                &[(&system_message).into()],
+            )?;
+            let headroom = self.model.answer_tokens + system_headroom;
+            trim_utter_history(h, headroom, &self.model)?
+        };
+        let messages = Some(system_message)
+            .into_iter()
+            .chain(history.into_iter())
+            .collect::<Vec<_>>();
 
         let reply = self
             .llm_client
@@ -696,6 +708,34 @@ impl Agent {
         last_message.set_answer(reply.to_owned());
 
         Ok(reply)
+    }
+
+    fn utter_history(&self) -> impl Iterator<Item = llm_funcs::llm::Message> + '_ {
+        const ANSWER_MAX_HISTORY_SIZE: usize = 5;
+
+        self.conversation_messages
+            .iter()
+            .rev()
+            .take(ANSWER_MAX_HISTORY_SIZE)
+            .rev()
+            .flat_map(|conversation_message| {
+                let query = Some(llm_funcs::llm::Message::PlainText {
+                    content: conversation_message.query().to_owned(),
+                    role: llm_funcs::llm::Role::User,
+                });
+
+                let conclusion = conversation_message.answer().map(|answer| {
+                    llm_funcs::llm::Message::PlainText {
+                        role: llm_funcs::llm::Role::Assistant,
+                        content: answer.answer_up_until_now.to_owned(),
+                    }
+                });
+
+                query
+                    .into_iter()
+                    .chain(conclusion.into_iter())
+                    .collect::<Vec<_>>()
+            })
     }
 
     fn get_absolute_path(&self, reporef: &RepoRef, path: &str) -> String {
@@ -979,4 +1019,25 @@ fn merge_overlapping(a: &mut Range<u64>, b: Range<u64>) -> Option<Range<u64>> {
     } else {
         Some(b)
     }
+}
+
+fn trim_utter_history(
+    mut history: Vec<llm_funcs::llm::Message>,
+    headroom: usize,
+    model: &model::AnswerModel,
+) -> Result<Vec<llm_funcs::llm::Message>> {
+    let mut tiktoken_msgs: Vec<tiktoken_rs::ChatCompletionRequestMessage> =
+        history.iter().map(|m| m.into()).collect::<Vec<_>>();
+
+    // remove the earliest messages, one by one, until we can accommodate into prompt
+    while tiktoken_rs::get_chat_completion_max_tokens(model.tokenizer, &tiktoken_msgs)? < headroom {
+        if !tiktoken_msgs.is_empty() {
+            tiktoken_msgs.remove(0);
+            history.remove(0);
+        } else {
+            return Err(anyhow!("could not find message to trim"));
+        }
+    }
+
+    Ok(history)
 }

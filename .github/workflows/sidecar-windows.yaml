@@ -17,6 +17,11 @@ jobs:
     - name: Demo run for 7zip
       run: |
         ./package_windows.sh
+    
+    - name: Run 7z action
+      uses: edgarrc/action-7z@v1
+      run: |
+        7z a -t7z "sidecar_test.7z" "onnxruntime/ qdrant/ models/"
 
     # Install gcp skcd
     - name: Setup GCP SDK
@@ -54,6 +59,11 @@ jobs:
     - name: Build and package
       run: |
         ./package_windows_bin.sh
+    
+    - name: Compile the 7z
+      uses: edgarrc/action-7z@v1
+      run: |
+        7z a -t7z "sidecar.7z" "onnxruntime/ qdrant/ target/release/webserver models/"
 
     - name: Upload to GCP bucket generated zip file
       env:

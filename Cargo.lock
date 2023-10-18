@@ -4115,7 +4115,6 @@ dependencies = [
  "scc",
  "serde",
  "serde_json",
- "signal-hook",
  "smallvec",
  "sqlx",
  "tantivy",

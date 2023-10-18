@@ -64,8 +64,8 @@ jobs:
     
     # Github action parser for sure, something to test it out too quickly
     - name: Compile the 7z
-      with:
-        args: 7z a -t7z "sidecar.7z" "onnxruntime/ qdrant/ target/release/webserver models/"
+      run: |
+        7z a -t7z "sidecar.7z" "onnxruntime/ qdrant/ target/release/webserver models/"
 
     - name: Upload to GCP bucket generated zip file
       env:

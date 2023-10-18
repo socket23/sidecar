@@ -43,6 +43,6 @@ jobs:
         GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       run: |
         # Set your GCP project
-        gcloud config set project $GCP_PROJECT_ID
+        gcloud config set project ${{ env.GCP_PROJECT_ID }}
         # Copy the built binary to the GCP bucket
         gsutil cp sidecar.zip gs://sidecar-bin/windows/sidecar.zip

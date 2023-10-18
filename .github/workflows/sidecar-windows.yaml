@@ -11,6 +11,13 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Install 7-Zip
+      run: choco install 7zip.install
+    
+    - name: Demo run for 7zip
+      run: |
+        ./package_windows.sh
+
     - name: Install Rust
       run: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -34,7 +41,7 @@ jobs:
     # Now run the .sh script which does the building and packaging
     - name: Build and package
       run: |
-        ./package.sh
+        ./package_windows_bin.sh
 
     - name: Upload to GCP bucket generated zip file
       env:

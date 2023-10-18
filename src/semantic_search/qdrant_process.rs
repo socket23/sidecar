@@ -63,8 +63,17 @@ impl QdrantServerProcess {
 
 fn get_qdrant_binary_name() -> Option<String> {
     let os = env::consts::OS;
+    let arch = env::consts::ARCH;
     if os == "macos" {
-        Some("qdrant_mac".to_owned())
+        if arch == "aarch64" {
+            Some("qdrant_mac".to_owned())
+        } else {
+            Some("qdrant_intel_chip".to_owned())
+        }
+    } else if os == "linux" {
+        Some("qdrant_linux".to_owned())
+    } else if os == "windows" {
+        Some("qdrant_windows.exe".to_owned())
     } else {
         None
     }

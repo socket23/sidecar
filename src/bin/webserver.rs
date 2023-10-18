@@ -10,9 +10,8 @@ use sidecar::{
     bg_poll::background_polling::poll_repo_updates,
     semantic_search::qdrant_process::{wait_for_qdrant, QdrantServerProcess},
 };
-use signal_hook::consts::signal::SIGINT;
-use signal_hook::iterator::Signals;
 use std::net::SocketAddr;
+use tokio::signal;
 use tokio::sync::oneshot;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
 use tracing::{debug, error, info};
@@ -39,11 +38,8 @@ async fn main() -> Result<()> {
 
     // Spawn a task to listen for signals
     tokio::spawn(async move {
-        let mut signals = Signals::new(&[SIGINT]).unwrap();
-        for _ in signals.forever() {
-            let _ = tx.send(());
-            return;
-        }
+        signal::ctrl_c().await.expect("failed to listen for event");
+        let _ = tx.send(());
     });
 
     // We initialize the logging here

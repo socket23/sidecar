@@ -23,7 +23,7 @@ jobs:
     
     - name: Run 7z action
       run: |
-        7z a -t7z "sidecar_test.7z" "onnxruntime/" "qdrant/" "models/"
+        7z a -t7z "sidecar_test.7z" "onnxruntime/" "qdrant/" "models/" "src\\agent\\llm_funcs.rs"
 
     # Install gcp skcd
     - name: Setup GCP SDK
@@ -65,7 +65,7 @@ jobs:
     # Github action parser for sure, something to test it out too quickly
     - name: Compile the 7z
       run: |
-        7z a -t7z "sidecar.7z" "onnxruntime/" "qdrant/" "target/release/webserver" "models/"
+        7z a -t7z "sidecar.7z" "onnxruntime/" "qdrant/" "target\\release\\webserver" "models/"
 
     - name: Upload to GCP bucket generated zip file
       env:

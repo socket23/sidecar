@@ -73,7 +73,7 @@ fn get_qdrant_binary_name() -> Option<String> {
     } else if os == "linux" {
         Some("qdrant_linux".to_owned())
     } else if os == "windows" {
-        Some("qdrant_windows.exe".to_owned())
+        Some("qdrant.exe".to_owned())
     } else {
         None
     }

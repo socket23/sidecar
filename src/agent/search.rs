@@ -804,38 +804,50 @@ impl Agent {
         match self.get_last_conversation_message_agent_state() {
             &AgentState::Explain => {
                 if let Some(user_selected_context_slice) = user_selected_context {
-                    prompt += "##### SELECTED CODE CONTEXT #####\n";
-                    for user_selected_context in user_selected_context_slice.iter() {
-                        let snippet = user_selected_context
-                            .data
-                            .lines()
-                            .enumerate()
-                            .map(|(i, line)| {
-                                format!(
-                                    "{} {line}\n",
-                                    i + user_selected_context.start_line as usize + 1
+                    let selected_code_context = "##### SELECTED CODE CONTEXT #####\n";
+                    let selected_code_header_tokens =
+                        bpe.encode_ordinary(&selected_code_context).len();
+                    if selected_code_header_tokens
+                        >= remaining_prompt_tokens - self.model.prompt_tokens_limit
+                    {
+                        info!("we can't set selected selection because of prompt limit");
+                    } else {
+                        prompt += "##### SELECTED CODE CONTEXT #####\n";
+                        remaining_prompt_tokens -= selected_code_header_tokens;
+
+                        for user_selected_context in user_selected_context_slice.iter() {
+                            let snippet = user_selected_context
+                                .data
+                                .lines()
+                                .enumerate()
+                                .map(|(i, line)| {
+                                    format!(
+                                        "{} {line}\n",
+                                        i + user_selected_context.start_line as usize + 1
+                                    )
+                                })
+                                .collect::<String>();
+
+                            let formatted_string = format!(
+                                "### {} ###\n{snippet}\n\n",
+                                self.get_absolute_path(
+                                    self.reporef(),
+                                    &user_selected_context.file_path
                                 )
-                            })
-                            .collect::<String>();
+                            );
 
-                        let formatted_string = format!(
-                            "### {} ###\n{snippet}\n\n",
-                            self.get_absolute_path(
-                                self.reporef(),
-                                &user_selected_context.file_path
-                            )
-                        );
+                            let snippet_tokens = bpe.encode_ordinary(&formatted_string).len();
+                            if snippet_tokens
+                                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
+                            {
+                                info!("breaking at {} tokens", remaining_prompt_tokens);
+                                break;
+                            }
+                            prompt += &formatted_string;
 
-                        let snippet_tokens = bpe.encode_ordinary(&formatted_string).len();
-                        if snippet_tokens
-                            >= remaining_prompt_tokens - self.model.prompt_tokens_limit
-                        {
-                            info!("breaking at {} tokens", remaining_prompt_tokens);
-                            break;
+                            // Make sure we are always in the context limit
+                            remaining_prompt_tokens -= snippet_tokens;
                         }
-
-                        // Make sure we are always in the context limit
-                        remaining_prompt_tokens -= snippet_tokens;
                     }
                 }
             }

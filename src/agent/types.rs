@@ -375,6 +375,20 @@ impl Agent {
         &self.reporef
     }
 
+    pub fn get_last_conversation_message_agent_state(&self) -> &AgentState {
+        &self
+            .conversation_messages
+            .last()
+            .expect("There should be a conversation message")
+            .agent_state
+    }
+
+    pub fn get_user_selected_context(&self) -> Option<&[CodeSpan]> {
+        self.conversation_messages
+            .last()
+            .map(|conversation_message| conversation_message.user_selected_code_span.as_slice())
+    }
+
     pub fn get_last_conversation_message(&mut self) -> &mut ConversationMessage {
         // If we don't have a conversation message then, we will crash and burn
         // here

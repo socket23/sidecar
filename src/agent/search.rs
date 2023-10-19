@@ -667,15 +667,26 @@ impl Agent {
         sender: tokio::sync::mpsc::UnboundedSender<Answer>,
     ) -> Result<String> {
         let context = self.answer_context(path_aliases).await?;
-        let system_prompt = prompts::answer_article_prompt(
-            path_aliases.len() != 1,
-            &context,
-            &self
-                .reporef()
-                .local_path()
-                .map(|path| path.to_string_lossy().to_string())
-                .unwrap_or_default(),
-        );
+        let system_prompt = match self.get_last_conversation_message_agent_state() {
+            &AgentState::Explain => prompts::explain_article_prompt(
+                path_aliases.len() != 1,
+                &context,
+                &self
+                    .reporef()
+                    .local_path()
+                    .map(|path| path.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+            ),
+            _ => prompts::answer_article_prompt(
+                path_aliases.len() != 1,
+                &context,
+                &self
+                    .reporef()
+                    .local_path()
+                    .map(|path| path.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+            ),
+        };
         let system_message = llm_funcs::llm::Message::system(&system_prompt);
         let history = {
             let h = self.utter_history().collect::<Vec<_>>();
@@ -787,6 +798,49 @@ impl Agent {
         let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
         let mut remaining_prompt_tokens =
             tiktoken_rs::get_completion_max_tokens(self.model.tokenizer, &prompt)?;
+
+        // We need to make sure that we send the selected context always
+        let user_selected_context = self.get_user_selected_context();
+        match self.get_last_conversation_message_agent_state() {
+            &AgentState::Explain => {
+                if let Some(user_selected_context_slice) = user_selected_context {
+                    prompt += "##### SELECTED CODE CONTEXT #####\n";
+                    for user_selected_context in user_selected_context_slice.iter() {
+                        let snippet = user_selected_context
+                            .data
+                            .lines()
+                            .enumerate()
+                            .map(|(i, line)| {
+                                format!(
+                                    "{} {line}\n",
+                                    i + user_selected_context.start_line as usize + 1
+                                )
+                            })
+                            .collect::<String>();
+
+                        let formatted_string = format!(
+                            "### {} ###\n{snippet}\n\n",
+                            self.get_absolute_path(
+                                self.reporef(),
+                                &user_selected_context.file_path
+                            )
+                        );
+
+                        let snippet_tokens = bpe.encode_ordinary(&formatted_string).len();
+                        if snippet_tokens
+                            >= remaining_prompt_tokens - self.model.prompt_tokens_limit
+                        {
+                            info!("breaking at {} tokens", remaining_prompt_tokens);
+                            break;
+                        }
+
+                        // Make sure we are always in the context limit
+                        remaining_prompt_tokens -= snippet_tokens;
+                    }
+                }
+            }
+            _ => {}
+        }
 
         // Select as many recent chunks as possible
         let mut recent_chunks = Vec::new();

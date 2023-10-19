@@ -148,6 +148,7 @@ fn agent_router() -> Router {
             "/hybrid_search",
             get(sidecar::webserver::agent::hybrid_search),
         )
+        .route("/explain", get(sidecar::webserver::agent::explain))
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

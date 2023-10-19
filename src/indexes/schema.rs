@@ -192,7 +192,7 @@ impl CodeSnippet {
 
         let unique_hash = builder.add_text_field("unique_hash", STRING | STORED);
 
-        let repo_disk_path = dbg!(builder.add_text_field("repo_disk_path", STRING));
+        let repo_disk_path = builder.add_text_field("repo_disk_path", STRING);
         let repo_ref = builder.add_text_field("repo_ref", STRING | STORED);
         let repo_name = builder.add_text_field("repo_name", code_snippet_tokenizer.clone());
         let relative_path = builder.add_text_field("relative_path", code_snippet_tokenizer.clone());

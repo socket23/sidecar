@@ -57,6 +57,28 @@ pub struct ConversationMessage {
 }
 
 impl ConversationMessage {
+    pub fn explain_message(session_id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self {
+            message_id: uuid::Uuid::new_v4(),
+            session_id,
+            query,
+            steps_taken: vec![],
+            agent_state,
+            open_files: vec![],
+            file_paths: vec![],
+            code_spans: vec![],
+            user_selected_code_span: vec![],
+            conversation_state: ConversationState::Started,
+            answer: None,
+            created_at: current_time,
+            last_updated: current_time,
+        }
+    }
+
     pub fn search_message(session_id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -109,6 +131,10 @@ impl ConversationMessage {
         self.code_spans.push(code_span);
     }
 
+    pub fn add_path(&mut self, relative_path: String) {
+        self.file_paths.push(relative_path);
+    }
+
     pub fn query(&self) -> &str {
         &self.query
     }
@@ -124,6 +150,10 @@ impl ConversationMessage {
             answer_up_until_now: answer,
             delta: None,
         });
+    }
+
+    pub fn add_user_selected_code_span(&mut self, user_selected_code_span: CodeSpan) {
+        self.user_selected_code_span.push(user_selected_code_span)
     }
 
     pub fn answer_update(session_id: uuid::Uuid, answer_update: Answer) -> Self {

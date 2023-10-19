@@ -111,6 +111,12 @@ impl Error {
     }
 }
 
+impl From<anyhow::Error> for Error {
+    fn from(value: anyhow::Error) -> Self {
+        Error::internal(value)
+    }
+}
+
 /// The response upon encountering an error
 #[derive(serde::Serialize, PartialEq, Eq, Debug)]
 pub struct EndpointError<'a> {

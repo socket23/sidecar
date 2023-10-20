@@ -85,6 +85,7 @@ impl Agent {
         llm_client: Arc<LlmClient>,
         conversation_id: uuid::Uuid,
         sql_db: SqlDb,
+        mut previous_conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
@@ -93,11 +94,34 @@ impl Agent {
             AgentState::Search,
             query.to_owned(),
         );
+        previous_conversations.push(conversation_message);
         let agent = Agent {
             application,
             reporef,
             session_id,
-            conversation_messages: vec![conversation_message],
+            conversation_messages: previous_conversations,
+            llm_client,
+            model: model::GPT_4,
+            sql_db,
+            sender,
+        };
+        agent
+    }
+
+    pub fn prepare_for_followup(
+        application: Application,
+        reporef: RepoRef,
+        session_id: uuid::Uuid,
+        llm_client: Arc<LlmClient>,
+        sql_db: SqlDb,
+        conversations: Vec<ConversationMessage>,
+        sender: Sender<ConversationMessage>,
+    ) -> Self {
+        let agent = Agent {
+            application,
+            reporef,
+            session_id,
+            conversation_messages: conversations,
             llm_client,
             model: model::GPT_4,
             sql_db,
@@ -114,6 +138,7 @@ impl Agent {
         llm_client: Arc<LlmClient>,
         conversation_id: uuid::Uuid,
         sql_db: SqlDb,
+        mut previous_conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
     ) -> Self {
         let conversation_message = ConversationMessage::semantic_search(
@@ -121,11 +146,12 @@ impl Agent {
             AgentState::SemanticSearch,
             query.to_owned(),
         );
+        previous_conversations.push(conversation_message);
         let agent = Agent {
             application,
             reporef,
             session_id,
-            conversation_messages: vec![conversation_message],
+            conversation_messages: previous_conversations,
             llm_client,
             model: model::GPT_4,
             sql_db,
@@ -206,8 +232,6 @@ impl Agent {
             let last_exchange = self.get_last_conversation_message();
             last_exchange.add_code_spans(code_snippet.clone());
         }
-
-        debug!("code search results length: {}", code_snippets.len());
 
         let response = code_snippets
             .iter()
@@ -677,6 +701,22 @@ impl Agent {
                     .map(|path| path.to_string_lossy().to_string())
                     .unwrap_or_default(),
             ),
+            // If we are in a followup chat, then we should always use the context
+            // from the previous conversation and use that to answer the query
+            &AgentState::FollowupChat => {
+                let answer_prompt = prompts::followup_chat_prompt(
+                    &context,
+                    &self
+                        .reporef()
+                        .local_path()
+                        .map(|path| path.to_string_lossy().to_string())
+                        .unwrap_or_default(),
+                    // If we had more than 1 conversation then this gets counted
+                    // as a followup
+                    self.conversation_messages_len() > 1,
+                );
+                answer_prompt
+            }
             _ => prompts::answer_article_prompt(
                 path_aliases.len() != 1,
                 &context,
@@ -717,6 +757,7 @@ impl Agent {
 
         let last_message = self.get_last_conversation_message();
         last_message.set_answer(reply.to_owned());
+        last_message.set_generated_answer_context(context);
 
         Ok(reply)
     }
@@ -763,11 +804,29 @@ impl Agent {
         }
     }
 
+    pub async fn followup_chat_context(&mut self) -> Result<String> {
+        if self.conversation_messages.len() > 1 {
+            dbg!("are we entering this workflow??");
+            // we want the last to last chat context here
+            self.conversation_messages[self.conversation_messages_len() - 2]
+                .get_generated_answer_context()
+                .map(|context| context.to_owned())
+                .ok_or(anyhow!("no previous chat"))
+        } else {
+            Ok("No previous chat".to_owned())
+        }
+    }
+
     async fn answer_context(&mut self, aliases: &[usize]) -> Result<String> {
         // Here we create the context for the answer, using the aliases and also
         // using the code spans which we have
         // We change the paths here to be absolute so the LLM can stream that
         // properly
+        // Here we might be in a weird position that we have to do followup-chats
+        // so for that the answer context is totally different and we set it as such
+        if self.get_last_conversation_message_agent_state() == &AgentState::FollowupChat {
+            return self.followup_chat_context().await;
+        }
         let paths = self.paths().collect::<Vec<_>>();
         let mut prompt = "".to_owned();
         let mut aliases = aliases
@@ -800,58 +859,48 @@ impl Agent {
             tiktoken_rs::get_completion_max_tokens(self.model.tokenizer, &prompt)?;
 
         // We need to make sure that we send the selected context always
+        // this is important for any workflow
         let user_selected_context = self.get_user_selected_context();
-        match self.get_last_conversation_message_agent_state() {
-            &AgentState::Explain => {
-                if let Some(user_selected_context_slice) = user_selected_context {
-                    let selected_code_context = "##### SELECTED CODE CONTEXT #####\n";
-                    let selected_code_header_tokens =
-                        bpe.encode_ordinary(&selected_code_context).len();
-                    if selected_code_header_tokens
-                        >= remaining_prompt_tokens - self.model.prompt_tokens_limit
-                    {
-                        info!("we can't set selected selection because of prompt limit");
-                    } else {
-                        prompt += "##### SELECTED CODE CONTEXT #####\n";
-                        remaining_prompt_tokens -= selected_code_header_tokens;
+        if let Some(user_selected_context_slice) = user_selected_context {
+            let selected_code_context = "##### SELECTED CODE CONTEXT #####\n";
+            let selected_code_header_tokens = bpe.encode_ordinary(&selected_code_context).len();
+            if selected_code_header_tokens
+                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
+            {
+                info!("we can't set selected selection because of prompt limit");
+            } else {
+                prompt += "##### SELECTED CODE CONTEXT #####\n";
+                remaining_prompt_tokens -= selected_code_header_tokens;
 
-                        for user_selected_context in user_selected_context_slice.iter() {
-                            let snippet = user_selected_context
-                                .data
-                                .lines()
-                                .enumerate()
-                                .map(|(i, line)| {
-                                    format!(
-                                        "{} {line}\n",
-                                        i + user_selected_context.start_line as usize + 1
-                                    )
-                                })
-                                .collect::<String>();
+                for user_selected_context in user_selected_context_slice.iter() {
+                    let snippet = user_selected_context
+                        .data
+                        .lines()
+                        .enumerate()
+                        .map(|(i, line)| {
+                            format!(
+                                "{} {line}\n",
+                                i + user_selected_context.start_line as usize + 1
+                            )
+                        })
+                        .collect::<String>();
 
-                            let formatted_string = format!(
-                                "### {} ###\n{snippet}\n\n",
-                                self.get_absolute_path(
-                                    self.reporef(),
-                                    &user_selected_context.file_path
-                                )
-                            );
+                    let formatted_string = format!(
+                        "### {} ###\n{snippet}\n\n",
+                        self.get_absolute_path(self.reporef(), &user_selected_context.file_path)
+                    );
 
-                            let snippet_tokens = bpe.encode_ordinary(&formatted_string).len();
-                            if snippet_tokens
-                                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
-                            {
-                                info!("breaking at {} tokens", remaining_prompt_tokens);
-                                break;
-                            }
-                            prompt += &formatted_string;
-
-                            // Make sure we are always in the context limit
-                            remaining_prompt_tokens -= snippet_tokens;
-                        }
+                    let snippet_tokens = bpe.encode_ordinary(&formatted_string).len();
+                    if snippet_tokens >= remaining_prompt_tokens - self.model.prompt_tokens_limit {
+                        info!("breaking at {} tokens", remaining_prompt_tokens);
+                        break;
                     }
+                    prompt += &formatted_string;
+
+                    // Make sure we are always in the context limit
+                    remaining_prompt_tokens -= snippet_tokens;
                 }
             }
-            _ => {}
         }
 
         // Select as many recent chunks as possible

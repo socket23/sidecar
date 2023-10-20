@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
+use anyhow::Context;
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tokio::sync::mpsc::Sender;
@@ -16,7 +17,7 @@ use super::{
     search::stop_words,
 };
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Answer {
     // This is the answer up-until now
     pub answer_up_until_now: String,
@@ -26,34 +27,39 @@ pub struct Answer {
     pub delta: Option<String>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConversationMessage {
     message_id: uuid::Uuid,
-    // We also want to store the session id here so we can load it and save it
+    /// We also want to store the session id here so we can load it and save it,
+    /// this allows us to follow threads and resume the information from that
+    /// context
     session_id: uuid::Uuid,
-    // The query which the user has asked
+    /// The query which the user has asked
     query: String,
-    // The steps which the agent has taken up until now
+    /// The steps which the agent has taken up until now
     steps_taken: Vec<AgentStep>,
-    // The state of the agent
+    /// The state of the agent
     agent_state: AgentState,
-    // The file paths we are interested in, can be populated via search or after
-    // asking for more context
+    /// The file paths we are interested in, can be populated via search or after
+    /// asking for more context
     file_paths: Vec<String>,
-    // The span which we found after performing search
+    /// The span which we found after performing search
     code_spans: Vec<CodeSpan>,
-    // The span which user has selected and added to the context
+    /// The span which user has selected and added to the context
     user_selected_code_span: Vec<CodeSpan>,
-    // The files which are open in the editor
+    /// The files which are open in the editor
     open_files: Vec<String>,
-    // The status of this conversation
+    /// The status of this conversation
     conversation_state: ConversationState,
-    // Final answer which is going to get stored here
+    /// Final answer which is going to get stored here
     answer: Option<Answer>,
-    // Last updated
+    /// Last updated
     last_updated: u64,
-    // Created at
+    /// Created at
     created_at: u64,
+    /// Whats the context for the answer if any, this gets set at the same time
+    /// when we finished generating the answer
+    generated_answer_context: Option<String>,
 }
 
 impl ConversationMessage {
@@ -76,6 +82,34 @@ impl ConversationMessage {
             answer: None,
             created_at: current_time,
             last_updated: current_time,
+            generated_answer_context: None,
+        }
+    }
+
+    pub fn general_question(
+        session_id: uuid::Uuid,
+        agent_state: AgentState,
+        query: String,
+    ) -> Self {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self {
+            message_id: uuid::Uuid::new_v4(),
+            session_id,
+            query,
+            steps_taken: vec![],
+            agent_state,
+            file_paths: vec![],
+            code_spans: vec![],
+            user_selected_code_span: vec![],
+            open_files: vec![],
+            conversation_state: ConversationState::Started,
+            answer: None,
+            created_at: current_time,
+            last_updated: current_time,
+            generated_answer_context: None,
         }
     }
 
@@ -98,6 +132,7 @@ impl ConversationMessage {
             answer: None,
             created_at: current_time,
             last_updated: current_time,
+            generated_answer_context: None,
         }
     }
 
@@ -120,6 +155,7 @@ impl ConversationMessage {
             answer: None,
             created_at: current_time,
             last_updated: current_time,
+            generated_answer_context: None,
         }
     }
 
@@ -133,6 +169,18 @@ impl ConversationMessage {
 
     pub fn add_path(&mut self, relative_path: String) {
         self.file_paths.push(relative_path);
+    }
+
+    pub fn get_paths(&self) -> &[String] {
+        &self.file_paths.as_slice()
+    }
+
+    pub fn code_spans(&self) -> &[CodeSpan] {
+        &self.code_spans.as_slice()
+    }
+
+    pub fn user_selected_code_spans(&self) -> &[CodeSpan] {
+        &self.user_selected_code_span.as_slice()
     }
 
     pub fn query(&self) -> &str {
@@ -150,6 +198,14 @@ impl ConversationMessage {
             answer_up_until_now: answer,
             delta: None,
         });
+    }
+
+    pub fn set_generated_answer_context(&mut self, answer_context: String) {
+        self.generated_answer_context = Some(answer_context);
+    }
+
+    pub fn get_generated_answer_context(&self) -> Option<&str> {
+        self.generated_answer_context.as_deref()
     }
 
     pub fn add_user_selected_code_span(&mut self, user_selected_code_span: CodeSpan) {
@@ -175,10 +231,13 @@ impl ConversationMessage {
             answer: Some(answer_update),
             created_at: current_time,
             last_updated: current_time,
+            // We use this to send it over the wire, this is pretty bad anyways
+            // but its fine to do things this way
+            generated_answer_context: None,
         }
     }
 
-    pub async fn save_to_db(&self, db: SqlDb) -> anyhow::Result<()> {
+    pub async fn save_to_db(&self, db: SqlDb, repo_ref: RepoRef) -> anyhow::Result<()> {
         debug!(%self.session_id, %self.message_id, "saving conversation message to db");
         let mut tx = db.begin().await?;
         let message_id = self.message_id.to_string();
@@ -197,10 +256,14 @@ impl ConversationMessage {
         let user_selected_code_span = serde_json::to_string(&self.user_selected_code_span)?;
         let open_files = serde_json::to_string(&self.open_files)?;
         let conversation_state = serde_json::to_string(&self.conversation_state)?;
+        let repo_ref_str = repo_ref.to_string();
+        let generated_answer_context = self.generated_answer_context.clone();
+        dbg!("what answer are we storing");
+        dbg!(&generated_answer_context);
         sqlx::query! {
             "INSERT INTO agent_conversation_message \
-            (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state) \
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, repo_ref, generated_answer_context) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             message_id,
             query,
             answer,
@@ -214,9 +277,72 @@ impl ConversationMessage {
             user_selected_code_span,
             open_files,
             conversation_state,
+            repo_ref_str,
+            generated_answer_context,
         }.execute(&mut *tx).await?;
         let _ = tx.commit().await?;
         Ok(())
+    }
+
+    pub async fn load_from_db(
+        db: SqlDb,
+        reporef: &RepoRef,
+        session_id: uuid::Uuid,
+    ) -> anyhow::Result<Vec<ConversationMessage>> {
+        let session_id_str = session_id.to_string();
+        let repo_ref_str = reporef.to_string();
+        // Now here we are going to read the previous conversations which have
+        // happened for the session_id and the repository reference
+        let rows = sqlx::query! {
+            "SELECT message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, generated_answer_context FROM agent_conversation_message \
+            WHERE session_id = ? AND repo_ref = ?",
+            session_id_str,
+            repo_ref_str,
+        }
+        .fetch_all(db.as_ref())
+        .await
+        .context("failed to fetch conversation message from the db")?;
+        Ok(rows
+            .into_iter()
+            .map(|record| {
+                let message_id = record.message_id;
+                let session_id = record.session_id;
+                let query = record.query;
+                let steps_taken = serde_json::from_str::<Vec<AgentStep>>(&record.steps_taken);
+                let agent_state = serde_json::from_str::<AgentState>(&record.agent_state);
+                let file_paths = serde_json::from_str::<Vec<String>>(&record.file_paths);
+                let user_selected_code_span =
+                    serde_json::from_str::<Vec<CodeSpan>>(&record.user_selected_code_span);
+                let open_files = serde_json::from_str::<Vec<String>>(&record.open_files);
+                let conversation_state =
+                    serde_json::from_str::<ConversationState>(&record.conversation_state);
+                let answer = record.answer;
+                let last_updated = record.last_updated;
+                let created_at = record.created_at;
+                let generated_answer_context = record.generated_answer_context;
+                ConversationMessage {
+                    message_id: uuid::Uuid::from_str(&message_id)
+                        .expect("parsing back should work"),
+                    session_id: uuid::Uuid::from_str(&session_id)
+                        .expect("parsing back should work"),
+                    query,
+                    steps_taken: steps_taken.unwrap_or_default(),
+                    agent_state: agent_state.expect("parsing back should work"),
+                    file_paths: file_paths.unwrap_or_default(),
+                    code_spans: vec![],
+                    user_selected_code_span: user_selected_code_span.unwrap_or_default(),
+                    open_files: open_files.unwrap_or_default(),
+                    conversation_state: conversation_state.expect("parsing back should work"),
+                    answer: answer.map(|answer| Answer {
+                        answer_up_until_now: answer,
+                        delta: None,
+                    }),
+                    last_updated: last_updated as u64,
+                    created_at: created_at as u64,
+                    generated_answer_context,
+                }
+            })
+            .collect())
     }
 }
 
@@ -264,7 +390,7 @@ impl std::fmt::Display for CodeSpan {
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum AgentStep {
     Path {
         query: String,
@@ -332,6 +458,9 @@ impl AgentAction {
 pub struct Agent {
     pub application: Application,
     pub reporef: RepoRef,
+    /// Session-id is unique to a single execution of the agent, this is different
+    /// from the thread-id which you will see across the codebase which is the
+    /// interactions happening across a single thread
     pub session_id: uuid::Uuid,
     pub conversation_messages: Vec<ConversationMessage>,
     pub llm_client: Arc<LlmClient>,
@@ -340,7 +469,7 @@ pub struct Agent {
     pub sender: Sender<ConversationMessage>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum AgentState {
     // We will end up doing a search
     Search,
@@ -356,9 +485,11 @@ pub enum AgentState {
     Finish,
     // If we are performing semantic search, we should be over here
     SemanticSearch,
+    // Followup question or general question answer
+    FollowupChat,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ConversationState {
     Pending,
     Started,
@@ -381,6 +512,10 @@ impl Agent {
             .last()
             .expect("There should be a conversation message")
             .agent_state
+    }
+
+    pub fn conversation_messages_len(&self) -> usize {
+        self.conversation_messages.len()
     }
 
     pub fn get_user_selected_context(&self) -> Option<&[CodeSpan]> {
@@ -529,7 +664,9 @@ impl Agent {
                 // save it to the db
                 if let Some(last_conversation) = self.conversation_messages.last() {
                     // save the conversation to the DB
-                    let _ = last_conversation.save_to_db(self.sql_db.clone()).await;
+                    let _ = last_conversation
+                        .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                        .await;
                     // send it over the sender
                     let _ = self.sender.send(last_conversation.clone()).await;
                 }
@@ -576,7 +713,9 @@ impl Agent {
         // We also retroactively save the last conversation to the database
         if let Some(last_conversation) = self.conversation_messages.last() {
             // save the conversation to the DB
-            let _ = last_conversation.save_to_db(self.sql_db.clone()).await;
+            let _ = last_conversation
+                .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                .await;
             // send it over the sender
             let _ = self.sender.send(last_conversation.clone()).await;
         }
@@ -732,11 +871,14 @@ impl Drop for Agent {
         let db = self.sql_db.clone();
         let conversation_messages = self.conversation_messages.to_vec();
         // This will save all the pending conversations to the database
+        let repo_ref = self.reporef().clone();
         tokio::spawn(async move {
             use futures::StreamExt;
             futures::stream::iter(conversation_messages)
-                .map(|conversation| (conversation, db.clone()))
-                .map(|(conversation, db)| async move { conversation.save_to_db(db.clone()).await })
+                .map(|conversation| (conversation, db.clone(), repo_ref.clone()))
+                .map(|(conversation, db, repo_ref)| async move {
+                    conversation.save_to_db(db.clone(), repo_ref).await
+                })
                 .collect::<Vec<_>>()
                 .await;
         });

@@ -21,10 +21,16 @@ use crate::repo::types::RepoRef;
 use super::types::ApiResponse;
 use super::types::Result;
 
+fn default_thread_id() -> uuid::Uuid {
+    uuid::Uuid::new_v4()
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct SearchInformation {
     pub query: String,
     pub reporef: RepoRef,
+    #[serde(default = "default_thread_id")]
+    pub thread_id: uuid::Uuid,
 }
 
 impl ApiResponse for SearchInformation {}
@@ -43,23 +49,31 @@ pub enum SearchEvents {
 }
 
 pub async fn search_agent(
-    axumQuery(SearchInformation { query, reporef }): axumQuery<SearchInformation>,
+    axumQuery(SearchInformation {
+        query,
+        reporef,
+        thread_id,
+    }): axumQuery<SearchInformation>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
     let llm_client = Arc::new(LlmClient::codestory_infra());
-    let conversation_id = uuid::Uuid::new_v4();
     let sql_db = app.sql.clone();
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let action = AgentAction::Query(query.clone());
+    let previous_conversation_message =
+        ConversationMessage::load_from_db(sql_db.clone(), &reporef, thread_id)
+            .await
+            .expect("loading from db to never fail");
     let agent = Agent::prepare_for_search(
         app,
         reporef,
         session_id,
         &query,
         llm_client,
-        conversation_id,
+        thread_id,
         sql_db,
+        previous_conversation_message,
         sender,
     );
 
@@ -104,6 +118,7 @@ pub async fn semantic_search(
         llm_client,
         conversation_id,
         sql_db,
+        vec![], // we don't have a previous conversation message here
         sender,
     );
     let code_spans = agent
@@ -194,6 +209,7 @@ pub async fn hybrid_search(
         llm_client,
         conversation_id,
         sql_db,
+        vec![], // we don't have a previous conversation message here
         sender,
     );
     let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
@@ -211,6 +227,8 @@ pub struct ExplainRequest {
     start_line: u64,
     end_line: u64,
     repo_ref: RepoRef,
+    #[serde(default = "default_thread_id")]
+    thread_id: uuid::Uuid,
 }
 
 /// We are going to handle the explain function here, but its going to be very
@@ -225,12 +243,10 @@ pub async fn explain(
         start_line,
         end_line,
         repo_ref,
+        thread_id,
     }): axumQuery<ExplainRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
-    // We want to send the delta events like before
-    let query_id = uuid::Uuid::new_v4();
-
     let file_content = app
         .indexes
         .file
@@ -239,6 +255,11 @@ pub async fn explain(
         .context("file retrieval failed")?
         .context("requested file not found")?
         .content;
+
+    let mut previous_messages =
+        ConversationMessage::load_from_db(app.sql.clone(), &repo_ref, thread_id)
+            .await
+            .expect("loading from db to never fail");
 
     let snippet = file_content
         .lines()
@@ -252,7 +273,7 @@ pub async fn explain(
         .join("\n");
 
     let mut conversation_message = ConversationMessage::explain_message(
-        query_id,
+        thread_id,
         crate::agent::types::AgentState::Explain,
         query,
     );
@@ -269,6 +290,8 @@ pub async fn explain(
     conversation_message.add_code_spans(code_span.clone());
     conversation_message.add_path(relative_path);
 
+    previous_messages.push(conversation_message);
+
     let action = AgentAction::Answer { paths: vec![0] };
 
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
@@ -281,12 +304,84 @@ pub async fn explain(
         application: app,
         reporef: repo_ref,
         session_id,
-        conversation_messages: vec![conversation_message],
+        conversation_messages: previous_messages,
         llm_client: Arc::new(LlmClient::codestory_infra()),
         model: GPT_4,
         sql_db: sql,
         sender,
     };
+
+    generate_agent_stream(agent, action, receiver).await
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct FollowupChatRequest {
+    pub query: String,
+    pub repo_ref: RepoRef,
+    pub thread_id: uuid::Uuid,
+}
+
+pub async fn followup_chat(
+    axumQuery(FollowupChatRequest {
+        query,
+        repo_ref,
+        thread_id,
+    }): axumQuery<FollowupChatRequest>,
+    Extension(app): Extension<Application>,
+) -> Result<impl IntoResponse> {
+    let session_id = uuid::Uuid::new_v4();
+    // Here we do something special, if the user is asking a followup question
+    // we just look at the previous conversation message the thread belonged
+    // to and use that as context for grounding the agent response. In the future
+    // we can obviously add more context using @ symbols etc
+    let sql_db = app.sql.clone();
+    let mut previous_messages =
+        ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)
+            .await
+            .expect("loading from db to never fail");
+
+    let mut conversation_message = ConversationMessage::general_question(
+        thread_id,
+        crate::agent::types::AgentState::FollowupChat,
+        query.to_owned(),
+    );
+
+    // Now we check if we have any previous messages, if we do we have to signal
+    // that to the agent that this could be a followup question, and if we don't
+    // know about that then its totally fine
+    if let Some(previous_message) = previous_messages.last() {
+        previous_message.get_paths().iter().for_each(|path| {
+            conversation_message.add_path(path.to_owned());
+        });
+        previous_message.code_spans().iter().for_each(|code_span| {
+            conversation_message.add_code_spans(code_span.clone());
+        });
+        previous_message
+            .user_selected_code_spans()
+            .iter()
+            .for_each(|code_span| {
+                conversation_message.add_user_selected_code_span(code_span.clone())
+            });
+    }
+
+    previous_messages.push(conversation_message);
+
+    dbg!(&previous_messages);
+
+    let (sender, receiver) = tokio::sync::mpsc::channel(100);
+
+    // If this is a followup, right now we don't take in any additional context,
+    // but only use the one from our previous conversation
+    let action = AgentAction::Answer { paths: vec![] };
+    let agent = Agent::prepare_for_followup(
+        app,
+        repo_ref,
+        session_id,
+        Arc::new(LlmClient::codestory_infra()),
+        sql_db,
+        previous_messages,
+        sender,
+    );
 
     generate_agent_stream(agent, action, receiver).await
 }

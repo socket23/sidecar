@@ -9,7 +9,7 @@ use axum::{extract::Query as axumQuery, Extension, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::agent::llm_funcs::LlmClient;
-use crate::agent::model::GPT_4;
+use crate::agent::model::{GPT_3_5_TURBO_16K, GPT_4};
 use crate::agent::types::Agent;
 use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
@@ -445,6 +445,51 @@ pub async fn followup_chat(
     );
 
     generate_agent_stream(agent, action, receiver).await
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GotoDefinitionSymbolsRequest {
+    pub code_snippet: String,
+    pub language: String,
+    pub repo_ref: RepoRef,
+    pub thread_id: uuid::Uuid,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GotoDefinitionSymbolsResponse {
+    symbols: Vec<String>,
+}
+
+impl ApiResponse for GotoDefinitionSymbolsResponse {}
+
+pub async fn go_to_definition_symbols(
+    Extension(app): Extension<Application>,
+    Json(GotoDefinitionSymbolsRequest {
+        code_snippet,
+        language,
+        repo_ref,
+        thread_id,
+    }): Json<GotoDefinitionSymbolsRequest>,
+) -> Result<impl IntoResponse> {
+    dbg!("we are over here in goto_definition_symbol");
+    let sql_db = app.sql.clone();
+    let agent = Agent {
+        application: app,
+        reporef: repo_ref,
+        session_id: uuid::Uuid::new_v4(),
+        conversation_messages: vec![],
+        llm_client: Arc::new(LlmClient::codestory_infra()),
+        model: GPT_3_5_TURBO_16K,
+        sql_db,
+        sender: tokio::sync::mpsc::channel(100).0,
+    };
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    Ok(json(GotoDefinitionSymbolsResponse {
+        symbols: agent
+            .goto_definition_symbols(&code_snippet, &language, sender)
+            .await
+            .expect("goto_definition_symbols to not fail"),
+    }))
 }
 
 #[cfg(test)]

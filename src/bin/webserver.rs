@@ -153,6 +153,10 @@ fn agent_router() -> Router {
             "/followup_chat",
             post(sidecar::webserver::agent::followup_chat),
         )
+        .route(
+            "/goto_definition_symbols",
+            post(sidecar::webserver::agent::go_to_definition_symbols),
+        )
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

@@ -5,6 +5,7 @@ use anyhow::Result;
 use axum::routing::get;
 use axum::Extension;
 use clap::Parser;
+use axum::extract::DefaultBodyLimit;
 use sidecar::{
     application::{application::Application, config::configuration::Configuration},
     bg_poll::background_polling::poll_repo_updates,
@@ -106,7 +107,9 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .with_state(app.clone())
         .with_state(app.clone())
         .layer(CorsLayer::permissive())
-        .layer(CatchPanicLayer::new());
+        .layer(CatchPanicLayer::new())
+        // I want to set the bytes limit here to 20 MB
+        .layer(DefaultBodyLimit::max(20 * 1024 * 1024));
 
     let router = Router::new().nest("/api", api);
 

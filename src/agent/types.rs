@@ -818,6 +818,32 @@ impl Agent {
         // from this function
         Ok(self.get_last_conversation_message().code_spans.to_vec())
     }
+
+    pub async fn goto_definition_symbols(
+        &self,
+        code_snippet: &str,
+        language: &str,
+        sender: tokio::sync::mpsc::UnboundedSender<Answer>,
+    ) -> anyhow::Result<Vec<String>> {
+        let model = llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?;
+        let system_prompt = prompts::extract_goto_definition_symbols_from_snippet(language);
+        let messages = vec![
+            llm_funcs::llm::Message::system(&system_prompt),
+            llm_funcs::llm::Message::user(&format!("```{code_snippet}```")),
+        ];
+        let response = self
+            .get_llm_client()
+            .stream_response(model, messages, None, 0.0, None, sender)
+            .await;
+        dbg!(&response);
+        response.map(|str_response| {
+            str_response
+                .trim()
+                .split(",")
+                .map(|response| response.trim().to_owned())
+                .collect()
+        })
+    }
 }
 
 fn trim_history(

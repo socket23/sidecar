@@ -461,3 +461,93 @@ pub fn followup_chat_prompt(context: &str, location: &str, is_followup: bool) ->
         not_followup_generate_question
     }
 }
+
+pub fn extract_goto_definition_symbols_from_snippet(language: &str) -> String {
+    let system_prompt = format!(
+        r#"
+    Your job is to help the user understand a code snippet completely. You will be shown a code snippet in {language} and you have output a comma separated list of symbols for which we need to get the go-to-definition value.
+
+    Respect these rules at all times:
+    - Do not ask for go-to-definition for symbols which are common to {language}.
+    - Do not ask for go-to-definition for symbols which are not present in the code snippet.
+    - You should always output the list of symbols in a comma separated list.
+
+    An example is given below for you to follow:
+    ###
+    ```typescript
+    const limiter = createLimiter(
+        // The concurrent requests limit is chosen very conservatively to avoid blocking the language
+        // server.
+        2,
+        // If any language server API takes more than 2 seconds to answer, we should cancel the request
+        5000
+    );
+    
+    
+    // This is the main function which gives us context about what's present on the
+    // current view port of the user, this is important to get right
+    export const getLSPGraphContextForChat = async (workingDirectory: string, repoRef: RepoRef): Promise<DeepContextForView> => {{
+        const activeEditor = vscode.window.activeTextEditor;
+    
+        if (activeEditor === undefined) {{
+            return {{
+                repoRef: repoRef.getRepresentation(),
+                preciseContext: [],
+                cursorPosition: null,
+                currentViewPort: null,
+            }};
+        }}
+    
+        const label = 'getLSPGraphContextForChat';
+        performance.mark(label);
+    
+        const uri = URI.file(activeEditor.document.fileName);
+    ```
+    Your response: createLimiter, RepoRef, DeepContextForView, activeTextEditor, performance, file
+    ###
+
+    Another example:
+    ###
+    ```rust
+    let mut previous_messages =
+        ConversationMessage::load_from_db(app.sql.clone(), &repo_ref, thread_id)
+            .await
+            .expect("loading from db to never fail");
+
+    let snippet = file_content
+        .lines()
+        .skip(start_line.try_into().expect("conversion_should_not_fail"))
+        .take(
+            (end_line - start_line)
+                .try_into()
+                .expect("conversion_should_not_fail"),
+        )
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut conversation_message = ConversationMessage::explain_message(
+        thread_id,
+        crate::agent::types::AgentState::Explain,
+        query,
+    );
+
+    let code_span = CodeSpan {{
+        file_path: relative_path.to_owned(),
+        alias: 0,
+        start_line,
+        end_line,
+        data: snippet,
+        score: Some(1.0),
+    }};
+    conversation_message.add_user_selected_code_span(code_span.clone());
+    conversation_message.add_code_spans(code_span.clone());
+    conversation_message.add_path(relative_path);
+
+    previous_messages.push(conversation_message);
+    ```
+    Your response: ConversationMessage, load_from_db, sql, repo_ref, thread_id, file_content, explain_message, AgentState, Explain, CodeSpan, add_user_selected_code_span, add_code_spans, add_path
+    ###
+    "#
+    );
+    system_prompt
+}

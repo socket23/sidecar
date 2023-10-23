@@ -108,7 +108,6 @@ impl FromStr for RepoRef {
     type Err = RepoError;
 
     fn from_str(refstr: &str) -> Result<Self, Self::Err> {
-        info!("Parsing repo ref: {}", refstr);
         match refstr.trim_start_matches('/').split_once('/') {
             // // github.com/...
             // Some(("github.com", name)) => RepoRef::new(Backend::Github, name),

@@ -151,7 +151,7 @@ fn agent_router() -> Router {
         .route("/explain", get(sidecar::webserver::agent::explain))
         .route(
             "/followup_chat",
-            get(sidecar::webserver::agent::followup_chat),
+            post(sidecar::webserver::agent::followup_chat),
         )
 }
 

@@ -4,7 +4,7 @@ use anyhow::Context;
 use std::sync::Arc;
 
 use axum::response::IntoResponse;
-use axum::{extract::Query as axumQuery, Extension};
+use axum::{extract::Query as axumQuery, Extension, Json};
 /// We will invoke the agent to get the answer, we are moving to an agent based work
 use serde::{Deserialize, Serialize};
 
@@ -319,15 +319,76 @@ pub struct FollowupChatRequest {
     pub query: String,
     pub repo_ref: RepoRef,
     pub thread_id: uuid::Uuid,
+    pub deep_context: DeepContextForView,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeepContextForView {
+    pub repo_ref: RepoRef,
+    pub precise_context: Vec<PreciseContext>,
+    pub cursor_position: Option<CursorPosition>,
+    pub current_view_port: Option<CurrentViewPort>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreciseContext {
+    pub symbol: Symbol,
+    pub hover_text: Vec<String>,
+    pub definition_snippet: String,
+    pub fs_file_path: String,
+    pub relative_file_path: String,
+    pub range: Range,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Symbol {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fuzzy_name: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorPosition {
+    pub start_position: Position,
+    pub end_position: Position,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentViewPort {
+    pub start_position: Position,
+    pub end_position: Position,
+    pub relative_path: String,
+    pub fs_file_path: String,
+    pub text_on_screen: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Position {
+    pub line: i32,
+    pub character: i32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Range {
+    pub start_line: i32,
+    pub start_character: i32,
+    pub end_line: i32,
+    pub end_character: i32,
 }
 
 pub async fn followup_chat(
-    axumQuery(FollowupChatRequest {
+    Extension(app): Extension<Application>,
+    Json(FollowupChatRequest {
         query,
         repo_ref,
         thread_id,
-    }): axumQuery<FollowupChatRequest>,
-    Extension(app): Extension<Application>,
+        deep_context,
+    }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
     // Here we do something special, if the user is asking a followup question
@@ -384,4 +445,19 @@ pub async fn followup_chat(
     );
 
     generate_agent_stream(agent, action, receiver).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FollowupChatRequest;
+    use serde_json;
+
+    #[test]
+    fn test_parsing() {
+        let input_string = r#"
+        {"repo_ref":"local//Users/skcd/scratch/website","query":"whats happenign here","thread_id":"7cb05252-1bb8-4d5e-a942-621ab5d5e114","deep_context":{"repoRef":"local//Users/skcd/scratch/website","preciseContext":[{"symbol":{"fuzzyName":"Author"},"fsFilePath":"/Users/skcd/scratch/website/interfaces/author.ts","relativeFilePath":"interfaces/author.ts","range":{"startLine":0,"startCharacter":0,"endLine":6,"endCharacter":1},"hoverText":["\n```typescript\n(alias) type Author = {\n    name: string;\n    picture: string;\n    twitter: string;\n    linkedin: string;\n    github: string;\n}\nimport Author\n```\n",""],"definitionSnippet":"type Author = {\n  name: string\n  picture: string\n  twitter: string\n  linkedin: string\n  github: string\n}"}],"cursorPosition":{"startPosition":{"line":16,"character":0},"endPosition":{"line":16,"character":0}},"currentViewPort":{"startPosition":{"line":0,"character":0},"endPosition":{"line":16,"character":0},"fsFilePath":"/Users/skcd/scratch/website/interfaces/post.ts","relativePath":"interfaces/post.ts","textOnScreen":"import type Author from './author'\n\ntype PostType = {\n  slug: string\n  title: string\n  date: string\n  coverImage: string\n  author: Author\n  excerpt: string\n  ogImage: {\n    url: string\n  }\n  content: string\n}\n\nexport default PostType\n"}}}
+        "#;
+        let parsed_response = serde_json::from_str::<FollowupChatRequest>(&input_string);
+        assert!(parsed_response.is_ok());
+    }
 }

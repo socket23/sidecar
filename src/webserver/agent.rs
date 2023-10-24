@@ -368,17 +368,17 @@ pub struct CurrentViewPort {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Position {
-    pub line: i32,
-    pub character: i32,
+    pub line: usize,
+    pub character: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Range {
-    pub start_line: i32,
-    pub start_character: i32,
-    pub end_line: i32,
-    pub end_character: i32,
+    pub start_line: usize,
+    pub start_character: usize,
+    pub end_line: usize,
+    pub end_character: usize,
 }
 
 pub async fn followup_chat(

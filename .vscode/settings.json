@@ -17,6 +17,7 @@
         "funcs",
         "getrlimit",
         "Hasher",
+        "hurestics",
         "HYSIAH",
         "kgnvq",
         "Mmap",

@@ -243,6 +243,7 @@ Your output will be interpreted as codestory-markdown which renders with the fol
   - E.g. Do not simply write `Bar`, write [`Bar`]({location}src/bar.rs#L100-L105).
   - E.g. Do not simply write "Foos are functions that create `Foo` values out of thin air." Instead, write: "Foos are functions that create [`Foo`]({location}src/foo.rs#L80-L120) values out of thin air."
 - Only internal links to the current file work
+- While generating code, do not leave any code partially generated
 - Basic markdown text formatting rules are allowed
 
 Here is an example response:
@@ -276,36 +277,8 @@ Respect these rules at all times:
 - Link all symbols, even when there are multiple in one sentence
   - E.g. Do not simply write: "Bars are [`Foo`]( that return a list filled with `Bar` variants." Instead, write: "Bars are functions that return a list filled with [`Bar`]({location}src/bar.rs#L38-L57) variants."
   - If you do not have enough information needed to answer the query, do not make up an answer. Instead respond only with a footnote that asks the user for more information, e.g. `assistant: I'm sorry, I couldn't find what you were looking for, could you provide more information?`
-- Code blocks MUST be displayed to the user using XML in the following formats:
-  - Do NOT output plain markdown blocks, the user CANNOT see them
-  - To create new code, you MUST mimic the following structure (example given):
-###
-The following demonstrates logging in JavaScript:
-<GeneratedCode>
-<Code>
-console.log("hello world")
-</Code>
-<Language>JavaScript</Language>
-</GeneratedCode>
-###
-  - To quote existing code, use the following structure (example given):
-###
-This is referred to in the Rust code:
-<QuotedCode>
-<Code>
-println!("hello world!");
-println!("hello world!");
-</Code>
-<Language>Rust</Language>
-<Path>src/main.rs</Path>
-<StartLine>4</StartLine>
-<EndLine>5</EndLine>
-</QuotedCode>
-###
-  - `<GeneratedCode>` and `<QuotedCode>` elements MUST contain a `<Language>` value, and `<QuotedCode>` MUST additionally contain `<Path>`, `<StartLine>`, and `<EndLine>`.
-  - Note: the line range is inclusive
-- When writing example code blocks, use `<GeneratedCode>`, and when quoting existing code, use `<QuotedCode>`.
-- You MUST use XML code blocks instead of markdown."#
+- While generating code, do not leave any code partially generated
+- Code blocks MUST be displayed to the user using markdown"#
     );
 
     if multi {
@@ -361,36 +334,7 @@ Respect these rules at all times:
 - Link all symbols, even when there are multiple in one sentence
   - E.g. Do not simply write: "Bars are [`Foo`]( that return a list filled with `Bar` variants." Instead, write: "Bars are functions that return a list filled with [`Bar`]({location}src/bar.rs#L38-L57) variants."
   - If you do not have enough information needed to answer the query, do not make up an answer. Instead respond only with a footnote that asks the user for more information, e.g. `assistant: I'm sorry, I couldn't find what you were looking for, could you provide more information?`
-- Code blocks MUST be displayed to the user using XML in the following formats:
-  - Do NOT output plain markdown blocks, the user CANNOT see them
-  - To create new code, you MUST mimic the following structure (example given):
-###
-The following demonstrates logging in JavaScript:
-<GeneratedCode>
-<Code>
-console.log("hello world")
-</Code>
-<Language>JavaScript</Language>
-</GeneratedCode>
-###
-  - To quote existing code, use the following structure (example given):
-###
-This is referred to in the Rust code:
-<QuotedCode>
-<Code>
-println!("hello world!");
-println!("hello world!");
-</Code>
-<Language>Rust</Language>
-<Path>src/main.rs</Path>
-<StartLine>4</StartLine>
-<EndLine>5</EndLine>
-</QuotedCode>
-###
-  - `<GeneratedCode>` and `<QuotedCode>` elements MUST contain a `<Language>` value, and `<QuotedCode>` MUST additionally contain `<Path>`, `<StartLine>`, and `<EndLine>`.
-  - Note: the line range is inclusive
-- When writing example code blocks, use `<GeneratedCode>`, and when quoting existing code, use `<QuotedCode>`.
-- You MUST use XML code blocks instead of markdown."#
+- Code blocks MUST be displayed to the user using markdown"#
     );
 
     if multi {
@@ -576,7 +520,7 @@ Your job is to perform the following tasks on the DEFINITION SNIPPET:
 3. DO NOT cite line ranges from the CODE SNIPPET IN THE EDITOR which the user is looking at.
 3. You MUST answer with only YES or NO, if the DEFINITION SNIPPET is relevant to the user question.
 
-Q: How do I change it from expect to unwrap
+Q: {query}
 A:"#
     );
     system_prompt

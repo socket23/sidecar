@@ -1,8 +1,10 @@
 use super::agent_stream::generate_agent_stream;
+use super::context_trimming::create_context_string_for_precise_contexts;
 use super::types::json;
 use anyhow::Context;
 use futures::stream;
 use futures::StreamExt;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use axum::response::IntoResponse;
@@ -335,6 +337,7 @@ pub struct DeepContextForView {
     pub precise_context: Vec<PreciseContext>,
     pub cursor_position: Option<CursorPosition>,
     pub current_view_port: Option<CurrentViewPort>,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -405,6 +408,7 @@ pub async fn followup_chat(
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
+    let language = deep_context.language.to_owned();
     let trimmed_context = trim_deep_context(deep_context).await;
     let trimmed_context_str = create_trimmed_context(&trimmed_context).await;
     let view_port_code_span = trimmed_context
@@ -437,7 +441,7 @@ pub async fn followup_chat(
     // know about that then its totally fine
     let mut conversation_message = ConversationMessage::general_question(
         thread_id,
-        crate::agent::types::AgentState::FollowupChat,
+        crate::agent::types::AgentState::ViewPort,
         query.to_owned(),
     );
     let mut previous_messages =
@@ -461,50 +465,97 @@ pub async fn followup_chat(
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
     let llm_client = Arc::new(LlmClient::codestory_infra());
-    let definitions_required: Vec<_> =
-        stream::iter(trimmed_context_str.into_iter().map(|trimmed_context| {
-            (
-                trimmed_context,
-                viewport_context.to_owned(),
-                llm_client.clone(),
-                query.to_owned(),
-            )
-        }))
-        .filter_map(
-            |(trimmed_context_str, view_port_context, llm_client, query)| async move {
-                // here we will call out the prompt with gpt3 and see what happens
-                // after that
-                let messages = vec![llm_funcs::llm::Message::system(
-                    &prompts::definition_snippet_required(
-                        &view_port_context,
-                        &trimmed_context_str,
-                        &query,
+    let goto_definitions_required =
+        prompts::extract_goto_definition_symbols_from_snippet(&language);
+    let (message_sender, message_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let response = dbg!(
+        llm_client
+            .stream_response(
+                crate::agent::llm_funcs::llm::OpenAIModel::GPT4,
+                vec![
+                    llm_funcs::llm::Message::system(
+                        &prompts::extract_goto_definition_symbols_from_snippet(&language),
                     ),
-                )];
-                let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-                let response = llm_client
-                    .stream_response(
-                        crate::agent::llm_funcs::llm::OpenAIModel::GPT3_5_16k,
-                        messages,
-                        None,
-                        0.2,
-                        None,
-                        sender,
-                    )
-                    .await;
-                dbg!(&response);
-                let final_response = response.unwrap_or("NO".to_owned());
-                if final_response.to_lowercase() == "no" {
-                    None
-                } else {
-                    Some(futures::future::ready(trimmed_context_str))
-                }
-            },
-        )
-        .buffer_unordered(10)
-        .collect::<Vec<_>>()
-        .await;
+                    llm_funcs::llm::Message::user(&viewport_context),
+                ],
+                None,
+                0.0,
+                None,
+                message_sender,
+            )
+            .await
+    );
+    let required_definition_strings = dbg!(response
+        .unwrap_or_default()
+        .split(",")
+        .map(|s| s.trim().to_owned())
+        .collect::<HashSet<_>>());
+    // let definitions_required: Vec<_> =
+    //     stream::iter(trimmed_context_str.into_iter().map(|trimmed_context| {
+    //         (
+    //             trimmed_context,
+    //             viewport_context.to_owned(),
+    //             llm_client.clone(),
+    //             query.to_owned(),
+    //         )
+    //     }))
+    //     .filter_map(
+    //         |(trimmed_context_str, view_port_context, llm_client, query)| async move {
+    //             // here we will call out the prompt with gpt3 and see what happens
+    //             // after that
+    //             let messages = vec![llm_funcs::llm::Message::system(
+    //                 &prompts::definition_snippet_required(
+    //                     &view_port_context,
+    //                     &trimmed_context_str,
+    //                     &query,
+    //                 ),
+    //             )];
+    //             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    //             let response = llm_client
+    //                 .stream_response(
+    //                     crate::agent::llm_funcs::llm::OpenAIModel::GPT4,
+    //                     messages,
+    //                     None,
+    //                     0.2,
+    //                     None,
+    //                     sender,
+    //                 )
+    //                 .await;
+    //             dbg!(&response);
+    //             let final_response = response.unwrap_or("NO".to_owned());
+    //             if final_response.to_lowercase() == "no" {
+    //                 None
+    //             } else {
+    //                 Some(futures::future::ready(trimmed_context_str))
+    //             }
+    //         },
+    //     )
+    //     .buffer_unordered(10)
+    //     .collect::<Vec<_>>()
+    //     .await;
 
+    let definitions_required = trimmed_context
+        .precise_context_map
+        .into_iter()
+        .filter_map(|(_, precise_contexts)| {
+            // check if the trimmed context string has any of the required strings,
+            // if it does we should include it otherwise we can exclude it
+            if precise_contexts.iter().any(|context| {
+                context
+                    .symbol
+                    .fuzzy_name
+                    .as_ref()
+                    .map(|fuzzy_name| required_definition_strings.contains(fuzzy_name))
+                    .unwrap_or_default()
+            }) {
+                Some(create_context_string_for_precise_contexts(precise_contexts))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // we will grab the required definitions from the response of the LLM here
     dbg!(&definitions_required);
 
     // very very hacky and very bad, but oh well we will figure out a way to

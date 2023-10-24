@@ -20,7 +20,7 @@ pub struct TrimmedContext {
     repo_ref: RepoRef,
     /// This is grouped here so we can just send the LLM data once for a given context and ask it
     /// to decide
-    precise_context_map: HashMap<String, Vec<PreciseContext>>,
+    pub precise_context_map: HashMap<String, Vec<PreciseContext>>,
 }
 
 pub struct ViewPortContext {
@@ -52,79 +52,83 @@ pub async fn trim_deep_context(context: DeepContextForView) -> TrimmedContext {
     }
 }
 
+pub fn create_context_string_for_precise_contexts(precise_context: Vec<PreciseContext>) -> String {
+    let (context_string, context_start_line, fs_file_path) = precise_context
+        .iter()
+        .last()
+        .map(|precise_context| {
+            (
+                precise_context.definition_snippet.context.to_owned(),
+                precise_context.definition_snippet.start_line,
+                precise_context.fs_file_path.to_owned(),
+            )
+        })
+        .unwrap_or_default();
+    // we also keep the start and end position here
+    let symbol_names: Vec<(String, (usize, usize))> = precise_context
+        .into_iter()
+        .filter(|precise_context| precise_context.symbol.fuzzy_name.is_some())
+        .map(|precise_context| {
+            let symbol_name = precise_context
+                .symbol
+                .fuzzy_name
+                .clone()
+                .expect("is_some check above to work");
+            (
+                symbol_name,
+                (
+                    precise_context.definition_snippet.start_line,
+                    precise_context.definition_snippet.end_line,
+                ),
+            )
+        })
+        .collect();
+    // Now we will generate the formatted string which will look like this
+    // ### DEFINITION SNIPPET ###
+    // File: {file_name}
+    // Code Snippet:
+    // {line_number}: {content}
+    // {line_number + 1}: {content}
+    // ...
+    // Symbols location:
+    // Symbol: {name} range: {line_number}
+
+    // This is the string we will be passing to the LLM for retrieval context
+    let formatted_lines = context_string
+        .lines()
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let line_number = context_start_line + index;
+            let line_number = line_number.to_string();
+            let line_number = format!("{}: ", line_number);
+            let line = format!("{}{}", line_number, line);
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let symbol_lines = symbol_names
+        .into_iter()
+        .map(|(symbol_name, (start_line, end_line))| {
+            let line_range = format!("{}-{}", start_line, end_line);
+            format!("Symbol: {} range: {}", symbol_name, line_range)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let final_string = format!(
+        "### DEFINITION SNIPPET ###\nFile: {}\nCode Snippet:\n{}\nSymbols location:\n{}\n",
+        fs_file_path, formatted_lines, symbol_lines
+    );
+    final_string
+}
+
 pub async fn create_trimmed_context(trimmed_context: &TrimmedContext) -> Vec<String> {
     let context_strings = trimmed_context
         .precise_context_map
         .iter()
         .map(|(_, precise_context_vec)| {
-            let (context_string, context_start_line, fs_file_path) = precise_context_vec
-                .iter()
-                .last()
-                .map(|precise_context| {
-                    (
-                        precise_context.definition_snippet.context.to_owned(),
-                        precise_context.definition_snippet.start_line,
-                        precise_context.fs_file_path.to_owned(),
-                    )
-                })
-                .unwrap_or_default();
-            // we also keep the start and end position here
-            let symbol_names: Vec<(String, (usize, usize))> = precise_context_vec
-                .into_iter()
-                .filter(|precise_context| precise_context.symbol.fuzzy_name.is_some())
-                .map(|precise_context| {
-                    let symbol_name = precise_context
-                        .symbol
-                        .fuzzy_name
-                        .clone()
-                        .expect("is_some check above to work");
-                    (
-                        symbol_name,
-                        (
-                            precise_context.definition_snippet.start_line,
-                            precise_context.definition_snippet.end_line,
-                        ),
-                    )
-                })
-                .collect();
-            // Now we will generate the formatted string which will look like this
-            // ### DEFINITION SNIPPET ###
-            // File: {file_name}
-            // Code Snippet:
-            // {line_number}: {content}
-            // {line_number + 1}: {content}
-            // ...
-            // Symbols location:
-            // Symbol: {name} range: {line_number}
-
-            // This is the string we will be passing to the LLM for retrieval context
-            let formatted_lines = context_string
-                .lines()
-                .into_iter()
-                .enumerate()
-                .map(|(index, line)| {
-                    let line_number = context_start_line + index;
-                    let line_number = line_number.to_string();
-                    let line_number = format!("{}: ", line_number);
-                    let line = format!("{}{}", line_number, line);
-                    line
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            let symbol_lines = symbol_names
-                .into_iter()
-                .map(|(symbol_name, (start_line, end_line))| {
-                    let line_range = format!("{}-{}", start_line, end_line);
-                    format!("Symbol: {} range: {}", symbol_name, line_range)
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            let final_string = format!(
-                "### DEFINITION SNIPPET ###\nFile: {}\nCode Snippet:\n{}\nSymbols location:\n{}\n",
-                fs_file_path, formatted_lines, symbol_lines
-            );
-            final_string
+            create_context_string_for_precise_contexts(precise_context_vec.to_owned())
         })
         .collect::<Vec<_>>();
     context_strings

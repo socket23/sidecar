@@ -501,6 +501,8 @@ pub enum AgentState {
     SemanticSearch,
     // Followup question or general question answer
     FollowupChat,
+    // Don't use followup but the general state
+    ViewPort,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

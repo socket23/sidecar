@@ -1,6 +1,8 @@
 use super::agent_stream::generate_agent_stream;
 use super::types::json;
 use anyhow::Context;
+use futures::stream;
+use futures::StreamExt;
 use std::sync::Arc;
 
 use axum::response::IntoResponse;
@@ -8,8 +10,9 @@ use axum::{extract::Query as axumQuery, Extension, Json};
 /// We will invoke the agent to get the answer, we are moving to an agent based work
 use serde::{Deserialize, Serialize};
 
-use crate::agent::llm_funcs::LlmClient;
+use crate::agent::llm_funcs::{self, LlmClient};
 use crate::agent::model::{GPT_3_5_TURBO_16K, GPT_4};
+use crate::agent::prompts;
 use crate::agent::types::Agent;
 use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
@@ -17,6 +20,9 @@ use crate::agent::types::ConversationMessage;
 use crate::application::application::Application;
 use crate::indexes::code_snippet::CodeSnippetDocument;
 use crate::repo::types::RepoRef;
+use crate::webserver::context_trimming::{
+    create_trimmed_context, create_viewport_context, trim_deep_context,
+};
 
 use super::types::ApiResponse;
 use super::types::Result;
@@ -333,10 +339,18 @@ pub struct DeepContextForView {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DefinitionSnippet {
+    pub context: String,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PreciseContext {
     pub symbol: Symbol,
     pub hover_text: Vec<String>,
-    pub definition_snippet: String,
+    pub definition_snippet: DefinitionSnippet,
     pub fs_file_path: String,
     pub relative_file_path: String,
     pub range: Range,
@@ -391,26 +405,45 @@ pub async fn followup_chat(
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
-    dbg!(deep_context);
-    // Here we do something special, if the user is asking a followup question
-    // we just look at the previous conversation message the thread belonged
-    // to and use that as context for grounding the agent response. In the future
-    // we can obviously add more context using @ symbols etc
+    let trimmed_context = trim_deep_context(deep_context).await;
+    let trimmed_context_str = create_trimmed_context(&trimmed_context).await;
+    let view_port_code_span = trimmed_context
+        .current_view_port
+        .as_ref()
+        .map(|current_view_port| CodeSpan {
+            file_path: current_view_port.fs_file_path.to_owned(),
+            alias: 0,
+            start_line: current_view_port
+                .start_position
+                .line
+                .try_into()
+                .expect("to work"),
+            end_line: current_view_port
+                .end_position
+                .line
+                .try_into()
+                .expect("to_work"),
+            data: current_view_port.text_on_screen.to_owned(),
+            score: Some(1.0),
+        });
+    let viewport_context = create_viewport_context(
+        trimmed_context.current_view_port,
+        trimmed_context.current_cursor_position,
+    )
+    .await;
     let sql_db = app.sql.clone();
-    let mut previous_messages =
-        ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)
-            .await
-            .expect("loading from db to never fail");
-
+    // Now we check if we have any previous messages, if we do we have to signal
+    // that to the agent that this could be a followup question, and if we don't
+    // know about that then its totally fine
     let mut conversation_message = ConversationMessage::general_question(
         thread_id,
         crate::agent::types::AgentState::FollowupChat,
         query.to_owned(),
     );
-
-    // Now we check if we have any previous messages, if we do we have to signal
-    // that to the agent that this could be a followup question, and if we don't
-    // know about that then its totally fine
+    let mut previous_messages =
+        ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)
+            .await
+            .expect("loading from db to never fail");
     if let Some(previous_message) = previous_messages.last() {
         previous_message.get_paths().iter().for_each(|path| {
             conversation_message.add_path(path.to_owned());
@@ -425,25 +458,75 @@ pub async fn followup_chat(
                 conversation_message.add_user_selected_code_span(code_span.clone())
             });
     }
-
-    previous_messages.push(conversation_message);
-
-    dbg!(&previous_messages);
-
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
-    // If this is a followup, right now we don't take in any additional context,
-    // but only use the one from our previous conversation
-    let action = AgentAction::Answer { paths: vec![] };
+    let llm_client = Arc::new(LlmClient::codestory_infra());
+    let definitions_required: Vec<_> =
+        stream::iter(trimmed_context_str.into_iter().map(|trimmed_context| {
+            (
+                trimmed_context,
+                viewport_context.to_owned(),
+                llm_client.clone(),
+                query.to_owned(),
+            )
+        }))
+        .filter_map(
+            |(trimmed_context_str, view_port_context, llm_client, query)| async move {
+                // here we will call out the prompt with gpt3 and see what happens
+                // after that
+                let messages = vec![llm_funcs::llm::Message::system(
+                    &prompts::definition_snippet_required(
+                        &view_port_context,
+                        &trimmed_context_str,
+                        &query,
+                    ),
+                )];
+                let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+                let response = llm_client
+                    .stream_response(
+                        crate::agent::llm_funcs::llm::OpenAIModel::GPT3_5_16k,
+                        messages,
+                        None,
+                        0.2,
+                        None,
+                        sender,
+                    )
+                    .await;
+                dbg!(&response);
+                let final_response = response.unwrap_or("NO".to_owned());
+                if final_response.to_lowercase() == "no" {
+                    None
+                } else {
+                    Some(futures::future::ready(trimmed_context_str))
+                }
+            },
+        )
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await;
+
+    dbg!(&definitions_required);
+
+    // very very hacky and very bad, but oh well we will figure out a way to
+    // re-rank things properly
+    if let Some(view_port_code_span) = view_port_code_span {
+        conversation_message.add_user_selected_code_span(view_port_code_span);
+    }
+    conversation_message.add_definitions_interested_in(definitions_required);
+    previous_messages.push(conversation_message);
     let agent = Agent::prepare_for_followup(
         app,
         repo_ref,
         session_id,
-        Arc::new(LlmClient::codestory_infra()),
+        llm_client.clone(),
         sql_db,
         previous_messages,
         sender,
     );
+
+    // If this is a followup, right now we don't take in any additional context,
+    // but only use the one from our previous conversation
+    let action = AgentAction::Answer { paths: vec![] };
 
     generate_agent_stream(agent, action, receiver).await
 }

@@ -15,8 +15,8 @@ use super::agent::{CurrentViewPort, CursorPosition, DeepContextForView, Position
 
 #[derive(Debug, Clone)]
 pub struct TrimmedContext {
-    current_view_port: Option<CurrentViewPort>,
-    current_cursor_position: Option<CursorPosition>,
+    pub current_view_port: Option<CurrentViewPort>,
+    pub current_cursor_position: Option<CursorPosition>,
     repo_ref: RepoRef,
     /// This is grouped here so we can just send the LLM data once for a given context and ask it
     /// to decide
@@ -28,7 +28,7 @@ pub struct ViewPortContext {
     cursor_in_view_port: bool,
 }
 
-pub async fn trim_deep_context(context: DeepContextForView) -> anyhow::Result<TrimmedContext> {
+pub async fn trim_deep_context(context: DeepContextForView) -> TrimmedContext {
     // grab the precis-context here and use a hashing function to only keep the non-duplicates
     let mut precise_context_map: HashMap<String, Vec<PreciseContext>> = Default::default();
     let current_view_port = context.current_view_port;
@@ -37,28 +37,110 @@ pub async fn trim_deep_context(context: DeepContextForView) -> anyhow::Result<Tr
     context.precise_context.into_iter().for_each(|context| {
         let definition_context = &context.definition_snippet;
         // get a hashing function now and only keep them
-        let hash = blake3::hash(definition_context.as_bytes());
+        let hash = blake3::hash(definition_context.context.as_bytes());
         let hashed_string = hash.to_string();
         precise_context_map
             .entry(hashed_string)
             .or_default()
             .push(context.clone());
     });
-    Ok(TrimmedContext {
+    TrimmedContext {
         current_view_port,
         current_cursor_position,
         repo_ref,
         precise_context_map,
-    })
+    }
+}
+
+pub async fn create_trimmed_context(trimmed_context: &TrimmedContext) -> Vec<String> {
+    let context_strings = trimmed_context
+        .precise_context_map
+        .iter()
+        .map(|(_, precise_context_vec)| {
+            let (context_string, context_start_line, fs_file_path) = precise_context_vec
+                .iter()
+                .last()
+                .map(|precise_context| {
+                    (
+                        precise_context.definition_snippet.context.to_owned(),
+                        precise_context.definition_snippet.start_line,
+                        precise_context.fs_file_path.to_owned(),
+                    )
+                })
+                .unwrap_or_default();
+            // we also keep the start and end position here
+            let symbol_names: Vec<(String, (usize, usize))> = precise_context_vec
+                .into_iter()
+                .filter(|precise_context| precise_context.symbol.fuzzy_name.is_some())
+                .map(|precise_context| {
+                    let symbol_name = precise_context
+                        .symbol
+                        .fuzzy_name
+                        .clone()
+                        .expect("is_some check above to work");
+                    (
+                        symbol_name,
+                        (
+                            precise_context.definition_snippet.start_line,
+                            precise_context.definition_snippet.end_line,
+                        ),
+                    )
+                })
+                .collect();
+            // Now we will generate the formatted string which will look like this
+            // ### DEFINITION SNIPPET ###
+            // File: {file_name}
+            // Code Snippet:
+            // {line_number}: {content}
+            // {line_number + 1}: {content}
+            // ...
+            // Symbols location:
+            // Symbol: {name} range: {line_number}
+
+            // This is the string we will be passing to the LLM for retrieval context
+            let formatted_lines = context_string
+                .lines()
+                .into_iter()
+                .enumerate()
+                .map(|(index, line)| {
+                    let line_number = context_start_line + index;
+                    let line_number = line_number.to_string();
+                    let line_number = format!("{}: ", line_number);
+                    let line = format!("{}{}", line_number, line);
+                    line
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let symbol_lines = symbol_names
+                .into_iter()
+                .map(|(symbol_name, (start_line, end_line))| {
+                    let line_range = format!("{}-{}", start_line, end_line);
+                    format!("Symbol: {} range: {}", symbol_name, line_range)
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            let final_string = format!(
+                "### DEFINITION SNIPPET ###\nFile: {}\nCode Snippet:\n{}\nSymbols location:\n{}\n",
+                fs_file_path, formatted_lines, symbol_lines
+            );
+            final_string
+        })
+        .collect::<Vec<_>>();
+    context_strings
 }
 
 // Now we are going to ask the LLM to decide which of the snippets are relevant to the user query
 // this will be decided by first asking the LLM to decide trim out the context even more and give
 // us the pointers
 pub async fn create_viewport_context(
-    view_port: CurrentViewPort,
+    view_port_maybe: Option<CurrentViewPort>,
     cursor_position: Option<CursorPosition>,
 ) -> String {
+    if view_port_maybe.is_none() {
+        return "No active file".to_owned();
+    }
+    let view_port = view_port_maybe.expect("is_none check above to hold");
     // Here we are going to decorate it as a code span but add a few more details
     // like where the cursor position is etc
     // we want it to the be in the format of a code span but also take into
@@ -203,7 +285,7 @@ mod tests {
         };
 
         let cursor_position = None;
-        let result = create_viewport_context(current_view_port, cursor_position).await;
+        let result = create_viewport_context(Some(current_view_port), cursor_position).await;
         let expected_result = r#"File path: /Users/testing/test.rs
 1: pub struct CurrentViewPort {
 2:     pub start_position: Position,
@@ -248,7 +330,7 @@ mod tests {
                 character: 14,
             },
         });
-        let result = create_viewport_context(current_view_port, cursor_position).await;
+        let result = create_viewport_context(Some(current_view_port), cursor_position).await;
         let expected_result = r#"File path: /Users/testing/test.rs
 1: pub str<cursor_position>uct CurrentViewPort {
 2:     pub start_position: Position,
@@ -293,7 +375,7 @@ mod tests {
             },
         });
 
-        let result = create_viewport_context(current_view_port, cursor_position).await;
+        let result = create_viewport_context(Some(current_view_port), cursor_position).await;
         let expected_result = r#"File path: /Users/testing/test.rs
 1: pub str<cursor_position></cursor_position>uct CurrentViewPort {
 2:     pub start_position: Position,

@@ -551,3 +551,40 @@ pub fn extract_goto_definition_symbols_from_snippet(language: &str) -> String {
     );
     system_prompt
 }
+
+pub fn definition_snippet_required(
+    view_port_snippet: &str,
+    definition_snippet: &str,
+    query: &str,
+) -> String {
+    let system_prompt = format!(
+        r#"
+Below is a code snippet which the user is looking at. We can also see the code selection of the user which is indicated in the code snippet below by the start of <cursor_position> and ends with </cursor_position>. The cursor position might be of interest to you as that's where the user was when they were last navigating the file.
+
+### CODE SNIPPET IN EDITOR ###
+{view_port_snippet}    
+###
+
+You are also given a code snippet of the definition of some code symbols below this section is called the DEFINITION SNIPPET
+### DEFINITION SNIPPET ###
+{definition_snippet}
+###
+
+Your job is to perform the following tasks on the DEFINITION SNIPPET:
+1. Find all the relevant line ranges from the DEFINITION SNIPPET and only from DEFINITION SNIPPET section which is necessary to answer the user question given the CODE SNIPPET IN THE EDITOR
+2. DO NOT cite line ranges that you are not given above and which are not in the DEFINITION SNIPPET
+3. DO NOT cite line ranges from the CODE SNIPPET IN THE EDITOR which the user is looking at.
+3. You MUST answer with only YES or NO, if the DEFINITION SNIPPET is relevant to the user question.
+
+Q: How do I change it from expect to unwrap
+A:"#
+    );
+    system_prompt
+}
+
+pub fn answer_user_question_for_view_port(
+    view_port_snippet: &str,
+    definition_snippets: Vec<String>,
+) -> String {
+    unimplemented!();
+}

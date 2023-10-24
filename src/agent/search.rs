@@ -548,8 +548,6 @@ impl Agent {
                 let contents = lines.join("\n");
                 let prompt = prompts::file_explanation(query, &path, &contents);
 
-                debug!(?path, "asking GPT-3.5 to get traces from the file");
-
                 let json = self
                     .get_llm_client()
                     .response(
@@ -560,8 +558,6 @@ impl Agent {
                         Some(0.2),
                     )
                     .await?;
-
-                debug!("response from gpt3.5 for path {:?}: {:?}", path, json);
 
                 #[derive(
                     serde::Deserialize,
@@ -897,6 +893,35 @@ impl Agent {
 
                     // Make sure we are always in the context limit
                     remaining_prompt_tokens -= snippet_tokens;
+                }
+            }
+        }
+
+        // If we have definition snippets we also add them to the mix here
+        let definition_snippets = self.get_definition_snippets();
+        if let Some(definition_snippets_slice) = definition_snippets {
+            let definition_snippets_context = "#### DEFINITION SNIPPETS ####\n";
+            let definition_snippets_context_tokens =
+                bpe.encode_ordinary(&definition_snippets_context).len();
+            if definition_snippets_context_tokens
+                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
+            {
+                info!("we can't set definition snippets because of prompt limit");
+            } else {
+                prompt += "#### DEFINITION SNIPPETS ####\n";
+                remaining_prompt_tokens -= definition_snippets_context_tokens;
+
+                for definition_snippet_context in definition_snippets_slice.iter() {
+                    let definition_snippet_tokens =
+                        bpe.encode_ordinary(&definition_snippet_context).len();
+                    if definition_snippet_tokens
+                        > remaining_prompt_tokens - self.model.prompt_tokens_limit
+                    {
+                        info!("breaking at {} tokens", remaining_prompt_tokens);
+                        break;
+                    }
+                    prompt += &definition_snippet_context;
+                    remaining_prompt_tokens -= definition_snippet_tokens;
                 }
             }
         }

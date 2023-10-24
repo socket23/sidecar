@@ -57,6 +57,8 @@ pub struct ConversationMessage {
     last_updated: u64,
     /// Created at
     created_at: u64,
+    // What definitions are we interested in?
+    definitions_interested_in: Vec<String>,
     /// Whats the context for the answer if any, this gets set at the same time
     /// when we finished generating the answer
     generated_answer_context: Option<String>,
@@ -83,6 +85,7 @@ impl ConversationMessage {
             created_at: current_time,
             last_updated: current_time,
             generated_answer_context: None,
+            definitions_interested_in: vec![],
         }
     }
 
@@ -110,6 +113,7 @@ impl ConversationMessage {
             created_at: current_time,
             last_updated: current_time,
             generated_answer_context: None,
+            definitions_interested_in: vec![],
         }
     }
 
@@ -133,6 +137,7 @@ impl ConversationMessage {
             created_at: current_time,
             last_updated: current_time,
             generated_answer_context: None,
+            definitions_interested_in: vec![],
         }
     }
 
@@ -156,7 +161,12 @@ impl ConversationMessage {
             created_at: current_time,
             last_updated: current_time,
             generated_answer_context: None,
+            definitions_interested_in: vec![],
         }
+    }
+
+    pub fn add_definitions_interested_in(&mut self, definitions: Vec<String>) {
+        self.definitions_interested_in.extend(definitions);
     }
 
     pub fn add_agent_step(&mut self, step: AgentStep) {
@@ -234,6 +244,7 @@ impl ConversationMessage {
             // We use this to send it over the wire, this is pretty bad anyways
             // but its fine to do things this way
             generated_answer_context: None,
+            definitions_interested_in: vec![],
         }
     }
 
@@ -340,6 +351,9 @@ impl ConversationMessage {
                     last_updated: last_updated as u64,
                     created_at: created_at as u64,
                     generated_answer_context,
+                    // we purposefuly leave this blank
+                    // TODO(skcd): Run the migration script for recording this later
+                    definitions_interested_in: vec![],
                 }
             })
             .collect())
@@ -516,6 +530,12 @@ impl Agent {
 
     pub fn conversation_messages_len(&self) -> usize {
         self.conversation_messages.len()
+    }
+
+    pub fn get_definition_snippets(&self) -> Option<&[String]> {
+        self.conversation_messages
+            .last()
+            .map(|conversation_message| conversation_message.definitions_interested_in.as_slice())
     }
 
     pub fn get_user_selected_context(&self) -> Option<&[CodeSpan]> {

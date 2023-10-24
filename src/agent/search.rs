@@ -531,7 +531,6 @@ impl Agent {
             // Buffer file loading to load multiple paths at once
             .buffered(10)
             .map(|result| async {
-                debug!("are we here in proc: {:?}", result);
                 let (lines, path) = result?;
 
                 // The unwraps here should never fail, we generated this string above to always
@@ -806,7 +805,6 @@ impl Agent {
 
     pub async fn followup_chat_context(&mut self) -> Result<String> {
         if self.conversation_messages.len() > 1 {
-            dbg!("are we entering this workflow??");
             // we want the last to last chat context here
             self.conversation_messages[self.conversation_messages_len() - 2]
                 .get_generated_answer_context()

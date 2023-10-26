@@ -3,5 +3,7 @@ pub mod agent_stream;
 pub mod config;
 pub mod context_trimming;
 pub mod health;
+pub mod in_line_agent;
+pub mod in_line_agent_stream;
 pub mod repos;
 pub mod types;

@@ -5,6 +5,7 @@ pub mod chunking;
 pub mod db;
 pub mod embedder;
 pub mod git;
+pub mod in_line_agent;
 pub mod indexes;
 pub mod posthog;
 pub mod repo;

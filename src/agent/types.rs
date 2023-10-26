@@ -857,7 +857,6 @@ impl Agent {
             .get_llm_client()
             .stream_response(model, messages, None, 0.0, None, sender)
             .await;
-        dbg!(&response);
         response.map(|str_response| {
             str_response
                 .trim()

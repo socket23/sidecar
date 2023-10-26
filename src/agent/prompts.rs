@@ -525,10 +525,3 @@ A:"#
     );
     system_prompt
 }
-
-pub fn answer_user_question_for_view_port(
-    view_port_snippet: &str,
-    definition_snippets: Vec<String>,
-) -> String {
-    unimplemented!();
-}

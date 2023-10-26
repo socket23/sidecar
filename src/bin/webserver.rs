@@ -2,10 +2,10 @@
 // locally
 
 use anyhow::Result;
+use axum::extract::DefaultBodyLimit;
 use axum::routing::get;
 use axum::Extension;
 use clap::Parser;
-use axum::extract::DefaultBodyLimit;
 use sidecar::{
     application::{application::Application, config::configuration::Configuration},
     bg_poll::background_polling::poll_repo_updates,
@@ -98,7 +98,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         )
         .route("/version", get(sidecar::webserver::config::version))
         .nest("/repo", repo_router())
-        .nest("/agent", agent_router());
+        .nest("/agent", agent_router())
+        .nest("/in_editor", in_editor_router());
 
     api = api.route("/health", get(sidecar::webserver::health::health));
 
@@ -160,6 +161,14 @@ fn agent_router() -> Router {
             "/goto_definition_symbols",
             post(sidecar::webserver::agent::go_to_definition_symbols),
         )
+}
+
+fn in_editor_router() -> Router {
+    use axum::routing::*;
+    Router::new().route(
+        "/answer",
+        get(sidecar::webserver::in_line_agent::reply_to_user),
+    )
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

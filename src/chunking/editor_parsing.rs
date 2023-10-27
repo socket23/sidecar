@@ -1,16 +1,34 @@
 use regex::Regex;
+use tracing::debug;
+
+use crate::repo::types::RepoRef;
 
 use super::{
+    javascript::javascript_language_config,
     languages::TSLanguageConfig,
-    text_document::{DocumentSymbol, Range, TextDocument},
+    rust::rust_language_config,
+    text_document::{DocumentSymbol, Position, Range, TextDocument},
+    typescript::typescript_language_config,
 };
 
 /// Here we will parse the document we get from the editor using symbol level
 /// information, as its very fast
 
 #[derive(Debug, Clone)]
-struct EditorParsing {
+pub struct EditorParsing {
     configs: Vec<TSLanguageConfig>,
+}
+
+impl Default for EditorParsing {
+    fn default() -> Self {
+        Self {
+            configs: vec![
+                rust_language_config(),
+                javascript_language_config(),
+                typescript_language_config(),
+            ],
+        }
+    }
 }
 
 impl EditorParsing {
@@ -92,12 +110,12 @@ impl EditorParsing {
     //     n.push(...s.flatMap(([a, l]) => a.children));
     // }
     // }
-    fn get_identifier_node_fully_contained(
-        &self,
-        tree_sitter_node: tree_sitter::Node,
-        range: &Range,
-        language_config: &TSLanguageConfig,
-    ) -> Option<tree_sitter::Node> {
+    fn get_identifier_node_fully_contained<'a>(
+        &'a self,
+        tree_sitter_node: tree_sitter::Node<'a>,
+        range: &'a Range,
+        language_config: &'a TSLanguageConfig,
+    ) -> Option<tree_sitter::Node<'a>> {
         let mut nodes = vec![tree_sitter_node];
         let mut identifier_nodes: Vec<(tree_sitter::Node, f64)> = vec![];
         loop {
@@ -121,31 +139,39 @@ impl EditorParsing {
             // from i, which is the biggest node here
             if intersecting_nodes.is_empty() {
                 return if identifier_nodes.is_empty() {
+                    dbg!("we are returning none here as we have no intersecting nodes");
                     None
                 } else {
                     Some({
-                        identifier_nodes
-                            .sort_by(|a, b| b.1.partial_cmp(&a.1).expect("partial_cmp to work"));
-                        identifier_nodes.remove(0).0
+                        dbg!("we are getting something from the identifier node");
+                        let mut current_node = identifier_nodes[0];
+                        dbg!(&current_node.0.kind());
+                        for identifier_node in &identifier_nodes[1..] {
+                            dbg!(&identifier_node.0.kind());
+                            if identifier_node.1 - current_node.1 > 0.0 {
+                                current_node = identifier_node.clone();
+                            }
+                        }
+                        current_node.0
                     })
                 };
             }
 
             // For the nodes in o, calculate a relevance score and filter the ones that are declarations or definitions for language 'r'
-            let mut identifier_nodes_sorted = intersecting_nodes
+            let identifier_nodes_sorted = intersecting_nodes
                 .iter()
                 .map(|(tree_sitter_node, intersection_size)| {
                     let len = Range::for_tree_node(&tree_sitter_node).len();
-                    let diff = (range.len() as f64 - intersection_size) as f64;
+                    let diff = ((range.len() as f64 - intersection_size) as f64).abs();
                     let relevance_score = (intersection_size - diff) as f64 / len as f64;
                     (tree_sitter_node.clone(), relevance_score)
                 })
                 .collect::<Vec<_>>();
 
             // now we filter out the nodes which are here based on the identifier function and set it to i
-            intersecting_nodes.extend(
+            identifier_nodes.extend(
                 identifier_nodes_sorted
-                    .drain(..)
+                    .into_iter()
                     .filter(|(tree_sitter_node, _)| {
                         self.is_node_identifier(tree_sitter_node, language_config)
                     })
@@ -220,6 +246,7 @@ impl EditorParsing {
         if let Some(identifier_node) =
             self.get_identifier_node_fully_contained(tree.root_node(), &range, &language_config)
         {
+            dbg!("we are going to the block which is fully contained");
             // we have a identifier node right here, so lets get the document symbol
             // for this and return it back
             return DocumentSymbol::from_tree_node(
@@ -234,6 +261,7 @@ impl EditorParsing {
         if let Some(expanded_node) =
             self.get_identifier_node_by_expanding(tree.root_node(), &range, &language_config)
         {
+            dbg!("we should be expanding for this one");
             // we get the expanded node here again
             return DocumentSymbol::from_tree_node(
                 &expanded_node,
@@ -245,5 +273,35 @@ impl EditorParsing {
         }
         // or else we return nothing here
         vec![]
+    }
+
+    pub fn get_documentation_node_for_range(
+        &self,
+        source_str: &str,
+        language: &str,
+        relative_path: &str,
+        fs_file_path: &str,
+        start_position: &Position,
+        end_position: &Position,
+        repo_ref: &RepoRef,
+    ) -> Vec<DocumentSymbol> {
+        // First we need to find the language config which matches up with
+        // the language we are interested in
+        let language_config = self.ts_language_config(&language);
+        if let None = language_config {
+            debug!("No language config found for language: {}", language);
+            return vec![];
+        }
+        // okay now we have a language config, lets parse it
+        self.get_documentation_node(
+            &TextDocument::new(
+                source_str.to_owned(),
+                repo_ref.clone(),
+                fs_file_path.to_owned(),
+                relative_path.to_owned(),
+            ),
+            dbg!(language_config.expect("if let None check above to hold")),
+            Range::new(start_position.clone(), end_position.clone()),
+        )
     }
 }

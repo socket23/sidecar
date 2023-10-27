@@ -2,26 +2,28 @@ use crate::repo::types::RepoRef;
 
 use super::languages::TSLanguageConfig;
 
-/// Contains information about the text document
-
-#[derive(Debug, Clone)]
-pub enum TextDocumentExtension {
-    Markdown,
-    Plaintext,
-    Code,
-    Cpp,
-    Python,
-    Rust,
-    JavaScript,
-}
-
 #[derive(Debug)]
 pub struct TextDocument {
     text: String,
-    extension: TextDocumentExtension,
     repo_ref: RepoRef,
     fs_file_path: String,
     relative_path: String,
+}
+
+impl TextDocument {
+    pub fn new(
+        text: String,
+        repo_ref: RepoRef,
+        fs_file_path: String,
+        relative_path: String,
+    ) -> Self {
+        Self {
+            text,
+            repo_ref,
+            fs_file_path,
+            relative_path,
+        }
+    }
 }
 
 impl TextDocument {
@@ -31,7 +33,8 @@ impl TextDocument {
 }
 
 // These are always 0 indexed
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Position {
     line: usize,
     character: usize,
@@ -61,6 +64,13 @@ pub struct Range {
 }
 
 impl Range {
+    pub fn new(start_position: Position, end_position: Position) -> Self {
+        Self {
+            start_position,
+            end_position,
+        }
+    }
+
     pub fn intersection_size(&self, other: &Range) -> usize {
         let start = self
             .start_position
@@ -70,7 +80,7 @@ impl Range {
             .end_position
             .byte_offset
             .min(other.end_position.byte_offset);
-        std::cmp::max(0, end - start)
+        std::cmp::max(0, end as i64 - start as i64) as usize
     }
 
     pub fn len(&self) -> usize {
@@ -121,9 +131,13 @@ impl DocumentSymbol {
         tree_cursor: &mut tree_sitter::TreeCursor<'a>,
         node: &tree_sitter::Node<'a>,
         regex: regex::Regex,
+        source_code: &str,
     ) -> Option<tree_sitter::Node<'a>> {
-        node.children(tree_cursor)
-            .find(|node| regex.is_match(node.kind()))
+        node.children(tree_cursor).find(|node| {
+            dbg!(node.kind());
+            dbg!(source_code[node.start_byte()..node.end_byte()].to_owned());
+            regex.is_match(node.kind())
+        })
     }
 
     fn get_identifier_node<'a>(
@@ -132,6 +146,7 @@ impl DocumentSymbol {
         second_cursor: &mut tree_sitter::TreeCursor<'a>,
         third_cursor: &mut tree_sitter::TreeCursor<'a>,
         language_config: &TSLanguageConfig,
+        source_code: &'a str,
     ) -> Option<tree_sitter::Node<'a>> {
         match language_config
             .language_ids
@@ -144,10 +159,12 @@ impl DocumentSymbol {
                 cursor,
                 node,
                 regex::Regex::new("identifier").expect("regex to build"),
+                source_code,
             ),
             "golang" => {
                 let regex_matcher = regex::Regex::new("identifier").unwrap();
-                let children = DocumentSymbol::get_node_matching(cursor, node, regex_matcher);
+                let children =
+                    DocumentSymbol::get_node_matching(cursor, node, regex_matcher, source_code);
                 if let Some(children) = children {
                     return Some(children);
                 } else {
@@ -168,8 +185,10 @@ impl DocumentSymbol {
             "javascript" | "javascript-react" | "typescript" | "typescript-react" | "cpp"
             | "java" => {
                 let regex_matcher = regex::Regex::new("identifier").unwrap();
-                let children = DocumentSymbol::get_node_matching(cursor, node, regex_matcher);
+                let children =
+                    DocumentSymbol::get_node_matching(cursor, node, regex_matcher, source_code);
                 if let Some(children) = children {
+                    dbg!("found child in identifier");
                     return Some(children);
                 } else {
                     let regex_matcher = regex::Regex::new("declarator").unwrap();
@@ -177,11 +196,13 @@ impl DocumentSymbol {
                         .children(second_cursor)
                         .find(|node| regex_matcher.is_match(node.kind()))
                     {
+                        dbg!("found child in declarator");
                         let regex_matcher = regex::Regex::new("identifier").unwrap();
                         return spec
                             .children(third_cursor)
                             .find(|node| regex_matcher.is_match(node.kind()));
                     } else {
+                        dbg!("didnt find anything yet");
                         None
                     }
                 }
@@ -195,6 +216,7 @@ impl DocumentSymbol {
         language_config: &TSLanguageConfig,
         source_code: &str,
     ) -> Option<DocumentSymbol> {
+        dbg!(source_code[tree_node.start_byte()..tree_node.end_byte()].to_owned());
         let mut walker = tree_node.walk();
         let mut second_walker = tree_node.walk();
         let mut third_walker = tree_node.walk();
@@ -204,6 +226,7 @@ impl DocumentSymbol {
             &mut second_walker,
             &mut third_walker,
             language_config,
+            source_code,
         );
         if let Some(identifier_node) = identifier_node {
             let start_position = Position {

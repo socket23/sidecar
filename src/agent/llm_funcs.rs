@@ -14,6 +14,7 @@ use tracing::debug;
 use tracing::error;
 use tracing::warn;
 
+use crate::chunking::text_document::DocumentSymbol;
 use crate::in_line_agent::types::InLineAgentAnswer;
 
 use super::types::Answer;
@@ -346,6 +347,7 @@ impl LlmClient {
         temperature: f32,
         frequency_penalty: Option<f32>,
         sender: tokio::sync::mpsc::UnboundedSender<InLineAgentAnswer>,
+        document_symbol: DocumentSymbol,
     ) -> anyhow::Result<String> {
         let client = self.get_model(&model);
         let request = self.create_request(messages, functions, temperature, frequency_penalty);
@@ -378,6 +380,7 @@ impl LlmClient {
                                 answer_up_until_now: buf.to_owned(),
                                 delta: Some(delta.to_owned()),
                                 state: Default::default(),
+                                document_symbol: Some(document_symbol.clone()),
                             })
                             .expect("sending answer should not fail");
                     }

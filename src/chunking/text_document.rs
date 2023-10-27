@@ -119,7 +119,7 @@ pub enum DocumentSymbolKind {
     Class,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DocumentSymbol {
     pub name: Option<String>,
     pub start_position: Position,
@@ -212,9 +212,6 @@ impl DocumentSymbol {
         language_config: &TSLanguageConfig,
         source_code: &str,
     ) -> Option<DocumentSymbol> {
-        dbg!(source_code[tree_node.start_byte()..tree_node.end_byte()].to_owned());
-        dbg!(tree_node.kind());
-        dbg!(tree_node.range());
         let mut walker = tree_node.walk();
         let mut second_walker = tree_node.walk();
         let mut third_walker = tree_node.walk();

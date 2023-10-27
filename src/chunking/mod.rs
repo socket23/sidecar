@@ -1,3 +1,4 @@
+pub mod documentation_parsing;
 pub mod editor_parsing;
 mod javascript;
 pub mod languages;

@@ -25,6 +25,8 @@ pub struct InLineAgentAnswer {
     pub answer_up_until_now: String,
     pub delta: Option<String>,
     pub state: MessageState,
+    // We also send the document symbol in question along the wire
+    pub document_symbol: Option<DocumentSymbol>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -307,6 +309,7 @@ impl InLineAgent {
                 answer_up_until_now: "could not find documentation node".to_owned(),
                 delta: Some("could not find documentation node".to_owned()),
                 state: MessageState::Errored,
+                document_symbol: None,
             })?;
         } else {
             last_exchange.message_state = MessageState::StreamingAnswer;
@@ -319,7 +322,7 @@ impl InLineAgent {
             let self_ = &*self;
             stream::iter(messages_list)
                 .map(|messages| (messages, answer_sender.clone()))
-                .for_each(|(messages, answer_sender)| async move {
+                .for_each(|((messages, document_symbol), answer_sender)| async move {
                     let _ = self_
                         .get_llm_client()
                         .stream_response_inline_agent(
@@ -330,6 +333,7 @@ impl InLineAgent {
                             0.2,
                             None,
                             answer_sender,
+                            document_symbol,
                         )
                         .await;
                 })
@@ -352,7 +356,7 @@ impl InLineAgent {
         language: &str,
         file_path: &str,
         query: &str,
-    ) -> Vec<llm_funcs::llm::Messages> {
+    ) -> Vec<(llm_funcs::llm::Messages, DocumentSymbol)> {
         document_symbols
             .into_iter()
             .map(|document_symbol| {
@@ -369,9 +373,12 @@ impl InLineAgent {
                     query,
                 );
                 let metadata_prompt = llm_funcs::llm::Message::user(&user_prompt);
-                llm_funcs::llm::Messages {
-                    messages: vec![system_message, code_selection_prompt, metadata_prompt],
-                }
+                (
+                    llm_funcs::llm::Messages {
+                        messages: vec![system_message, code_selection_prompt, metadata_prompt],
+                    },
+                    document_symbol,
+                )
             })
             .collect::<Vec<_>>()
     }

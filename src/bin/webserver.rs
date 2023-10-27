@@ -99,7 +99,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .route("/version", get(sidecar::webserver::config::version))
         .nest("/repo", repo_router())
         .nest("/agent", agent_router())
-        .nest("/in_editor", in_editor_router());
+        .nest("/in_editor", in_editor_router())
+        .nest("/tree_sitter", tree_sitter_router());
 
     api = api.route("/health", get(sidecar::webserver::health::health));
 
@@ -168,6 +169,14 @@ fn in_editor_router() -> Router {
     Router::new().route(
         "/answer",
         post(sidecar::webserver::in_line_agent::reply_to_user),
+    )
+}
+
+fn tree_sitter_router() -> Router {
+    use axum::routing::*;
+    Router::new().route(
+        "/documentation_parsing",
+        post(sidecar::webserver::tree_sitter::extract_documentation_strings),
     )
 }
 

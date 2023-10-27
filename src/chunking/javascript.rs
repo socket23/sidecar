@@ -2,7 +2,7 @@ use crate::chunking::languages::TSLanguageConfig;
 
 pub fn javascript_language_config() -> TSLanguageConfig {
     TSLanguageConfig {
-        language_ids: &["Javascript", "JSX"],
+        language_ids: &["Javascript", "JSX", "javascript", "jsx"],
         file_extensions: &["js", "jsx"],
         grammar: tree_sitter_javascript::language,
         namespaces: vec![

@@ -120,10 +120,10 @@ pub enum DocumentSymbolKind {
 
 #[derive(Debug, Clone)]
 pub struct DocumentSymbol {
-    pub name: String,
+    pub name: Option<String>,
     pub start_position: Position,
     pub end_position: Position,
-    pub kind: String,
+    pub kind: Option<String>,
 }
 
 impl DocumentSymbol {
@@ -188,7 +188,6 @@ impl DocumentSymbol {
                 let children =
                     DocumentSymbol::get_node_matching(cursor, node, regex_matcher, source_code);
                 if let Some(children) = children {
-                    dbg!("found child in identifier");
                     return Some(children);
                 } else {
                     let regex_matcher = regex::Regex::new("declarator").unwrap();
@@ -196,13 +195,11 @@ impl DocumentSymbol {
                         .children(second_cursor)
                         .find(|node| regex_matcher.is_match(node.kind()))
                     {
-                        dbg!("found child in declarator");
                         let regex_matcher = regex::Regex::new("identifier").unwrap();
                         return spec
                             .children(third_cursor)
                             .find(|node| regex_matcher.is_match(node.kind()));
                     } else {
-                        dbg!("didnt find anything yet");
                         None
                     }
                 }
@@ -217,6 +214,7 @@ impl DocumentSymbol {
         source_code: &str,
     ) -> Option<DocumentSymbol> {
         dbg!(source_code[tree_node.start_byte()..tree_node.end_byte()].to_owned());
+        dbg!(tree_node.kind());
         let mut walker = tree_node.walk();
         let mut second_walker = tree_node.walk();
         let mut third_walker = tree_node.walk();
@@ -243,13 +241,26 @@ impl DocumentSymbol {
             // This can fail but it shouldn't if this blows up we fatal bad
             let name = source_code[start_position.byte_offset..end_position.byte_offset].to_owned();
             Some(DocumentSymbol {
-                name,
+                name: Some(name),
                 start_position,
                 end_position,
-                kind,
+                kind: Some(kind),
             })
         } else {
-            None
+            Some(DocumentSymbol {
+                name: None,
+                start_position: Position {
+                    line: tree_node.start_position().row,
+                    character: tree_node.start_position().column,
+                    byte_offset: tree_node.start_byte(),
+                },
+                end_position: Position {
+                    line: tree_node.end_position().row,
+                    character: tree_node.end_position().column,
+                    byte_offset: tree_node.end_byte(),
+                },
+                kind: None,
+            })
         }
     }
 }

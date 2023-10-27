@@ -246,7 +246,6 @@ impl EditorParsing {
         if let Some(identifier_node) =
             self.get_identifier_node_fully_contained(tree.root_node(), &range, &language_config)
         {
-            dbg!("we are going to the block which is fully contained");
             // we have a identifier node right here, so lets get the document symbol
             // for this and return it back
             return DocumentSymbol::from_tree_node(
@@ -261,7 +260,6 @@ impl EditorParsing {
         if let Some(expanded_node) =
             self.get_identifier_node_by_expanding(tree.root_node(), &range, &language_config)
         {
-            dbg!("we should be expanding for this one");
             // we get the expanded node here again
             return DocumentSymbol::from_tree_node(
                 &expanded_node,
@@ -300,7 +298,7 @@ impl EditorParsing {
                 fs_file_path.to_owned(),
                 relative_path.to_owned(),
             ),
-            dbg!(language_config.expect("if let None check above to hold")),
+            &language_config.expect("if let None check above to work"),
             Range::new(start_position.clone(), end_position.clone()),
         )
     }

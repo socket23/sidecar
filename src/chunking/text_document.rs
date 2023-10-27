@@ -97,16 +97,17 @@ impl Range {
     }
 
     pub fn for_tree_node(node: &tree_sitter::Node) -> Self {
+        let range = node.range();
         Self {
             start_position: Position {
-                line: node.start_position().row,
-                character: node.start_position().column,
-                byte_offset: node.start_byte(),
+                line: range.start_point.row,
+                character: range.start_point.column,
+                byte_offset: range.start_byte,
             },
             end_position: Position {
-                line: node.end_position().row,
-                character: node.end_position().column,
-                byte_offset: node.end_byte(),
+                line: range.end_point.row,
+                character: range.end_point.column,
+                byte_offset: range.end_byte,
             },
         }
     }
@@ -124,6 +125,7 @@ pub struct DocumentSymbol {
     pub start_position: Position,
     pub end_position: Position,
     pub kind: Option<String>,
+    pub code: String,
 }
 
 impl DocumentSymbol {
@@ -133,11 +135,8 @@ impl DocumentSymbol {
         regex: regex::Regex,
         source_code: &str,
     ) -> Option<tree_sitter::Node<'a>> {
-        node.children(tree_cursor).find(|node| {
-            dbg!(node.kind());
-            dbg!(source_code[node.start_byte()..node.end_byte()].to_owned());
-            regex.is_match(node.kind())
-        })
+        node.children(tree_cursor)
+            .find(|node| regex.is_match(node.kind()))
     }
 
     fn get_identifier_node<'a>(
@@ -215,9 +214,21 @@ impl DocumentSymbol {
     ) -> Option<DocumentSymbol> {
         dbg!(source_code[tree_node.start_byte()..tree_node.end_byte()].to_owned());
         dbg!(tree_node.kind());
+        dbg!(tree_node.range());
         let mut walker = tree_node.walk();
         let mut second_walker = tree_node.walk();
         let mut third_walker = tree_node.walk();
+        let range = tree_node.range();
+        let start_position = Position {
+            line: range.start_point.row,
+            character: range.start_point.column,
+            byte_offset: range.start_byte,
+        };
+        let end_position = Position {
+            line: range.end_point.row,
+            character: range.end_point.column,
+            byte_offset: range.end_byte,
+        };
         let identifier_node = DocumentSymbol::get_identifier_node(
             tree_node,
             &mut walker,
@@ -227,39 +238,25 @@ impl DocumentSymbol {
             source_code,
         );
         if let Some(identifier_node) = identifier_node {
-            let start_position = Position {
-                line: identifier_node.start_position().row,
-                character: identifier_node.start_position().column,
-                byte_offset: identifier_node.start_byte(),
-            };
-            let end_position = Position {
-                line: identifier_node.end_position().row,
-                character: identifier_node.end_position().column,
-                byte_offset: identifier_node.end_byte(),
-            };
             let kind = identifier_node.kind().to_owned();
-            // This can fail but it shouldn't if this blows up we fatal bad
-            let name = source_code[start_position.byte_offset..end_position.byte_offset].to_owned();
+            // We get a proper name for the identifier here so we can just use
+            // thats
+            let name =
+                source_code[identifier_node.start_byte()..identifier_node.end_byte()].to_owned();
             Some(DocumentSymbol {
                 name: Some(name),
                 start_position,
                 end_position,
                 kind: Some(kind),
+                code: source_code[tree_node.start_byte()..tree_node.end_byte()].to_owned(),
             })
         } else {
             Some(DocumentSymbol {
                 name: None,
-                start_position: Position {
-                    line: tree_node.start_position().row,
-                    character: tree_node.start_position().column,
-                    byte_offset: tree_node.start_byte(),
-                },
-                end_position: Position {
-                    line: tree_node.end_position().row,
-                    character: tree_node.end_position().column,
-                    byte_offset: tree_node.end_byte(),
-                },
+                start_position,
+                end_position,
                 kind: None,
+                code: source_code[tree_node.start_byte()..tree_node.end_byte()].to_owned(),
             })
         }
     }

@@ -68,6 +68,8 @@ pub async fn reply_to_user(
         &end_position,
         &repo_ref,
     );
+    // Now we want to handle this and send the data to a prompt which will generate
+    // the proper things
     dbg!(document_nodes);
     unimplemented!("not done yet");
     // Here we will handle how the in-line agent will handle the work

@@ -167,7 +167,7 @@ fn in_editor_router() -> Router {
     use axum::routing::*;
     Router::new().route(
         "/answer",
-        get(sidecar::webserver::in_line_agent::reply_to_user),
+        post(sidecar::webserver::in_line_agent::reply_to_user),
     )
 }
 

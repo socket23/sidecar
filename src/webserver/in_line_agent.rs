@@ -18,6 +18,7 @@ pub struct SnippetInformation {
     pub snippet_before: String,
     pub snippet_after: String,
     pub snippet_selected: String,
+    pub file_path: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

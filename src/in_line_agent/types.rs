@@ -41,7 +41,7 @@ pub enum InLineAgentAction {
 
 impl InLineAgentAction {
     pub fn from_gpt_response(response: &str) -> anyhow::Result<Self> {
-        match response {
+        match response.trim() {
             "code" => Ok(Self::Code),
             "doc" => Ok(Self::Doc),
             "edit" => Ok(Self::Edit),

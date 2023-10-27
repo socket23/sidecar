@@ -1,5 +1,5 @@
 /// We want to parse the documentation here for a given code block
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 async fn documentation_queries() -> HashMap<String, String> {
     vec![(
@@ -29,6 +29,20 @@ pub fn parse_documentation_for_typescript_code(code: &str) -> Vec<String> {
     let nodes = cursor
         .matches(&query, node, code.as_bytes())
         .flat_map(|m| m.captures)
+        .collect::<Vec<_>>();
+    // we want to keep the unique nodes here for the documentation which has
+    // been generated
+    let mut node_ranges: HashSet<tree_sitter::Range> = Default::default();
+    let nodes = nodes
+        .into_iter()
+        .filter(|capture| {
+            let range = capture.node.range();
+            if node_ranges.contains(&range) {
+                return false;
+            }
+            node_ranges.insert(range);
+            true
+        })
         .collect::<Vec<_>>();
     get_merged_comments(nodes, code)
 }
@@ -79,40 +93,23 @@ mod tests {
         .expect("this to work");
         let source_code = r#"
         /**
-         * Returns an async iterator that streams chat completions from the OpenAI API.
-         * @param messages An array of chat messages to send to the API.
-         * @returns An async iterator that yields chat completion objects.
+         * Represents the response object returned by the Open AI chat completion API.
          */
-        stream(messages: OpenAIChatCompletionMessageInput[]) {
-          const self = this;
-      
-          return {
-            async *[Symbol.asyncIterator]() {
-              const stream = await self.client.chat.completions.create({
-                ...self.options,
-                messages: messages,
-                stream: true,
-              });
-      
-              for await (const part of stream) {
-                yield {
-                  id: part.id,
-                  created: part.created,
-                  model: part.model,
-                  object: part.object,
-                  choices: part.choices,
-                };
-              }
-            },
+        interface Response {
+          id: string;
+          created: number;
+          model: string;
+          object: string;
+          choices: Array<{
+            finish_reason: 'stop' | 'length' | 'function_call';
+            index: number;
+            message: MessageOutput;
+          }>;
+          usage?: {
+            completion_tokens: number;
+            prompt_tokens: number;
+            total_tokens: number;
           };
-        }
-
-        /**
-         * Something interesting here
-         *
-         */
-        function something() {
-            return 1;
         }
 
         /**

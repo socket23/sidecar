@@ -20,6 +20,8 @@ pub async fn extract_documentation_strings(
         ExtractDocumentationStringRequest,
     >,
 ) -> Result<impl IntoResponse> {
+    dbg!(&language);
+    dbg!(&source);
     match language.as_ref() {
         "typescript" | "typescriptreact" => {
             let documentation =

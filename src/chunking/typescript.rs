@@ -26,5 +26,8 @@ pub fn typescript_language_config() -> TSLanguageConfig {
         .into_iter()
         .map(|s| s.to_owned())
         .collect(),
+        documentation_query: vec!["((comment) @comment
+        (#match? @comment \"^\\\\/\\\\*\\\\*\")) @docComment"
+            .to_owned()],
     }
 }

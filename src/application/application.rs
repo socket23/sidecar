@@ -32,6 +32,8 @@ pub struct Application {
     /// Background & maintenance tasks are executed on a separate
     /// executor
     pub sync_queue: SyncQueue,
+    /// We also want to keep the language parsing functionality here
+    pub language_parsing: Arc<TSLanguageParsing>,
     pub sql: SqlDb,
 }
 
@@ -58,11 +60,12 @@ impl Application {
                 sql_db.clone(),
                 semantic_client,
                 config.clone(),
-                language_parsing,
+                language_parsing.clone(),
             )
             .await?
             .into(),
             sync_queue,
+            language_parsing,
             sql: sql_db,
         })
     }

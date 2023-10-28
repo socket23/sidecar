@@ -323,7 +323,8 @@ impl InLineAgent {
             stream::iter(messages_list)
                 .map(|messages| (messages, answer_sender.clone()))
                 .for_each(|((messages, document_symbol), answer_sender)| async move {
-                    let _ = self_
+                    let (proxy_sender, _proxy_receiver) = tokio::sync::mpsc::unbounded_channel();
+                    let answer = self_
                         .get_llm_client()
                         .stream_response_inline_agent(
                             llm_funcs::llm::OpenAIModel::get_model(&self_.model.model_name)
@@ -332,10 +333,22 @@ impl InLineAgent {
                             None,
                             0.2,
                             None,
-                            answer_sender,
-                            document_symbol,
+                            proxy_sender,
+                            document_symbol.clone(),
                         )
                         .await;
+                    // we send the answer after we have generated the whole thing
+                    // not in between as its not proactive updates
+                    if let Ok(answer) = answer {
+                        answer_sender
+                            .send(InLineAgentAnswer {
+                                answer_up_until_now: answer.to_owned(),
+                                delta: Some(answer.to_owned()),
+                                state: Default::default(),
+                                document_symbol: Some(document_symbol.clone()),
+                            })
+                            .unwrap();
+                    }
                 })
                 .await;
         }

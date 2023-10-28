@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use axum::{Extension, Json};
+use axum::{response::sse, Extension, Json};
+use rand::seq::SliceRandom;
+use serde_json::json;
 
 use super::{in_line_agent_stream::generate_in_line_agent_stream, types::Result};
 use crate::{
@@ -80,12 +82,36 @@ pub async fn reply_to_user(
         vec![inline_agent_message],
         sender,
     );
-    generate_in_line_agent_stream(
+    let result = generate_in_line_agent_stream(
         inline_agent,
         // Since we are always starting with deciding the action, lets send that
         // as the first action
         in_line_agent::types::InLineAgentAction::DecideAction { query },
         receiver,
     )
-    .await
+    .await?;
+    Ok(result.keep_alive(
+        sse::KeepAlive::new()
+            .interval(Duration::from_secs(1))
+            .event(
+                sse::Event::default()
+                    .json_data(json!(
+                        {"keep_alive": get_keep_alive_message(),
+                        "session_id": thread_id,
+                    }))
+                    .expect("json to not fail on keep alive"),
+            ),
+    ))
+}
+
+fn get_keep_alive_message() -> String {
+    [
+        "Fetching response... please wait",
+        "Aide is hard at work, any moment now...",
+        "Code snippets incoming...",
+        "Processing code snippets...",
+    ]
+    .choose(&mut rand::thread_rng())
+    .map(|value| value.to_string())
+    .unwrap_or("Working on your request...".to_owned())
 }

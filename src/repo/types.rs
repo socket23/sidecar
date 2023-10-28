@@ -58,6 +58,10 @@ impl RepoRef {
         })
     }
 
+    pub fn local(name: &(impl AsRef<str> + ?Sized)) -> Result<Self, RepoError> {
+        Self::new(Backend::Local, name)
+    }
+
     pub fn local_path(&self) -> Option<PathBuf> {
         match self.backend {
             Backend::Local => Some(PathBuf::from(&self.name)),

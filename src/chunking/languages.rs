@@ -69,6 +69,12 @@ impl TSLanguageParsing {
         }
     }
 
+    pub fn for_lang(&self, language: &str) -> Option<&TSLanguageConfig> {
+        self.configs
+            .iter()
+            .find(|config| config.language_ids.contains(&language))
+    }
+
     /// We will use this to chunk the file to pieces which can be used for
     /// searching
     pub fn chunk_file(
@@ -104,6 +110,8 @@ impl TSLanguageParsing {
     }
 
     pub fn parse_documentation(&self, code: &str, language: &str) -> Vec<String> {
+        dbg!(code);
+        dbg!(language);
         let language_config_maybe = self
             .configs
             .iter()
@@ -522,6 +530,19 @@ struct A {
                 "/// something else",
                 "/// something over here",
             ]
+        );
+    }
+
+    #[test]
+    fn test_documentation_parsing_rust_another() {
+        let source_code = "/// Returns the default user ID as a `String`.\n///\n/// The default user ID is set to \"codestory\".\nfn default_user_id() -> String {\n    \"codestory\".to_owned()\n}";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let documentation = tree_sitter_parsing.parse_documentation(source_code, "rust");
+        assert_eq!(
+            documentation,
+            vec![
+                "/// Returns the default user ID as a `String`.\n///\n/// The default user ID is set to \"codestory\".",
+            ],
         );
     }
 

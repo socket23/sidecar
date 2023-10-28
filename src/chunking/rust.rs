@@ -21,5 +21,13 @@ pub fn rust_language_config() -> TSLanguageConfig {
         .into_iter()
         .map(|s| s.to_owned())
         .collect(),
+        documentation_query: vec![
+            "((line_comment) @comment
+            (#match? @comment \"^///\")) @docComment"
+                .to_owned(),
+            "((line_comment) @comment
+                (#match? @comment \"^//!\")) @moduleDocComment"
+                .to_owned(),
+        ],
     }
 }

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::{
     javascript::javascript_language_config, rust::rust_language_config,
     typescript::typescript_language_config,
@@ -40,6 +42,9 @@ pub struct TSLanguageConfig {
     /// Namespaces defined by this language,
     /// E.g.: type namespace, variable namespace, function namespace
     pub namespaces: Vec<String>,
+
+    /// The documentation query which will be used by this language
+    pub documentation_query: Vec<String>,
 }
 
 impl TSLanguageConfig {
@@ -97,6 +102,90 @@ impl TSLanguageParsing {
             return naive_chunker(buffer, 30, 15);
         }
     }
+
+    pub fn parse_documentation(&self, code: &str, language: &str) -> Vec<String> {
+        let language_config_maybe = self
+            .configs
+            .iter()
+            .find(|config| config.language_ids.contains(&language));
+        if let None = language_config_maybe {
+            return Default::default();
+        }
+        let language_config = language_config_maybe.expect("if let None check above to hold");
+        let grammar = language_config.grammar;
+        let documentation_queries = language_config.documentation_query.to_vec();
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(code, None).unwrap();
+        let node = parsed_data.root_node();
+        let mut nodes = vec![];
+        documentation_queries
+            .into_iter()
+            .for_each(|documentation_query| {
+                let query = tree_sitter::Query::new(grammar(), &documentation_query)
+                    .expect("documentation queries are well formed");
+                let mut cursor = tree_sitter::QueryCursor::new();
+                cursor
+                    .captures(&query, node, code.as_bytes())
+                    .into_iter()
+                    .for_each(|capture| {
+                        capture.0.captures.into_iter().for_each(|capture| {
+                            nodes.push(capture.node);
+                        })
+                    });
+            });
+
+        // Now we only want to keep the unique ranges which we have captured
+        // from the nodes
+        let mut node_ranges: HashSet<tree_sitter::Range> = Default::default();
+        let nodes = nodes
+            .into_iter()
+            .filter(|capture| {
+                let range = capture.range();
+                if node_ranges.contains(&range) {
+                    return false;
+                }
+                node_ranges.insert(range);
+                true
+            })
+            .collect::<Vec<_>>();
+
+        // Now that we have the nodes, we also want to merge them together,
+        // for that we need to first order the nodes
+        get_merged_documentation_nodes(nodes, code)
+    }
+}
+
+fn get_merged_documentation_nodes(matches: Vec<tree_sitter::Node>, source: &str) -> Vec<String> {
+    let mut comments = Vec::new();
+    let mut current_index = 0;
+
+    while current_index < matches.len() {
+        let mut lines = Vec::new();
+        lines.push(get_text_from_source(
+            source,
+            &matches[current_index].range(),
+        ));
+
+        while current_index + 1 < matches.len()
+            && matches[current_index].range().end_point.row + 1
+                == matches[current_index + 1].range().start_point.row
+        {
+            current_index += 1;
+            lines.push(get_text_from_source(
+                source,
+                &matches[current_index].range(),
+            ));
+        }
+
+        comments.push(lines.join("\n"));
+        current_index += 1;
+    }
+    comments
+}
+
+fn get_text_from_source(source: &str, range: &tree_sitter::Range) -> String {
+    source[range.start_byte..range.end_byte].to_owned()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -266,6 +355,7 @@ pub fn chunk_tree(
 mod tests {
 
     use super::naive_chunker;
+    use super::TSLanguageParsing;
 
     fn get_naive_chunking_test_string<'a>() -> &'a str {
         r#"
@@ -406,5 +496,68 @@ mod tests {
         // and overlap of 15 we get 9 chunks, its easy maths. ceil(128/15) == 9
         let chunks = naive_chunker(get_naive_chunking_test_string(), 30, 15);
         assert_eq!(chunks.len(), 9);
+    }
+
+    #[test]
+    fn test_documentation_parsing_rust() {
+        let source_code = r#"
+/// Some comment
+/// Some other comment
+fn blah_blah() {
+
+}
+
+/// something else
+struct A {
+    /// something over here
+    pub a: string,
+}
+        "#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let documentation = tree_sitter_parsing.parse_documentation(source_code, "rust");
+        assert_eq!(
+            documentation,
+            vec![
+                "/// Some comment\n/// Some other comment",
+                "/// something else",
+                "/// something over here",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_documentation_parsing_typescript() {
+        let source_code = r#"
+        /**
+         * Run a streaming chat completion against the Azure-openAI API. The resulting stream emits only the string tokens.
+         *
+         * @see https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions
+         *
+         * @param request The request body sent to Azure. See Azure's documentation for all available parameters.
+         * @param options
+         * @param options.apiKey Azure API key.
+         * @param options.resourceName Azure resource name.
+         * @param options.deploymentId Azure deployment id.
+         * @param options.apiUrl The url of the OpenAI (or compatible) API. If this is passed, resourceName and deploymentId are ignored.
+         * @param options.fetch A custom implementation of fetch. Defaults to globalThis.fetch.
+         * @param options.headers Optionally add additional HTTP headers to the request.
+         * @param options.signal An AbortSignal that can be used to abort the fetch request.
+         *
+         * @returns A stream of tokens from the API.
+         */
+        declare function streamTokens(
+          request: AzureOpenAIChatTypes.Request,
+          options: AzureOpenAIChatTypes.RequestOptions
+        ): Promise<ReadableStream<string>>;
+        "#;
+
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let documentation = tree_sitter_parsing.parse_documentation(source_code, "typescript");
+        assert_eq!(
+            documentation,
+            vec![
+    "/**\n         * Run a streaming chat completion against the Azure-openAI API. The resulting stream emits only the string tokens.\n         *\n         * @see https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions\n         *\n         * @param request The request body sent to Azure. See Azure's documentation for all available parameters.\n         * @param options\n         * @param options.apiKey Azure API key.\n         * @param options.resourceName Azure resource name.\n         * @param options.deploymentId Azure deployment id.\n         * @param options.apiUrl The url of the OpenAI (or compatible) API. If this is passed, resourceName and deploymentId are ignored.\n         * @param options.fetch A custom implementation of fetch. Defaults to globalThis.fetch.\n         * @param options.headers Optionally add additional HTTP headers to the request.\n         * @param options.signal An AbortSignal that can be used to abort the fetch request.\n         *\n         * @returns A stream of tokens from the API.\n         */",
+            ],
+        );
     }
 }

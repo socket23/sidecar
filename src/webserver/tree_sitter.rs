@@ -1,4 +1,6 @@
-use axum::{response::IntoResponse, Json};
+use axum::{response::IntoResponse, Extension, Json};
+
+use crate::application::application::Application;
 
 use super::types::{ApiResponse, Result};
 
@@ -16,24 +18,14 @@ struct ExtractDocumentationStringResponse {
 impl ApiResponse for ExtractDocumentationStringResponse {}
 
 pub async fn extract_documentation_strings(
+    Extension(app): Extension<Application>,
     Json(ExtractDocumentationStringRequest { language, source }): Json<
         ExtractDocumentationStringRequest,
     >,
 ) -> Result<impl IntoResponse> {
-    dbg!(&language);
-    dbg!(&source);
-    match language.as_ref() {
-        "typescript" | "typescriptreact" => {
-            let documentation =
-                crate::chunking::documentation_parsing::parse_documentation_for_typescript_code(
-                    &source,
-                );
-            Ok(Json(ExtractDocumentationStringResponse { documentation }))
-        }
-        // If we have no matching, just return an empty list here, we will show
-        // the diff for the whole chunk
-        _ => Ok(Json(ExtractDocumentationStringResponse {
-            documentation: Vec::new(),
-        })),
-    }
+    let language_parsing = app.language_parsing.clone();
+    let documentation_strings = language_parsing.parse_documentation(&language, &source);
+    Ok(Json(ExtractDocumentationStringResponse {
+        documentation: documentation_strings,
+    }))
 }

@@ -33,7 +33,7 @@ impl TextDocument {
 }
 
 // These are always 0 indexed
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
     line: usize,
@@ -54,6 +54,14 @@ impl Position {
 
     pub fn to_byte_offset(&self) -> usize {
         self.byte_offset
+    }
+
+    pub fn new(line: usize, character: usize, byte_offset: usize) -> Self {
+        Self {
+            line,
+            character,
+            byte_offset,
+        }
     }
 }
 
@@ -216,6 +224,7 @@ impl DocumentSymbol {
         let mut second_walker = tree_node.walk();
         let mut third_walker = tree_node.walk();
         let range = tree_node.range();
+        dbg!(source_code[range.start_byte..range.end_byte].to_owned());
         let start_position = Position {
             line: range.start_point.row,
             character: range.start_point.column,

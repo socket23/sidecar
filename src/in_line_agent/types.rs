@@ -391,12 +391,12 @@ impl InLineAgent {
     ) -> String {
         let code = &document_symbol.code;
         let prompt_string = format!(
-            r"#I have the following code in the selection:
+            r#"I have the following code in the selection:
 ```{language}
 // FILEPATH: {file_path}
 {code}
 ```
-#"
+"#
         );
         prompt_string
     }

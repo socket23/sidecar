@@ -64,6 +64,7 @@ impl EditorParsing {
             "ruby" => Regex::new(r"(module|class|method|assignment)")
                 .unwrap()
                 .is_match(node.kind()),
+            "rust" => Regex::new(r"(item)").unwrap().is_match(node.kind()),
             _ => Regex::new(r"(definition|declaration|declarator)")
                 .unwrap()
                 .is_match(node.kind()),
@@ -115,6 +116,7 @@ impl EditorParsing {
         tree_sitter_node: tree_sitter::Node<'a>,
         range: &'a Range,
         language_config: &'a TSLanguageConfig,
+        source_str: &str,
     ) -> Option<tree_sitter::Node<'a>> {
         let mut nodes = vec![tree_sitter_node];
         let mut identifier_nodes: Vec<(tree_sitter::Node, f64)> = vec![];
@@ -124,6 +126,12 @@ impl EditorParsing {
             let mut intersecting_nodes = nodes
                 .into_iter()
                 .map(|tree_sitter_node| {
+                    {
+                        // print the node ranges here
+                        dbg!(source_str[tree_sitter_node.range().start_byte
+                            ..tree_sitter_node.range().end_byte]
+                            .to_owned());
+                    }
                     (
                         tree_sitter_node,
                         Range::for_tree_node(&tree_sitter_node).intersection_size(range) as f64,
@@ -157,7 +165,7 @@ impl EditorParsing {
                 };
             }
 
-            // For the nodes in o, calculate a relevance score and filter the ones that are declarations or definitions for language 'r'
+            // For the nodes in intersecting_nodes, calculate a relevance score and filter the ones that are declarations or definitions for language 'language_config'
             let identifier_nodes_sorted = intersecting_nodes
                 .iter()
                 .map(|(tree_sitter_node, intersection_size)| {
@@ -168,12 +176,20 @@ impl EditorParsing {
                 })
                 .collect::<Vec<_>>();
 
-            // now we filter out the nodes which are here based on the identifier function and set it to i
+            // now we filter out the nodes which are here based on the identifier function and set it to identifier nodes
+            // which we want to find for documentation
             identifier_nodes.extend(
                 identifier_nodes_sorted
                     .into_iter()
                     .filter(|(tree_sitter_node, _)| {
                         self.is_node_identifier(tree_sitter_node, language_config)
+                    })
+                    .map(|(tree_sitter_node, score)| {
+                        dbg!("identifier node found");
+                        dbg!(source_str[tree_sitter_node.range().start_byte
+                            ..tree_sitter_node.range().end_byte]
+                            .to_owned());
+                        (tree_sitter_node, score)
                     })
                     .collect::<Vec<_>>(),
             );
@@ -237,15 +253,22 @@ impl EditorParsing {
         language_config: &TSLanguageConfig,
         range: Range,
     ) -> Vec<DocumentSymbol> {
+        dbg!(&text_document);
+        dbg!(&language_config);
+        dbg!(&range);
         let language = language_config.grammar;
+        let source = text_document.get_content_buffer();
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(language()).unwrap();
         let tree = parser
             .parse(text_document.get_content_buffer().as_bytes(), None)
             .unwrap();
-        if let Some(identifier_node) =
-            self.get_identifier_node_fully_contained(tree.root_node(), &range, &language_config)
-        {
+        if let Some(identifier_node) = self.get_identifier_node_fully_contained(
+            tree.root_node(),
+            &range,
+            &language_config,
+            source,
+        ) {
             // we have a identifier node right here, so lets get the document symbol
             // for this and return it back
             return DocumentSymbol::from_tree_node(
@@ -301,5 +324,42 @@ impl EditorParsing {
             &language_config.expect("if let None check above to work"),
             Range::new(start_position.clone(), end_position.clone()),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        chunking::{
+            languages::TSLanguageParsing,
+            text_document::{Position, Range, TextDocument},
+        },
+        repo::types::RepoRef,
+    };
+
+    use super::EditorParsing;
+
+    #[test]
+    fn rust_selection_parsing() {
+        let editor_parsing = EditorParsing::default();
+        // This is from the configuration file
+        let source_str = "use std::{\n    num::NonZeroUsize,\n    path::{Path, PathBuf},\n};\n\nuse clap::Parser;\nuse serde::{Deserialize, Serialize};\n\nuse crate::repo::state::StateSource;\n\n#[derive(Serialize, Deserialize, Parser, Debug, Clone)]\n#[clap(author, version, about, long_about = None)]\npub struct Configuration {\n    #[clap(short, long, default_value_os_t = default_index_dir())]\n    #[serde(default = \"default_index_dir\")]\n    /// Directory to store all persistent state\n    pub index_dir: PathBuf,\n\n    #[clap(long, default_value_t = default_port())]\n    #[serde(default = \"default_port\")]\n    /// Bind the webserver to `<host>`\n    pub port: u16,\n\n    #[clap(long)]\n    /// Path to the embedding model directory\n    pub model_dir: PathBuf,\n\n    #[clap(long, default_value_t = default_host())]\n    #[serde(default = \"default_host\")]\n    /// Bind the webserver to `<port>`\n    pub host: String,\n\n    #[clap(flatten)]\n    #[serde(default)]\n    pub state_source: StateSource,\n\n    #[clap(short, long, default_value_t = default_parallelism())]\n    #[serde(default = \"default_parallelism\")]\n    /// Maximum number of parallel background threads\n    pub max_threads: usize,\n\n    #[clap(short, long, default_value_t = default_buffer_size())]\n    #[serde(default = \"default_buffer_size\")]\n    /// Size of memory to use for file indexes\n    pub buffer_size: usize,\n\n    /// Qdrant url here can be mentioned if we are running it remotely or have\n    /// it running on its own process\n    #[clap(long)]\n    #[serde(default = \"default_qdrant_url\")]\n    pub qdrant_url: String,\n\n    /// The folder where the qdrant binary is present so we can start the server\n    /// and power the qdrant client\n    #[clap(short, long)]\n    pub qdrant_binary_directory: Option<PathBuf>,\n\n    /// The location for the dylib directory where we have the runtime binaries\n    /// required for ort\n    #[clap(short, long)]\n    pub dylib_directory: PathBuf,\n\n    /// Qdrant allows us to create collections and we need to provide it a default\n    /// value to start with\n    #[clap(short, long, default_value_t = default_collection_name())]\n    #[serde(default = \"default_collection_name\")]\n    pub collection_name: String,\n\n    #[clap(long, default_value_t = interactive_batch_size())]\n    #[serde(default = \"interactive_batch_size\")]\n    /// Batch size for batched embeddings\n    pub embedding_batch_len: NonZeroUsize,\n\n    #[clap(long, default_value_t = default_user_id())]\n    #[serde(default = \"default_user_id\")]\n    user_id: String,\n\n    /// If we should poll the local repo for updates auto-magically. Disabled\n    /// by default, until we figure out the delta sync method where we only\n    /// reindex the files which have changed\n    #[clap(long)]\n    pub enable_background_polling: bool,\n}\n\nimpl Configuration {\n    /// Directory where logs are written to\n    pub fn log_dir(&self) -> PathBuf {\n        self.index_dir.join(\"logs\")\n    }\n\n    pub fn index_path(&self, name: impl AsRef<Path>) -> impl AsRef<Path> {\n        self.index_dir.join(name)\n    }\n\n    pub fn qdrant_storage(&self) -> PathBuf {\n        self.index_dir.join(\"qdrant_storage\")\n    }\n}\n\nfn default_index_dir() -> PathBuf {\n    match directories::ProjectDirs::from(\"ai\", \"codestory\", \"sidecar\") {\n        Some(dirs) => dirs.data_dir().to_owned(),\n        None => \"codestory_sidecar\".into(),\n    }\n}\n\nfn default_port() -> u16 {\n    42424\n}\n\nfn default_host() -> String {\n    \"127.0.0.1\".to_owned()\n}\n\npub fn default_parallelism() -> usize {\n    std::thread::available_parallelism().unwrap().get()\n}\n\nconst fn default_buffer_size() -> usize {\n    100_000_000\n}\n\nfn default_collection_name() -> String {\n    \"codestory\".to_owned()\n}\n\nfn interactive_batch_size() -> NonZeroUsize {\n    NonZeroUsize::new(1).unwrap()\n}\n\nfn default_qdrant_url() -> String {\n    \"http://127.0.0.1:6334\".to_owned()\n}\n\nfn default_user_id() -> String {\n    \"codestory\".to_owned()\n}\n";
+        let range = Range::new(Position::new(134, 7, 3823), Position::new(137, 0, 3878));
+        let ts_lang_parsing = TSLanguageParsing::init();
+        let rust_config = ts_lang_parsing.for_lang("rust");
+        let mut documentation_nodes = editor_parsing.get_documentation_node(
+            &TextDocument::new(
+                source_str.to_owned(),
+                RepoRef::local("/Users/skcd/testing/").expect("test to work"),
+                "".to_owned(),
+                "".to_owned(),
+            ),
+            &rust_config.expect("rust config to be present"),
+            range,
+        );
+        assert!(!documentation_nodes.is_empty());
+        let first_entry = documentation_nodes.remove(0);
+        assert_eq!(first_entry.start_position, Position::new(134, 0, 3816));
+        assert_eq!(first_entry.end_position, Position::new(136, 1, 3877));
     }
 }

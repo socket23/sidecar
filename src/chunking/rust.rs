@@ -29,5 +29,10 @@ pub fn rust_language_config() -> TSLanguageConfig {
                 (#match? @comment \"^//!\")) @moduleDocComment"
                 .to_owned(),
         ],
+        function_query: vec!["[(function_item
+        	name: (identifier)? @identifier
+            body: (block) @body)
+        ] @function"
+            .to_owned()],
     }
 }

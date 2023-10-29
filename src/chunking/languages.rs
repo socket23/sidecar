@@ -45,6 +45,9 @@ pub struct TSLanguageConfig {
 
     /// The documentation query which will be used by this language
     pub documentation_query: Vec<String>,
+
+    /// The queries to get the function body for the language
+    pub function_query: Vec<String>,
 }
 
 impl TSLanguageConfig {
@@ -110,8 +113,6 @@ impl TSLanguageParsing {
     }
 
     pub fn parse_documentation(&self, code: &str, language: &str) -> Vec<String> {
-        dbg!(code);
-        dbg!(language);
         let language_config_maybe = self
             .configs
             .iter()
@@ -362,6 +363,11 @@ pub fn chunk_tree(
 #[cfg(test)]
 mod tests {
 
+    use std::collections::HashSet;
+
+    use crate::chunking::types::FunctionInformation;
+    use crate::chunking::types::FunctionNodeType;
+
     use super::naive_chunker;
     use super::TSLanguageParsing;
 
@@ -580,5 +586,83 @@ struct A {
     "/**\n         * Run a streaming chat completion against the Azure-openAI API. The resulting stream emits only the string tokens.\n         *\n         * @see https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions\n         *\n         * @param request The request body sent to Azure. See Azure's documentation for all available parameters.\n         * @param options\n         * @param options.apiKey Azure API key.\n         * @param options.resourceName Azure resource name.\n         * @param options.deploymentId Azure deployment id.\n         * @param options.apiUrl The url of the OpenAI (or compatible) API. If this is passed, resourceName and deploymentId are ignored.\n         * @param options.fetch A custom implementation of fetch. Defaults to globalThis.fetch.\n         * @param options.headers Optionally add additional HTTP headers to the request.\n         * @param options.signal An AbortSignal that can be used to abort the fetch request.\n         *\n         * @returns A stream of tokens from the API.\n         */",
             ],
         );
+    }
+
+    #[test]
+    fn test_function_body_parsing_rust() {
+        let source_code = r#"
+/// Some comment
+/// Some other comment
+fn blah_blah() {
+
+}
+
+/// something else
+struct A {
+    /// something over here
+    pub a: string,
+}
+
+impl A {
+    fn something_else() -> Option<String> {
+        None
+    }
+}
+        "#;
+
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let language_config = tree_sitter_parsing.for_lang("rust").unwrap();
+        let function_queries = language_config.function_query.to_vec();
+
+        // Now we need to run the tree sitter query on this and get back the
+        // answer
+        let grammar = language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code.as_bytes(), None).unwrap();
+        let node = parsed_data.root_node();
+        let mut function_nodes = vec![];
+        let mut unique_ranges: HashSet<tree_sitter::Range> = Default::default();
+        function_queries.into_iter().for_each(|function_query| {
+            let query = tree_sitter::Query::new(grammar(), &function_query)
+                .expect("function queries are well formed");
+            let mut cursor = tree_sitter::QueryCursor::new();
+            cursor
+                .captures(&query, node, source_code.as_bytes())
+                .into_iter()
+                .for_each(|capture| {
+                    capture.0.captures.into_iter().for_each(|capture| {
+                        let capture_name = query
+                            .capture_names()
+                            .to_vec()
+                            .remove(capture.index.try_into().unwrap());
+                        let capture_type = FunctionNodeType::from_str(&capture_name);
+                        if let Some(capture_type) = capture_type {
+                            function_nodes
+                                .push(FunctionInformation::new(capture.node, capture_type));
+                        }
+                    })
+                });
+        });
+        function_nodes = function_nodes
+            .into_iter()
+            .filter_map(|function_node| {
+                let range = function_node.node().range();
+                if unique_ranges.contains(&range) {
+                    return None;
+                }
+                unique_ranges.insert(range);
+                dbg!(function_node.r#type());
+                dbg!(function_node.node().range());
+                dbg!(function_node.node().kind());
+                dbg!(source_code
+                    [function_node.node().start_byte()..function_node.node().end_byte()]
+                    .to_owned());
+                Some(function_node)
+            })
+            .collect();
+        // we should get back 2 function nodes here and since we capture 3 pieces
+        // of information for each function block, in total that is 6
+        assert_eq!(function_nodes.len(), 6);
     }
 }

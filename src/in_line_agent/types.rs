@@ -440,3 +440,153 @@ impl InLineAgent {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        chunking::{
+            languages::TSLanguageParsing,
+            text_document::{Position, Range},
+            types::{FunctionInformation, FunctionNodeType},
+        },
+        repo::types::RepoRef,
+        webserver::in_line_agent::{SnippetInformation, TextDocumentWeb},
+    };
+
+    use super::ProcessInEditorRequest;
+    #[test]
+    fn test_context_for_in_line_edit() {
+        let source_code = r#"
+        "#;
+        let query = "".to_owned();
+        let language = "rust".to_owned();
+        let repo_ref = RepoRef::local("/Users/skcd").expect("test should work");
+        let snippet_information = SnippetInformation {
+            start_position: Position::new(0, 0, 0),
+            end_position: Position::new(0, 0, 0),
+        };
+        let text_document_web = TextDocumentWeb {
+            text: source_code.to_owned(),
+            language: language.to_owned(),
+            fs_file_path: "/Users/skcd".to_owned(),
+            relative_path: "/Users/skcd".to_owned(),
+        };
+        let thread_id = uuid::Uuid::new_v4();
+        let selection = ProcessInEditorRequest {
+            query,
+            language: language.to_owned(),
+            repo_ref,
+            snippet_information,
+            text_document_web,
+            thread_id,
+        };
+        // This is the current request selection range
+        let selection_range = Range::new(
+            snippet_information.start_position,
+            snippet_information.end_position,
+        );
+        // Now we want to get the chunks properly
+        // First we get the function blocks along with the ranges we know about
+        let ts_language_parsing = TSLanguageParsing::init();
+        // we get the function nodes here
+        let function_nodes = ts_language_parsing.function_information_nodes(source_code, &language);
+        // Now we need to get the nodes which are just function blocks
+        let mut function_blocks: Vec<_> = function_nodes
+            .iter()
+            .filter_map(|function_node| {
+                if function_node.r#type() == &FunctionNodeType::Function {
+                    Some(function_node)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // Now we sort the function blocks based on how close they are to the start index
+        // of the code selection
+        // we sort the nodes in increasing order
+        function_blocks.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
+
+        // Next we need to get the function bodies
+        let mut function_bodies: Vec<_> = function_nodes
+            .iter()
+            .filter_map(|function_node| {
+                if function_node.r#type() == &FunctionNodeType::Body {
+                    Some(function_node)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // Here we are sorting it in increasing order of start byte
+        function_bodies.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
+
+        // Now we are going to do some processing on the whole range which we got
+        // in the selection
+        // Here we are basically going to expand the given range to be a bit bigger
+        // inputs: t: document
+        // inputs: e: ranges for the function bodies
+        // inputs: r: whole range
+        // function pJ(t, e, r) { let n = lJ(t, e, r.start), i = lJ(t, e, r.end), o = t.offsetAt(r.start), s = t.offsetAt(r.end); return n && (o = Math.min(o, n.startIndex), s = Math.max(s, n.endIndex)), i && (o = Math.min(o, i.startIndex), s = Math.max(s, i.endIndex)), new De(t.positionAt(o), t.positionAt(s)) }
+        // This uses the lJ function to get some ranges, so lets fist implement that
+        // function lJ(t, e, r) { let n = t.offsetAt(r), i = null; for (let o of e) if (!(o.endIndex < n)) { if (o.startIndex > n) break; i = o } return i }
+        let expanded_selection =
+            get_expanded_selection_range(function_bodies.as_slice(), selection_range);
+
+        // Next we have to get use the value returned by this function to get
+        // the top and bottom selection ranges using the tokens
+    }
+
+    // we are going to get a new range here for our selections
+    fn get_expanded_selection_range(
+        function_bodies: &[&FunctionInformation],
+        selection_range: Range,
+    ) -> Range {
+        let mut start_position = selection_range.start_position();
+        let mut end_position = selection_range.end_position();
+        let selection_start_fn_body =
+            get_function_bodies_position(function_bodies, selection_range.start_byte());
+        let selection_end_fn_body =
+            get_function_bodies_position(function_bodies, selection_range.end_byte());
+
+        // What we are trying to do here is expand our selection to cover the whole
+        // function if we have to
+        if let Some(selection_start_function) = selection_start_fn_body {
+            // check if we can expand the range a bit here
+            if start_position.to_byte_offset() > selection_start_function.range().start_byte() {
+                start_position = selection_start_function.range().start_position();
+            }
+            // check if the function block ends after our current selection
+            if selection_start_function.range().end_byte() > end_position.to_byte_offset() {
+                end_position = selection_start_function.range().end_position();
+            }
+        }
+        if let Some(selection_end_function) = selection_end_fn_body {
+            // check if we can expand the start position byte here a bit
+            if selection_end_function.range().start_byte() < start_position.to_byte_offset() {
+                start_position = selection_end_function.range().start_position();
+            }
+            if selection_end_function.range().end_byte() > end_position.to_byte_offset() {
+                end_position = selection_end_function.range().end_position();
+            }
+        }
+        Range::new(start_position, end_position)
+    }
+
+    fn get_function_bodies_position<'a>(
+        function_blocks: &'a [&'a FunctionInformation],
+        byte_offset: usize,
+    ) -> Option<&'a FunctionInformation> {
+        let possible_function_block = None;
+        for function_block in function_blocks {
+            // if the end byte for this block is greater than the current byte
+            // position and the start byte is greater than the current bytes
+            // position as well, we have our function block
+            if function_block.range().end_byte() >= byte_offset {
+                if function_block.range().start_byte() > byte_offset {
+                    return possible_function_block;
+                }
+            }
+        }
+        None
+    }
+}

@@ -2,7 +2,7 @@ use super::text_document::Range;
 
 /// Some common types which can be reused across calls
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionNodeType {
     // The identifier for the function
     Identifier,

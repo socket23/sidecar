@@ -79,6 +79,22 @@ impl Range {
         }
     }
 
+    pub fn start_position(&self) -> Position {
+        self.start_position.clone()
+    }
+
+    pub fn end_position(&self) -> Position {
+        self.end_position.clone()
+    }
+
+    pub fn start_byte(&self) -> usize {
+        self.start_position.byte_offset
+    }
+
+    pub fn end_byte(&self) -> usize {
+        self.end_position.byte_offset
+    }
+
     pub fn intersection_size(&self, other: &Range) -> usize {
         let start = self
             .start_position

@@ -1,6 +1,8 @@
+use super::text_document::Range;
+
 /// Some common types which can be reused across calls
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FunctionNodeType {
     // The identifier for the function
     Identifier,
@@ -21,19 +23,19 @@ impl FunctionNodeType {
     }
 }
 
-#[derive(Debug)]
-pub struct FunctionInformation<'a> {
-    node: tree_sitter::Node<'a>,
+#[derive(Debug, Clone)]
+pub struct FunctionInformation {
+    range: Range,
     r#type: FunctionNodeType,
 }
 
-impl<'a> FunctionInformation<'a> {
-    pub fn new(node: tree_sitter::Node<'a>, r#type: FunctionNodeType) -> Self {
-        Self { node, r#type }
+impl FunctionInformation {
+    pub fn new(range: Range, r#type: FunctionNodeType) -> Self {
+        Self { range, r#type }
     }
 
-    pub fn node(&self) -> &tree_sitter::Node<'a> {
-        &self.node
+    pub fn range(&self) -> &Range {
+        &self.range
     }
 
     pub fn r#type(&self) -> &FunctionNodeType {

@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
 use super::{
-    javascript::javascript_language_config, rust::rust_language_config,
+    javascript::javascript_language_config,
+    rust::rust_language_config,
+    text_document::Range,
+    types::{FunctionInformation, FunctionNodeType},
     typescript::typescript_language_config,
 };
 
@@ -162,6 +165,63 @@ impl TSLanguageParsing {
         // Now that we have the nodes, we also want to merge them together,
         // for that we need to first order the nodes
         get_merged_documentation_nodes(nodes, code)
+    }
+
+    pub fn function_information_nodes(
+        &self,
+        source_code: &str,
+        language: &str,
+    ) -> Vec<FunctionInformation> {
+        let language_config = self.for_lang(language);
+        if let None = language_config {
+            return Default::default();
+        }
+        let language_config = language_config.expect("if let None check above to hold");
+        let function_queries = language_config.function_query.to_vec();
+
+        // Now we need to run the tree sitter query on this and get back the
+        // answer
+        let grammar = language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code.as_bytes(), None).unwrap();
+        let node = parsed_data.root_node();
+        let mut function_nodes = vec![];
+        let mut unique_ranges: HashSet<tree_sitter::Range> = Default::default();
+        function_queries.into_iter().for_each(|function_query| {
+            let query = tree_sitter::Query::new(grammar(), &function_query)
+                .expect("function queries are well formed");
+            let mut cursor = tree_sitter::QueryCursor::new();
+            cursor
+                .captures(&query, node, source_code.as_bytes())
+                .into_iter()
+                .for_each(|capture| {
+                    capture.0.captures.into_iter().for_each(|capture| {
+                        let capture_name = query
+                            .capture_names()
+                            .to_vec()
+                            .remove(capture.index.try_into().unwrap());
+                        let capture_type = FunctionNodeType::from_str(&capture_name);
+                        if let Some(capture_type) = capture_type {
+                            function_nodes.push(FunctionInformation::new(
+                                Range::for_tree_node(&capture.node),
+                                capture_type,
+                            ));
+                        }
+                    })
+                });
+        });
+        function_nodes
+            .into_iter()
+            .filter_map(|function_node| {
+                let range = function_node.range();
+                if unique_ranges.contains(&range.to_tree_sitter_range()) {
+                    return None;
+                }
+                unique_ranges.insert(range.to_tree_sitter_range());
+                Some(function_node.clone())
+            })
+            .collect()
     }
 }
 
@@ -611,56 +671,8 @@ impl A {
         "#;
 
         let tree_sitter_parsing = TSLanguageParsing::init();
-        let language_config = tree_sitter_parsing.for_lang("rust").unwrap();
-        let function_queries = language_config.function_query.to_vec();
+        let function_nodes = tree_sitter_parsing.function_information_nodes(source_code, "rust");
 
-        // Now we need to run the tree sitter query on this and get back the
-        // answer
-        let grammar = language_config.grammar;
-        let mut parser = tree_sitter::Parser::new();
-        parser.set_language(grammar()).unwrap();
-        let parsed_data = parser.parse(source_code.as_bytes(), None).unwrap();
-        let node = parsed_data.root_node();
-        let mut function_nodes = vec![];
-        let mut unique_ranges: HashSet<tree_sitter::Range> = Default::default();
-        function_queries.into_iter().for_each(|function_query| {
-            let query = tree_sitter::Query::new(grammar(), &function_query)
-                .expect("function queries are well formed");
-            let mut cursor = tree_sitter::QueryCursor::new();
-            cursor
-                .captures(&query, node, source_code.as_bytes())
-                .into_iter()
-                .for_each(|capture| {
-                    capture.0.captures.into_iter().for_each(|capture| {
-                        let capture_name = query
-                            .capture_names()
-                            .to_vec()
-                            .remove(capture.index.try_into().unwrap());
-                        let capture_type = FunctionNodeType::from_str(&capture_name);
-                        if let Some(capture_type) = capture_type {
-                            function_nodes
-                                .push(FunctionInformation::new(capture.node, capture_type));
-                        }
-                    })
-                });
-        });
-        function_nodes = function_nodes
-            .into_iter()
-            .filter_map(|function_node| {
-                let range = function_node.node().range();
-                if unique_ranges.contains(&range) {
-                    return None;
-                }
-                unique_ranges.insert(range);
-                dbg!(function_node.r#type());
-                dbg!(function_node.node().range());
-                dbg!(function_node.node().kind());
-                dbg!(source_code
-                    [function_node.node().start_byte()..function_node.node().end_byte()]
-                    .to_owned());
-                Some(function_node)
-            })
-            .collect();
         // we should get back 2 function nodes here and since we capture 3 pieces
         // of information for each function block, in total that is 6
         assert_eq!(function_nodes.len(), 6);

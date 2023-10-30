@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::{response::sse, Extension, Json};
+use gix::filter::plumbing::driver::Process;
 use rand::seq::SliceRandom;
 use serde_json::json;
 
@@ -45,6 +46,28 @@ pub struct ProcessInEditorRequest {
     pub snippet_information: SnippetInformation,
     pub text_document_web: TextDocumentWeb,
     pub thread_id: uuid::Uuid,
+}
+
+impl ProcessInEditorRequest {
+    pub fn source_code(&self) -> &str {
+        &self.text_document_web.text
+    }
+
+    pub fn language(&self) -> &str {
+        &self.text_document_web.language
+    }
+
+    pub fn line_count(&self) -> usize {
+        self.text_document_web.line_count
+    }
+
+    pub fn start_position(&self) -> Position {
+        self.snippet_information.start_position.clone()
+    }
+
+    pub fn end_position(&self) -> Position {
+        self.snippet_information.end_position.clone()
+    }
 }
 
 pub async fn reply_to_user(

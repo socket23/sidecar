@@ -346,9 +346,9 @@ fn expand_above_and_below_selections(
 
 #[derive(Debug)]
 pub struct SelectionContext {
-    above: ContextParserInLineEdit,
-    range: ContextParserInLineEdit,
-    below: ContextParserInLineEdit,
+    pub above: ContextParserInLineEdit,
+    pub range: ContextParserInLineEdit,
+    pub below: ContextParserInLineEdit,
 }
 
 fn generate_selection_context(
@@ -451,9 +451,9 @@ fn generate_selection_context(
 
 #[derive(Debug)]
 pub struct SelectionWithOutlines {
-    selection_context: SelectionContext,
-    outline_above: String,
-    outline_below: String,
+    pub selection_context: SelectionContext,
+    pub outline_above: String,
+    pub outline_below: String,
 }
 
 pub fn generate_context_for_range(

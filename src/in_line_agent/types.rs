@@ -7,6 +7,7 @@ use crate::chunking::text_document::Range;
 use crate::chunking::types::FunctionInformation;
 use crate::chunking::types::FunctionNodeType;
 use crate::in_line_agent::context_parsing::generate_context_for_range;
+use crate::in_line_agent::context_parsing::ContextParserInLineEdit;
 use crate::in_line_agent::context_parsing::EditExpandedSelectionRange;
 use crate::{
     agent::{
@@ -23,6 +24,7 @@ use crate::{
     webserver::in_line_agent::ProcessInEditorRequest,
 };
 
+use super::context_parsing::SelectionWithOutlines;
 use super::prompts;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -454,7 +456,8 @@ impl InLineAgent {
             function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
             self.editor_request.fs_file_path().to_owned(),
         );
-        dbg!(response);
+        let messages = self.edit_generation_prompt(self.editor_request.language(), response);
+        dbg!(messages);
         Ok(())
     }
 
@@ -533,5 +536,85 @@ impl InLineAgent {
                 format!("Please add {comment_type} for the selection.")
             }
         }
+    }
+
+    fn edit_generation_prompt(
+        &self,
+        language: &str,
+        selection_with_outline: SelectionWithOutlines,
+    ) -> Vec<String> {
+        let mut prompts = vec![];
+        let has_surrounding_context = selection_with_outline.selection_context.above.has_context()
+            || selection_with_outline.selection_context.below.has_context()
+            || !selection_with_outline.outline_above.is_empty()
+            || !selection_with_outline.outline_below.is_empty();
+
+        let prompt_with_outline = |heading: &str, outline: String, fs_file_path: &str| -> String {
+            return vec![
+                heading.to_owned(),
+                format!("```{language}"),
+                format!("// FILEPATH: {fs_file_path}"),
+                outline,
+                "```".to_owned(),
+            ]
+            .join("\n");
+        };
+
+        let prompt_with_content = |heading: &str, context: &ContextParserInLineEdit| -> String {
+            let prompt_parts = context.generate_prompt(has_surrounding_context);
+            let mut answer = vec![heading.to_owned()];
+            answer.extend(prompt_parts.into_iter());
+            answer.join("\n")
+        };
+
+        if !selection_with_outline.outline_above.is_empty() {
+            prompts.push(prompt_with_outline(
+                "I have the following code above:",
+                selection_with_outline.outline_above.to_owned(),
+                self.editor_request.fs_file_path(),
+            ));
+        }
+
+        if selection_with_outline.selection_context.above.has_context() {
+            prompts.push(prompt_with_content(
+                "I have the following code above the selection:",
+                &selection_with_outline.selection_context.above,
+            ));
+        }
+
+        if selection_with_outline.selection_context.below.has_context() {
+            prompts.push(prompt_with_content(
+                "I have the following code below the selection:",
+                &selection_with_outline.selection_context.below,
+            ));
+        }
+
+        if !selection_with_outline.outline_below.is_empty() {
+            prompts.push(prompt_with_outline(
+                "I have the following code below:",
+                selection_with_outline.outline_below.to_owned(),
+                self.editor_request.fs_file_path(),
+            ));
+        }
+
+        let mut selection_prompt = vec![];
+        if selection_with_outline.selection_context.range.has_context() {
+            selection_prompt.push("I have the following code in the selection".to_owned());
+            selection_prompt.extend(
+                selection_with_outline
+                    .selection_context
+                    .range
+                    .generate_prompt(has_surrounding_context)
+                    .into_iter(),
+            );
+        } else {
+            let fs_file_path = self.editor_request.fs_file_path();
+            selection_prompt.push("I am working with the following code:".to_owned());
+            selection_prompt.push(format!("```{language}"));
+            selection_prompt.push(format!("// FILEPATH: {fs_file_path}"));
+            selection_prompt.push("```".to_owned());
+        }
+        prompts.push(selection_prompt.join("\n"));
+        prompts
     }
 }

@@ -450,7 +450,7 @@ mod tests {
         agent::llm_funcs::{self, llm::OpenAIModel},
         chunking::{
             languages::TSLanguageParsing,
-            text_document::{Position, Range},
+            text_document::{OutlineForRange, Position, Range},
             types::{FunctionInformation, FunctionNodeType},
         },
         in_line_agent::context_parsing::{ContextParserInLineEdit, ContextWindowTracker},
@@ -661,7 +661,7 @@ mod tests {
             && restricted_selection_context.below.is_complete()
         {
             dbg!("we are in this loop");
-            let generated_outline = generate_outline_for_range(
+            let generated_outline = OutlineForRange::generate_outline_for_range(
                 function_bodies,
                 expanded_range.clone(),
                 language,
@@ -670,9 +670,8 @@ mod tests {
             dbg!(&generated_outline);
             // this is where we make sure we are fitting the above and below
             // into the context window
-            let processed_outline = process_outlines(generated_outline, &mut token_tracker);
-            outline_above = processed_outline.above;
-            outline_below = processed_outline.below;
+            let processed_outline = token_tracker.process_outlines(generated_outline);
+            (outline_above, outline_below) = processed_outline.get_tuple();
         }
 
         SelectionWithOutlines {
@@ -680,170 +679,6 @@ mod tests {
             outline_above,
             outline_below,
         }
-    }
-
-    fn process_outlines(
-        generated_outline: OutlineForRange,
-        context_manager: &mut ContextWindowTracker,
-    ) -> OutlineForRange {
-        // here we will process the outline again and try to generate it after making
-        // sure that it fits in the limit
-        let split_lines_regex = Regex::new(r"\r\n|\r|\n").unwrap();
-        let lines_above: Vec<String> = split_lines_regex
-            .split(&generated_outline.above)
-            .map(|s| s.to_owned())
-            .collect();
-        let lines_below: Vec<String> = split_lines_regex
-            .split(&generated_outline.below)
-            .map(|s| s.to_owned())
-            .collect();
-
-        let mut processed_above = vec![];
-        let mut processed_below = vec![];
-
-        let mut try_add_above_line =
-            |line: &str, context_manager: &mut ContextWindowTracker| -> bool {
-                if context_manager.line_would_fit(line) {
-                    context_manager.add_line(line);
-                    processed_above.insert(0, line.to_owned());
-                    return true;
-                }
-                false
-            };
-
-        let mut try_add_below_line =
-            |line: &str, context_manager: &mut ContextWindowTracker| -> bool {
-                if context_manager.line_would_fit(line) {
-                    context_manager.add_line(line);
-                    processed_below.push(line.to_owned());
-                    return true;
-                }
-                false
-            };
-
-        let mut above_index: i64 = <i64>::try_from(lines_above.len() - 1).expect("to work");
-        let mut below_index = 0;
-        let mut can_add_above = true;
-        let mut can_add_below = true;
-
-        for index in 0..100 {
-            if !can_add_above || (can_add_below && index % 4 == 3) {
-                if below_index < lines_below.len()
-                    && try_add_below_line(&lines_below[below_index], context_manager)
-                {
-                    below_index += 1;
-                } else {
-                    can_add_below = false;
-                }
-            } else {
-                if above_index >= 0
-                    && try_add_above_line(
-                        &lines_above[<usize>::try_from(above_index).expect("to work")],
-                        context_manager,
-                    )
-                {
-                    above_index -= 1;
-                } else {
-                    can_add_above = false;
-                }
-            }
-        }
-
-        OutlineForRange {
-            above: processed_above.join("\n"),
-            below: processed_below.join("\n"),
-        }
-    }
-
-    #[derive(Debug)]
-    struct OutlineForRange {
-        above: String,
-        below: String,
-    }
-
-    fn generate_outline_for_range(
-        function_bodies: Vec<FunctionInformation>,
-        range_expanded_to_function: Range,
-        language: &str,
-        source_code: &str,
-    ) -> OutlineForRange {
-        // Now we try to see if we can expand properly
-        let mut terminator = "".to_owned();
-        if language == "typescript" {
-            terminator = ";".to_owned();
-        }
-
-        // we only keep the function bodies which are not too far away from
-        // the range we are interested in selecting
-        let filtered_function_bodies: Vec<_> = function_bodies
-            .to_vec()
-            .into_iter()
-            .filter_map(|function_body| {
-                let fn_body_end_line = function_body.range().end_position().line();
-                let fn_body_start_line = function_body.range().start_position().line();
-                let range_start_line = range_expanded_to_function.start_position().line();
-                let range_end_line = range_expanded_to_function.end_position().line();
-                if fn_body_end_line < range_start_line {
-                    if range_start_line - fn_body_start_line > 50 {
-                        Some(function_body)
-                    } else {
-                        None
-                    }
-                } else if fn_body_start_line > range_end_line {
-                    if fn_body_end_line - range_end_line > 50 {
-                        Some(function_body)
-                    } else {
-                        None
-                    }
-                } else {
-                    Some(function_body)
-                }
-            })
-            .collect();
-
-        fn build_outline(
-            source_code: &str,
-            function_bodies: Vec<FunctionInformation>,
-            range: Range,
-            terminator: &str,
-        ) -> OutlineForRange {
-            let mut current_index = 0;
-            let mut outline_above = "".to_owned();
-            let mut end_of_range = range.end_byte();
-            let mut outline_below = "".to_owned();
-
-            for function_body in function_bodies.iter() {
-                if function_body.range().end_byte() < range.start_byte() {
-                    outline_above += source_code
-                        .get(current_index..function_body.range().start_byte())
-                        .expect("to not fail");
-                    outline_above += terminator;
-                    current_index = function_body.range().end_byte();
-                } else if function_body.range().start_byte() > range.end_byte() {
-                    outline_below += source_code
-                        .get(end_of_range..function_body.range().start_byte())
-                        .expect("to not fail");
-                    outline_below += terminator;
-                    end_of_range = function_body.range().end_byte();
-                }
-            }
-            outline_above += source_code
-                .get(current_index..range.start_byte())
-                .expect("to not fail");
-            outline_below += source_code
-                .get(end_of_range..source_code.len())
-                .expect("to not fail");
-            OutlineForRange {
-                above: outline_above,
-                below: outline_below,
-            }
-        }
-        build_outline(
-            source_code,
-            filtered_function_bodies,
-            range_expanded_to_function,
-            &terminator,
-        )
     }
 
     fn generate_selection_context(
@@ -991,30 +826,6 @@ mod tests {
         }
         if append_line_index > selection_limits.maximum_line_index {
             below.mark_complete();
-        }
-    }
-
-    // It can happen that we expand to too large a range, in which case we want
-    // to guard against how big it goes
-    // our threshold is atmost 30 lines+= expansion
-    fn guard_large_expansion(selection_range: &Range, expanded_range: &Range) -> Range {
-        let start_line_difference =
-            if selection_range.start_position().line() > expanded_range.start_position().line() {
-                selection_range.start_position().line() - expanded_range.start_position().line()
-            } else {
-                expanded_range.start_position().line() - selection_range.start_position().line()
-            };
-        let end_line_difference =
-            if selection_range.end_position().line() > expanded_range.end_position().line() {
-                selection_range.end_position().line() - expanded_range.end_position().line()
-            } else {
-                expanded_range.end_position().line() - selection_range.end_position().line()
-            };
-        if (start_line_difference + end_line_difference) > 30 {
-            // we are going to return the selection range here
-            return selection_range.clone();
-        } else {
-            return expanded_range.clone();
         }
     }
 

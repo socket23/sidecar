@@ -33,6 +33,7 @@ pub struct TextDocumentWeb {
     pub language: String,
     pub fs_file_path: String,
     pub relative_path: String,
+    pub line_count: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

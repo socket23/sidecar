@@ -144,6 +144,27 @@ impl Range {
         self.start_position.byte_offset <= other.start_position.byte_offset
             && self.end_position.byte_offset >= other.end_position.byte_offset
     }
+
+    pub fn guard_large_expansion(selection_range: Self, expanded_range: Self, size: usize) -> Self {
+        let start_line_difference =
+            if selection_range.start_position().line() > expanded_range.start_position().line() {
+                selection_range.start_position().line() - expanded_range.start_position().line()
+            } else {
+                expanded_range.start_position().line() - selection_range.start_position().line()
+            };
+        let end_line_difference =
+            if selection_range.end_position().line() > expanded_range.end_position().line() {
+                selection_range.end_position().line() - expanded_range.end_position().line()
+            } else {
+                expanded_range.end_position().line() - selection_range.end_position().line()
+            };
+        if (start_line_difference + end_line_difference) > 30 {
+            // we are going to return the selection range here
+            return selection_range.clone();
+        } else {
+            return expanded_range.clone();
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

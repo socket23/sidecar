@@ -8,6 +8,7 @@ use super::{
     languages::TSLanguageConfig,
     rust::rust_language_config,
     text_document::{DocumentSymbol, Position, Range, TextDocument},
+    types::FunctionInformation,
     typescript::typescript_language_config,
 };
 
@@ -310,7 +311,6 @@ impl EditorParsing {
         // the language we are interested in
         let language_config = self.ts_language_config(&language);
         if let None = language_config {
-            debug!("No language config found for language: {}", language);
             return vec![];
         }
         // okay now we have a language config, lets parse it
@@ -324,6 +324,20 @@ impl EditorParsing {
             &language_config.expect("if let None check above to work"),
             Range::new(start_position.clone(), end_position.clone()),
         )
+    }
+
+    pub fn function_information_nodes(
+        &self,
+        source_code: &str,
+        language: &str,
+    ) -> Vec<FunctionInformation> {
+        let language_config = self.ts_language_config(&language);
+        if let None = language_config {
+            return vec![];
+        }
+        language_config
+            .expect("if let None check above")
+            .function_information_nodes(source_code)
     }
 }
 

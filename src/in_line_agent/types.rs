@@ -3,6 +3,11 @@ use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 
+use crate::chunking::text_document::Range;
+use crate::chunking::types::FunctionInformation;
+use crate::chunking::types::FunctionNodeType;
+use crate::in_line_agent::context_parsing::generate_context_for_range;
+use crate::in_line_agent::context_parsing::EditExpandedSelectionRange;
 use crate::{
     agent::{
         llm_funcs::{self, llm::Message, LlmClient},
@@ -244,6 +249,10 @@ impl InLineAgent {
                 self.generate_documentation(answer_sender).await?;
                 return Ok(None);
             }
+            InLineAgentAction::Edit => {
+                self.process_edit().await?;
+                return Ok(None);
+            }
             _ => {
                 self.apologise_message().await?;
                 return Ok(None);
@@ -363,6 +372,90 @@ impl InLineAgent {
         Ok(())
     }
 
+    async fn process_edit(&mut self) -> anyhow::Result<()> {
+        // Here we will try to process the edits
+        // This is the current request selection range
+        let selection_range = Range::new(
+            self.editor_request.start_position(),
+            self.editor_request.end_position(),
+        );
+        // Now we want to get the chunks properly
+        // First we get the function blocks along with the ranges we know about
+        // we get the function nodes here
+        let function_nodes = self.editor_parsing.function_information_nodes(
+            &self.editor_request.source_code(),
+            &self.editor_request.language(),
+        );
+        // Now we need to get the nodes which are just function blocks
+        let mut function_blocks: Vec<_> = function_nodes
+            .iter()
+            .filter_map(|function_node| {
+                if function_node.r#type() == &FunctionNodeType::Function {
+                    Some(function_node)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // Now we sort the function blocks based on how close they are to the start index
+        // of the code selection
+        // we sort the nodes in increasing order
+        function_blocks.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
+
+        // Next we need to get the function bodies
+        let mut function_bodies: Vec<_> = function_nodes
+            .iter()
+            .filter_map(|function_node| {
+                if function_node.r#type() == &FunctionNodeType::Body {
+                    Some(function_node)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // Here we are sorting it in increasing order of start byte
+        function_bodies.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
+
+        let expanded_selection = FunctionInformation::get_expanded_selection_range(
+            function_blocks.as_slice(),
+            &selection_range,
+        );
+
+        let edit_expansion = EditExpandedSelectionRange::new(
+            Range::guard_large_expansion(selection_range.clone(), expanded_selection.clone(), 30),
+            expanded_selection.clone(),
+            FunctionInformation::fold_function_blocks(
+                function_bodies
+                    .to_vec()
+                    .into_iter()
+                    .map(|x| x.clone())
+                    .collect(),
+            ),
+        );
+
+        // these are the missing variables I have to fill in,
+        // lines count and the source lines
+        use regex::Regex;
+        let split_lines = Regex::new(r"\r\n|\r|\n").unwrap();
+        let source_lines: Vec<String> = split_lines
+            .split(&self.editor_request.source_code())
+            .map(|s| s.to_owned())
+            .collect();
+        // generate the prompts for it and then send it over to the LLM
+        let response = generate_context_for_range(
+            &self.editor_request.source_code(),
+            self.editor_request.line_count(),
+            &selection_range,
+            &expanded_selection,
+            &edit_expansion.range_expanded_to_functions,
+            &self.editor_request.language(),
+            4000,
+            source_lines,
+            function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
+        );
+        Ok(())
+    }
+
     pub fn messages_for_documentation_generation(
         &mut self,
         document_symbols: Vec<DocumentSymbol>,
@@ -438,400 +531,5 @@ impl InLineAgent {
                 format!("Please add {comment_type} for the selection.")
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use gix::config::file::includes::conditional::Context;
-    use regex::Regex;
-
-    use crate::{
-        agent::llm_funcs::{self, llm::OpenAIModel},
-        chunking::{
-            languages::TSLanguageParsing,
-            text_document::{OutlineForRange, Position, Range},
-            types::{FunctionInformation, FunctionNodeType},
-        },
-        in_line_agent::context_parsing::{ContextParserInLineEdit, ContextWindowTracker},
-        repo::types::RepoRef,
-        webserver::in_line_agent::{SnippetInformation, TextDocumentWeb},
-    };
-
-    use super::ProcessInEditorRequest;
-    #[test]
-    fn test_context_for_in_line_edit() {
-        let source_code = "import { HttpError, isHttpError, POST } from '@axflow/models/shared';\n\n// HuggingFace has the concept of a task. This code supports the \"textGeneration\" task.\n// https://huggingface.co/models?pipeline_tag=text-generation\n\n// https://huggingface.co/docs/api-inference/quicktour#running-inference-with-api-requests\nconst HUGGING_FACE_MODEL_API_URL = 'https://api-inference.huggingface.co/models/';\nconst HUGGING_FACE_STOP_TOKEN = '</s>';\n\nfunction headers(apiKey?: string, customHeaders?: Record<string, string>) {\n  const headers: Record<string, string> = {\n    accept: 'application/json',\n    ...customHeaders,\n    'content-type': 'application/json',\n  };\n  if (typeof apiKey === 'string') {\n    headers.authorization = `Bearer ${apiKey}`;\n  }\n  return headers;\n}\n\nexport namespace HuggingFaceTextGenerationTypes {\n  // https://huggingface.co/docs/api-inference/detailed_parameters#text-generation-task\n  export type Request = {\n    model: string;\n    inputs: string;\n    parameters?: {\n      top_k?: number;\n      top_p?: number;\n      temperature?: number;\n      repetition_penalty?: number;\n      max_new_tokens?: number;\n      // In seconds\n      max_time?: number;\n      return_full_text?: boolean;\n      num_return_sequences?: number;\n      do_sample?: boolean;\n    };\n    options?: {\n      use_cache?: boolean;\n      wait_for_model?: boolean;\n    };\n  };\n\n  export type RequestOptions = {\n    apiKey?: string;\n    apiUrl?: string;\n    fetch?: typeof fetch;\n    headers?: Record<string, string>;\n    signal?: AbortSignal;\n  };\n\n  export type GeneratedText = {\n    generated_text: string;\n  };\n\n  // https://huggingface.co/docs/api-inference/detailed_parameters#text-generation-task\n  export type Response = GeneratedText | GeneratedText[];\n\n  // Best documentation available: https://huggingface.co/docs/huggingface_hub/main/en/package_reference/inference_client#huggingface_hub.inference._text_generation.TextGenerationStreamResponse\n  export type Chunk = {\n    token: {\n      id: number;\n      text: string;\n      logprob: number;\n      special: boolean;\n    };\n    generated_text: string;\n    details?: {\n      // https://github.com/huggingface/huggingface_hub/blob/49cbeb78d3d87b22a40d04ef8a733855e82d17ef/src/huggingface_hub/inference/_text_generation.py#L272\n      finishReason: string;\n      generated_tokens: number;\n      seed?: number;\n    };\n  };\n}\n\n/**\n * Run a textGeneration task against the HF inference API\n *\n * @see https://huggingface.co/docs/api-inference/detailed_parameters#text-generation-task\n *\n * @param request The request body sent to HF. See their documentation linked above for details\n * @param options\n * @param options.apiKey The HuggingFace access token. If not provided, requests will be throttled\n * @param options.apiUrl The HuggingFace API URL. Defaults to https://api-inference.huggingface.co/models/\n * @param options.fetch The fetch implementation to use. Defaults to globalThis.fetch\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns The response body from HF. See their documentation linked above for details\n */\nasync function run(\n  request: HuggingFaceTextGenerationTypes.Request,\n  options: HuggingFaceTextGenerationTypes.RequestOptions,\n): Promise<HuggingFaceTextGenerationTypes.Response> {\n  const url = options.apiUrl || HUGGING_FACE_MODEL_API_URL + request.model;\n\n  const headers_ = headers(options.apiKey, options.headers);\n  const body = JSON.stringify({ ...request, stream: false });\n  const response = await POST(url, {\n    headers: headers_,\n    body,\n    fetch: options.fetch,\n    signal: options.signal,\n  });\n\n  return response.json();\n}\n\n/**\n * Stream a textGeneration task against the HF inference API. The resulting stream is the raw unmodified bytes from the API\n *\n * @see https://huggingface.co/docs/api-inference/detailed_parameters#text-generation-task\n *\n * @param request The request body sent to HF. See their documentation linked above for details\n * @param options\n * @param options.apiKey The HuggingFace access token. If not provided, requests will be throttled\n * @param options.apiUrl The HuggingFace API URL. Defaults to https://api-inference.huggingface.co/models/\n * @param options.fetch The fetch implementation to use. Defaults to globalThis.fetch\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns A stream of bytes directly from the API.\n */\nasync function streamBytes(\n  request: HuggingFaceTextGenerationTypes.Request,\n  options: HuggingFaceTextGenerationTypes.RequestOptions,\n): Promise<ReadableStream<Uint8Array>> {\n  const url = options.apiUrl || HUGGING_FACE_MODEL_API_URL + request.model;\n\n  const headers_ = headers(options.apiKey, options.headers);\n  const body = JSON.stringify({ ...request, stream: true });\n  try {\n    const response = await POST(url, {\n      headers: headers_,\n      body,\n      fetch: options.fetch,\n      signal: options.signal,\n    });\n\n    if (!response.body) {\n      throw new HttpError('Expected response body to be a ReadableStream', response);\n    }\n\n    return response.body;\n  } catch (e) {\n    if (isHttpError(e)) {\n      try {\n        const body = await e.response.json();\n        if (body?.error[0]?.includes('`stream` is not supported for this model')) {\n          throw new HttpError(`Model '${request.model}' does not support streaming`, e.response);\n        }\n      } catch {\n        // Cannot parse the response body into JSON, so throw the original error\n        throw e;\n      }\n    }\n    throw e;\n  }\n}\n\nfunction noop(chunk: HuggingFaceTextGenerationTypes.Chunk) {\n  return chunk;\n}\n\n/*\n * Return the text from a chunk. If the chunk is a stop token, don't return it to the user.\n * Example chunk:\n *   {\n *     token: { id: 11, text: ' and', logprob: -0.00002193451, special: false },\n *     generated_text: null,\n *     details: null\n *   }\n */\nfunction chunkToToken(chunk: HuggingFaceTextGenerationTypes.Chunk) {\n  if (chunk.token.special && chunk.token.text.includes(HUGGING_FACE_STOP_TOKEN)) {\n    return '';\n  }\n  return chunk.token.text;\n}\n\n/**\n * Stream a textGeneration task against the HF inference API. The resulting stream is the parsed stream data as JavaScript objects.\n * Example chunk:\n *   {\n *     token: { id: 11, text: ' and', logprob: -0.00002193451, special: false },\n *     generated_text: null,\n *     details: null\n *   }\n *\n * @see https://huggingface.co/docs/api-inference/detailed_parameters#text-generation-task\n *\n * @param request The request body sent to HF. See their documentation linked above for details\n * @param options\n * @param options.apiKey The HuggingFace access token. If not provided, requests will be throttled\n * @param options.apiUrl The HuggingFace API URL. Defaults to https://api-inference.huggingface.co/models/\n * @param options.fetch The fetch implementation to use. Defaults to globalThis.fetch\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns A stream of objects representing each chunk from the API\n */\nasync function stream(\n  request: HuggingFaceTextGenerationTypes.Request,\n  options: HuggingFaceTextGenerationTypes.RequestOptions,\n): Promise<ReadableStream<HuggingFaceTextGenerationTypes.Chunk>> {\n  const byteStream = await streamBytes(request, options);\n  return byteStream.pipeThrough(new HuggingFaceDecoderStream(noop));\n}\n\n/**\n * Run a streaming completion against the HF inference API. The resulting stream emits only the string tokens.\n * Note that this will strip the STOP token '</s>' from the text.\n *\n * @see https://huggingface.co/docs/api-inference/detailed_parameters#text-generation-task\n *\n * @param request The request body sent to HF. See their documentation linked above for details\n * @param options\n * @param options.apiKey The HuggingFace access token. If not provided, requests will be throttled\n * @param options.apiUrl The HuggingFace API URL. Defaults to https://api-inference.huggingface.co/models/\n * @param options.fetch The fetch implementation to use. Defaults to globalThis.fetch\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns A stream of tokens from the API.\n */\nasync function streamTokens(\n  request: HuggingFaceTextGenerationTypes.Request,\n  options: HuggingFaceTextGenerationTypes.RequestOptions,\n): Promise<ReadableStream<string>> {\n  const byteStream = await streamBytes(request, options);\n  return byteStream.pipeThrough(new HuggingFaceDecoderStream(chunkToToken));\n}\n\n/**\n * An object that encapsulates methods for calling the HF inference API\n */\nexport class HuggingFaceTextGeneration {\n  static run = run;\n  static streamBytes = streamBytes;\n  static stream = stream;\n  static streamTokens = streamTokens;\n}\n\nclass HuggingFaceDecoderStream<T> extends TransformStream<Uint8Array, T> {\n  private static LINES_RE = /data:\\s*(.+)/;\n\n  private static parseChunk(lines: string): HuggingFaceTextGenerationTypes.Chunk | null {\n    lines = lines.trim();\n\n    // Empty lines are ignored\n    if (lines.length === 0) {\n      return null;\n    }\n\n    const match = lines.match(HuggingFaceDecoderStream.LINES_RE);\n\n    try {\n      const data = match![1];\n      return JSON.parse(data);\n    } catch (e) {\n      throw new Error(`Malformed streaming data from HuggingFace: ${JSON.stringify(lines)}`);\n    }\n  }\n\n  private static transformer<T>(map: (chunk: HuggingFaceTextGenerationTypes.Chunk) => T) {\n    let buffer: string[] = [];\n    const decoder = new TextDecoder();\n\n    return (bytes: Uint8Array, controller: TransformStreamDefaultController<T>) => {\n      const chunk = decoder.decode(bytes);\n\n      for (let i = 0, len = chunk.length; i < len; ++i) {\n        const bufferLength = buffer.length;\n        // HF streams separator is `\\n\\n` (at least with the currently tested model)\n        const isSeparator = chunk[i] === '\\n' && buffer[bufferLength - 1] === '\\n';\n\n        // Keep buffering unless we've hit the end of a data chunk\n        if (!isSeparator) {\n          buffer.push(chunk[i]);\n          continue;\n        }\n\n        // Decode the object into the expected JSON type\n        const parsedChunk = HuggingFaceDecoderStream.parseChunk(buffer.join(''));\n        if (parsedChunk) {\n          controller.enqueue(map(parsedChunk));\n        }\n\n        buffer = [];\n      }\n    };\n  }\n\n  constructor(map: (chunk: HuggingFaceTextGenerationTypes.Chunk) => T) {\n    super({ transform: HuggingFaceDecoderStream.transformer(map) });\n  }\n}\n".to_owned();
-        let query = "".to_owned();
-        let language = "typescript".to_owned();
-        let line_count = 296;
-        let repo_ref = RepoRef::local("/Users/skcd").expect("test should work");
-        let snippet_information = SnippetInformation {
-            start_position: Position::new(265, 10, 9786),
-            end_position: Position::new(288, 6, 10636),
-        };
-        let text_document_web = TextDocumentWeb {
-            text: source_code.to_owned(),
-            language: language.to_owned(),
-            fs_file_path: "/Users/skcd".to_owned(),
-            relative_path: "/Users/skcd".to_owned(),
-            line_count,
-        };
-        let thread_id = uuid::Uuid::new_v4();
-        let selection = ProcessInEditorRequest {
-            query,
-            language: language.to_owned(),
-            repo_ref,
-            snippet_information: snippet_information.clone(),
-            text_document_web,
-            thread_id,
-        };
-        // This is the current request selection range
-        let selection_range = Range::new(
-            snippet_information.start_position,
-            snippet_information.end_position,
-        );
-        // Now we want to get the chunks properly
-        // First we get the function blocks along with the ranges we know about
-        let ts_language_parsing = TSLanguageParsing::init();
-        // we get the function nodes here
-        let function_nodes =
-            ts_language_parsing.function_information_nodes(&source_code, &language);
-        // Now we need to get the nodes which are just function blocks
-        let mut function_blocks: Vec<_> = function_nodes
-            .iter()
-            .filter_map(|function_node| {
-                if function_node.r#type() == &FunctionNodeType::Function {
-                    Some(function_node)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        // Now we sort the function blocks based on how close they are to the start index
-        // of the code selection
-        // we sort the nodes in increasing order
-        function_blocks.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
-
-        // Next we need to get the function bodies
-        let mut function_bodies: Vec<_> = function_nodes
-            .iter()
-            .filter_map(|function_node| {
-                if function_node.r#type() == &FunctionNodeType::Body {
-                    Some(function_node)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        // Here we are sorting it in increasing order of start byte
-        function_bodies.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
-
-        let expanded_selection = FunctionInformation::get_expanded_selection_range(
-            function_blocks.as_slice(),
-            &selection_range,
-        );
-
-        dbg!(&expanded_selection);
-
-        let edit_expansion = EditExpandedSelectionRange {
-            expanded_selection: Range::guard_large_expansion(
-                selection_range.clone(),
-                expanded_selection.clone(),
-                30,
-            ),
-            range_expanded_to_functions: expanded_selection.clone(),
-            function_bodies: FunctionInformation::fold_function_blocks(
-                function_bodies
-                    .to_vec()
-                    .into_iter()
-                    .map(|x| x.clone())
-                    .collect(),
-            ),
-        };
-
-        // these are the missing variables I have to fill in,
-        // lines count and the source lines
-        use regex::Regex;
-        let split_lines = Regex::new(r"\r\n|\r|\n").unwrap();
-        let source_lines: Vec<String> = split_lines
-            .split(&source_code)
-            .map(|s| s.to_owned())
-            .collect();
-        let response = generate_context_for_range(
-            &source_code,
-            line_count,
-            dbg!(&selection_range),
-            dbg!(&expanded_selection),
-            dbg!(&edit_expansion.range_expanded_to_functions),
-            &language,
-            4000,
-            source_lines,
-            function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
-        );
-        dbg!(&response.outline_above);
-        dbg!(&response.outline_below);
-        dbg!(&response.selection_context.range.line_string());
-        assert!(false);
-    }
-
-    // We want to send the above, in-range and the below sections
-    #[derive(Debug)]
-    pub struct SelectionContext {
-        above: ContextParserInLineEdit,
-        range: ContextParserInLineEdit,
-        below: ContextParserInLineEdit,
-    }
-
-    #[derive(Debug)]
-    pub struct SelectionLimits {
-        above_line_index: i64,
-        below_line_index: i64,
-        minimum_line_index: i64,
-        maximum_line_index: i64,
-    }
-
-    #[derive(Debug)]
-    pub struct SelectionWithOutlines {
-        selection_context: SelectionContext,
-        outline_above: String,
-        outline_below: String,
-    }
-
-    fn generate_context_for_range(
-        source_code: &str,
-        lines_count: usize,
-        original_selection: &Range,
-        maintain_range: &Range,
-        expanded_range: &Range,
-        language: &str,
-        character_limit: usize,
-        source_lines: Vec<String>,
-        function_bodies: Vec<FunctionInformation>,
-    ) -> SelectionWithOutlines {
-        // Here we will try 2 things:
-        // - try to send the whole document as the context first
-        // - if that fails, then we try to send the partial document as the
-        // context
-
-        let line_count_i64 = <i64>::try_from(lines_count).expect("usize to i64 should not fail");
-
-        // first try with the whole context
-        dbg!("generate_context_for_range");
-        let mut token_tracker = ContextWindowTracker::new(character_limit);
-        let selection_context = generate_selection_context(
-            source_code,
-            line_count_i64,
-            original_selection,
-            maintain_range,
-            &Range::new(Position::new(0, 0, 0), Position::new(lines_count, 0, 0)),
-            character_limit,
-            language,
-            source_lines.to_vec(),
-            &mut token_tracker,
-        );
-        dbg!("generate_context_for_range: full range");
-        if !(selection_context.above.has_context() && !selection_context.above.is_complete()) {
-            dbg!("generating context here because above has no context");
-            return SelectionWithOutlines {
-                selection_context,
-                outline_above: "".to_owned(),
-                outline_below: "".to_owned(),
-            };
-        }
-
-        dbg!("we are falling back to our range");
-
-        // now we try to send just the amount of data we have in the selection
-        let mut token_tracker = ContextWindowTracker::new(character_limit);
-        let restricted_selection_context = generate_selection_context(
-            source_code,
-            line_count_i64,
-            original_selection,
-            maintain_range,
-            expanded_range,
-            character_limit,
-            language,
-            source_lines,
-            &mut token_tracker,
-        );
-        let mut outline_above = "".to_owned();
-        let mut outline_below = "".to_owned();
-        if restricted_selection_context.above.is_complete()
-            && restricted_selection_context.below.is_complete()
-        {
-            dbg!("we are in this loop");
-            let generated_outline = OutlineForRange::generate_outline_for_range(
-                function_bodies,
-                expanded_range.clone(),
-                language,
-                source_code,
-            );
-            dbg!(&generated_outline);
-            // this is where we make sure we are fitting the above and below
-            // into the context window
-            let processed_outline = token_tracker.process_outlines(generated_outline);
-            (outline_above, outline_below) = processed_outline.get_tuple();
-        }
-
-        SelectionWithOutlines {
-            selection_context: restricted_selection_context,
-            outline_above,
-            outline_below,
-        }
-    }
-
-    fn generate_selection_context(
-        source_code: &str,
-        line_count: i64,
-        original_selection: &Range,
-        range_to_maintain: &Range,
-        expanded_range: &Range,
-        character_limit: usize,
-        language: &str,
-        lines: Vec<String>,
-        mut token_count: &mut ContextWindowTracker,
-    ) -> SelectionContext {
-        // Change this later on, this is the limits on the characters right
-        // now and not the tokens
-        let mut in_range = ContextParserInLineEdit::new(
-            language.to_owned(),
-            "ed8c6549bwf9".to_owned(),
-            line_count,
-            lines.to_vec(),
-        );
-        let mut above = ContextParserInLineEdit::new(
-            language.to_owned(),
-            "abpxx6d04wxr".to_owned(),
-            line_count,
-            lines.to_vec(),
-        );
-        let mut below = ContextParserInLineEdit::new(
-            language.to_owned(),
-            "be15d9bcejpp".to_owned(),
-            line_count,
-            lines.to_vec(),
-        );
-        let start_line = range_to_maintain.start_position().line();
-        let end_line = range_to_maintain.end_position().line();
-
-        for index in (start_line..=end_line).rev() {
-            if !in_range.prepend_line(index, &mut token_count) {
-                above.trim(None);
-                in_range.trim(Some(original_selection));
-                below.trim(None);
-                return {
-                    SelectionContext {
-                        above,
-                        range: in_range,
-                        below,
-                    }
-                };
-            }
-        }
-
-        dbg!("we are able to fill in the context for the range");
-
-        // Now we can try and expand the above and below ranges, since
-        // we have some space for the context
-        expand_above_and_below_selections(
-            &mut above,
-            &mut below,
-            &mut token_count,
-            SelectionLimits {
-                above_line_index: i64::try_from(range_to_maintain.start_position().line())
-                    .expect("usize to i64 to work")
-                    - 1,
-                below_line_index: i64::try_from(range_to_maintain.end_position().line())
-                    .expect("usize to i64 to work")
-                    + 1,
-                minimum_line_index: std::cmp::max(
-                    0,
-                    expanded_range
-                        .start_position()
-                        .line()
-                        .try_into()
-                        .expect("usize to i64 to work"),
-                ),
-                maximum_line_index: std::cmp::min(
-                    line_count - 1,
-                    expanded_range
-                        .end_position()
-                        .line()
-                        .try_into()
-                        .expect("usize to i64 to work"),
-                ),
-            },
-        );
-
-        // Now we trim out the ranges again and send the result back
-        above.trim(None);
-        below.trim(None);
-        in_range.trim(Some(original_selection));
-        SelectionContext {
-            above,
-            range: in_range,
-            below,
-        }
-    }
-
-    // We are going to expand the above and below ranges to gather more
-    // context if possible
-    fn expand_above_and_below_selections(
-        above: &mut ContextParserInLineEdit,
-        below: &mut ContextParserInLineEdit,
-        token_count: &mut ContextWindowTracker,
-        selection_limits: SelectionLimits,
-    ) {
-        dbg!(&selection_limits);
-        let mut prepend_line_index = selection_limits.above_line_index;
-        let mut append_line_index = selection_limits.below_line_index;
-        let mut can_prepend = true;
-        let mut can_append = true;
-        for iteration in 0..100 {
-            if !can_prepend || (can_append && iteration % 4 == 3) {
-                // If we're within the allowed range and the append is successful, increase the index
-                if append_line_index <= selection_limits.maximum_line_index
-                    && below.append_line(
-                        append_line_index
-                            .try_into()
-                            .expect("usize to i64 will not fail"),
-                        token_count,
-                    )
-                {
-                    append_line_index += 1;
-                } else {
-                    // Otherwise, set the flag to stop appending
-                    can_append = false;
-                }
-            } else {
-                // If we're within the allowed range and the prepend is successful, decrease the index
-                if prepend_line_index >= selection_limits.minimum_line_index
-                    && above.prepend_line(
-                        prepend_line_index
-                            .try_into()
-                            .expect("usize to i64 will not fail"),
-                        token_count,
-                    )
-                {
-                    prepend_line_index -= 1;
-                } else {
-                    // Otherwise, set the flag to stop prepending
-                    can_prepend = false;
-                }
-            }
-        }
-        if prepend_line_index < selection_limits.minimum_line_index {
-            above.mark_complete();
-        }
-        if append_line_index > selection_limits.maximum_line_index {
-            below.mark_complete();
-        }
-    }
-
-    struct EditExpandedSelectionRange {
-        expanded_selection: Range,
-        range_expanded_to_functions: Range,
-        function_bodies: Vec<FunctionInformation>,
     }
 }

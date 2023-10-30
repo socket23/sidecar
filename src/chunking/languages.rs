@@ -57,6 +57,54 @@ impl TSLanguageConfig {
     pub fn get_language(&self) -> Option<String> {
         self.language_ids.first().map(|s| s.to_string())
     }
+
+    pub fn function_information_nodes(&self, source_code: &str) -> Vec<FunctionInformation> {
+        let function_queries = self.function_query.to_vec();
+
+        // Now we need to run the tree sitter query on this and get back the
+        // answer
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code.as_bytes(), None).unwrap();
+        let node = parsed_data.root_node();
+        let mut function_nodes = vec![];
+        let mut unique_ranges: HashSet<tree_sitter::Range> = Default::default();
+        function_queries.into_iter().for_each(|function_query| {
+            let query = tree_sitter::Query::new(grammar(), &function_query)
+                .expect("function queries are well formed");
+            let mut cursor = tree_sitter::QueryCursor::new();
+            cursor
+                .captures(&query, node, source_code.as_bytes())
+                .into_iter()
+                .for_each(|capture| {
+                    capture.0.captures.into_iter().for_each(|capture| {
+                        let capture_name = query
+                            .capture_names()
+                            .to_vec()
+                            .remove(capture.index.try_into().unwrap());
+                        let capture_type = FunctionNodeType::from_str(&capture_name);
+                        if let Some(capture_type) = capture_type {
+                            function_nodes.push(FunctionInformation::new(
+                                Range::for_tree_node(&capture.node),
+                                capture_type,
+                            ));
+                        }
+                    })
+                });
+        });
+        function_nodes
+            .into_iter()
+            .filter_map(|function_node| {
+                let range = function_node.range();
+                if unique_ranges.contains(&range.to_tree_sitter_range()) {
+                    return None;
+                }
+                unique_ranges.insert(range.to_tree_sitter_range());
+                Some(function_node.clone())
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone)]

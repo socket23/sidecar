@@ -1,6 +1,9 @@
 use regex::Regex;
 
-use crate::chunking::text_document::{OutlineForRange, Range};
+use crate::chunking::{
+    text_document::{OutlineForRange, Position, Range},
+    types::FunctionInformation,
+};
 
 #[derive(Debug)]
 pub struct ContextWindowTracker {
@@ -254,6 +257,276 @@ impl ContextParserInLineEdit {
                 self.last_line_index -= 1;
                 self.lines.pop();
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+struct SelectionLimits {
+    above_line_index: i64,
+    below_line_index: i64,
+    minimum_line_index: i64,
+    maximum_line_index: i64,
+}
+
+fn expand_above_and_below_selections(
+    above: &mut ContextParserInLineEdit,
+    below: &mut ContextParserInLineEdit,
+    token_count: &mut ContextWindowTracker,
+    selection_limits: SelectionLimits,
+) {
+    let mut prepend_line_index = selection_limits.above_line_index;
+    let mut append_line_index = selection_limits.below_line_index;
+    let mut can_prepend = true;
+    let mut can_append = true;
+    for iteration in 0..100 {
+        if !can_prepend || (can_append && iteration % 4 == 3) {
+            // If we're within the allowed range and the append is successful, increase the index
+            if append_line_index <= selection_limits.maximum_line_index
+                && below.append_line(
+                    append_line_index
+                        .try_into()
+                        .expect("usize to i64 will not fail"),
+                    token_count,
+                )
+            {
+                append_line_index += 1;
+            } else {
+                // Otherwise, set the flag to stop appending
+                can_append = false;
+            }
+        } else {
+            // If we're within the allowed range and the prepend is successful, decrease the index
+            if prepend_line_index >= selection_limits.minimum_line_index
+                && above.prepend_line(
+                    prepend_line_index
+                        .try_into()
+                        .expect("usize to i64 will not fail"),
+                    token_count,
+                )
+            {
+                prepend_line_index -= 1;
+            } else {
+                // Otherwise, set the flag to stop prepending
+                can_prepend = false;
+            }
+        }
+    }
+    if prepend_line_index < selection_limits.minimum_line_index {
+        above.mark_complete();
+    }
+    if append_line_index > selection_limits.maximum_line_index {
+        below.mark_complete();
+    }
+}
+
+#[derive(Debug)]
+pub struct SelectionContext {
+    above: ContextParserInLineEdit,
+    range: ContextParserInLineEdit,
+    below: ContextParserInLineEdit,
+}
+
+fn generate_selection_context(
+    source_code: &str,
+    line_count: i64,
+    original_selection: &Range,
+    range_to_maintain: &Range,
+    expanded_range: &Range,
+    character_limit: usize,
+    language: &str,
+    lines: Vec<String>,
+    mut token_count: &mut ContextWindowTracker,
+) -> SelectionContext {
+    // Change this later on, this is the limits on the characters right
+    // now and not the tokens
+    let mut in_range = ContextParserInLineEdit::new(
+        language.to_owned(),
+        "ed8c6549bwf9".to_owned(),
+        line_count,
+        lines.to_vec(),
+    );
+    let mut above = ContextParserInLineEdit::new(
+        language.to_owned(),
+        "abpxx6d04wxr".to_owned(),
+        line_count,
+        lines.to_vec(),
+    );
+    let mut below = ContextParserInLineEdit::new(
+        language.to_owned(),
+        "be15d9bcejpp".to_owned(),
+        line_count,
+        lines.to_vec(),
+    );
+    let start_line = range_to_maintain.start_position().line();
+    let end_line = range_to_maintain.end_position().line();
+
+    for index in (start_line..=end_line).rev() {
+        if !in_range.prepend_line(index, &mut token_count) {
+            above.trim(None);
+            in_range.trim(Some(original_selection));
+            below.trim(None);
+            return {
+                SelectionContext {
+                    above,
+                    range: in_range,
+                    below,
+                }
+            };
+        }
+    }
+
+    dbg!("we are able to fill in the context for the range");
+
+    // Now we can try and expand the above and below ranges, since
+    // we have some space for the context
+    expand_above_and_below_selections(
+        &mut above,
+        &mut below,
+        &mut token_count,
+        SelectionLimits {
+            above_line_index: i64::try_from(range_to_maintain.start_position().line())
+                .expect("usize to i64 to work")
+                - 1,
+            below_line_index: i64::try_from(range_to_maintain.end_position().line())
+                .expect("usize to i64 to work")
+                + 1,
+            minimum_line_index: std::cmp::max(
+                0,
+                expanded_range
+                    .start_position()
+                    .line()
+                    .try_into()
+                    .expect("usize to i64 to work"),
+            ),
+            maximum_line_index: std::cmp::min(
+                line_count - 1,
+                expanded_range
+                    .end_position()
+                    .line()
+                    .try_into()
+                    .expect("usize to i64 to work"),
+            ),
+        },
+    );
+
+    // Now we trim out the ranges again and send the result back
+    above.trim(None);
+    below.trim(None);
+    in_range.trim(Some(original_selection));
+    SelectionContext {
+        above,
+        range: in_range,
+        below,
+    }
+}
+
+#[derive(Debug)]
+pub struct SelectionWithOutlines {
+    selection_context: SelectionContext,
+    outline_above: String,
+    outline_below: String,
+}
+
+pub fn generate_context_for_range(
+    source_code: &str,
+    lines_count: usize,
+    original_selection: &Range,
+    maintain_range: &Range,
+    expanded_range: &Range,
+    language: &str,
+    character_limit: usize,
+    source_lines: Vec<String>,
+    function_bodies: Vec<FunctionInformation>,
+) -> SelectionWithOutlines {
+    // Here we will try 2 things:
+    // - try to send the whole document as the context first
+    // - if that fails, then we try to send the partial document as the
+    // context
+
+    let line_count_i64 = <i64>::try_from(lines_count).expect("usize to i64 should not fail");
+
+    // first try with the whole context
+    dbg!("generate_context_for_range");
+    let mut token_tracker = ContextWindowTracker::new(character_limit);
+    let selection_context = generate_selection_context(
+        source_code,
+        line_count_i64,
+        original_selection,
+        maintain_range,
+        &Range::new(Position::new(0, 0, 0), Position::new(lines_count, 0, 0)),
+        character_limit,
+        language,
+        source_lines.to_vec(),
+        &mut token_tracker,
+    );
+    dbg!("generate_context_for_range: full range");
+    if !(selection_context.above.has_context() && !selection_context.above.is_complete()) {
+        dbg!("generating context here because above has no context");
+        return SelectionWithOutlines {
+            selection_context,
+            outline_above: "".to_owned(),
+            outline_below: "".to_owned(),
+        };
+    }
+
+    dbg!("we are falling back to our range");
+
+    // now we try to send just the amount of data we have in the selection
+    let mut token_tracker = ContextWindowTracker::new(character_limit);
+    let restricted_selection_context = generate_selection_context(
+        source_code,
+        line_count_i64,
+        original_selection,
+        maintain_range,
+        expanded_range,
+        character_limit,
+        language,
+        source_lines,
+        &mut token_tracker,
+    );
+    let mut outline_above = "".to_owned();
+    let mut outline_below = "".to_owned();
+    if restricted_selection_context.above.is_complete()
+        && restricted_selection_context.below.is_complete()
+    {
+        dbg!("we are in this loop");
+        let generated_outline = OutlineForRange::generate_outline_for_range(
+            function_bodies,
+            expanded_range.clone(),
+            language,
+            source_code,
+        );
+        dbg!(&generated_outline);
+        // this is where we make sure we are fitting the above and below
+        // into the context window
+        let processed_outline = token_tracker.process_outlines(generated_outline);
+        (outline_above, outline_below) = processed_outline.get_tuple();
+    }
+
+    SelectionWithOutlines {
+        selection_context: restricted_selection_context,
+        outline_above,
+        outline_below,
+    }
+}
+
+pub struct EditExpandedSelectionRange {
+    pub expanded_selection: Range,
+    pub range_expanded_to_functions: Range,
+    pub function_bodies: Vec<FunctionInformation>,
+}
+
+impl EditExpandedSelectionRange {
+    pub fn new(
+        expanded_selection: Range,
+        range_expanded_to_functions: Range,
+        function_bodies: Vec<FunctionInformation>,
+    ) -> Self {
+        Self {
+            expanded_selection,
+            range_expanded_to_functions,
+            function_bodies,
         }
     }
 }

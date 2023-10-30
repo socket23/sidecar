@@ -117,6 +117,7 @@ pub struct ContextParserInLineEdit {
     source_lines: Vec<String>,
     /// This is the lines we are going to use for the context
     lines: Vec<String>,
+    fs_file_path: String,
 }
 
 impl ContextParserInLineEdit {
@@ -125,6 +126,7 @@ impl ContextParserInLineEdit {
         unique_identifier: String,
         lines_count: i64,
         source_lines: Vec<String>,
+        fs_file_path: String,
     ) -> Self {
         let comment_style = "//".to_owned();
         Self {
@@ -140,6 +142,7 @@ impl ContextParserInLineEdit {
             end_marker: format!("{} END: {}", &comment_style, unique_identifier),
             source_lines,
             lines: vec![],
+            fs_file_path,
         }
     }
 
@@ -259,6 +262,27 @@ impl ContextParserInLineEdit {
             }
         }
     }
+
+    pub fn generate_prompt(&self, should_use_markers: bool) -> Vec<String> {
+        if !self.has_context() {
+            Default::default()
+        } else {
+            let mut lines: Vec<String> = vec![];
+            let language = &self.language;
+            lines.push(format!("```{language}"));
+            let fs_file_path = &self.fs_file_path;
+            lines.push(format!("// FILEPATH: ${fs_file_path}"));
+            if should_use_markers {
+                lines.push(self.start_marker.clone());
+            }
+            lines.extend(self.lines.to_vec().into_iter());
+            if should_use_markers {
+                lines.push(self.end_marker.clone());
+            }
+            lines.push("```".to_owned());
+            lines
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -336,6 +360,7 @@ fn generate_selection_context(
     character_limit: usize,
     language: &str,
     lines: Vec<String>,
+    fs_file_path: String,
     mut token_count: &mut ContextWindowTracker,
 ) -> SelectionContext {
     // Change this later on, this is the limits on the characters right
@@ -345,18 +370,21 @@ fn generate_selection_context(
         "ed8c6549bwf9".to_owned(),
         line_count,
         lines.to_vec(),
+        fs_file_path.to_owned(),
     );
     let mut above = ContextParserInLineEdit::new(
         language.to_owned(),
         "abpxx6d04wxr".to_owned(),
         line_count,
         lines.to_vec(),
+        fs_file_path.to_owned(),
     );
     let mut below = ContextParserInLineEdit::new(
         language.to_owned(),
         "be15d9bcejpp".to_owned(),
         line_count,
         lines.to_vec(),
+        fs_file_path,
     );
     let start_line = range_to_maintain.start_position().line();
     let end_line = range_to_maintain.end_position().line();
@@ -438,6 +466,7 @@ pub fn generate_context_for_range(
     character_limit: usize,
     source_lines: Vec<String>,
     function_bodies: Vec<FunctionInformation>,
+    fs_file_path: String,
 ) -> SelectionWithOutlines {
     // Here we will try 2 things:
     // - try to send the whole document as the context first
@@ -447,7 +476,6 @@ pub fn generate_context_for_range(
     let line_count_i64 = <i64>::try_from(lines_count).expect("usize to i64 should not fail");
 
     // first try with the whole context
-    dbg!("generate_context_for_range");
     let mut token_tracker = ContextWindowTracker::new(character_limit);
     let selection_context = generate_selection_context(
         source_code,
@@ -458,19 +486,16 @@ pub fn generate_context_for_range(
         character_limit,
         language,
         source_lines.to_vec(),
+        fs_file_path.to_owned(),
         &mut token_tracker,
     );
-    dbg!("generate_context_for_range: full range");
     if !(selection_context.above.has_context() && !selection_context.above.is_complete()) {
-        dbg!("generating context here because above has no context");
         return SelectionWithOutlines {
             selection_context,
             outline_above: "".to_owned(),
             outline_below: "".to_owned(),
         };
     }
-
-    dbg!("we are falling back to our range");
 
     // now we try to send just the amount of data we have in the selection
     let mut token_tracker = ContextWindowTracker::new(character_limit);
@@ -483,6 +508,7 @@ pub fn generate_context_for_range(
         character_limit,
         language,
         source_lines,
+        fs_file_path,
         &mut token_tracker,
     );
     let mut outline_above = "".to_owned();
@@ -490,14 +516,12 @@ pub fn generate_context_for_range(
     if restricted_selection_context.above.is_complete()
         && restricted_selection_context.below.is_complete()
     {
-        dbg!("we are in this loop");
         let generated_outline = OutlineForRange::generate_outline_for_range(
             function_bodies,
             expanded_range.clone(),
             language,
             source_code,
         );
-        dbg!(&generated_outline);
         // this is where we make sure we are fitting the above and below
         // into the context window
         let processed_outline = token_tracker.process_outlines(generated_outline);

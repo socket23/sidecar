@@ -523,15 +523,6 @@ mod tests {
         // Here we are sorting it in increasing order of start byte
         function_bodies.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
 
-        // Now we are going to do some processing on the whole range which we got
-        // in the selection
-        // Here we are basically going to expand the given range to be a bit bigger
-        // inputs: t: document
-        // inputs: e: ranges for the function bodies
-        // inputs: r: whole range
-        // function pJ(t, e, r) { let n = lJ(t, e, r.start), i = lJ(t, e, r.end), o = t.offsetAt(r.start), s = t.offsetAt(r.end); return n && (o = Math.min(o, n.startIndex), s = Math.max(s, n.endIndex)), i && (o = Math.min(o, i.startIndex), s = Math.max(s, i.endIndex)), new De(t.positionAt(o), t.positionAt(s)) }
-        // This uses the lJ function to get some ranges, so lets fist implement that
-        // function lJ(t, e, r) { let n = t.offsetAt(r), i = null; for (let o of e) if (!(o.endIndex < n)) { if (o.startIndex > n) break; i = o } return i }
         let expanded_selection =
             get_expanded_selection_range(function_bodies.as_slice(), selection_range.clone());
 
@@ -539,35 +530,29 @@ mod tests {
             expanded_selection: guard_large_expansion(&selection_range, &expanded_selection),
             range_expanded_to_functions: Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
             function_bodies: fold_function_blocks(
-                function_bodies.into_iter().map(|x| x.clone()).collect(),
+                function_bodies
+                    .to_vec()
+                    .into_iter()
+                    .map(|x| x.clone())
+                    .collect(),
             ),
         };
 
-        // Next we have to get use the value returned by this function to get
-        // the top and bottom selection ranges using the tokens
-        // // how is the selection is generated
-        // First lets understand the inputs to this
-        // e: this looks like some kind of context for the endpoint to use?
-        // r: looks like the current document but I might be wrong
-        // n: is the expanded range we are going with
-        // i: what is the function block(s?) this range has been expanded to
-        // o: is all the function bodies which we have in the current file
-        // s: is null here
-        // async generateSelectionContext(e, r, n, i, o, s) { let a = await e.get(pr).getChatEndpointInfo(); s = s ?? a.modelMaxTokenWindow * 4 / 3; let l = new os(s), c = OM(r.document, r.selection, n, new De(0, 0, r.document.lineCount, 0), r.language, l); if (!(c.above.hasContent && !c.above.isComplete)) return { above: c.above, range: c.range, below: c.below, outlineAbove: "", outlineBelow: "" }; let d = new os(s), p = new De(i.start.line, 0, i.end.line, r.document.lineAt(i.end.line).range.end.character), f = OM(r.document, r.selection, n, p, r.language, d), m = "", h = ""; if (f.above.isComplete && f.below.isComplete) { let g = _Pe({ document: r.document, functionBodies: o, rangeExpandedToFunctionWholeLines: p }), v = xPe(g, d); m = v.outlineAbove, h = v.outlineBelow } return { above: f.above, range: f.range, below: f.below, outlineAbove: m, outlineBelow: h } }
-        // over in this function we end up calling the OM function which looks like this:
-        // OM function and his arguments:
-        // t: document
-        // e: the selection we originally had
-        // r: the expanded range
-        // n: the range we want to expand into?
-        // i: the language we are using
-        // o: the context window tracker
-        // function OM(t, e, r, n, i, o) {
-        //   let s = new ci(o, t, i, "ed8c6549bwf9"),
-        //   a = new ci(o, t, i, "abpxx6d04wxr"),
-        //   l = new ci(o, t, i, "be15d9bcejpp"),
-        //   c = () => (a.trim(), s.trim(e), l.trim(), { above: a, range: s, below: l });
-        // }
+        // these are the missing variables I have to fill in,
+        // lines count and the source lines
+        let lines_count = 0;
+        let source_lines: Vec<String> = vec![];
+        generate_context_for_range(
+            source_code,
+            lines_count,
+            &selection_range,
+            &expanded_selection,
+            &edit_expansion.range_expanded_to_functions,
+            &language,
+            8000,
+            vec![],
+            function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
+        );
     }
 
     // We want to send the above, in-range and the below sections

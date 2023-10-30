@@ -63,6 +63,10 @@ impl Position {
             byte_offset,
         }
     }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -134,6 +138,11 @@ impl Range {
                 byte_offset: range.end_byte,
             },
         }
+    }
+
+    pub fn is_contained(&self, other: &Self) -> bool {
+        self.start_position.byte_offset <= other.start_position.byte_offset
+            && self.end_position.byte_offset >= other.end_position.byte_offset
     }
 }
 

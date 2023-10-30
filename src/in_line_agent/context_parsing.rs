@@ -1,4 +1,6 @@
-use crate::chunking::text_document::Range;
+use regex::Regex;
+
+use crate::chunking::text_document::{OutlineForRange, Range};
 
 #[derive(Debug)]
 pub struct ContextWindowTracker {
@@ -28,6 +30,73 @@ impl ContextWindowTracker {
 
     pub fn add_line(&mut self, line: &str) {
         self.total_tokens += line.len() + 1;
+    }
+
+    pub fn process_outlines(&mut self, generated_outline: OutlineForRange) -> OutlineForRange {
+        // here we will process the outline again and try to generate it after making
+        // sure that it fits in the limit
+        let split_lines_regex = Regex::new(r"\r\n|\r|\n").unwrap();
+        let lines_above: Vec<String> = split_lines_regex
+            .split(&generated_outline.above())
+            .map(|s| s.to_owned())
+            .collect();
+        let lines_below: Vec<String> = split_lines_regex
+            .split(&generated_outline.below())
+            .map(|s| s.to_owned())
+            .collect();
+
+        let mut processed_above = vec![];
+        let mut processed_below = vec![];
+
+        let mut try_add_above_line =
+            |line: &str, context_manager: &mut ContextWindowTracker| -> bool {
+                if context_manager.line_would_fit(line) {
+                    context_manager.add_line(line);
+                    processed_above.insert(0, line.to_owned());
+                    return true;
+                }
+                false
+            };
+
+        let mut try_add_below_line =
+            |line: &str, context_manager: &mut ContextWindowTracker| -> bool {
+                if context_manager.line_would_fit(line) {
+                    context_manager.add_line(line);
+                    processed_below.push(line.to_owned());
+                    return true;
+                }
+                false
+            };
+
+        let mut above_index: i64 = <i64>::try_from(lines_above.len() - 1).expect("to work");
+        let mut below_index = 0;
+        let mut can_add_above = true;
+        let mut can_add_below = true;
+
+        for index in 0..100 {
+            if !can_add_above || (can_add_below && index % 4 == 3) {
+                if below_index < lines_below.len()
+                    && try_add_below_line(&lines_below[below_index], self)
+                {
+                    below_index += 1;
+                } else {
+                    can_add_below = false;
+                }
+            } else {
+                if above_index >= 0
+                    && try_add_above_line(
+                        &lines_above[<usize>::try_from(above_index).expect("to work")],
+                        self,
+                    )
+                {
+                    above_index -= 1;
+                } else {
+                    can_add_above = false;
+                }
+            }
+        }
+
+        OutlineForRange::new(processed_above.join("\n"), processed_below.join("\n"))
     }
 }
 

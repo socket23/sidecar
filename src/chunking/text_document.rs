@@ -1,6 +1,6 @@
 use crate::repo::types::RepoRef;
 
-use super::languages::TSLanguageConfig;
+use super::{languages::TSLanguageConfig, types::FunctionInformation};
 
 #[derive(Debug)]
 pub struct TextDocument {
@@ -311,5 +311,114 @@ impl DocumentSymbol {
                 code: source_code[tree_node.start_byte()..tree_node.end_byte()].to_owned(),
             })
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct OutlineForRange {
+    above: String,
+    below: String,
+}
+
+impl OutlineForRange {
+    pub fn new(above: String, below: String) -> Self {
+        Self { above, below }
+    }
+
+    pub fn get_tuple(self: Self) -> (String, String) {
+        (self.above, self.below)
+    }
+
+    pub fn above(&self) -> &str {
+        &self.above
+    }
+
+    pub fn below(&self) -> &str {
+        &self.below
+    }
+
+    pub fn generate_outline_for_range(
+        function_bodies: Vec<FunctionInformation>,
+        range_expanded_to_function: Range,
+        language: &str,
+        source_code: &str,
+    ) -> Self {
+        // Now we try to see if we can expand properly
+        let mut terminator = "".to_owned();
+        if language == "typescript" {
+            terminator = ";".to_owned();
+        }
+
+        // we only keep the function bodies which are not too far away from
+        // the range we are interested in selecting
+        let filtered_function_bodies: Vec<_> = function_bodies
+            .to_vec()
+            .into_iter()
+            .filter_map(|function_body| {
+                let fn_body_end_line = function_body.range().end_position().line();
+                let fn_body_start_line = function_body.range().start_position().line();
+                let range_start_line = range_expanded_to_function.start_position().line();
+                let range_end_line = range_expanded_to_function.end_position().line();
+                if fn_body_end_line < range_start_line {
+                    if range_start_line - fn_body_start_line > 50 {
+                        Some(function_body)
+                    } else {
+                        None
+                    }
+                } else if fn_body_start_line > range_end_line {
+                    if fn_body_end_line - range_end_line > 50 {
+                        Some(function_body)
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(function_body)
+                }
+            })
+            .collect();
+
+        fn build_outline(
+            source_code: &str,
+            function_bodies: Vec<FunctionInformation>,
+            range: Range,
+            terminator: &str,
+        ) -> OutlineForRange {
+            let mut current_index = 0;
+            let mut outline_above = "".to_owned();
+            let mut end_of_range = range.end_byte();
+            let mut outline_below = "".to_owned();
+
+            for function_body in function_bodies.iter() {
+                if function_body.range().end_byte() < range.start_byte() {
+                    outline_above += source_code
+                        .get(current_index..function_body.range().start_byte())
+                        .expect("to not fail");
+                    outline_above += terminator;
+                    current_index = function_body.range().end_byte();
+                } else if function_body.range().start_byte() > range.end_byte() {
+                    outline_below += source_code
+                        .get(end_of_range..function_body.range().start_byte())
+                        .expect("to not fail");
+                    outline_below += terminator;
+                    end_of_range = function_body.range().end_byte();
+                }
+            }
+            outline_above += source_code
+                .get(current_index..range.start_byte())
+                .expect("to not fail");
+            outline_below += source_code
+                .get(end_of_range..source_code.len())
+                .expect("to not fail");
+            OutlineForRange {
+                above: outline_above,
+                below: outline_below,
+            }
+        }
+        build_outline(
+            source_code,
+            filtered_function_bodies,
+            range_expanded_to_function,
+            &terminator,
+        )
     }
 }

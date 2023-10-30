@@ -443,7 +443,10 @@ impl InLineAgent {
 
 #[cfg(test)]
 mod tests {
+    use gix::config::file::includes::conditional::Context;
+
     use crate::{
+        agent::llm_funcs::{self, llm::OpenAIModel},
         chunking::{
             languages::TSLanguageParsing,
             text_document::{Position, Range},
@@ -476,7 +479,7 @@ mod tests {
             query,
             language: language.to_owned(),
             repo_ref,
-            snippet_information,
+            snippet_information: snippet_information.clone(),
             text_document_web,
             thread_id,
         };
@@ -530,10 +533,447 @@ mod tests {
         // This uses the lJ function to get some ranges, so lets fist implement that
         // function lJ(t, e, r) { let n = t.offsetAt(r), i = null; for (let o of e) if (!(o.endIndex < n)) { if (o.startIndex > n) break; i = o } return i }
         let expanded_selection =
-            get_expanded_selection_range(function_bodies.as_slice(), selection_range);
+            get_expanded_selection_range(function_bodies.as_slice(), selection_range.clone());
+
+        let edit_expansion = EditExpandedSelectionRange {
+            expanded_selection: guard_large_expansion(&selection_range, &expanded_selection),
+            range_expanded_to_functions: Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+            function_bodies: fold_function_blocks(
+                function_bodies.into_iter().map(|x| x.clone()).collect(),
+            ),
+        };
 
         // Next we have to get use the value returned by this function to get
         // the top and bottom selection ranges using the tokens
+        // // how is the selection is generated
+        // First lets understand the inputs to this
+        // e: this looks like some kind of context for the endpoint to use?
+        // r: looks like the current document but I might be wrong
+        // n: is the expanded range we are going with
+        // i: what is the function block(s?) this range has been expanded to
+        // o: is all the function bodies which we have in the current file
+        // s: is null here
+        // async generateSelectionContext(e, r, n, i, o, s) { let a = await e.get(pr).getChatEndpointInfo(); s = s ?? a.modelMaxTokenWindow * 4 / 3; let l = new os(s), c = OM(r.document, r.selection, n, new De(0, 0, r.document.lineCount, 0), r.language, l); if (!(c.above.hasContent && !c.above.isComplete)) return { above: c.above, range: c.range, below: c.below, outlineAbove: "", outlineBelow: "" }; let d = new os(s), p = new De(i.start.line, 0, i.end.line, r.document.lineAt(i.end.line).range.end.character), f = OM(r.document, r.selection, n, p, r.language, d), m = "", h = ""; if (f.above.isComplete && f.below.isComplete) { let g = _Pe({ document: r.document, functionBodies: o, rangeExpandedToFunctionWholeLines: p }), v = xPe(g, d); m = v.outlineAbove, h = v.outlineBelow } return { above: f.above, range: f.range, below: f.below, outlineAbove: m, outlineBelow: h } }
+        // over in this function we end up calling the OM function which looks like this:
+        // OM function and his arguments:
+        // t: document
+        // e: the selection we originally had
+        // r: the expanded range
+        // n: the range we want to expand into?
+        // i: the language we are using
+        // o: the context window tracker
+        // function OM(t, e, r, n, i, o) {
+        //   let s = new ci(o, t, i, "ed8c6549bwf9"),
+        //   a = new ci(o, t, i, "abpxx6d04wxr"),
+        //   l = new ci(o, t, i, "be15d9bcejpp"),
+        //   c = () => (a.trim(), s.trim(e), l.trim(), { above: a, range: s, below: l });
+        // }
+    }
+
+    // We want to send the above, in-range and the below sections
+    pub struct SelectionContext {
+        above: ContextParserInLineEdit,
+        range: ContextParserInLineEdit,
+        below: ContextParserInLineEdit,
+    }
+
+    pub struct SelectionLimits {
+        above_line_index: i64,
+        below_line_index: i64,
+        minimum_line_index: i64,
+        maximum_line_index: i64,
+    }
+
+    pub struct SelectionWithOutlines {
+        selection_context: SelectionContext,
+        outline_above: String,
+        outline_below: String,
+    }
+
+    fn generate_context_for_range(
+        source_code: &str,
+        lines_count: usize,
+        original_selection: &Range,
+        maintain_range: &Range,
+        expanded_range: &Range,
+        language: &str,
+        character_limit: usize,
+        source_lines: Vec<String>,
+        function_bodies: Vec<FunctionInformation>,
+    ) -> SelectionWithOutlines {
+        // Here we will try 2 things:
+        // - try to send the whole document as the context first
+        // - if that fails, then we try to send the partial document as the
+        // context
+
+        let line_count_i64 = <i64>::try_from(lines_count).expect("usize to i64 should not fail");
+
+        // first try with the whole context
+        let selection_context = generate_selection_context(
+            source_code,
+            line_count_i64,
+            original_selection,
+            maintain_range,
+            &Range::new(Position::new(0, 0, 0), Position::new(lines_count, 0, 0)),
+            character_limit,
+            language,
+            source_lines.to_vec(),
+        );
+        if !(selection_context.above.has_context() && !selection_context.above.is_complete()) {
+            return SelectionWithOutlines {
+                selection_context,
+                outline_above: "".to_owned(),
+                outline_below: "".to_owned(),
+            };
+        }
+
+        // now we try to send just the amount of data we have in the selection
+        let restricted_selection_context = generate_selection_context(
+            source_code,
+            line_count_i64,
+            original_selection,
+            maintain_range,
+            expanded_range,
+            character_limit,
+            language,
+            source_lines,
+        );
+        let mut outline_above = "".to_owned();
+        let mut outline_below = "".to_owned();
+        if restricted_selection_context.above.is_complete()
+            && restricted_selection_context.below.is_complete()
+        {
+            let generated_outline = generate_outline_for_range(
+                function_bodies,
+                expanded_range.clone(),
+                language,
+                source_code,
+            );
+            outline_above = generated_outline.above;
+            outline_below = generated_outline.below;
+        }
+
+        SelectionWithOutlines {
+            selection_context: restricted_selection_context,
+            outline_above,
+            outline_below,
+        }
+    }
+
+    struct OutlineForRange {
+        above: String,
+        below: String,
+    }
+
+    fn generate_outline_for_range(
+        function_bodies: Vec<FunctionInformation>,
+        range_expanded_to_function: Range,
+        language: &str,
+        source_code: &str,
+    ) -> OutlineForRange {
+        // Now we try to see if we can expand properly
+        let mut terminator = "".to_owned();
+        if language == "typescript" {
+            terminator = ";".to_owned();
+        }
+
+        // we only keep the function bodies which are not too far away from
+        // the range we are interested in selecting
+        let filtered_function_bodies: Vec<_> = function_bodies
+            .to_vec()
+            .into_iter()
+            .filter_map(|function_body| {
+                let fn_body_end_line = function_body.range().end_position().line();
+                let fn_body_start_line = function_body.range().start_position().line();
+                let range_start_line = range_expanded_to_function.start_position().line();
+                let range_end_line = range_expanded_to_function.end_position().line();
+                if fn_body_end_line < range_start_line {
+                    if range_start_line - fn_body_start_line > 50 {
+                        Some(function_body)
+                    } else {
+                        None
+                    }
+                } else if fn_body_start_line > range_end_line {
+                    if fn_body_end_line - range_end_line > 50 {
+                        Some(function_body)
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(function_body)
+                }
+            })
+            .collect();
+
+        fn build_outline(
+            source_code: &str,
+            function_bodies: Vec<FunctionInformation>,
+            range: Range,
+            terminator: &str,
+        ) -> OutlineForRange {
+            let mut current_index = 0;
+            let mut outline_above = "".to_owned();
+            let mut end_of_range = range.end_byte();
+            let mut outline_below = "".to_owned();
+
+            for function_body in function_bodies.iter() {
+                if function_body.range().end_byte() < range.start_byte() {
+                    outline_above += source_code
+                        .get(current_index..function_body.range().start_byte())
+                        .expect("to not fail");
+                    outline_above += terminator;
+                    current_index = function_body.range().end_byte();
+                } else if function_body.range().start_byte() > range.end_byte() {
+                    outline_below += source_code
+                        .get(end_of_range..function_body.range().start_byte())
+                        .expect("to not fail");
+                    outline_below += terminator;
+                    end_of_range = function_body.range().end_byte();
+                }
+            }
+            outline_above += source_code
+                .get(current_index..range.start_byte())
+                .expect("to not fail");
+            outline_below += source_code
+                .get(end_of_range..source_code.len())
+                .expect("to not fail");
+            OutlineForRange {
+                above: outline_above,
+                below: outline_below,
+            }
+        }
+        build_outline(
+            source_code,
+            function_bodies,
+            range_expanded_to_function,
+            &terminator,
+        )
+    }
+
+    // function buildOutlines(text, positions, range, terminator) {
+    //     let currentIndex = 0;
+    //     let outlineAbove = "";
+    //     let endOfRange = range.endOffset;
+    //     let outlineBelow = "";
+
+    //     for (let position of positions) {
+    //         if (position.endIndex < range.startOffset) {
+    //             outlineAbove += text.substring(currentIndex, position.startIndex);
+    //             outlineAbove += terminator;
+    //             currentIndex = position.endIndex;
+    //         } else if (position.startIndex > range.endOffset) {
+    //             outlineBelow += text.substring(endOfRange, position.startIndex);
+    //             outlineBelow += terminator;
+    //             endOfRange = position.endIndex;
+    //         }
+    //     }
+
+    //     outlineAbove += text.substring(currentIndex, range.startOffset);
+    //     outlineBelow += text.substring(endOfRange, text.length);
+
+    //     return { outlineAbove, outlineBelow };
+    // }
+
+    fn generate_selection_context(
+        source_code: &str,
+        line_count: i64,
+        original_selection: &Range,
+        range_to_maintain: &Range,
+        expanded_range: &Range,
+        character_limit: usize,
+        language: &str,
+        lines: Vec<String>,
+    ) -> SelectionContext {
+        // Change this later on, this is the limits on the characters right
+        // now and not the tokens
+        let mut token_tracker = ContextWindowTracker::new(character_limit);
+        let mut in_range = ContextParserInLineEdit::new(
+            language.to_owned(),
+            "ed8c6549bwf9".to_owned(),
+            line_count,
+            lines.to_vec(),
+        );
+        let mut above = ContextParserInLineEdit::new(
+            language.to_owned(),
+            "abpxx6d04wxr".to_owned(),
+            line_count,
+            lines.to_vec(),
+        );
+        let mut below = ContextParserInLineEdit::new(
+            language.to_owned(),
+            "be15d9bcejpp".to_owned(),
+            line_count,
+            lines.to_vec(),
+        );
+        let start_line = range_to_maintain.start_position().line();
+        let end_line = range_to_maintain.end_position().line();
+
+        for index in (start_line..=end_line).rev() {
+            if !in_range.prepend_line(index, &mut token_tracker) {
+                above.trim(None);
+                in_range.trim(Some(original_selection));
+                below.trim(None);
+                return {
+                    SelectionContext {
+                        above,
+                        range: in_range,
+                        below,
+                    }
+                };
+            }
+        }
+
+        // Now we can try and expand the above and below ranges, since
+        // we have some space for the context
+        expand_above_and_below_selections(
+            &mut above,
+            &mut below,
+            &mut token_tracker,
+            SelectionLimits {
+                above_line_index: i64::try_from(range_to_maintain.start_position().line())
+                    .expect("usize to i64 to work")
+                    - 1,
+                below_line_index: i64::try_from(range_to_maintain.end_position().line())
+                    .expect("usize to i64 to work")
+                    + 1,
+                minimum_line_index: expanded_range
+                    .start_position()
+                    .line()
+                    .try_into()
+                    .expect("usize to i64 to work"),
+                maximum_line_index: expanded_range
+                    .end_position()
+                    .line()
+                    .try_into()
+                    .expect("usize to i64 to work"),
+            },
+        );
+
+        // Now we trim out the ranges again and send the result back
+        above.trim(None);
+        below.trim(None);
+        in_range.trim(Some(original_selection));
+        SelectionContext {
+            above,
+            range: in_range,
+            below,
+        }
+    }
+
+    // We are going to expand the above and below ranges to gather more
+    // context if possible
+    fn expand_above_and_below_selections(
+        above: &mut ContextParserInLineEdit,
+        below: &mut ContextParserInLineEdit,
+        token_count: &mut ContextWindowTracker,
+        selection_limits: SelectionLimits,
+    ) {
+        let mut prepend_line_index = selection_limits.above_line_index;
+        let mut append_line_index = selection_limits.below_line_index;
+        let mut can_prepend = true;
+        let mut can_append = true;
+        for iteration in 0..100 {
+            if !can_prepend || (can_append && iteration % 4 == 3) {
+                // If we're within the allowed range and the append is successful, increase the index
+                if append_line_index <= selection_limits.maximum_line_index
+                    && below.append_line(
+                        append_line_index
+                            .try_into()
+                            .expect("usize to i64 will not fail"),
+                        token_count,
+                    )
+                {
+                    append_line_index += 1;
+                } else {
+                    // Otherwise, set the flag to stop appending
+                    can_append = false;
+                }
+            } else {
+                // If we're within the allowed range and the prepend is successful, decrease the index
+                if prepend_line_index >= selection_limits.minimum_line_index
+                    && above.prepend_line(
+                        prepend_line_index
+                            .try_into()
+                            .expect("usize to i64 will not fail"),
+                        token_count,
+                    )
+                {
+                    prepend_line_index -= 1;
+                } else {
+                    // Otherwise, set the flag to stop prepending
+                    can_prepend = false;
+                }
+            }
+        }
+        if prepend_line_index < selection_limits.minimum_line_index {
+            above.mark_complete();
+        }
+        if append_line_index > selection_limits.maximum_line_index {
+            below.mark_complete();
+        }
+    }
+
+    // It can happen that we expand to too large a range, in which case we want
+    // to guard against how big it goes
+    // our threshold is atmost 30 lines+= expansion
+    fn guard_large_expansion(selection_range: &Range, expanded_range: &Range) -> Range {
+        let start_line_difference =
+            if selection_range.start_position().line() > expanded_range.start_position().line() {
+                selection_range.start_position().line() - expanded_range.start_position().line()
+            } else {
+                expanded_range.start_position().line() - selection_range.start_position().line()
+            };
+        let end_line_difference =
+            if selection_range.end_position().line() > expanded_range.end_position().line() {
+                selection_range.end_position().line() - expanded_range.end_position().line()
+            } else {
+                expanded_range.end_position().line() - selection_range.end_position().line()
+            };
+        if (start_line_difference + end_line_difference) > 30 {
+            // we are going to return the selection range here
+            return selection_range.clone();
+        } else {
+            return expanded_range.clone();
+        }
+    }
+
+    fn fold_function_blocks(
+        mut function_blocks: Vec<FunctionInformation>,
+    ) -> Vec<FunctionInformation> {
+        // First we sort the function blocks(which are bodies) based on the start
+        // index or the end index
+        function_blocks.sort_by(|a, b| {
+            a.range()
+                .start_byte()
+                .cmp(&b.range().start_byte())
+                .then(b.range().end_byte().cmp(&a.range().end_byte()))
+        });
+
+        // Now that these are sorted we only keep the ones which are not overlapping
+        // or fully contained in the other one
+        let mut filtered_function_blocks = Vec::new();
+        let mut index = 0;
+
+        while index < function_blocks.len() {
+            function_blocks.push(function_blocks[index].clone());
+            let mut iterate_index = index + 1;
+            while iterate_index < function_blocks.len()
+                && function_blocks[index]
+                    .range()
+                    .is_contained(&function_blocks[iterate_index].range())
+            {
+                iterate_index += 1;
+            }
+            index = iterate_index;
+        }
+
+        filtered_function_blocks
+    }
+
+    struct EditExpandedSelectionRange {
+        expanded_selection: Range,
+        range_expanded_to_functions: Range,
+        function_bodies: Vec<FunctionInformation>,
     }
 
     // we are going to get a new range here for our selections
@@ -588,5 +1028,189 @@ mod tests {
             }
         }
         None
+    }
+
+    // This will help us keep track of how many tokens we have remaining
+    pub struct ContextWindowTracker {
+        token_limit: usize,
+        total_tokens: usize,
+    }
+
+    impl ContextWindowTracker {
+        pub fn new(token_limit: usize) -> Self {
+            Self {
+                token_limit,
+                total_tokens: 0,
+            }
+        }
+
+        pub fn add_tokens(&mut self, tokens: usize) {
+            self.total_tokens += tokens;
+        }
+
+        pub fn tokens_remaining(&self) -> usize {
+            self.token_limit - self.total_tokens
+        }
+
+        pub fn line_would_fit(&self, line: &str) -> bool {
+            self.total_tokens + line.len() + 1 < self.token_limit
+        }
+
+        pub fn add_line(&mut self, line: &str) {
+            self.total_tokens += line.len() + 1;
+        }
+    }
+
+    pub struct ContextParserInLineEdit {
+        language: String,
+        unique_identifier: String,
+        first_line_index: i64,
+        last_line_index: i64,
+        is_complete: bool,
+        non_trim_whitespace_character_count: i64,
+        start_marker: String,
+        end_marker: String,
+        // This is the lines coming from the source
+        source_lines: Vec<String>,
+        /// This is the lines we are going to use for the context
+        lines: Vec<String>,
+    }
+
+    impl ContextParserInLineEdit {
+        pub fn new(
+            language: String,
+            unique_identifier: String,
+            lines_count: i64,
+            source_lines: Vec<String>,
+        ) -> Self {
+            let comment_style = "//".to_owned();
+            Self {
+                language,
+                unique_identifier: unique_identifier.to_owned(),
+                first_line_index: lines_count,
+                last_line_index: -1,
+                is_complete: false,
+                non_trim_whitespace_character_count: 0,
+                // we also need to provide the comment style here, lets assume
+                // that we are using //
+                start_marker: format!("{} BEGIN: {}", &comment_style, unique_identifier),
+                end_marker: format!("{} END: {}", &comment_style, unique_identifier),
+                source_lines,
+                lines: vec![],
+            }
+        }
+
+        pub fn is_complete(&self) -> bool {
+            self.is_complete
+        }
+
+        pub fn mark_complete(&mut self) {
+            self.is_complete = true;
+        }
+
+        pub fn has_context(&self) -> bool {
+            if self.lines.len() == 0 || self.non_trim_whitespace_character_count == 0 {
+                false
+            } else {
+                !self.lines.is_empty()
+            }
+        }
+
+        pub fn prepend_line(
+            &mut self,
+            line_index: usize,
+            character_limit: &mut ContextWindowTracker,
+        ) -> bool {
+            let line_text = self.source_lines[line_index].to_owned();
+            if !character_limit.line_would_fit(&line_text) {
+                return false;
+            }
+
+            self.first_line_index = std::cmp::min(self.first_line_index, line_index as i64);
+            self.last_line_index = std::cmp::max(self.last_line_index, line_index as i64);
+
+            character_limit.add_line(&line_text);
+            self.non_trim_whitespace_character_count += line_text.trim().len() as i64;
+            self.lines.insert(0, line_text);
+
+            true
+        }
+
+        pub fn append_line(
+            &mut self,
+            line_index: usize,
+            character_limit: &mut ContextWindowTracker,
+        ) -> bool {
+            let line_text = self.source_lines[line_index].to_owned();
+            if !character_limit.line_would_fit(&line_text) {
+                return false;
+            }
+
+            self.first_line_index = std::cmp::min(self.first_line_index, line_index as i64);
+            self.last_line_index = std::cmp::max(self.last_line_index, line_index as i64);
+
+            character_limit.add_line(&line_text);
+            self.non_trim_whitespace_character_count += line_text.trim().len() as i64;
+            self.lines.push(line_text);
+
+            true
+        }
+
+        pub fn trim(&mut self, range: Option<&Range>) {
+            // now we can begin trimming it on a range if appropriate and then
+            // do things properly
+            let last_line_index = if let Some(range) = range.clone() {
+                if self.last_line_index
+                    < range
+                        .start_position()
+                        .line()
+                        .try_into()
+                        .expect("usize to i64 not fail")
+                {
+                    self.last_line_index
+                } else {
+                    range
+                        .start_position()
+                        .line()
+                        .try_into()
+                        .expect("usize to i64 not fail")
+                }
+            } else {
+                self.last_line_index
+            };
+            for _ in self.first_line_index..last_line_index {
+                if self.lines.len() > 0 && self.lines[0].trim().len() == 0 {
+                    self.first_line_index += 1;
+                    self.lines.remove(0);
+                }
+            }
+
+            let first_line_index = if let Some(range) = range {
+                if self.first_line_index
+                    > range
+                        .end_position()
+                        .line()
+                        .try_into()
+                        .expect("usize to i64 not fail")
+                {
+                    self.first_line_index
+                } else {
+                    range
+                        .end_position()
+                        .line()
+                        .try_into()
+                        .expect("usize to i64 not fail")
+                }
+            } else {
+                self.first_line_index
+            };
+
+            for _ in first_line_index..self.last_line_index {
+                if self.lines.len() > 0 && self.lines[self.lines.len() - 1].trim().len() == 0 {
+                    self.last_line_index -= 1;
+                    self.lines.pop();
+                }
+            }
+        }
     }
 }

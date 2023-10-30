@@ -404,8 +404,6 @@ fn generate_selection_context(
         }
     }
 
-    dbg!("we are able to fill in the context for the range");
-
     // Now we can try and expand the above and below ranges, since
     // we have some space for the context
     expand_above_and_below_selections(

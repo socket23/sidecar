@@ -252,7 +252,19 @@ impl InLineAgent {
                 return Ok(None);
             }
             InLineAgentAction::Edit => {
-                self.process_edit().await?;
+                // First we update our state here
+                let last_exchange;
+                {
+                    let last_exchange_ref = self.get_last_agent_message();
+                    last_exchange_ref.add_agent_action(InLineAgentAction::Edit);
+                    last_exchange = last_exchange_ref.clone();
+                }
+                // send it over the wire
+                {
+                    self.sender.send(last_exchange.clone()).await?;
+                }
+                // and then we start generating the edit and send it over
+                self.process_edit(answer_sender).await?;
                 return Ok(None);
             }
             _ => {
@@ -345,7 +357,7 @@ impl InLineAgent {
                             0.2,
                             None,
                             proxy_sender,
-                            document_symbol.clone(),
+                            Some(document_symbol.clone()),
                         )
                         .await;
                     // we send the answer after we have generated the whole thing
@@ -374,7 +386,10 @@ impl InLineAgent {
         Ok(())
     }
 
-    async fn process_edit(&mut self) -> anyhow::Result<()> {
+    async fn process_edit(
+        &mut self,
+        answer_sender: UnboundedSender<InLineAgentAnswer>,
+    ) -> anyhow::Result<()> {
         // Here we will try to process the edits
         // This is the current request selection range
         let selection_range = Range::new(
@@ -451,13 +466,44 @@ impl InLineAgent {
             &expanded_selection,
             &edit_expansion.range_expanded_to_functions,
             &self.editor_request.language(),
+            // TODO(skcd): Make this more variable going forward
             4000,
             source_lines,
             function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
             self.editor_request.fs_file_path().to_owned(),
         );
-        let messages = self.edit_generation_prompt(self.editor_request.language(), response);
-        dbg!(messages);
+        let mut user_messages = self
+            .edit_generation_prompt(self.editor_request.language(), response)
+            .into_iter()
+            .map(|message| llm_funcs::llm::Message::user(&message))
+            .collect::<Vec<_>>();
+        // Also add back the user query
+        user_messages.push(llm_funcs::llm::Message::user(&self.editor_request.query));
+
+        let mut final_messages = vec![llm_funcs::llm::Message::system(
+            &prompts::in_line_edit_system_prompt(self.editor_request.language()),
+        )];
+        final_messages.extend(user_messages);
+
+        // Now that we have the user-messages we can send it over the wire
+        let last_exchange = self.get_last_agent_message();
+        last_exchange.message_state = MessageState::StreamingAnswer;
+        let self_ = &*self;
+        let answer = self
+            .get_llm_client()
+            .stream_response_inline_agent(
+                llm_funcs::llm::OpenAIModel::get_model(&self_.model.model_name)
+                    .expect("openai model getting to always work"),
+                final_messages,
+                None,
+                0.2,
+                None,
+                answer_sender,
+                None,
+            )
+            .await;
+        dbg!("what are we sending over here");
+        dbg!(answer);
         Ok(())
     }
 

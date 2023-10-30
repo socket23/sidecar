@@ -463,6 +463,7 @@ mod tests {
         "#;
         let query = "".to_owned();
         let language = "rust".to_owned();
+        let line_count = 0;
         let repo_ref = RepoRef::local("/Users/skcd").expect("test should work");
         let snippet_information = SnippetInformation {
             start_position: Position::new(0, 0, 0),
@@ -473,6 +474,7 @@ mod tests {
             language: language.to_owned(),
             fs_file_path: "/Users/skcd".to_owned(),
             relative_path: "/Users/skcd".to_owned(),
+            line_count,
         };
         let thread_id = uuid::Uuid::new_v4();
         let selection = ProcessInEditorRequest {
@@ -540,17 +542,20 @@ mod tests {
 
         // these are the missing variables I have to fill in,
         // lines count and the source lines
-        let lines_count = 0;
-        let source_lines: Vec<String> = vec![];
+        let source_lines: Vec<String> = source_code
+            .split("/\r\n|\r|\n/g")
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
         generate_context_for_range(
             source_code,
-            lines_count,
+            line_count,
             &selection_range,
             &expanded_selection,
             &edit_expansion.range_expanded_to_functions,
             &language,
             8000,
-            vec![],
+            source_lines,
             function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
         );
     }
@@ -594,6 +599,7 @@ mod tests {
         let line_count_i64 = <i64>::try_from(lines_count).expect("usize to i64 should not fail");
 
         // first try with the whole context
+        let mut token_tracker = ContextWindowTracker::new(character_limit);
         let selection_context = generate_selection_context(
             source_code,
             line_count_i64,
@@ -603,6 +609,7 @@ mod tests {
             character_limit,
             language,
             source_lines.to_vec(),
+            &mut token_tracker,
         );
         if !(selection_context.above.has_context() && !selection_context.above.is_complete()) {
             return SelectionWithOutlines {
@@ -613,6 +620,7 @@ mod tests {
         }
 
         // now we try to send just the amount of data we have in the selection
+        let mut token_tracker = ContextWindowTracker::new(character_limit);
         let restricted_selection_context = generate_selection_context(
             source_code,
             line_count_i64,
@@ -622,6 +630,7 @@ mod tests {
             character_limit,
             language,
             source_lines,
+            &mut token_tracker,
         );
         let mut outline_above = "".to_owned();
         let mut outline_below = "".to_owned();
@@ -634,14 +643,90 @@ mod tests {
                 language,
                 source_code,
             );
-            outline_above = generated_outline.above;
-            outline_below = generated_outline.below;
+            // this is where we make sure we are fitting the above and below
+            // into the context window
+            let processed_outline = process_outlines(generated_outline, &mut token_tracker);
+            outline_above = processed_outline.above;
+            outline_below = processed_outline.below;
         }
 
         SelectionWithOutlines {
             selection_context: restricted_selection_context,
             outline_above,
             outline_below,
+        }
+    }
+
+    fn process_outlines(
+        generated_outline: OutlineForRange,
+        context_manager: &mut ContextWindowTracker,
+    ) -> OutlineForRange {
+        // here we will process the outline again and try to generate it after making
+        // sure that it fits in the limit
+        let lines_above: Vec<String> = generated_outline
+            .above
+            .split("/\r\n|\r|\n/g")
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
+        let lines_below: Vec<String> = generated_outline
+            .below
+            .split("/\r\n|\r|\n/g")
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
+
+        let mut processed_above = vec![];
+        let mut processed_below = vec![];
+
+        let mut try_add_above_line =
+            |line: &str, context_manager: &mut ContextWindowTracker| -> bool {
+                if context_manager.line_would_fit(line) {
+                    context_manager.add_line(line);
+                    processed_above.insert(0, line.to_owned());
+                    return true;
+                }
+                false
+            };
+
+        let mut try_add_below_line =
+            |line: &str, context_manager: &mut ContextWindowTracker| -> bool {
+                if context_manager.line_would_fit(line) {
+                    context_manager.add_line(line);
+                    processed_below.push(line.to_owned());
+                    return true;
+                }
+                false
+            };
+
+        let mut above_index = lines_above.len() - 1;
+        let mut below_index = 0;
+        let mut can_add_above = true;
+        let mut can_add_below = true;
+
+        for index in 0..100 {
+            if !can_add_above || (can_add_below && index % 4 == 3) {
+                if below_index < lines_below.len()
+                    && try_add_below_line(&lines_below[below_index], context_manager)
+                {
+                    below_index += 1;
+                } else {
+                    can_add_below = false;
+                }
+            } else {
+                if above_index >= 0
+                    && try_add_above_line(&lines_above[above_index], context_manager)
+                {
+                    above_index -= 1;
+                } else {
+                    can_add_above = false;
+                }
+            }
+        }
+
+        OutlineForRange {
+            above: processed_above.join("\n"),
+            below: processed_below.join("\n"),
         }
     }
 
@@ -729,35 +814,11 @@ mod tests {
         }
         build_outline(
             source_code,
-            function_bodies,
+            filtered_function_bodies,
             range_expanded_to_function,
             &terminator,
         )
     }
-
-    // function buildOutlines(text, positions, range, terminator) {
-    //     let currentIndex = 0;
-    //     let outlineAbove = "";
-    //     let endOfRange = range.endOffset;
-    //     let outlineBelow = "";
-
-    //     for (let position of positions) {
-    //         if (position.endIndex < range.startOffset) {
-    //             outlineAbove += text.substring(currentIndex, position.startIndex);
-    //             outlineAbove += terminator;
-    //             currentIndex = position.endIndex;
-    //         } else if (position.startIndex > range.endOffset) {
-    //             outlineBelow += text.substring(endOfRange, position.startIndex);
-    //             outlineBelow += terminator;
-    //             endOfRange = position.endIndex;
-    //         }
-    //     }
-
-    //     outlineAbove += text.substring(currentIndex, range.startOffset);
-    //     outlineBelow += text.substring(endOfRange, text.length);
-
-    //     return { outlineAbove, outlineBelow };
-    // }
 
     fn generate_selection_context(
         source_code: &str,
@@ -768,10 +829,10 @@ mod tests {
         character_limit: usize,
         language: &str,
         lines: Vec<String>,
+        mut token_count: &mut ContextWindowTracker,
     ) -> SelectionContext {
         // Change this later on, this is the limits on the characters right
         // now and not the tokens
-        let mut token_tracker = ContextWindowTracker::new(character_limit);
         let mut in_range = ContextParserInLineEdit::new(
             language.to_owned(),
             "ed8c6549bwf9".to_owned(),
@@ -794,7 +855,7 @@ mod tests {
         let end_line = range_to_maintain.end_position().line();
 
         for index in (start_line..=end_line).rev() {
-            if !in_range.prepend_line(index, &mut token_tracker) {
+            if !in_range.prepend_line(index, &mut token_count) {
                 above.trim(None);
                 in_range.trim(Some(original_selection));
                 below.trim(None);
@@ -813,7 +874,7 @@ mod tests {
         expand_above_and_below_selections(
             &mut above,
             &mut below,
-            &mut token_tracker,
+            &mut token_count,
             SelectionLimits {
                 above_line_index: i64::try_from(range_to_maintain.start_position().line())
                     .expect("usize to i64 to work")

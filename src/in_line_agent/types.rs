@@ -452,7 +452,9 @@ impl InLineAgent {
             4000,
             source_lines,
             function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
+            self.editor_request.fs_file_path().to_owned(),
         );
+        dbg!(response);
         Ok(())
     }
 

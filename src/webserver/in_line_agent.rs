@@ -68,6 +68,10 @@ impl ProcessInEditorRequest {
     pub fn end_position(&self) -> Position {
         self.snippet_information.end_position.clone()
     }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.text_document_web.fs_file_path
+    }
 }
 
 pub async fn reply_to_user(

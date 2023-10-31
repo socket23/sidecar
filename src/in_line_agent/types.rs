@@ -252,7 +252,9 @@ impl InLineAgent {
                 self.generate_documentation(answer_sender).await?;
                 return Ok(None);
             }
-            InLineAgentAction::Edit => {
+            // For both the edit and the code we use the same functionality right
+            // now, we will give them separate commands later on
+            InLineAgentAction::Edit | InLineAgentAction::Code => {
                 // First we update our state here
                 let last_exchange;
                 {

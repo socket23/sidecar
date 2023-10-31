@@ -543,7 +543,10 @@ impl InLineAgent {
             .into_iter()
             .map(|message| llm_funcs::llm::Message::user(&message))
             .collect::<Vec<_>>();
-        user_messages.push(llm_funcs::llm::Message::user(&self.editor_request.query));
+        // we emphasize again that it needs to always put the //BEGIN and //END
+        let user_query = &self.editor_request.query;
+        let user_query = format!("{user_query}\nDo not forget to include the // BEGIN and // END markers in your generated code.");
+        user_messages.push(llm_funcs::llm::Message::user(&user_query));
 
         let mut final_messages = vec![llm_funcs::llm::Message::system(
             &prompts::in_line_edit_system_prompt(self.editor_request.language()),
@@ -568,8 +571,6 @@ impl InLineAgent {
                 Some(selection_context.clone()),
             )
             .await;
-        dbg!("what are we sending over here");
-        dbg!(answer);
         Ok(())
     }
 

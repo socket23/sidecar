@@ -10,6 +10,7 @@ use crate::chunking::types::FunctionNodeType;
 use crate::in_line_agent::context_parsing::generate_context_for_range;
 use crate::in_line_agent::context_parsing::ContextParserInLineEdit;
 use crate::in_line_agent::context_parsing::EditExpandedSelectionRange;
+use crate::webserver::agent::Position;
 use crate::{
     agent::{
         llm_funcs::{self, llm::Message, LlmClient},
@@ -29,12 +30,58 @@ use super::context_parsing::SelectionWithOutlines;
 use super::prompts;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineAgentSelectionData {
+    has_content: bool,
+    first_line_index: i64,
+    last_line_index: i64,
+    lines: Vec<String>,
+}
+
+impl InLineAgentSelectionData {
+    pub fn new(
+        has_content: bool,
+        first_line_index: i64,
+        last_line_index: i64,
+        lines: Vec<String>,
+    ) -> Self {
+        Self {
+            has_content,
+            first_line_index,
+            last_line_index,
+            lines,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ContextSelection {
+    above: InLineAgentSelectionData,
+    range: InLineAgentSelectionData,
+    below: InLineAgentSelectionData,
+}
+
+impl ContextSelection {
+    pub fn new(
+        above: InLineAgentSelectionData,
+        range: InLineAgentSelectionData,
+        below: InLineAgentSelectionData,
+    ) -> Self {
+        Self {
+            above,
+            range,
+            below,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineAgentAnswer {
     pub answer_up_until_now: String,
     pub delta: Option<String>,
     pub state: MessageState,
     // We also send the document symbol in question along the wire
     pub document_symbol: Option<DocumentSymbol>,
+    pub context_selection: Option<ContextSelection>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -336,6 +383,7 @@ impl InLineAgent {
                 delta: Some("could not find documentation node".to_owned()),
                 state: MessageState::Errored,
                 document_symbol: None,
+                context_selection: None,
             })?;
         } else {
             last_exchange.message_state = MessageState::StreamingAnswer;
@@ -361,6 +409,7 @@ impl InLineAgent {
                             None,
                             proxy_sender,
                             Some(document_symbol.clone()),
+                            None,
                         )
                         .await;
                     // we send the answer after we have generated the whole thing
@@ -372,6 +421,7 @@ impl InLineAgent {
                                 delta: Some(answer.to_owned()),
                                 state: Default::default(),
                                 document_symbol: Some(document_symbol.clone()),
+                                context_selection: None,
                             })
                             .unwrap();
                     }
@@ -475,6 +525,8 @@ impl InLineAgent {
             self.editor_request.fs_file_path().to_owned(),
         );
 
+        let selection_context = response.to_context_selection();
+
         // We create a fake document symbol which we will use to replace the
         // range which is present in the context of the selection
         let document_symbol = {
@@ -513,6 +565,7 @@ impl InLineAgent {
                 None,
                 answer_sender,
                 Some(document_symbol),
+                Some(selection_context.clone()),
             )
             .await;
         dbg!("what are we sending over here");

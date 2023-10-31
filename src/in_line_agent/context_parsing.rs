@@ -5,6 +5,8 @@ use crate::chunking::{
     types::FunctionInformation,
 };
 
+use super::types::{ContextSelection, InLineAgentSelectionData};
+
 #[derive(Debug)]
 pub struct ContextWindowTracker {
     token_limit: usize,
@@ -144,6 +146,15 @@ impl ContextParserInLineEdit {
             lines: vec![],
             fs_file_path,
         }
+    }
+
+    pub fn to_agent_selection_data(&self) -> InLineAgentSelectionData {
+        InLineAgentSelectionData::new(
+            self.has_context(),
+            self.first_line_index,
+            self.last_line_index,
+            self.lines.to_vec(),
+        )
     }
 
     pub fn first_line_index(&self) -> i64 {
@@ -483,6 +494,16 @@ pub struct SelectionWithOutlines {
     pub selection_context: SelectionContext,
     pub outline_above: String,
     pub outline_below: String,
+}
+
+impl SelectionWithOutlines {
+    pub fn to_context_selection(&self) -> ContextSelection {
+        ContextSelection::new(
+            self.selection_context.above.to_agent_selection_data(),
+            self.selection_context.range.to_agent_selection_data(),
+            self.selection_context.below.to_agent_selection_data(),
+        )
+    }
 }
 
 pub fn generate_context_for_range(

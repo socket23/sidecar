@@ -15,6 +15,8 @@ use tracing::error;
 use tracing::warn;
 
 use crate::chunking::text_document::DocumentSymbol;
+use crate::in_line_agent::context_parsing::SelectionContext;
+use crate::in_line_agent::types::ContextSelection;
 use crate::in_line_agent::types::InLineAgentAnswer;
 
 use super::types::Answer;
@@ -348,6 +350,7 @@ impl LlmClient {
         frequency_penalty: Option<f32>,
         sender: tokio::sync::mpsc::UnboundedSender<InLineAgentAnswer>,
         document_symbol: Option<DocumentSymbol>,
+        context_selection: Option<ContextSelection>,
     ) -> anyhow::Result<String> {
         let client = self.get_model(&model);
         let request = self.create_request(messages, functions, temperature, frequency_penalty);
@@ -380,6 +383,7 @@ impl LlmClient {
                                 delta: Some(delta.to_owned()),
                                 state: Default::default(),
                                 document_symbol: document_symbol.clone(),
+                                context_selection: context_selection.clone(),
                             })
                             .expect("sending answer should not fail");
                     }

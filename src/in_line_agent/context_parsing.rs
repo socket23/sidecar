@@ -146,6 +146,14 @@ impl ContextParserInLineEdit {
         }
     }
 
+    pub fn first_line_index(&self) -> i64 {
+        self.first_line_index
+    }
+
+    pub fn last_line_index(&self) -> i64 {
+        self.last_line_index
+    }
+
     pub fn line_string(&self) -> String {
         self.lines.join("\n")
     }
@@ -349,6 +357,29 @@ pub struct SelectionContext {
     pub above: ContextParserInLineEdit,
     pub range: ContextParserInLineEdit,
     pub below: ContextParserInLineEdit,
+}
+
+impl SelectionContext {
+    pub fn get_selection_range(&self) -> Range {
+        Range::new(
+            Position::new(
+                self.range
+                    .first_line_index()
+                    .try_into()
+                    .expect("i64 to usize to work"),
+                0,
+                0,
+            ),
+            Position::new(
+                self.range
+                    .last_line_index()
+                    .try_into()
+                    .expect("i64 to usize to work"),
+                0,
+                0,
+            ),
+        )
+    }
 }
 
 fn generate_selection_context(

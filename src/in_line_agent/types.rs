@@ -1,5 +1,6 @@
 use futures::stream;
 use futures::StreamExt;
+use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 
@@ -452,7 +453,6 @@ impl InLineAgent {
 
         // these are the missing variables I have to fill in,
         // lines count and the source lines
-        use regex::Regex;
         let split_lines = Regex::new(r"\r\n|\r|\n").unwrap();
         let source_lines: Vec<String> = split_lines
             .split(&self.editor_request.source_code())
@@ -472,12 +472,23 @@ impl InLineAgent {
             function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
             self.editor_request.fs_file_path().to_owned(),
         );
+
+        // We create a fake document symbol which we will use to replace the
+        // range which is present in the context of the selection
+        let document_symbol = {
+            let response_range = response.selection_context.get_selection_range();
+            DocumentSymbol::for_edit(
+                response_range.start_position(),
+                response_range.end_position(),
+            )
+        };
+
+        // We create the prompts here
         let mut user_messages = self
             .edit_generation_prompt(self.editor_request.language(), response)
             .into_iter()
             .map(|message| llm_funcs::llm::Message::user(&message))
             .collect::<Vec<_>>();
-        // Also add back the user query
         user_messages.push(llm_funcs::llm::Message::user(&self.editor_request.query));
 
         let mut final_messages = vec![llm_funcs::llm::Message::system(
@@ -499,7 +510,7 @@ impl InLineAgent {
                 0.2,
                 None,
                 answer_sender,
-                None,
+                Some(document_symbol),
             )
             .await;
         dbg!("what are we sending over here");

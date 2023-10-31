@@ -183,6 +183,19 @@ pub struct DocumentSymbol {
 }
 
 impl DocumentSymbol {
+    pub fn for_edit(start_position: Position, end_position: Position) -> Self {
+        Self {
+            name: None,
+            start_position,
+            end_position,
+            kind: None,
+            // We send a placeholder for edit here
+            code: "edit".to_owned(),
+        }
+    }
+}
+
+impl DocumentSymbol {
     fn get_node_matching<'a>(
         tree_cursor: &mut tree_sitter::TreeCursor<'a>,
         node: &tree_sitter::Node<'a>,

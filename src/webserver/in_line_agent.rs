@@ -57,7 +57,7 @@ pub struct DiagnosticRelatedInformation {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticInformation {
-    pub prompt_parts: String,
+    pub prompt_parts: Vec<String>,
     pub related_information: Vec<DiagnosticRelatedInformation>,
 }
 

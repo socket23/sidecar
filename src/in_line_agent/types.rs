@@ -75,6 +75,14 @@ impl ContextSelection {
             below,
         }
     }
+
+    pub fn from_selection_context(selection_context: SelectionContext) -> Self {
+        Self {
+            above: selection_context.above.to_agent_selection_data(),
+            range: selection_context.range.to_agent_selection_data(),
+            below: selection_context.below.to_agent_selection_data(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -320,6 +328,21 @@ impl InLineAgent {
                 self.process_edit(answer_sender).await?;
                 return Ok(None);
             }
+            InLineAgentAction::Fix => {
+                let last_exchange;
+                {
+                    let last_exchange_ref = self.get_last_agent_message();
+                    last_exchange_ref.add_agent_action(InLineAgentAction::Fix);
+                    last_exchange = last_exchange_ref.clone();
+                }
+                // send it over the wire
+                {
+                    self.sender.send(last_exchange.clone()).await?;
+                }
+                // and then we start generating the fix and send it over
+                self.process_fix(answer_sender).await?;
+                return Ok(None);
+            }
             _ => {
                 self.apologise_message().await?;
                 return Ok(None);
@@ -472,8 +495,48 @@ impl InLineAgent {
             self.editor_request.fs_file_path().to_owned(),
             &mut token_tracker,
         );
-        let user_prompts = self.fix_generation_prompt(selection_context);
+        let user_prompts = self.fix_generation_prompt(&selection_context);
+        let related_prompts = self.fix_diagnostics_prompt();
+        let mut prompts = vec![llm_funcs::llm::Message::system(
+            &prompts::fix_system_prompt(&self.editor_request.language()),
+        )];
+        prompts.extend(
+            user_prompts
+                .into_iter()
+                .map(|prompt| llm_funcs::llm::Message::user(&prompt)),
+        );
+        prompts.extend(
+            related_prompts
+                .into_iter()
+                .map(|prompt| llm_funcs::llm::Message::user(&prompt)),
+        );
+        let last_exchange = self.get_last_agent_message();
+        last_exchange.message_state = MessageState::StreamingAnswer;
+        let document_symbol = {
+            let response_range = fixing_range;
+            DocumentSymbol::for_edit(
+                response_range.start_position(),
+                response_range.end_position(),
+            )
+        };
+        let self_ = &*self;
+        let selection_context = ContextSelection::from_selection_context(selection_context);
+        let answer = self
+            .get_llm_client()
+            .stream_response_inline_agent(
+                llm_funcs::llm::OpenAIModel::get_model(&self_.model.model_name)
+                    .expect("openai model getting to always work"),
+                prompts,
+                None,
+                0.2,
+                None,
+                answer_sender,
+                Some(document_symbol),
+                Some(selection_context.clone()),
+            )
+            .await;
         // Now we need to create the prompts for diagnostics
+        // now we need to get the diagnostics prompts
         Ok(())
     }
 
@@ -689,7 +752,48 @@ impl InLineAgent {
         }
     }
 
-    fn fix_generation_prompt(&self, selection: SelectionContext) -> Vec<String> {
+    fn fix_diagnostics_prompt(&self) -> Vec<String> {
+        if let Some(diagnostics_information) = &self.editor_request.diagnostics_information {
+            let related_information = diagnostics_information
+                .diagnostic_information
+                .iter()
+                .map(|diagnostic| {
+                    let prompt_parts = diagnostic.prompt_parts.to_vec();
+                    let code_blocks: Vec<String> = diagnostic
+                        .related_information
+                        .iter()
+                        .map(|related_information| {
+                            let new_range = self
+                                .application
+                                .language_parsing
+                                .get_parent_range_for_selection(
+                                    &related_information.text,
+                                    &related_information.language,
+                                    &related_information.range,
+                                );
+                            let source_code = related_information.text
+                                [new_range.start_byte()..new_range.end_byte()]
+                                .to_owned();
+                            wrap_in_code_block("", &source_code)
+                        })
+                        .collect();
+                    if diagnostic.related_information.is_empty() {
+                        prompt_parts.join("\n")
+                    } else {
+                        let mut answer = vec![prompt_parts.join("\n")];
+                        answer.push("This diagnostic has some related code:".to_owned());
+                        answer.extend(code_blocks.into_iter());
+                        answer.join("\n")
+                    }
+                })
+                .collect::<Vec<_>>();
+            related_information
+        } else {
+            vec![]
+        }
+    }
+
+    fn fix_generation_prompt(&self, selection: &SelectionContext) -> Vec<String> {
         let mut prompts = vec![];
         if selection.above.has_context() {
             let mut above_prompts = vec![];
@@ -801,4 +905,15 @@ impl InLineAgent {
         prompts.push(selection_prompt.join("\n"));
         prompts
     }
+}
+
+fn wrap_in_code_block(t: &str, e: &str) -> String {
+    let re = regex::Regex::new(r"^\s*(```+)").unwrap();
+    let captures = re.captures_iter(e);
+
+    let max_length = captures.map(|cap| cap[1].len() + 1).max().unwrap_or(3);
+
+    let i = "`".repeat(max_length);
+
+    format!("{}{}\n{}\n{}", i, t, e.trim(), i)
 }

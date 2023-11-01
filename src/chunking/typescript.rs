@@ -49,5 +49,25 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             body: (statement_block) @body)
         ] @function"
             .to_owned()],
+        construct_types: vec![
+            "program",
+            "interface_declaration",
+            "class_declaration",
+            "function_declaration",
+            "function",
+            "type_alias_declaration",
+            "method_definition",
+        ]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect(),
+        expression_statements: vec![
+            "lexical_declaration",
+            "expression_statement",
+            "public_field_definition",
+        ]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect(),
     }
 }

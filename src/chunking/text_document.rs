@@ -52,6 +52,14 @@ impl Position {
         tree_sitter::Point::new(self.line, self.character)
     }
 
+    pub fn from_tree_sitter_point(point: &tree_sitter::Point, byte_offset: usize) -> Self {
+        Self {
+            line: point.row,
+            character: point.column,
+            byte_offset,
+        }
+    }
+
     pub fn to_byte_offset(&self) -> usize {
         self.byte_offset
     }
@@ -69,7 +77,8 @@ impl Position {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Range {
     start_position: Position,
     end_position: Position,

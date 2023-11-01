@@ -34,5 +34,23 @@ pub fn rust_language_config() -> TSLanguageConfig {
             body: (block) @body)
         ] @function"
             .to_owned()],
+        construct_types: vec![
+            "source_file",   // Represents the entire Rust source file.
+            "struct_item",   // Represents the declaration of a struct.
+            "enum_item",     // Represents the declaration of an enum.
+            "trait_item",    // Represents the declaration of a trait.
+            "impl_item",     // Represents an implementation block.
+            "function_item", // Represents a standalone function declaration.
+            "method_item",   // Represents a method within an impl block.
+            "mod_item",      // Represents a module declaration.
+            "use_item",      // Represents the use keyword to import modules or paths.
+        ]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect(),
+        expression_statements: vec!["let_declaration", "expression_statement", "call_expression"]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect(),
     }
 }

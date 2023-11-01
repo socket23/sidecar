@@ -9,7 +9,10 @@ use super::{in_line_agent_stream::generate_in_line_agent_stream, types::Result};
 use crate::{
     agent::llm_funcs::LlmClient,
     application::application::Application,
-    chunking::{editor_parsing::EditorParsing, text_document::Position},
+    chunking::{
+        editor_parsing::EditorParsing,
+        text_document::{Position, Range},
+    },
     in_line_agent::{
         self,
         types::{InLineAgent, InLineAgentMessage},
@@ -25,6 +28,12 @@ use axum::response::IntoResponse;
 pub struct SnippetInformation {
     pub start_position: Position,
     pub end_position: Position,
+}
+
+impl SnippetInformation {
+    pub fn to_range(&self) -> Range {
+        Range::new(self.start_position.clone(), self.end_position.clone())
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

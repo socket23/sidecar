@@ -26,6 +26,9 @@ use crate::{
     webserver::in_line_agent::ProcessInEditorRequest,
 };
 
+use super::context_parsing::generate_selection_context_for_fix;
+use super::context_parsing::ContextWindowTracker;
+use super::context_parsing::SelectionContext;
 use super::context_parsing::SelectionWithOutlines;
 use super::prompts;
 
@@ -439,6 +442,39 @@ impl InLineAgent {
         Ok(())
     }
 
+    async fn process_fix(
+        &mut self,
+        answer_sender: UnboundedSender<InLineAgentAnswer>,
+    ) -> anyhow::Result<()> {
+        let fixing_range_maybe = self.application.language_parsing.get_fix_range(
+            self.editor_request.source_code(),
+            self.editor_request.language(),
+            &self.editor_request.snippet_information.to_range(),
+            15,
+        );
+        let fixing_range =
+            fixing_range_maybe.unwrap_or(self.editor_request.snippet_information.to_range());
+
+        let split_lines = Regex::new(r"\r\n|\r|\n").unwrap();
+        let source_lines: Vec<String> = split_lines
+            .split(&self.editor_request.source_code())
+            .map(|s| s.to_owned())
+            .collect();
+        let character_limit = 8000;
+        let mut token_tracker = ContextWindowTracker::new(character_limit);
+        // Now we try to generate the snippet information
+        let selection_context = generate_selection_context_for_fix(
+            <i64>::try_from(self.editor_request.line_count()).unwrap(),
+            &fixing_range,
+            &self.editor_request.snippet_information.to_range(),
+            self.editor_request.language(),
+            source_lines,
+            self.editor_request.fs_file_path().to_owned(),
+            &mut token_tracker,
+        );
+        Ok(())
+    }
+
     async fn process_edit(
         &mut self,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
@@ -649,6 +685,39 @@ impl InLineAgent {
                 format!("Please add {comment_type} for the selection.")
             }
         }
+    }
+
+    fn fix_generation_prompt(&self, selection: SelectionContext) -> Vec<String> {
+        let mut prompts = vec![];
+        if selection.above.has_context() {
+            let mut above_prompts = vec![];
+            above_prompts.push("I have the following code above the selection:".to_owned());
+            above_prompts.extend(selection.above.generate_prompt(true));
+            prompts.push(above_prompts.join("\n"));
+        }
+        if selection.below.has_context() {
+            let mut below_prompts = vec![];
+            below_prompts.push("I have the following code below the selection:".to_owned());
+            below_prompts.extend(selection.below.generate_prompt(true));
+            prompts.push(below_prompts.join("\n"));
+        }
+        if selection.range.has_context() {
+            let mut range_prompts = vec![];
+            range_prompts.push("I have the following code in the selection:".to_owned());
+            range_prompts.extend(selection.range.generate_prompt(true));
+            prompts.push(range_prompts.join("\n"));
+        } else {
+            prompts.push("There is no code in the selection.".to_owned());
+        }
+        let in_range_start_marker = selection.range.start_marker();
+        let in_range_end_marker = selection.range.end_marker();
+        prompts.push(
+            format!(
+                "Only change the code inside of the selection, delimited by markers: {in_range_start_marker} and {in_range_end_marker}"
+            )
+            .to_owned(),
+        );
+        prompts
     }
 
     fn edit_generation_prompt(

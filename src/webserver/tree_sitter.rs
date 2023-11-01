@@ -53,7 +53,6 @@ pub async fn extract_diagnostics_range(
         threshold_to_expand,
     }): Json<ExtractDiagnosticsRangeQuery>,
 ) -> Result<impl IntoResponse> {
-    // do something here
     let language_parsing = app.language_parsing.clone();
     let expanded_range = language_parsing.get_fix_range(
         &text_document_web.text,

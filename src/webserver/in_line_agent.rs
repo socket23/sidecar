@@ -48,6 +48,28 @@ pub struct TextDocumentWeb {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiagnosticRelatedInformation {
+    pub text: String,
+    pub language: String,
+    pub range: Range,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticInformation {
+    pub prompt_parts: String,
+    pub related_information: Vec<DiagnosticRelatedInformation>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticInformationFromEditor {
+    pub first_message: String,
+    pub diagnostic_information: Vec<DiagnosticInformation>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProcessInEditorRequest {
     pub query: String,
     pub language: String,
@@ -55,6 +77,7 @@ pub struct ProcessInEditorRequest {
     pub snippet_information: SnippetInformation,
     pub text_document_web: TextDocumentWeb,
     pub thread_id: uuid::Uuid,
+    pub diagnostics_information: Option<DiagnosticInformationFromEditor>,
 }
 
 impl ProcessInEditorRequest {
@@ -92,6 +115,7 @@ pub async fn reply_to_user(
         snippet_information,
         thread_id,
         text_document_web,
+        diagnostics_information,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
     let editor_parsing: EditorParsing = Default::default();
@@ -115,6 +139,7 @@ pub async fn reply_to_user(
             snippet_information,
             text_document_web,
             thread_id,
+            diagnostics_information,
         },
         vec![inline_agent_message],
         sender,

@@ -472,6 +472,8 @@ impl InLineAgent {
             self.editor_request.fs_file_path().to_owned(),
             &mut token_tracker,
         );
+        let user_prompts = self.fix_generation_prompt(selection_context);
+        // Now we need to create the prompts for diagnostics
         Ok(())
     }
 

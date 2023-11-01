@@ -329,6 +329,51 @@ impl TSLanguageParsing {
             Some(found_range)
         }
     }
+
+    pub fn get_parent_range_for_selection(
+        &self,
+        source_code: &str,
+        language: &str,
+        range: &Range,
+    ) -> Range {
+        let language_config = self.for_lang(language);
+        if let None = language_config {
+            return range.clone();
+        }
+        let language_config = language_config.expect("if let None check above to hold");
+        let grammar = language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code.as_bytes(), None).unwrap();
+        let node = parsed_data.root_node();
+        let query = language_config
+            .construct_types
+            .iter()
+            .map(|construct_type| format!("({construct_type}) @scope"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let query = tree_sitter::Query::new(grammar(), &query).expect("query to be well formed");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut found_node = None;
+        cursor
+            .matches(&query, node, source_code.as_bytes())
+            .into_iter()
+            .for_each(|capture| {
+                capture.captures.into_iter().for_each(|capture| {
+                    let node = capture.node;
+                    let node_range = Range::for_tree_node(&node);
+                    if node_range.start_byte() <= range.start_byte()
+                        && node_range.end_byte() >= range.end_byte()
+                        && found_node.is_none()
+                    {
+                        found_node = Some(node);
+                    }
+                })
+            });
+        found_node
+            .map(|node| Range::for_tree_node(&node))
+            .unwrap_or(range.clone())
+    }
 }
 
 fn find_node_to_use(

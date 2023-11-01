@@ -354,6 +354,7 @@ impl LlmClient {
     ) -> anyhow::Result<String> {
         let client = self.get_model(&model);
         let request = self.create_request(messages, functions, temperature, frequency_penalty);
+        dbg!(request);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 

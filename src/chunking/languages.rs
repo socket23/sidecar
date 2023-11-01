@@ -510,7 +510,8 @@ fn iterate_over_children(
     let mut end_idx = interested_nodes.len() - 1;
     let mut current_start_range = interested_nodes[start_idx];
     let mut current_end_range = interested_nodes[end_idx];
-    while distance_between_nodes(&current_start_range, &current_end_range) > line_limit
+    while distance_between_nodes(&current_start_range, &current_end_range)
+        > <i64>::try_from(line_limit).unwrap()
         && start_idx != end_idx
     {
         if index_of_interest - start_idx < end_idx - index_of_interest {
@@ -522,7 +523,9 @@ fn iterate_over_children(
         }
     }
 
-    if distance_between_nodes(&current_start_range, &current_end_range) > line_limit {
+    if distance_between_nodes(&current_start_range, &current_end_range)
+        > <i64>::try_from(line_limit).unwrap()
+    {
         Range::new(
             Position::from_tree_sitter_point(
                 &current_start_range.start_position(),
@@ -538,11 +541,10 @@ fn iterate_over_children(
     }
 }
 
-fn distance_between_nodes(
-    node: &tree_sitter::Node<'_>,
-    other_node: &tree_sitter::Node<'_>,
-) -> usize {
-    other_node.end_position().row - node.end_position().row + 1
+fn distance_between_nodes(node: &tree_sitter::Node<'_>, other_node: &tree_sitter::Node<'_>) -> i64 {
+    <i64>::try_from(other_node.end_position().row).unwrap()
+        - <i64>::try_from(node.end_position().row).unwrap()
+        + 1
 }
 
 fn keep_iterating<'a>(

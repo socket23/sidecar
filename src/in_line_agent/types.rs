@@ -754,6 +754,7 @@ impl InLineAgent {
 
     fn fix_diagnostics_prompt(&self) -> Vec<String> {
         if let Some(diagnostics_information) = &self.editor_request.diagnostics_information {
+            let first_message = &diagnostics_information.first_message;
             let related_information = diagnostics_information
                 .diagnostic_information
                 .iter()
@@ -787,7 +788,13 @@ impl InLineAgent {
                     }
                 })
                 .collect::<Vec<_>>();
-            related_information
+            {
+                vec![format!(
+                    "{}\n{}",
+                    first_message,
+                    related_information.join("\n")
+                )]
+            }
         } else {
             vec![]
         }

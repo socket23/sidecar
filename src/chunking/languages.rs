@@ -346,7 +346,6 @@ fn find_node_to_use(
     }
     let parent_node = parent_node.expect("check above to work");
     let filtered_ranges = keep_iterating(
-        language,
         parent_node
             .children(&mut parent_node.walk())
             .into_iter()
@@ -445,7 +444,6 @@ fn iterate_over_children(
         return Range::for_tree_node(&some_other_node_to_name);
     }
     let filtered_ranges_maybe = keep_iterating(
-        language,
         children,
         some_other_node_to_name,
         language_config,
@@ -500,7 +498,6 @@ fn distance_between_nodes(
 }
 
 fn keep_iterating<'a>(
-    language: &'a str,
     children: Vec<tree_sitter::Node<'a>>,
     current_node: tree_sitter::Node<'a>,
     language_config: &'a TSLanguageConfig,

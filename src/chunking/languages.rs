@@ -1,9 +1,12 @@
 use std::collections::HashSet;
 
+use gix::filter;
+use ort::download::language;
+
 use super::{
     javascript::javascript_language_config,
     rust::rust_language_config,
-    text_document::Range,
+    text_document::{Position, Range},
     types::{FunctionInformation, FunctionNodeType},
     typescript::typescript_language_config,
 };
@@ -51,6 +54,12 @@ pub struct TSLanguageConfig {
 
     /// The queries to get the function body for the language
     pub function_query: Vec<String>,
+
+    /// The different constructs for the language and their tree-sitter node types
+    pub construct_types: Vec<String>,
+
+    /// The different expression statements which are present in the language
+    pub expression_statements: Vec<String>,
 }
 
 impl TSLanguageConfig {
@@ -271,6 +280,295 @@ impl TSLanguageParsing {
             })
             .collect()
     }
+
+    pub fn get_fix_range<'a>(
+        &'a self,
+        source_code: &'a str,
+        language: &'a str,
+        range: &'a Range,
+        extra_width: usize,
+    ) -> Option<Range> {
+        let language_config = self.for_lang(language);
+        if let None = language_config {
+            return None;
+        }
+        let language_config = language_config.expect("if let None check above to hold");
+        let grammar = language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code.as_bytes(), None).unwrap();
+        let node = parsed_data.root_node();
+        let descendant_node_maybe =
+            node.descendant_for_byte_range(range.start_byte(), range.end_byte());
+        if let None = descendant_node_maybe {
+            return None;
+        }
+        // we are going to now check if the descendant node is important enough
+        // for us to consider and fits in the size range we expect it to
+        let descendant_node = descendant_node_maybe.expect("if let None to hold");
+        let mut cursor = descendant_node.walk();
+        let children: Vec<_> = descendant_node
+            .named_children(&mut cursor)
+            .into_iter()
+            .collect();
+        let found_range = iterate_over_nodes_within_range(
+            language,
+            descendant_node,
+            extra_width,
+            range,
+            true,
+            language_config,
+        );
+        let current_node_range = Range::for_tree_node(&descendant_node);
+        if found_range.start_byte() == current_node_range.start_byte()
+            && found_range.end_byte() == current_node_range.end_byte()
+        {
+            // here we try to iterate upwards if we can find a node
+            Some(find_node_to_use(language, descendant_node, language_config))
+        } else {
+            Some(found_range)
+        }
+    }
+}
+
+fn find_node_to_use(
+    language: &str,
+    node: tree_sitter::Node<'_>,
+    language_config: &TSLanguageConfig,
+) -> Range {
+    let parent_node = node.parent();
+    let current_range = Range::for_tree_node(&node);
+    let construct_type = language_config
+        .construct_types
+        .contains(&node.kind().to_owned());
+    if construct_type || parent_node.is_none() {
+        return current_range;
+    }
+    let parent_node = parent_node.expect("check above to work");
+    let filtered_ranges = keep_iterating(
+        language,
+        parent_node
+            .children(&mut parent_node.walk())
+            .into_iter()
+            .collect::<Vec<_>>(),
+        parent_node,
+        language_config,
+        false,
+    );
+    if filtered_ranges.is_none() {
+        return current_range;
+    }
+    let filtered_ranges_with_interest_node = filtered_ranges.expect("if let is_none to work");
+    let filtered_ranges = filtered_ranges_with_interest_node.filtered_nodes;
+    let index_of_interest = filtered_ranges_with_interest_node.index_of_interest;
+    if index_of_interest - 1 >= 0 && index_of_interest <= filtered_ranges.len() - 1 {
+        let before_node = filtered_ranges[index_of_interest - 1];
+        let after_node = filtered_ranges[index_of_interest + 1];
+        Range::new(
+            Position::from_tree_sitter_point(
+                &before_node.start_position(),
+                before_node.start_byte(),
+            ),
+            Position::from_tree_sitter_point(&after_node.end_position(), after_node.end_byte()),
+        )
+    } else {
+        find_node_to_use(language, parent_node, language_config)
+    }
+}
+
+fn iterate_over_nodes_within_range(
+    language: &str,
+    node: tree_sitter::Node<'_>,
+    line_limit: usize,
+    range: &Range,
+    should_go_inside: bool,
+    language_config: &TSLanguageConfig,
+) -> Range {
+    let children = node
+        .children(&mut node.walk())
+        .into_iter()
+        .collect::<Vec<_>>();
+    if node.range().end_point.row - node.range().start_point.row + 1 <= line_limit {
+        let found_range = if language_config
+            .construct_types
+            .contains(&node.kind().to_owned())
+        {
+            // if we have a matching kind, then we should be probably looking at
+            // this node which fits the bill and keep going
+            return Range::for_tree_node(&node);
+        } else {
+            iterate_over_children(
+                language,
+                children,
+                line_limit,
+                node,
+                language_config,
+                should_go_inside,
+            )
+        };
+        let parent_node = node.parent();
+        if let None = parent_node {
+            found_range
+        } else {
+            let mut parent = parent_node.expect("if let None to hold");
+            // we iterate over the children of the parent
+            iterate_over_nodes_within_range(
+                language,
+                parent,
+                line_limit,
+                &found_range,
+                false,
+                language_config,
+            )
+        }
+    } else {
+        iterate_over_children(
+            language,
+            children,
+            line_limit,
+            node,
+            language_config,
+            should_go_inside,
+        )
+    }
+}
+
+fn iterate_over_children(
+    language: &str,
+    children: Vec<tree_sitter::Node<'_>>,
+    line_limit: usize,
+    some_other_node_to_name: tree_sitter::Node<'_>,
+    language_config: &TSLanguageConfig,
+    should_go_inside: bool,
+) -> Range {
+    if children.is_empty() {
+        return Range::for_tree_node(&some_other_node_to_name);
+    }
+    let filtered_ranges_maybe = keep_iterating(
+        language,
+        children,
+        some_other_node_to_name,
+        language_config,
+        should_go_inside,
+    );
+
+    if let None = filtered_ranges_maybe {
+        return Range::for_tree_node(&some_other_node_to_name);
+    }
+
+    let filtered_range = filtered_ranges_maybe.expect("if let None");
+    let interested_nodes = filtered_range.filtered_nodes;
+    let index_of_interest = filtered_range.index_of_interest;
+
+    let mut start_idx = 0;
+    let mut end_idx = interested_nodes.len() - 1;
+    let mut current_start_range = interested_nodes[start_idx];
+    let mut current_end_range = interested_nodes[end_idx];
+    while distance_between_nodes(&current_start_range, &current_end_range) > line_limit
+        && start_idx != end_idx
+    {
+        if index_of_interest - start_idx < end_idx - index_of_interest {
+            end_idx = end_idx - 1;
+            current_end_range = interested_nodes[end_idx];
+        } else {
+            start_idx = start_idx + 1;
+            current_start_range = interested_nodes[start_idx];
+        }
+    }
+
+    if distance_between_nodes(&current_start_range, &current_end_range) > line_limit {
+        Range::new(
+            Position::from_tree_sitter_point(
+                &current_start_range.start_position(),
+                current_start_range.start_byte(),
+            ),
+            Position::from_tree_sitter_point(
+                &current_end_range.end_position(),
+                current_end_range.end_byte(),
+            ),
+        )
+    } else {
+        Range::for_tree_node(&some_other_node_to_name)
+    }
+}
+
+fn distance_between_nodes(
+    node: &tree_sitter::Node<'_>,
+    other_node: &tree_sitter::Node<'_>,
+) -> usize {
+    other_node.end_position().row - node.end_position().row + 1
+}
+
+fn keep_iterating<'a>(
+    language: &'a str,
+    children: Vec<tree_sitter::Node<'a>>,
+    current_node: tree_sitter::Node<'a>,
+    language_config: &'a TSLanguageConfig,
+    should_go_inside: bool,
+) -> Option<FilteredRanges<'a>> {
+    let mut filtered_children = vec![];
+    let mut index = None;
+    if should_go_inside {
+        filtered_children = children
+            .into_iter()
+            .filter(|node| {
+                language_config
+                    .construct_types
+                    .contains(&node.kind().to_owned())
+                    || language_config
+                        .expression_statements
+                        .contains(&node.kind().to_owned())
+            })
+            .collect::<Vec<_>>();
+        index = Some(binary_search(filtered_children.to_vec(), &current_node));
+        filtered_children.insert(index.expect("binary search always returns"), current_node);
+    } else {
+        filtered_children = children
+            .into_iter()
+            .filter(|node| {
+                language_config
+                    .construct_types
+                    .contains(&node.kind().to_owned())
+                    || language_config
+                        .expression_statements
+                        .contains(&node.kind().to_owned())
+                    || (node.start_byte() <= current_node.start_byte()
+                        && node.end_byte() >= current_node.end_byte())
+            })
+            .collect::<Vec<_>>();
+        index = filtered_children.to_vec().into_iter().position(|node| {
+            node.start_byte() <= current_node.start_byte()
+                && node.end_byte() >= current_node.end_byte()
+        })
+    }
+
+    index.map(|index| FilteredRanges {
+        filtered_nodes: filtered_children,
+        index_of_interest: index,
+    })
+}
+
+struct FilteredRanges<'a> {
+    filtered_nodes: Vec<tree_sitter::Node<'a>>,
+    index_of_interest: usize,
+}
+
+fn binary_search<'a>(
+    nodes: Vec<tree_sitter::Node<'a>>,
+    current_node: &tree_sitter::Node<'_>,
+) -> usize {
+    let mut start = 0;
+    let mut end = nodes.len();
+
+    while start < end {
+        let mid = (start + end) / 2;
+        if nodes[mid].range().start_byte < current_node.range().start_byte {
+            start = mid + 1;
+        } else {
+            end = mid;
+        }
+    }
+    start
 }
 
 fn get_merged_documentation_nodes(matches: Vec<tree_sitter::Node>, source: &str) -> Vec<String> {

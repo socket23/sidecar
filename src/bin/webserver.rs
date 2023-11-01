@@ -174,10 +174,15 @@ fn in_editor_router() -> Router {
 
 fn tree_sitter_router() -> Router {
     use axum::routing::*;
-    Router::new().route(
-        "/documentation_parsing",
-        post(sidecar::webserver::tree_sitter::extract_documentation_strings),
-    )
+    Router::new()
+        .route(
+            "/documentation_parsing",
+            post(sidecar::webserver::tree_sitter::extract_documentation_strings),
+        )
+        .route(
+            "/diagnostic_parsing",
+            post(sidecar::webserver::tree_sitter::extract_diagnostics_range),
+        )
 }
 
 // TODO(skcd): Now we have to do the following: start the qdrant binary

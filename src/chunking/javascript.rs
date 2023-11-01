@@ -44,5 +44,24 @@ pub fn javascript_language_config() -> TSLanguageConfig {
 					body: (statement_block) @body)
 			] @function"
             .to_owned()],
+        construct_types: vec![
+            "program",
+            "class_declaration",
+            "function_declaration",
+            "function",
+            "method_definition",
+        ]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect(),
+        expression_statements: vec![
+            "call_expression",
+            "expression_statement",
+            "variable_declaration",
+            "public_field_definition",
+        ]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect(),
     }
 }

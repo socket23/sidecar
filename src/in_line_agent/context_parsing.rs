@@ -148,6 +148,14 @@ impl ContextParserInLineEdit {
         }
     }
 
+    pub fn start_marker(&self) -> &str {
+        &self.start_marker
+    }
+
+    pub fn end_marker(&self) -> &str {
+        &self.end_marker
+    }
+
     pub fn to_agent_selection_data(&self) -> InLineAgentSelectionData {
         InLineAgentSelectionData::new(
             self.has_context(),
@@ -393,13 +401,99 @@ impl SelectionContext {
     }
 }
 
+pub fn generate_selection_context_for_fix(
+    line_count: i64,
+    fix_range_of_interest: &Range,
+    selection_range: &Range,
+    language: &str,
+    lines: Vec<String>,
+    fs_file_path: String,
+    mut token_count: &mut ContextWindowTracker,
+) -> SelectionContext {
+    let mut in_range = ContextParserInLineEdit::new(
+        language.to_owned(),
+        "ed8c6549bwf9".to_owned(),
+        line_count,
+        lines.to_vec(),
+        fs_file_path.to_owned(),
+    );
+    let mut above = ContextParserInLineEdit::new(
+        language.to_owned(),
+        "abpxx6d04wxr".to_owned(),
+        line_count,
+        lines.to_vec(),
+        fs_file_path.to_owned(),
+    );
+    let mut below = ContextParserInLineEdit::new(
+        language.to_owned(),
+        "be15d9bcejpp".to_owned(),
+        line_count,
+        lines.to_vec(),
+        fs_file_path,
+    );
+    let mut should_expand = true;
+    let middle_line =
+        (selection_range.start_position().line() + selection_range.end_position().line()) / 2;
+    let size = std::cmp::max(
+        middle_line - selection_range.start_position().line(),
+        selection_range.end_position().line() - middle_line,
+    );
+    in_range.append_line(middle_line, token_count);
+    for index in 1..=size {
+        if !should_expand {
+            break;
+        }
+        let start_line_before = middle_line - index;
+        let end_line_after = middle_line + index;
+        if (start_line_before >= fix_range_of_interest.start_position().line()
+            && !in_range.prepend_line(start_line_before, token_count))
+            || (end_line_after <= fix_range_of_interest.end_position().line()
+                && !in_range.append_line(end_line_after, token_count))
+        {
+            should_expand = false;
+            break;
+        }
+    }
+    if !should_expand {
+        above.trim(None);
+        in_range.trim(None);
+        below.trim(None);
+        return SelectionContext {
+            above,
+            range: in_range,
+            below,
+        };
+    }
+    expand_above_and_below_selections(
+        &mut above,
+        &mut below,
+        &mut token_count,
+        SelectionLimits {
+            above_line_index: i64::try_from(fix_range_of_interest.start_position().line())
+                .expect("usize to i64 to work")
+                - 1,
+            below_line_index: i64::try_from(fix_range_of_interest.end_position().line())
+                .expect("usize to i64 to work")
+                + 1,
+            minimum_line_index: 0,
+            maximum_line_index: line_count - 1,
+        },
+    );
+    above.trim(None);
+    below.trim(None);
+    in_range.trim(None);
+    SelectionContext {
+        above,
+        range: in_range,
+        below,
+    }
+}
+
 fn generate_selection_context(
-    source_code: &str,
     line_count: i64,
     original_selection: &Range,
     range_to_maintain: &Range,
     expanded_range: &Range,
-    character_limit: usize,
     language: &str,
     lines: Vec<String>,
     fs_file_path: String,
@@ -528,12 +622,10 @@ pub fn generate_context_for_range(
     // first try with the whole context
     let mut token_tracker = ContextWindowTracker::new(character_limit);
     let selection_context = generate_selection_context(
-        source_code,
         line_count_i64,
         original_selection,
         maintain_range,
         &Range::new(Position::new(0, 0, 0), Position::new(lines_count, 0, 0)),
-        character_limit,
         language,
         source_lines.to_vec(),
         fs_file_path.to_owned(),
@@ -550,12 +642,10 @@ pub fn generate_context_for_range(
     // now we try to send just the amount of data we have in the selection
     let mut token_tracker = ContextWindowTracker::new(character_limit);
     let restricted_selection_context = generate_selection_context(
-        source_code,
         line_count_i64,
         original_selection,
         maintain_range,
         expanded_range,
-        character_limit,
         language,
         source_lines,
         fs_file_path,

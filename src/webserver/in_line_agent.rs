@@ -122,7 +122,6 @@ pub async fn reply_to_user(
     // Now we want to handle this and send the data to a prompt which will generate
     // the proper things
     // Here we will handle how the in-line agent will handle the work
-    dbg!(&diagnostics_information);
     let sql_db = app.sql.clone();
     let llm_client = LlmClient::codestory_infra();
     let (sender, receiver) = tokio::sync::mpsc::channel(100);

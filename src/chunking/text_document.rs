@@ -292,7 +292,6 @@ impl DocumentSymbol {
         let mut second_walker = tree_node.walk();
         let mut third_walker = tree_node.walk();
         let range = tree_node.range();
-        dbg!(source_code[range.start_byte..range.end_byte].to_owned());
         let start_position = Position {
             line: range.start_point.row,
             character: range.start_point.column,

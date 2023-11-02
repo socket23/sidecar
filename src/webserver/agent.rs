@@ -327,7 +327,6 @@ pub struct FollowupChatRequest {
     pub query: String,
     pub repo_ref: RepoRef,
     pub thread_id: uuid::Uuid,
-    pub deep_context: DeepContextForView,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -404,50 +403,28 @@ pub async fn followup_chat(
         query,
         repo_ref,
         thread_id,
-        deep_context,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
-    let language = deep_context.language.to_owned();
-    let trimmed_context = trim_deep_context(deep_context).await;
-    let trimmed_context_str = create_trimmed_context(&trimmed_context).await;
-    let view_port_code_span = trimmed_context
-        .current_view_port
-        .as_ref()
-        .map(|current_view_port| CodeSpan {
-            file_path: current_view_port.fs_file_path.to_owned(),
-            alias: 0,
-            start_line: current_view_port
-                .start_position
-                .line
-                .try_into()
-                .expect("to work"),
-            end_line: current_view_port
-                .end_position
-                .line
-                .try_into()
-                .expect("to_work"),
-            data: current_view_port.text_on_screen.to_owned(),
-            score: Some(1.0),
-        });
-    let viewport_context = create_viewport_context(
-        trimmed_context.current_view_port,
-        trimmed_context.current_cursor_position,
-    )
-    .await;
+    // Here we do something special, if the user is asking a followup question
+    // we just look at the previous conversation message the thread belonged
+    // to and use that as context for grounding the agent response. In the future
+    // we can obviously add more context using @ symbols etc
     let sql_db = app.sql.clone();
-    // Now we check if we have any previous messages, if we do we have to signal
-    // that to the agent that this could be a followup question, and if we don't
-    // know about that then its totally fine
-    let mut conversation_message = ConversationMessage::general_question(
-        thread_id,
-        crate::agent::types::AgentState::ViewPort,
-        query.to_owned(),
-    );
     let mut previous_messages =
         ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)
             .await
             .expect("loading from db to never fail");
+
+    let mut conversation_message = ConversationMessage::general_question(
+        thread_id,
+        crate::agent::types::AgentState::FollowupChat,
+        query.to_owned(),
+    );
+
+    // Now we check if we have any previous messages, if we do we have to signal
+    // that to the agent that this could be a followup question, and if we don't
+    // know about that then its totally fine
     if let Some(previous_message) = previous_messages.last() {
         previous_message.get_paths().iter().for_each(|path| {
             conversation_message.add_path(path.to_owned());
@@ -462,122 +439,23 @@ pub async fn followup_chat(
                 conversation_message.add_user_selected_code_span(code_span.clone())
             });
     }
-    let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
-    let llm_client = Arc::new(LlmClient::codestory_infra());
-    let goto_definitions_required =
-        prompts::extract_goto_definition_symbols_from_snippet(&language);
-    let (message_sender, message_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let response = dbg!(
-        llm_client
-            .stream_response(
-                crate::agent::llm_funcs::llm::OpenAIModel::GPT4,
-                vec![
-                    llm_funcs::llm::Message::system(
-                        &prompts::extract_goto_definition_symbols_from_snippet(&language),
-                    ),
-                    llm_funcs::llm::Message::user(&viewport_context),
-                ],
-                None,
-                0.0,
-                None,
-                message_sender,
-            )
-            .await
-    );
-    let required_definition_strings = dbg!(response
-        .unwrap_or_default()
-        .split(",")
-        .map(|s| s.trim().to_owned())
-        .collect::<HashSet<_>>());
-    // let definitions_required: Vec<_> =
-    //     stream::iter(trimmed_context_str.into_iter().map(|trimmed_context| {
-    //         (
-    //             trimmed_context,
-    //             viewport_context.to_owned(),
-    //             llm_client.clone(),
-    //             query.to_owned(),
-    //         )
-    //     }))
-    //     .filter_map(
-    //         |(trimmed_context_str, view_port_context, llm_client, query)| async move {
-    //             // here we will call out the prompt with gpt3 and see what happens
-    //             // after that
-    //             let messages = vec![llm_funcs::llm::Message::system(
-    //                 &prompts::definition_snippet_required(
-    //                     &view_port_context,
-    //                     &trimmed_context_str,
-    //                     &query,
-    //                 ),
-    //             )];
-    //             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    //             let response = llm_client
-    //                 .stream_response(
-    //                     crate::agent::llm_funcs::llm::OpenAIModel::GPT4,
-    //                     messages,
-    //                     None,
-    //                     0.2,
-    //                     None,
-    //                     sender,
-    //                 )
-    //                 .await;
-    //             dbg!(&response);
-    //             let final_response = response.unwrap_or("NO".to_owned());
-    //             if final_response.to_lowercase() == "no" {
-    //                 None
-    //             } else {
-    //                 Some(futures::future::ready(trimmed_context_str))
-    //             }
-    //         },
-    //     )
-    //     .buffer_unordered(10)
-    //     .collect::<Vec<_>>()
-    //     .await;
-
-    let definitions_required = trimmed_context
-        .precise_context_map
-        .into_iter()
-        .filter_map(|(_, precise_contexts)| {
-            // check if the trimmed context string has any of the required strings,
-            // if it does we should include it otherwise we can exclude it
-            if precise_contexts.iter().any(|context| {
-                context
-                    .symbol
-                    .fuzzy_name
-                    .as_ref()
-                    .map(|fuzzy_name| required_definition_strings.contains(fuzzy_name))
-                    .unwrap_or_default()
-            }) {
-                Some(create_context_string_for_precise_contexts(precise_contexts))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // we will grab the required definitions from the response of the LLM here
-    dbg!(&definitions_required);
-
-    // very very hacky and very bad, but oh well we will figure out a way to
-    // re-rank things properly
-    if let Some(view_port_code_span) = view_port_code_span {
-        conversation_message.add_user_selected_code_span(view_port_code_span);
-    }
-    conversation_message.add_definitions_interested_in(definitions_required);
     previous_messages.push(conversation_message);
-    let agent = Agent::prepare_for_followup(
-        app,
-        repo_ref,
-        session_id,
-        llm_client.clone(),
-        sql_db,
-        previous_messages,
-        sender,
-    );
+
+    let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
     // If this is a followup, right now we don't take in any additional context,
     // but only use the one from our previous conversation
     let action = AgentAction::Answer { paths: vec![] };
+    let agent = Agent::prepare_for_followup(
+        app,
+        repo_ref,
+        session_id,
+        Arc::new(LlmClient::codestory_infra()),
+        sql_db,
+        previous_messages,
+        sender,
+    );
 
     generate_agent_stream(agent, action, receiver).await
 }
@@ -606,7 +484,6 @@ pub async fn go_to_definition_symbols(
         thread_id,
     }): Json<GotoDefinitionSymbolsRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!("we are over here in goto_definition_symbol");
     let sql_db = app.sql.clone();
     let agent = Agent {
         application: app,

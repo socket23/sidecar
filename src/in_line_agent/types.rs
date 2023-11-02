@@ -693,7 +693,7 @@ impl InLineAgent {
                     &self.document_symbol_prompt(&document_symbol, language, file_path),
                 );
                 let user_prompt = format!(
-                    "{} {}",
+                    "{} {}. Do not forget to include the FILEPATH marker in your generated code.",
                     self.document_symbol_metadata(&document_symbol, language,),
                     query,
                 );

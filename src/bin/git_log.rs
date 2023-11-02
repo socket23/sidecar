@@ -63,7 +63,6 @@ struct Args {
 
 fn run(args: Args) -> anyhow::Result<()> {
     let repo = gix::discover(args.git_dir.as_deref().unwrap_or(Path::new(".")))?;
-    dbg!(&repo);
     let commit = repo
         .rev_parse_single({
             args.committish

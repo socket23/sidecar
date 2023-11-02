@@ -127,12 +127,6 @@ impl EditorParsing {
             let mut intersecting_nodes = nodes
                 .into_iter()
                 .map(|tree_sitter_node| {
-                    {
-                        // print the node ranges here
-                        dbg!(source_str[tree_sitter_node.range().start_byte
-                            ..tree_sitter_node.range().end_byte]
-                            .to_owned());
-                    }
                     (
                         tree_sitter_node,
                         Range::for_tree_node(&tree_sitter_node).intersection_size(range) as f64,
@@ -148,15 +142,11 @@ impl EditorParsing {
             // from i, which is the biggest node here
             if intersecting_nodes.is_empty() {
                 return if identifier_nodes.is_empty() {
-                    dbg!("we are returning none here as we have no intersecting nodes");
                     None
                 } else {
                     Some({
-                        dbg!("we are getting something from the identifier node");
                         let mut current_node = identifier_nodes[0];
-                        dbg!(&current_node.0.kind());
                         for identifier_node in &identifier_nodes[1..] {
-                            dbg!(&identifier_node.0.kind());
                             if identifier_node.1 - current_node.1 > 0.0 {
                                 current_node = identifier_node.clone();
                             }
@@ -185,13 +175,7 @@ impl EditorParsing {
                     .filter(|(tree_sitter_node, _)| {
                         self.is_node_identifier(tree_sitter_node, language_config)
                     })
-                    .map(|(tree_sitter_node, score)| {
-                        dbg!("identifier node found");
-                        dbg!(source_str[tree_sitter_node.range().start_byte
-                            ..tree_sitter_node.range().end_byte]
-                            .to_owned());
-                        (tree_sitter_node, score)
-                    })
+                    .map(|(tree_sitter_node, score)| (tree_sitter_node, score))
                     .collect::<Vec<_>>(),
             );
 
@@ -254,9 +238,6 @@ impl EditorParsing {
         language_config: &TSLanguageConfig,
         range: Range,
     ) -> Vec<DocumentSymbol> {
-        dbg!(&text_document);
-        dbg!(&language_config);
-        dbg!(&range);
         let language = language_config.grammar;
         let source = text_document.get_content_buffer();
         let mut parser = tree_sitter::Parser::new();

@@ -269,8 +269,6 @@ impl ConversationMessage {
         let conversation_state = serde_json::to_string(&self.conversation_state)?;
         let repo_ref_str = repo_ref.to_string();
         let generated_answer_context = self.generated_answer_context.clone();
-        dbg!("what answer are we storing");
-        dbg!(&generated_answer_context);
         sqlx::query! {
             "INSERT INTO agent_conversation_message \
             (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, repo_ref, generated_answer_context) \

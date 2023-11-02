@@ -510,6 +510,9 @@ impl InLineAgent {
                 .into_iter()
                 .map(|prompt| llm_funcs::llm::Message::user(&prompt)),
         );
+        prompts.push(llm_funcs::llm::Message::user(
+            "Do not forget to include the // BEGIN and // END markers in your generated code.",
+        ));
         let last_exchange = self.get_last_agent_message();
         last_exchange.message_state = MessageState::StreamingAnswer;
         let document_symbol = {

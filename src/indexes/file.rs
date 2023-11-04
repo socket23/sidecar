@@ -307,10 +307,11 @@ impl RepositoryFile {
         let lines_avg = self.buffer.len() as f64 / self.buffer.lines().count() as f64;
 
         // Get the language of the file
-        let language = hyperpolyglot::detect(&self.pathbuf)
-            .unwrap_or(None)
-            .map(|detection| detection.language().to_ascii_lowercase())
-            .unwrap_or("not_detected_language".to_owned());
+        let language = "not_detected_language".to_owned();
+        // let language = hyperpolyglot::detect(&self.pathbuf)
+        //     .unwrap_or(None)
+        //     .map(|detection| detection.language().to_ascii_lowercase())
+        //     .unwrap_or("not_detected_language".to_owned());
 
         let file_extension = self
             .pathbuf

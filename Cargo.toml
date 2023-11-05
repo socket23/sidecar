@@ -67,6 +67,7 @@ tiktoken-rs = "0.5.4"
 rake = "0.3.3"
 tokio-stream = "0.1.14"
 fancy-regex = "0.11.0"
+tree-sitter-python = "0.20.4"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = [ "resource" ] }

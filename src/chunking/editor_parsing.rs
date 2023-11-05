@@ -6,6 +6,7 @@ use crate::repo::types::RepoRef;
 use super::{
     javascript::javascript_language_config,
     languages::TSLanguageConfig,
+    python::python_language_config,
     rust::rust_language_config,
     text_document::{DocumentSymbol, Position, Range, TextDocument},
     types::FunctionInformation,
@@ -27,6 +28,7 @@ impl Default for EditorParsing {
                 rust_language_config(),
                 javascript_language_config(),
                 typescript_language_config(),
+                python_language_config(),
             ],
         }
     }

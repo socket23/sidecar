@@ -17,7 +17,6 @@ use tantivy::{
     tokenizer::NgramTokenizer,
     DocAddress, Document, IndexReader, IndexWriter, Score,
 };
-use tokio::sync::RwLock;
 use tracing::debug;
 
 use crate::application::background::SyncHandle;
@@ -43,7 +42,7 @@ use super::schema::{CodeSnippet, CodeSnippetTokenizer, File};
 pub struct Indexer<T> {
     pub source: T,
     pub index: tantivy::Index,
-    pub reader: RwLock<IndexReader>,
+    pub reader: IndexReader,
     pub reindex_buffer_size: usize,
     pub reindex_threads: usize,
 }
@@ -55,8 +54,7 @@ impl Indexer<CodeSnippet> {
         query_str: &str,
         limit: usize,
     ) -> Result<Vec<CodeSnippetDocument>> {
-        let reader = self.reader.read().await;
-        let searcher = reader.searcher();
+        let searcher = self.reader.searcher();
         let collector = TopDocs::with_limit(5 * limit);
         let code_snippet_source = &self.source;
         let query_parser = QueryParser::for_index(
@@ -129,8 +127,7 @@ impl Indexer<File> {
         limit: usize,
     ) -> impl Iterator<Item = FileDocument> + '_ {
         // lifted from query::compiler
-        let reader = self.reader.read().await;
-        let searcher = reader.searcher();
+        let searcher = self.reader.searcher();
         let collector = TopDocs::with_limit(5 * limit); // TODO: tune this
         let file_source = &self.source;
 
@@ -229,8 +226,7 @@ impl Indexer<File> {
         path: &str,
         reporef: &RepoRef,
     ) -> anyhow::Result<Option<FileDocument>> {
-        let reader = self.reader.read().await;
-        let searcher = reader.searcher();
+        let searcher = self.reader.searcher();
         let file_index = searcher.index();
         // get the tantivy query here and search for it
         let query_parser = QueryParser::for_index(
@@ -345,17 +341,11 @@ pub trait Indexable: Send + Sync {
 // the writer here is the tantivy writer which we need to use
 pub struct IndexWriteHandle<'a> {
     source: &'a dyn Indexable,
-    index: &'a tantivy::Index,
-    reader: &'a RwLock<IndexReader>,
+    reader: &'a IndexReader,
     writer: IndexWriter,
 }
 
 impl<'a> IndexWriteHandle<'a> {
-    pub async fn refresh_reader(&self) -> Result<()> {
-        *self.reader.write().await = self.index.reader()?;
-        Ok(())
-    }
-
     pub fn delete(&self, repo: &Repository) {
         self.source.delete_by_repo(&self.writer, repo)
     }
@@ -372,9 +362,9 @@ impl<'a> IndexWriteHandle<'a> {
             .await
     }
 
-    pub async fn commit(&mut self) -> Result<()> {
+    pub fn commit(&mut self) -> Result<()> {
         self.writer.commit()?;
-        self.refresh_reader().await?;
+        self.reader.reload()?;
 
         Ok(())
     }
@@ -445,7 +435,6 @@ impl<T: Indexable> Indexer<T> {
     fn write_handle(&self) -> Result<IndexWriteHandle<'_>> {
         Ok(IndexWriteHandle {
             source: &self.source,
-            index: &self.index,
             reader: &self.reader,
             writer: self
                 .index
@@ -459,7 +448,6 @@ impl<T: Indexable> Indexer<T> {
         let mut index =
             tantivy::Index::open_or_create(tantivy::directory::MmapDirectory::open(path)?, schema)?;
 
-        index.set_default_multithread_executor()?;
         index.set_multithread_executor(threads)?;
         index
             .tokenizers()
@@ -490,7 +478,7 @@ impl<T: Indexable> Indexer<T> {
     /// Create an index using `source` at the specified path.
     pub fn create(source: T, path: &Path, buffer_size: usize, threads: usize) -> Result<Self> {
         let index = Self::init_index(source.schema(), path, threads)?;
-        let reader = index.reader()?.into();
+        let reader = index.reader()?;
         let instance = Self {
             reader,
             index,
@@ -532,7 +520,7 @@ impl<T: Indexable> Indexer<T> {
         C: Collector<Fruit = (Vec<(Score, DocAddress)>, MultiFruit)>,
         R: DocumentRead<Schema = T>,
     {
-        let searcher = self.reader.read().await.searcher();
+        let searcher = self.reader.searcher();
         let queries = queries
             .filter(|q| doc_reader.query_matches(q))
             .collect::<SmallVec<[_; 2]>>();
@@ -571,9 +559,9 @@ impl<'a> Deref for WriteHandleForIndexers<'a> {
 }
 
 impl<'a> WriteHandleForIndexers<'a> {
-    pub async fn commit(self) -> Result<()> {
+    pub fn commit(self) -> Result<()> {
         for mut handle in self.handles {
-            handle.commit().await?
+            handle.commit()?
         }
 
         Ok(())

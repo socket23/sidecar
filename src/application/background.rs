@@ -643,7 +643,7 @@ impl SyncHandle {
         match indexed {
             Ok(_) => {
                 debug!("committing index");
-                writers.commit().await.map_err(SyncError::Tantivy)?;
+                writers.commit().map_err(SyncError::Tantivy)?;
                 debug!("finished committing index");
                 indexed.map_err(SyncError::Indexing)
             }

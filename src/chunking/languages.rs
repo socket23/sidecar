@@ -1,10 +1,8 @@
 use std::collections::HashSet;
 
-use gix::filter;
-use ort::download::language;
-
 use super::{
     javascript::javascript_language_config,
+    python::python_language_config,
     rust::rust_language_config,
     text_document::{Position, Range},
     types::{FunctionInformation, FunctionNodeType},
@@ -128,6 +126,7 @@ impl TSLanguageParsing {
                 javascript_language_config(),
                 typescript_language_config(),
                 rust_language_config(),
+                python_language_config(),
             ],
         }
     }

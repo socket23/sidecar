@@ -416,7 +416,7 @@ impl OutlineForRange {
                         .expect("to not fail");
                     outline_above += terminator;
                     current_index = function_body.range().end_byte();
-                } else if function_body.range().start_byte() > range.end_byte() {
+                } else if function_body.range().start_byte() > end_of_range {
                     outline_below += source_code
                         .get(end_of_range..function_body.range().start_byte())
                         .expect("to not fail");

@@ -19,7 +19,8 @@ pub fn python_language_config() -> TSLanguageConfig {
                 (function_definition
                     name: (identifier) @identifier
                     parameters: (parameters) @parameters
-                    body: (block
+                    return_type: (type) @return_type
+                        body: (block
                             (expression_statement (string))? @docstring) @body)
                 (assignment
                     left: (identifier) @identifier

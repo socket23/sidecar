@@ -318,6 +318,7 @@ pub async fn explain(
         model: GPT_4,
         sql_db: sql,
         sender,
+        user_context: None,
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -528,6 +529,7 @@ pub async fn go_to_definition_symbols(
         model: GPT_3_5_TURBO_16K,
         sql_db,
         sender: tokio::sync::mpsc::channel(100).0,
+        user_context: None,
     };
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     Ok(json(GotoDefinitionSymbolsResponse {

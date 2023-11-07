@@ -75,6 +75,14 @@ impl Position {
     pub fn line(&self) -> usize {
         self.line
     }
+
+    pub fn column(&self) -> usize {
+        self.character
+    }
+
+    pub fn set_byte_offset(&mut self, byte_offset: usize) {
+        self.byte_offset = byte_offset;
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -362,7 +370,7 @@ impl OutlineForRange {
         function_bodies: Vec<FunctionInformation>,
         range_expanded_to_function: Range,
         language: &str,
-        source_code: &str,
+        source_code: Vec<u8>,
     ) -> Self {
         // Now we try to see if we can expand properly
         let mut terminator = "".to_owned();
@@ -399,7 +407,7 @@ impl OutlineForRange {
             .collect();
 
         fn build_outline(
-            source_code: &str,
+            source_code: Vec<u8>,
             function_bodies: Vec<FunctionInformation>,
             range: Range,
             terminator: &str,
@@ -411,25 +419,43 @@ impl OutlineForRange {
 
             for function_body in function_bodies.iter() {
                 if function_body.range().end_byte() < range.start_byte() {
-                    outline_above += source_code
-                        .get(current_index..function_body.range().start_byte())
-                        .expect("to not fail");
+                    outline_above += &String::from_utf8(
+                        source_code
+                            .get(current_index..function_body.range().start_byte())
+                            .expect("to not fail")
+                            .to_vec(),
+                    )
+                    .expect("ut8 errors to not happen");
                     outline_above += terminator;
                     current_index = function_body.range().end_byte();
-                } else if function_body.range().start_byte() > end_of_range {
-                    outline_below += source_code
-                        .get(end_of_range..function_body.range().start_byte())
-                        .expect("to not fail");
+                } else if function_body.range().start_byte() > range.end_byte() {
+                    outline_below += &String::from_utf8(
+                        source_code
+                            .get(end_of_range..function_body.range().start_byte())
+                            .expect("to not fail")
+                            .to_vec(),
+                    )
+                    .expect("ut8 to not fail");
                     outline_below += terminator;
                     end_of_range = function_body.range().end_byte();
+                } else {
+                    continue;
                 }
             }
-            outline_above += source_code
-                .get(current_index..range.start_byte())
-                .expect("to not fail");
-            outline_below += source_code
-                .get(end_of_range..source_code.len())
-                .expect("to not fail");
+            outline_above += &String::from_utf8(
+                source_code
+                    .get(current_index..range.start_byte())
+                    .expect("to not fail")
+                    .to_vec(),
+            )
+            .expect("ut8 to not fail");
+            outline_below += &String::from_utf8(
+                source_code
+                    .get(end_of_range..source_code.len())
+                    .expect("to not fail")
+                    .to_vec(),
+            )
+            .expect("ut8 to not fail");
             OutlineForRange {
                 above: outline_above,
                 below: outline_below,

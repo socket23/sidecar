@@ -557,7 +557,7 @@ impl InLineAgent {
         // First we get the function blocks along with the ranges we know about
         // we get the function nodes here
         let function_nodes = self.editor_parsing.function_information_nodes(
-            &self.editor_request.source_code(),
+            &self.editor_request.source_code_bytes(),
             &self.editor_request.language(),
         );
         // Now we need to get the nodes which are just function blocks
@@ -616,7 +616,7 @@ impl InLineAgent {
             .collect();
         // generate the prompts for it and then send it over to the LLM
         let response = generate_context_for_range(
-            &self.editor_request.source_code(),
+            self.editor_request.source_code_bytes().to_vec(),
             self.editor_request.line_count(),
             &selection_range,
             &expanded_selection,
@@ -625,7 +625,7 @@ impl InLineAgent {
             // TODO(skcd): Make this more variable going forward
             4000,
             source_lines,
-            function_bodies.into_iter().map(|fnb| fnb.clone()).collect(),
+            edit_expansion.function_bodies,
             self.editor_request.fs_file_path().to_owned(),
         );
 

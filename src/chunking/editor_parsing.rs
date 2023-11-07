@@ -311,7 +311,7 @@ impl EditorParsing {
 
     pub fn function_information_nodes(
         &self,
-        source_code: &str,
+        source_code: &[u8],
         language: &str,
     ) -> Vec<FunctionInformation> {
         let language_config = self.ts_language_config(&language);

@@ -104,6 +104,7 @@ impl Agent {
             model: model::GPT_4,
             sql_db,
             sender,
+            user_context: None,
         };
         agent
     }
@@ -126,6 +127,7 @@ impl Agent {
             model: model::GPT_4,
             sql_db,
             sender,
+            user_context: None,
         };
         agent
     }
@@ -156,6 +158,7 @@ impl Agent {
             model: model::GPT_4,
             sql_db,
             sender,
+            user_context: None,
         };
         agent
     }
@@ -678,6 +681,20 @@ impl Agent {
         });
 
         Ok(response)
+    }
+
+    pub async fn answer_using_context(
+        &mut self,
+        path_aliases: &[usize],
+        sender: tokio::sync::mpsc::UnboundedSender<Answer>,
+    ) -> Result<String> {
+        if self.user_context.is_none() {
+            return Ok(
+                "reached unexpected path in code, please report to the developers".to_owned(),
+            );
+        }
+        // Here we ask the agent about which the lexical search
+        unimplemented!()
     }
 
     pub async fn answer(

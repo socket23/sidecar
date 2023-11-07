@@ -16,14 +16,16 @@ pub fn python_language_config() -> TSLanguageConfig {
             .to_owned()],
         function_query: vec![
             "[
-            (function_definition
-                name: (identifier) @identifier
-                body: (block
-                        (expression_statement (string))? @docstring) @body)
-            (assignment
-                left: (identifier) @identifier
-                right: (lambda) @body)
-        ] @function"
+                (function_definition
+                    name: (identifier) @identifier
+                    parameters: (parameters) @parameters
+                    body: (block
+                            (expression_statement (string))? @docstring) @body)
+                (assignment
+                    left: (identifier) @identifier
+                    type: (type) @parameters
+                    right: (lambda) @body)
+            ] @function"
                 .to_owned(),
             "(ERROR (\"def\" (identifier) (parameters))) @function".to_owned(),
         ],

@@ -84,7 +84,7 @@ impl TSLanguageConfig {
         let node = parsed_data.root_node();
         let mut function_nodes = vec![];
         let source_code_vec = source_code.to_vec();
-        let mut unique_ranges: HashSet<tree_sitter::Range> = Default::default();
+        let mut range_set = HashSet::new();
         function_queries.into_iter().for_each(|function_query| {
             let query = tree_sitter::Query::new(grammar(), &function_query)
                 .expect("function queries are well formed");
@@ -99,11 +99,14 @@ impl TSLanguageConfig {
                             .to_vec()
                             .remove(capture.index.try_into().unwrap());
                         let capture_type = FunctionNodeType::from_str(&capture_name);
-                        if let Some(capture_type) = capture_type {
-                            function_nodes.push(FunctionInformation::new(
-                                Range::for_tree_node(&capture.node),
-                                capture_type,
-                            ));
+                        if !range_set.contains(&Range::for_tree_node(&capture.node)) {
+                            if let Some(capture_type) = capture_type {
+                                function_nodes.push(FunctionInformation::new(
+                                    Range::for_tree_node(&capture.node),
+                                    capture_type,
+                                ));
+                                range_set.insert(Range::for_tree_node(&capture.node));
+                            }
                         }
                     })
                 });
@@ -171,8 +174,7 @@ impl TSLanguageConfig {
             }
             index = end_index;
         }
-
-        unimplemented!();
+        FunctionInformation::fold_function_blocks(compressed_functions)
     }
 
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
@@ -1195,5 +1197,17 @@ impl A {
         let fix_range = fix_range.expect("is_some to work");
         let generated_range = source_code[fix_range.start_byte()..fix_range.end_byte()].to_owned();
         assert_eq!(generated_range, "{\n        // Cohere separates events with '\\n'\n        const isEventSeparator = chunk[\"something\"] === '\\n';\n\n        // Keep buffering unless we've hit the end of an event\n        if (!isEventSeparator) {\n          buffer.push(chunk[i]);\n          continue;\n        }\n\n        const event = CohereGenerationDecoderStream.parse(buffer.join(''));\n\n        if (event) {\n          controller.enqueue(map(event));\n        }\n\n        buffer = [];\n      }");
+    }
+
+    #[test]
+    fn test_function_nodes_for_typescript() {
+        let source_code = "import { POST, HttpError } from '@axflow/models/shared';\nimport { headers } from './shared';\nimport type { SharedRequestOptions } from './shared';\n\nconst COHERE_API_URL = 'https://api.cohere.ai/v1/generate';\n\nexport namespace CohereGenerationTypes {\n  export type Request = {\n    prompt: string;\n    model?: string;\n    num_generations?: number;\n    max_tokens?: number;\n    truncate?: string;\n    temperature?: number;\n    preset?: string;\n    end_sequences?: string[];\n    stop_sequences?: string[];\n    k?: number;\n    p?: number;\n    frequency_penalty?: number;\n    presence_penalty?: number;\n    return_likelihoods?: string;\n    logit_bias?: Record<string, any>;\n  };\n\n  export type RequestOptions = SharedRequestOptions;\n\n  export type Generation = {\n    id: string;\n    text: string;\n    index?: number;\n    likelihood?: number;\n    token_likelihoods?: Array<{\n      token: string;\n      likelihood: number;\n    }>;\n  };\n\n  export type Response = {\n    id: string;\n    prompt?: string;\n    generations: Generation[];\n    meta: {\n      api_version: {\n        version: string;\n        is_deprecated?: boolean;\n        is_experimental?: boolean;\n      };\n      warnings?: string[];\n    };\n  };\n\n  export type Chunk = {\n    text?: string;\n    is_finished: boolean;\n    finished_reason?: 'COMPLETE' | 'MAX_TOKENS' | 'ERROR' | 'ERROR_TOXIC';\n    response?: {\n      id: string;\n      prompt?: string;\n      generations: Generation[];\n    };\n  };\n}\n\n/**\n * Run a generation against the Cohere API.\n *\n * @see https://docs.cohere.com/reference/generate\n *\n * @param request The request body sent to Cohere. See Cohere's documentation for /v1/generate for supported parameters.\n * @param options\n * @param options.apiKey Cohere API key.\n * @param options.apiUrl The url of the Cohere (or compatible) API. Defaults to https://api.cohere.ai/v1/generate.\n * @param options.fetch A custom implementation of fetch. Defaults to globalThis.fetch.\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns Cohere completion. See Cohere's documentation for /v1/generate.\n */\nasync function run(\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n): Promise<CohereGenerationTypes.Response> {\n  const url = options.apiUrl || COHERE_API_URL;\n\n  const response = await POST(url, {\n    headers: headers(options.apiKey, options.headers),\n    body: JSON.stringify({ ...request, stream: false }),\n    fetch: options.fetch,\n    signal: options.signal,\n  });\n\n  return response.json();\n}\n\n/**\n * Run a streaming generation against the Cohere API. The resulting stream is the raw unmodified bytes from the API.\n *\n * @see https://docs.cohere.com/reference/generate\n *\n * @param request The request body sent to Cohere. See Cohere's documentation for /v1/generate for supported parameters.\n * @param options\n * @param options.apiKey Cohere API key.\n * @param options.apiUrl The url of the Cohere (or compatible) API. Defaults to https://api.cohere.ai/v1/generate.\n * @param options.fetch A custom implementation of fetch. Defaults to globalThis.fetch.\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns A stream of bytes directly from the API.\n */\nasync function streamBytes(\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n): Promise<ReadableStream<Uint8Array>> {\n  const url = options.apiUrl || COHERE_API_URL;\n\n  const response = await POST(url, {\n    headers: headers(options.apiKey, options.headers),\n    body: JSON.stringify({ ...request, stream: true }),\n    fetch: options.fetch,\n    signal: options.signal,\n  });\n\n  if (!response.body) {\n    throw new HttpError('Expected response body to be a ReadableStream', response);\n  }\n\n  return response.body;\n}\n\nfunction noop(chunk: CohereGenerationTypes.Chunk) {\n  return chunk;\n}\n\n/**\n * Run a streaming generation against the Cohere API. The resulting stream is the parsed stream data as JavaScript objects.\n *\n * @see https://docs.cohere.com/reference/generate\n *\n * @param request The request body sent to Cohere. See Cohere's documentation for /v1/generate for supported parameters.\n * @param options\n * @param options.apiKey Cohere API key.\n * @param options.apiUrl The url of the Cohere (or compatible) API. Defaults to https://api.cohere.ai/v1/generate.\n * @param options.fetch A custom implementation of fetch. Defaults to globalThis.fetch.\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns A stream of objects representing each chunk from the API.\n */\nasync function stream(\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n): Promise<ReadableStream<CohereGenerationTypes.Chunk>> {\n  const byteStream = await streamBytes(request, options);\n  return byteStream.pipeThrough(new CohereGenerationDecoderStream(noop));\n}\n\nfunction chunkToToken(chunk: CohereGenerationTypes.Chunk) {\n  return chunk.text || '';\n}\n\n/**\n * Run a streaming generation against the Cohere API. The resulting stream emits only the string tokens.\n *\n * @see https://docs.cohere.com/reference/generate\n *\n * @param request The request body sent to Cohere. See Cohere's documentation for /v1/generate for supported parameters.\n * @param options\n * @param options.apiKey Cohere API key.\n * @param options.apiUrl The url of the Cohere (or compatible) API. Defaults to https://api.cohere.ai/v1/generate.\n * @param options.fetch A custom implementation of fetch. Defaults to globalThis.fetch.\n * @param options.headers Optionally add additional HTTP headers to the request.\n * @param options.signal An AbortSignal that can be used to abort the fetch request.\n * @returns A stream of tokens from the API.\n */\nasync function streamTokens(\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n): Promise<ReadableStream<string>> {\n  const byteStream = await streamBytes(request, options);\n  return byteStream.pipeThrough(new CohereGenerationDecoderStream(chunkToToken));\n}\n\n/**\n * An object that encapsulates methods for calling the Cohere Generate API.\n */\nexport class CohereGeneration {\n  static run = run;\n  static stream = stream;\n  static streamBytes = streamBytes;\n  static streamTokens = streamTokens;\n}\n\nclass CohereGenerationDecoderStream<T> extends TransformStream<Uint8Array, T> {\n  private static parse(line: string): CohereGenerationTypes.Chunk | null {\n    line = line.trim();\n\n    // Empty lines are ignored\n    if (line.length === 0) {\n      return null;\n    }\n\n    try {\n      return JSON.parse(line);\n    } catch (error) {\n      throw new Error(\n        `Invalid event: expected well-formed event lines but got ${JSON.stringify(line)}`,\n      );\n    }\n  }\n\n  private static transformer<T>(map: (chunk: CohereGenerationTypes.Chunk) => T) {\n    let buffer: string[] = [];\n    const decoder = new TextDecoder();\n\n    return (bytes: Uint8Array, controller: TransformStreamDefaultController<T>) => {\n      const chunk = decoder.decode(bytes);\n\n      for (let i = 0, len = chunk.length; i < len; ++i) {\n        // Cohere separates events with '\\n'\n        const isEventSeparator = chunk[\"something\"] === '\\n';\n\n        // Keep buffering unless we've hit the end of an event\n        if (!isEventSeparator) {\n          buffer.push(chunk[i]);\n          continue;\n        }\n\n        const event = CohereGenerationDecoderStream.parse(buffer.join(''));\n\n        if (event) {\n          controller.enqueue(map(event));\n        }\n\n        buffer = [];\n      }\n    };\n  }\n\n  constructor(map: (chunk: CohereGenerationTypes.Chunk) => T) {\n    super({ transform: CohereGenerationDecoderStream.transformer(map) });\n  }\n}\n";
+        let language = "typescript";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("test to work");
+        let function_data = ts_language_config.capture_function_data(source_code.as_bytes());
+        assert!(true);
     }
 }

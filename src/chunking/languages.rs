@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use crate::chunking::types::FunctionNodeInformation;
+
 use super::{
     javascript::javascript_language_config,
     python::python_language_config,
@@ -26,6 +28,10 @@ fn naive_chunker(buffer: &str, line_count: usize, overlap: usize) -> Vec<Span> {
         start += line_count - overlap;
     }
     chunks
+}
+
+fn get_string_from_bytes(source_code: &Vec<u8>, start_byte: usize, end_byte: usize) -> String {
+    String::from_utf8(source_code[start_byte..end_byte].to_vec()).unwrap_or_default()
 }
 
 /// We are going to use tree-sitter to parse the code and get the chunks for the
@@ -63,6 +69,110 @@ pub struct TSLanguageConfig {
 impl TSLanguageConfig {
     pub fn get_language(&self) -> Option<String> {
         self.language_ids.first().map(|s| s.to_string())
+    }
+
+    pub fn capture_function_data(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
+        let function_queries = self.function_query.to_vec();
+        // We want to capture the function information here and then do a folding on top of
+        // it, we just want to keep top level functions over here
+        // Now we need to run the tree sitter query on this and get back the
+        // answer
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code, None).unwrap();
+        let node = parsed_data.root_node();
+        let mut function_nodes = vec![];
+        let source_code_vec = source_code.to_vec();
+        let mut unique_ranges: HashSet<tree_sitter::Range> = Default::default();
+        function_queries.into_iter().for_each(|function_query| {
+            let query = tree_sitter::Query::new(grammar(), &function_query)
+                .expect("function queries are well formed");
+            let mut cursor = tree_sitter::QueryCursor::new();
+            cursor
+                .captures(&query, node, source_code)
+                .into_iter()
+                .for_each(|capture| {
+                    capture.0.captures.into_iter().for_each(|capture| {
+                        let capture_name = query
+                            .capture_names()
+                            .to_vec()
+                            .remove(capture.index.try_into().unwrap());
+                        let capture_type = FunctionNodeType::from_str(&capture_name);
+                        if let Some(capture_type) = capture_type {
+                            function_nodes.push(FunctionInformation::new(
+                                Range::for_tree_node(&capture.node),
+                                capture_type,
+                            ));
+                        }
+                    })
+                });
+        });
+
+        // Now we know from the query, that we have to do the following:
+        // function
+        // - identifier
+        // - body
+        // - parameters
+        // - return
+        let mut index = 0;
+        let mut compressed_functions = vec![];
+        while index < function_nodes.len() {
+            let start_index = index;
+            if function_nodes[start_index].r#type() != &FunctionNodeType::Function {
+                index += 1;
+                continue;
+            }
+            compressed_functions.push(function_nodes[start_index].clone());
+            let mut end_index = start_index + 1;
+            let mut function_node_information = FunctionNodeInformation::default();
+            while end_index < function_nodes.len()
+                && function_nodes[end_index].r#type() != &FunctionNodeType::Function
+            {
+                match function_nodes[end_index].r#type() {
+                    &FunctionNodeType::Identifier => {
+                        function_node_information.set_name(get_string_from_bytes(
+                            &source_code_vec,
+                            function_nodes[end_index].range().start_byte(),
+                            function_nodes[end_index].range().end_byte(),
+                        ));
+                    }
+                    &FunctionNodeType::Body => {
+                        function_node_information.set_body(get_string_from_bytes(
+                            &source_code_vec,
+                            function_nodes[end_index].range().start_byte(),
+                            function_nodes[end_index].range().end_byte(),
+                        ));
+                    }
+                    &FunctionNodeType::Parameters => {
+                        function_node_information.set_parameters(get_string_from_bytes(
+                            &source_code_vec,
+                            function_nodes[end_index].range().start_byte(),
+                            function_nodes[end_index].range().end_byte(),
+                        ));
+                    }
+                    &FunctionNodeType::ReturnType => {
+                        function_node_information.set_return_type(get_string_from_bytes(
+                            &source_code_vec,
+                            function_nodes[end_index].range().start_byte(),
+                            function_nodes[end_index].range().end_byte(),
+                        ));
+                    }
+                    _ => {}
+                }
+                end_index += 1;
+            }
+
+            match compressed_functions.last_mut() {
+                Some(function_information) => {
+                    function_information.set_node_information(function_node_information);
+                }
+                None => {}
+            }
+            index = end_index;
+        }
+
+        unimplemented!();
     }
 
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {

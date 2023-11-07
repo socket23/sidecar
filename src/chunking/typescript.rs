@@ -33,25 +33,32 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             (function
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
+                return_type: (type_annotation)? @return_type
                 body: (statement_block) @body)
             (function_declaration
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
+                return_type: (type_annotation)? @return_type
                 body: (statement_block) @body)
             (generator_function
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
+                return_type: (type_annotation)? @return_type
                 body: (statement_block) @body)
             (generator_function_declaration
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
+                return_type: (type_annotation)? @return_type
                 body: (statement_block) @body)
             (method_definition
                 name: (property_identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
+                return_type: (type_annotation)? @return_type
                 body: (statement_block) @body)
             (arrow_function
-                body: (statement_block) @body)
+                body: (statement_block) @body
+                parameters: (formal_parameters)? @parameters
+                return_type: (type_annotation)? @return_type)
             ] @function"
             .to_owned()],
         construct_types: vec![

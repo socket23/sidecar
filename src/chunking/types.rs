@@ -2,10 +2,30 @@ use super::text_document::Range;
 
 /// Some common types which can be reused across calls
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FunctionNodeInformation {
     name: String,
-    arguments: String,
+    parameters: String,
+    body: String,
+    return_type: String,
+}
+
+impl FunctionNodeInformation {
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
+    pub fn set_parameters(&mut self, parameters: String) {
+        self.parameters = parameters;
+    }
+
+    pub fn set_body(&mut self, body: String) {
+        self.body = body;
+    }
+
+    pub fn set_return_type(&mut self, return_type: String) {
+        self.return_type = return_type;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +36,10 @@ pub enum FunctionNodeType {
     Body,
     // The full function with its name and the body
     Function,
+    // The parameters of the function
+    Parameters,
+    // The return type of the function
+    ReturnType,
 }
 
 impl FunctionNodeType {
@@ -24,6 +48,8 @@ impl FunctionNodeType {
             "identifier" => Some(Self::Identifier),
             "body" => Some(Self::Body),
             "function" => Some(Self::Function),
+            "parameters" => Some(Self::Parameters),
+            "return_type" => Some(Self::ReturnType),
             _ => None,
         }
     }
@@ -33,11 +59,20 @@ impl FunctionNodeType {
 pub struct FunctionInformation {
     range: Range,
     r#type: FunctionNodeType,
+    node_information: Option<FunctionNodeInformation>,
 }
 
 impl FunctionInformation {
     pub fn new(range: Range, r#type: FunctionNodeType) -> Self {
-        Self { range, r#type }
+        Self {
+            range,
+            r#type,
+            node_information: None,
+        }
+    }
+
+    pub fn set_node_information(&mut self, node_information: FunctionNodeInformation) {
+        self.node_information = Some(node_information);
     }
 
     pub fn range(&self) -> &Range {

@@ -4,6 +4,7 @@ use super::types::json;
 use anyhow::Context;
 use futures::stream;
 use futures::StreamExt;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -323,10 +324,40 @@ pub async fn explain(
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub enum VariableType {
+    File,
+    CodeSymbol,
+    Selection,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct VariableInformation {
+    pub start_position: Position,
+    pub end_position: Position,
+    pub fs_file_path: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub variable_type: VariableType,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct FileContentValue {
+    pub file_path: String,
+    pub file_content: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct UserContext {
+    pub variables: Vec<VariableInformation>,
+    file_content_map: Vec<FileContentValue>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct FollowupChatRequest {
     pub query: String,
     pub repo_ref: RepoRef,
     pub thread_id: uuid::Uuid,
+    pub user_context: UserContext,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -403,10 +434,12 @@ pub async fn followup_chat(
         query,
         repo_ref,
         thread_id,
+        user_context,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
     dbg!(&query);
+    dbg!(&user_context);
     // Here we do something special, if the user is asking a followup question
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future

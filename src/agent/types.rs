@@ -8,7 +8,7 @@ use tracing::{debug, info};
 
 use crate::{
     agent::llm_funcs::llm::FunctionCall, application::application::Application, db::sqlite::SqlDb,
-    indexes::indexer::FileDocument, repo::types::RepoRef,
+    indexes::indexer::FileDocument, repo::types::RepoRef, webserver::agent::UserContext,
 };
 
 use super::{
@@ -479,6 +479,7 @@ pub struct Agent {
     pub model: model::AnswerModel,
     pub sql_db: SqlDb,
     pub sender: Sender<ConversationMessage>,
+    pub user_context: Option<UserContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -674,23 +675,34 @@ impl Agent {
         // next best action should be
         match action {
             AgentAction::Answer { paths } => {
-                // here we can finally answer after we do some merging on the spans
-                // and also look at the history to provide more context
-                let answer = self.answer(paths.as_slice(), answer_sender).await?;
-                info!(%self.session_id, "conversation finished");
-                info!(%self.session_id, answer, "answer");
-                // We should make it an atomic operation where whenever we update
-                // the conversation, we send an update on the stream and also
-                // save it to the db
-                if let Some(last_conversation) = self.conversation_messages.last() {
-                    // save the conversation to the DB
-                    let _ = last_conversation
-                        .save_to_db(self.sql_db.clone(), self.reporef().clone())
-                        .await;
-                    // send it over the sender
-                    let _ = self.sender.send(last_conversation.clone()).await;
+                // Let's do something here, if we have the user context then we
+                // take a different path, or else we go with the usual flow
+                match self.user_context {
+                    Some(_) => {
+                        // here we have to parse the context using just the context
+                        // provided and then figure out what to do next
+                        return Ok(None);
+                    }
+                    None => {
+                        // here we can finally answer after we do some merging on the spans
+                        // and also look at the history to provide more context
+                        let answer = self.answer(paths.as_slice(), answer_sender).await?;
+                        info!(%self.session_id, "conversation finished");
+                        info!(%self.session_id, answer, "answer");
+                        // We should make it an atomic operation where whenever we update
+                        // the conversation, we send an update on the stream and also
+                        // save it to the db
+                        if let Some(last_conversation) = self.conversation_messages.last() {
+                            // save the conversation to the DB
+                            let _ = last_conversation
+                                .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                                .await;
+                            // send it over the sender
+                            let _ = self.sender.send(last_conversation.clone()).await;
+                        }
+                        return Ok(None);
+                    }
                 }
-                return Ok(None);
             }
             AgentAction::Code { query } => self.code_search(&query).await?,
             AgentAction::Path { query } => self.path_search(&query).await?,

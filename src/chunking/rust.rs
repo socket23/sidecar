@@ -31,6 +31,8 @@ pub fn rust_language_config() -> TSLanguageConfig {
         ],
         function_query: vec!["[(function_item
         	name: (identifier)? @identifier
+            parameters: (parameters)? @parameters
+            return_type: (generic_type)? @return_type
             body: (block) @body)
         ] @function"
             .to_owned()],

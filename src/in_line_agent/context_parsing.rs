@@ -601,7 +601,7 @@ impl SelectionWithOutlines {
 }
 
 pub fn generate_context_for_range(
-    source_code: &str,
+    source_code: Vec<u8>,
     lines_count: usize,
     original_selection: &Range,
     maintain_range: &Range,
@@ -675,6 +675,7 @@ pub fn generate_context_for_range(
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct EditExpandedSelectionRange {
     pub expanded_selection: Range,
     pub range_expanded_to_functions: Range,

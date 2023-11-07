@@ -51,7 +51,7 @@ impl FunctionInformation {
             // if the end byte for this block is greater than the current byte
             // position and the start byte is greater than the current bytes
             // position as well, we have our function block
-            if function_block.range().end_byte() >= byte_offset {
+            if !(function_block.range().end_byte() < byte_offset) {
                 if function_block.range().start_byte() > byte_offset {
                     break;
                 }
@@ -93,6 +93,7 @@ impl FunctionInformation {
                 end_position = selection_end_function.range().end_position();
             }
         }
+        dbg!(&start_position, &end_position);
         Range::new(start_position, end_position)
     }
 
@@ -103,7 +104,7 @@ impl FunctionInformation {
             a.range()
                 .start_byte()
                 .cmp(&b.range().start_byte())
-                .then(b.range().end_byte().cmp(&a.range().end_byte()))
+                .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
         });
 
         // Now that these are sorted we only keep the ones which are not overlapping

@@ -65,7 +65,7 @@ impl TSLanguageConfig {
         self.language_ids.first().map(|s| s.to_string())
     }
 
-    pub fn function_information_nodes(&self, source_code: &str) -> Vec<FunctionInformation> {
+    pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
         let function_queries = self.function_query.to_vec();
 
         // Now we need to run the tree sitter query on this and get back the
@@ -73,7 +73,7 @@ impl TSLanguageConfig {
         let grammar = self.grammar;
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(grammar()).unwrap();
-        let parsed_data = parser.parse(source_code.as_bytes(), None).unwrap();
+        let parsed_data = parser.parse(source_code, None).unwrap();
         let node = parsed_data.root_node();
         let mut function_nodes = vec![];
         let mut unique_ranges: HashSet<tree_sitter::Range> = Default::default();
@@ -82,7 +82,7 @@ impl TSLanguageConfig {
                 .expect("function queries are well formed");
             let mut cursor = tree_sitter::QueryCursor::new();
             cursor
-                .captures(&query, node, source_code.as_bytes())
+                .captures(&query, node, source_code)
                 .into_iter()
                 .for_each(|capture| {
                     capture.0.captures.into_iter().for_each(|capture| {

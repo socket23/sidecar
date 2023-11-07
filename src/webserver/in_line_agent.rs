@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use axum::{response::sse, Extension, Json};
 use rand::seq::SliceRandom;
+use regex::Regex;
 use serde_json::json;
 
 use super::{in_line_agent_stream::generate_in_line_agent_stream, types::Result};
@@ -33,12 +34,21 @@ impl SnippetInformation {
     pub fn to_range(&self) -> Range {
         Range::new(self.start_position.clone(), self.end_position.clone())
     }
+
+    pub fn set_start_byte_offset(&mut self, byte_offset: usize) {
+        self.start_position.set_byte_offset(byte_offset);
+    }
+
+    pub fn set_end_byte_offset(&mut self, byte_offset: usize) {
+        self.end_position.set_byte_offset(byte_offset);
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextDocumentWeb {
     pub text: String,
+    pub utf8_array: Vec<u8>,
     pub language: String,
     pub fs_file_path: String,
     pub relative_path: String,
@@ -84,6 +94,10 @@ impl ProcessInEditorRequest {
         &self.text_document_web.text
     }
 
+    pub fn source_code_bytes(&self) -> &[u8] {
+        &self.text_document_web.utf8_array
+    }
+
     pub fn language(&self) -> &str {
         &self.text_document_web.language
     }
@@ -111,12 +125,13 @@ pub async fn reply_to_user(
         query,
         language,
         repo_ref,
-        snippet_information,
+        mut snippet_information,
         thread_id,
         text_document_web,
         diagnostics_information,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!(&query);
     let editor_parsing: EditorParsing = Default::default();
     // Now we want to handle this and send the data to a prompt which will generate
     // the proper things
@@ -125,6 +140,9 @@ pub async fn reply_to_user(
     let llm_client = LlmClient::codestory_infra();
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let inline_agent_message = InLineAgentMessage::start_message(thread_id, query.to_owned());
+    snippet_information =
+        fix_snippet_information(snippet_information, text_document_web.utf8_array.as_slice());
+    // we have to fix the snippet information which is coming over the wire
     let inline_agent = InLineAgent::new(
         app,
         repo_ref.clone(),
@@ -175,4 +193,83 @@ fn get_keep_alive_message() -> String {
     .choose(&mut rand::thread_rng())
     .map(|value| value.to_string())
     .unwrap_or("Working on your request...".to_owned())
+}
+
+fn line_column_to_byte_offset(
+    lines: Vec<&str>,
+    target_line: usize,
+    target_column: usize,
+) -> Option<usize> {
+    // Keep track of the current line and column in the input text
+    let mut current_line = 0;
+    let mut current_byte_offset = 0;
+
+    for (index, line) in lines.iter().enumerate() {
+        if index == target_line {
+            let mut current_col = 0;
+
+            // If the target column is at the beginning of the line
+            if target_column == 0 {
+                return Some(current_byte_offset);
+            }
+
+            for char in line.chars() {
+                if current_col == target_column {
+                    return Some(current_byte_offset);
+                }
+                current_byte_offset += char.len_utf8();
+                current_col += 1;
+            }
+
+            // If the target column is exactly at the end of this line
+            if current_col == target_column {
+                return Some(current_byte_offset); // target_column is at the line break
+            }
+
+            // Column requested is beyond the current line length
+            return None;
+        }
+
+        // Increment the byte offset by the length of the current line and its newline
+        current_byte_offset += line.len() + "\n".len(); // add 1 for the newline character
+        current_line += 1;
+    }
+
+    // Line requested is beyond the input text line count
+    None
+}
+
+fn fix_snippet_information(
+    mut snippet_information: SnippetInformation,
+    text_bytes: &[u8],
+) -> SnippetInformation {
+    // First we convert from the bytes to the string
+    let text_str = String::from_utf8(text_bytes.to_vec()).unwrap_or_default();
+    // Now we have to split the text on the new lines
+    let re = Regex::new(r"\r\n|\r|\n").unwrap();
+
+    // Split the string using the regex pattern
+    let lines: Vec<&str> = re.split(&text_str).collect();
+
+    let start_position_byte_offset = line_column_to_byte_offset(
+        lines.to_vec(),
+        snippet_information.start_position.line(),
+        snippet_information.start_position.column(),
+    );
+
+    let end_position_byte_offset = line_column_to_byte_offset(
+        lines.to_vec(),
+        snippet_information.end_position.line(),
+        snippet_information.end_position.column(),
+    );
+
+    if let Some(start_position_byte) = start_position_byte_offset {
+        snippet_information.set_start_byte_offset(start_position_byte);
+    }
+
+    if let Some(end_position_byte) = end_position_byte_offset {
+        snippet_information.set_end_byte_offset(end_position_byte);
+    }
+
+    snippet_information
 }

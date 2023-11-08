@@ -345,6 +345,7 @@ pub struct VariableInformation {
 pub struct FileContentValue {
     pub file_path: String,
     pub file_content: String,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]

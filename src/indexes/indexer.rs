@@ -373,6 +373,10 @@ impl<'a> IndexWriteHandle<'a> {
         self.writer.rollback()?;
         Ok(())
     }
+
+    pub fn get_writer(&self) -> &IndexWriter {
+        &self.writer
+    }
 }
 
 #[async_trait]
@@ -432,7 +436,7 @@ pub fn get_u64_field(doc: &tantivy::Document, field: Field) -> u64 {
 }
 
 impl<T: Indexable> Indexer<T> {
-    fn write_handle(&self) -> Result<IndexWriteHandle<'_>> {
+    pub fn write_handle(&self) -> Result<IndexWriteHandle<'_>> {
         Ok(IndexWriteHandle {
             source: &self.source,
             reader: &self.reader,

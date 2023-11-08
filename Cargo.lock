@@ -1040,6 +1040,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "floating-distance"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02d5d5af5584f170de8df7f99f813b579664dcbc0c87c61601bf9fbb5da72768"
+dependencies = [
+ "cfg-if",
+ "num-traits",
+]
+
+[[package]]
 name = "flume"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3880,6 +3890,7 @@ dependencies = [
  "either",
  "erased-serde",
  "fancy-regex",
+ "floating-distance",
  "flume",
  "fs_extra",
  "futures",

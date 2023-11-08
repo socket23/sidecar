@@ -1,13 +1,15 @@
 use std::collections::HashSet;
 
-use crate::chunking::types::FunctionNodeInformation;
+use blake3::Hash;
+
+use crate::{agent::llm_funcs::llm::Parameter, chunking::types::FunctionNodeInformation};
 
 use super::{
     javascript::javascript_language_config,
     python::python_language_config,
     rust::rust_language_config,
     text_document::{Position, Range},
-    types::{FunctionInformation, FunctionNodeType},
+    types::{ClassInformation, ClassNodeType, FunctionInformation, FunctionNodeType},
     typescript::typescript_language_config,
 };
 
@@ -64,11 +66,94 @@ pub struct TSLanguageConfig {
 
     /// The different expression statements which are present in the language
     pub expression_statements: Vec<String>,
+
+    /// The queries we use to get the class definitions
+    pub class_query: Vec<String>,
 }
 
 impl TSLanguageConfig {
     pub fn get_language(&self) -> Option<String> {
         self.language_ids.first().map(|s| s.to_string())
+    }
+
+    pub fn capture_class_data(&self, source_code: &[u8]) -> Vec<ClassInformation> {
+        let class_queries = self.class_query.to_vec();
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        let parsed_data = parser.parse(source_code, None).unwrap();
+        let node = parsed_data.root_node();
+        let mut class_nodes = vec![];
+        let class_code_vec = source_code.to_vec();
+        let mut range_set = HashSet::new();
+        class_queries.into_iter().for_each(|class_query| {
+            let query = tree_sitter::Query::new(grammar(), &class_query)
+                .expect("class queries are well formed");
+            let mut cursor = tree_sitter::QueryCursor::new();
+            cursor
+                .captures(&query, node, source_code)
+                .into_iter()
+                .for_each(|capture| {
+                    capture.0.captures.into_iter().for_each(|capture| {
+                        let capture_name = query
+                            .capture_names()
+                            .to_vec()
+                            .remove(capture.index.try_into().unwrap());
+                        let capture_type = ClassNodeType::from_str(&capture_name);
+                        if !range_set.contains(&Range::for_tree_node(&capture.node)) {
+                            if let Some(capture_type) = capture_type {
+                                class_nodes.push(ClassInformation::new(
+                                    Range::for_tree_node(&capture.node),
+                                    "not_set".to_owned(),
+                                    capture_type,
+                                ));
+                                range_set.insert(Range::for_tree_node(&capture.node));
+                            }
+                        }
+                    })
+                })
+        });
+
+        // Now we iterate again and try to get the name of the classes as well
+        // and generate the final representation
+        // the nodes are ordered in this way:
+        // class
+        // - identifier
+        let mut index = 0;
+        let mut compressed_classes = vec![];
+        while index < class_nodes.len() {
+            let start_index = index;
+            if class_nodes[start_index].get_class_type() != &ClassNodeType::ClassDeclaration {
+                index += 1;
+                continue;
+            }
+            compressed_classes.push(class_nodes[start_index].clone());
+            let mut end_index = start_index + 1;
+            let mut class_identifier = None;
+            while end_index < class_nodes.len()
+                && class_nodes[end_index].get_class_type() != &ClassNodeType::ClassDeclaration
+            {
+                match class_nodes[end_index].get_class_type() {
+                    ClassNodeType::Identifier => {
+                        class_identifier = Some(get_string_from_bytes(
+                            &class_code_vec,
+                            class_nodes[end_index].range().start_byte(),
+                            class_nodes[end_index].range().end_byte(),
+                        ));
+                    }
+                    _ => {}
+                }
+                end_index += 1;
+            }
+
+            match (compressed_classes.last_mut(), class_identifier) {
+                (Some(class_information), Some(class_name)) => {
+                    class_information.set_name(class_name);
+                }
+                _ => {}
+            }
+            index = end_index;
+        }
+        unimplemented!();
     }
 
     pub fn capture_function_data(&self, source_code: &[u8]) -> Vec<FunctionInformation> {

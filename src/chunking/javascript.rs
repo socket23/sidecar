@@ -69,5 +69,8 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         .into_iter()
         .map(|s| s.to_owned())
         .collect(),
+        class_query: vec![
+            "[(class_declaration name: (identifier)? @identifier)] @class_declaration".to_owned(),
+        ],
     }
 }

@@ -169,3 +169,79 @@ impl FunctionInformation {
         filtered_function_blocks
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClassNodeType {
+    Identifier,
+    ClassDeclaration,
+}
+
+impl ClassNodeType {
+    pub fn from_str(s: &str) -> Option<ClassNodeType> {
+        match s {
+            "identifier" => Some(Self::Identifier),
+            "class_declaration" => Some(Self::ClassDeclaration),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClassInformation {
+    range: Range,
+    name: String,
+    class_node_type: ClassNodeType,
+}
+
+impl ClassInformation {
+    pub fn new(range: Range, name: String, class_node_type: ClassNodeType) -> Self {
+        Self {
+            range,
+            name,
+            class_node_type,
+        }
+    }
+
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
+    pub fn get_class_type(&self) -> &ClassNodeType {
+        &self.class_node_type
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn fold_class_information(mut classes: Vec<Self>) -> Vec<Self> {
+        // First we sort the function blocks(which are bodies) based on the start
+        // index or the end index
+        classes.sort_by(|a, b| {
+            a.range()
+                .start_byte()
+                .cmp(&b.range().start_byte())
+                .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
+        });
+
+        // Now that these are sorted we only keep the ones which are not overlapping
+        // or fully contained in the other one
+        let mut filtered_classes = Vec::new();
+        let mut index = 0;
+
+        while index < classes.len() {
+            filtered_classes.push(classes[index].clone());
+            let mut iterate_index = index + 1;
+            while iterate_index < classes.len()
+                && classes[index]
+                    .range()
+                    .is_contained(&classes[iterate_index].range())
+            {
+                iterate_index += 1;
+            }
+            index = iterate_index;
+        }
+
+        filtered_classes
+    }
+}

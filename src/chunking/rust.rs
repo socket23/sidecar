@@ -54,5 +54,10 @@ pub fn rust_language_config() -> TSLanguageConfig {
             .into_iter()
             .map(|s| s.to_owned())
             .collect(),
+        class_query: vec!["[
+                (struct_item name: (type_identifier)? @identifier)
+                (impl_item type: (type_identifier)? @identifier)
+            ] @class_declaration"
+            .to_owned()],
     }
 }

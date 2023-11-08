@@ -81,5 +81,9 @@ pub fn typescript_language_config() -> TSLanguageConfig {
         .into_iter()
         .map(|s| s.to_owned())
         .collect(),
+        class_query: vec![
+            "[(abstract_class_declaration name: (type_identifier)? @identifier) (class_declaration name: (type_identifier)? @identifier)] @class_declaration"
+                .to_owned(),
+        ],
     }
 }

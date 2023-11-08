@@ -782,6 +782,13 @@ impl Agent {
         }
     }
 
+    pub async fn answer_using_user_context(&self) {
+        // So here we are going to do 3 things in a flow:
+        // - we try to keep the selection intact
+        // - if we have a file and we can keep all of them in the context, then we keep it (we might need to do some ordering)
+        // - if we have a code symbol, we try to keep it intact as well
+    }
+
     pub async fn semantic_search(&mut self) -> anyhow::Result<Vec<CodeSpan>> {
         let model = llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?;
         // Get or create the history from the conversation before so we can better

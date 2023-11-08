@@ -350,7 +350,7 @@ pub struct FileContentValue {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct UserContext {
     pub variables: Vec<VariableInformation>,
-    file_content_map: Vec<FileContentValue>,
+    pub file_content_map: Vec<FileContentValue>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]

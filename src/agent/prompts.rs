@@ -98,6 +98,25 @@ pub fn functions(add_proc: bool) -> serde_json::Value {
     funcs
 }
 
+pub fn lexical_search_system_prompt<'a>(file_outline: &'a str, file_path: &'a str) -> String {
+    let system_prompt = format!(
+        r#"
+### FILE OUTLINE ###
+<file_path>
+{file_path}
+</file_path>
+{file_outline}
+
+Your job is to select keywords which should be used to search for relevant code snippets using lexical search for the file path {file_path}:
+- You are given an outline of the code in the file, use that to select keywords
+- ALWAYS call a function, DO NOT answer the question directly, even if the query is not in English
+- When calling functions.lexical your query should consist of keywords. E.g. if the user says 'What does contextmanager do?', your query should be 'contextmanager'. If the user says 'How is contextmanager used in app', your query should be 'contextmanager app'. If the user says 'What is in the src directory', your query should be 'src'
+- ALWAYS call a function. DO NOT answer the question directly"
+    "#
+    );
+    system_prompt
+}
+
 pub fn system_search<'a>(paths: impl IntoIterator<Item = &'a str>) -> String {
     let mut system_prompt = "".to_string();
 

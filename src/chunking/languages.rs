@@ -413,17 +413,23 @@ impl TSLanguageParsing {
         file_path: &str,
         buffer: &str,
         file_extension: Option<&str>,
+        file_language_id: Option<&str>,
     ) -> Vec<Span> {
-        if file_extension.is_none() {
+        if file_extension.is_none() && file_language_id.is_none() {
             // We use naive chunker here which just splits on the number
             // of lines
             return naive_chunker(buffer, 30, 15);
         }
-        // We try to find which language config we should use for this file
-        let language_config_maybe = self
-            .configs
-            .iter()
-            .find(|config| config.file_extensions.contains(&file_extension.unwrap()));
+        let mut language_config_maybe = None;
+        if let Some(language_id) = file_language_id {
+            language_config_maybe = self.for_lang(language_id);
+        }
+        if let Some(file_extension) = file_extension {
+            language_config_maybe = self
+                .configs
+                .iter()
+                .find(|config| config.file_extensions.contains(&file_extension));
+        }
         if let Some(language_config) = language_config_maybe {
             // We use tree-sitter to parse the file and get the chunks
             // for the file

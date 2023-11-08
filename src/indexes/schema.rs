@@ -10,6 +10,8 @@ use tantivy::tokenizer::{Token, TokenStream, Tokenizer};
 use crate::chunking::languages::TSLanguageParsing;
 use crate::{db::sqlite::SqlDb, semantic_search::client::SemanticClient};
 
+use super::indexer::{get_text_field, get_u64_field};
+
 /// A schema for indexing all files and directories, linked to a
 /// single repository on disk.
 #[derive(Clone)]
@@ -233,6 +235,100 @@ impl CodeSnippet {
             commit_hash,
             start_line,
             end_line,
+        }
+    }
+}
+
+/// A schema for quickly searching for the code snippets which we are interested
+/// in, but allows us to do this online, the only data we have here is about the
+/// file-path and the content of the snippet and the start and end line
+#[derive(Clone)]
+pub struct QuickCodeSnippet {
+    pub schema: Schema,
+
+    /// Path to the file, relative to the repo root
+    pub path: Field,
+
+    pub content: Field,
+
+    // The start line of this code snippet
+    pub start_line: Field,
+    // The end line of this code snippet
+    pub end_line: Field,
+}
+
+pub struct QuickCodeSnippetDocument {
+    pub path: String,
+    pub content: String,
+    pub start_line: u64,
+    pub end_line: u64,
+    pub score: f32,
+}
+
+impl QuickCodeSnippetDocument {
+    pub fn read_document(
+        schema: &QuickCodeSnippet,
+        doc: tantivy::Document,
+    ) -> QuickCodeSnippetDocument {
+        let path = get_text_field(&doc, schema.path);
+        let start_line = get_u64_field(&doc, schema.start_line);
+        let end_line = get_u64_field(&doc, schema.end_line);
+        let content = get_text_field(&doc, schema.content);
+
+        QuickCodeSnippetDocument {
+            path,
+            content,
+            start_line,
+            end_line,
+            score: 0.0,
+        }
+    }
+
+    pub fn read_document_with_score(
+        schema: &QuickCodeSnippet,
+        doc: tantivy::Document,
+        score: f32,
+    ) -> QuickCodeSnippetDocument {
+        let mut doc = Self::read_document(schema, doc);
+        doc.score = score;
+        doc
+    }
+
+    pub fn new(path: String, content: String, start_line: u64, end_line: u64, score: f32) -> Self {
+        Self {
+            path,
+            content,
+            start_line,
+            end_line,
+            score,
+        }
+    }
+}
+
+impl QuickCodeSnippet {
+    pub fn new() -> Self {
+        let mut builder = tantivy::schema::SchemaBuilder::new();
+        let code_snippet_tokenizer = TextOptions::default().set_stored().set_indexing_options(
+            TextFieldIndexing::default()
+                // We get the code_snippet tokenizer from the custom
+                // tokenizer we are setting
+                .set_tokenizer("code_snippet")
+                .set_index_option(IndexRecordOption::WithFreqsAndPositions),
+        );
+
+        let path = builder.add_text_field("path", STRING | STORED);
+
+        let content = builder.add_text_field("content", code_snippet_tokenizer.clone());
+
+        let start_line = builder.add_u64_field("start_line", FAST | STORED);
+        let end_line = builder.add_u64_field("end_line", FAST | STORED);
+
+        Self {
+            schema: builder.build(),
+            content,
+            start_line,
+            end_line,
+            path,
         }
     }
 }

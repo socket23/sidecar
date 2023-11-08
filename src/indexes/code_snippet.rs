@@ -339,6 +339,7 @@ impl RepositoryFile {
                 &relative_path.to_string_lossy().to_string(),
                 &self.buffer,
                 file_extension,
+                None,
             )
             .into_iter()
             .filter(|span| span.data.is_some())

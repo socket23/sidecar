@@ -140,7 +140,7 @@ impl SemanticClient {
     ) -> impl ParallelIterator<Item = (String, Payload)> + 'a {
         let spans = self
             .language_parsing
-            .chunk_file(relative_path, buffer, file_extension);
+            .chunk_file(relative_path, buffer, file_extension, None);
         debug!(chunk_count = spans.len(), relative_path, "found chunks");
         spans.iter().for_each(|span| {
             debug!(?span, relative_path, "span content");

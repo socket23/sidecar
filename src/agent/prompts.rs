@@ -98,23 +98,59 @@ pub fn functions(add_proc: bool) -> serde_json::Value {
     funcs
 }
 
-pub fn lexical_search_system_prompt<'a>(file_outline: &'a str, file_path: &'a str) -> String {
-    let system_prompt = format!(
-        r#"
-### FILE OUTLINE ###
+pub fn lexical_search_functions() -> serde_json::Value {
+    let mut funcs = serde_json::json!([code_function()]);
+    funcs
+}
+
+pub fn lexical_search_system_prompt<'a>(
+    file_outline: Option<String>,
+    file_path: &'a str,
+) -> String {
+    match file_outline {
+        Some(file_outline) => {
+            let system_prompt = format!(
+                r#"
+##### FILE PATH #####
+{file_path}
+
+##### FILE OUTLINE #####
 <file_path>
 {file_path}
 </file_path>
-{file_outline}
 
-Your job is to select keywords which should be used to search for relevant code snippets using lexical search for the file path {file_path}:
-- You are given an outline of the code in the file, use that to select keywords
+{file_outline}
+#####
+
+Your job is to select keywords which should be used to search for relevant code snippets using lexical search for the file path `{file_path}`:
+
+- You are given an outline of the code in the file, use the outline to select keywords
 - ALWAYS call a function, DO NOT answer the question directly, even if the query is not in English
-- When calling functions.lexical your query should consist of keywords. E.g. if the user says 'What does contextmanager do?', your query should be 'contextmanager'. If the user says 'How is contextmanager used in app', your query should be 'contextmanager app'. If the user says 'What is in the src directory', your query should be 'src'
-- ALWAYS call a function. DO NOT answer the question directly"
-    "#
-    );
-    system_prompt
+- When calling functions.code your query should consist of keywords. E.g. if the user says 'What does contextmanager do?', your query should be 'contextmanager'. If the user says 'How is contextmanager used in app', your query should be 'contextmanager app'. If the user says 'What is in the src directory', your query should be 'src'
+- DO NOT end the keywords with ing, so instead of 'streaming' use 'stream', 'querying' use 'query'
+- DO NOT use plural form of a word, so instead of 'queries' use 'query', 'functions' use 'function'
+- ALWAYS call a function. DO NOT answer the question directly"#
+            );
+            system_prompt
+        }
+        None => {
+            let system_prompt = format!(
+                r#"
+##### FILE PATH #####
+{file_path}
+
+Your job is to select keywords which should be used to search for relevant code snippets using lexical search for the file path `{file_path}`:
+
+- You are given an outline of the code in the file, use the outline to select keywords
+- ALWAYS call a function, DO NOT answer the question directly, even if the query is not in English
+- When calling functions.code your query should consist of keywords. E.g. if the user says 'What does contextmanager do?', your query should be 'contextmanager'. If the user says 'How is contextmanager used in app', your query should be 'contextmanager app'. If the user says 'What is in the src directory', your query should be 'src'
+- DO NOT end the keywords with ing, so instead of 'streaming' use 'stream', 'querying' use 'query'
+- DO NOT use plural form of a word, so instead of 'queries' use 'query', 'functions' use 'function'
+- ALWAYS call a function. DO NOT answer the question directly"#
+            );
+            system_prompt
+        }
+    }
 }
 
 pub fn system_search<'a>(paths: impl IntoIterator<Item = &'a str>) -> String {

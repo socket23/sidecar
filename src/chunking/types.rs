@@ -26,6 +26,18 @@ impl FunctionNodeInformation {
     pub fn set_return_type(&mut self, return_type: String) {
         self.return_type = return_type;
     }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn get_parameters(&self) -> &str {
+        &self.parameters
+    }
+
+    pub fn get_return_type(&self) -> &str {
+        &self.return_type
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,6 +81,10 @@ impl FunctionInformation {
             r#type,
             node_information: None,
         }
+    }
+
+    pub fn get_node_information(&self) -> Option<&FunctionNodeInformation> {
+        self.node_information.as_ref()
     }
 
     pub fn set_node_information(&mut self, node_information: FunctionNodeInformation) {
@@ -200,6 +216,10 @@ impl ClassInformation {
             name,
             class_node_type,
         }
+    }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
     }
 
     pub fn set_name(&mut self, name: String) {

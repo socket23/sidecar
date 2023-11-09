@@ -582,3 +582,25 @@ A:"#
     );
     system_prompt
 }
+
+pub fn code_snippet_important(
+    location: &str,
+    snippet: &str,
+    language: &str,
+    query: &str,
+) -> String {
+    let system_prompt = format!(
+        r#"You will be asked to decide if the code snippet is relevant to the user query, reply with YES or NO
+User query:
+{query}
+
+Code Snippet:
+Location: {location}
+```{language}
+{snippet}
+```
+    
+    "#
+    );
+    system_prompt
+}

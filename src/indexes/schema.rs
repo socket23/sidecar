@@ -255,6 +255,8 @@ pub struct QuickCodeSnippet {
     pub start_line: Field,
     // The end line of this code snippet
     pub end_line: Field,
+    // The language of this code snippet
+    pub language: Field,
 }
 
 #[derive(Debug)]
@@ -264,6 +266,7 @@ pub struct QuickCodeSnippetDocument {
     pub start_line: u64,
     pub end_line: u64,
     pub score: f32,
+    pub language: String,
 }
 
 impl QuickCodeSnippetDocument {
@@ -275,6 +278,7 @@ impl QuickCodeSnippetDocument {
         let start_line = get_u64_field(&doc, schema.start_line);
         let end_line = get_u64_field(&doc, schema.end_line);
         let content = get_text_field(&doc, schema.content);
+        let language = get_text_field(&doc, schema.language);
 
         QuickCodeSnippetDocument {
             path,
@@ -282,6 +286,7 @@ impl QuickCodeSnippetDocument {
             start_line,
             end_line,
             score: 0.0,
+            language,
         }
     }
 
@@ -295,18 +300,26 @@ impl QuickCodeSnippetDocument {
         doc
     }
 
-    pub fn new(path: String, content: String, start_line: u64, end_line: u64, score: f32) -> Self {
+    pub fn new(
+        path: String,
+        content: String,
+        start_line: u64,
+        end_line: u64,
+        score: f32,
+        language: String,
+    ) -> Self {
         Self {
             path,
             content,
             start_line,
             end_line,
             score,
+            language,
         }
     }
 
     pub fn unique_key(&self) -> String {
-        format!("{}:{}:{}", self.path, self.start_line, self.end_line)
+        format!("{}:{}-{}", self.path, self.start_line, self.end_line)
     }
 }
 
@@ -327,6 +340,7 @@ impl QuickCodeSnippet {
 
         let start_line = builder.add_u64_field("start_line", FAST | STORED);
         let end_line = builder.add_u64_field("end_line", FAST | STORED);
+        let language = builder.add_text_field("language", STRING | STORED);
 
         Self {
             schema: builder.build(),
@@ -334,6 +348,7 @@ impl QuickCodeSnippet {
             start_line,
             end_line,
             path,
+            language,
         }
     }
 }

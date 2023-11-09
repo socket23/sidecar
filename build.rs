@@ -28,11 +28,12 @@ fn main() {
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let path = entry.path();
-            if Some(OsStr::new("rs")) == path.extension() {
-                Some(path)
-            } else {
-                None
-            }
+            // if Some(OsStr::new("rs")) == path.extension() {
+            //     Some(path)
+            // } else {
+            //     None
+            // }
+            Some(path)
         })
     {
         hasher.update(read_to_string(&path).unwrap().as_bytes());

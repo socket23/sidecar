@@ -5,7 +5,7 @@ use crate::{
             llm::{self, Message},
         },
         prompts,
-        types::{AgentStep, CodeSpan},
+        types::{AgentStep, CodeSpan, VariableInformation},
     },
     application::application::Application,
     db::sqlite::SqlDb,
@@ -221,6 +221,13 @@ impl Agent {
         });
 
         Ok(response)
+    }
+
+    pub fn update_user_selected_variables(&mut self, user_variables: Vec<VariableInformation>) {
+        let last_exchange = self.get_last_conversation_message();
+        user_variables.into_iter().for_each(|user_variable| {
+            last_exchange.add_user_variable(user_variable);
+        })
     }
 
     pub fn save_code_snippets_response(
@@ -518,7 +525,6 @@ impl Agent {
                     .get_file_content(&path)
                     .await?
                     .with_context(|| format!("path does not exist in the index: {path}"))?
-                    .content
                     .lines()
                     .enumerate()
                     .map(|(i, line)| format!("{} {line}", i + 1))
@@ -685,29 +691,15 @@ impl Agent {
         Ok(response)
     }
 
-    pub async fn answer_using_context(
-        &mut self,
-        sender: tokio::sync::mpsc::UnboundedSender<Answer>,
-    ) -> Result<String> {
-        dbg!("we are pruning the context here");
-        if self.user_context.is_none() {
-            return Ok(
-                "reached unexpected path in code, please report to the developers".to_owned(),
-            );
-        }
-        let query = self.get_query().expect("to be present");
-        let _ = self.truncate_user_context(query.as_str()).await;
-        // Here we ask the agent about which the lexical search
-        Ok("".to_owned())
-    }
-
     pub async fn answer(
         &mut self,
         path_aliases: &[usize],
         sender: tokio::sync::mpsc::UnboundedSender<Answer>,
     ) -> Result<String> {
         if self.user_context.is_some() {
-            let _ = self.answer_using_context(sender.clone()).await;
+            let _ = self
+                .truncate_user_context(self.get_query().expect("query to be present").as_str())
+                .await;
         }
         let context = self.answer_context(path_aliases).await?;
         let system_prompt = match self.get_last_conversation_message_agent_state() {
@@ -733,6 +725,7 @@ impl Agent {
                     // If we had more than 1 conversation then this gets counted
                     // as a followup
                     self.conversation_messages_len() > 1,
+                    self.user_context.is_some(),
                 );
                 answer_prompt
             }
@@ -782,8 +775,9 @@ impl Agent {
     }
 
     fn utter_history(&self) -> impl Iterator<Item = llm_funcs::llm::Message> + '_ {
-        const ANSWER_MAX_HISTORY_SIZE: usize = 5;
+        const ANSWER_MAX_HISTORY_SIZE: usize = 10;
 
+        let mut last_message = true;
         self.conversation_messages
             .iter()
             .rev()
@@ -823,15 +817,15 @@ impl Agent {
         }
     }
 
-    pub async fn followup_chat_context(&mut self) -> Result<String> {
+    pub async fn followup_chat_context(&mut self) -> Result<Option<String>> {
         if self.conversation_messages.len() > 1 {
             // we want the last to last chat context here
             self.conversation_messages[self.conversation_messages_len() - 2]
                 .get_generated_answer_context()
-                .map(|context| context.to_owned())
+                .map(|context| Some(context.to_owned()))
                 .ok_or(anyhow!("no previous chat"))
         } else {
-            Ok("No previous chat".to_owned())
+            Ok(None)
         }
     }
 
@@ -842,11 +836,9 @@ impl Agent {
         // properly
         // Here we might be in a weird position that we have to do followup-chats
         // so for that the answer context is totally different and we set it as such
-        if self.get_last_conversation_message_agent_state() == &AgentState::FollowupChat {
-            return self.followup_chat_context().await;
-        }
-        let paths = self.paths().collect::<Vec<_>>();
         let mut prompt = "".to_owned();
+
+        let paths = self.paths().collect::<Vec<_>>();
         let mut aliases = aliases
             .iter()
             .copied()
@@ -875,6 +867,34 @@ impl Agent {
         let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
         let mut remaining_prompt_tokens =
             tiktoken_rs::get_completion_max_tokens(self.model.tokenizer, &prompt)?;
+
+        // we have to show the selected snippets which the user has selected
+        let user_variables = self.get_user_variables();
+        if let Some(user_variables_slice) = user_variables {
+            let user_selected_context = "#### USER SELECTED CONTEXT ####\n";
+            let user_selected_context_tokens = bpe.encode_ordinary(&user_selected_context).len();
+            if user_selected_context_tokens
+                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
+            {
+                info!("we can't set user selected context because of prompt limit");
+            } else {
+                prompt += "#### USER SELECTED CONTEXT ####\n";
+                remaining_prompt_tokens -= user_selected_context_tokens;
+
+                for user_variable in user_variables_slice.iter() {
+                    let variable_prompt = user_variable.to_prompt();
+                    let user_variable_tokens = bpe.encode_ordinary(&variable_prompt).len();
+                    if user_variable_tokens
+                        > remaining_prompt_tokens - self.model.prompt_tokens_limit
+                    {
+                        info!("breaking at {} tokens", remaining_prompt_tokens);
+                        break;
+                    }
+                    prompt += &variable_prompt;
+                    remaining_prompt_tokens -= user_variable_tokens;
+                }
+            }
+        }
 
         // If we have definition snippets we also add them to the mix here
         let definition_snippets = self.get_definition_snippets();
@@ -963,8 +983,6 @@ impl Agent {
     }
 
     async fn dedup_code_spans(&mut self, aliases: &[usize]) -> Vec<CodeSpan> {
-        debug!(?aliases, "deduping code spans");
-
         /// The ratio of code tokens to context size.
         ///
         /// Making this closure to 1 means that more of the context is taken up by source code.
@@ -1000,7 +1018,6 @@ impl Agent {
                     .await
                     .unwrap()
                     .unwrap_or_else(|| panic!("path did not exist in the index: {path}"))
-                    .content
                     // we should be using .lines here instead, but this is okay
                     // for now
                     .split("\n")

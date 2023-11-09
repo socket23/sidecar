@@ -17,6 +17,7 @@ use tantivy::tokenizer::NgramTokenizer;
 use crate::agent::llm_funcs;
 use crate::agent::prompts;
 use crate::agent::types::AgentAction;
+use crate::agent::types::CodeSpan;
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
 use crate::indexes::schema::CodeSnippetTokenizer;
@@ -116,13 +117,27 @@ impl Agent {
                 .into_iter()
                 .take(50)
                 .collect::<Vec<_>>();
-        let mut ranked_candidates =
+        let ranked_candidates =
             re_rank_code_snippets(query, self.get_llm_client(), candidates).await;
-        ranked_candidates = merge_consecutive_chunks(ranked_candidates);
-        dbg!(ranked_candidates);
+        let code_snippets = merge_consecutive_chunks(ranked_candidates)
+            .into_iter()
+            .map(|code_snippet| CodeSpan::from_quick_code_snippet(code_snippet, 0))
+            .collect::<Vec<_>>();
+        // Now we update the code spans which we have selected
+        let _ = self.save_code_snippets_response(query, code_snippets);
+        // We also retroactively save the last conversation to the database
+        if let Some(last_conversation) = self.conversation_messages.last() {
+            // save the conversation to the DB
+            let _ = last_conversation
+                .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                .await;
+            // send it over the sender
+            let _ = self.sender.send(last_conversation.clone()).await;
+        }
+        // dbg!(code_snippets);
         // Now we want to merge the ranges if they are consecutive so we can get them
         // together when we show the range
-        unimplemented!();
+        Ok("".to_owned())
     }
 }
 

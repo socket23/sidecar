@@ -1,6 +1,7 @@
 //! We are going to implement how tht agent is going to use user context
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -63,7 +64,6 @@ impl Agent {
                     }),
                     &file_value.file_path,
                 );
-                dbg!(&system_prompt);
                 let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
                     prompts::proc_function_truncate(),
                 )
@@ -114,7 +114,12 @@ impl Agent {
             gather_code_snippets_for_answer(lexical_search_and_file, self.application.clone())
                 .await
                 .into_iter()
-                .take(50);
+                .take(50)
+                .collect::<Vec<_>>();
+        let mut ranked_candidates =
+            re_rank_code_snippets(query, self.get_llm_client(), candidates).await;
+        ranked_candidates = merge_consecutive_chunks(ranked_candidates);
+        dbg!(ranked_candidates);
         // Now we want to merge the ranges if they are consecutive so we can get them
         // together when we show the range
         unimplemented!();
@@ -126,8 +131,7 @@ impl VariableInformation {
         let file_path = &self.fs_file_path;
         let start_line = self.start_position.line;
         let end_line = self.end_position.line;
-        let language = &self.language;
-        let name = &self.name;
+        let language = &self.language.to_lowercase();
         let formatted_content = self
             .content
             .split('\n')
@@ -137,8 +141,7 @@ impl VariableInformation {
             .collect::<Vec<_>>()
             .join("\n");
         format!(
-            r#"User Selected Code:{name}
-Location: {file_path}:{start_line}-{end_line}
+            r#"Location: {file_path}:{start_line}-{end_line}
 ```{language}
 {formatted_content}
 ```\n"#
@@ -154,38 +157,79 @@ fn get_prompt_for_user_variables(user_variables: Vec<VariableInformation>) -> Ve
         .collect()
 }
 
-fn re_rank_code_snippets(
+async fn re_rank_code_snippets(
     query: &str,
     llm_client: Arc<LlmClient>,
     candidates: Vec<QuickCodeSnippetDocument>,
 ) -> Vec<QuickCodeSnippetDocument> {
-    // We will take the code snippets here until we fill in the context window
-    // of the LLM, in our case we restrict to around 4k tokens leaving a bit of
-    // space for the other prompts to come in
-    //     stream::iter(candidates)
-    //         .map(|candidate| async move {
-    //             let content = candidate.content;
-    //             let file_path = candidate.path;
-    //             let start_line = candidate.start_line;
-    //             let end_line = candidate.end_line;
-    //             let prompt = format!(
-    //                 r#"{file_path}-{start_line}:{end_line}
-    // ```
-    // {content}
-    // ```"#
-    //             );
-    //             llm_client.stream_completion_call(llm_funcs::llm::OpenAIModel::GPT, prompt)
-    //         })
-    //         .buffered(10)
-    //         .collect()
-    //         .await;
-    candidates
+    let mut logprob_scored = stream::iter(
+        candidates
+            .into_iter()
+            .map(|candidate| (candidate, llm_client.clone())),
+    )
+    .map(|(candidate, llm_client)| async move {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let completion_request = prompts::code_snippet_important(
+            &candidate.unique_key(),
+            &candidate.content,
+            &candidate.language,
+            query,
+        );
+        let answer = llm_client
+            .stream_completion_call(
+                llm_funcs::llm::OpenAIModel::GPT3_5Instruct,
+                &completion_request,
+                sender,
+            )
+            .await;
+        let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+        let mut logprobs = 0.0;
+        let mut total_tokens = 0.0;
+        receiver_stream
+            .for_each(|item| {
+                let _ = item.logprobs.map(|logprob| {
+                    logprob.into_iter().for_each(|prob| {
+                        prob.and_then(|prob| {
+                            logprobs += prob;
+                            total_tokens = total_tokens + 1.0;
+                            Some(())
+                        });
+                    });
+                });
+                futures::future::ready(())
+            })
+            .await;
+        // Now we will calculate the average log probability score
+        let average_logprobs = logprobs / total_tokens as f32;
+        let answer = match answer {
+            Ok(answer) => answer.to_lowercase().trim().to_owned(),
+            Err(_) => "no".to_owned(),
+        };
+        if answer == "yes" {
+            Some((average_logprobs, candidate))
+        } else {
+            None
+        }
+    })
+    .buffer_unordered(10)
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .filter_map(|s| s)
+    .collect::<Vec<_>>();
+    // We sort it in decreasing order of the logprob score
+    logprob_scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    logprob_scored
+        .into_iter()
+        .map(|(_, candidate)| candidate)
+        .take(10)
+        .collect()
 }
 
 fn merge_consecutive_chunks(
     code_snippets: Vec<QuickCodeSnippetDocument>,
 ) -> Vec<QuickCodeSnippetDocument> {
-    const CHUNK_MERGE_DISTANCE: usize = 10;
+    const CHUNK_MERGE_DISTANCE: usize = 0;
     let mut file_to_code_snippets: HashMap<String, Vec<QuickCodeSnippetDocument>> =
         Default::default();
 
@@ -200,7 +244,7 @@ fn merge_consecutive_chunks(
     // We want to sort the code snippets in increasing order of the start line
     file_to_code_snippets
         .iter_mut()
-        .for_each(|(file_path, code_snippets)| {
+        .for_each(|(_, code_snippets)| {
             code_snippets.sort_by(|a, b| a.start_line.cmp(&b.start_line));
         });
 
@@ -233,6 +277,7 @@ fn merge_consecutive_chunks(
                     start_line: code_snippet.start_line,
                     end_line: code_snippet.end_line,
                     score: code_snippet.score,
+                    language: code_snippet.language,
                 })
                 .collect::<Vec<_>>()
         })
@@ -298,10 +343,12 @@ async fn gather_code_snippets_for_answer(
 
     // Now we want to merge the results together and get back the results
 
+    let mut quick_code_snippet_set: HashSet<String> = HashSet::new();
     lexical_search_results = lexical_search_results
         .into_iter()
         .map(|mut lexical_search_result| {
             let mut final_result = lexical_search_result.score * 2.5;
+            quick_code_snippet_set.insert(lexical_search_result.unique_key());
             if let Some(embedding_score) =
                 embedding_search_map.get(&lexical_search_result.unique_key())
             {
@@ -311,6 +358,14 @@ async fn gather_code_snippets_for_answer(
             lexical_search_result
         })
         .collect::<Vec<_>>();
+
+    embedding_search_results
+        .into_iter()
+        .for_each(|embedding_search_result| {
+            if !quick_code_snippet_set.contains(&embedding_search_result.unique_key()) {
+                lexical_search_results.push(embedding_search_result);
+            }
+        });
 
     lexical_search_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
     // This is the final lexical search results we get
@@ -450,6 +505,7 @@ impl FileContentValue {
                     schema.end_line => chunk.end as u64,
                     schema.path => self.file_path.to_owned(),
                     schema.content =>  data.to_owned(),
+                    schema.language => self.language.to_owned(),
                 )
             })
             .collect::<Vec<_>>()
@@ -532,6 +588,7 @@ async fn rank_spans_on_embeddings(
             chunks[index].start as u64,
             chunks[index].end as u64,
             score,
+            language.clone(),
         ));
     }
     final_generation

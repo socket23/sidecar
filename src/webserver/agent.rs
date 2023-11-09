@@ -339,6 +339,8 @@ pub struct VariableInformation {
     pub name: String,
     #[serde(rename = "type")]
     pub variable_type: VariableType,
+    pub content: String,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -491,6 +493,7 @@ pub async fn followup_chat(
         sql_db,
         previous_messages,
         sender,
+        user_context,
     );
 
     generate_agent_stream(agent, action, receiver).await

@@ -112,7 +112,7 @@ impl TSLanguageConfig {
                     outline = outline
                         + "\n"
                         + &format!(
-                            "    function {}({}): {}",
+                            "    function {} {} {}",
                             node_information.get_name(),
                             node_information.get_parameters(),
                             node_information.get_return_type()
@@ -132,7 +132,7 @@ impl TSLanguageConfig {
                 outline = outline
                     + "\n"
                     + &format!(
-                        "function {}({}): {}",
+                        "function {} {} {}",
                         node_information.get_name(),
                         node_information.get_parameters(),
                         node_information.get_return_type()

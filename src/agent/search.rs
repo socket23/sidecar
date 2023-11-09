@@ -11,6 +11,7 @@ use crate::{
     db::sqlite::SqlDb,
     git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
+    webserver::agent::UserContext,
 };
 
 /// Here we allow the agent to perform search and answer workflow related questions
@@ -117,6 +118,7 @@ impl Agent {
         sql_db: SqlDb,
         conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
+        user_context: UserContext,
     ) -> Self {
         let agent = Agent {
             application,
@@ -127,7 +129,7 @@ impl Agent {
             model: model::GPT_4,
             sql_db,
             sender,
-            user_context: None,
+            user_context: Some(user_context),
         };
         agent
     }
@@ -685,14 +687,16 @@ impl Agent {
 
     pub async fn answer_using_context(
         &mut self,
-        path_aliases: &[usize],
         sender: tokio::sync::mpsc::UnboundedSender<Answer>,
     ) -> Result<String> {
+        dbg!("we are pruning the context here");
         if self.user_context.is_none() {
             return Ok(
                 "reached unexpected path in code, please report to the developers".to_owned(),
             );
         }
+        let query = self.get_query().expect("to be present");
+        let _ = self.truncate_user_context(query.as_str()).await;
         // Here we ask the agent about which the lexical search
         unimplemented!()
     }
@@ -702,6 +706,9 @@ impl Agent {
         path_aliases: &[usize],
         sender: tokio::sync::mpsc::UnboundedSender<Answer>,
     ) -> Result<String> {
+        if self.user_context.is_some() {
+            let _ = self.answer_using_context(sender.clone()).await;
+        }
         let context = self.answer_context(path_aliases).await?;
         let system_prompt = match self.get_last_conversation_message_agent_state() {
             &AgentState::Explain => prompts::explain_article_prompt(

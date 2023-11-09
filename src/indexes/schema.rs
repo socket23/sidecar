@@ -257,6 +257,7 @@ pub struct QuickCodeSnippet {
     pub end_line: Field,
 }
 
+#[derive(Debug)]
 pub struct QuickCodeSnippetDocument {
     pub path: String,
     pub content: String,
@@ -302,6 +303,10 @@ impl QuickCodeSnippetDocument {
             end_line,
             score,
         }
+    }
+
+    pub fn unique_key(&self) -> String {
+        format!("{}:{}:{}", self.path, self.start_line, self.end_line)
     }
 }
 

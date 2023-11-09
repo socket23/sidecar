@@ -1,5 +1,6 @@
 //! We are going to implement how tht agent is going to use user context
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -17,14 +18,14 @@ use crate::agent::prompts;
 use crate::agent::types::AgentAction;
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
-use crate::indexes::indexer::Indexer;
-use crate::indexes::schema::CodeSnippet;
 use crate::indexes::schema::CodeSnippetTokenizer;
 use crate::indexes::schema::QuickCodeSnippet;
 use crate::indexes::schema::QuickCodeSnippetDocument;
 use crate::webserver::agent::FileContentValue;
+use crate::webserver::agent::VariableInformation;
 
-use super::{llm_funcs::LlmClient, types::Agent};
+use super::llm_funcs::LlmClient;
+use super::types::Agent;
 
 impl Agent {
     pub async fn truncate_user_context(&mut self, query: &str) -> Result<String> {
@@ -42,6 +43,8 @@ impl Agent {
             .expect("user_context to be there")
             .clone();
         let user_variables = user_context.variables;
+        // we always capture the user variables as much as possible since these
+        // are important and have been provided by the user
         let user_files = user_context.file_content_map;
 
         let self_ = &*self;
@@ -51,25 +54,30 @@ impl Agent {
                 // First generate the outline for the file here
                 let language_config = self_.application.language_parsing.for_lang(language);
                 let file_content = &file_value.file_content;
+                let fs_file_path = &file_value.file_path;
                 // Now we can query gpt3.5 with the output here and aks it to
                 // generate the code search keywords which we need
-                let system_prompt = prompts::lexical_search_system_prompt(
+                let system_prompt = prompts::proc_search_system_prompt(
                     language_config.map(|lang_config| {
                         lang_config.generate_file_outline(file_content.as_bytes())
                     }),
                     &file_value.file_path,
                 );
+                dbg!(&system_prompt);
                 let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
-                    prompts::lexical_search_functions(),
+                    prompts::proc_function_truncate(),
                 )
                 .unwrap();
                 let response = self_
                     .get_llm_client()
                     .stream_function_call(
-                        llm_funcs::llm::OpenAIModel::GPT3_5_16k,
+                        llm_funcs::llm::OpenAIModel::GPT4,
                         vec![
                             llm_funcs::llm::Message::system(&system_prompt),
                             llm_funcs::llm::Message::user(query),
+                            llm_funcs::llm::Message::user(&format!(
+                                "We are working on {fs_file_path} so choose your answer for this file."
+                            )),
                             llm_funcs::llm::Message::user("CALL A FUNCTION!. Do not answer"),
                         ],
                         functions,
@@ -86,7 +94,12 @@ impl Agent {
                             // we messed up in the pipeline somewhere
                             return Some((query, file_value));
                         }
-                        _ => return None,
+                        Ok(Some(AgentAction::Proc { query, paths: _ })) => {
+                            return Some((query, file_value))
+                        }
+                        _ => {
+                            None
+                        }
                     }
                 } else {
                     None
@@ -97,28 +110,242 @@ impl Agent {
             .collect::<Vec<_>>()
             .await;
 
-        // // First we create an in-memory tantivy index to perform search
-        // let code_snippet_indexer = Indexer::create_for_in_memory_code_search(
-        //     CodeSnippet::new(
-        //         self.application.sql.clone(),
-        //         self.application.language_parsing.clone(),
-        //     ),
-        //     100_000_000,
-        //     std::thread::available_parallelism().unwrap().get(),
-        // )
-        // .expect("index creation to not fail");
-
-        // we want to be fast af, so let's parallelize the lexical search on each
-        // of these files and get the queries
-        // stream::iter(user_files.into_iter())
-        //     .map(|value| {
-        //         let fs_file_path = value.file_path;
-        //         let file_content = value.file_content;
-        //     })
-        //     .collect()
-        //     .await;
+        let candidates =
+            gather_code_snippets_for_answer(lexical_search_and_file, self.application.clone())
+                .await
+                .into_iter()
+                .take(50);
+        // Now we want to merge the ranges if they are consecutive so we can get them
+        // together when we show the range
         unimplemented!();
     }
+}
+
+impl VariableInformation {
+    pub fn to_prompt(&self) -> String {
+        let file_path = &self.fs_file_path;
+        let start_line = self.start_position.line;
+        let end_line = self.end_position.line;
+        let language = &self.language;
+        let name = &self.name;
+        let formatted_content = self
+            .content
+            .split('\n')
+            .enumerate()
+            .into_iter()
+            .map(|(idx, line)| format!("{}:{}", idx + start_line as usize, line))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            r#"User Selected Code:{name}
+Location: {file_path}:{start_line}-{end_line}
+```{language}
+{formatted_content}
+```\n"#
+        )
+    }
+}
+
+// We will send the full user variables to the LLM
+fn get_prompt_for_user_variables(user_variables: Vec<VariableInformation>) -> Vec<String> {
+    user_variables
+        .into_iter()
+        .map(|variable| variable.to_prompt())
+        .collect()
+}
+
+fn re_rank_code_snippets(
+    query: &str,
+    llm_client: Arc<LlmClient>,
+    candidates: Vec<QuickCodeSnippetDocument>,
+) -> Vec<QuickCodeSnippetDocument> {
+    // We will take the code snippets here until we fill in the context window
+    // of the LLM, in our case we restrict to around 4k tokens leaving a bit of
+    // space for the other prompts to come in
+    //     stream::iter(candidates)
+    //         .map(|candidate| async move {
+    //             let content = candidate.content;
+    //             let file_path = candidate.path;
+    //             let start_line = candidate.start_line;
+    //             let end_line = candidate.end_line;
+    //             let prompt = format!(
+    //                 r#"{file_path}-{start_line}:{end_line}
+    // ```
+    // {content}
+    // ```"#
+    //             );
+    //             llm_client.stream_completion_call(llm_funcs::llm::OpenAIModel::GPT, prompt)
+    //         })
+    //         .buffered(10)
+    //         .collect()
+    //         .await;
+    candidates
+}
+
+fn merge_consecutive_chunks(
+    code_snippets: Vec<QuickCodeSnippetDocument>,
+) -> Vec<QuickCodeSnippetDocument> {
+    const CHUNK_MERGE_DISTANCE: usize = 10;
+    let mut file_to_code_snippets: HashMap<String, Vec<QuickCodeSnippetDocument>> =
+        Default::default();
+
+    code_snippets.into_iter().for_each(|code_snippet| {
+        let file_path = code_snippet.path.clone();
+        let code_snippets = file_to_code_snippets
+            .entry(file_path)
+            .or_insert_with(Vec::new);
+        code_snippets.push(code_snippet);
+    });
+
+    // We want to sort the code snippets in increasing order of the start line
+    file_to_code_snippets
+        .iter_mut()
+        .for_each(|(file_path, code_snippets)| {
+            code_snippets.sort_by(|a, b| a.start_line.cmp(&b.start_line));
+        });
+
+    // Now we will merge chunks which are in the range of CHUNK_MERGE_DISTANCE
+    let results = file_to_code_snippets
+        .into_iter()
+        .map(|(file_path, mut code_snippets)| {
+            let mut final_code_snippets = Vec::new();
+            let mut current_code_snippet = code_snippets.remove(0);
+            for code_snippet in code_snippets {
+                if code_snippet.start_line - current_code_snippet.end_line
+                    <= CHUNK_MERGE_DISTANCE as u64
+                {
+                    // We can merge these two code snippets
+                    current_code_snippet.end_line = code_snippet.end_line;
+                    current_code_snippet.content =
+                        format!("{}{}", current_code_snippet.content, code_snippet.content);
+                } else {
+                    // We cannot merge these two code snippets
+                    final_code_snippets.push(current_code_snippet);
+                    current_code_snippet = code_snippet;
+                }
+            }
+            final_code_snippets.push(current_code_snippet);
+            final_code_snippets
+                .into_iter()
+                .map(|code_snippet| QuickCodeSnippetDocument {
+                    path: file_path.clone(),
+                    content: code_snippet.content,
+                    start_line: code_snippet.start_line,
+                    end_line: code_snippet.end_line,
+                    score: code_snippet.score,
+                })
+                .collect::<Vec<_>>()
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    results
+}
+
+async fn gather_code_snippets_for_answer(
+    candidates: Vec<(String, FileContentValue)>,
+    application: Application,
+) -> Vec<QuickCodeSnippetDocument> {
+    let mut quick_code_snippet_index = QuickCodeSnippetIndex::create_in_memory_index();
+    quick_code_snippet_index = build_tantivy_index(
+        quick_code_snippet_index,
+        candidates
+            .to_vec()
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect(),
+        application.clone(),
+    );
+
+    // Now we need to perform the lexical and then the embedding search
+    // we will do this in parallel
+    let mut lexical_search_results: Vec<_> = relativize_scores_for_snippets(
+        candidates
+            .iter()
+            .flat_map(|(query, file_content_value)| {
+                dbg!(&query);
+                quick_code_snippet_index.lexical_query(&file_content_value.file_path, query)
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    let embedding_search_results: Vec<_> = relativize_scores_for_snippets(
+        stream::iter(
+            candidates
+                .into_iter()
+                .map(|candidate| (candidate, application.clone())),
+        )
+        .map(|(candidate, application)| {
+            rank_spans_on_embeddings(
+                candidate.1.file_path,
+                candidate.1.file_content,
+                candidate.0,
+                application.clone(),
+                candidate.1.language,
+            )
+        })
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .flatten()
+        .collect(),
+    );
+
+    let embedding_search_map = embedding_search_results
+        .iter()
+        .map(|embeddings| (embeddings.unique_key(), embeddings.score))
+        .collect::<HashMap<_, _>>();
+
+    // Now we want to merge the results together and get back the results
+
+    lexical_search_results = lexical_search_results
+        .into_iter()
+        .map(|mut lexical_search_result| {
+            let mut final_result = lexical_search_result.score * 2.5;
+            if let Some(embedding_score) =
+                embedding_search_map.get(&lexical_search_result.unique_key())
+            {
+                final_result += embedding_score;
+            }
+            lexical_search_result.score = final_result;
+            lexical_search_result
+        })
+        .collect::<Vec<_>>();
+
+    lexical_search_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    // This is the final lexical search results we get
+    lexical_search_results
+}
+
+fn relativize_scores_for_snippets(
+    mut quick_code_snippets: Vec<QuickCodeSnippetDocument>,
+) -> Vec<QuickCodeSnippetDocument> {
+    if quick_code_snippets.is_empty() {
+        return quick_code_snippets;
+    }
+    // Here we will also reduce the score to be in a range from 0.5 -> 1 for the
+    // lexical search
+    let max_score = quick_code_snippets
+        .iter()
+        .map(|lexical_search_snippet| lexical_search_snippet.score)
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    let mut min_score = quick_code_snippets
+        .iter()
+        .map(|lexical_search_snippet| lexical_search_snippet.score)
+        .min_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    if min_score == max_score {
+        min_score = 0.0;
+    }
+    // Now relativize the scores in this range
+    quick_code_snippets
+        .iter_mut()
+        .for_each(|lexical_search_snippet| {
+            lexical_search_snippet.score =
+                (lexical_search_snippet.score - min_score) / (max_score - min_score) * 0.5 + 0.5;
+        });
+    quick_code_snippets
 }
 
 struct QuickCodeSnippetIndex {
@@ -129,10 +356,7 @@ struct QuickCodeSnippetIndex {
 }
 
 impl QuickCodeSnippetIndex {
-    fn create_in_memory_index(
-        schema: &tantivy::schema::Schema,
-        language_parsing: Arc<TSLanguageParsing>,
-    ) -> Self {
+    fn create_in_memory_index() -> Self {
         let mut index = tantivy::Index::create_in_ram(QuickCodeSnippet::new().schema);
         index
             .set_default_multithread_executor()
@@ -162,7 +386,6 @@ impl QuickCodeSnippetIndex {
         }
     }
 
-    // TODO(skcd): Implement this
     fn lexical_query(&self, file_path: &str, query: &str) -> Vec<QuickCodeSnippetDocument> {
         let searcher = self.reader.searcher();
         let collector = TopDocs::with_limit(20);
@@ -174,7 +397,7 @@ impl QuickCodeSnippetIndex {
         let tokens = CodeSnippetTokenizer::tokenize_call(query);
         let mut query_string = tokens
             .iter()
-            .map(|token| format!(r#"content:{}""#, token.text))
+            .map(|token| format!(r#"content:{}"#, token.text))
             .collect::<Vec<_>>()
             .join(" OR ");
         query_string = format!(r#"path:"{}" AND ({})"#, file_path, query_string);
@@ -203,7 +426,7 @@ impl QuickCodeSnippetIndex {
 /// We can build the tantivy documents this way
 impl FileContentValue {
     fn build_documents(
-        mut self,
+        self,
         schema: &QuickCodeSnippet,
         language_parsing: Arc<TSLanguageParsing>,
     ) -> Vec<tantivy::schema::Document> {
@@ -217,6 +440,7 @@ impl FileContentValue {
             .into_iter()
             .filter(|span| span.data.is_some())
             .collect::<Vec<_>>();
+        dbg!(chunks.len());
         chunks
             .into_iter()
             .map(|chunk| {
@@ -236,7 +460,7 @@ impl FileContentValue {
 fn build_tantivy_index(
     mut quick_code_snippet_index: QuickCodeSnippetIndex,
     file_content_value: Vec<FileContentValue>,
-    application: Arc<Application>,
+    application: Application,
 ) -> QuickCodeSnippetIndex {
     let _ = file_content_value
         .into_par_iter()
@@ -264,9 +488,9 @@ fn build_tantivy_index(
 async fn rank_spans_on_embeddings(
     fs_file_path: String,
     file_content: String,
-    language: String,
     query: String,
-    application: Arc<Application>,
+    application: Application,
+    language: String,
 ) -> Vec<QuickCodeSnippetDocument> {
     if application.semantic_client.is_none() {
         return vec![];
@@ -279,7 +503,7 @@ async fn rank_spans_on_embeddings(
     let query_embeddings = embedder.embed(&query).expect("embedding to not fail");
     let chunks = application
         .language_parsing
-        .chunk_file(&fs_file_path, &file_content, None, None)
+        .chunk_file(&fs_file_path, &file_content, None, Some(language.as_str()))
         .into_iter()
         .filter(|chunk| chunk.data.is_some())
         .collect::<Vec<_>>();

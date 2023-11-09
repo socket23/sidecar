@@ -99,14 +99,15 @@ pub fn functions(add_proc: bool) -> serde_json::Value {
 }
 
 pub fn lexical_search_functions() -> serde_json::Value {
-    let mut funcs = serde_json::json!([code_function()]);
+    let funcs = serde_json::json!([code_function()]);
     funcs
 }
 
-pub fn lexical_search_system_prompt<'a>(
-    file_outline: Option<String>,
-    file_path: &'a str,
-) -> String {
+pub fn proc_function_truncate() -> serde_json::Value {
+    serde_json::json!([proc_function()])
+}
+
+pub fn proc_search_system_prompt<'a>(file_outline: Option<String>, file_path: &'a str) -> String {
     match file_outline {
         Some(file_outline) => {
             let system_prompt = format!(
@@ -126,7 +127,8 @@ Your job is to select keywords which should be used to search for relevant code 
 
 - You are given an outline of the code in the file, use the outline to select keywords
 - ALWAYS call a function, DO NOT answer the question directly, even if the query is not in English
-- When calling functions.code your query should consist of keywords. E.g. if the user says 'What does contextmanager do?', your query should be 'contextmanager'. If the user says 'How is contextmanager used in app', your query should be 'contextmanager app'. If the user says 'What is in the src directory', your query should be 'src'
+- Only call functions.proc with path indices that are under the PATHS heading above
+- Call functions.proc with paths that might contain relevant information. Either because of the path name, or to expand on the code outline
 - DO NOT end the keywords with ing, so instead of 'streaming' use 'stream', 'querying' use 'query'
 - DO NOT use plural form of a word, so instead of 'queries' use 'query', 'functions' use 'function'
 - ALWAYS call a function. DO NOT answer the question directly"#

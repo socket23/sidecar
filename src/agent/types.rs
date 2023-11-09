@@ -7,8 +7,12 @@ use tokio::sync::mpsc::Sender;
 use tracing::{debug, info};
 
 use crate::{
-    agent::llm_funcs::llm::FunctionCall, application::application::Application, db::sqlite::SqlDb,
-    indexes::indexer::FileDocument, repo::types::RepoRef, webserver::agent::UserContext,
+    agent::llm_funcs::llm::FunctionCall,
+    application::application::Application,
+    db::sqlite::SqlDb,
+    indexes::{indexer::FileDocument, schema::QuickCodeSnippetDocument},
+    repo::types::RepoRef,
+    webserver::agent::UserContext,
 };
 
 use super::{
@@ -394,6 +398,20 @@ impl CodeSpan {
     pub fn get_unique_key(&self) -> String {
         format!("{}:{}-{}", self.file_path, self.start_line, self.end_line)
     }
+
+    pub fn from_quick_code_snippet(
+        code_snippet_document: QuickCodeSnippetDocument,
+        path_alias: usize,
+    ) -> Self {
+        Self {
+            file_path: code_snippet_document.path,
+            alias: path_alias,
+            start_line: code_snippet_document.start_line,
+            end_line: code_snippet_document.end_line,
+            score: Some(code_snippet_document.score),
+            data: code_snippet_document.content,
+        }
+    }
 }
 
 impl std::fmt::Display for CodeSpan {
@@ -545,6 +563,12 @@ impl Agent {
             .map(|conversation_message| conversation_message.user_selected_code_span.as_slice())
     }
 
+    pub fn get_query(&self) -> Option<String> {
+        self.conversation_messages
+            .last()
+            .map(|conversation_message| conversation_message.query.to_owned())
+    }
+
     pub fn get_last_conversation_message(&mut self) -> &mut ConversationMessage {
         // If we don't have a conversation message then, we will crash and burn
         // here
@@ -679,6 +703,7 @@ impl Agent {
                 // take a different path, or else we go with the usual flow
                 match self.user_context {
                     Some(_) => {
+                        let answer = self.answer(paths.as_slice(), answer_sender).await?;
                         // here we have to parse the context using just the context
                         // provided and then figure out what to do next
                         return Ok(None);

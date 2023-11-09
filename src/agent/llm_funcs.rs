@@ -1,13 +1,22 @@
+use std::pin::Pin;
+
 /// We define all the helper stuff required here for the LLM to be able to do
 /// things.
 use async_openai::config::AzureConfig;
+use async_openai::config::Config;
+use async_openai::config::OpenAIConfig;
+use async_openai::error::OpenAIError;
 use async_openai::types::ChatCompletionFunctionCall;
 use async_openai::types::ChatCompletionFunctionsArgs;
 use async_openai::types::ChatCompletionRequestMessageArgs;
 use async_openai::types::CreateChatCompletionRequest;
 use async_openai::types::CreateChatCompletionRequestArgs;
+use async_openai::types::CreateCompletionRequestArgs;
+use async_openai::types::CreateCompletionResponse;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
+use color_eyre::owo_colors::colors::css::Azure;
+use futures::Stream;
 use futures::StreamExt;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 use tracing::debug;
@@ -129,6 +138,7 @@ pub mod llm {
         GPT4,
         GPT4_32k,
         GPT3_5_16k,
+        GPT3_5Instruct,
     }
 
     impl OpenAIModel {
@@ -137,6 +147,7 @@ pub mod llm {
                 OpenAIModel::GPT3_5_16k => "gpt-3.5-turbo-16k-0613".to_owned(),
                 OpenAIModel::GPT4 => "gpt-4-0613".to_owned(),
                 OpenAIModel::GPT4_32k => "gpt-4-32k-0613".to_owned(),
+                OpenAIModel::GPT3_5Instruct => "gpt-3.5-turbo-instruct".to_owned(),
             }
         }
 
@@ -147,6 +158,8 @@ pub mod llm {
                 Ok(OpenAIModel::GPT4)
             } else if model_name == "gpt-4-32k-0613" {
                 Ok(OpenAIModel::GPT4_32k)
+            } else if model_name == "gpt-3.5-turbo-instruct" {
+                Ok(OpenAIModel::GPT3_5Instruct)
             } else {
                 Err(anyhow::anyhow!("unknown model name"))
             }
@@ -259,6 +272,7 @@ pub struct LlmClient {
     gpt4_client: Client<AzureConfig>,
     gpt432k_client: Client<AzureConfig>,
     gpt3_5_client: Client<AzureConfig>,
+    gpt3_5_turbo_instruct: Client<OpenAIConfig>,
 }
 
 impl LlmClient {
@@ -271,6 +285,9 @@ impl LlmClient {
             .with_api_key(api_key)
             .with_api_version(api_version)
             .with_deployment_id("gpt4-access".to_owned());
+        let openai_config = OpenAIConfig::new()
+            .with_org_id("org-pKCie8wjobiHKD2874lQP9wR".to_owned())
+            .with_api_key("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".to_owned());
         let gpt4_config = azure_config.clone();
         let gpt4_32k_config = azure_config
             .clone()
@@ -280,6 +297,7 @@ impl LlmClient {
             gpt4_client: Client::with_config(gpt4_config),
             gpt432k_client: Client::with_config(gpt4_32k_config),
             gpt3_5_client: Client::with_config(gpt3_5_config),
+            gpt3_5_turbo_instruct: Client::with_config(openai_config),
         }
     }
 
@@ -293,13 +311,20 @@ impl LlmClient {
         sender: tokio::sync::mpsc::UnboundedSender<Answer>,
     ) -> anyhow::Result<String> {
         let client = self.get_model(&model);
+        if client.is_none() {
+            return Err(anyhow::anyhow!("model not found"));
+        }
         let request = self.create_request(messages, functions, temperature, frequency_penalty);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
-            let stream = client.chat().create_stream(request.clone()).await;
+            let stream = client
+                .expect("is_none to work")
+                .chat()
+                .create_stream(request.clone())
+                .await;
             if stream.is_err() {
                 continue 'retry_loop;
             }
@@ -352,13 +377,20 @@ impl LlmClient {
         context_selection: Option<ContextSelection>,
     ) -> anyhow::Result<String> {
         let client = self.get_model(&model);
+        if client.is_none() {
+            return Err(anyhow::anyhow!("model not found"));
+        }
         let request = self.create_request(messages, functions, temperature, frequency_penalty);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
-            let stream = client.chat().create_stream(request.clone()).await;
+            let stream = client
+                .expect("is_none to work")
+                .chat()
+                .create_stream(request.clone())
+                .await;
             if stream.is_err() {
                 continue 'retry_loop;
             }
@@ -409,13 +441,20 @@ impl LlmClient {
         frequency_penalty: Option<f32>,
     ) -> anyhow::Result<String> {
         let client = self.get_model(&model);
+        if client.is_none() {
+            return Err(anyhow::anyhow!("model not found"));
+        }
         let request = self.create_request(messages, functions, temperature, frequency_penalty);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
-            let stream = client.chat().create_stream(request.clone()).await;
+            let stream = client
+                .expect("is_none to work")
+                .chat()
+                .create_stream(request.clone())
+                .await;
             if stream.is_err() {
                 continue 'retry_loop;
             }
@@ -447,6 +486,33 @@ impl LlmClient {
         ))
     }
 
+    pub async fn stream_completion_call(
+        &self,
+        model: llm::OpenAIModel,
+        prompt: &str,
+    ) -> anyhow::Result<
+        Pin<Box<dyn Stream<Item = Result<CreateCompletionResponse, OpenAIError>> + Send>>,
+    > {
+        let client = self.get_model_openai(&model);
+        if client.is_none() {
+            return Err(anyhow::anyhow!("model not found"));
+        }
+        let completion_request = CreateCompletionRequestArgs::default()
+            .stream(true)
+            .temperature(0.1)
+            .prompt(prompt)
+            .logprobs(5)
+            .build()
+            .unwrap();
+        let completion = client
+            .expect("is_none")
+            .completions()
+            .create_stream(completion_request)
+            .await?;
+
+        Ok(completion)
+    }
+
     pub async fn stream_function_call(
         &self,
         model: llm::OpenAIModel,
@@ -456,6 +522,9 @@ impl LlmClient {
         frequency_penalty: Option<f32>,
     ) -> anyhow::Result<Option<llm::FunctionCall>> {
         let client = self.get_model(&model);
+        if client.is_none() {
+            return Err(anyhow::anyhow!("model not found"));
+        }
         let mut request =
             self.create_request(messages, Some(functions), temperature, frequency_penalty);
 
@@ -465,7 +534,11 @@ impl LlmClient {
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut cloned_request = request.clone();
             cloned_request.stream = Some(false);
-            let data = client.chat().create(cloned_request).await;
+            let data = client
+                .expect("is_none to work")
+                .chat()
+                .create(cloned_request)
+                .await;
             match data {
                 Ok(mut data_okay) => {
                     let message = data_okay.choices.remove(0).message;
@@ -488,13 +561,24 @@ impl LlmClient {
         Ok(None)
     }
 
-    fn get_model(&self, model: &llm::OpenAIModel) -> &Client<AzureConfig> {
+    fn get_model(&self, model: &llm::OpenAIModel) -> Option<&Client<AzureConfig>> {
         let client = match model {
             llm::OpenAIModel::GPT4 => &self.gpt4_client,
             llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
             llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
+            llm::OpenAIModel::GPT3_5Instruct => return None,
         };
-        client
+        Some(client)
+    }
+
+    fn get_model_openai(&self, model: &llm::OpenAIModel) -> Option<&Client<OpenAIConfig>> {
+        let client = match model {
+            llm::OpenAIModel::GPT4 => return None,
+            llm::OpenAIModel::GPT4_32k => return None,
+            llm::OpenAIModel::GPT3_5_16k => return None,
+            llm::OpenAIModel::GPT3_5Instruct => &self.gpt3_5_turbo_instruct,
+        };
+        Some(client)
     }
 
     fn create_request(

@@ -56,8 +56,6 @@ pub struct ConversationMessage {
     file_paths: Vec<String>,
     /// The span which we found after performing search
     code_spans: Vec<CodeSpan>,
-    /// The span which user has selected and added to the context
-    user_selected_code_span: Vec<CodeSpan>,
     /// The files which are open in the editor
     open_files: Vec<String>,
     /// The status of this conversation
@@ -90,7 +88,6 @@ impl ConversationMessage {
             open_files: vec![],
             file_paths: vec![],
             code_spans: vec![],
-            user_selected_code_span: vec![],
             conversation_state: ConversationState::Started,
             answer: None,
             created_at: current_time,
@@ -117,7 +114,6 @@ impl ConversationMessage {
             agent_state,
             file_paths: vec![],
             code_spans: vec![],
-            user_selected_code_span: vec![],
             open_files: vec![],
             conversation_state: ConversationState::Started,
             answer: None,
@@ -141,7 +137,6 @@ impl ConversationMessage {
             agent_state,
             file_paths: vec![],
             code_spans: vec![],
-            user_selected_code_span: vec![],
             open_files: vec![],
             conversation_state: ConversationState::Started,
             answer: None,
@@ -165,7 +160,6 @@ impl ConversationMessage {
             agent_state,
             file_paths: vec![],
             code_spans: vec![],
-            user_selected_code_span: vec![],
             open_files: vec![],
             conversation_state: ConversationState::Started,
             answer: None,
@@ -200,10 +194,6 @@ impl ConversationMessage {
         &self.code_spans.as_slice()
     }
 
-    pub fn user_selected_code_spans(&self) -> &[CodeSpan] {
-        &self.user_selected_code_span.as_slice()
-    }
-
     pub fn query(&self) -> &str {
         &self.query
     }
@@ -229,10 +219,6 @@ impl ConversationMessage {
         self.generated_answer_context.as_deref()
     }
 
-    pub fn add_user_selected_code_span(&mut self, user_selected_code_span: CodeSpan) {
-        self.user_selected_code_span.push(user_selected_code_span)
-    }
-
     pub fn answer_update(session_id: uuid::Uuid, answer_update: Answer) -> Self {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -246,7 +232,6 @@ impl ConversationMessage {
             agent_state: AgentState::Finish,
             file_paths: vec![],
             code_spans: vec![],
-            user_selected_code_span: vec![],
             open_files: vec![],
             conversation_state: ConversationState::StreamingAnswer,
             answer: Some(answer_update),
@@ -275,7 +260,6 @@ impl ConversationMessage {
         let agent_state = serde_json::to_string(&self.agent_state)?;
         let file_paths = serde_json::to_string(&self.file_paths)?;
         let code_spans = serde_json::to_string(&self.code_spans)?;
-        let user_selected_code_span = serde_json::to_string(&self.user_selected_code_span)?;
         let open_files = serde_json::to_string(&self.open_files)?;
         let conversation_state = serde_json::to_string(&self.conversation_state)?;
         let repo_ref_str = repo_ref.to_string();
@@ -294,7 +278,7 @@ impl ConversationMessage {
             agent_state,
             file_paths,
             code_spans,
-            user_selected_code_span,
+            "",
             open_files,
             conversation_state,
             repo_ref_str,
@@ -350,7 +334,6 @@ impl ConversationMessage {
                     agent_state: agent_state.expect("parsing back should work"),
                     file_paths: file_paths.unwrap_or_default(),
                     code_spans: vec![],
-                    user_selected_code_span: user_selected_code_span.unwrap_or_default(),
                     open_files: open_files.unwrap_or_default(),
                     conversation_state: conversation_state.expect("parsing back should work"),
                     answer: answer.map(|answer| Answer {
@@ -562,12 +545,6 @@ impl Agent {
         self.conversation_messages
             .last()
             .map(|conversation_message| conversation_message.definitions_interested_in.as_slice())
-    }
-
-    pub fn get_user_selected_context(&self) -> Option<&[CodeSpan]> {
-        self.conversation_messages
-            .last()
-            .map(|conversation_message| conversation_message.user_selected_code_span.as_slice())
     }
 
     pub fn get_query(&self) -> Option<String> {

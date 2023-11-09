@@ -1,11 +1,6 @@
 use super::agent_stream::generate_agent_stream;
-use super::context_trimming::create_context_string_for_precise_contexts;
 use super::types::json;
 use anyhow::Context;
-use futures::stream;
-use futures::StreamExt;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use axum::response::IntoResponse;
@@ -13,9 +8,8 @@ use axum::{extract::Query as axumQuery, Extension, Json};
 /// We will invoke the agent to get the answer, we are moving to an agent based work
 use serde::{Deserialize, Serialize};
 
-use crate::agent::llm_funcs::{self, LlmClient};
+use crate::agent::llm_funcs::LlmClient;
 use crate::agent::model::{GPT_3_5_TURBO_16K, GPT_4};
-use crate::agent::prompts;
 use crate::agent::types::Agent;
 use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
@@ -23,9 +17,6 @@ use crate::agent::types::ConversationMessage;
 use crate::application::application::Application;
 use crate::indexes::code_snippet::CodeSnippetDocument;
 use crate::repo::types::RepoRef;
-use crate::webserver::context_trimming::{
-    create_trimmed_context, create_viewport_context, trim_deep_context,
-};
 
 use super::types::ApiResponse;
 use super::types::Result;
@@ -295,7 +286,6 @@ pub async fn explain(
         data: snippet,
         score: Some(1.0),
     };
-    conversation_message.add_user_selected_code_span(code_span.clone());
     conversation_message.add_code_spans(code_span.clone());
     conversation_message.add_path(relative_path);
 
@@ -470,12 +460,6 @@ pub async fn followup_chat(
         previous_message.code_spans().iter().for_each(|code_span| {
             conversation_message.add_code_spans(code_span.clone());
         });
-        previous_message
-            .user_selected_code_spans()
-            .iter()
-            .for_each(|code_span| {
-                conversation_message.add_user_selected_code_span(code_span.clone())
-            });
     }
 
     previous_messages.push(conversation_message);

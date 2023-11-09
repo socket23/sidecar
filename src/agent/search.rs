@@ -223,7 +223,7 @@ impl Agent {
         Ok(response)
     }
 
-    fn save_code_snippets_response(
+    pub fn save_code_snippets_response(
         &mut self,
         query: &str,
         code_snippets: Vec<CodeSpan>,
@@ -698,7 +698,7 @@ impl Agent {
         let query = self.get_query().expect("to be present");
         let _ = self.truncate_user_context(query.as_str()).await;
         // Here we ask the agent about which the lexical search
-        unimplemented!()
+        Ok("".to_owned())
     }
 
     pub async fn answer(
@@ -875,51 +875,6 @@ impl Agent {
         let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
         let mut remaining_prompt_tokens =
             tiktoken_rs::get_completion_max_tokens(self.model.tokenizer, &prompt)?;
-
-        // We need to make sure that we send the selected context always
-        // this is important for any workflow
-        let user_selected_context = self.get_user_selected_context();
-        if let Some(user_selected_context_slice) = user_selected_context {
-            let selected_code_context = "##### SELECTED CODE CONTEXT #####\n";
-            let selected_code_header_tokens = bpe.encode_ordinary(&selected_code_context).len();
-            if selected_code_header_tokens
-                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
-            {
-                info!("we can't set selected selection because of prompt limit");
-            } else {
-                prompt += "##### SELECTED CODE CONTEXT #####\n";
-                remaining_prompt_tokens -= selected_code_header_tokens;
-
-                for user_selected_context in user_selected_context_slice.iter() {
-                    let snippet = user_selected_context
-                        .data
-                        .lines()
-                        .enumerate()
-                        .map(|(i, line)| {
-                            format!(
-                                "{} {line}\n",
-                                i + user_selected_context.start_line as usize + 1
-                            )
-                        })
-                        .collect::<String>();
-
-                    let formatted_string = format!(
-                        "### {} ###\n{snippet}\n\n",
-                        self.get_absolute_path(self.reporef(), &user_selected_context.file_path)
-                    );
-
-                    let snippet_tokens = bpe.encode_ordinary(&formatted_string).len();
-                    if snippet_tokens >= remaining_prompt_tokens - self.model.prompt_tokens_limit {
-                        info!("breaking at {} tokens", remaining_prompt_tokens);
-                        break;
-                    }
-                    prompt += &formatted_string;
-
-                    // Make sure we are always in the context limit
-                    remaining_prompt_tokens -= snippet_tokens;
-                }
-            }
-        }
 
         // If we have definition snippets we also add them to the mix here
         let definition_snippets = self.get_definition_snippets();

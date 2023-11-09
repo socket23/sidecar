@@ -25,12 +25,13 @@ use crate::indexes::schema::QuickCodeSnippet;
 use crate::indexes::schema::QuickCodeSnippetDocument;
 use crate::webserver::agent::FileContentValue;
 use crate::webserver::agent::VariableInformation;
+use crate::webserver::agent::VariableType;
 
 use super::llm_funcs::LlmClient;
 use super::types::Agent;
 
 impl Agent {
-    pub async fn truncate_user_context(&mut self, query: &str) -> Result<String> {
+    pub async fn truncate_user_context(&mut self, query: &str) {
         // We get different levels of context here from the user:
         // - @file full files (which we have to truncate and get relevant values)
         // - @selection selection ranges from the user (these we have to include including expanding them a bit on each side)
@@ -47,6 +48,12 @@ impl Agent {
         let user_variables = user_context.variables;
         // we always capture the user variables as much as possible since these
         // are important and have been provided by the user
+        let file_path_to_index: HashMap<String, usize> = user_context
+            .file_content_map
+            .iter()
+            .enumerate()
+            .map(|(idx, file_value)| (file_value.file_path.clone(), idx))
+            .collect();
         let user_files = user_context.file_content_map;
 
         let self_ = &*self;
@@ -121,8 +128,26 @@ impl Agent {
             re_rank_code_snippets(query, self.get_llm_client(), candidates).await;
         let code_snippets = merge_consecutive_chunks(ranked_candidates)
             .into_iter()
-            .map(|code_snippet| CodeSpan::from_quick_code_snippet(code_snippet, 0))
+            .map(|code_snippet| {
+                let index = file_path_to_index
+                    .get(code_snippet.path.as_str())
+                    .expect("file path to be present")
+                    .clone();
+                CodeSpan::from_quick_code_snippet(code_snippet, index)
+            })
             .collect::<Vec<_>>();
+
+        // Add the user selected variables to the conversation
+        // we filter out the file type variables cause we are truncating them
+        // already, so its okay to add other variables here but not the file ones
+        self.update_user_selected_variables(
+            user_variables
+                .into_iter()
+                .filter(|variable| variable.variable_type != VariableType::File)
+                .map(|variable| variable.to_agent_type())
+                .collect(),
+        );
+
         // Now we update the code spans which we have selected
         let _ = self.save_code_snippets_response(query, code_snippets);
         // We also retroactively save the last conversation to the database
@@ -134,10 +159,6 @@ impl Agent {
             // send it over the sender
             let _ = self.sender.send(last_conversation.clone()).await;
         }
-        // dbg!(code_snippets);
-        // Now we want to merge the ranges if they are consecutive so we can get them
-        // together when we show the range
-        Ok("".to_owned())
     }
 }
 
@@ -159,17 +180,10 @@ impl VariableInformation {
             r#"Location: {file_path}:{start_line}-{end_line}
 ```{language}
 {formatted_content}
-```\n"#
+```
+"#
         )
     }
-}
-
-// We will send the full user variables to the LLM
-fn get_prompt_for_user_variables(user_variables: Vec<VariableInformation>) -> Vec<String> {
-    user_variables
-        .into_iter()
-        .map(|variable| variable.to_prompt())
-        .collect()
 }
 
 async fn re_rank_code_snippets(

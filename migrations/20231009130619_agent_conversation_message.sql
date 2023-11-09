@@ -1,7 +1,6 @@
 -- Add migration script here
 CREATE TABLE agent_conversation_message (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    message_id TEXT NOT NULL,
+    message_id TEXT NOT NULL PRIMARY KEY,
     query TEXT NOT NULL,
     answer TEXT,
     created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -15,5 +14,7 @@ CREATE TABLE agent_conversation_message (
     code_spans TEXT NOT NULL,
     user_selected_code_span TEXT NOT NULL,
     open_files TEXT NOT NULL,
-    conversation_state TEXT NOT NULL
+    conversation_state TEXT NOT NULL,
+    repo_ref TEXT NOT NULL,
+    generated_answer_context TEXT NULL
 )

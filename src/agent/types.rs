@@ -9,6 +9,7 @@ use tracing::{debug, info};
 use crate::{
     agent::llm_funcs::llm::FunctionCall,
     application::application::Application,
+    chunking::text_document::Position,
     db::sqlite::SqlDb,
     indexes::{indexer::FileDocument, schema::QuickCodeSnippetDocument},
     repo::types::RepoRef,
@@ -36,6 +37,48 @@ pub struct Answer {
     // when streaming we often times want to send the delta so we can show
     // the output in a streaming fashion
     pub delta: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub enum VariableType {
+    File,
+    CodeSymbol,
+    Selection,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VariableInformation {
+    pub start_position: Position,
+    pub end_position: Position,
+    pub fs_file_path: String,
+    pub name: String,
+    pub variable_type: VariableType,
+    pub content: String,
+    pub language: String,
+}
+
+impl VariableInformation {
+    pub fn to_prompt(&self) -> String {
+        let start_line = self.start_position.line();
+        let end_line = self.end_position.line();
+        let fs_file_path = self.fs_file_path.as_str();
+        let content = self
+            .content
+            .split("\n")
+            .enumerate()
+            .into_iter()
+            .map(|(idx, content)| format!("{}: {}", idx + 1, content))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let language = self.language.as_str().to_lowercase();
+        let prompt = format!(
+            r#"Location: {fs_file_path}:{start_line}-{end_line}
+```{language}
+{content}
+```\n"#
+        );
+        prompt
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -71,6 +114,8 @@ pub struct ConversationMessage {
     /// Whats the context for the answer if any, this gets set at the same time
     /// when we finished generating the answer
     generated_answer_context: Option<String>,
+    /// The symbols which were provided by the user
+    user_variables: Vec<VariableInformation>,
 }
 
 impl ConversationMessage {
@@ -94,6 +139,7 @@ impl ConversationMessage {
             last_updated: current_time,
             generated_answer_context: None,
             definitions_interested_in: vec![],
+            user_variables: vec![],
         }
     }
 
@@ -121,6 +167,7 @@ impl ConversationMessage {
             last_updated: current_time,
             generated_answer_context: None,
             definitions_interested_in: vec![],
+            user_variables: vec![],
         }
     }
 
@@ -144,6 +191,7 @@ impl ConversationMessage {
             last_updated: current_time,
             generated_answer_context: None,
             definitions_interested_in: vec![],
+            user_variables: vec![],
         }
     }
 
@@ -167,6 +215,7 @@ impl ConversationMessage {
             last_updated: current_time,
             generated_answer_context: None,
             definitions_interested_in: vec![],
+            user_variables: vec![],
         }
     }
 
@@ -200,6 +249,10 @@ impl ConversationMessage {
 
     pub fn answer(&self) -> Option<Answer> {
         self.answer.clone()
+    }
+
+    pub fn add_user_variable(&mut self, user_variable: VariableInformation) {
+        self.user_variables.push(user_variable);
     }
 
     pub fn set_answer(&mut self, answer: String) {
@@ -241,6 +294,7 @@ impl ConversationMessage {
             // but its fine to do things this way
             generated_answer_context: None,
             definitions_interested_in: vec![],
+            user_variables: vec![],
         }
     }
 
@@ -315,8 +369,6 @@ impl ConversationMessage {
                 let steps_taken = serde_json::from_str::<Vec<AgentStep>>(&record.steps_taken);
                 let agent_state = serde_json::from_str::<AgentState>(&record.agent_state);
                 let file_paths = serde_json::from_str::<Vec<String>>(&record.file_paths);
-                let user_selected_code_span =
-                    serde_json::from_str::<Vec<CodeSpan>>(&record.user_selected_code_span);
                 let open_files = serde_json::from_str::<Vec<String>>(&record.open_files);
                 let conversation_state =
                     serde_json::from_str::<ConversationState>(&record.conversation_state);
@@ -346,6 +398,8 @@ impl ConversationMessage {
                     // we purposefuly leave this blank
                     // TODO(skcd): Run the migration script for recording this later
                     definitions_interested_in: vec![],
+                    // we also leave this blank right now
+                    user_variables: vec![],
                 }
             })
             .collect())
@@ -541,6 +595,12 @@ impl Agent {
         self.conversation_messages.len()
     }
 
+    pub fn get_user_variables(&self) -> Option<&[VariableInformation]> {
+        self.conversation_messages
+            .last()
+            .map(|conversation_message| conversation_message.user_variables.as_slice())
+    }
+
     pub fn get_definition_snippets(&self) -> Option<&[String]> {
         self.conversation_messages
             .last()
@@ -568,15 +628,36 @@ impl Agent {
             .map(String::as_str)
     }
 
-    pub async fn get_file_content(&self, path: &str) -> anyhow::Result<Option<FileDocument>> {
+    pub fn add_path(&mut self, path: &str) {
+        self.get_last_conversation_message()
+            .add_path(path.to_owned());
+    }
+
+    pub async fn get_file_content(&self, path: &str) -> anyhow::Result<Option<String>> {
         debug!(%self.reporef, path, %self.session_id, "executing file search");
         let file_reader = self
             .application
             .indexes
             .file
             .get_by_path(path, &self.reporef)
-            .await;
-        file_reader
+            .await
+            .map(|file_document| file_document.map(|doc| doc.content));
+        if let Ok(Some(_)) = file_reader {
+            return file_reader;
+        }
+        // Otherwise we will look at the user context and try to get the path
+        Ok(self
+            .user_context
+            .as_ref()
+            .map(|user_context| {
+                user_context
+                    .file_content_map
+                    .iter()
+                    .filter(|file_content| file_content.file_path == path)
+                    .map(|file_content| file_content.file_content.clone())
+                    .next()
+            })
+            .flatten())
     }
 
     pub fn get_path_alias(&mut self, path: &str) -> usize {
@@ -683,35 +764,23 @@ impl Agent {
         // next best action should be
         match action {
             AgentAction::Answer { paths } => {
-                // Let's do something here, if we have the user context then we
-                // take a different path, or else we go with the usual flow
-                match self.user_context {
-                    Some(_) => {
-                        let answer = self.answer(paths.as_slice(), answer_sender).await?;
-                        // here we have to parse the context using just the context
-                        // provided and then figure out what to do next
-                        return Ok(None);
-                    }
-                    None => {
-                        // here we can finally answer after we do some merging on the spans
-                        // and also look at the history to provide more context
-                        let answer = self.answer(paths.as_slice(), answer_sender).await?;
-                        info!(%self.session_id, "conversation finished");
-                        info!(%self.session_id, answer, "answer");
-                        // We should make it an atomic operation where whenever we update
-                        // the conversation, we send an update on the stream and also
-                        // save it to the db
-                        if let Some(last_conversation) = self.conversation_messages.last() {
-                            // save the conversation to the DB
-                            let _ = last_conversation
-                                .save_to_db(self.sql_db.clone(), self.reporef().clone())
-                                .await;
-                            // send it over the sender
-                            let _ = self.sender.send(last_conversation.clone()).await;
-                        }
-                        return Ok(None);
-                    }
+                // here we can finally answer after we do some merging on the spans
+                // and also look at the history to provide more context
+                let answer = self.answer(paths.as_slice(), answer_sender).await?;
+                info!(%self.session_id, "conversation finished");
+                info!(%self.session_id, answer, "answer");
+                // We should make it an atomic operation where whenever we update
+                // the conversation, we send an update on the stream and also
+                // save it to the db
+                if let Some(last_conversation) = self.conversation_messages.last() {
+                    // save the conversation to the DB
+                    let _ = last_conversation
+                        .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                        .await;
+                    // send it over the sender
+                    let _ = self.sender.send(last_conversation.clone()).await;
                 }
+                return Ok(None);
             }
             AgentAction::Code { query } => self.code_search(&query).await?,
             AgentAction::Path { query } => self.path_search(&query).await?,

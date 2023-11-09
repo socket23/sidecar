@@ -10,11 +10,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::agent::llm_funcs::LlmClient;
 use crate::agent::model::{GPT_3_5_TURBO_16K, GPT_4};
-use crate::agent::types::Agent;
 use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
+use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
 use crate::application::application::Application;
+use crate::chunking::text_document::Position as DocumentPosition;
 use crate::indexes::code_snippet::CodeSnippetDocument;
 use crate::repo::types::RepoRef;
 
@@ -314,11 +315,21 @@ pub async fn explain(
     generate_agent_stream(agent, action, receiver).await
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum VariableType {
     File,
     CodeSymbol,
     Selection,
+}
+
+impl Into<crate::agent::types::VariableType> for VariableType {
+    fn into(self) -> crate::agent::types::VariableType {
+        match self {
+            VariableType::File => crate::agent::types::VariableType::File,
+            VariableType::CodeSymbol => crate::agent::types::VariableType::CodeSymbol,
+            VariableType::Selection => crate::agent::types::VariableType::Selection,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -331,6 +342,28 @@ pub struct VariableInformation {
     pub variable_type: VariableType,
     pub content: String,
     pub language: String,
+}
+
+impl VariableInformation {
+    pub fn to_agent_type(self) -> AgentVariableInformation {
+        AgentVariableInformation {
+            start_position: DocumentPosition::new(
+                self.start_position.line,
+                self.start_position.character,
+                0,
+            ),
+            end_position: DocumentPosition::new(
+                self.end_position.line,
+                self.end_position.character,
+                0,
+            ),
+            fs_file_path: self.fs_file_path,
+            name: self.name,
+            variable_type: self.variable_type.into(),
+            content: self.content,
+            language: self.language,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -450,17 +483,14 @@ pub async fn followup_chat(
         query.to_owned(),
     );
 
-    // Now we check if we have any previous messages, if we do we have to signal
-    // that to the agent that this could be a followup question, and if we don't
-    // know about that then its totally fine
-    if let Some(previous_message) = previous_messages.last() {
-        previous_message.get_paths().iter().for_each(|path| {
-            conversation_message.add_path(path.to_owned());
+    // We add all the paths which we are going to get into the conversation message
+    // so that we can use that for the next followup question
+    user_context
+        .file_content_map
+        .iter()
+        .for_each(|file_content_value| {
+            conversation_message.add_path(file_content_value.file_path.to_owned());
         });
-        previous_message.code_spans().iter().for_each(|code_span| {
-            conversation_message.add_code_spans(code_span.clone());
-        });
-    }
 
     previous_messages.push(conversation_message);
 
@@ -468,7 +498,10 @@ pub async fn followup_chat(
 
     // If this is a followup, right now we don't take in any additional context,
     // but only use the one from our previous conversation
-    let action = AgentAction::Answer { paths: vec![] };
+    let file_path_len = user_context.file_content_map.len();
+    let action = AgentAction::Answer {
+        paths: (0..file_path_len).collect(),
+    };
     let agent = Agent::prepare_for_followup(
         app,
         repo_ref,

@@ -21,6 +21,13 @@ use super::{
     search::stop_words,
 };
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct CompletionItem {
+    pub answer_up_until_now: String,
+    pub delta: Option<String>,
+    pub logprobs: Option<Vec<Option<f32>>>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Answer {
     // This is the answer up-until now

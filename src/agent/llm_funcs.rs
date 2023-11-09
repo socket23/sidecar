@@ -1,22 +1,15 @@
-use std::pin::Pin;
-
 /// We define all the helper stuff required here for the LLM to be able to do
 /// things.
 use async_openai::config::AzureConfig;
-use async_openai::config::Config;
 use async_openai::config::OpenAIConfig;
-use async_openai::error::OpenAIError;
 use async_openai::types::ChatCompletionFunctionCall;
 use async_openai::types::ChatCompletionFunctionsArgs;
 use async_openai::types::ChatCompletionRequestMessageArgs;
 use async_openai::types::CreateChatCompletionRequest;
 use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::CreateCompletionRequestArgs;
-use async_openai::types::CreateCompletionResponse;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
-use color_eyre::owo_colors::colors::css::Azure;
-use futures::Stream;
 use futures::StreamExt;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 use tracing::debug;
@@ -24,11 +17,11 @@ use tracing::error;
 use tracing::warn;
 
 use crate::chunking::text_document::DocumentSymbol;
-use crate::in_line_agent::context_parsing::SelectionContext;
 use crate::in_line_agent::types::ContextSelection;
 use crate::in_line_agent::types::InLineAgentAnswer;
 
 use super::types::Answer;
+use super::types::CompletionItem;
 
 pub mod llm {
     use std::collections::HashMap;
@@ -490,27 +483,77 @@ impl LlmClient {
         &self,
         model: llm::OpenAIModel,
         prompt: &str,
-    ) -> anyhow::Result<
-        Pin<Box<dyn Stream<Item = Result<CreateCompletionResponse, OpenAIError>> + Send>>,
-    > {
+        sender: tokio::sync::mpsc::UnboundedSender<CompletionItem>,
+    ) -> anyhow::Result<String> {
         let client = self.get_model_openai(&model);
         if client.is_none() {
             return Err(anyhow::anyhow!("model not found"));
         }
-        let completion_request = CreateCompletionRequestArgs::default()
-            .stream(true)
-            .temperature(0.1)
-            .prompt(prompt)
-            .logprobs(5)
-            .build()
-            .unwrap();
-        let completion = client
-            .expect("is_none")
-            .completions()
-            .create_stream(completion_request)
-            .await?;
+        const TOTAL_CHAT_RETRIES: usize = 5;
 
-        Ok(completion)
+        'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
+            let mut buf = "".to_owned();
+            let completion_request = CreateCompletionRequestArgs::default()
+                .stream(true)
+                .model(model.model_name())
+                .temperature(0.1)
+                .prompt(prompt)
+                .logprobs(2)
+                .build()
+                .unwrap();
+            let completion_stream = client
+                .expect("is_none")
+                .completions()
+                .create_stream(completion_request)
+                .await;
+            if completion_stream.is_err() {
+                continue 'retry_loop;
+            }
+            let unwrap_stream = completion_stream.expect("is_err check above to work");
+            tokio::pin!(unwrap_stream);
+
+            loop {
+                match unwrap_stream.next().await {
+                    None => break,
+                    Some(Ok(value)) => {
+                        let delta = &value
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.text.clone())
+                            .unwrap_or("".to_owned());
+                        let logprobs = &value
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.logprobs.clone())
+                            .flatten();
+                        buf += &value
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.text.clone())
+                            .unwrap_or("".to_owned());
+                        let generated_logprobs = logprobs
+                            .as_ref()
+                            .map(|logprob| logprob.token_logprobs.to_vec());
+                        sender
+                            .send(CompletionItem {
+                                answer_up_until_now: buf.to_owned(),
+                                delta: Some(delta.to_owned()),
+                                logprobs: generated_logprobs,
+                            })
+                            .expect("sending answer should not fail");
+                    }
+                    Some(Err(e)) => {
+                        warn!(?e, "openai stream error, retrying");
+                        continue 'retry_loop;
+                    }
+                }
+            }
+
+            return Ok(buf);
+        }
+        Err(anyhow::anyhow!(
+            "failed to get response from openai".to_owned()
+        ))
     }
 
     pub async fn stream_function_call(

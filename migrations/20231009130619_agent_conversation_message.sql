@@ -17,5 +17,5 @@ CREATE TABLE agent_conversation_message (
     conversation_state TEXT NOT NULL,
     repo_ref TEXT NOT NULL,
     generated_answer_context TEXT NULL,
-    code_snippets_all TEXT NULL
+    user_context TEXT
 )

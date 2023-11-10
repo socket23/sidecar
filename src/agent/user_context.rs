@@ -159,11 +159,9 @@ impl Agent {
         // We also retroactively save the last conversation to the database
         if let Some(last_conversation) = self.conversation_messages.last() {
             // save the conversation to the DB
-            let _ = dbg!(
-                last_conversation
-                    .save_to_db(self.sql_db.clone(), self.reporef().clone())
-                    .await
-            );
+            let _ = last_conversation
+                .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                .await;
             // send it over the sender
             let _ = self.sender.send(last_conversation.clone()).await;
         }

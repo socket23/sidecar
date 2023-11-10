@@ -267,6 +267,12 @@ pub struct LlmClient {
     gpt3_5_client: Client<AzureConfig>,
     gpt3_5_turbo_instruct: Client<OpenAIConfig>,
 }
+// pub struct LlmClient {
+//     gpt4_client: Client<OpenAIConfig>,
+//     gpt432k_client: Client<OpenAIConfig>,
+//     gpt3_5_client: Client<OpenAIConfig>,
+//     gpt3_5_turbo_instruct: Client<OpenAIConfig>,
+// }
 
 impl LlmClient {
     pub fn codestory_infra() -> LlmClient {
@@ -292,6 +298,12 @@ impl LlmClient {
             gpt3_5_client: Client::with_config(gpt3_5_config),
             gpt3_5_turbo_instruct: Client::with_config(openai_config),
         }
+        // Self {
+        //     gpt4_client: Client::with_config(openai_config.clone()),
+        //     gpt432k_client: Client::with_config(openai_config.clone()),
+        //     gpt3_5_client: Client::with_config(openai_config.clone()),
+        //     gpt3_5_turbo_instruct: Client::with_config(openai_config),
+        // }
     }
 
     pub async fn stream_response(
@@ -307,7 +319,8 @@ impl LlmClient {
         if client.is_none() {
             return Err(anyhow::anyhow!("model not found"));
         }
-        let request = self.create_request(messages, functions, temperature, frequency_penalty);
+        let request =
+            self.create_request(model, messages, functions, temperature, frequency_penalty);
         dbg!(&request);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
@@ -374,7 +387,8 @@ impl LlmClient {
         if client.is_none() {
             return Err(anyhow::anyhow!("model not found"));
         }
-        let request = self.create_request(messages, functions, temperature, frequency_penalty);
+        let request =
+            self.create_request(model, messages, functions, temperature, frequency_penalty);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -438,7 +452,8 @@ impl LlmClient {
         if client.is_none() {
             return Err(anyhow::anyhow!("model not found"));
         }
-        let request = self.create_request(messages, functions, temperature, frequency_penalty);
+        let request =
+            self.create_request(model, messages, functions, temperature, frequency_penalty);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -569,8 +584,13 @@ impl LlmClient {
         if client.is_none() {
             return Err(anyhow::anyhow!("model not found"));
         }
-        let mut request =
-            self.create_request(messages, Some(functions), temperature, frequency_penalty);
+        let mut request = self.create_request(
+            model,
+            messages,
+            Some(functions),
+            temperature,
+            frequency_penalty,
+        );
         dbg!(&request);
         let mut final_function_call = llm::FunctionCall::default();
 
@@ -627,6 +647,7 @@ impl LlmClient {
 
     fn create_request(
         &self,
+        model: llm::OpenAIModel,
         messages: Vec<llm::Message>,
         functions: Option<Vec<llm::Function>>,
         temperature: f32,
@@ -674,6 +695,7 @@ impl LlmClient {
         let mut request_args_builder = request_builder_args
             .messages(request_messages)
             .temperature(temperature)
+            .model(model.model_name())
             .stream(true);
         if let Some(functions) = functions {
             let function_calling: Vec<_> = functions

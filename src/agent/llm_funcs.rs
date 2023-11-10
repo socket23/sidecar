@@ -571,7 +571,7 @@ impl LlmClient {
         }
         let mut request =
             self.create_request(messages, Some(functions), temperature, frequency_penalty);
-
+        dbg!(&request);
         let mut final_function_call = llm::FunctionCall::default();
 
         const TOTAL_CHAT_RETRIES: usize = 5;

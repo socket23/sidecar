@@ -125,6 +125,8 @@ pub fn proc_search_system_prompt<'a>(file_outline: Option<String>, file_path: &'
 
 Your job is to select keywords which should be used to search for relevant code snippets using lexical search for the file path `{file_path}`:
 
+- You are also given a user conversation history, use that to understand which keywords should be used to search for relevant code snippets
+- The user conversation is given to you to decide the keywords which can further answer the user query
 - You are given an outline of the code in the file, use the outline to select keywords
 - ALWAYS call a function, DO NOT answer the question directly, even if the query is not in English
 - Only call functions.proc with path indices that are under the PATHS heading above

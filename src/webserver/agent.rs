@@ -465,8 +465,6 @@ pub async fn followup_chat(
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
-    dbg!(&query);
-    dbg!(&user_context);
     // Here we do something special, if the user is asking a followup question
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future

@@ -16,5 +16,6 @@ CREATE TABLE agent_conversation_message (
     open_files TEXT NOT NULL,
     conversation_state TEXT NOT NULL,
     repo_ref TEXT NOT NULL,
-    generated_answer_context TEXT NULL
+    generated_answer_context TEXT NULL,
+    code_snippets_all TEXT NULL
 )

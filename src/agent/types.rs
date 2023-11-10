@@ -116,6 +116,11 @@ pub struct ConversationMessage {
     generated_answer_context: Option<String>,
     /// The symbols which were provided by the user
     user_variables: Vec<VariableInformation>,
+    /// These are all the code snippets which are present as context for this
+    /// conversation
+    /// We skip this during serialization and deserialization
+    #[serde(skip)]
+    code_snippets_all: Vec<CodeSpan>,
 }
 
 impl ConversationMessage {
@@ -140,6 +145,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
+            code_snippets_all: vec![],
         }
     }
 
@@ -168,6 +174,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
+            code_snippets_all: vec![],
         }
     }
 
@@ -192,6 +199,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
+            code_snippets_all: vec![],
         }
     }
 
@@ -216,6 +224,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
+            code_snippets_all: vec![],
         }
     }
 
@@ -295,6 +304,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
+            code_snippets_all: vec![],
         }
     }
 
@@ -307,6 +317,9 @@ impl ConversationMessage {
             .answer
             .as_ref()
             .map(|answer| answer.answer_up_until_now.to_owned());
+        dbg!("save_to_db");
+        dbg!(&query);
+        dbg!(&answer);
         let created_at = self.created_at as i64;
         let last_updated = self.last_updated as i64;
         let session_id = self.session_id.to_string();
@@ -318,10 +331,17 @@ impl ConversationMessage {
         let conversation_state = serde_json::to_string(&self.conversation_state)?;
         let repo_ref_str = repo_ref.to_string();
         let generated_answer_context = self.generated_answer_context.clone();
+        let code_snippets_all = serde_json::to_string(&self.code_snippets_all)?;
+        sqlx::query! {
+            "DELETE FROM agent_conversation_message WHERE message_id = ?;",
+            message_id,
+        }
+        .execute(&mut *tx)
+        .await?;
         sqlx::query! {
             "INSERT INTO agent_conversation_message \
-            (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, repo_ref, generated_answer_context) \
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, repo_ref, generated_answer_context, code_snippets_all) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             message_id,
             query,
             answer,
@@ -337,6 +357,7 @@ impl ConversationMessage {
             conversation_state,
             repo_ref_str,
             generated_answer_context,
+            code_snippets_all,
         }.execute(&mut *tx).await?;
         let _ = tx.commit().await?;
         Ok(())
@@ -352,7 +373,7 @@ impl ConversationMessage {
         // Now here we are going to read the previous conversations which have
         // happened for the session_id and the repository reference
         let rows = sqlx::query! {
-            "SELECT message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, generated_answer_context FROM agent_conversation_message \
+            "SELECT message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, generated_answer_context, code_snippets_all FROM agent_conversation_message \
             WHERE session_id = ? AND repo_ref = ?",
             session_id_str,
             repo_ref_str,
@@ -373,9 +394,15 @@ impl ConversationMessage {
                 let conversation_state =
                     serde_json::from_str::<ConversationState>(&record.conversation_state);
                 let answer = record.answer;
+                dbg!("load_from_db");
+                dbg!(&query);
+                dbg!(&answer);
                 let last_updated = record.last_updated;
                 let created_at = record.created_at;
                 let generated_answer_context = record.generated_answer_context;
+                let code_snippets_all = record.code_snippets_all.map(|code_snippet_all| {
+                    serde_json::from_str::<Vec<CodeSpan>>(&code_snippet_all).unwrap_or_default()
+                });
                 ConversationMessage {
                     message_id: uuid::Uuid::from_str(&message_id)
                         .expect("parsing back should work"),
@@ -400,6 +427,7 @@ impl ConversationMessage {
                     definitions_interested_in: vec![],
                     // we also leave this blank right now
                     user_variables: vec![],
+                    code_snippets_all: code_snippets_all.unwrap_or_default(),
                 }
             })
             .collect())
@@ -774,9 +802,11 @@ impl Agent {
                 // save it to the db
                 if let Some(last_conversation) = self.conversation_messages.last() {
                     // save the conversation to the DB
-                    let _ = last_conversation
-                        .save_to_db(self.sql_db.clone(), self.reporef().clone())
-                        .await;
+                    let _ = dbg!(
+                        last_conversation
+                            .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                            .await
+                    );
                     // send it over the sender
                     let _ = self.sender.send(last_conversation.clone()).await;
                 }
@@ -823,9 +853,11 @@ impl Agent {
         // We also retroactively save the last conversation to the database
         if let Some(last_conversation) = self.conversation_messages.last() {
             // save the conversation to the DB
-            let _ = last_conversation
-                .save_to_db(self.sql_db.clone(), self.reporef().clone())
-                .await;
+            let _ = dbg!(
+                last_conversation
+                    .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                    .await
+            );
             // send it over the sender
             let _ = self.sender.send(last_conversation.clone()).await;
         }
@@ -858,13 +890,6 @@ impl Agent {
         } else {
             Ok(None)
         }
-    }
-
-    pub async fn answer_using_user_context(&self) {
-        // So here we are going to do 3 things in a flow:
-        // - we try to keep the selection intact
-        // - if we have a file and we can keep all of them in the context, then we keep it (we might need to do some ordering)
-        // - if we have a code symbol, we try to keep it intact as well
     }
 
     pub async fn semantic_search(&mut self) -> anyhow::Result<Vec<CodeSpan>> {

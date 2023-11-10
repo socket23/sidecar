@@ -31,7 +31,9 @@ use super::llm_funcs::LlmClient;
 use super::types::Agent;
 
 impl Agent {
-    pub async fn truncate_user_context(&mut self, query: &str) {
+    pub async fn truncate_user_context(&mut self, messages: Vec<llm_funcs::llm::Message>) {
+        let query = query_from_messages(messages.as_slice());
+        let previous_message = messages;
         // We get different levels of context here from the user:
         // - @file full files (which we have to truncate and get relevant values)
         // - @selection selection ranges from the user (these we have to include including expanding them a bit on each side)
@@ -57,66 +59,70 @@ impl Agent {
         let user_files = user_context.file_content_map;
 
         let self_ = &*self;
-        let lexical_search_and_file = stream::iter(user_files)
-            .map(|file_value| async move {
-                let language = &file_value.language;
-                // First generate the outline for the file here
-                let language_config = self_.application.language_parsing.for_lang(language);
-                let file_content = &file_value.file_content;
-                let fs_file_path = &file_value.file_path;
-                // Now we can query gpt3.5 with the output here and aks it to
-                // generate the code search keywords which we need
-                let system_prompt = prompts::proc_search_system_prompt(
-                    language_config.map(|lang_config| {
-                        lang_config.generate_file_outline(file_content.as_bytes())
-                    }),
-                    &file_value.file_path,
-                );
-                let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
-                    prompts::proc_function_truncate(),
+        let lexical_search_and_file = stream::iter(
+            user_files
+                .into_iter()
+                .map(|user_file| (user_file, previous_message.to_vec())),
+        )
+        .map(|(file_value, previous_message)| async move {
+            let language = &file_value.language;
+            // First generate the outline for the file here
+            let language_config = self_.application.language_parsing.for_lang(language);
+            let file_content = &file_value.file_content;
+            let fs_file_path = &file_value.file_path;
+            // Now we can query gpt3.5 with the output here and aks it to
+            // generate the code search keywords which we need
+            let system_prompt = prompts::proc_search_system_prompt(
+                language_config
+                    .map(|lang_config| lang_config.generate_file_outline(file_content.as_bytes())),
+                &file_value.file_path,
+            );
+            let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
+                prompts::proc_function_truncate(),
+            )
+            .unwrap();
+            let messages = vec![llm_funcs::llm::Message::system(&system_prompt)]
+                .into_iter()
+                .chain(previous_message)
+                .chain(vec![
+                    llm_funcs::llm::Message::user(&format!(
+                        "We are working on {fs_file_path} so choose your answer for this file."
+                    )),
+                    llm_funcs::llm::Message::user("CALL A FUNCTION!. Do not answer"),
+                ])
+                .collect::<Vec<_>>();
+            let response = self_
+                .get_llm_client()
+                .stream_function_call(
+                    llm_funcs::llm::OpenAIModel::GPT4,
+                    messages,
+                    functions,
+                    0.0,
+                    Some(0.2),
                 )
-                .unwrap();
-                let response = self_
-                    .get_llm_client()
-                    .stream_function_call(
-                        llm_funcs::llm::OpenAIModel::GPT4,
-                        vec![
-                            llm_funcs::llm::Message::system(&system_prompt),
-                            llm_funcs::llm::Message::user(query),
-                            llm_funcs::llm::Message::user(&format!(
-                                "We are working on {fs_file_path} so choose your answer for this file."
-                            )),
-                            llm_funcs::llm::Message::user("CALL A FUNCTION!. Do not answer"),
-                        ],
-                        functions,
-                        0.0,
-                        Some(0.2),
-                    )
-                    .await;
-                if let Ok(Some(response)) = response {
-                    let agent_action =
-                        AgentAction::from_gpt_response(&response).map(|response| Some(response));
-                    match agent_action {
-                        Ok(Some(AgentAction::Code { query })) => {
-                            // If we match the code output we are good, otherwise
-                            // we messed up in the pipeline somewhere
-                            return Some((query, file_value));
-                        }
-                        Ok(Some(AgentAction::Proc { query, paths: _ })) => {
-                            return Some((query, file_value))
-                        }
-                        _ => {
-                            None
-                        }
+                .await;
+            if let Ok(Some(response)) = response {
+                let agent_action =
+                    AgentAction::from_gpt_response(&response).map(|response| Some(response));
+                match agent_action {
+                    Ok(Some(AgentAction::Code { query })) => {
+                        // If we match the code output we are good, otherwise
+                        // we messed up in the pipeline somewhere
+                        return Some((query, file_value));
                     }
-                } else {
-                    None
+                    Ok(Some(AgentAction::Proc { query, paths: _ })) => {
+                        return Some((query, file_value))
+                    }
+                    _ => None,
                 }
-            })
-            .buffer_unordered(10)
-            .filter_map(|value| async { value })
-            .collect::<Vec<_>>()
-            .await;
+            } else {
+                None
+            }
+        })
+        .buffer_unordered(10)
+        .filter_map(|value| async { value })
+        .collect::<Vec<_>>()
+        .await;
 
         let candidates =
             gather_code_snippets_for_answer(lexical_search_and_file, self.application.clone())
@@ -125,7 +131,7 @@ impl Agent {
                 .take(50)
                 .collect::<Vec<_>>();
         let ranked_candidates =
-            re_rank_code_snippets(query, self.get_llm_client(), candidates).await;
+            re_rank_code_snippets(&query, self.get_llm_client(), candidates).await;
         let code_snippets = merge_consecutive_chunks(ranked_candidates)
             .into_iter()
             .map(|code_snippet| {
@@ -149,17 +155,41 @@ impl Agent {
         );
 
         // Now we update the code spans which we have selected
-        let _ = self.save_code_snippets_response(query, code_snippets);
+        let _ = self.save_code_snippets_response(&query, code_snippets);
         // We also retroactively save the last conversation to the database
         if let Some(last_conversation) = self.conversation_messages.last() {
             // save the conversation to the DB
-            let _ = last_conversation
-                .save_to_db(self.sql_db.clone(), self.reporef().clone())
-                .await;
+            let _ = dbg!(
+                last_conversation
+                    .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                    .await
+            );
             // send it over the sender
             let _ = self.sender.send(last_conversation.clone()).await;
         }
     }
+}
+
+fn query_from_messages(messages: &[llm_funcs::llm::Message]) -> String {
+    messages
+        .iter()
+        .map(|message| match message {
+            llm_funcs::llm::Message::PlainText {
+                role: llm_funcs::llm::Role::User,
+                content,
+            } => {
+                format!("User: {}", content)
+            }
+            llm_funcs::llm::Message::PlainText {
+                role: llm_funcs::llm::Role::Assistant,
+                content,
+            } => {
+                format!("Assistant: {}", content)
+            }
+            _ => "".to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 impl VariableInformation {
@@ -240,7 +270,7 @@ async fn re_rank_code_snippets(
             None
         }
     })
-    .buffer_unordered(10)
+    .buffer_unordered(20)
     .collect::<Vec<_>>()
     .await
     .into_iter()

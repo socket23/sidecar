@@ -697,9 +697,11 @@ impl Agent {
         sender: tokio::sync::mpsc::UnboundedSender<Answer>,
     ) -> Result<String> {
         if self.user_context.is_some() {
-            let _ = self
-                .truncate_user_context(self.get_query().expect("query to be present").as_str())
-                .await;
+            let message = self
+                .utter_history(Some(2))
+                .map(|message| message.to_owned())
+                .collect::<Vec<_>>();
+            let _ = self.truncate_user_context(message).await;
         }
         let context = self.answer_context(path_aliases).await?;
         let system_prompt = match self.get_last_conversation_message_agent_state() {
@@ -741,7 +743,7 @@ impl Agent {
         };
         let system_message = llm_funcs::llm::Message::system(&system_prompt);
         let history = {
-            let h = self.utter_history().collect::<Vec<_>>();
+            let h = self.utter_history(None).collect::<Vec<_>>();
             let system_headroom = tiktoken_rs::num_tokens_from_messages(
                 self.model.tokenizer,
                 &[(&system_message).into()],
@@ -761,7 +763,7 @@ impl Agent {
                 llm::OpenAIModel::get_model(self.model.model_name)?,
                 messages,
                 None,
-                0.0,
+                0.1,
                 None,
                 sender,
             )
@@ -774,14 +776,19 @@ impl Agent {
         Ok(reply)
     }
 
-    fn utter_history(&self) -> impl Iterator<Item = llm_funcs::llm::Message> + '_ {
+    fn utter_history(
+        &self,
+        size: Option<usize>,
+    ) -> impl Iterator<Item = llm_funcs::llm::Message> + '_ {
         const ANSWER_MAX_HISTORY_SIZE: usize = 10;
 
-        let mut last_message = true;
         self.conversation_messages
             .iter()
             .rev()
-            .take(ANSWER_MAX_HISTORY_SIZE)
+            .take(
+                size.map(|size| std::cmp::min(ANSWER_MAX_HISTORY_SIZE, size))
+                    .unwrap_or(ANSWER_MAX_HISTORY_SIZE),
+            )
             .rev()
             .flat_map(|conversation_message| {
                 let query = Some(llm_funcs::llm::Message::PlainText {

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, generated_answer_context, code_snippets_all FROM agent_conversation_message WHERE session_id = ? AND repo_ref = ?",
+  "query": "SELECT message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, generated_answer_context, user_context FROM agent_conversation_message WHERE session_id = ? AND repo_ref = ?",
   "describe": {
     "columns": [
       {
@@ -74,7 +74,7 @@
         "type_info": "Text"
       },
       {
-        "name": "code_snippets_all",
+        "name": "user_context",
         "ordinal": 14,
         "type_info": "Text"
       }
@@ -100,5 +100,5 @@
       true
     ]
   },
-  "hash": "17745011d4c2595e568489e0e75ba0761a314f01717bf4bc9246567c632447f2"
+  "hash": "89e8a76436d3395071a2cf5608804c8a2c7ebc9d73bde890f3a2ff79b2ebf309"
 }

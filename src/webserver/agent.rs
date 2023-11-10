@@ -1,6 +1,7 @@
 use super::agent_stream::generate_agent_stream;
 use super::types::json;
 use anyhow::Context;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use axum::response::IntoResponse;
@@ -373,10 +374,43 @@ pub struct FileContentValue {
     pub language: String,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
 pub struct UserContext {
     pub variables: Vec<VariableInformation>,
     pub file_content_map: Vec<FileContentValue>,
+}
+
+impl UserContext {
+    fn merge_from_previous(mut self, previous: Option<&UserContext>) -> Self {
+        // Here we try and merge the user contexts together, if we have something
+        match previous {
+            Some(previous_user_context) => {
+                let previous_file_content = &previous_user_context.file_content_map;
+                let previous_user_variables = &previous_user_context.variables;
+                // We want to merge the variables together, but keep the unique
+                // ones only
+                // TODO(skcd): We should be filtering on variables here, but for
+                // now we ball 🖲️
+                self.variables
+                    .extend(previous_user_variables.to_vec().into_iter());
+                // We want to merge the file content map together, and only keep
+                // the unique ones and the new file content map we are getting if
+                // there are any repetitions
+                let mut file_content_set: HashSet<String> = HashSet::new();
+                self.file_content_map.iter().for_each(|file_content| {
+                    file_content_set.insert(file_content.file_path.to_owned());
+                });
+                // Look at the previous ones and add those which are missing
+                previous_file_content.into_iter().for_each(|file_content| {
+                    if !file_content_set.contains(&file_content.file_path) {
+                        self.file_content_map.push(file_content.clone());
+                    }
+                });
+                self
+            }
+            None => self,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -474,12 +508,18 @@ pub async fn followup_chat(
         ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)
             .await
             .expect("loading from db to never fail");
+    let last_user_context = previous_messages
+        .last()
+        .map(|previous_message| previous_message.get_user_context());
+
+    let user_context = user_context.merge_from_previous(last_user_context);
 
     let mut conversation_message = ConversationMessage::general_question(
         thread_id,
         crate::agent::types::AgentState::FollowupChat,
         query.to_owned(),
     );
+    conversation_message.set_user_context(user_context.clone());
 
     // We add all the paths which we are going to get into the conversation message
     // so that we can use that for the next followup question

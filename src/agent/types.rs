@@ -116,11 +116,10 @@ pub struct ConversationMessage {
     generated_answer_context: Option<String>,
     /// The symbols which were provided by the user
     user_variables: Vec<VariableInformation>,
-    /// These are all the code snippets which are present as context for this
-    /// conversation
-    /// We skip this during serialization and deserialization
+    /// The context provided by the user, this is also carried over from the
+    /// previous user conversations
     #[serde(skip)]
-    code_snippets_all: Vec<CodeSpan>,
+    user_context: UserContext,
 }
 
 impl ConversationMessage {
@@ -145,7 +144,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
-            code_snippets_all: vec![],
+            user_context: Default::default(),
         }
     }
 
@@ -174,7 +173,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
-            code_snippets_all: vec![],
+            user_context: Default::default(),
         }
     }
 
@@ -199,7 +198,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
-            code_snippets_all: vec![],
+            user_context: Default::default(),
         }
     }
 
@@ -224,7 +223,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
-            code_snippets_all: vec![],
+            user_context: Default::default(),
         }
     }
 
@@ -273,6 +272,14 @@ impl ConversationMessage {
         });
     }
 
+    pub fn get_user_context(&self) -> &UserContext {
+        &self.user_context
+    }
+
+    pub fn set_user_context(&mut self, user_context: UserContext) {
+        self.user_context = user_context;
+    }
+
     pub fn set_generated_answer_context(&mut self, answer_context: String) {
         self.generated_answer_context = Some(answer_context);
     }
@@ -304,7 +311,7 @@ impl ConversationMessage {
             generated_answer_context: None,
             definitions_interested_in: vec![],
             user_variables: vec![],
-            code_snippets_all: vec![],
+            user_context: Default::default(),
         }
     }
 
@@ -317,9 +324,6 @@ impl ConversationMessage {
             .answer
             .as_ref()
             .map(|answer| answer.answer_up_until_now.to_owned());
-        dbg!("save_to_db");
-        dbg!(&query);
-        dbg!(&answer);
         let created_at = self.created_at as i64;
         let last_updated = self.last_updated as i64;
         let session_id = self.session_id.to_string();
@@ -331,7 +335,7 @@ impl ConversationMessage {
         let conversation_state = serde_json::to_string(&self.conversation_state)?;
         let repo_ref_str = repo_ref.to_string();
         let generated_answer_context = self.generated_answer_context.clone();
-        let code_snippets_all = serde_json::to_string(&self.code_snippets_all)?;
+        let user_context = serde_json::to_string(&self.user_context)?;
         sqlx::query! {
             "DELETE FROM agent_conversation_message WHERE message_id = ?;",
             message_id,
@@ -340,7 +344,7 @@ impl ConversationMessage {
         .await?;
         sqlx::query! {
             "INSERT INTO agent_conversation_message \
-            (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, repo_ref, generated_answer_context, code_snippets_all) \
+            (message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, repo_ref, generated_answer_context, user_context) \
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             message_id,
             query,
@@ -357,7 +361,7 @@ impl ConversationMessage {
             conversation_state,
             repo_ref_str,
             generated_answer_context,
-            code_snippets_all,
+            user_context,
         }.execute(&mut *tx).await?;
         let _ = tx.commit().await?;
         Ok(())
@@ -373,7 +377,7 @@ impl ConversationMessage {
         // Now here we are going to read the previous conversations which have
         // happened for the session_id and the repository reference
         let rows = sqlx::query! {
-            "SELECT message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, generated_answer_context, code_snippets_all FROM agent_conversation_message \
+            "SELECT message_id, query, answer, created_at, last_updated, session_id, steps_taken, agent_state, file_paths, code_spans, user_selected_code_span, open_files, conversation_state, generated_answer_context, user_context FROM agent_conversation_message \
             WHERE session_id = ? AND repo_ref = ?",
             session_id_str,
             repo_ref_str,
@@ -394,15 +398,16 @@ impl ConversationMessage {
                 let conversation_state =
                     serde_json::from_str::<ConversationState>(&record.conversation_state);
                 let answer = record.answer;
-                dbg!("load_from_db");
-                dbg!(&query);
-                dbg!(&answer);
                 let last_updated = record.last_updated;
                 let created_at = record.created_at;
                 let generated_answer_context = record.generated_answer_context;
-                let code_snippets_all = record.code_snippets_all.map(|code_snippet_all| {
-                    serde_json::from_str::<Vec<CodeSpan>>(&code_snippet_all).unwrap_or_default()
-                });
+                let user_context = record
+                    .user_context
+                    .map(|user_context| serde_json::from_str::<UserContext>(&user_context))
+                    .transpose()
+                    .unwrap_or_default()
+                    .unwrap_or_default();
+                dbg!(&user_context);
                 ConversationMessage {
                     message_id: uuid::Uuid::from_str(&message_id)
                         .expect("parsing back should work"),
@@ -427,7 +432,7 @@ impl ConversationMessage {
                     definitions_interested_in: vec![],
                     // we also leave this blank right now
                     user_variables: vec![],
-                    code_snippets_all: code_snippets_all.unwrap_or_default(),
+                    user_context,
                 }
             })
             .collect())

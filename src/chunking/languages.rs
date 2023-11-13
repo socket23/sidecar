@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use blake3::Hash;
-
-use crate::{agent::llm_funcs::llm::Parameter, chunking::types::FunctionNodeInformation};
+use crate::chunking::types::FunctionNodeInformation;
 
 use super::{
     javascript::javascript_language_config,

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 /// We define all the helper stuff required here for the LLM to be able to do
 /// things.
 use async_openai::config::AzureConfig;
@@ -500,6 +502,7 @@ impl LlmClient {
         model: llm::OpenAIModel,
         prompt: &str,
         sender: tokio::sync::mpsc::UnboundedSender<CompletionItem>,
+        logit_bias: Option<HashMap<String, serde_json::Value>>,
     ) -> anyhow::Result<String> {
         let client = self.get_model_openai(&model);
         if client.is_none() {
@@ -509,14 +512,26 @@ impl LlmClient {
 
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = "".to_owned();
-            let completion_request = CreateCompletionRequestArgs::default()
-                .stream(true)
-                .model(model.model_name())
-                .temperature(0.1)
-                .prompt(prompt)
-                .logprobs(2)
-                .build()
-                .unwrap();
+            let completion_request = if let Some(ref logit_bias) = logit_bias {
+                CreateCompletionRequestArgs::default()
+                    .stream(true)
+                    .model(model.model_name())
+                    .temperature(0.1)
+                    .prompt(prompt)
+                    .logprobs(1)
+                    .logit_bias(logit_bias.clone())
+                    .build()
+                    .unwrap()
+            } else {
+                CreateCompletionRequestArgs::default()
+                    .stream(true)
+                    .model(model.model_name())
+                    .temperature(0.1)
+                    .prompt(prompt)
+                    .logprobs(1)
+                    .build()
+                    .unwrap()
+            };
             let completion_stream = client
                 .expect("is_none")
                 .completions()

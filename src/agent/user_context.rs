@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use anyhow::Result;
 use futures::stream;
 use futures::StreamExt;
 use rayon::iter::ParallelIterator;
@@ -232,11 +231,20 @@ async fn re_rank_code_snippets(
             &candidate.language,
             query,
         );
+        // we also send a logit-bias to the request, since we want to guard
+        // against the model generating yes and no and only those values
         let answer = llm_client
             .stream_completion_call(
                 llm_funcs::llm::OpenAIModel::GPT3_5Instruct,
                 &completion_request,
                 sender,
+                Some(
+                    // these are the yes and no tokens we get from the cl100k_base tokenizer
+                    // for the gpt family of models
+                    vec![("9642".to_owned(), 1.into()), ("2822".to_owned(), 1.into())]
+                        .into_iter()
+                        .collect(),
+                ),
             )
             .await;
         let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);

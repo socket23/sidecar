@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::Context;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-use tracing::info;
 
 use super::state::RepoError;
 

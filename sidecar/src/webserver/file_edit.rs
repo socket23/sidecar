@@ -9,8 +9,9 @@ use crate::agent::prompts::diff_accept_prompt;
 use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
+use crate::chunking::text_document::Range;
 
-use super::types::Result;
+use super::types::{json, ApiResponse, Result};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EditFileRequest {
@@ -18,7 +19,28 @@ pub struct EditFileRequest {
     pub file_content: String,
     pub new_content: String,
     pub language: String,
+    pub user_query: String,
+    pub session_id: String,
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum EditFileResponse {
+    Message {
+        message: String,
+    },
+    Action {
+        action: DiffActionResponse,
+        range: Range,
+        content: String,
+        previous_content: String,
+    },
+    TextEdit {
+        range: Range,
+        content: String,
+    },
+}
+
+impl ApiResponse for EditFileResponse {}
 
 pub async fn file_edit(
     Extension(app): Extension<Application>,
@@ -27,6 +49,8 @@ pub async fn file_edit(
         file_content,
         language,
         new_content,
+        user_query,
+        session_id,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
     // Here we have to first check if the new content is tree-sitter valid, if
@@ -41,7 +65,17 @@ pub async fn file_edit(
         app.language_parsing.clone(),
     )
     .await;
-    Ok(vec![])
+    if let None = file_diff_content {
+        return Ok(json(EditFileResponse::Message {
+            message: "The file diff is not valid".to_owned(),
+        }));
+    }
+    // After generating the git diff we want to send back the responses to the
+    // user depending on what edit information we get, we can stream this to the
+    // user so they know the agent is working on some action and it will show up
+    // as edits on the editor
+    let text_edits = process_file_lines_to_gpt(file_diff_content.unwrap(), &user_query);
+    unimplemented!();
 }
 
 pub async fn generate_file_diff(
@@ -447,6 +481,62 @@ impl DiffActionResponse {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct FileLineContent {
+    pub index: usize,
+    pub content: String,
+    pub line_content_type: LineContentType,
+}
+
+impl FileLineContent {
+    pub fn is_diff_start(&self) -> bool {
+        matches!(self.line_content_type, LineContentType::DiffStartMarker)
+    }
+
+    pub fn is_diff_end(&self) -> bool {
+        matches!(self.line_content_type, LineContentType::DiffEndMarker)
+    }
+
+    pub fn is_diff_separator(&self) -> bool {
+        matches!(self.line_content_type, LineContentType::DiffSeparator)
+    }
+
+    pub fn is_line(&self) -> bool {
+        matches!(self.line_content_type, LineContentType::FileLine)
+    }
+
+    pub fn from_lines(lines: Vec<String>) -> Vec<Self> {
+        let mut index = 0;
+        lines
+            .into_iter()
+            .map(|content| FileLineContent {
+                index,
+                line_content_type: {
+                    if content.contains("<<<<<<<") {
+                        LineContentType::DiffStartMarker
+                    } else if content.contains("=======") {
+                        LineContentType::DiffSeparator
+                    } else if content.contains(">>>>>>>") {
+                        LineContentType::DiffEndMarker
+                    } else {
+                        index = index + 1;
+                        LineContentType::FileLine
+                    }
+                },
+                content,
+            })
+            .collect::<Vec<_>>()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum LineContentType {
+    FileLine,
+    DiffStartMarker,
+    DiffEndMarker,
+    DiffSeparator,
+}
+
 /// We will use gpt to generate the lines of the code which should be applied
 /// to the delta using llm (this is like the machine version of doing git diff(accept/reject))
 async fn process_file_lines_to_gpt(file_lines: Vec<String>, user_query: &str) -> Vec<String> {
@@ -457,25 +547,33 @@ async fn process_file_lines_to_gpt(file_lines: Vec<String>, user_query: &str) ->
     // and 5 lines of prefix to the LLM to ask it to perform the git operation
     // and then use that to build up the file thats how we can solve this
     let mut initial_index = 0;
-    let total_lines = file_lines.len();
-    dbg!(&file_lines);
+    let file_lines_to_document = FileLineContent::from_lines(file_lines);
+    let total_lines = file_lines_to_document.len();
     let mut total_file_lines: Vec<String> = vec![];
     while initial_index < total_lines {
-        let line = file_lines[initial_index].to_owned();
-        if line.contains("<<<<<<<") {
+        let line = file_lines_to_document[initial_index].clone();
+        if line.is_diff_start() {
             let mut current_changes = vec![];
             let mut current_iteration_index = initial_index + 1;
-            while !file_lines[current_iteration_index].contains("=======") {
+            while !file_lines_to_document[current_iteration_index].is_diff_separator() {
                 // we have to keep going here
-                current_changes.push(file_lines[current_iteration_index].to_owned());
+                current_changes.push(
+                    file_lines_to_document[current_iteration_index]
+                        .content
+                        .to_owned(),
+                );
                 current_iteration_index = current_iteration_index + 1;
             }
             // Now we are at the index which has ======, so move to the next one
             current_iteration_index = current_iteration_index + 1;
             let mut incoming_changes = vec![];
-            while !file_lines[current_iteration_index].contains(">>>>>>>") {
+            while !file_lines_to_document[current_iteration_index].is_diff_end() {
                 // we have to keep going here
-                incoming_changes.push(file_lines[current_iteration_index].to_owned());
+                incoming_changes.push(
+                    file_lines_to_document[current_iteration_index]
+                        .content
+                        .to_owned(),
+                );
                 current_iteration_index = current_iteration_index + 1;
             }
             // This is where we will call the agent out and ask it to decide
@@ -513,7 +611,9 @@ async fn process_file_lines_to_gpt(file_lines: Vec<String>, user_query: &str) ->
         } else {
             // just insert the line here and then push the current line to the
             // total_file_lines
-            total_file_lines.push(line);
+            // we know here that it will be a normal line, so we can just add
+            // the content back
+            total_file_lines.push(line.content);
             initial_index = initial_index + 1;
         }
     }

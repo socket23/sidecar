@@ -54,3 +54,7 @@ chunk_cache: file_path, repo_ref, chunk_hash, line_start, line_end, tantivy_cach
 
 ## Gotcha's
 - If qdrant explodes while indexing, you might need to increase the ulimit on your machine. You can do that by running: sudo ulimit -n 16535
+
+
+### Difftastic??
+- Difftastic is a fork of https://github.com/wilfred/difftastic which we are using to get the tree sitter based diffs

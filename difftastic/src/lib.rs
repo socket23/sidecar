@@ -40,6 +40,9 @@ mod parse;
 mod summary;
 mod version;
 
+/// We expose this to use in the sidecar if required
+pub use display::side_by_side::LineInformation;
+
 #[macro_use]
 extern crate log;
 
@@ -70,6 +73,7 @@ use crate::parse::syntax;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+use std::ffi::OsStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{env, path::Path};
@@ -102,6 +106,39 @@ fn reset_sigpipe() {
 #[cfg(not(unix))]
 fn reset_sigpipe() {
     // Do nothing.
+}
+
+/// The entry point for sidecar to call into the library
+pub fn generate_sidecar_diff(
+    original_content: &str,
+    llm_content: &str,
+    file_extension: &str,
+) -> (Vec<LineInformation>, Vec<LineInformation>) {
+    let display_options = DisplayOptions::default()
+        .set_context_lines(10000)
+        .set_display_width(10000);
+    let diff_result = diff_file_content(
+        "output",
+        None,
+        &FileArgument::from_path_argument(OsStr::new(&format!("original{file_extension}"))),
+        &FileArgument::from_path_argument(OsStr::new(&format!("llm{file_extension}"))),
+        original_content,
+        llm_content,
+        &display_options,
+        &DiffOptions::default(),
+        &[],
+    );
+    crate::display::side_by_side::print(
+        diff_result.hunks.as_slice(),
+        &display_options,
+        &diff_result.display_path,
+        None,
+        &diff_result.file_format,
+        original_content,
+        llm_content,
+        &diff_result.lhs_positions,
+        &diff_result.rhs_positions,
+    )
 }
 
 /// The entrypoint.

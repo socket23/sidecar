@@ -112,6 +112,69 @@ fn display_single_column(
     result
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum LineNumberStatus {
+    Removed,
+    Added,
+    Unchanged,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum LineInformation {
+    // If the line is present on either side, we will get the present flow and
+    // have information about the line here
+    Present {
+        line_number: usize,
+        line_number_status: LineNumberStatus,
+    },
+    // If the line is not present, or if its blank then we get NotPresent
+    NotPresent,
+}
+
+impl LineInformation {
+    fn get_line_number_status(line_number: usize, is_novel: bool, side: Side) -> Self {
+        LineInformation::Present {
+            line_number: line_number,
+            line_number_status: {
+                if is_novel {
+                    match side {
+                        Side::Left => LineNumberStatus::Removed,
+                        Side::Right => LineNumberStatus::Added,
+                    }
+                } else {
+                    LineNumberStatus::Unchanged
+                }
+            },
+        }
+    }
+}
+
+fn display_line_nums_in_sidecar_format(
+    lhs_line_num: Option<LineNumber>,
+    rhs_line_num: Option<LineNumber>,
+    source_dims: &SourceDimensions,
+    display_options: &DisplayOptions,
+    lhs_has_novel: bool,
+    rhs_has_novel: bool,
+    prev_lhs_line_num: Option<LineNumber>,
+    prev_rhs_line_num: Option<LineNumber>,
+) -> (LineInformation, LineInformation) {
+    let display_lhs_line_num: LineInformation = match lhs_line_num {
+        Some(line_num) => {
+            LineInformation::get_line_number_status(line_num.as_usize(), lhs_has_novel, Side::Left)
+        }
+        None => LineInformation::NotPresent,
+    };
+    let display_rhs_line_num: LineInformation = match rhs_line_num {
+        Some(line_num) => {
+            LineInformation::get_line_number_status(line_num.as_usize(), rhs_has_novel, Side::Right)
+        }
+        None => LineInformation::NotPresent,
+    };
+
+    (display_lhs_line_num, display_rhs_line_num)
+}
+
 fn display_line_nums(
     lhs_line_num: Option<LineNumber>,
     rhs_line_num: Option<LineNumber>,
@@ -145,39 +208,6 @@ fn display_line_nums(
             Side::Right,
             display_options.use_color,
         ),
-    };
-
-    (display_lhs_line_num, display_rhs_line_num)
-}
-
-fn display_line_nums_in_readable_format(
-    lhs_line_num: Option<LineNumber>,
-    rhs_line_num: Option<LineNumber>,
-    source_dims: &SourceDimensions,
-    display_options: &DisplayOptions,
-    lhs_has_novel: bool,
-    rhs_has_novel: bool,
-    prev_lhs_line_num: Option<LineNumber>,
-    prev_rhs_line_num: Option<LineNumber>,
-) -> (
-    Option<(String, Option<bool>)>,
-    Option<(String, Option<bool>)>,
-) {
-    let display_lhs_line_num: Option<(String, Option<bool>)> = match lhs_line_num {
-        Some(line_num) => {
-            let s = format_line_num_padded(line_num, source_dims.lhs_line_nums_width);
-            Some(get_line_number_status(&s, lhs_has_novel, Side::Left))
-            // apply_line_number_color(&s, lhs_has_novel, Side::Left, display_options)
-        }
-        None => None,
-    };
-    let display_rhs_line_num: Option<(String, Option<bool>)> = match rhs_line_num {
-        Some(line_num) => {
-            let s = format_line_num_padded(line_num, source_dims.rhs_line_nums_width);
-            Some(get_line_number_status(&s, lhs_has_novel, Side::Right))
-            // apply_line_number_color(&s, rhs_has_novel, Side::Right, display_options)
-        }
-        None => None,
     };
 
     (display_lhs_line_num, display_rhs_line_num)
@@ -363,7 +393,7 @@ pub fn print(
     rhs_src: &str,
     lhs_mps: &[MatchedPos],
     rhs_mps: &[MatchedPos],
-) {
+) -> (Vec<LineInformation>, Vec<LineInformation>) {
     let (lhs_colored_lines, rhs_colored_lines) = if display_options.use_color {
         (
             apply_colors(
@@ -391,32 +421,10 @@ pub fn print(
     };
 
     if lhs_src.is_empty() {
-        for line in display_single_column(
-            display_path,
-            old_path,
-            file_format,
-            &rhs_colored_lines,
-            Side::Right,
-            display_options,
-        ) {
-            print!("{}", line);
-        }
-        println!();
-        return;
+        unreachable!();
     }
     if rhs_src.is_empty() {
-        for line in display_single_column(
-            display_path,
-            old_path,
-            file_format,
-            &lhs_colored_lines,
-            Side::Left,
-            display_options,
-        ) {
-            print!("{}", line);
-        }
-        println!();
-        return;
+        unreachable!();
     }
 
     // TODO: this is largely duplicating the `apply_colors` logic.
@@ -444,6 +452,9 @@ pub fn print(
 
     let mut left_line_values = vec![];
     let mut right_line_values = vec![];
+
+    let mut left_line_information_vec: Vec<LineInformation> = vec![];
+    let mut right_line_information_vec: Vec<LineInformation> = vec![];
 
     for (i, hunk) in hunks.iter().enumerate() {
         println!(
@@ -506,16 +517,17 @@ pub fn print(
                 prev_rhs_line_num,
             );
 
-            let (left_value, right_value) = display_line_nums_in_readable_format(
-                *lhs_line_num,
-                *rhs_line_num,
-                &source_dims,
-                display_options,
-                lhs_line_novel,
-                rhs_line_novel,
-                prev_lhs_line_num,
-                prev_rhs_line_num,
-            );
+            let (left_line_information, right_line_information) =
+                display_line_nums_in_sidecar_format(
+                    *lhs_line_num,
+                    *rhs_line_num,
+                    &source_dims,
+                    display_options,
+                    lhs_line_novel,
+                    rhs_line_novel,
+                    prev_lhs_line_num,
+                    prev_rhs_line_num,
+                );
 
             let show_both = matches!(
                 display_options.display_mode,
@@ -588,7 +600,7 @@ pub fn print(
                         lhs_line.unwrap_or_else(|| " ".repeat(source_dims.content_width));
                     let rhs_line = rhs_line.unwrap_or_else(|| "".into());
                     let lhs_num: String = if i == 0 {
-                        left_line_values.push(left_value.clone());
+                        left_line_information_vec.push(left_line_information.clone());
                         display_lhs_line_num.clone()
                     } else {
                         let mut s = format_missing_line_num(
@@ -605,6 +617,13 @@ pub fn print(
                                 Side::Left,
                                 display_options,
                             );
+                            left_line_information_vec.push(
+                                LineInformation::get_line_number_status(
+                                    line_num.as_usize(),
+                                    lhs_lines_with_novel.contains(line_num),
+                                    Side::Left,
+                                ),
+                            );
                             left_line_values.push(Some(get_line_number_status(
                                 &s,
                                 lhs_lines_with_novel.contains(line_num),
@@ -614,7 +633,7 @@ pub fn print(
                         s
                     };
                     let rhs_num: String = if i == 0 {
-                        right_line_values.push(right_value.clone());
+                        right_line_information_vec.push(right_line_information.clone());
                         display_rhs_line_num.clone()
                     } else {
                         let mut s = format_missing_line_num(
@@ -631,6 +650,13 @@ pub fn print(
                                 Side::Right,
                                 display_options,
                             );
+                            right_line_information_vec.push(
+                                LineInformation::get_line_number_status(
+                                    line_num.as_usize(),
+                                    rhs_lines_with_novel.contains(line_num),
+                                    Side::Right,
+                                ),
+                            );
                             right_line_values.push(Some(get_line_number_status(
                                 &s,
                                 rhs_lines_with_novel.contains(line_num),
@@ -641,7 +667,7 @@ pub fn print(
                     };
 
                     // print the left and right line numbers here
-                    println!("left: {} right: {}", lhs_num, rhs_num);
+                    // println!("left: {} right: {}", lhs_num, rhs_num);
                     // println!("{}{}{}{}{}", lhs_num, lhs_line, SPACER, rhs_num, rhs_line);
                 }
             }
@@ -653,10 +679,11 @@ pub fn print(
                 prev_rhs_line_num = *rhs_line_num;
             }
         }
-        println!("{:?}", left_line_values);
-        println!("{:?}", right_line_values);
-        println!();
+        // println!("{:?}", left_line_values);
+        // println!("{:?}", right_line_values);
+        // println!();
     }
+    (left_line_information_vec, right_line_information_vec)
 }
 
 #[cfg(test)]

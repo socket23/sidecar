@@ -60,9 +60,9 @@ impl TreeSitterParser {
                 cpp_build.file(dir.join(file));
             }
 
-            if rustc_supports_whole_archive {
-                cpp_build.link_lib_modifier("+whole-archive");
-            }
+            // if rustc_supports_whole_archive {
+            //     cpp_build.link_lib_modifier("+whole-archive");
+            // }
 
             cpp_build.compile(&format!("{}-cpp", self.name));
         }
@@ -76,9 +76,9 @@ impl TreeSitterParser {
             build.file(dir.join(file));
         }
 
-        if rustc_supports_whole_archive {
-            build.link_lib_modifier("+whole-archive");
-        }
+        // if rustc_supports_whole_archive {
+        //     build.link_lib_modifier("+whole-archive");
+        // }
 
         build.compile(self.name);
     }

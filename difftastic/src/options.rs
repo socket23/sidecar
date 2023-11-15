@@ -61,6 +61,18 @@ impl Default for DisplayOptions {
     }
 }
 
+impl DisplayOptions {
+    pub fn set_display_width(mut self, display_width: usize) -> Self {
+        self.display_width = display_width;
+        self
+    }
+
+    pub fn set_context_lines(mut self, num_context_lines: u32) -> Self {
+        self.num_context_lines = num_context_lines;
+        self
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DiffOptions {
     pub graph_limit: usize,
@@ -292,7 +304,7 @@ When multiple overrides are specified, the first matching override wins."))
         .arg_required_else_help(true)
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum DisplayMode {
     Inline,
     SideBySide,

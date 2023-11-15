@@ -112,14 +112,32 @@ fn display_single_column(
     result
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum LineNumberStatus {
     Removed,
     Added,
     Unchanged,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+impl LineNumberStatus {
+    pub fn unchanged(&self) -> bool {
+        matches!(self, LineNumberStatus::Unchanged)
+    }
+
+    pub fn added(&self) -> bool {
+        matches!(self, LineNumberStatus::Added)
+    }
+
+    pub fn removed(&self) -> bool {
+        matches!(self, LineNumberStatus::Removed)
+    }
+
+    pub fn changed(&self) -> bool {
+        !self.unchanged()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum LineInformation {
     // If the line is present on either side, we will get the present flow and
     // have information about the line here
@@ -145,6 +163,46 @@ impl LineInformation {
                     LineNumberStatus::Unchanged
                 }
             },
+        }
+    }
+
+    pub fn get_line_number(&self) -> Option<usize> {
+        match self {
+            LineInformation::Present {
+                line_number,
+                line_number_status: _,
+            } => Some(*line_number),
+            LineInformation::NotPresent => None,
+        }
+    }
+
+    pub fn not_present(&self) -> bool {
+        match self {
+            LineInformation::Present {
+                line_number: _,
+                line_number_status: _,
+            } => false,
+            LineInformation::NotPresent => true,
+        }
+    }
+
+    pub fn present(&self) -> bool {
+        match self {
+            LineInformation::Present {
+                line_number: _,
+                line_number_status: _,
+            } => true,
+            LineInformation::NotPresent => false,
+        }
+    }
+
+    pub fn get_line_status(&self) -> Option<LineNumberStatus> {
+        match self {
+            LineInformation::Present {
+                line_number: _,
+                line_number_status,
+            } => Some(line_number_status.clone()),
+            LineInformation::NotPresent => None,
         }
     }
 }

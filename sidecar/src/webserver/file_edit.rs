@@ -71,7 +71,7 @@ pub async fn file_edit(
     )
     .await;
     if let None = file_diff_content {
-        sender.send(EditFileResponse::Message {
+        let _ = sender.send(EditFileResponse::Message {
             message: "The file diff is not valid".to_owned(),
         });
     }
@@ -165,7 +165,6 @@ async fn parse_difftastic_output(
     right_lines_information: Vec<LineInformation>,
 ) -> Vec<String> {
     assert_eq!(left_lines_information.len(), right_lines_information.len());
-    let mut final_output: Vec<String> = vec![];
     let mut iteration_index = 0;
     let left_lines_limit = left_lines_information.len();
     let mut final_lines_file: Vec<String> = vec![];

@@ -35,8 +35,6 @@ async fn main() {
     let right =
         std::fs::read_to_string("/Users/skcd/scratch/sidecar/sidecar/src/bin/testing2.ts").unwrap();
     let output = difftastic::generate_sidecar_diff(&left, &right, ".ts");
-    dbg!(&output.0);
-    dbg!(&output.1);
     let output = parse_difft_output(left, right, output.0, output.1).await;
 
     let user_query = "Can you add the logger to the cschat class?";

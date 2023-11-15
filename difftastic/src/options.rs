@@ -23,7 +23,7 @@ pub const DEFAULT_PARSE_ERROR_LIMIT: usize = 0;
 
 pub const DEFAULT_TAB_WIDTH: usize = 8;
 
-const USAGE: &str = concat!(env!("CARGO_BIN_NAME"), " [OPTIONS] OLD-PATH NEW-PATH");
+const USAGE: &str = concat!("difft", " [OPTIONS] OLD-PATH NEW-PATH");
 
 #[derive(Debug, Clone, Copy)]
 pub enum ColorOutput {
@@ -93,15 +93,15 @@ fn app() -> clap::Command<'static> {
         .after_long_help(concat!(
             "You can compare two files with difftastic by specifying them as arguments.\n\n",
             "$ ",
-            env!("CARGO_BIN_NAME"),
+            "difft",
             " old.js new.js\n\n",
             "You can also use directories as arguments. Difftastic will walk both directories and compare files with matching names.\n\n",
             "$ ",
-            env!("CARGO_BIN_NAME"),
+            "difft",
             " old/ new/\n\n",
             "If you have a file with conflict markers, you can pass it as a single argument. Difftastic will diff the two conflicting file states.\n\n",
             "$ ",
-            env!("CARGO_BIN_NAME"),
+            "difft",
             " file_with_conflicts.js\n\n",
             "Difftastic can also be invoked with 7 arguments in the format that GIT_EXTERNAL_DIFF expects.\n\n",
             "See the full manual at: https://difftastic.wilfred.me.uk/")
@@ -230,13 +230,13 @@ json: Output the results as a machine-readable JSON array with an element per fi
                 .value_name("GLOB:NAME")
                 .help(concat!("Associate this glob pattern with this language, overriding normal language detection. For example:
 
-$ ", env!("CARGO_BIN_NAME"), " --override='*.c:C++' old.c new.c
+$ ", "difft", " --override='*.c:C++' old.c new.c
 
 See --list-languages for the list of language names. Language names are matched case insensitively. Overrides may also specify the language \"text\" to treat a file as plain text.
 
 This argument may be given more than once. For example:
 
-$ ", env!("CARGO_BIN_NAME"), " --override='CustomFile:json' --override='*.c:text' old.c new.c
+$ ", "difft", " --override='CustomFile:json' --override='*.c:text' old.c new.c
 
 To configure multiple overrides using environment variables, difftastic also accepts DFT_OVERRIDE_1 up to DFT_OVERRIDE_9.
 

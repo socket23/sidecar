@@ -42,7 +42,7 @@ async fn main() {
     let user_query = "Can you add the logger to the cschat class?";
 
     // let file_lines = parse_difft_output(left, right).await;
-    // let final_response = process_file_lines_to_gpt(file_lines, user_query).await;
+    let final_response = process_file_lines_to_gpt(output, user_query).await;
     // println!("==============================");
     // println!("==============================");
     // println!("{}", final_response.join("\n"));

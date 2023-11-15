@@ -5,6 +5,8 @@ use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use difftastic::LineInformation;
 
+use crate::agent::prompts::diff_accept_prompt;
+use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
 
@@ -400,4 +402,177 @@ async fn parse_difftastic_output(
     // println!("=============================================");
     // println!("=============================================");
     // final_lines_vec
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum DiffActionResponse {
+    // Accept the current changes
+    AcceptCurrentChanges,
+    AcceptIncomingChanges,
+    AcceptBothChanges,
+}
+
+impl DiffActionResponse {
+    pub fn from_gpt_response(response: &str) -> Option<DiffActionResponse> {
+        // we are going to parse data between <answer>{your_answer}</answer>
+        let response = response
+            .split("<answer>")
+            .collect::<Vec<_>>()
+            .last()
+            .unwrap()
+            .split("</answer>")
+            .collect::<Vec<_>>()
+            .first()
+            .unwrap()
+            .to_owned();
+        if response.to_lowercase().contains("accept")
+            && response.to_lowercase().contains("current")
+            && response.to_lowercase().contains("change")
+        {
+            return Some(DiffActionResponse::AcceptCurrentChanges);
+        }
+        if response.to_lowercase().contains("accept")
+            && response.to_lowercase().contains("incoming")
+            && response.to_lowercase().contains("change")
+        {
+            return Some(DiffActionResponse::AcceptIncomingChanges);
+        }
+        if response.to_lowercase().contains("accept")
+            && response.to_lowercase().contains("both")
+            && response.to_lowercase().contains("change")
+        {
+            return Some(DiffActionResponse::AcceptBothChanges);
+        }
+        None
+    }
+}
+
+/// We will use gpt to generate the lines of the code which should be applied
+/// to the delta using llm (this is like the machine version of doing git diff(accept/reject))
+async fn process_file_lines_to_gpt(file_lines: Vec<String>, user_query: &str) -> Vec<String> {
+    // Find where the markers are and then send it over to the llm and ask it
+    // to accept/reject the code which has been generated.
+    // we detect the git markers and use that for sending over the file and showing that to the LLM
+    // we have to check for the <<<<<<, ======, >>>>>> markers and then send the code in between these ranges
+    // and 5 lines of prefix to the LLM to ask it to perform the git operation
+    // and then use that to build up the file thats how we can solve this
+    let mut initial_index = 0;
+    let total_lines = file_lines.len();
+    dbg!(&file_lines);
+    let mut total_file_lines: Vec<String> = vec![];
+    while initial_index < total_lines {
+        let line = file_lines[initial_index].to_owned();
+        if line.contains("<<<<<<<") {
+            let mut current_changes = vec![];
+            let mut current_iteration_index = initial_index + 1;
+            while !file_lines[current_iteration_index].contains("=======") {
+                // we have to keep going here
+                current_changes.push(file_lines[current_iteration_index].to_owned());
+                current_iteration_index = current_iteration_index + 1;
+            }
+            // Now we are at the index which has ======, so move to the next one
+            current_iteration_index = current_iteration_index + 1;
+            let mut incoming_changes = vec![];
+            while !file_lines[current_iteration_index].contains(">>>>>>>") {
+                // we have to keep going here
+                incoming_changes.push(file_lines[current_iteration_index].to_owned());
+                current_iteration_index = current_iteration_index + 1;
+            }
+            // This is where we will call the agent out and ask it to decide
+            // which of the following git diffs to keep and which to remove
+            // before we do this, we can do some hand-woven checks to figure out
+            // what action to take
+            // we also want to keep a prefix of the lines here and send that along
+            // to the llm for context as well
+            let selection_lines = call_gpt_for_action_resolution(
+                current_changes,
+                incoming_changes,
+                total_file_lines
+                    .iter()
+                    .rev()
+                    .take(5)
+                    .rev()
+                    .into_iter()
+                    .map(|s| s.to_owned())
+                    .collect::<Vec<_>>(),
+                user_query,
+            )
+            .await;
+            total_file_lines.extend(selection_lines.to_vec());
+            println!("===== selection lines =====");
+            println!("{}", selection_lines.to_vec().join("\n"));
+            println!("===== selection lines =====");
+            println!("==============================");
+            println!("==============================");
+            println!("{}", total_file_lines.join("\n"));
+            println!("==============================");
+            println!("==============================");
+            // Now we are at the index which has >>>>>>>, so move to the next one on the iteration loop
+            initial_index = current_iteration_index + 1;
+            // we have a git diff event now, so lets try to fix that
+        } else {
+            // just insert the line here and then push the current line to the
+            // total_file_lines
+            total_file_lines.push(line);
+            initial_index = initial_index + 1;
+        }
+    }
+    println!("==============================");
+    println!("==============================");
+    println!("{}", total_file_lines.join("\n"));
+    println!("==============================");
+    println!("==============================");
+    unimplemented!("something here");
+}
+
+async fn call_gpt_for_action_resolution(
+    current_changes: Vec<String>,
+    incoming_changes: Vec<String>,
+    prefix: Vec<String>,
+    query: &str,
+) -> Vec<String> {
+    let system_message = llm_funcs::llm::Message::system(&diff_accept_prompt(query));
+    let user_messages = prompts::diff_user_messages(
+        &prefix.join("\n"),
+        &current_changes.join("\n"),
+        &incoming_changes.join("\n"),
+    )
+    .into_iter()
+    .map(|message| llm_funcs::llm::Message::user(&message));
+    let messages = vec![system_message]
+        .into_iter()
+        .chain(user_messages)
+        .collect::<Vec<_>>();
+    let llm_client = Arc::new(llm_funcs::LlmClient::codestory_infra());
+    let model = llm_funcs::llm::OpenAIModel::GPT4;
+    let response = llm_client.response(model, messages, None, 0.1, None).await;
+    dbg!(&response);
+    let diff_action = match response {
+        Ok(response) => DiffActionResponse::from_gpt_response(&response),
+        Err(_) => {
+            // leave it as it is
+            None
+        }
+    };
+    match diff_action {
+        Some(DiffActionResponse::AcceptCurrentChanges) => {
+            // we have to accept the current changes
+            current_changes
+        }
+        Some(DiffActionResponse::AcceptIncomingChanges) => {
+            // we have to accept the incoming changes
+            incoming_changes
+        }
+        Some(DiffActionResponse::AcceptBothChanges) => {
+            // we have to accept both the changes
+            current_changes
+                .into_iter()
+                .chain(incoming_changes)
+                .collect()
+        }
+        None => {
+            // we have to accept the current changes
+            current_changes
+        }
+    }
 }

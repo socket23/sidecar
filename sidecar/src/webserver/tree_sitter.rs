@@ -64,3 +64,36 @@ pub async fn extract_diagnostics_range(
         range: expanded_range.unwrap_or(range),
     }))
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TreeSitterValidRequest {
+    language: String,
+    source: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TreeSitterValidResponse {
+    valid: bool,
+}
+
+pub async fn tree_sitter_node_check(
+    Extension(app): Extension<Application>,
+    Json(TreeSitterValidRequest { language, source }): Json<TreeSitterValidRequest>,
+) -> Result<impl IntoResponse> {
+    let language_parsing = app.language_parsing.clone();
+    let tree_sitter = language_parsing.for_lang(&language);
+    let valid = match tree_sitter {
+        Some(tree_sitter) => {
+            let grammar = tree_sitter.grammar;
+            let mut parser = tree_sitter::Parser::new();
+            parser.set_language(grammar());
+            let node = parser.parse(&source, None);
+            match node {
+                Some(node) => node.root_node().has_error(),
+                None => false,
+            }
+        }
+        None => false,
+    };
+    Ok(Json(TreeSitterValidResponse { valid }))
+}

@@ -185,6 +185,11 @@ fn tree_sitter_router() -> Router {
         )
 }
 
+fn file_operations_router() -> Router {
+    use axum::routing::*;
+    Router::new().route("/edit_file", post(sidecar::webserver::file_edit::file_edit))
+}
+
 // TODO(skcd): Now we have to do the following: start the qdrant binary
 // and also setup the client properly so we can use qdrant, we can also not do
 // this and keep going with raw embedding search and make it happen, but this

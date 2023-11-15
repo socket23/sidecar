@@ -184,6 +184,10 @@ fn tree_sitter_router() -> Router {
             "/diagnostic_parsing",
             post(sidecar::webserver::tree_sitter::extract_diagnostics_range),
         )
+        .route(
+            "/tree_sitter_valid",
+            post(sidecar::webserver::tree_sitter::tree_sitter_node_check),
+        )
 }
 
 fn file_operations_router() -> Router {

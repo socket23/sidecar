@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use axum::response::IntoResponse;
+use axum::response::{sse, IntoResponse, Sse};
 use axum::{Extension, Json};
 use difftastic::LineInformation;
+use futures::StreamExt;
+use serde_json::json;
 
 use crate::agent::prompts::diff_accept_prompt;
 use crate::agent::{llm_funcs, prompts};
@@ -57,6 +59,9 @@ pub async fn file_edit(
     // thats the case only then can we apply it to the file
     // First we check if the output generated is valid by itself, if it is then
     // we can think about applying the changes to the file
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let text_edit_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver)
+        .map(|item| sse::Event::default().json_data(item));
     let file_diff_content = generate_file_diff(
         &file_content,
         &file_path,
@@ -66,16 +71,34 @@ pub async fn file_edit(
     )
     .await;
     if let None = file_diff_content {
-        return Ok(json(EditFileResponse::Message {
+        sender.send(EditFileResponse::Message {
             message: "The file diff is not valid".to_owned(),
-        }));
+        });
     }
     // After generating the git diff we want to send back the responses to the
     // user depending on what edit information we get, we can stream this to the
     // user so they know the agent is working on some action and it will show up
     // as edits on the editor
-    let text_edits = process_file_lines_to_gpt(file_diff_content.unwrap(), &user_query);
-    unimplemented!();
+    process_file_lines_to_gpt(file_diff_content.unwrap(), &user_query, sender).await;
+    let cloned_session_id = session_id.clone();
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": cloned_session_id,
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": session_id,
+            }))
+            .expect("failed to send done object"))
+    });
+    let stream = init_stream.chain(text_edit_stream).chain(done_stream);
+    Ok(Sse::new(Box::pin(stream)))
 }
 
 pub async fn generate_file_diff(
@@ -538,6 +561,7 @@ pub enum LineContentType {
 async fn process_file_lines_to_gpt(
     file_lines: Vec<String>,
     user_query: &str,
+    sender: tokio::sync::mpsc::UnboundedSender<EditFileResponse>,
 ) -> (Vec<String>, Vec<EditFileResponse>) {
     // Find where the markers are and then send it over to the llm and ask it
     // to accept/reject the code which has been generated.
@@ -609,6 +633,7 @@ async fn process_file_lines_to_gpt(
             println!("==============================");
             println!("==============================");
             if let Some(edit_response) = edit_file_response {
+                sender.send(edit_response.clone());
                 edit_responses.push(edit_response);
             }
             // Now we are at the index which has >>>>>>>, so move to the next one on the iteration loop
@@ -669,6 +694,7 @@ async fn call_gpt_for_action_resolution(
         }
         Some(DiffActionResponse::AcceptIncomingChanges) => {
             // we have to accept the incoming changes
+            let content = incoming_changes.join("\n");
             (
                 incoming_changes,
                 Some(EditFileResponse::TextEdit {
@@ -677,7 +703,7 @@ async fn call_gpt_for_action_resolution(
                         // large number here for the column end value for the end line
                         Position::new(line_start + current_changes.len(), 10000, 0),
                     ),
-                    content: incoming_changes.join("\n"),
+                    content,
                 }),
             )
         }

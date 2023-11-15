@@ -74,6 +74,16 @@ impl TSLanguageConfig {
         self.language_ids.first().map(|s| s.to_string())
     }
 
+    pub fn is_valid_code(&self, code: &str) -> bool {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree_maybe = parser.parse(code, None);
+        tree_maybe
+            .map(|tree| !tree.root_node().has_error())
+            .unwrap_or_default()
+    }
+
     // The file outline looks like this:
     // function something(arguments): return_value_something
     // Class something_else

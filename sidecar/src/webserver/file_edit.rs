@@ -633,7 +633,7 @@ async fn process_file_lines_to_gpt(
             println!("==============================");
             println!("==============================");
             if let Some(edit_response) = edit_file_response {
-                sender.send(edit_response.clone());
+                let _ = sender.send(edit_response.clone());
                 edit_responses.push(edit_response);
             }
             // Now we are at the index which has >>>>>>>, so move to the next one on the iteration loop
@@ -653,7 +653,7 @@ async fn process_file_lines_to_gpt(
     println!("{}", total_file_lines.join("\n"));
     println!("==============================");
     println!("==============================");
-    unimplemented!("something here");
+    (total_file_lines, edit_responses)
 }
 
 async fn call_gpt_for_action_resolution(

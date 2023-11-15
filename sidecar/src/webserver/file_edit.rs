@@ -1,7 +1,12 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
+use difftastic::LineInformation;
 
 use crate::application::application::Application;
+use crate::chunking::languages::TSLanguageParsing;
 
 use super::types::Result;
 
@@ -10,6 +15,7 @@ pub struct EditFileRequest {
     pub file_path: String,
     pub file_content: String,
     pub new_content: String,
+    pub language: String,
 }
 
 pub async fn file_edit(
@@ -17,8 +23,381 @@ pub async fn file_edit(
     Json(EditFileRequest {
         file_path,
         file_content,
+        language,
         new_content,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
+    // Here we have to first check if the new content is tree-sitter valid, if
+    // thats the case only then can we apply it to the file
+    // First we check if the output generated is valid by itself, if it is then
+    // we can think about applying the changes to the file
+    let file_diff_content = generate_file_diff(
+        &file_content,
+        &file_path,
+        &new_content,
+        &language,
+        app.language_parsing.clone(),
+    )
+    .await;
     Ok(vec![])
+}
+
+pub async fn generate_file_diff(
+    file_content: &str,
+    file_path: &str,
+    new_content: &str,
+    language: &str,
+    language_parsing: Arc<TSLanguageParsing>,
+) -> Option<Vec<String>> {
+    // First we will check with the language parsing if this is a valid tree
+    // which we can apply to the edit
+    let language_parser = language_parsing.for_lang(language);
+    if language_parser.is_none() {
+        return None;
+    }
+    let language_parser = language_parser.unwrap();
+    let validity = language_parser.is_valid_code(file_content);
+    if !validity {
+        return None;
+    }
+    // we can get the extension from the file path
+    let file_extension = PathBuf::from(file_path)
+        .extension()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    // Cool so the tree is valid, then we can go about generating the diff tree now
+    let difftastic_output =
+        difftastic::generate_sidecar_diff(file_content, new_content, &format!(".{file_extension}"));
+    // sanity check here if this is a valid tree
+    let diff_file = parse_difftastic_output(
+        file_content.to_owned(),
+        new_content.to_owned(),
+        difftastic_output.0,
+        difftastic_output.1,
+    )
+    .await;
+    Some(diff_file)
+}
+
+fn get_content_from_file_line_information(
+    content: &str,
+    line_information: &LineInformation,
+) -> Option<String> {
+    let lines: Vec<String> = content
+        .lines()
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect::<Vec<_>>();
+    let line_number = line_information.get_line_number();
+    dbg!(line_number);
+    match line_number {
+        Some(line_number) => Some(lines[line_number].to_owned()),
+        None => None,
+    }
+}
+
+// Here we will first parse the llm output and get the left and right links
+async fn parse_difftastic_output(
+    left: String,
+    right: String,
+    left_lines_information: Vec<LineInformation>,
+    right_lines_information: Vec<LineInformation>,
+) -> Vec<String> {
+    assert_eq!(left_lines_information.len(), right_lines_information.len());
+    let mut final_output: Vec<String> = vec![];
+    let mut iteration_index = 0;
+    let left_lines_limit = left_lines_information.len();
+    let mut final_lines_file: Vec<String> = vec![];
+    // Remember: left is our main file and right is the diff which the LLM has
+    // generated
+    while iteration_index < left_lines_limit {
+        // dbg!("iterating loop break, iterating again");
+        loop {
+            // dbg!("loop iteration", iteration_index);
+            if iteration_index >= left_lines_limit {
+                break;
+            }
+            // Now we will here greedily try to insert the markers for git and then
+            let left_content_now_maybe = left_lines_information[iteration_index];
+            if iteration_index >= right_lines_information.len() {
+                // empty the left side to the final lines
+                loop {
+                    let left_content_now = left_lines_information[iteration_index];
+                    let content = get_content_from_file_line_information(&left, &left_content_now);
+                    match content {
+                        Some(content) => {
+                            final_lines_file.push(content);
+                        }
+                        None => {}
+                    }
+                    iteration_index = iteration_index + 1;
+                    if iteration_index >= left_lines_information.len() {
+                        break;
+                    }
+                }
+            }
+            let right_content_now_maybe = right_lines_information[iteration_index];
+            // we have content on the left but nothing on the right, so we keep going for as long
+            // as possible we have content
+            if left_content_now_maybe.present() && right_content_now_maybe.not_present() {
+                // Let's get the color of the left side
+                // we will always have a left color ALWAYS and it will be RED or false
+                let content =
+                    get_content_from_file_line_information(&left, &left_content_now_maybe);
+                match content {
+                    Some(content) => {
+                        final_lines_file.push(content);
+                    }
+                    None => {}
+                }
+                // Now we can start going down on left and right, if we keep getting
+                // right None as usual..
+                loop {
+                    iteration_index = iteration_index + 1;
+                    if left_lines_information.len() >= iteration_index {
+                        break;
+                    }
+                    if right_lines_information.len() <= iteration_index {
+                        // If we are here, we have to collect the rest of the lines
+                        // in the right and call it a day
+                        loop {
+                            let left_content_now_maybe = left_lines_information[iteration_index];
+                            let content = get_content_from_file_line_information(
+                                &left,
+                                &left_content_now_maybe,
+                            );
+                            match content {
+                                Some(content) => {
+                                    final_lines_file.push(content);
+                                }
+                                None => {}
+                            }
+                            iteration_index = iteration_index + 1;
+                            if iteration_index >= left_lines_information.len() {
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    // otherwise we want to keep checking the lines after this
+                    let left_content_now_maybe = left_lines_information[iteration_index];
+                    let right_content_now_maybe = right_lines_information[iteration_index];
+                    if !(left_content_now_maybe.present() && right_content_now_maybe.not_present())
+                    {
+                        // we are not in the same style as before, so we break it
+                        break;
+                    } else {
+                        let content =
+                            get_content_from_file_line_information(&left, &left_content_now_maybe);
+                        match content {
+                            Some(content) => {
+                                final_lines_file.push(content);
+                            }
+                            None => {}
+                        }
+                    }
+                }
+                break;
+            }
+            // we have some content on the right but nothing ont he left
+            if left_content_now_maybe.not_present() && right_content_now_maybe.present() {
+                // Now we are in a state where we can be sure that on the right
+                // we have a GREEN and nothing on the left side, cause that's
+                // the only case where its possible
+                let content =
+                    get_content_from_file_line_information(&right, &right_content_now_maybe);
+                match content {
+                    Some(content) => {
+                        final_lines_file.push(content);
+                    }
+                    None => {}
+                }
+                // Now we start the loop again
+                loop {
+                    iteration_index = iteration_index + 1;
+                    if right_lines_information.len() >= iteration_index {
+                        break;
+                    }
+                    let left_content_now_maybe = left_lines_information[iteration_index];
+                    let right_content_now_maybe = right_lines_information[iteration_index];
+                    if !(left_content_now_maybe.not_present() && right_content_now_maybe.present())
+                    {
+                        break;
+                    } else {
+                        let content = get_content_from_file_line_information(
+                            &right,
+                            &right_content_now_maybe,
+                        );
+                        match content {
+                            Some(content) => {
+                                final_lines_file.push(content);
+                            }
+                            None => {}
+                        }
+                    }
+                }
+                break;
+            }
+            // we have content on both the sides, so we keep going
+            if left_content_now_maybe.present() && right_content_now_maybe.present() {
+                // things get interesting here, so let's handle each case by case
+                let left_color = left_content_now_maybe
+                    .get_line_status()
+                    .expect("present check above to hold");
+                let right_color = right_content_now_maybe
+                    .get_line_status()
+                    .expect("present check above to hold");
+                let left_content =
+                    get_content_from_file_line_information(&left, &left_content_now_maybe);
+                let right_content =
+                    get_content_from_file_line_information(&right, &right_content_now_maybe);
+                // no change both are equivalent, best case <3
+                if left_color.unchanged() && right_color.unchanged() {
+                    let content =
+                        get_content_from_file_line_information(&left, &left_content_now_maybe);
+                    match content {
+                        Some(content) => {
+                            final_lines_file.push(content);
+                        }
+                        None => {}
+                    }
+                    iteration_index = iteration_index + 1;
+                    continue;
+                }
+                // if we have some color on the left and no color on the right
+                // we have to figure out what to do
+                // this case represents deletion on the left line and no change
+                // on the right line, so we want to keep the left line and not
+                // delete it, this is akin to a deletion and insertion
+                if left_color.changed() && right_color.unchanged() {
+                    // in this case the LLM predicted that we have to remove
+                    // a line, this is generally the case with whitespace
+                    // otherwise we get a R and G on both sides
+                    let content =
+                        get_content_from_file_line_information(&left, &left_content_now_maybe);
+                    match content {
+                        Some(content) => {
+                            final_lines_file.push(content);
+                        }
+                        None => {}
+                    };
+                    iteration_index = iteration_index + 1;
+                    continue;
+                }
+                if left_color.unchanged() && right_color.changed() {
+                    // This is the complicated case we have to handle
+                    // this is generally when the LLM wants to edit the file but
+                    // whats added here is mostly a comment or something similar
+                    // so we can just add the right content here and move on
+                    let content =
+                        get_content_from_file_line_information(&right, &right_content_now_maybe);
+                    match content {
+                        Some(content) => {
+                            final_lines_file.push(content);
+                        }
+                        None => {}
+                    };
+                    iteration_index = iteration_index + 1;
+                    continue;
+                }
+                if left_color.changed() && right_color.changed() {
+                    // we do have to insert a diff range here somehow
+                    // but how long will be defined by the sequence after this
+                    let mut left_content_vec = vec![left_content];
+                    let mut right_content_vec = vec![right_content];
+                    loop {
+                        // the condition we want to look for here is the following
+                        // R G
+                        // R .
+                        // R .
+                        // ...
+                        // This means that there is a range in the left range
+                        // which we have to replace with the Green
+                        // we keep going until we have a non-color on the left
+                        // or right gets some content
+                        iteration_index = iteration_index + 1;
+                        if iteration_index >= left_lines_information.len() {
+                            // If this happens, we can send a diff with the current
+                            // collection
+                            final_lines_file.push("<<<<<<<".to_owned());
+                            final_lines_file.append(
+                                &mut left_content_vec
+                                    .into_iter()
+                                    .filter_map(|s| s)
+                                    .collect::<Vec<String>>(),
+                            );
+                            final_lines_file.push("=======".to_owned());
+                            final_lines_file.append(
+                                &mut right_content_vec
+                                    .into_iter()
+                                    .filter_map(|s| s)
+                                    .collect::<Vec<String>>(),
+                            );
+                            final_lines_file.push(">>>>>>>".to_owned());
+                            break;
+                        }
+                        let left_content_now_maybe = left_lines_information[iteration_index];
+                        let right_content_now_maybe = right_lines_information[iteration_index];
+                        // if the left content is none here, then we are taking
+                        // a L, then we have to break from the loop right now
+                        if left_content_now_maybe.not_present() {
+                            final_lines_file.push("<<<<<<<".to_owned());
+                            final_lines_file.append(
+                                &mut left_content_vec.into_iter().filter_map(|s| s).collect(),
+                            );
+                            final_lines_file.push("=======".to_owned());
+                            final_lines_file.append(
+                                &mut right_content_vec.into_iter().filter_map(|s| s).collect(),
+                            );
+                            final_lines_file.push(">>>>>>>".to_owned());
+                            break;
+                        }
+                        let left_color_updated = left_content_now_maybe
+                            .get_line_status()
+                            .expect("line_status to be present");
+                        if left_color_updated == left_color && right_content_now_maybe.not_present()
+                        {
+                            // we have to keep going here
+                            let content = get_content_from_file_line_information(
+                                &left,
+                                &left_content_now_maybe,
+                            );
+                            match content {
+                                Some(content) => {
+                                    left_content_vec.push(Some(content));
+                                }
+                                None => {}
+                            }
+                            continue;
+                        } else {
+                            // we have to break here
+                            final_lines_file.push("<<<<<<<".to_owned());
+                            final_lines_file.append(
+                                &mut left_content_vec.into_iter().flat_map(|s| s).collect(),
+                            );
+                            final_lines_file.push("=======".to_owned());
+                            final_lines_file.append(
+                                &mut right_content_vec.into_iter().flat_map(|s| s).collect(),
+                            );
+                            final_lines_file.push(">>>>>>>".to_owned());
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                break;
+            }
+        }
+    }
+    final_lines_file
+    // let final_lines_vec = final_lines_file.to_vec();
+    // let final_content = final_lines_file.join("\n");
+    // println!("=============================================");
+    // println!("=============================================");
+    // println!("{}", final_content);
+    // println!("=============================================");
+    // println!("=============================================");
+    // final_lines_vec
 }

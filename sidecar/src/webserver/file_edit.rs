@@ -483,7 +483,6 @@ impl DiffActionResponse {
 
 #[derive(Debug, Clone)]
 pub struct FileLineContent {
-    pub index: usize,
     pub content: String,
     pub line_content_type: LineContentType,
 }
@@ -506,11 +505,9 @@ impl FileLineContent {
     }
 
     pub fn from_lines(lines: Vec<String>) -> Vec<Self> {
-        let mut index = 0;
         lines
             .into_iter()
             .map(|content| FileLineContent {
-                index,
                 line_content_type: {
                     if content.contains("<<<<<<<") {
                         LineContentType::DiffStartMarker
@@ -519,7 +516,6 @@ impl FileLineContent {
                     } else if content.contains(">>>>>>>") {
                         LineContentType::DiffEndMarker
                     } else {
-                        index = index + 1;
                         LineContentType::FileLine
                     }
                 },

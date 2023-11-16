@@ -11,12 +11,12 @@ extern crate serde_json;
 const API_ENDPOINT: &str = "https://app.posthog.com/capture/";
 const TIMEOUT: &Duration = &Duration::from_millis(800); // This should be specified by the user
 
-pub fn client<C: Into<ClientOptions>>(options: C) -> Client {
+pub fn client<C: Into<ClientOptions>>(options: C) -> PosthogClient {
     let client = HttpClient::builder()
         .timeout(TIMEOUT.clone())
         .build()
         .unwrap(); // Unwrap here is as safe as `HttpClient::new`
-    Client {
+    PosthogClient {
         options: options.into(),
         client,
     }
@@ -39,6 +39,7 @@ pub enum Error {
     Serialization(String),
 }
 
+#[derive(Debug, Clone)]
 pub struct ClientOptions {
     api_endpoint: String,
     api_key: String,
@@ -53,12 +54,13 @@ impl From<&str> for ClientOptions {
     }
 }
 
-pub struct Client {
+#[derive(Debug, Clone)]
+pub struct PosthogClient {
     options: ClientOptions,
     client: HttpClient,
 }
 
-impl Client {
+impl PosthogClient {
     pub async fn capture(&self, event: Event) -> Result<(), Error> {
         let inner_event = InnerEvent::new(event, self.options.api_key.clone());
         let _res = self
@@ -142,4 +144,8 @@ impl Event {
         let _ = self.properties.props.insert(key.into(), as_json);
         Ok(())
     }
+}
+
+pub fn posthog_client() -> PosthogClient {
+    client("phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB")
 }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 /// Binary to check if we can call openai
 use async_openai::config::AzureConfig;
 use async_openai::types::ChatCompletionRequestMessageArgs;
@@ -7,18 +9,16 @@ use async_openai::Client;
 use futures::StreamExt;
 use sidecar::agent::prompts;
 use sidecar::posthog::client::client;
-use sidecar::posthog::client::Client as PosthogClient;
 use sidecar::posthog::client::Event as PosthogEvent;
+use sidecar::posthog::client::PosthogClient;
 
 // Note: This does not work as posthog uses an internal blocking reqwest client
 // we should not be using that and instead fork it and create our own
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let posthog_client = posthog_client();
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async { main_func(posthog_client).await })
+    let _ = main_func(posthog_client).await;
+    Ok(())
 }
 
 async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
@@ -86,7 +86,7 @@ fn posthog_client() -> PosthogClient {
 async fn llm_request() {
     use sidecar::agent::llm_funcs::LlmClient;
 
-    let client = LlmClient::codestory_infra();
+    let client = LlmClient::codestory_infra(Arc::new(posthog_client()));
 
     let messages = vec![sidecar::agent::llm_funcs::llm::Message::system(
         "chose one of the functions when the user wants to do code search with the keywords: sentence transformers",

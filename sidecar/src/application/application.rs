@@ -9,6 +9,7 @@ use tracing::{debug, warn};
 use crate::{
     chunking::languages::TSLanguageParsing,
     db::sqlite::{self, SqlDb},
+    posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
 };
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
@@ -35,6 +36,7 @@ pub struct Application {
     /// We also want to keep the language parsing functionality here
     pub language_parsing: Arc<TSLanguageParsing>,
     pub sql: SqlDb,
+    pub posthog_client: Arc<PosthogClient>,
 }
 
 impl Application {
@@ -50,6 +52,7 @@ impl Application {
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
         let language_parsing = Arc::new(TSLanguageParsing::init());
         let semantic_client = SemanticClient::new(config.clone(), language_parsing.clone()).await;
+        let posthog_client = posthog_client();
         debug!("semantic client presence: {}", semantic_client.is_some());
         Ok(Self {
             config: config.clone(),
@@ -67,6 +70,7 @@ impl Application {
             sync_queue,
             language_parsing,
             sql: sql_db,
+            posthog_client: Arc::new(posthog_client),
         })
     }
 

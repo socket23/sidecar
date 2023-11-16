@@ -40,6 +40,10 @@ pub enum EditFileResponse {
         range: Range,
         content: String,
     },
+    Status {
+        session_id: String,
+        status: String,
+    },
 }
 
 impl ApiResponse for EditFileResponse {}
@@ -71,9 +75,10 @@ pub async fn file_edit(
         let cloned_session_id = session_id.clone();
         let init_stream = futures::stream::once(async move {
             Ok(sse::Event::default()
-                .json_data(json!({
-                    "session_id": cloned_session_id,
-                }))
+                .json_data(EditFileResponse::Status {
+                    session_id: cloned_session_id,
+                    status: "started".to_owned(),
+                })
                 // This should never happen, so we force an unwrap.
                 .expect("failed to serialize initialization object"))
         });
@@ -87,10 +92,10 @@ pub async fn file_edit(
         });
         let done_stream = futures::stream::once(async move {
             Ok(sse::Event::default()
-                .json_data(json!(
-                    {"done": "[CODESTORY_DONE]".to_owned(),
-                    "session_id": session_id,
-                }))
+                .json_data(EditFileResponse::Status {
+                    session_id,
+                    status: "done".to_owned(),
+                })
                 .expect("failed to send done object"))
         });
         let stream: Result<
@@ -108,53 +113,10 @@ pub async fn file_edit(
         // user depending on what edit information we get, we can stream this to the
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
-        let result = process_file_lines_to_gpt(file_diff_content.unwrap(), user_query).await;
+        let result =
+            process_file_lines_to_gpt(file_diff_content.unwrap(), user_query, session_id).await;
         result
     }
-}
-
-async fn generate_file_edit_stream(
-    file_path: String,
-    file_content: String,
-    language: String,
-    llm_content: String,
-    user_query: String,
-    session_id: String,
-    app: Application,
-) -> Result<
-    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
-> {
-    let cloned_session_id = session_id.to_owned();
-    let file_diff_content = generate_file_diff(
-        &file_content,
-        &file_path,
-        &llm_content,
-        &language,
-        app.language_parsing.clone(),
-    )
-    .await;
-    if let None = file_diff_content {
-        // if we don't have a file diff content then we have to send a message
-        // that we cannot apply the diff
-    }
-    let init_stream = futures::stream::once(async move {
-        Ok(sse::Event::default()
-            .json_data(json!({
-                "session_id": cloned_session_id,
-            }))
-            // This should never happen, so we force an unwrap.
-            .expect("failed to serialize initialization object"))
-    });
-    let done_stream = futures::stream::once(async move {
-        Ok(sse::Event::default()
-            .json_data(json!(
-                {"done": "[CODESTORY_DONE]".to_owned(),
-                "session_id": session_id,
-            }))
-            .expect("failed to send done object"))
-    });
-    let stream = init_stream.chain(done_stream);
-    Ok(Sse::new(Box::pin(stream)))
 }
 
 pub async fn generate_file_diff(
@@ -616,6 +578,7 @@ pub enum LineContentType {
 async fn process_file_lines_to_gpt(
     file_lines: Vec<String>,
     user_query: String,
+    session_id: String,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -706,11 +669,13 @@ async fn process_file_lines_to_gpt(
             }
         }
     };
+    let cloned_session_id = session_id.to_owned();
     let init_stream = futures::stream::once(async move {
         Ok(sse::Event::default()
-            .json_data(json!({
-                "session_id": "session_id",
-            }))
+            .json_data(EditFileResponse::Status {
+                session_id: session_id.clone(),
+                status: "started".to_owned(),
+            })
             // This should never happen, so we force an unwrap.
             .expect("failed to serialize initialization object"))
     });
@@ -721,10 +686,10 @@ async fn process_file_lines_to_gpt(
     });
     let done_stream = futures::stream::once(async move {
         Ok(sse::Event::default()
-            .json_data(json!(
-                {"done": "[CODESTORY_DONE]".to_owned(),
-                "session_id": "session_id",
-            }))
+            .json_data(EditFileResponse::Status {
+                session_id: cloned_session_id,
+                status: "done".to_owned(),
+            })
             .expect("failed to send done object"))
     });
     let stream = init_stream.chain(answer_stream).chain(done_stream);

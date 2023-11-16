@@ -134,6 +134,7 @@ pub mod llm {
         GPT4_32k,
         GPT3_5_16k,
         GPT3_5Instruct,
+        GPT4_Turbo,
     }
 
     impl OpenAIModel {
@@ -143,6 +144,7 @@ pub mod llm {
                 OpenAIModel::GPT4 => "gpt-4-0613".to_owned(),
                 OpenAIModel::GPT4_32k => "gpt-4-32k-0613".to_owned(),
                 OpenAIModel::GPT3_5Instruct => "gpt-3.5-turbo-instruct".to_owned(),
+                OpenAIModel::GPT4_Turbo => "gpt-4-1106-preview".to_owned(),
             }
         }
 
@@ -155,6 +157,8 @@ pub mod llm {
                 Ok(OpenAIModel::GPT4_32k)
             } else if model_name == "gpt-3.5-turbo-instruct" {
                 Ok(OpenAIModel::GPT3_5Instruct)
+            } else if model_name == "gpt-4-1106-preview" {
+                Ok(OpenAIModel::GPT4_Turbo)
             } else {
                 Err(anyhow::anyhow!("unknown model name"))
             }
@@ -268,6 +272,7 @@ pub struct LlmClient {
     gpt432k_client: Client<AzureConfig>,
     gpt3_5_client: Client<AzureConfig>,
     gpt3_5_turbo_instruct: Client<OpenAIConfig>,
+    gpt4_turbo_client: Client<OpenAIConfig>,
 }
 // pub struct LlmClient {
 //     gpt4_client: Client<OpenAIConfig>,
@@ -294,11 +299,16 @@ impl LlmClient {
             .clone()
             .with_deployment_id("gpt4-32k-access".to_owned());
         let gpt3_5_config = azure_config.with_deployment_id("gpt35-turbo-access".to_owned());
+        let gpt4_turbo = openai_config
+            .clone()
+            .with_org_id("org-pKCie8wjobiHKD2874lQP9wR".to_owned())
+            .with_api_key("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".to_owned());
         Self {
             gpt4_client: Client::with_config(gpt4_config),
             gpt432k_client: Client::with_config(gpt4_32k_config),
             gpt3_5_client: Client::with_config(gpt3_5_config),
             gpt3_5_turbo_instruct: Client::with_config(openai_config),
+            gpt4_turbo_client: Client::with_config(gpt4_turbo),
         }
         // Self {
         //     gpt4_client: Client::with_config(openai_config.clone()),
@@ -323,7 +333,6 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
-        dbg!(&request);
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -427,6 +436,61 @@ impl LlmClient {
                                 context_selection: context_selection.clone(),
                             })
                             .expect("sending answer should not fail");
+                    }
+                    Some(Err(e)) => {
+                        warn!(?e, "openai stream error, retrying");
+                        continue 'retry_loop;
+                    }
+                }
+            }
+
+            return Ok(buf);
+        }
+        Err(anyhow::anyhow!(
+            "failed to get response from openai".to_owned()
+        ))
+    }
+
+    pub async fn response_openai(
+        &self,
+        model: llm::OpenAIModel,
+        messages: Vec<llm::Message>,
+        functions: Option<Vec<llm::Function>>,
+        temperature: f32,
+        frequency_penalty: Option<f32>,
+    ) -> anyhow::Result<String> {
+        let client = self.get_model_openai(&model);
+        if client.is_none() {
+            return Err(anyhow::anyhow!("model not found"));
+        }
+        let request =
+            self.create_request(model, messages, functions, temperature, frequency_penalty);
+
+        const TOTAL_CHAT_RETRIES: usize = 5;
+
+        'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
+            let mut buf = String::new();
+            let stream = client
+                .expect("is_none to work")
+                .chat()
+                .create_stream(request.clone())
+                .await;
+            if stream.is_err() {
+                continue 'retry_loop;
+            }
+            let unwrap_stream = stream.expect("is_err check above to work");
+            tokio::pin!(unwrap_stream);
+
+            loop {
+                match unwrap_stream.next().await {
+                    None => break,
+                    Some(Ok(s)) => {
+                        buf += &s
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.delta.content.clone())
+                            .flatten()
+                            .unwrap_or("".to_owned())
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -606,7 +670,6 @@ impl LlmClient {
             temperature,
             frequency_penalty,
         );
-        dbg!(&request);
         let mut final_function_call = llm::FunctionCall::default();
 
         const TOTAL_CHAT_RETRIES: usize = 5;
@@ -645,6 +708,7 @@ impl LlmClient {
             llm::OpenAIModel::GPT4 => &self.gpt4_client,
             llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
             llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
+            llm::OpenAIModel::GPT4_Turbo => return None,
             llm::OpenAIModel::GPT3_5Instruct => return None,
         };
         Some(client)
@@ -655,6 +719,7 @@ impl LlmClient {
             llm::OpenAIModel::GPT4 => return None,
             llm::OpenAIModel::GPT4_32k => return None,
             llm::OpenAIModel::GPT3_5_16k => return None,
+            llm::OpenAIModel::GPT4_Turbo => &self.gpt4_turbo_client,
             llm::OpenAIModel::GPT3_5Instruct => &self.gpt3_5_turbo_instruct,
         };
         Some(client)

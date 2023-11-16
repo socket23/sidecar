@@ -59,9 +59,6 @@ pub async fn file_edit(
     // thats the case only then can we apply it to the file
     // First we check if the output generated is valid by itself, if it is then
     // we can think about applying the changes to the file
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let text_edit_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver)
-        .map(|item| sse::Event::default().json_data(item));
     let file_diff_content = generate_file_diff(
         &file_content,
         &file_path,
@@ -71,16 +68,75 @@ pub async fn file_edit(
     )
     .await;
     if let None = file_diff_content {
-        let _ = sender.send(EditFileResponse::Message {
-            message: "The file diff is not valid".to_owned(),
+        let cloned_session_id = session_id.clone();
+        let init_stream = futures::stream::once(async move {
+            Ok(sse::Event::default()
+                .json_data(json!({
+                    "session_id": cloned_session_id,
+                }))
+                // This should never happen, so we force an unwrap.
+                .expect("failed to serialize initialization object"))
         });
+        let message_stream = futures::stream::once(async move {
+            Ok(sse::Event::default()
+                .json_data(EditFileResponse::Message {
+                    message: "Cannot apply the diff to the file".to_owned(),
+                })
+                // This should never happen, so we force an unwrap.
+                .expect("failed to serialize initialization object"))
+        });
+        let done_stream = futures::stream::once(async move {
+            Ok(sse::Event::default()
+                .json_data(json!(
+                    {"done": "[CODESTORY_DONE]".to_owned(),
+                    "session_id": session_id,
+                }))
+                .expect("failed to send done object"))
+        });
+        let stream: Result<
+            Sse<
+                std::pin::Pin<
+                    Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>,
+                >,
+            >,
+        > = Ok(Sse::new(Box::pin(
+            init_stream.chain(message_stream).chain(done_stream),
+        )));
+        stream
+    } else {
+        // After generating the git diff we want to send back the responses to the
+        // user depending on what edit information we get, we can stream this to the
+        // user so they know the agent is working on some action and it will show up
+        // as edits on the editor
+        let result = process_file_lines_to_gpt(file_diff_content.unwrap(), user_query).await;
+        result
     }
-    // After generating the git diff we want to send back the responses to the
-    // user depending on what edit information we get, we can stream this to the
-    // user so they know the agent is working on some action and it will show up
-    // as edits on the editor
-    process_file_lines_to_gpt(file_diff_content.unwrap(), &user_query, sender).await;
-    let cloned_session_id = session_id.clone();
+}
+
+async fn generate_file_edit_stream(
+    file_path: String,
+    file_content: String,
+    language: String,
+    llm_content: String,
+    user_query: String,
+    session_id: String,
+    app: Application,
+) -> Result<
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
+    let cloned_session_id = session_id.to_owned();
+    let file_diff_content = generate_file_diff(
+        &file_content,
+        &file_path,
+        &llm_content,
+        &language,
+        app.language_parsing.clone(),
+    )
+    .await;
+    if let None = file_diff_content {
+        // if we don't have a file diff content then we have to send a message
+        // that we cannot apply the diff
+    }
     let init_stream = futures::stream::once(async move {
         Ok(sse::Event::default()
             .json_data(json!({
@@ -97,7 +153,7 @@ pub async fn file_edit(
             }))
             .expect("failed to send done object"))
     });
-    let stream = init_stream.chain(text_edit_stream).chain(done_stream);
+    let stream = init_stream.chain(done_stream);
     Ok(Sse::new(Box::pin(stream)))
 }
 
@@ -559,100 +615,121 @@ pub enum LineContentType {
 /// to the delta using llm (this is like the machine version of doing git diff(accept/reject))
 async fn process_file_lines_to_gpt(
     file_lines: Vec<String>,
-    user_query: &str,
-    sender: tokio::sync::mpsc::UnboundedSender<EditFileResponse>,
-) -> (Vec<String>, Vec<EditFileResponse>) {
+    user_query: String,
+) -> Result<
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
     // Find where the markers are and then send it over to the llm and ask it
     // to accept/reject the code which has been generated.
     // we detect the git markers and use that for sending over the file and showing that to the LLM
     // we have to check for the <<<<<<, ======, >>>>>> markers and then send the code in between these ranges
     // and 5 lines of prefix to the LLM to ask it to perform the git operation
     // and then use that to build up the file thats how we can solve this
-    let mut initial_index = 0;
-    let file_lines_to_document = FileLineContent::from_lines(file_lines);
-    let total_lines = file_lines_to_document.len();
-    let mut total_file_lines: Vec<String> = vec![];
-    let mut edit_responses = vec![];
-    while initial_index < total_lines {
-        let line = file_lines_to_document[initial_index].clone();
-        if line.is_diff_start() {
-            let mut current_changes = vec![];
-            let mut current_iteration_index = initial_index + 1;
-            while !file_lines_to_document[current_iteration_index].is_diff_separator() {
-                // we have to keep going here
-                current_changes.push(
-                    file_lines_to_document[current_iteration_index]
-                        .content
-                        .to_owned(),
-                );
+    let edit_messages = async_stream::stream! {
+        let mut initial_index = 0;
+        let file_lines_to_document = FileLineContent::from_lines(file_lines);
+        let total_lines = file_lines_to_document.len();
+        let mut total_file_lines: Vec<String> = vec![];
+        let mut edit_responses = vec![];
+        while initial_index < total_lines {
+            let line = file_lines_to_document[initial_index].clone();
+            if line.is_diff_start() {
+                let mut current_changes = vec![];
+                let mut current_iteration_index = initial_index + 1;
+                while !file_lines_to_document[current_iteration_index].is_diff_separator() {
+                    // we have to keep going here
+                    current_changes.push(
+                        file_lines_to_document[current_iteration_index]
+                            .content
+                            .to_owned(),
+                    );
+                    current_iteration_index = current_iteration_index + 1;
+                }
+                // Now we are at the index which has ======, so move to the next one
                 current_iteration_index = current_iteration_index + 1;
+                let mut incoming_changes = vec![];
+                while !file_lines_to_document[current_iteration_index].is_diff_end() {
+                    // we have to keep going here
+                    incoming_changes.push(
+                        file_lines_to_document[current_iteration_index]
+                            .content
+                            .to_owned(),
+                    );
+                    current_iteration_index = current_iteration_index + 1;
+                }
+                // This is where we will call the agent out and ask it to decide
+                // which of the following git diffs to keep and which to remove
+                // before we do this, we can do some hand-woven checks to figure out
+                // what action to take
+                // we also want to keep a prefix of the lines here and send that along
+                // to the llm for context as well
+                let (delta_lines, edit_file_response) = call_gpt_for_action_resolution(
+                    // the index is simply the length of the current lines which are
+                    // present in the file
+                    total_file_lines.len(),
+                    current_changes,
+                    incoming_changes,
+                    total_file_lines
+                        .iter()
+                        .rev()
+                        .take(5)
+                        .rev()
+                        .into_iter()
+                        .map(|s| s.to_owned())
+                        .collect::<Vec<_>>(),
+                    &user_query,
+                )
+                .await;
+                total_file_lines.extend(delta_lines.to_vec());
+                println!("===== selection lines =====");
+                println!("{}", delta_lines.to_vec().join("\n"));
+                println!("===== selection lines =====");
+                println!("==============================");
+                println!("==============================");
+                println!("{}", total_file_lines.join("\n"));
+                println!("==============================");
+                println!("==============================");
+                if let Some(edit_response) = edit_file_response {
+                    edit_responses.push(edit_response.clone());
+                    yield edit_response;
+                }
+                // Now we are at the index which has >>>>>>>, so move to the next one on the iteration loop
+                initial_index = current_iteration_index + 1;
+                // we have a git diff event now, so lets try to fix that
+            } else {
+                // just insert the line here and then push the current line to the
+                // total_file_lines
+                // we know here that it will be a normal line, so we can just add
+                // the content back
+                total_file_lines.push(line.content);
+                initial_index = initial_index + 1;
             }
-            // Now we are at the index which has ======, so move to the next one
-            current_iteration_index = current_iteration_index + 1;
-            let mut incoming_changes = vec![];
-            while !file_lines_to_document[current_iteration_index].is_diff_end() {
-                // we have to keep going here
-                incoming_changes.push(
-                    file_lines_to_document[current_iteration_index]
-                        .content
-                        .to_owned(),
-                );
-                current_iteration_index = current_iteration_index + 1;
-            }
-            // This is where we will call the agent out and ask it to decide
-            // which of the following git diffs to keep and which to remove
-            // before we do this, we can do some hand-woven checks to figure out
-            // what action to take
-            // we also want to keep a prefix of the lines here and send that along
-            // to the llm for context as well
-            let (delta_lines, edit_file_response) = call_gpt_for_action_resolution(
-                // the index is simply the length of the current lines which are
-                // present in the file
-                total_file_lines.len(),
-                current_changes,
-                incoming_changes,
-                total_file_lines
-                    .iter()
-                    .rev()
-                    .take(5)
-                    .rev()
-                    .into_iter()
-                    .map(|s| s.to_owned())
-                    .collect::<Vec<_>>(),
-                user_query,
-            )
-            .await;
-            total_file_lines.extend(delta_lines.to_vec());
-            println!("===== selection lines =====");
-            println!("{}", delta_lines.to_vec().join("\n"));
-            println!("===== selection lines =====");
-            println!("==============================");
-            println!("==============================");
-            println!("{}", total_file_lines.join("\n"));
-            println!("==============================");
-            println!("==============================");
-            if let Some(edit_response) = edit_file_response {
-                let _ = sender.send(edit_response.clone());
-                edit_responses.push(edit_response);
-            }
-            // Now we are at the index which has >>>>>>>, so move to the next one on the iteration loop
-            initial_index = current_iteration_index + 1;
-            // we have a git diff event now, so lets try to fix that
-        } else {
-            // just insert the line here and then push the current line to the
-            // total_file_lines
-            // we know here that it will be a normal line, so we can just add
-            // the content back
-            total_file_lines.push(line.content);
-            initial_index = initial_index + 1;
         }
-    }
-    println!("==============================");
-    println!("==============================");
-    println!("{}", total_file_lines.join("\n"));
-    println!("==============================");
-    println!("==============================");
-    (total_file_lines, edit_responses)
+    };
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": "session_id",
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+    let answer_stream = edit_messages.map(|item| {
+        Ok(sse::Event::default()
+            .json_data(item)
+            .expect("failed to serialize edit response"))
+    });
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": "session_id",
+            }))
+            .expect("failed to send done object"))
+    });
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+    // Fix this type error which is happening here
+    Ok(Sse::new(Box::pin(stream)))
 }
 
 async fn call_gpt_for_action_resolution(

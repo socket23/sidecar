@@ -7,6 +7,7 @@ use difftastic::LineInformation;
 use futures::StreamExt;
 use serde_json::json;
 
+use crate::agent::llm_funcs::LlmClient;
 use crate::agent::prompts::diff_accept_prompt;
 use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
@@ -63,6 +64,7 @@ pub async fn file_edit(
     // thats the case only then can we apply it to the file
     // First we check if the output generated is valid by itself, if it is then
     // we can think about applying the changes to the file
+    let llm_client = Arc::new(LlmClient::codestory_infra(app.posthog_client.clone()));
     let file_diff_content = generate_file_diff(
         &file_content,
         &file_path,
@@ -113,8 +115,13 @@ pub async fn file_edit(
         // user depending on what edit information we get, we can stream this to the
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
-        let result =
-            process_file_lines_to_gpt(file_diff_content.unwrap(), user_query, session_id).await;
+        let result = process_file_lines_to_gpt(
+            file_diff_content.unwrap(),
+            user_query,
+            session_id,
+            llm_client,
+        )
+        .await;
         result
     }
 }
@@ -579,6 +586,7 @@ async fn process_file_lines_to_gpt(
     file_lines: Vec<String>,
     user_query: String,
     session_id: String,
+    llm_client: Arc<LlmClient>,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -641,6 +649,7 @@ async fn process_file_lines_to_gpt(
                         .map(|s| s.to_owned())
                         .collect::<Vec<_>>(),
                     &user_query,
+                    llm_client.clone(),
                 )
                 .await;
                 total_file_lines.extend(delta_lines.to_vec());
@@ -704,6 +713,7 @@ async fn call_gpt_for_action_resolution(
     incoming_changes: Vec<String>,
     prefix: Vec<String>,
     query: &str,
+    llm_client: Arc<LlmClient>,
 ) -> (Vec<String>, Option<EditFileResponse>) {
     let system_message = llm_funcs::llm::Message::system(&diff_accept_prompt(query));
     let user_messages = prompts::diff_user_messages(
@@ -717,7 +727,6 @@ async fn call_gpt_for_action_resolution(
         .into_iter()
         .chain(user_messages)
         .collect::<Vec<_>>();
-    let llm_client = Arc::new(llm_funcs::LlmClient::codestory_infra());
     let model = llm_funcs::llm::OpenAIModel::GPT4;
     let response = llm_client.response(model, messages, None, 0.1, None).await;
     dbg!(&response);

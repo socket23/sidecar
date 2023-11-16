@@ -4,9 +4,12 @@ use difftastic::LineInformation;
 /// Here we are going to parse the diff stat output and see if we can figure
 /// out what kind of merging questions we should ask to the LLM
 use serde::{Deserialize, Serialize};
-use sidecar::agent::{
-    llm_funcs,
-    prompts::{self, diff_accept_prompt},
+use sidecar::{
+    agent::{
+        llm_funcs,
+        prompts::{self, diff_accept_prompt},
+    },
+    posthog::client::posthog_client,
 };
 
 fn get_content_from_file_line_information(
@@ -110,7 +113,9 @@ async fn call_gpt_for_action_resolution(
         .into_iter()
         .chain(user_messages)
         .collect::<Vec<_>>();
-    let llm_client = Arc::new(llm_funcs::LlmClient::codestory_infra());
+    let llm_client = Arc::new(llm_funcs::LlmClient::codestory_infra(Arc::new(
+        posthog_client(),
+    )));
     let model = llm_funcs::llm::OpenAIModel::GPT4_Turbo;
     let response = llm_client
         .response_openai(model, messages, None, 0.1, None)

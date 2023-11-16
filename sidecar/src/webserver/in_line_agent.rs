@@ -17,6 +17,7 @@ use crate::{
         self,
         types::{InLineAgent, InLineAgentMessage},
     },
+    posthog::client::posthog_client,
     repo::types::RepoRef,
 };
 use axum::response::IntoResponse;
@@ -137,7 +138,7 @@ pub async fn reply_to_user(
     // the proper things
     // Here we will handle how the in-line agent will handle the work
     let sql_db = app.sql.clone();
-    let llm_client = LlmClient::codestory_infra();
+    let llm_client = LlmClient::codestory_infra(app.posthog_client.clone());
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let inline_agent_message = InLineAgentMessage::start_message(thread_id, query.to_owned());
     snippet_information =

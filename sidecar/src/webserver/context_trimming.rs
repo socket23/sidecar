@@ -17,7 +17,6 @@ use super::agent::{CurrentViewPort, CursorPosition, DeepContextForView, Position
 pub struct TrimmedContext {
     pub current_view_port: Option<CurrentViewPort>,
     pub current_cursor_position: Option<CursorPosition>,
-    repo_ref: RepoRef,
     /// This is grouped here so we can just send the LLM data once for a given context and ask it
     /// to decide
     pub precise_context_map: HashMap<String, Vec<PreciseContext>>,
@@ -47,7 +46,6 @@ pub async fn trim_deep_context(context: DeepContextForView) -> TrimmedContext {
     TrimmedContext {
         current_view_port,
         current_cursor_position,
-        repo_ref,
         precise_context_map,
     }
 }

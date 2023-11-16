@@ -36,6 +36,7 @@ async fn main() {
         std::fs::read_to_string("/Users/skcd/scratch/sidecar/sidecar/src/bin/testing2.ts").unwrap();
     let output = difftastic::generate_sidecar_diff(&left, &right, ".ts");
     let output = parse_difft_output(left, right, output.0, output.1).await;
+    // dbg!(&output.join("\n"));
 
     let user_query = "Can you add the logger to the cschat class?";
 
@@ -110,9 +111,10 @@ async fn call_gpt_for_action_resolution(
         .chain(user_messages)
         .collect::<Vec<_>>();
     let llm_client = Arc::new(llm_funcs::LlmClient::codestory_infra());
-    let model = llm_funcs::llm::OpenAIModel::GPT4;
-    let response = llm_client.response(model, messages, None, 0.1, None).await;
-    dbg!(&response);
+    let model = llm_funcs::llm::OpenAIModel::GPT4_Turbo;
+    let response = llm_client
+        .response_openai(model, messages, None, 0.1, None)
+        .await;
     let diff_action = match response {
         Ok(response) => DiffActionResponse::from_gpt_response(&response),
         Err(_) => {

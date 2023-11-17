@@ -133,5 +133,6 @@ fn default_qdrant_url() -> String {
 }
 
 fn default_user_id() -> String {
-    "codestory".to_owned()
+    let username = whoami::username();
+    username
 }

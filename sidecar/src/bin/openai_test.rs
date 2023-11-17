@@ -9,8 +9,8 @@ use async_openai::Client;
 use futures::StreamExt;
 use sidecar::agent::prompts;
 use sidecar::posthog::client::client;
-use sidecar::posthog::client::Event as PosthogEvent;
 use sidecar::posthog::client::PosthogClient;
+use sidecar::posthog::client::PosthogEvent;
 
 // Note: This does not work as posthog uses an internal blocking reqwest client
 // we should not be using that and instead fork it and create our own
@@ -36,7 +36,7 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
         .with_api_version(api_version)
         .with_deployment_id(deployment_id);
 
-    let event = PosthogEvent::new("rust_event", "skcd_testing");
+    let event = PosthogEvent::new("rust_event");
     let start_time = std::time::Instant::now();
     let capture_status = posthog_client.capture(event).await;
     let time_taken = start_time.elapsed().as_millis();
@@ -61,9 +61,9 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
         .messages(vec![system_message, user_message])
         .build()
         .unwrap();
-    let mut event = PosthogEvent::new("rust_something", "skcd_testing");
+    let mut event = PosthogEvent::new("rust_something");
     let start_time = std::time::Instant::now();
-    event.insert_prop("request", chat_request_args.clone());
+    let _ = event.insert_prop("request", chat_request_args.clone());
     let capture_status = posthog_client.capture(event).await;
     let time_taken = start_time.elapsed().as_millis();
     dbg!(time_taken, "capture_time");
@@ -80,7 +80,10 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
 }
 
 fn posthog_client() -> PosthogClient {
-    client("phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB")
+    client(
+        "phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB",
+        "codestory".to_owned(),
+    )
 }
 
 async fn llm_request() {

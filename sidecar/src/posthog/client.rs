@@ -11,7 +11,7 @@ extern crate serde_json;
 const API_ENDPOINT: &str = "https://app.posthog.com/capture/";
 const TIMEOUT: &Duration = &Duration::from_millis(800); // This should be specified by the user
 
-pub fn client<C: Into<ClientOptions>>(options: C) -> PosthogClient {
+pub fn client<C: Into<ClientOptions>>(options: C, user_id: String) -> PosthogClient {
     let client = HttpClient::builder()
         .timeout(TIMEOUT.clone())
         .build()
@@ -19,6 +19,7 @@ pub fn client<C: Into<ClientOptions>>(options: C) -> PosthogClient {
     PosthogClient {
         options: options.into(),
         client,
+        user_id,
     }
 }
 
@@ -58,11 +59,13 @@ impl From<&str> for ClientOptions {
 pub struct PosthogClient {
     options: ClientOptions,
     client: HttpClient,
+    user_id: String,
 }
 
 impl PosthogClient {
-    pub async fn capture(&self, event: Event) -> Result<(), Error> {
-        let inner_event = InnerEvent::new(event, self.options.api_key.clone());
+    pub async fn capture(&self, event: PosthogEvent) -> Result<(), Error> {
+        let inner_event =
+            InnerEvent::new(event, self.options.api_key.clone(), self.user_id.to_owned());
         let _res = self
             .client
             .post(self.options.api_endpoint.clone())
@@ -74,7 +77,7 @@ impl PosthogClient {
         Ok(())
     }
 
-    pub async fn capture_batch(&self, events: Vec<Event>) -> Result<(), Error> {
+    pub async fn capture_batch(&self, events: Vec<PosthogEvent>) -> Result<(), Error> {
         for event in events {
             self.capture(event).await?;
         }
@@ -92,7 +95,8 @@ struct InnerEvent {
 }
 
 impl InnerEvent {
-    fn new(event: Event, api_key: String) -> Self {
+    fn new(mut event: PosthogEvent, api_key: String, user_id: String) -> Self {
+        event.properties.distinct_id = user_id;
         Self {
             api_key,
             event: event.event,
@@ -103,7 +107,7 @@ impl InnerEvent {
 }
 
 #[derive(Serialize, Debug, PartialEq, Eq)]
-pub struct Event {
+pub struct PosthogEvent {
     event: String,
     properties: Properties,
     timestamp: Option<NaiveDateTime>,
@@ -124,11 +128,11 @@ impl Properties {
     }
 }
 
-impl Event {
-    pub fn new<S: Into<String>>(event: S, distinct_id: S) -> Self {
+impl PosthogEvent {
+    pub fn new<S: Into<String>>(event: S) -> Self {
         Self {
             event: event.into(),
-            properties: Properties::new(distinct_id),
+            properties: Properties::new("codestory"),
             timestamp: None,
         }
     }
@@ -147,5 +151,8 @@ impl Event {
 }
 
 pub fn posthog_client() -> PosthogClient {
-    client("phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB")
+    client(
+        "phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB",
+        "codestory".to_owned(),
+    )
 }

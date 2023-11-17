@@ -11,7 +11,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    application::application::Application,
+    application::{application::Application, background::Progress},
     repo::types::{Backend, RepoRef, Repository, SyncStatus},
 };
 
@@ -71,6 +71,12 @@ pub struct RepoStatus {
 
 impl ApiResponse for RepoStatus {}
 
+#[derive(Debug, Clone, Serialize)]
+pub enum SyncUpdate {
+    ProgressEvent(Progress),
+    KeepAlive,
+}
+
 /// Synchronize a repo by its id
 pub async fn sync(
     Query(RepoParams { repo }): Query<RepoParams>,
@@ -89,11 +95,11 @@ pub async fn sync(
 //
 pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoResponse {
     let mut receiver = app.sync_queue.subscribe();
-    let progress_context = app.sync_queue.get_progress_context().to_owned();
+    let _ = app.sync_queue.get_progress_context().to_owned();
 
     Sse::new(async_stream::stream! {
         while let Ok(event) = receiver.recv().await {
-            yield sse::Event::default().json_data(event).map_err(|err| {
+            yield sse::Event::default().json_data(SyncUpdate::ProgressEvent(event)).map_err(|err| {
                 <_ as Into<Box<dyn std::error::Error + Send + Sync>>>::into(err)
             });
         }
@@ -101,7 +107,11 @@ pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoRe
     .keep_alive(
         sse::KeepAlive::new()
             .interval(Duration::from_secs(2))
-            .event(sse::Event::default().event(format!("keep_alive {}", progress_context))),
+            .event(
+                sse::Event::default()
+                    .json_data(SyncUpdate::KeepAlive)
+                    .expect("deserialization to works"),
+            ),
     )
 }
 

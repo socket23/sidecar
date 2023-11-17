@@ -22,7 +22,7 @@ use crate::webserver::repos::QueuedRepoStatus;
 use super::application::Application;
 use super::config::configuration::Configuration;
 
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize, Clone, Debug)]
 pub struct Progress {
     #[serde(rename = "ref")]
     pub reporef: RepoRef,
@@ -30,7 +30,7 @@ pub struct Progress {
     pub event: ProgressEvent,
 }
 
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum ProgressEvent {
     IndexPercent(u8),

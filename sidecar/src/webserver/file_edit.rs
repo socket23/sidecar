@@ -64,7 +64,11 @@ pub async fn file_edit(
     // thats the case only then can we apply it to the file
     // First we check if the output generated is valid by itself, if it is then
     // we can think about applying the changes to the file
-    let llm_client = Arc::new(LlmClient::codestory_infra(app.posthog_client.clone()));
+    let llm_client = Arc::new(LlmClient::codestory_infra(
+        app.posthog_client.clone(),
+        app.sql.clone(),
+        app.user_id.to_owned(),
+    ));
     let file_diff_content = generate_file_diff(
         &file_content,
         &file_path,

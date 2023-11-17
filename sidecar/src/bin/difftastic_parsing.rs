@@ -95,60 +95,60 @@ impl DiffActionResponse {
     }
 }
 
-async fn call_gpt_for_action_resolution(
-    current_changes: Vec<String>,
-    incoming_changes: Vec<String>,
-    prefix: Vec<String>,
-    query: &str,
-) -> Vec<String> {
-    let system_message = llm_funcs::llm::Message::system(&diff_accept_prompt(query));
-    let user_messages = prompts::diff_user_messages(
-        &prefix.join("\n"),
-        &current_changes.join("\n"),
-        &incoming_changes.join("\n"),
-    )
-    .into_iter()
-    .map(|message| llm_funcs::llm::Message::user(&message));
-    let messages = vec![system_message]
-        .into_iter()
-        .chain(user_messages)
-        .collect::<Vec<_>>();
-    let llm_client = Arc::new(llm_funcs::LlmClient::codestory_infra(Arc::new(
-        posthog_client(),
-    )));
-    let model = llm_funcs::llm::OpenAIModel::GPT4_Turbo;
-    let response = llm_client
-        .response_openai(model, messages, None, 0.1, None)
-        .await;
-    let diff_action = match response {
-        Ok(response) => DiffActionResponse::from_gpt_response(&response),
-        Err(_) => {
-            // leave it as it is
-            None
-        }
-    };
-    match diff_action {
-        Some(DiffActionResponse::AcceptCurrentChanges) => {
-            // we have to accept the current changes
-            current_changes
-        }
-        Some(DiffActionResponse::AcceptIncomingChanges) => {
-            // we have to accept the incoming changes
-            incoming_changes
-        }
-        Some(DiffActionResponse::AcceptBothChanges) => {
-            // we have to accept both the changes
-            current_changes
-                .into_iter()
-                .chain(incoming_changes)
-                .collect()
-        }
-        None => {
-            // we have to accept the current changes
-            current_changes
-        }
-    }
-}
+// async fn call_gpt_for_action_resolution(
+//     current_changes: Vec<String>,
+//     incoming_changes: Vec<String>,
+//     prefix: Vec<String>,
+//     query: &str,
+// ) -> Vec<String> {
+//     let system_message = llm_funcs::llm::Message::system(&diff_accept_prompt(query));
+//     let user_messages = prompts::diff_user_messages(
+//         &prefix.join("\n"),
+//         &current_changes.join("\n"),
+//         &incoming_changes.join("\n"),
+//     )
+//     .into_iter()
+//     .map(|message| llm_funcs::llm::Message::user(&message));
+//     let messages = vec![system_message]
+//         .into_iter()
+//         .chain(user_messages)
+//         .collect::<Vec<_>>();
+//     let llm_client = Arc::new(llm_funcs::LlmClient::codestory_infra(Arc::new(
+//         posthog_client(),
+//     )));
+//     let model = llm_funcs::llm::OpenAIModel::GPT4_Turbo;
+//     let response = llm_client
+//         .response_openai(model, messages, None, 0.1, None)
+//         .await;
+//     let diff_action = match response {
+//         Ok(response) => DiffActionResponse::from_gpt_response(&response),
+//         Err(_) => {
+//             // leave it as it is
+//             None
+//         }
+//     };
+//     match diff_action {
+//         Some(DiffActionResponse::AcceptCurrentChanges) => {
+//             // we have to accept the current changes
+//             current_changes
+//         }
+//         Some(DiffActionResponse::AcceptIncomingChanges) => {
+//             // we have to accept the incoming changes
+//             incoming_changes
+//         }
+//         Some(DiffActionResponse::AcceptBothChanges) => {
+//             // we have to accept both the changes
+//             current_changes
+//                 .into_iter()
+//                 .chain(incoming_changes)
+//                 .collect()
+//         }
+//         None => {
+//             // we have to accept the current changes
+//             current_changes
+//         }
+//     }
+// }
 
 /// We will use gpt to generate the lines of the code which should be applied
 /// to the delta using llm (this is like the machine version of doing git diff(accept/reject))
@@ -187,20 +187,21 @@ async fn process_file_lines_to_gpt(file_lines: Vec<String>, user_query: &str) ->
             // what action to take
             // we also want to keep a prefix of the lines here and send that along
             // to the llm for context as well
-            let selection_lines = call_gpt_for_action_resolution(
-                current_changes,
-                incoming_changes,
-                total_file_lines
-                    .iter()
-                    .rev()
-                    .take(5)
-                    .rev()
-                    .into_iter()
-                    .map(|s| s.to_owned())
-                    .collect::<Vec<_>>(),
-                user_query,
-            )
-            .await;
+            // let selection_lines = call_gpt_for_action_resolution(
+            //     current_changes,
+            //     incoming_changes,
+            //     total_file_lines
+            //         .iter()
+            //         .rev()
+            //         .take(5)
+            //         .rev()
+            //         .into_iter()
+            //         .map(|s| s.to_owned())
+            //         .collect::<Vec<_>>(),
+            //     user_query,
+            // )
+            // .await;
+            let selection_lines = vec![];
             total_file_lines.extend(selection_lines.to_vec());
             println!("===== selection lines =====");
             println!("{}", selection_lines.to_vec().join("\n"));

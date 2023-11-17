@@ -281,13 +281,14 @@ pub struct LlmClient {
     posthog_client: Arc<PosthogClient>,
     sql_db: SqlDb,
     user_id: String,
+    allowed_user_ids: Vec<String>,
 }
-// pub struct LlmClient {
-//     gpt4_client: Client<OpenAIConfig>,
-//     gpt432k_client: Client<OpenAIConfig>,
-//     gpt3_5_client: Client<OpenAIConfig>,
-//     gpt3_5_turbo_instruct: Client<OpenAIConfig>,
-// }
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+enum OpenAIEventType {
+    Request,
+    RequestAndResponse,
+}
 
 impl LlmClient {
     pub fn codestory_infra(
@@ -295,6 +296,7 @@ impl LlmClient {
         sql_db: SqlDb,
         user_id: String,
     ) -> LlmClient {
+        let allowed_user_ids = vec!["skcd".to_owned(), "nareshr".to_owned()];
         let api_base = "https://codestory-gpt4.openai.azure.com".to_owned();
         let api_key = "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned();
         let api_version = "2023-08-01-preview".to_owned();
@@ -324,6 +326,7 @@ impl LlmClient {
             posthog_client,
             sql_db,
             user_id,
+            allowed_user_ids,
         }
         // Self {
         //     gpt4_client: Client::with_config(openai_config.clone()),
@@ -338,6 +341,25 @@ impl LlmClient {
         request: T,
         response: R,
     ) -> anyhow::Result<()> {
+        if self.allowed_user_ids.contains(&self.user_id) {
+            let mut tx = self.sql_db.begin().await?;
+            let request_str = serde_json::to_string(&request)?;
+            let response_str = serde_json::to_string(&response)?;
+            let event_type_str = serde_json::to_string(&OpenAIEventType::RequestAndResponse)?;
+            let _ = sqlx::query! {
+                r#"
+                INSERT INTO openai_llm_data (user_id, prompt, response, event_type)
+                VALUES (?, ?, ?, ?)
+                "#,
+                self.user_id,
+                request_str,
+                response_str,
+                event_type_str,
+            }
+            .execute(&mut *tx)
+            .await?;
+            tx.commit().await?;
+        }
         let mut event = PosthogEvent::new("openai_response_request_stream_response");
         let _ = event.insert_prop("response", response);
         let _ = event.insert_prop("request", request);
@@ -350,6 +372,23 @@ impl LlmClient {
         &self,
         request: T,
     ) -> anyhow::Result<()> {
+        if self.allowed_user_ids.contains(&self.user_id) {
+            let mut tx = self.sql_db.begin().await?;
+            let request_str = serde_json::to_string(&request)?;
+            let event_type_str = serde_json::to_string(&OpenAIEventType::Request)?;
+            let _ = sqlx::query! {
+                r#"
+                INSERT INTO openai_llm_data (user_id, prompt, event_type)
+                VALUES (?, ?, ?)
+                "#,
+                self.user_id,
+                request_str,
+                event_type_str,
+            }
+            .execute(&mut *tx)
+            .await?;
+            tx.commit().await?;
+        }
         let mut event = PosthogEvent::new("openai_request");
         let _ = event.insert_prop("request", request);
         let _ = self.posthog_client.capture(event).await;
@@ -371,7 +410,6 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
-        let request_posthog = request.clone();
         self.capture_openai_request(request.clone()).await?;
 
         const TOTAL_CHAT_RETRIES: usize = 5;

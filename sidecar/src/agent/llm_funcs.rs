@@ -10,6 +10,7 @@ use async_openai::types::ChatCompletionFunctionsArgs;
 use async_openai::types::ChatCompletionRequestMessageArgs;
 use async_openai::types::CreateChatCompletionRequest;
 use async_openai::types::CreateChatCompletionRequestArgs;
+use async_openai::types::CreateChatCompletionResponse;
 use async_openai::types::CreateCompletionRequestArgs;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
@@ -323,6 +324,29 @@ impl LlmClient {
         // }
     }
 
+    pub async fn capture_openai_request_response<T: serde::Serialize, R: serde::Serialize>(
+        &self,
+        request: T,
+        response: R,
+    ) -> anyhow::Result<()> {
+        let mut event = PosthogEvent::new("openai_response_request_stream_response");
+        let _ = event.insert_prop("response", response);
+        let _ = event.insert_prop("request", request);
+        let _ = self.posthog_client.capture(event).await;
+
+        Ok(())
+    }
+
+    pub async fn capture_openai_request<T: serde::Serialize>(
+        &self,
+        request: T,
+    ) -> anyhow::Result<()> {
+        let mut event = PosthogEvent::new("openai_request");
+        let _ = event.insert_prop("request", request);
+        let _ = self.posthog_client.capture(event).await;
+        Ok(())
+    }
+
     pub async fn stream_response(
         &self,
         model: llm::OpenAIModel,
@@ -339,9 +363,7 @@ impl LlmClient {
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
         let request_posthog = request.clone();
-        let mut event = PosthogEvent::new("openai_request");
-        let _ = event.insert_prop("request", request_posthog.clone());
-        let _ = self.posthog_client.capture(event).await;
+        self.capture_openai_request(request.clone()).await?;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -363,11 +385,8 @@ impl LlmClient {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            let mut event =
-                                PosthogEvent::new("openai_response_request_stream_response");
-                            let _ = event.insert_prop("response", answer);
-                            let _ = event.insert_prop("request", request_posthog.clone());
-                            let _ = self.posthog_client.capture(event).await;
+                            self.capture_openai_request_response(request.clone(), answer)
+                                .await?;
                         }
                         break;
                     }
@@ -420,10 +439,7 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
-        let request_posthog = request.clone();
-        let mut event = PosthogEvent::new("openai_request");
-        let _ = event.insert_prop("request", request_posthog.clone());
-        let _ = self.posthog_client.capture(event).await;
+        self.capture_openai_request(request.clone()).await?;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -446,11 +462,8 @@ impl LlmClient {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            let mut event =
-                                PosthogEvent::new("openai_response_request_stream_response");
-                            let _ = event.insert_prop("response", answer);
-                            let _ = event.insert_prop("request", request_posthog.clone());
-                            let _ = self.posthog_client.capture(event).await;
+                            self.capture_openai_request_response(request.clone(), answer)
+                                .await?;
                         }
                         break;
                     }
@@ -502,9 +515,7 @@ impl LlmClient {
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
         let request_posthog = request.clone();
-        let mut event = PosthogEvent::new("openai_request");
-        let _ = event.insert_prop("request", request_posthog.clone());
-        let _ = self.posthog_client.capture(event).await;
+        self.capture_openai_request(request.clone()).await?;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -526,11 +537,8 @@ impl LlmClient {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            let mut event =
-                                PosthogEvent::new("openai_response_request_stream_response");
-                            let _ = event.insert_prop("response", answer);
-                            let _ = event.insert_prop("request", request_posthog.clone());
-                            let _ = self.posthog_client.capture(event).await;
+                            self.capture_openai_request_response(request_posthog.clone(), answer)
+                                .await?;
                         }
                         break;
                     }
@@ -572,9 +580,7 @@ impl LlmClient {
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
         let request_posthog = request.clone();
-        let mut event = PosthogEvent::new("openai_request");
-        let _ = event.insert_prop("request", request_posthog.clone());
-        let _ = self.posthog_client.capture(event).await;
+        self.capture_openai_request(request.clone()).await?;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -596,11 +602,8 @@ impl LlmClient {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            let mut event =
-                                PosthogEvent::new("openai_response_request_stream_response");
-                            let _ = event.insert_prop("response", answer);
-                            let _ = event.insert_prop("request", request_posthog.clone());
-                            let _ = self.posthog_client.capture(event).await;
+                            self.capture_openai_request_response(request_posthog.clone(), answer)
+                                .await?;
                         }
                         break;
                     }
@@ -663,9 +666,7 @@ impl LlmClient {
                     .unwrap()
             };
             let request_posthog = completion_request.clone();
-            let mut event = PosthogEvent::new("openai_request");
-            let _ = event.insert_prop("request", request_posthog.clone());
-            let _ = self.posthog_client.capture(event).await;
+            self.capture_openai_request(request_posthog.clone()).await?;
             let completion_stream = client
                 .expect("is_none")
                 .completions()
@@ -682,11 +683,8 @@ impl LlmClient {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            let mut event =
-                                PosthogEvent::new("openai_response_request_stream_response");
-                            let _ = event.insert_prop("response", answer);
-                            let _ = event.insert_prop("request", request_posthog.clone());
-                            let _ = self.posthog_client.capture(event).await;
+                            self.capture_openai_request_response(request_posthog.clone(), answer)
+                                .await?;
                         }
                         break;
                     }
@@ -752,9 +750,7 @@ impl LlmClient {
             frequency_penalty,
         );
         let request_posthog = request.clone();
-        let mut event = PosthogEvent::new("openai_request");
-        let _ = event.insert_prop("request", request_posthog.clone());
-        let _ = self.posthog_client.capture(event).await;
+        self.capture_openai_request(request.clone()).await?;
         let mut final_function_call = llm::FunctionCall::default();
 
         const TOTAL_CHAT_RETRIES: usize = 5;
@@ -766,19 +762,16 @@ impl LlmClient {
                 .chat()
                 .create(cloned_request)
                 .await;
-            let mut final_answer = None;
             match data {
-                Ok(mut data_okay) => {
-                    let message = data_okay.choices.remove(0).message;
+                Ok(data_okay) => {
+                    let message = data_okay.choices.to_vec().remove(0).message;
                     let function_call = message.function_call;
-                    final_answer = Some(data_okay);
                     if let Some(function_call) = function_call {
                         final_function_call.name = Some(function_call.name);
                         final_function_call.arguments = function_call.arguments;
-                        let mut event = PosthogEvent::new("openai_response_request");
-                        let _ = event.insert_prop("response", final_answer);
-                        let _ = event.insert_prop("request", request_posthog.clone());
-                        let _ = self.posthog_client.capture(event).await;
+                        let _ = self
+                            .capture_openai_request_response(request_posthog.clone(), data_okay)
+                            .await;
                         return Ok(Some(final_function_call));
                     }
                     request.temperature = Some(0.1);

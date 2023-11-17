@@ -37,6 +37,7 @@ pub struct Application {
     pub language_parsing: Arc<TSLanguageParsing>,
     pub sql: SqlDb,
     pub posthog_client: Arc<PosthogClient>,
+    pub user_id: String,
 }
 
 impl Application {
@@ -71,6 +72,7 @@ impl Application {
             language_parsing,
             sql: sql_db,
             posthog_client: Arc::new(posthog_client),
+            user_id: config.user_id.clone(),
         })
     }
 

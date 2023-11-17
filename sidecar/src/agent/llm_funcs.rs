@@ -21,6 +21,7 @@ use tracing::error;
 use tracing::warn;
 
 use crate::chunking::text_document::DocumentSymbol;
+use crate::db::sqlite::SqlDb;
 use crate::in_line_agent::types::ContextSelection;
 use crate::in_line_agent::types::InLineAgentAnswer;
 use crate::posthog::client::PosthogClient;
@@ -278,6 +279,8 @@ pub struct LlmClient {
     gpt3_5_turbo_instruct: Client<OpenAIConfig>,
     gpt4_turbo_client: Client<OpenAIConfig>,
     posthog_client: Arc<PosthogClient>,
+    sql_db: SqlDb,
+    user_id: String,
 }
 // pub struct LlmClient {
 //     gpt4_client: Client<OpenAIConfig>,
@@ -287,7 +290,11 @@ pub struct LlmClient {
 // }
 
 impl LlmClient {
-    pub fn codestory_infra(posthog_client: Arc<PosthogClient>) -> LlmClient {
+    pub fn codestory_infra(
+        posthog_client: Arc<PosthogClient>,
+        sql_db: SqlDb,
+        user_id: String,
+    ) -> LlmClient {
         let api_base = "https://codestory-gpt4.openai.azure.com".to_owned();
         let api_key = "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned();
         let api_version = "2023-08-01-preview".to_owned();
@@ -315,6 +322,8 @@ impl LlmClient {
             gpt3_5_turbo_instruct: Client::with_config(openai_config),
             gpt4_turbo_client: Client::with_config(gpt4_turbo),
             posthog_client,
+            sql_db,
+            user_id,
         }
         // Self {
         //     gpt4_client: Client::with_config(openai_config.clone()),

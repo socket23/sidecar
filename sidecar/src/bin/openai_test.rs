@@ -87,24 +87,24 @@ fn posthog_client() -> PosthogClient {
 }
 
 async fn llm_request() {
-    use sidecar::agent::llm_funcs::LlmClient;
+    // use sidecar::agent::llm_funcs::LlmClient;
 
-    let client = LlmClient::codestory_infra(Arc::new(posthog_client()));
+    // let client = LlmClient::codestory_infra(Arc::new(posthog_client()));
 
-    let messages = vec![sidecar::agent::llm_funcs::llm::Message::system(
-        "chose one of the functions when the user wants to do code search with the keywords: sentence transformers",
-    )];
-    let functions = serde_json::from_value::<Vec<sidecar::agent::llm_funcs::llm::Function>>(
-        prompts::functions(false), // Only add proc if there are paths in context
-    )
-    .unwrap();
-    let _ = client
-        .stream_function_call(
-            sidecar::agent::llm_funcs::llm::OpenAIModel::GPT4,
-            messages,
-            functions,
-            0.0,
-            None,
-        )
-        .await;
+    // let messages = vec![sidecar::agent::llm_funcs::llm::Message::system(
+    //     "chose one of the functions when the user wants to do code search with the keywords: sentence transformers",
+    // )];
+    // let functions = serde_json::from_value::<Vec<sidecar::agent::llm_funcs::llm::Function>>(
+    //     prompts::functions(false), // Only add proc if there are paths in context
+    // )
+    // .unwrap();
+    // let _ = client
+    //     .stream_function_call(
+    //         sidecar::agent::llm_funcs::llm::OpenAIModel::GPT4,
+    //         messages,
+    //         functions,
+    //         0.0,
+    //         None,
+    //     )
+    //     .await;
 }

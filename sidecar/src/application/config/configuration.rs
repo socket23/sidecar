@@ -73,7 +73,7 @@ pub struct Configuration {
 
     #[clap(long, default_value_t = default_user_id())]
     #[serde(default = "default_user_id")]
-    user_id: String,
+    pub user_id: String,
 
     /// If we should poll the local repo for updates auto-magically. Disabled
     /// by default, until we figure out the delta sync method where we only

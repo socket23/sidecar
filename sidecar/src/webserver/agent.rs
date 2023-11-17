@@ -59,7 +59,11 @@ pub async fn search_agent(
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
-    let llm_client = Arc::new(LlmClient::codestory_infra(app.posthog_client.clone()));
+    let llm_client = Arc::new(LlmClient::codestory_infra(
+        app.posthog_client.clone(),
+        app.sql.clone(),
+        app.user_id.to_owned(),
+    ));
     let sql_db = app.sql.clone();
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let action = AgentAction::Query(query.clone());
@@ -108,7 +112,11 @@ pub async fn semantic_search(
     // we return at this point, because the latency is too high, and this is
     // okay as it is
     let session_id = uuid::Uuid::new_v4();
-    let llm_client = Arc::new(LlmClient::codestory_infra(app.posthog_client.clone()));
+    let llm_client = Arc::new(LlmClient::codestory_infra(
+        app.posthog_client.clone(),
+        app.sql.clone(),
+        app.user_id.to_owned(),
+    ));
     let conversation_id = uuid::Uuid::new_v4();
     let sql_db = app.sql.clone();
     let (sender, _) = tokio::sync::mpsc::channel(100);
@@ -199,7 +207,11 @@ pub async fn hybrid_search(
     // - final score -> git_log_score * 4 + lexical_search * 2.5 + semantic_search_score
     // - combine the score as following
     let session_id = uuid::Uuid::new_v4();
-    let llm_client = Arc::new(LlmClient::codestory_infra(app.posthog_client.clone()));
+    let llm_client = Arc::new(LlmClient::codestory_infra(
+        app.posthog_client.clone(),
+        app.sql.clone(),
+        app.user_id.to_owned(),
+    ));
     let conversation_id = uuid::Uuid::new_v4();
     let sql_db = app.sql.clone();
     let (sender, _) = tokio::sync::mpsc::channel(100);
@@ -249,7 +261,9 @@ pub async fn explain(
     }): axumQuery<ExplainRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let user_id = app.user_id.to_owned();
     let posthog_client = app.posthog_client.clone();
+    let sql_db = app.sql.clone();
     let file_content = app
         .indexes
         .file
@@ -307,7 +321,7 @@ pub async fn explain(
         reporef: repo_ref,
         session_id,
         conversation_messages: previous_messages,
-        llm_client: Arc::new(LlmClient::codestory_infra(posthog_client)),
+        llm_client: Arc::new(LlmClient::codestory_infra(posthog_client, sql_db, user_id)),
         model: GPT_4,
         sql_db: sql,
         sender,
@@ -505,6 +519,7 @@ pub async fn followup_chat(
     // to and use that as context for grounding the agent response. In the future
     // we can obviously add more context using @ symbols etc
     let posthog_client = app.posthog_client.clone();
+    let user_id = app.user_id.to_owned();
     let sql_db = app.sql.clone();
     let mut previous_messages =
         ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)
@@ -546,7 +561,11 @@ pub async fn followup_chat(
         app,
         repo_ref,
         session_id,
-        Arc::new(LlmClient::codestory_infra(posthog_client)),
+        Arc::new(LlmClient::codestory_infra(
+            posthog_client,
+            sql_db.clone(),
+            user_id.to_owned(),
+        )),
         sql_db,
         previous_messages,
         sender,
@@ -582,12 +601,17 @@ pub async fn go_to_definition_symbols(
 ) -> Result<impl IntoResponse> {
     let posthog_client = app.posthog_client.clone();
     let sql_db = app.sql.clone();
+    let user_id = app.user_id.to_owned();
     let agent = Agent {
         application: app,
         reporef: repo_ref,
         session_id: uuid::Uuid::new_v4(),
         conversation_messages: vec![],
-        llm_client: Arc::new(LlmClient::codestory_infra(posthog_client)),
+        llm_client: Arc::new(LlmClient::codestory_infra(
+            posthog_client,
+            sql_db.clone(),
+            user_id,
+        )),
         model: GPT_3_5_TURBO_16K,
         sql_db,
         sender: tokio::sync::mpsc::channel(100).0,

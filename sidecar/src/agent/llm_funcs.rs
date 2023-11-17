@@ -23,6 +23,7 @@ use crate::chunking::text_document::DocumentSymbol;
 use crate::in_line_agent::types::ContextSelection;
 use crate::in_line_agent::types::InLineAgentAnswer;
 use crate::posthog::client::PosthogClient;
+use crate::posthog::client::PosthogEvent;
 
 use super::types::Answer;
 use super::types::CompletionItem;
@@ -337,6 +338,10 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
+        let request_posthog = request.clone();
+        let mut event = PosthogEvent::new("openai_request");
+        let _ = event.insert_prop("request", request_posthog.clone());
+        let _ = self.posthog_client.capture(event).await;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -352,10 +357,20 @@ impl LlmClient {
             }
             let unwrap_stream = stream.expect("is_err check above to work");
             tokio::pin!(unwrap_stream);
+            let mut last_answer = None;
 
             loop {
                 match unwrap_stream.next().await {
-                    None => break,
+                    None => {
+                        if let Some(answer) = last_answer {
+                            let mut event =
+                                PosthogEvent::new("openai_response_request_stream_response");
+                            let _ = event.insert_prop("response", answer);
+                            let _ = event.insert_prop("request", request_posthog.clone());
+                            let _ = self.posthog_client.capture(event).await;
+                        }
+                        break;
+                    }
                     Some(Ok(s)) => {
                         let delta = &s
                             .choices
@@ -363,6 +378,7 @@ impl LlmClient {
                             .map(|choice| choice.delta.content.clone())
                             .flatten()
                             .unwrap_or("".to_owned());
+                        last_answer = Some(s);
                         buf += delta;
                         sender
                             .send(Answer {
@@ -404,8 +420,14 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
+        let request_posthog = request.clone();
+        let mut event = PosthogEvent::new("openai_request");
+        let _ = event.insert_prop("request", request_posthog.clone());
+        let _ = self.posthog_client.capture(event).await;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
+
+        let mut last_answer = None;
 
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
@@ -422,7 +444,16 @@ impl LlmClient {
 
             loop {
                 match unwrap_stream.next().await {
-                    None => break,
+                    None => {
+                        if let Some(answer) = last_answer {
+                            let mut event =
+                                PosthogEvent::new("openai_response_request_stream_response");
+                            let _ = event.insert_prop("response", answer);
+                            let _ = event.insert_prop("request", request_posthog.clone());
+                            let _ = self.posthog_client.capture(event).await;
+                        }
+                        break;
+                    }
                     Some(Ok(s)) => {
                         let delta = &s
                             .choices
@@ -440,6 +471,7 @@ impl LlmClient {
                                 context_selection: context_selection.clone(),
                             })
                             .expect("sending answer should not fail");
+                        last_answer = Some(s);
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -469,6 +501,10 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
+        let request_posthog = request.clone();
+        let mut event = PosthogEvent::new("openai_request");
+        let _ = event.insert_prop("request", request_posthog.clone());
+        let _ = self.posthog_client.capture(event).await;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -486,15 +522,26 @@ impl LlmClient {
             tokio::pin!(unwrap_stream);
 
             loop {
+                let mut last_answer = None;
                 match unwrap_stream.next().await {
-                    None => break,
+                    None => {
+                        if let Some(answer) = last_answer {
+                            let mut event =
+                                PosthogEvent::new("openai_response_request_stream_response");
+                            let _ = event.insert_prop("response", answer);
+                            let _ = event.insert_prop("request", request_posthog.clone());
+                            let _ = self.posthog_client.capture(event).await;
+                        }
+                        break;
+                    }
                     Some(Ok(s)) => {
                         buf += &s
                             .choices
                             .get(0)
                             .map(|choice| choice.delta.content.clone())
                             .flatten()
-                            .unwrap_or("".to_owned())
+                            .unwrap_or("".to_owned());
+                        last_answer = Some(s);
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -524,6 +571,10 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
+        let request_posthog = request.clone();
+        let mut event = PosthogEvent::new("openai_request");
+        let _ = event.insert_prop("request", request_posthog.clone());
+        let _ = self.posthog_client.capture(event).await;
 
         const TOTAL_CHAT_RETRIES: usize = 5;
 
@@ -541,15 +592,26 @@ impl LlmClient {
             tokio::pin!(unwrap_stream);
 
             loop {
+                let mut last_answer = None;
                 match unwrap_stream.next().await {
-                    None => break,
+                    None => {
+                        if let Some(answer) = last_answer {
+                            let mut event =
+                                PosthogEvent::new("openai_response_request_stream_response");
+                            let _ = event.insert_prop("response", answer);
+                            let _ = event.insert_prop("request", request_posthog.clone());
+                            let _ = self.posthog_client.capture(event).await;
+                        }
+                        break;
+                    }
                     Some(Ok(s)) => {
                         buf += &s
                             .choices
                             .get(0)
                             .map(|choice| choice.delta.content.clone())
                             .flatten()
-                            .unwrap_or("".to_owned())
+                            .unwrap_or("".to_owned());
+                        last_answer = Some(s);
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -600,6 +662,10 @@ impl LlmClient {
                     .build()
                     .unwrap()
             };
+            let request_posthog = completion_request.clone();
+            let mut event = PosthogEvent::new("openai_request");
+            let _ = event.insert_prop("request", request_posthog.clone());
+            let _ = self.posthog_client.capture(event).await;
             let completion_stream = client
                 .expect("is_none")
                 .completions()
@@ -610,10 +676,20 @@ impl LlmClient {
             }
             let unwrap_stream = completion_stream.expect("is_err check above to work");
             tokio::pin!(unwrap_stream);
+            let mut last_answer = None;
 
             loop {
                 match unwrap_stream.next().await {
-                    None => break,
+                    None => {
+                        if let Some(answer) = last_answer {
+                            let mut event =
+                                PosthogEvent::new("openai_response_request_stream_response");
+                            let _ = event.insert_prop("response", answer);
+                            let _ = event.insert_prop("request", request_posthog.clone());
+                            let _ = self.posthog_client.capture(event).await;
+                        }
+                        break;
+                    }
                     Some(Ok(value)) => {
                         let delta = &value
                             .choices
@@ -640,6 +716,7 @@ impl LlmClient {
                                 logprobs: generated_logprobs,
                             })
                             .expect("sending answer should not fail");
+                        last_answer = Some(value);
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -674,6 +751,10 @@ impl LlmClient {
             temperature,
             frequency_penalty,
         );
+        let request_posthog = request.clone();
+        let mut event = PosthogEvent::new("openai_request");
+        let _ = event.insert_prop("request", request_posthog.clone());
+        let _ = self.posthog_client.capture(event).await;
         let mut final_function_call = llm::FunctionCall::default();
 
         const TOTAL_CHAT_RETRIES: usize = 5;
@@ -685,13 +766,19 @@ impl LlmClient {
                 .chat()
                 .create(cloned_request)
                 .await;
+            let mut final_answer = None;
             match data {
                 Ok(mut data_okay) => {
                     let message = data_okay.choices.remove(0).message;
                     let function_call = message.function_call;
+                    final_answer = Some(data_okay);
                     if let Some(function_call) = function_call {
                         final_function_call.name = Some(function_call.name);
                         final_function_call.arguments = function_call.arguments;
+                        let mut event = PosthogEvent::new("openai_response_request");
+                        let _ = event.insert_prop("response", final_answer);
+                        let _ = event.insert_prop("request", request_posthog.clone());
+                        let _ = self.posthog_client.capture(event).await;
                         return Ok(Some(final_function_call));
                     }
                     request.temperature = Some(0.1);

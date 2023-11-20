@@ -495,7 +495,7 @@ impl QuickCodeSnippetIndex {
         let writer = index
             .writer_with_num_threads(
                 std::thread::available_parallelism().unwrap().get(),
-                100_000_000,
+                100_000_000 * std::thread::available_parallelism().unwrap().get(),
             )
             .expect("index writer to not fail");
         Self {

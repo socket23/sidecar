@@ -53,7 +53,7 @@ impl Application {
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
         let language_parsing = Arc::new(TSLanguageParsing::init());
         let semantic_client = SemanticClient::new(config.clone(), language_parsing.clone()).await;
-        let posthog_client = posthog_client();
+        let posthog_client = posthog_client(&config.user_id);
         debug!("semantic client presence: {}", semantic_client.is_some());
         Ok(Self {
             config: config.clone(),

@@ -150,9 +150,9 @@ impl PosthogEvent {
     }
 }
 
-pub fn posthog_client() -> PosthogClient {
+pub fn posthog_client(user_id: &str) -> PosthogClient {
     client(
         "phc_dKVAmUNwlfHYSIAH1kgnvq3iEw7ovE5YYvGhTyeRlaB",
-        "codestory".to_owned(),
+        user_id.to_owned(),
     )
 }

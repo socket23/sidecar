@@ -74,7 +74,7 @@ impl ApiResponse for RepoStatus {}
 #[derive(Debug, Clone, Serialize)]
 pub enum SyncUpdate {
     ProgressEvent(Progress),
-    KeepAlive,
+    KeepAlive { timestamp: f64 },
 }
 
 /// Synchronize a repo by its id
@@ -109,7 +109,12 @@ pub async fn index_status(Extension(app): Extension<Application>) -> impl IntoRe
             .interval(Duration::from_secs(2))
             .event(
                 sse::Event::default()
-                    .json_data(SyncUpdate::KeepAlive)
+                    .json_data(SyncUpdate::KeepAlive {
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64(),
+                    })
                     .expect("deserialization to works"),
             ),
     )

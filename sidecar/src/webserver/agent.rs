@@ -524,7 +524,7 @@ pub async fn followup_chat(
     let mut previous_messages =
         ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)
             .await
-            .expect("loading from db to never fail");
+            .unwrap_or_default();
     let last_user_context = previous_messages
         .last()
         .map(|previous_message| previous_message.get_user_context());

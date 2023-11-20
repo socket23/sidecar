@@ -340,6 +340,7 @@ impl LlmClient {
         &self,
         request: T,
         response: R,
+        answer: Option<String>,
     ) -> anyhow::Result<()> {
         if self.allowed_user_ids.contains(&self.user_id) {
             let mut tx = self.sql_db.begin().await?;
@@ -348,12 +349,13 @@ impl LlmClient {
             let event_type_str = serde_json::to_string(&OpenAIEventType::RequestAndResponse)?;
             let _ = sqlx::query! {
                 r#"
-                INSERT INTO openai_llm_data (user_id, prompt, response, event_type)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO openai_llm_data (user_id, prompt, response, answer, event_type)
+                VALUES (?, ?, ?, ?, ?)
                 "#,
                 self.user_id,
                 request_str,
                 response_str,
+                answer,
                 event_type_str,
             }
             .execute(&mut *tx)
@@ -363,6 +365,7 @@ impl LlmClient {
         let mut event = PosthogEvent::new("openai_response_request_stream_response");
         let _ = event.insert_prop("response", response);
         let _ = event.insert_prop("request", request);
+        let _ = event.insert_prop("answer", answer);
         let _ = self.posthog_client.capture(event).await;
 
         Ok(())
@@ -427,13 +430,19 @@ impl LlmClient {
             let unwrap_stream = stream.expect("is_err check above to work");
             tokio::pin!(unwrap_stream);
             let mut last_answer = None;
+            let mut full_answer = None;
 
             loop {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            self.capture_openai_request_response(request.clone(), answer)
-                                .await?;
+                            dbg!(&full_answer);
+                            self.capture_openai_request_response(
+                                request.clone(),
+                                answer,
+                                full_answer,
+                            )
+                            .await?;
                         }
                         break;
                     }
@@ -444,8 +453,18 @@ impl LlmClient {
                             .map(|choice| choice.delta.content.clone())
                             .flatten()
                             .unwrap_or("".to_owned());
-                        last_answer = Some(s);
+                        // we want the last answer which is some here
+                        let value = s
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.delta.content.as_ref())
+                            .flatten();
+                        if value.is_some() {
+                            last_answer = Some(s);
+                        }
                         buf += delta;
+                        full_answer = Some(buf.to_owned());
+                        dbg!("What is the answer we have here", &full_answer);
                         sender
                             .send(Answer {
                                 answer_up_until_now: buf.to_owned(),
@@ -491,6 +510,7 @@ impl LlmClient {
         const TOTAL_CHAT_RETRIES: usize = 5;
 
         let mut last_answer = None;
+        let mut full_answer = None;
 
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
@@ -509,8 +529,12 @@ impl LlmClient {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            self.capture_openai_request_response(request.clone(), answer)
-                                .await?;
+                            self.capture_openai_request_response(
+                                request.clone(),
+                                answer,
+                                full_answer,
+                            )
+                            .await?;
                         }
                         break;
                     }
@@ -522,6 +546,7 @@ impl LlmClient {
                             .flatten()
                             .unwrap_or("".to_owned());
                         buf += delta;
+                        full_answer = Some(buf.to_owned());
                         sender
                             .send(InLineAgentAnswer {
                                 answer_up_until_now: buf.to_owned(),
@@ -531,7 +556,14 @@ impl LlmClient {
                                 context_selection: context_selection.clone(),
                             })
                             .expect("sending answer should not fail");
-                        last_answer = Some(s);
+                        let value = s
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.delta.content.as_ref())
+                            .flatten();
+                        if value.is_some() {
+                            last_answer = Some(s);
+                        }
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -581,11 +613,16 @@ impl LlmClient {
 
             loop {
                 let mut last_answer = None;
+                let mut full_answer = None;
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            self.capture_openai_request_response(request_posthog.clone(), answer)
-                                .await?;
+                            self.capture_openai_request_response(
+                                request_posthog.clone(),
+                                answer,
+                                full_answer,
+                            )
+                            .await?;
                         }
                         break;
                     }
@@ -596,7 +633,15 @@ impl LlmClient {
                             .map(|choice| choice.delta.content.clone())
                             .flatten()
                             .unwrap_or("".to_owned());
-                        last_answer = Some(s);
+                        full_answer = Some(buf.to_owned());
+                        let value = s
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.delta.content.as_ref())
+                            .flatten();
+                        if value.is_some() {
+                            last_answer = Some(s);
+                        }
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -646,11 +691,16 @@ impl LlmClient {
 
             loop {
                 let mut last_answer = None;
+                let mut full_answer = None;
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            self.capture_openai_request_response(request_posthog.clone(), answer)
-                                .await?;
+                            self.capture_openai_request_response(
+                                request_posthog.clone(),
+                                answer,
+                                full_answer,
+                            )
+                            .await?;
                         }
                         break;
                     }
@@ -661,7 +711,15 @@ impl LlmClient {
                             .map(|choice| choice.delta.content.clone())
                             .flatten()
                             .unwrap_or("".to_owned());
-                        last_answer = Some(s);
+                        full_answer = Some(buf.to_owned());
+                        let value = s
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.delta.content.as_ref())
+                            .flatten();
+                        if value.is_some() {
+                            last_answer = Some(s);
+                        }
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -725,13 +783,18 @@ impl LlmClient {
             let unwrap_stream = completion_stream.expect("is_err check above to work");
             tokio::pin!(unwrap_stream);
             let mut last_answer = None;
+            let mut full_answer = None;
 
             loop {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            self.capture_openai_request_response(request_posthog.clone(), answer)
-                                .await?;
+                            self.capture_openai_request_response(
+                                request_posthog.clone(),
+                                answer,
+                                full_answer,
+                            )
+                            .await?;
                         }
                         break;
                     }
@@ -751,6 +814,7 @@ impl LlmClient {
                             .get(0)
                             .map(|choice| choice.text.clone())
                             .unwrap_or("".to_owned());
+                        full_answer = Some(buf.to_owned());
                         let generated_logprobs = logprobs
                             .as_ref()
                             .map(|logprob| logprob.token_logprobs.to_vec());
@@ -761,7 +825,15 @@ impl LlmClient {
                                 logprobs: generated_logprobs,
                             })
                             .expect("sending answer should not fail");
-                        last_answer = Some(value);
+                        if value
+                            .choices
+                            .get(0)
+                            .map(|choice| choice.finish_reason.as_ref())
+                            .flatten()
+                            .is_none()
+                        {
+                            last_answer = Some(value);
+                        }
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");
@@ -817,7 +889,11 @@ impl LlmClient {
                         final_function_call.name = Some(function_call.name);
                         final_function_call.arguments = function_call.arguments;
                         let _ = self
-                            .capture_openai_request_response(request_posthog.clone(), data_okay)
+                            .capture_openai_request_response(
+                                request_posthog.clone(),
+                                data_okay,
+                                None,
+                            )
                             .await;
                         return Ok(Some(final_function_call));
                     }

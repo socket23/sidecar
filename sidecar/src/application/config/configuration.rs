@@ -116,8 +116,8 @@ pub fn default_parallelism() -> usize {
     std::thread::available_parallelism().unwrap().get()
 }
 
-const fn default_buffer_size() -> usize {
-    100_000_000
+fn default_buffer_size() -> usize {
+    100_000_000 * default_parallelism()
 }
 
 fn default_collection_name() -> String {

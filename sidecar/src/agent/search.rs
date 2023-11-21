@@ -731,6 +731,7 @@ impl Agent {
                     // as a followup
                     self.conversation_messages_len() > 1,
                     self.user_context.is_some(),
+                    &self.project_labels,
                 );
                 answer_prompt
             }

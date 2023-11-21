@@ -575,6 +575,7 @@ pub struct Agent {
     pub sql_db: SqlDb,
     pub sender: Sender<ConversationMessage>,
     pub user_context: Option<UserContext>,
+    pub project_labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

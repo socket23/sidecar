@@ -326,6 +326,7 @@ pub async fn explain(
         sql_db: sql,
         sender,
         user_context: None,
+        project_labels: vec![],
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -434,6 +435,7 @@ pub struct FollowupChatRequest {
     pub repo_ref: RepoRef,
     pub thread_id: uuid::Uuid,
     pub user_context: UserContext,
+    pub project_labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -511,6 +513,7 @@ pub async fn followup_chat(
         repo_ref,
         thread_id,
         user_context,
+        project_labels,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -616,6 +619,7 @@ pub async fn go_to_definition_symbols(
         sql_db,
         sender: tokio::sync::mpsc::channel(100).0,
         user_context: None,
+        project_labels: vec![],
     };
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     Ok(json(GotoDefinitionSymbolsResponse {

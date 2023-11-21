@@ -106,6 +106,7 @@ impl Agent {
             sql_db,
             sender,
             user_context: None,
+            project_labels: vec![],
         };
         agent
     }
@@ -130,6 +131,7 @@ impl Agent {
             sql_db,
             sender,
             user_context: Some(user_context),
+            project_labels: vec![],
         };
         agent
     }
@@ -161,6 +163,7 @@ impl Agent {
             sql_db,
             sender,
             user_context: None,
+            project_labels: vec![],
         };
         agent
     }

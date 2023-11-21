@@ -408,8 +408,27 @@ pub fn followup_chat_prompt(
     location: &str,
     is_followup: bool,
     user_context: bool,
+    project_labels: &[String],
 ) -> String {
+    use std::collections::HashSet;
     let mut user_selected_instructions = "";
+    let mut project_labels_context = "".to_owned();
+    if !project_labels.is_empty() {
+        let unique_project_labels = project_labels
+            .iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|value| format!("- {value}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        project_labels_context = format!(
+            r#"- You are given the following project labels which are associated with the codebase:
+{unique_project_labels}
+"#
+        );
+    }
     if user_context {
         user_selected_instructions = r#"- You are given the code which the user has selected explicitly in the USER SELECTED CODE section
 - Pay special attention to the USER SELECTED CODE as these code snippets are specially selected by the user in their query"#;
@@ -420,6 +439,8 @@ Your job is to answer the user query.
 
 If you do not have enough information needed to answer the query, do not make up an answer.
 When referring to code, you must provide an example in a code block.
+
+{project_labels_context}
 
 Respect these rules at all times:
 - When asked for your name, you must respond with "Aide".
@@ -453,6 +474,8 @@ Your job is to answer the user query which is a followup to the conversation we 
 
 Provide only as much information and code as is necessary to answer the query, but be concise. Keep number of quoted lines to a minimum when possible. If you do not have enough information needed to answer the query, do not make up an answer.
 When referring to code, you must provide an example in a code block.
+
+{project_labels_context}
 
 Respect these rules at all times:
 - When asked for your name, you must respond with "Aide".

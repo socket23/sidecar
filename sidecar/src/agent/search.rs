@@ -898,20 +898,24 @@ impl Agent {
             tiktoken_rs::get_completion_max_tokens(self.model.tokenizer, &prompt)?;
 
         // we have to show the selected snippets which the user has selected
-        let user_variables = self.get_user_variables();
-        if let Some(user_variables_slice) = user_variables {
-            let user_selected_context = "#### USER SELECTED CONTEXT ####\n";
-            let user_selected_context_tokens = bpe.encode_ordinary(&user_selected_context).len();
+        // we have to show the selected snippets to the prompt as well
+        let extended_user_selected_context = self.get_extended_user_selection_information();
+        if let Some(extended_user_selection_context_slice) = extended_user_selected_context {
+            let user_selected_context_header = "#### USER SELECTED CONTEXT ####\n";
+            let user_selected_context_tokens = bpe.encode_ordinary(&user_selected_context_header).len();
             if user_selected_context_tokens
                 >= remaining_prompt_tokens - self.model.prompt_tokens_limit
             {
                 info!("we can't set user selected context because of prompt limit");
             } else {
-                prompt += "#### USER SELECTED CONTEXT ####\n";
+                prompt += user_selected_context_header;
                 remaining_prompt_tokens -= user_selected_context_tokens;
 
-                for user_variable in user_variables_slice.iter() {
-                    let variable_prompt = user_variable.to_prompt();
+                for extended_user_selected_context in extended_user_selection_context_slice
+                    .iter()
+                    .rev()
+                {
+                    let variable_prompt = extended_user_selected_context.to_prompt();
                     let user_variable_tokens = bpe.encode_ordinary(&variable_prompt).len();
                     if user_variable_tokens
                         > remaining_prompt_tokens - self.model.prompt_tokens_limit
@@ -921,35 +925,6 @@ impl Agent {
                     }
                     prompt += &variable_prompt;
                     remaining_prompt_tokens -= user_variable_tokens;
-                }
-            }
-        }
-
-        // If we have definition snippets we also add them to the mix here
-        let definition_snippets = self.get_definition_snippets();
-        if let Some(definition_snippets_slice) = definition_snippets {
-            let definition_snippets_context = "#### DEFINITION SNIPPETS ####\n";
-            let definition_snippets_context_tokens =
-                bpe.encode_ordinary(&definition_snippets_context).len();
-            if definition_snippets_context_tokens
-                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
-            {
-                info!("we can't set definition snippets because of prompt limit");
-            } else {
-                prompt += "#### DEFINITION SNIPPETS ####\n";
-                remaining_prompt_tokens -= definition_snippets_context_tokens;
-
-                for definition_snippet_context in definition_snippets_slice.iter() {
-                    let definition_snippet_tokens =
-                        bpe.encode_ordinary(&definition_snippet_context).len();
-                    if definition_snippet_tokens
-                        > remaining_prompt_tokens - self.model.prompt_tokens_limit
-                    {
-                        info!("breaking at {} tokens", remaining_prompt_tokens);
-                        break;
-                    }
-                    prompt += &definition_snippet_context;
-                    remaining_prompt_tokens -= definition_snippet_tokens;
                 }
             }
         }

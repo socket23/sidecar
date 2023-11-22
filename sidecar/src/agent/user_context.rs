@@ -100,7 +100,17 @@ impl Agent {
             let file_content = user_context.file_content_map;
             let user_variables = user_context.variables;
             // We will handle the selection variables first here since those are super important
-            self.truncate_files_to_fit_in_limit(file_content, messages, prompt_token_limit, &bpe).await?
+            let (selection_variables, remaining_tokens) = self
+                .select_user_variable_selection_to_fit_in_context(
+                    user_variables,
+                    file_content.clone(),
+                    prompt_token_limit,
+                    &bpe,
+                )
+                .await?;
+            // Save this to the last message
+            self.save_extended_code_selection_variables(selection_variables)?;
+            self.truncate_files_to_fit_in_limit(file_content, messages, remaining_tokens, &bpe).await?
         };
         // Now we update the code spans which we have selected
         let _ = self.save_code_snippets_response(&query, code_spans);
@@ -122,19 +132,54 @@ impl Agent {
         file_content_map: Vec<FileContentValue>,
         prompt_token_limit: usize,
         bpe: &tiktoken_rs::CoreBPE,
-    ) -> anyhow::Result<Vec<ExtendedVariableInformation>> {
+        // We return here the extended variable information and the tokens which remain
+    ) -> anyhow::Result<(Vec<ExtendedVariableInformation>, usize)> {
         // Here we will try to get the enclosing span of the context which the user has selected
         // and try to expand on it?
+        let mut tokens_used = 0;
         let selection_variables = user_variables
             .into_iter()
             .filter(|variable| variable.is_selection())
             .filter(|variable| file_content_map.iter().any(|file| file.file_path == variable.fs_file_path))
             .collect::<Vec<_>>();
-        // TODO(skcd): Finish implementing from here
+        
+        let extended_variables = selection_variables.into_iter().filter_map(|selection_variable| {
+            // These are 1 indexed in our case, so we have to work with that
+            let start_line = selection_variable.start_position.line;
+            let end_line = selection_variable.end_position.line;
+            let file_path = selection_variable.fs_file_path.clone();
+            let file_content = file_content_map.iter().find(|file| file.file_path == file_path).unwrap().file_content.clone();
+            let file_path_alias = self.get_last_conversation_message_immutable().get_file_path_alias(&file_path);
+            if file_path_alias.is_none() {
+                return None;
+            }
+            let file_lines = file_content.split('\n').collect::<Vec<_>>();
+            let start_line = start_line as usize;
+            let end_line = end_line as usize;
+            let content = file_lines[start_line..end_line].join("\n");
+            let tokens = bpe.encode_ordinary(&content).len();
+            if tokens_used + tokens >= prompt_token_limit {
+                return None;
+            } else {
+                tokens_used += tokens;
+            }
+            Some(ExtendedVariableInformation::new(
+                selection_variable.to_agent_type(),
+                Some(CodeSpan::new(
+                    file_path,
+                    file_path_alias.expect("is_none check above to work"),
+                    start_line as u64,
+                    end_line as u64,
+                    content.to_owned(),
+                    Some(1.0),
+                )),
+                content,
+            ))
+        }).collect::<Vec<_>>();
 
         // Now we can safely try and expand the selection context here if required, atleast we can get the function beginning and the end using this or the class
         // start and end here if required
-        Ok(vec![])
+        Ok((extended_variables, prompt_token_limit - tokens_used))
     }
 
     async fn truncate_files_to_fit_in_limit(

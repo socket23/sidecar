@@ -19,7 +19,7 @@ use crate::{
 use super::{
     llm_funcs::LlmClient,
     model,
-    types::{Agent, AgentState, Answer, ConversationMessage},
+    types::{Agent, AgentState, Answer, ConversationMessage, ExtendedVariableInformation},
 };
 
 use anyhow::anyhow;
@@ -238,6 +238,17 @@ impl Agent {
         user_variables.into_iter().for_each(|user_variable| {
             last_exchange.add_user_variable(user_variable);
         })
+    }
+
+    pub fn save_extended_code_selection_variables(
+        &mut self,
+        extended_variable_information: Vec<ExtendedVariableInformation>,
+    ) -> anyhow::Result<()> {
+        for variable_information in extended_variable_information.iter() {
+            let last_exchange = self.get_last_conversation_message();
+            last_exchange.add_extended_variable_information(variable_information.clone());
+        }
+        Ok(())
     }
 
     pub fn save_code_snippets_response(

@@ -549,6 +549,7 @@ pub async fn followup_chat(
         query.to_owned(),
     );
     conversation_message.set_user_context(user_context.clone());
+    conversation_message.set_active_window(active_window_data);
 
     // We add all the paths which we are going to get into the conversation message
     // so that we can use that for the next followup question

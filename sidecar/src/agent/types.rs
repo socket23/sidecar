@@ -13,7 +13,7 @@ use crate::{
     db::sqlite::SqlDb,
     indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
-    webserver::agent::{UserContext, ActiveWindowData},
+    webserver::agent::{ActiveWindowData, UserContext},
 };
 
 use super::{
@@ -246,6 +246,9 @@ impl ConversationMessage {
     }
 
     pub fn add_path(&mut self, relative_path: String) {
+        if self.file_paths.contains(&relative_path) {
+            return;
+        }
         self.file_paths.push(relative_path);
     }
 
@@ -288,6 +291,16 @@ impl ConversationMessage {
 
     pub fn set_active_window(&mut self, active_window_data: Option<ActiveWindowData>) {
         self.active_window_data = active_window_data;
+    }
+
+    /// Returns the active window data, if available.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(&ActiveWindowData)`: If there is active window data available.
+    /// - `None`: If there is no active window data available.
+    pub fn get_active_window(&self) -> Option<&ActiveWindowData> {
+        self.active_window_data.as_ref()
     }
 
     pub fn set_generated_answer_context(&mut self, answer_context: String) {
@@ -501,6 +514,27 @@ impl CodeSpan {
             data: code_snippet_document.content,
         }
     }
+
+    pub fn from_active_window(
+        active_window_data: &ActiveWindowData,
+        path_alias: usize,
+    ) -> Self {
+        let file_path = active_window_data.file_path.clone();
+        let split_content = active_window_data.file_content.lines().collect::<Vec<_>>();
+        let alias = path_alias;
+        let start_line = 0;
+        let end_line = split_content.len() as u64;
+        let score = Some(1.0);
+        let data = active_window_data.file_content.clone();
+        Self {
+            file_path,
+            alias,
+            start_line,
+            end_line,
+            score,
+            data,
+        }
+    }
 }
 
 impl std::fmt::Display for CodeSpan {
@@ -659,6 +693,14 @@ impl Agent {
             .map(|conversation_message| conversation_message.query.to_owned())
     }
 
+    pub fn get_last_conversation_message_immutable(&self) -> &ConversationMessage {
+        // If we don't have a conversation message then, we will crash and burn
+        // here
+        self.conversation_messages
+            .last()
+            .expect("There should be a conversation message")
+    }
+
     pub fn get_last_conversation_message(&mut self) -> &mut ConversationMessage {
         // If we don't have a conversation message then, we will crash and burn
         // here
@@ -680,6 +722,38 @@ impl Agent {
     }
 
     pub async fn get_file_content(&self, path: &str) -> anyhow::Result<Option<String>> {
+        // first we try to get the context from the user provided context
+        let content = self
+            .user_context
+            .as_ref()
+            .map(|user_context| {
+                user_context
+                    .file_content_map
+                    .iter()
+                    .filter(|file_content| file_content.file_path == path)
+                    .map(|file_content| file_content.file_content.clone())
+                    .next()
+            })
+            .flatten();
+        if let Some(content) = content {
+            return Ok(Some(content));
+        }
+
+        // Now we try to check if the active window data has the file content
+        let content = self
+            .get_last_conversation_message_immutable()
+            .get_active_window()
+            .map(|active_window_data| {
+                if active_window_data.file_path == path {
+                    Some(active_window_data.file_content.clone())
+                } else {
+                    None
+                }
+            })
+            .flatten();
+        if let Some(content) = content {
+            return Ok(Some(content));
+        }
         debug!(%self.reporef, path, %self.session_id, "executing file search");
         let file_reader = self
             .application
@@ -691,19 +765,7 @@ impl Agent {
         if let Ok(Some(_)) = file_reader {
             return file_reader;
         }
-        // Otherwise we will look at the user context and try to get the path
-        Ok(self
-            .user_context
-            .as_ref()
-            .map(|user_context| {
-                user_context
-                    .file_content_map
-                    .iter()
-                    .filter(|file_content| file_content.file_path == path)
-                    .map(|file_content| file_content.file_content.clone())
-                    .next()
-            })
-            .flatten())
+        Ok(None)
     }
 
     pub fn get_path_alias(&mut self, path: &str) -> usize {

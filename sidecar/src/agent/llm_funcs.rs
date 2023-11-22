@@ -464,7 +464,6 @@ impl LlmClient {
                         }
                         buf += delta;
                         full_answer = Some(buf.to_owned());
-                        dbg!("What is the answer we have here", &full_answer);
                         sender
                             .send(Answer {
                                 answer_up_until_now: buf.to_owned(),

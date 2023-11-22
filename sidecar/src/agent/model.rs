@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 #[derive(Debug, Clone)]
+/// Represents a model used for generating answers.
 pub struct AnswerModel {
     /// The name of this model according to tiktoken
     pub tokenizer: &'static str,
@@ -16,6 +17,9 @@ pub struct AnswerModel {
 
     /// The number of tokens reserved for history
     pub history_tokens_limit: usize,
+
+    /// The total number of tokens reserved for the model
+    pub total_tokens: usize,
 }
 
 // GPT-3.5-16k Turbo has 16,385 tokens
@@ -25,6 +29,7 @@ pub const GPT_3_5_TURBO_16K: AnswerModel = AnswerModel {
     answer_tokens: 1024 * 2,
     prompt_tokens_limit: 2500 * 2,
     history_tokens_limit: 2048 * 2,
+    total_tokens: 16385,
 };
 
 // GPT-4 has 8,192 tokens
@@ -34,6 +39,7 @@ pub const GPT_4: AnswerModel = AnswerModel {
     answer_tokens: 1024,
     prompt_tokens_limit: 2500,
     history_tokens_limit: 2048,
+    total_tokens: 8192,
 };
 
 // GPT4-32k has 32,769 tokens
@@ -43,6 +49,7 @@ pub const GPT_4_32K: AnswerModel = AnswerModel {
     answer_tokens: 1024 * 4,
     prompt_tokens_limit: 2500 * 4,
     history_tokens_limit: 2048 * 4,
+    total_tokens: 32769,
 };
 
 impl FromStr for AnswerModel {

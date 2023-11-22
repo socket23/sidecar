@@ -396,11 +396,17 @@ pub struct UserContext {
     pub file_content_map: Vec<FileContentValue>,
 }
 
+impl UserContext {
+    pub fn is_empty(&self) -> bool {
+        self.variables.is_empty() && self.file_content_map.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ActiveWindowData {
     pub file_path: String,
-    pub contents: String,
+    pub file_content: String,
+    pub language: String,
 }
 
 impl UserContext {
@@ -548,6 +554,11 @@ pub async fn followup_chat(
         crate::agent::types::AgentState::FollowupChat,
         query.to_owned(),
     );
+
+    // Add the path for the active window to the conversation message as well
+    if let Some(active_window_data) = &active_window_data {
+        conversation_message.add_path(active_window_data.file_path.to_owned());
+    }
     conversation_message.set_user_context(user_context.clone());
     conversation_message.set_active_window(active_window_data);
 
@@ -559,14 +570,15 @@ pub async fn followup_chat(
         .for_each(|file_content_value| {
             conversation_message.add_path(file_content_value.file_path.to_owned());
         });
-
+    
+    // We also want to add the file path for the active window if it's not already there
+    let file_path_len = conversation_message.get_paths().len();
     previous_messages.push(conversation_message);
 
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
     // If this is a followup, right now we don't take in any additional context,
     // but only use the one from our previous conversation
-    let file_path_len = user_context.file_content_map.len();
     let action = AgentAction::Answer {
         paths: (0..file_path_len).collect(),
     };

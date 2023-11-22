@@ -705,7 +705,7 @@ impl Agent {
                 .utter_history(Some(2))
                 .map(|message| message.to_owned())
                 .collect::<Vec<_>>();
-            let _ = self.truncate_user_context(message).await;
+            let _ = self.answer_context_from_user_data(message).await;
         }
         let context = self.answer_context(path_aliases).await?;
         let system_prompt = match self.get_last_conversation_message_agent_state() {
@@ -1030,9 +1030,7 @@ impl Agent {
                     .await
                     .unwrap()
                     .unwrap_or_else(|| panic!("path did not exist in the index: {path}"))
-                    // we should be using .lines here instead, but this is okay
-                    // for now
-                    .split("\n")
+                    .lines()
                     .map(str::to_owned)
                     .collect::<Vec<_>>();
 

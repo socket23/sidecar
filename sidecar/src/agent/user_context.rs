@@ -30,6 +30,8 @@ use super::llm_funcs::LlmClient;
 use super::types::Agent;
 
 impl Agent {
+    // TODO(skcd): We want to fix how many tokens we will be sending over, so we can properly
+    // make sure that the context is always in control
     pub async fn truncate_user_context(&mut self, messages: Vec<llm_funcs::llm::Message>) {
         let query = query_from_messages(messages.as_slice());
         let previous_message = messages;
@@ -276,7 +278,7 @@ async fn re_rank_code_snippets(
             None
         }
     })
-    .buffer_unordered(20)
+    .buffer_unordered(25)
     .collect::<Vec<_>>()
     .await
     .into_iter()

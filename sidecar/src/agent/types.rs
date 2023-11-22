@@ -11,9 +11,9 @@ use crate::{
     application::application::Application,
     chunking::text_document::Position,
     db::sqlite::SqlDb,
-    indexes::{indexer::FileDocument, schema::QuickCodeSnippetDocument},
+    indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
-    webserver::agent::UserContext,
+    webserver::agent::{UserContext, ActiveWindowData},
 };
 
 use super::{
@@ -120,6 +120,8 @@ pub struct ConversationMessage {
     /// previous user conversations
     #[serde(skip)]
     user_context: UserContext,
+    #[serde(skip)]
+    active_window_data: Option<ActiveWindowData>,
 }
 
 impl ConversationMessage {
@@ -145,6 +147,7 @@ impl ConversationMessage {
             definitions_interested_in: vec![],
             user_variables: vec![],
             user_context: Default::default(),
+            active_window_data: None,
         }
     }
 
@@ -174,6 +177,7 @@ impl ConversationMessage {
             definitions_interested_in: vec![],
             user_variables: vec![],
             user_context: Default::default(),
+            active_window_data: None,
         }
     }
 
@@ -199,6 +203,7 @@ impl ConversationMessage {
             definitions_interested_in: vec![],
             user_variables: vec![],
             user_context: Default::default(),
+            active_window_data: None,
         }
     }
 
@@ -224,6 +229,7 @@ impl ConversationMessage {
             definitions_interested_in: vec![],
             user_variables: vec![],
             user_context: Default::default(),
+            active_window_data: None,
         }
     }
 
@@ -280,6 +286,10 @@ impl ConversationMessage {
         self.user_context = user_context;
     }
 
+    pub fn set_active_window(&mut self, active_window_data: Option<ActiveWindowData>) {
+        self.active_window_data = active_window_data;
+    }
+
     pub fn set_generated_answer_context(&mut self, answer_context: String) {
         self.generated_answer_context = Some(answer_context);
     }
@@ -312,6 +322,7 @@ impl ConversationMessage {
             definitions_interested_in: vec![],
             user_variables: vec![],
             user_context: Default::default(),
+            active_window_data: None,
         }
     }
 
@@ -433,6 +444,7 @@ impl ConversationMessage {
                     // we also leave this blank right now
                     user_variables: vec![],
                     user_context,
+                    active_window_data: None,
                 }
             })
             .collect())

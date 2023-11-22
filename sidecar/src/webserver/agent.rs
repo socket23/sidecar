@@ -396,6 +396,13 @@ pub struct UserContext {
     pub file_content_map: Vec<FileContentValue>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveWindowData {
+    pub file_path: String,
+    pub contents: String,
+}
+
 impl UserContext {
     fn merge_from_previous(mut self, previous: Option<&UserContext>) -> Self {
         // Here we try and merge the user contexts together, if we have something
@@ -436,6 +443,7 @@ pub struct FollowupChatRequest {
     pub thread_id: uuid::Uuid,
     pub user_context: UserContext,
     pub project_labels: Vec<String>,
+    pub active_window_data: Option<ActiveWindowData>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -514,6 +522,7 @@ pub async fn followup_chat(
         thread_id,
         user_context,
         project_labels,
+        active_window_data,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();

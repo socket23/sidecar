@@ -30,11 +30,206 @@ use super::llm_funcs::LlmClient;
 use super::types::Agent;
 
 impl Agent {
-    // TODO(skcd): We want to fix how many tokens we will be sending over, so we can properly
-    // make sure that the context is always in control
-    pub async fn truncate_user_context(&mut self, messages: Vec<llm_funcs::llm::Message>) {
+    pub async fn answer_context_from_user_data(
+        &mut self,
+        messages: Vec<llm_funcs::llm::Message>,
+    ) -> anyhow::Result<()> {
+        let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
+        let query = query_from_messages(messages.as_slice());
+
+        let history_token_limit = self.model.history_tokens_limit;
+        let mut prompt_token_limit = self.model.prompt_tokens_limit;
+
+        // we look at our messages and check how many more tokens we can save
+        // and send over
+        let history_tokens_in_use = tiktoken_rs::num_tokens_from_messages(
+            self.model.tokenizer,
+            messages
+                .iter()
+                .map(|message| message.into())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )?;
+
+        // we get additional breathing room if we are using less history tokens
+        // than required
+        prompt_token_limit = prompt_token_limit
+            + std::cmp::max(
+                0,
+                (history_token_limit as i64) - (history_tokens_in_use as i64),
+            ) as usize;
+        let open_file_data = self
+            .get_last_conversation_message_immutable()
+            .get_active_window();
+        let user_context = self
+            .user_context
+            .as_ref()
+            .expect("user_context to be there")
+            .clone();
+
+        // What if the user_context is empty? we just use the current open window
+        // as the context for the answer
+        let code_spans = if user_context.is_empty() {
+            match open_file_data {
+                Some(open_file) => {
+                    let file_tokens = bpe.encode_ordinary(&open_file.file_content).len();
+                    if file_tokens <= prompt_token_limit {
+                        // we are good, no need to filter things out here
+                        vec![CodeSpan::from_active_window(open_file, 0)]
+                    } else {
+                        // we are not good, need to truncate here until we fit
+                        // in the prompt limit
+                        let files = vec![
+                            FileContentValue {
+                                file_path: open_file.file_path.clone(),
+                                file_content: open_file.file_content.clone(),
+                                language: open_file.language.clone(),
+                            },
+                        ];
+                        self.truncate_files_to_fit_in_limit(files, messages, prompt_token_limit, &bpe).await?
+                    }
+                }
+                None => {
+                    // we have none, so do nothing here
+                    vec![]
+                }
+            }
+        } else {
+            // Now we have multiple things to take care of, so let's get on that
+            self.truncate_files_to_fit_in_limit(user_context.file_content_map, messages, prompt_token_limit, &bpe).await?
+        };
+        // Now we update the code spans which we have selected
+        let _ = self.save_code_snippets_response(&query, code_spans);
+        // We also retroactively save the last conversation to the database
+        if let Some(last_conversation) = self.conversation_messages.last() {
+            // save the conversation to the DB
+            let _ = last_conversation
+                .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                .await;
+            // send it over the sender
+            let _ = self.sender.send(last_conversation.clone()).await;
+        }
+        Ok(())
+    }
+
+    async fn truncate_files_to_fit_in_limit(
+        &mut self,
+        files: Vec<FileContentValue>,
+        messages: Vec<llm_funcs::llm::Message>,
+        prompt_token_limit: usize,
+        bpe: &tiktoken_rs::CoreBPE,
+    ) -> anyhow::Result<Vec<CodeSpan>> {
         let query = query_from_messages(messages.as_slice());
         let previous_message = messages;
+        // we always capture the user variables as much as possible since these
+        // are important and have been provided by the user
+        let file_path_to_index: HashMap<String, usize> = files
+            .iter()
+            .enumerate()
+            .map(|(idx, file_value)| (file_value.file_path.clone(), idx))
+            .collect();
+
+        let self_ = &*self;
+        let lexical_search_and_file = stream::iter(
+            files
+                .into_iter()
+                .map(|user_file| (user_file, previous_message.to_vec())),
+        )
+        .map(|(file_value, previous_message)| async move {
+            let language = &file_value.language;
+            // First generate the outline for the file here
+            let language_config = self_.application.language_parsing.for_lang(language);
+            let file_content = &file_value.file_content;
+            let fs_file_path = &file_value.file_path;
+            // Now we can query gpt3.5 with the output here and aks it to
+            // generate the code search keywords which we need
+            let system_prompt = prompts::proc_search_system_prompt(
+                language_config
+                    .map(|lang_config| lang_config.generate_file_outline(file_content.as_bytes())),
+                &file_value.file_path,
+            );
+            let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
+                prompts::proc_function_truncate(),
+            )
+            .unwrap();
+            let messages = vec![llm_funcs::llm::Message::system(&system_prompt)]
+                .into_iter()
+                .chain(previous_message)
+                .chain(vec![
+                    llm_funcs::llm::Message::user(&format!(
+                        "We are working on {fs_file_path} so choose your answer for this file."
+                    )),
+                    llm_funcs::llm::Message::user("CALL A FUNCTION!. Do not answer"),
+                ])
+                .collect::<Vec<_>>();
+            let response = self_
+                .get_llm_client()
+                .stream_function_call(
+                    llm_funcs::llm::OpenAIModel::GPT4,
+                    messages,
+                    functions,
+                    0.0,
+                    Some(0.2),
+                )
+                .await;
+            if let Ok(Some(response)) = response {
+                let agent_action =
+                    AgentAction::from_gpt_response(&response).map(|response| Some(response));
+                match agent_action {
+                    Ok(Some(AgentAction::Code { query })) => {
+                        // If we match the code output we are good, otherwise
+                        // we messed up in the pipeline somewhere
+                        return Some((query, file_value));
+                    }
+                    Ok(Some(AgentAction::Proc { query, paths: _ })) => {
+                        return Some((query, file_value))
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        })
+        .buffer_unordered(10)
+        .filter_map(|value| async { value })
+        .collect::<Vec<_>>()
+        .await;
+
+        let candidates =
+            gather_code_snippets_for_answer(lexical_search_and_file, self.application.clone())
+                .await
+                .into_iter()
+                .take(50)
+                .collect::<Vec<_>>();
+        let ranked_candidates =
+            re_rank_code_snippets(&query, self.get_llm_client(), candidates, prompt_token_limit, bpe).await;
+        let code_snippets = merge_consecutive_chunks(ranked_candidates)
+            .into_iter()
+            .map(|code_snippet| {
+                let index = file_path_to_index
+                    .get(code_snippet.path.as_str())
+                    .expect("file path to be present")
+                    .clone();
+                CodeSpan::from_quick_code_snippet(code_snippet, index)
+            })
+            .collect::<Vec<_>>();
+        Ok(code_snippets)
+    }
+
+    // TODO(skcd): We want to fix how many tokens we will be sending over, so we can properly
+    // make sure that the context is always in control
+    pub async fn truncate_user_context(
+        &mut self,
+        messages: Vec<llm_funcs::llm::Message>,
+    ) -> anyhow::Result<()> {
+        let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
+        let query = query_from_messages(messages.as_slice());
+        let previous_message = messages;
+        let prompt_tokens_limit = self.model.prompt_tokens_limit;
+        // Quick check here if we even need to truncate?
+        // We will take 2 flows here:
+        // - if no user context is provided, we use the current file if it exists
+        // - if user context is provided, we do smart selection on top of it
         // We get different levels of context here from the user:
         // - @file full files (which we have to truncate and get relevant values)
         // - @selection selection ranges from the user (these we have to include including expanding them a bit on each side)
@@ -132,7 +327,7 @@ impl Agent {
                 .take(50)
                 .collect::<Vec<_>>();
         let ranked_candidates =
-            re_rank_code_snippets(&query, self.get_llm_client(), candidates).await;
+            re_rank_code_snippets(&query, self.get_llm_client(), candidates, prompt_tokens_limit, &bpe).await;
         let code_snippets = merge_consecutive_chunks(ranked_candidates)
             .into_iter()
             .map(|code_snippet| {
@@ -166,6 +361,7 @@ impl Agent {
             // send it over the sender
             let _ = self.sender.send(last_conversation.clone()).await;
         }
+        Ok(())
     }
 }
 
@@ -219,6 +415,8 @@ async fn re_rank_code_snippets(
     query: &str,
     llm_client: Arc<LlmClient>,
     candidates: Vec<QuickCodeSnippetDocument>,
+    prompt_token_limit: usize,
+    encoder: &tiktoken_rs::CoreBPE,
 ) -> Vec<QuickCodeSnippetDocument> {
     let mut logprob_scored = stream::iter(
         candidates
@@ -286,11 +484,19 @@ async fn re_rank_code_snippets(
     .collect::<Vec<_>>();
     // We sort it in decreasing order of the logprob score
     logprob_scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-    logprob_scored
-        .into_iter()
-        .map(|(_, candidate)| candidate)
-        .take(10)
-        .collect()
+    let mut current_tokens_used = 0;
+    let mut final_candidates = Vec::new();
+    for (_, candidate) in logprob_scored.into_iter() {
+        // This is not exactly correct as we are missing the tokens from the proper formatting of
+        // the code snippet, but because we have some headroom this is okay
+        current_tokens_used += encoder.encode_ordinary(&candidate.content).len();
+        if current_tokens_used >= prompt_token_limit {
+            break;
+        } else {
+            final_candidates.push(candidate);
+        }
+    }
+    final_candidates
 }
 
 fn merge_consecutive_chunks(

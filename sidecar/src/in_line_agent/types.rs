@@ -10,16 +10,15 @@ use crate::chunking::types::FunctionNodeType;
 use crate::in_line_agent::context_parsing::generate_context_for_range;
 use crate::in_line_agent::context_parsing::ContextParserInLineEdit;
 use crate::in_line_agent::context_parsing::EditExpandedSelectionRange;
-use crate::webserver::agent::Position;
 use crate::{
     agent::{
-        llm_funcs::{self, llm::Message, LlmClient},
+        llm_funcs::{self, LlmClient},
         model,
     },
     application::application::Application,
     chunking::{
         editor_parsing::EditorParsing,
-        text_document::{DocumentSymbol, TextDocument},
+        text_document::DocumentSymbol,
     },
     db::sqlite::SqlDb,
     repo::types::RepoRef,

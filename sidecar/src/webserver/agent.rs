@@ -573,6 +573,7 @@ pub async fn followup_chat(
         previous_messages,
         sender,
         user_context,
+        project_labels,
     );
 
     generate_agent_stream(agent, action, receiver).await

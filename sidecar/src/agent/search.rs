@@ -120,6 +120,7 @@ impl Agent {
         conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
         user_context: UserContext,
+        project_labels: Vec<String>,
     ) -> Self {
         let agent = Agent {
             application,
@@ -131,7 +132,7 @@ impl Agent {
             sql_db,
             sender,
             user_context: Some(user_context),
-            project_labels: vec![],
+            project_labels,
         };
         agent
     }

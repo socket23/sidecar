@@ -100,6 +100,10 @@ impl ExtendedVariableInformation {
             content,
         }
     }
+
+    pub fn to_prompt(&self) -> String {
+        self.variable_information.to_prompt()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -722,6 +726,12 @@ impl Agent {
         self.conversation_messages
             .last()
             .map(|conversation_message| conversation_message.user_variables.as_slice())
+    }
+
+    pub fn get_extended_user_selection_information(&self) -> Option<&[ExtendedVariableInformation]> {
+        self.conversation_messages
+            .last()
+            .map(|conversation_message| conversation_message.extended_variable_information.as_slice())
     }
 
     pub fn get_definition_snippets(&self) -> Option<&[String]> {

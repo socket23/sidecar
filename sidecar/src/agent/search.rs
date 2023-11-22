@@ -11,7 +11,7 @@ use crate::{
     db::sqlite::SqlDb,
     git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
-    webserver::agent::UserContext,
+    webserver::agent::UserContext, chunking::editor_parsing::EditorParsing,
 };
 
 /// Here we allow the agent to perform search and answer workflow related questions
@@ -88,6 +88,7 @@ impl Agent {
         sql_db: SqlDb,
         mut previous_conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
+        editor_parsing: EditorParsing,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
         let conversation_message = ConversationMessage::search_message(
@@ -107,6 +108,7 @@ impl Agent {
             sender,
             user_context: None,
             project_labels: vec![],
+            editor_parsing,
         };
         agent
     }
@@ -121,6 +123,7 @@ impl Agent {
         sender: Sender<ConversationMessage>,
         user_context: UserContext,
         project_labels: Vec<String>,
+        editor_parsing: EditorParsing,
     ) -> Self {
         let agent = Agent {
             application,
@@ -133,6 +136,7 @@ impl Agent {
             sender,
             user_context: Some(user_context),
             project_labels,
+            editor_parsing,
         };
         agent
     }
@@ -147,6 +151,7 @@ impl Agent {
         sql_db: SqlDb,
         mut previous_conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
+        editor_parsing: EditorParsing,
     ) -> Self {
         let conversation_message = ConversationMessage::semantic_search(
             conversation_id,
@@ -165,6 +170,7 @@ impl Agent {
             sender,
             user_context: None,
             project_labels: vec![],
+            editor_parsing,
         };
         agent
     }
@@ -1030,7 +1036,7 @@ impl Agent {
                     .await
                     .unwrap()
                     .unwrap_or_else(|| panic!("path did not exist in the index: {path}"))
-                    .lines()
+                    .split('\n')
                     .map(str::to_owned)
                     .collect::<Vec<_>>();
 

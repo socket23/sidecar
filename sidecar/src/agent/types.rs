@@ -88,6 +88,20 @@ pub struct ExtendedVariableInformation {
     pub content: String,
 }
 
+impl ExtendedVariableInformation {
+    pub fn new(
+        variable_information: VariableInformation,
+        extended_code_span: Option<CodeSpan>,
+        content: String,
+    ) -> Self {
+        Self {
+            variable_information,
+            extended_code_span,
+            content,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConversationMessage {
     message_id: uuid::Uuid,
@@ -264,6 +278,18 @@ impl ConversationMessage {
             return;
         }
         self.file_paths.push(relative_path);
+    }
+
+    pub fn get_file_path_alias(&self, file_path: &str) -> Option<usize> {
+        self.file_paths.iter().position(|path| path == file_path)
+    }
+
+    pub fn add_extended_variable_information(
+        &mut self,
+        extended_variable_information: ExtendedVariableInformation,
+    ) {
+        self.extended_variable_information
+            .push(extended_variable_information);
     }
 
     pub fn get_paths(&self) -> &[String] {

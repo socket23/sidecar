@@ -81,6 +81,7 @@ pub async fn search_agent(
         sql_db,
         previous_conversation_message,
         sender,
+        Default::default(),
     );
 
     generate_agent_stream(agent, action, receiver).await
@@ -130,6 +131,7 @@ pub async fn semantic_search(
         sql_db,
         vec![], // we don't have a previous conversation message here
         sender,
+        Default::default(),
     );
     let code_spans = agent
         .semantic_search()
@@ -225,6 +227,7 @@ pub async fn hybrid_search(
         sql_db,
         vec![], // we don't have a previous conversation message here
         sender,
+        Default::default(),
     );
     let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
     Ok(json(HybridSearchResponse {
@@ -315,6 +318,7 @@ pub async fn explain(
     let session_id = uuid::Uuid::new_v4();
 
     let sql = app.sql.clone();
+    let editor_parsing = Default::default();
 
     let agent = Agent {
         application: app,
@@ -327,6 +331,7 @@ pub async fn explain(
         sender,
         user_context: None,
         project_labels: vec![],
+        editor_parsing,
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -380,6 +385,10 @@ impl VariableInformation {
             content: self.content,
             language: self.language,
         }
+    }
+
+    pub fn is_selection(&self) -> bool {
+        self.variable_type == VariableType::Selection
     }
 }
 
@@ -596,6 +605,7 @@ pub async fn followup_chat(
         sender,
         user_context,
         project_labels,
+        Default::default(),
     );
 
     generate_agent_stream(agent, action, receiver).await
@@ -628,6 +638,7 @@ pub async fn go_to_definition_symbols(
     let posthog_client = app.posthog_client.clone();
     let sql_db = app.sql.clone();
     let user_id = app.user_id.to_owned();
+    let editor_parsing = Default::default();
     let agent = Agent {
         application: app,
         reporef: repo_ref,
@@ -643,6 +654,7 @@ pub async fn go_to_definition_symbols(
         sender: tokio::sync::mpsc::channel(100).0,
         user_context: None,
         project_labels: vec![],
+        editor_parsing,
     };
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     Ok(json(GotoDefinitionSymbolsResponse {

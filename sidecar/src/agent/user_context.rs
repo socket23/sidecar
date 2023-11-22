@@ -28,6 +28,7 @@ use crate::webserver::agent::VariableType;
 
 use super::llm_funcs::LlmClient;
 use super::types::Agent;
+use super::types::ExtendedVariableInformation;
 
 impl Agent {
     pub async fn answer_context_from_user_data(
@@ -95,8 +96,11 @@ impl Agent {
                 }
             }
         } else {
-            // Now we have multiple things to take care of, so let's get on that
-            self.truncate_files_to_fit_in_limit(user_context.file_content_map, messages, prompt_token_limit, &bpe).await?
+            // since we have some user context, this takes precedence over the open file in the editor
+            let file_content = user_context.file_content_map;
+            let user_variables = user_context.variables;
+            // We will handle the selection variables first here since those are super important
+            self.truncate_files_to_fit_in_limit(file_content, messages, prompt_token_limit, &bpe).await?
         };
         // Now we update the code spans which we have selected
         let _ = self.save_code_snippets_response(&query, code_spans);
@@ -110,6 +114,27 @@ impl Agent {
             let _ = self.sender.send(last_conversation.clone()).await;
         }
         Ok(())
+    }
+
+    async fn select_user_variable_selection_to_fit_in_context(
+        &mut self,
+        user_variables: Vec<VariableInformation>,
+        file_content_map: Vec<FileContentValue>,
+        prompt_token_limit: usize,
+        bpe: &tiktoken_rs::CoreBPE,
+    ) -> anyhow::Result<Vec<ExtendedVariableInformation>> {
+        // Here we will try to get the enclosing span of the context which the user has selected
+        // and try to expand on it?
+        let selection_variables = user_variables
+            .into_iter()
+            .filter(|variable| variable.is_selection())
+            .filter(|variable| file_content_map.iter().any(|file| file.file_path == variable.fs_file_path))
+            .collect::<Vec<_>>();
+        // TODO(skcd): Finish implementing from here
+
+        // Now we can safely try and expand the selection context here if required, atleast we can get the function beginning and the end using this or the class
+        // start and end here if required
+        Ok(vec![])
     }
 
     async fn truncate_files_to_fit_in_limit(
@@ -365,6 +390,15 @@ impl Agent {
     }
 }
 
+/// Takes a slice of `llm_funcs::llm::Message` and returns a string containing the content of the messages from the user and assistant roles.
+///
+/// # Arguments
+///
+/// * `messages` - A slice of `llm_funcs::llm::Message` representing the messages to query.
+///
+/// # Returns
+///
+/// A string containing the content of the messages from the user and assistant roles, with each message separated by a newline character.
 fn query_from_messages(messages: &[llm_funcs::llm::Message]) -> String {
     messages
         .iter()

@@ -9,7 +9,7 @@ use tracing::{debug, info};
 use crate::{
     agent::llm_funcs::llm::FunctionCall,
     application::application::Application,
-    chunking::text_document::Position,
+    chunking::{text_document::Position, editor_parsing::EditorParsing},
     db::sqlite::SqlDb,
     indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
@@ -82,6 +82,13 @@ impl VariableInformation {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExtendedVariableInformation {
+    pub variable_information: VariableInformation,
+    pub extended_code_span: Option<CodeSpan>,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConversationMessage {
     message_id: uuid::Uuid,
     /// We also want to store the session id here so we can load it and save it,
@@ -122,6 +129,9 @@ pub struct ConversationMessage {
     user_context: UserContext,
     #[serde(skip)]
     active_window_data: Option<ActiveWindowData>,
+    // This is where we store the user context which is selected by the user,
+    // we get a chance to expand on this if there is enough context window remaining
+    extended_variable_information: Vec<ExtendedVariableInformation>,
 }
 
 impl ConversationMessage {
@@ -148,6 +158,7 @@ impl ConversationMessage {
             user_variables: vec![],
             user_context: Default::default(),
             active_window_data: None,
+            extended_variable_information: vec![],
         }
     }
 
@@ -178,6 +189,7 @@ impl ConversationMessage {
             user_variables: vec![],
             user_context: Default::default(),
             active_window_data: None,
+            extended_variable_information: vec![],
         }
     }
 
@@ -204,6 +216,7 @@ impl ConversationMessage {
             user_variables: vec![],
             user_context: Default::default(),
             active_window_data: None,
+            extended_variable_information: vec![],
         }
     }
 
@@ -230,6 +243,7 @@ impl ConversationMessage {
             user_variables: vec![],
             user_context: Default::default(),
             active_window_data: None,
+            extended_variable_information: vec![],
         }
     }
 
@@ -336,6 +350,7 @@ impl ConversationMessage {
             user_variables: vec![],
             user_context: Default::default(),
             active_window_data: None,
+            extended_variable_information: vec![],
         }
     }
 
@@ -458,6 +473,7 @@ impl ConversationMessage {
                     user_variables: vec![],
                     user_context,
                     active_window_data: None,
+                    extended_variable_information: vec![],
                 }
             })
             .collect())
@@ -622,6 +638,7 @@ pub struct Agent {
     pub sender: Sender<ConversationMessage>,
     pub user_context: Option<UserContext>,
     pub project_labels: Vec<String>,
+    pub editor_parsing: EditorParsing,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

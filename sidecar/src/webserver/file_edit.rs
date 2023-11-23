@@ -5,7 +5,6 @@ use axum::response::{sse, IntoResponse, Sse};
 use axum::{Extension, Json};
 use difftastic::LineInformation;
 use futures::StreamExt;
-use serde_json::json;
 
 use crate::agent::llm_funcs::LlmClient;
 use crate::agent::prompts::diff_accept_prompt;
@@ -14,7 +13,7 @@ use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
 use crate::chunking::text_document::{Position, Range};
 
-use super::types::{json, ApiResponse, Result};
+use super::types::{ApiResponse, Result};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EditFileRequest {
@@ -706,7 +705,6 @@ async fn process_file_lines_to_gpt(
             .expect("failed to send done object"))
     });
     let stream = init_stream.chain(answer_stream).chain(done_stream);
-    // Fix this type error which is happening here
     Ok(Sse::new(Box::pin(stream)))
 }
 

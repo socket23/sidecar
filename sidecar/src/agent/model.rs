@@ -37,7 +37,9 @@ pub const GPT_4: AnswerModel = AnswerModel {
     tokenizer: "gpt-4-0613",
     model_name: "gpt-4-0613",
     answer_tokens: 1024,
-    prompt_tokens_limit: 2500,
+    // The prompt tokens limit for gpt4 are a bit higher so we can get more context
+    // when required
+    prompt_tokens_limit: 3500,
     history_tokens_limit: 2048,
     total_tokens: 8192,
 };

@@ -235,7 +235,7 @@ impl Agent {
             let response = self_
                 .get_llm_client()
                 .stream_function_call(
-                    llm_funcs::llm::OpenAIModel::GPT4,
+                    llm_funcs::llm::OpenAIModel::GPT4_Turbo,
                     messages,
                     functions,
                     0.0,

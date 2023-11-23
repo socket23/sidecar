@@ -654,7 +654,7 @@ Location: {location}
 
 pub fn diff_accept_prompt(user_query: &str) -> String {
     let system_prompt = format!(
-        r#"You are an expert at understanding and performing git commit changes action. Another junior engineer is working on changes to a current section of the code,  the engineer has generated code to solve the following USER QUERY: "{user_query}"
+        r#"You are an expert at understanding and performing git commit changes action. Another junior engineer is working on changes to a current section of the code,  the engineer has generated code and this is the reasoning: "{user_query}"
 
 You have 3 actions to use:
 - Accept Current Change you can use this to keep the edit as it is
@@ -663,15 +663,15 @@ You have 3 actions to use:
 
 Points to remember:
 - You will be shown a merge conflict between the code which is present and the code written by the junior engineer
+- You are also shown parts of the prefix of the merge conflict and the suffix of the merge conflict. The suffix of the merge conflict might have conflicts but YOU SHOULD NOT PAY ATTENTION TO THEM.
 - You are only given a small section of the git diff, so no matter which option you select and even if the code is incomplete we will be okay with selecting either of the options
 - The user will also tell you how the code will look like after doing the 3 operations we mentioned above, use that to understand the impact of your choice and select the best one based on the user query
 - The junior engineer might generate code which is not exactly correct and tends to delete chunks of code which are required, so pay attention to what code the changes made by junior engineer will replace
-- If a line starts with '-' then it has been deleted, if it starts with '+' it has been added to the code
 - The junior engineer changes might end up deleting important part of the code, which is not correct
 - If you select Accept Current Changes, then the changes done by the junior engineer are not applied
-- when you select Accept Incoming Changes it deletes the code which starts with '-' so it won't be present in the final code
 - <deleted_code>{{code}}</deleted_code> that means the code in between has been deleted and will not be part of the final output
 - <added_code>{{code}}</added_code> that means the code in between will be added and will be part of the final output
+- <suffix_code>{{code}}</suffix_code> that means the code in between will be part of the code after the merge conflict, these markers are not part of the code but are shown to you to understand how the code will be placed
 - This junior engineer is forgetful so sometimes they make mistakes. It might be the case that the changes which are done can delete part of the code, so keep that in mind when selecting the 3 options below, if the change made by the user junior engineer is an indication of leaving the code as it, for example: "// ...", "// ... existing code", "// rest of the code ..." or other variants of this, just "accept current change"
 
 As an example if the code looks like:
@@ -711,6 +711,7 @@ pub fn diff_user_messages(
     prefix_code: &str,
     current_changes: &str,
     incoming_changes: &str,
+    suffix_code: &str,
 ) -> Vec<String> {
     let git_patch = format!(
         r#"The git patch
@@ -723,6 +724,9 @@ pub fn diff_user_messages(
 =======
 {incoming_changes}
 >>>>>>> JUNIOR ENGINEER CODE
+<suffix_code>
+{suffix_code}
+</suffix_code>
 ```"#
     );
     let accept_current_changes = format!(
@@ -732,6 +736,9 @@ pub fn diff_user_messages(
 {prefix_code}
 </previous_code>
 {current_changes}
+<suffix_code>
+{suffix_code}
+</suffix_code>
 ```"#
     );
     let accept_incoming_changes = format!(
@@ -746,6 +753,9 @@ pub fn diff_user_messages(
 <added_code_by_junior_engineer>
 {incoming_changes}
 </added_code_by_junior_engineer>
+<suffix_code>
+{suffix_code}
+</suffix_code>
 ```"#
     );
     let accept_both_changes = format!(
@@ -758,6 +768,9 @@ pub fn diff_user_messages(
 <added_code_by_junior_engineer>
 {incoming_changes}
 </added_code_by_junior_engineer>
+<suffix_code>
+{suffix_code}
+</suffix_code>
 ```"#
     );
     let user_action = format!(

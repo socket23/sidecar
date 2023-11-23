@@ -277,7 +277,7 @@ pub struct LlmClient {
     gpt432k_client: Client<AzureConfig>,
     gpt3_5_client: Client<AzureConfig>,
     gpt3_5_turbo_instruct: Client<OpenAIConfig>,
-    gpt4_turbo_client: Client<OpenAIConfig>,
+    gpt4_turbo_client: Client<AzureConfig>,
     posthog_client: Arc<PosthogClient>,
     sql_db: SqlDb,
     user_id: String,
@@ -312,28 +312,19 @@ impl LlmClient {
         let gpt4_32k_config = azure_config
             .clone()
             .with_deployment_id("gpt4-32k-access".to_owned());
+        let gpt4_turbo_128k_config = azure_config.clone().with_deployment_id("gpt-4-turbo".to_owned());
         let gpt3_5_config = azure_config.with_deployment_id("gpt35-turbo-access".to_owned());
-        let gpt4_turbo = openai_config
-            .clone()
-            .with_org_id("org-pKCie8wjobiHKD2874lQP9wR".to_owned())
-            .with_api_key("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".to_owned());
         Self {
             gpt4_client: Client::with_config(gpt4_config),
             gpt432k_client: Client::with_config(gpt4_32k_config),
             gpt3_5_client: Client::with_config(gpt3_5_config),
             gpt3_5_turbo_instruct: Client::with_config(openai_config),
-            gpt4_turbo_client: Client::with_config(gpt4_turbo),
+            gpt4_turbo_client: Client::with_config(gpt4_turbo_128k_config),
             posthog_client,
             sql_db,
             user_id,
             allowed_user_ids,
         }
-        // Self {
-        //     gpt4_client: Client::with_config(openai_config.clone()),
-        //     gpt432k_client: Client::with_config(openai_config.clone()),
-        //     gpt3_5_client: Client::with_config(openai_config.clone()),
-        //     gpt3_5_turbo_instruct: Client::with_config(openai_config),
-        // }
     }
 
     pub async fn capture_openai_request_response<T: serde::Serialize, R: serde::Serialize>(
@@ -914,7 +905,7 @@ impl LlmClient {
             llm::OpenAIModel::GPT4 => &self.gpt4_client,
             llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
             llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
-            llm::OpenAIModel::GPT4_Turbo => return None,
+            llm::OpenAIModel::GPT4_Turbo => &self.gpt4_turbo_client,
             llm::OpenAIModel::GPT3_5Instruct => return None,
         };
         Some(client)
@@ -925,7 +916,7 @@ impl LlmClient {
             llm::OpenAIModel::GPT4 => return None,
             llm::OpenAIModel::GPT4_32k => return None,
             llm::OpenAIModel::GPT3_5_16k => return None,
-            llm::OpenAIModel::GPT4_Turbo => &self.gpt4_turbo_client,
+            llm::OpenAIModel::GPT4_Turbo => return None,
             llm::OpenAIModel::GPT3_5Instruct => &self.gpt3_5_turbo_instruct,
         };
         Some(client)

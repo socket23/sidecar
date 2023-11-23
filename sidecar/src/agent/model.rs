@@ -54,6 +54,16 @@ pub const GPT_4_32K: AnswerModel = AnswerModel {
     total_tokens: 32769,
 };
 
+// GPT4-Turbo has 128k tokens as input, but let's keep it capped at 32k tokens
+pub const GPT_4_TURBO_128K: AnswerModel = AnswerModel {
+    tokenizer: "gpt-4-1106-preview",
+    model_name: "gpt-4-1106-preview",
+    answer_tokens: 1024 * 4,
+    prompt_tokens_limit: 2500 * 4,
+    history_tokens_limit: 2048 * 4,
+    total_tokens: 32769,
+};
+
 impl FromStr for AnswerModel {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -61,6 +71,7 @@ impl FromStr for AnswerModel {
         match s {
             "gpt-4-0613" => Ok(GPT_4),
             "gpt-4-32k-0613" => Ok(GPT_4_32K),
+            "gpt-4-1106-preview" => Ok(GPT_4_TURBO_128K),
             "gpt-3.5-turbo-16k-0613" | _ => Ok(GPT_3_5_TURBO_16K),
         }
     }

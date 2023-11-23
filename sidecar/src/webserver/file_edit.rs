@@ -120,6 +120,7 @@ pub async fn file_edit(
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
         let file_diff_content = file_diff_content.unwrap();
+        dbg!(&file_diff_content.join("\n"));
         let result = process_file_lines_to_gpt(
             file_diff_content,
             user_query,
@@ -293,6 +294,10 @@ async fn parse_difftastic_output(
                 // Now we are in a state where we can be sure that on the right
                 // we have a GREEN and nothing on the left side, cause that's
                 // the only case where its possible
+                // we need to send the git markers for this anyways, since its important
+                // for the editor to know that some insertion has happened
+                final_lines_file.push("<<<<<<<".to_owned());
+                final_lines_file.push("=======".to_owned());
                 let content =
                     get_content_from_file_line_information(&right, &right_content_now_maybe);
                 match content {
@@ -305,12 +310,15 @@ async fn parse_difftastic_output(
                 loop {
                     iteration_index = iteration_index + 1;
                     if right_lines_information.len() >= iteration_index {
+                        final_lines_file.push(">>>>>>>".to_owned());
                         break;
                     }
                     let left_content_now_maybe = left_lines_information[iteration_index];
                     let right_content_now_maybe = right_lines_information[iteration_index];
                     if !(left_content_now_maybe.not_present() && right_content_now_maybe.present())
                     {
+                        // we are not in the same style as before, so we break it
+                        final_lines_file.push(">>>>>>>".to_owned());
                         break;
                     } else {
                         let content = get_content_from_file_line_information(
@@ -735,6 +743,25 @@ async fn call_gpt_for_action_resolution(
     query: &str,
     llm_client: Arc<LlmClient>,
 ) -> (Vec<String>, Option<EditFileResponse>) {
+    // we can handle some edge cases early on and save a llm call
+    // case 1: if we have nothing on the left side, but have to insert on the right side we already
+    // know the verdict for it
+    if current_changes.is_empty() && !incoming_changes.is_empty() {
+        let mut content = incoming_changes.join("\n");
+        content = content + "\n";
+        return (
+            incoming_changes,
+            Some(EditFileResponse::TextEdit {
+                range: Range::new(
+                    Position::new(line_start, 0, 0),
+                    // large number here for the column end value for the end line
+                    Position::new(line_start + current_changes.len(), 10000, 0),
+                ),
+                content,
+                should_insert: true,
+            }),
+        );
+    }
     let system_message = llm_funcs::llm::Message::system(&diff_accept_prompt(query));
     let user_messages = prompts::diff_user_messages(
         &prefix.join("\n"),
@@ -764,7 +791,8 @@ async fn call_gpt_for_action_resolution(
         }
         Some(DiffActionResponse::AcceptIncomingChanges) => {
             // we have to accept the incoming changes
-            let content = incoming_changes.join("\n");
+            let mut content = incoming_changes.join("\n");
+            content = content + "\n";
             (
                 incoming_changes,
                 Some(EditFileResponse::TextEdit {

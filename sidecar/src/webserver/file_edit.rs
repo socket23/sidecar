@@ -39,6 +39,7 @@ pub enum EditFileResponse {
     TextEdit {
         range: Range,
         content: String,
+        should_insert: bool,
     },
     Status {
         session_id: String,
@@ -119,7 +120,6 @@ pub async fn file_edit(
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
         let file_diff_content = file_diff_content.unwrap();
-        dbg!(&file_diff_content.join("\n"));
         let result = process_file_lines_to_gpt(
             file_diff_content,
             user_query,
@@ -774,25 +774,37 @@ async fn call_gpt_for_action_resolution(
                         Position::new(line_start + current_changes.len(), 10000, 0),
                     ),
                     content,
+                    should_insert: false,
                 }),
             )
         }
         Some(DiffActionResponse::AcceptBothChanges) => {
-            // we have to accept both the changes
+            // we have to accept both the changes, since the vscode api only allows for
+            // edit or insert, here we will insert the other part of our changes after moving
+            // the line index to where the current changes will be
             let current_change_size = current_changes.len();
+            let incoming_changes_start_index = line_start + current_change_size;
+            let incoming_changes_end_index: usize = incoming_changes_start_index
+                + incoming_changes.len();
+            let mut changes_str = incoming_changes.join("\n");
+            // send an extra \n here because we are inserting the changes and when we join,
+            // we are going to miss the last \n so we want to move the pointer to the next line
+            changes_str = changes_str + "\n";
+
             let changes = current_changes
                 .into_iter()
                 .chain(incoming_changes)
                 .collect::<Vec<_>>();
-            let changes_str = changes.join("\n");
+
             (
                 changes,
                 Some(EditFileResponse::TextEdit {
                     range: Range::new(
-                        Position::new(line_start, 0, 0),
-                        Position::new(line_start + current_change_size, 1000, 0),
+                        Position::new(incoming_changes_start_index, 0, 0),
+                        Position::new(incoming_changes_end_index, 1000, 0),
                     ),
                     content: changes_str,
+                    should_insert: true,
                 }),
             )
         }

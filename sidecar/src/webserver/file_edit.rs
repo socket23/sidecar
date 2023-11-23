@@ -118,8 +118,10 @@ pub async fn file_edit(
         // user depending on what edit information we get, we can stream this to the
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
+        let file_diff_content = file_diff_content.unwrap();
+        dbg!(&file_diff_content.join("\n"));
         let result = process_file_lines_to_gpt(
-            file_diff_content.unwrap(),
+            file_diff_content,
             user_query,
             session_id,
             llm_client,
@@ -178,7 +180,6 @@ fn get_content_from_file_line_information(
         .map(|s| s.to_owned())
         .collect::<Vec<_>>();
     let line_number = line_information.get_line_number();
-    dbg!(line_number);
     match line_number {
         Some(line_number) => Some(lines[line_number].to_owned()),
         None => None,
@@ -392,7 +393,7 @@ async fn parse_difftastic_output(
                     // we do have to insert a diff range here somehow
                     // but how long will be defined by the sequence after this
                     let mut left_content_vec = vec![left_content];
-                    let mut right_content_vec = vec![right_content];
+                    let right_content_vec = vec![right_content];
                     loop {
                         // the condition we want to look for here is the following
                         // R G
@@ -538,6 +539,10 @@ pub struct FileLineContent {
 }
 
 impl FileLineContent {
+    pub fn get_content(&self) -> String {
+        self.content.to_owned()
+    }
+
     pub fn is_diff_start(&self) -> bool {
         matches!(self.line_content_type, LineContentType::DiffStartMarker)
     }
@@ -607,9 +612,11 @@ async fn process_file_lines_to_gpt(
         let mut edit_responses = vec![];
         while initial_index < total_lines {
             let line = file_lines_to_document[initial_index].clone();
+            // we want to go until we have a diff start marker
             if line.is_diff_start() {
                 let mut current_changes = vec![];
                 let mut current_iteration_index = initial_index + 1;
+                // Here we are iterating until we hit the diff separator
                 while !file_lines_to_document[current_iteration_index].is_diff_separator() {
                     // we have to keep going here
                     current_changes.push(
@@ -622,6 +629,7 @@ async fn process_file_lines_to_gpt(
                 // Now we are at the index which has ======, so move to the next one
                 current_iteration_index = current_iteration_index + 1;
                 let mut incoming_changes = vec![];
+                // Here we are iterating until we hit the diff end
                 while !file_lines_to_document[current_iteration_index].is_diff_end() {
                     // we have to keep going here
                     incoming_changes.push(
@@ -635,22 +643,31 @@ async fn process_file_lines_to_gpt(
                 // which of the following git diffs to keep and which to remove
                 // before we do this, we can do some hand-woven checks to figure out
                 // what action to take
+
                 // we also want to keep a prefix of the lines here and send that along
                 // to the llm for context as well
+                let prefix = total_file_lines.iter().rev().take(5).rev().into_iter().map(|s| s.to_owned()).collect::<Vec<_>>();
+                // Now we want to provide the suffix as well, this is interesting because
+                // we can have unresolved merge conflicts at this point so the llm will need
+                // to be prompted accordingly or else it will get confused
+                let mut suffix_index = current_iteration_index + 1; // +1 here since current_iteration_index is the index of the diff end marker
+                let iteratation_limit = 5;
+                let mut suffix_lines = vec![];
+                while suffix_index < total_lines && suffix_lines.len() < iteratation_limit {
+                    let line = file_lines_to_document[suffix_index].get_content();
+                    suffix_index = suffix_index + 1;
+                    suffix_lines.push(line);
+                }
+                
+                // we want to get some suffix here so we can pass that along to the LLM
                 let (delta_lines, edit_file_response) = call_gpt_for_action_resolution(
                     // the index is simply the length of the current lines which are
                     // present in the file
                     total_file_lines.len(),
                     current_changes,
                     incoming_changes,
-                    total_file_lines
-                        .iter()
-                        .rev()
-                        .take(5)
-                        .rev()
-                        .into_iter()
-                        .map(|s| s.to_owned())
-                        .collect::<Vec<_>>(),
+                    prefix,
+                    suffix_lines,
                     &user_query,
                     llm_client.clone(),
                 )
@@ -714,6 +731,7 @@ async fn call_gpt_for_action_resolution(
     current_changes: Vec<String>,
     incoming_changes: Vec<String>,
     prefix: Vec<String>,
+    suffix: Vec<String>,
     query: &str,
     llm_client: Arc<LlmClient>,
 ) -> (Vec<String>, Option<EditFileResponse>) {
@@ -722,6 +740,7 @@ async fn call_gpt_for_action_resolution(
         &prefix.join("\n"),
         &current_changes.join("\n"),
         &incoming_changes.join("\n"),
+        &suffix.join("\n"),
     )
     .into_iter()
     .map(|message| llm_funcs::llm::Message::user(&message));
@@ -731,7 +750,6 @@ async fn call_gpt_for_action_resolution(
         .collect::<Vec<_>>();
     let model = llm_funcs::llm::OpenAIModel::GPT4;
     let response = llm_client.response(model, messages, None, 0.1, None).await;
-    dbg!(&response);
     let diff_action = match response {
         Ok(response) => DiffActionResponse::from_gpt_response(&response),
         Err(_) => {

@@ -1,13 +1,16 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{Extension, Json};
 use difftastic::LineInformation;
-use futures::StreamExt;
+use either::Either;
+use futures::{StreamExt, FutureExt, stream};
 
 use crate::agent::llm_funcs::LlmClient;
 use crate::agent::prompts::diff_accept_prompt;
+use crate::agent::types::Answer;
 use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
@@ -15,6 +18,8 @@ use crate::chunking::text_document::{Position, Range, TextDocument};
 use crate::chunking::types::{ClassInformation, ClassNodeType, FunctionInformation};
 
 use super::types::{ApiResponse, Result};
+
+const TIMEOUT_SECS: u64 = 60;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EditFileRequest {
@@ -178,8 +183,12 @@ pub async fn file_edit(
         // user depending on what edit information we get, we can stream this to the
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
-        let file_lines = file_content.split("\n").into_iter().map(|s| s.to_owned()).collect::<Vec<_>>();
-    
+        let file_lines = file_content
+            .split("\n")
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect::<Vec<_>>();
+
         let result = llm_writing_code(
             file_lines,
             file_content,
@@ -190,7 +199,8 @@ pub async fn file_edit(
             app.language_parsing.clone(),
             file_path,
             nearest_range_for_symbols,
-        ).await;
+        )
+        .await;
         result
     }
 }
@@ -1028,45 +1038,39 @@ async fn llm_writing_code(
                     ].into_iter().chain(prompts::user_message_for_git_patch(&language, &symbol_name, &symbol_type, &git_diff, &file_path, &symbol_content).into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
                     .collect::<Vec<_>>();
                     // Now we send it over to gpt3.5 and ask it to generate code
-                    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-                    let mut reciever_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-                    let _ = llm_client.stream_response(llm_funcs::llm::OpenAIModel::GPT3_5_16k, messages, None, 0.2, None, sender).await;
+                    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<Answer>();
+                    let reciever_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|item| either::Left(item));
+                    let llm_answer = llm_client.stream_response(llm_funcs::llm::OpenAIModel::GPT3_5_16k, messages, None, 0.2, None, sender).into_stream().map(|item| either::Right(item));
                     // we drain the answer stream here and send over our incremental edits update
+                    let timeout = Duration::from_secs(TIMEOUT_SECS);
                     yield EditFileResponse::start_text_edit();
-                    while let Some(answer) = reciever_stream.next().await {
-                        if answer.delta.is_none() {
-                            // Now that we have the full answer, we can update our total lines and move the index to after the symbol at this
-                            // position because we applied the delta here, and we should also send over the end of edit symbol
-                            yield EditFileResponse::end_text_edit();
-                            let final_answer = answer.answer_up_until_now;
-                            // our final answer will be of the form
-                            // // FILEPATH: {file_path}
-                            // // BEGIN: {hash}
-                            // // {code}
-                            // // END: {hash}
-                            // we want to extract out the code bit from here
-                            let final_answer = final_answer.split("// BEGIN:").collect::<Vec<_>>().last().unwrap().split("// END:").collect::<Vec<_>>().first().unwrap().to_owned();
-                            // now insert these lines to the total final answers after splitting it on \n
-                            total_file_lines.append(
-                                final_answer
-                                    .split("\n")
-                                    .collect::<Vec<_>>()
-                                    .into_iter()
-                                    .map(|s| s.to_owned())
-                                    .collect::<Vec<_>>()
-                                    .as_mut(),
-                            );
-                            // increment the index to the end of this symbol, since gpt is already filling in the middle here
-                            initial_index = range.end_position().line() + 1;
-                            // move to the next symbol as the anchor point
-                            nearest_range_symbols_index = nearest_range_symbols_index + 1;
-                            break;
-                        } else {
-                            yield EditFileResponse::stream_incremental_edit(
-                                &range,
-                                answer.answer_up_until_now,
-                                answer.delta.expect("is_none match above to hold"),
-                            );
+                    for await item in tokio_stream::StreamExt::timeout(
+                        stream::select(reciever_stream, llm_answer),
+                        timeout,
+                    ) {
+                        match item {
+                            Ok(Either::Left(answer_item)) => {
+                                if let Some(delta) = answer_item.delta {
+                                    yield EditFileResponse::stream_incremental_edit(&range, answer_item.answer_up_until_now, delta);
+                                }
+                            },
+                            Ok(Either::Right(Ok(llm_answer))) => {
+                                // Now that we have the final answer, we can update our total lines and move the index to after
+                                yield EditFileResponse::end_text_edit();
+                                let code_snippet = llm_answer.split("// BEGIN:").collect::<Vec<_>>().last().unwrap().split("// END:").collect::<Vec<_>>().first().unwrap().to_owned();
+                                total_file_lines.append(
+                                    code_snippet.split("\n").collect::<Vec<_>>().into_iter().map(|s| s.to_owned()).collect::<Vec<_>>().as_mut(),
+                                );
+                                initial_index = range.end_position().line() + 1;
+                                nearest_range_symbols_index = nearest_range_symbols_index + 1;
+                            },
+                            _ => {
+                                // If things fail, then we skip the current symbol which we want to change
+                                // and we want to move to modifying the next range
+                                initial_index = range.end_position().line() + 1;
+                                nearest_range_symbols_index = nearest_range_symbols_index + 1;
+                                yield EditFileResponse::end_text_edit();
+                            },
                         }
                     }
                     // yielding the elements from the stream and moving things forward

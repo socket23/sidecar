@@ -62,6 +62,40 @@ pub enum EditFileResponse {
     },
 }
 
+impl EditFileResponse {
+    fn start_text_edit() -> Self {
+        Self::TextEditStreaming {
+            data: TextEditStreaming::Start,
+        }
+    }
+
+    fn end_text_edit() -> Self {
+        Self::TextEditStreaming {
+            data: TextEditStreaming::End,
+        }
+    }
+
+    fn stream_edit(range: Range, content: String) -> Self {
+        Self::TextEditStreaming {
+            data: TextEditStreaming::EditStreaming {
+                range,
+                content_up_until_now: content.to_owned(),
+                content_delta: content,
+            },
+        }
+    }
+
+    fn stream_incremental_edit(range: &Range, buf: String, delta: String) -> Self {
+        Self::TextEditStreaming {
+            data: TextEditStreaming::EditStreaming {
+                range: range.clone(),
+                content_up_until_now: buf,
+                content_delta: delta,
+            },
+        }
+    }
+}
+
 impl ApiResponse for EditFileResponse {}
 
 pub async fn file_edit(
@@ -139,16 +173,24 @@ pub async fn file_edit(
         )
         .await;
 
-    // Now we apply the edits and send it over to the user
+        // Now we apply the edits and send it over to the user
         // After generating the git diff we want to send back the responses to the
         // user depending on what edit information we get, we can stream this to the
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
-        let file_diff_content = file_diff_content.unwrap();
-        unimplemented!("something over here");
-        dbg!(&file_diff_content.join("\n"));
-        let result =
-            process_file_lines_to_gpt(file_diff_content, user_query, session_id, llm_client).await;
+        let file_lines = file_content.split("\n").into_iter().map(|s| s.to_owned()).collect::<Vec<_>>();
+    
+        let result = llm_writing_code(
+            file_lines,
+            file_content,
+            user_query,
+            language,
+            session_id,
+            llm_client,
+            app.language_parsing.clone(),
+            file_path,
+            nearest_range_for_symbols,
+        ).await;
         result
     }
 }
@@ -169,6 +211,38 @@ impl ClassOrFunction {
                 function_information.content(file_content)
             }
         }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            ClassOrFunction::Class(class_information) => class_information.get_name().to_owned(),
+            ClassOrFunction::Function(function_information) => function_information
+                .name()
+                .map(|name| name.to_owned())
+                .unwrap_or_default(),
+        }
+    }
+
+    pub fn symbol_type(&self) -> String {
+        match self {
+            ClassOrFunction::Class(_) => "class".to_owned(),
+            ClassOrFunction::Function(_) => "function".to_owned(),
+        }
+    }
+
+    fn merge_symbols_from_index(
+        symbols_vec: Vec<ClassOrFunction>,
+        start_index: usize,
+        file_content: &str,
+    ) -> String {
+        let mut symbols_vec = symbols_vec;
+        let mut final_string = "".to_owned();
+
+        for symbol in symbols_vec.drain(start_index..) {
+            final_string.push_str(&symbol.content(file_content));
+            final_string.push('\n');
+        }
+        final_string
     }
 }
 
@@ -395,59 +469,8 @@ async fn find_nearest_position_for_code_edit(
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (None, None) => std::cmp::Ordering::Equal,
     });
-    // dbg!("are we even here???");
-    // Now we can incrementally apply the edits here
-    // dbg!(&identified);
 
     identified
-
-    // // To start with, we are going to apply the edits as we see them and incrementally build up
-    // // our file, using difftastic to generate the diff and applying that to the file, since we already
-    // // know the ranges etc, we can do a really good job of applying the diffs since its smaller now
-    // futures::stream::iter(identified.into_iter().map(|identifier| {
-    //     (
-    //         identifier,
-    //         language_parsing.clone(),
-    //         language.to_owned(),
-    //         new_content.to_owned(),
-    //     )
-    // }))
-    // .for_each(
-    //     |(identified, language_parsing, language, llm_content)| async move {
-    //         let (range, class_or_function) = identified;
-    //         let text_document = TextDocument::new(
-    //             file_content.to_owned(),
-    //             Default::default(),
-    //             file_path.to_owned(),
-    //             file_path.to_owned(),
-    //         );
-    //         match range {
-    //             Some(range) => {
-    //                 let document_content = text_document.from_range(&range);
-    //                 let symbol_content = class_or_function.content(&llm_content);
-    //                 dbg!("whats the diff content");
-    //                 dbg!(&document_content);
-    //                 dbg!(&symbol_content);
-    //                 dbg!("finished diff content");
-    //                 let content_diff = generate_file_diff(
-    //                     &document_content,
-    //                     &file_path,
-    //                     &symbol_content,
-    //                     &language,
-    //                     language_parsing,
-    //                 )
-    //                 .await;
-    //                 dbg!("we have something here");
-    //                 if let Some(content_diff) = content_diff {
-    //                     dbg!(&content_diff.join("\n"));
-    //                 }
-    //             }
-    //             None => {}
-    //         }
-    //     },
-    // )
-    // .await;
-    // unimplemented!("something over here");
 }
 
 pub async fn generate_file_diff(
@@ -916,15 +939,166 @@ pub enum LineContentType {
 
 async fn llm_writing_code(
     file_lines: Vec<String>,
+    file_content: String,
     user_query: String,
+    language: String,
     session_id: String,
     llm_client: Arc<LlmClient>,
+    language_parsing: Arc<TSLanguageParsing>,
+    file_path: String,
     nearest_range_symbols: Vec<(Option<Range>, ClassOrFunction)>,
 ) -> Result<
-Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
     // Here we have to generate the code using the llm and then we have to apply the diff
-    unimplemented!();
+    let edit_messages = async_stream::stream! {
+        let mut initial_index = 0;
+        let total_lines = file_lines.len();
+        let mut total_file_lines: Vec<String> = vec![];
+        let mut nearest_range_symbols_index = 0;
+        let nearest_range_symbols_len = nearest_range_symbols.len();
+        let cloned_language_parsing = language_parsing.clone();
+        while initial_index < total_lines {
+            // now we have the symbols and the range we want to replace
+            if nearest_range_symbols_index >= nearest_range_symbols_len {
+                break;
+            }
+            let (range_maybe, _) = nearest_range_symbols[nearest_range_symbols_index].clone();
+            if let None = range_maybe {
+                // At this point, we don't have a range, and the rest of the symbols can be concatenated and sent over
+                // the wire
+               let merged_symbols = ClassOrFunction::merge_symbols_from_index(
+                    nearest_range_symbols
+                        .to_vec()
+                        .into_iter()
+                        .map(|(_, class_or_function)| class_or_function)
+                        .collect::<Vec<_>>(),
+                    nearest_range_symbols_index,
+                    &file_content,
+                );
+                // add the rest of the lines to the lines of the file as well
+                total_file_lines.append(
+                    file_lines
+                        .clone()
+                        .into_iter()
+                        .skip(initial_index)
+                        .collect::<Vec<_>>()
+                        .as_mut(),
+                );
+                // now we can send over the events to the client
+                yield EditFileResponse::start_text_edit();
+                yield EditFileResponse::stream_edit(Range::new(
+                    Position::new((total_file_lines.len() as u32).try_into().unwrap(), 0, 0),
+                    Position::new((total_file_lines.len() as u32).try_into().unwrap(), 100_000, 100_000),
+                ), merged_symbols);
+                yield EditFileResponse::end_text_edit();
+                // we break from the loop here
+                break;
+            } else {
+                // we need to start the range here
+                let range = range_maybe.expect("if let None holds true");
+                let start_line = range.start_position().line();
+                if initial_index < start_line {
+                    total_file_lines.push(file_lines[initial_index].to_owned());
+                    initial_index = initial_index + 1;
+                    continue;
+                }
+                if initial_index == start_line {
+                    let symbol_name = nearest_range_symbols[nearest_range_symbols_index]
+                        .1
+                        .name();
+                    let symbol_type = nearest_range_symbols[nearest_range_symbols_index]
+                        .1
+                        .symbol_type();
+                    let symbol_content = nearest_range_symbols[nearest_range_symbols_index]
+                        .1
+                        .content(&file_content);
+                    let git_diff = generate_file_diff(
+                        &file_content,
+                        &file_path,
+                        &symbol_content,
+                        &language,
+                        cloned_language_parsing.clone(),
+                    ).await
+                    .map(|content| content.join("\n")).unwrap_or(symbol_content.to_owned());
+
+                    // we have a match with the start of a symbol, so lets try to ask gpt to stream it
+                    let messages = vec![
+                        llm_funcs::llm::Message::system(&prompts::system_prompt_for_git_patch(&user_query, &language, &symbol_name, &symbol_type))
+                    ].into_iter().chain(prompts::user_message_for_git_patch(&language, &symbol_name, &symbol_type, &git_diff, &file_path, &symbol_content).into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
+                    .collect::<Vec<_>>();
+                    // Now we send it over to gpt3.5 and ask it to generate code
+                    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+                    let mut reciever_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+                    let _ = llm_client.stream_response(llm_funcs::llm::OpenAIModel::GPT3_5_16k, messages, None, 0.2, None, sender).await;
+                    // we drain the answer stream here and send over our incremental edits update
+                    yield EditFileResponse::start_text_edit();
+                    while let Some(answer) = reciever_stream.next().await {
+                        if answer.delta.is_none() {
+                            // Now that we have the full answer, we can update our total lines and move the index to after the symbol at this
+                            // position because we applied the delta here, and we should also send over the end of edit symbol
+                            yield EditFileResponse::end_text_edit();
+                            let final_answer = answer.answer_up_until_now;
+                            // our final answer will be of the form
+                            // // FILEPATH: {file_path}
+                            // // BEGIN: {hash}
+                            // // {code}
+                            // // END: {hash}
+                            // we want to extract out the code bit from here
+                            let final_answer = final_answer.split("// BEGIN:").collect::<Vec<_>>().last().unwrap().split("// END:").collect::<Vec<_>>().first().unwrap().to_owned();
+                            // now insert these lines to the total final answers after splitting it on \n
+                            total_file_lines.append(
+                                final_answer
+                                    .split("\n")
+                                    .collect::<Vec<_>>()
+                                    .into_iter()
+                                    .map(|s| s.to_owned())
+                                    .collect::<Vec<_>>()
+                                    .as_mut(),
+                            );
+                            // increment the index to the end of this symbol, since gpt is already filling in the middle here
+                            initial_index = range.end_position().line() + 1;
+                            // move to the next symbol as the anchor point
+                            nearest_range_symbols_index = nearest_range_symbols_index + 1;
+                            break;
+                        } else {
+                            yield EditFileResponse::stream_incremental_edit(
+                                &range,
+                                answer.answer_up_until_now,
+                                answer.delta.expect("is_none match above to hold"),
+                            );
+                        }
+                    }
+                    // yielding the elements from the stream and moving things forward
+                }
+            }
+        }
+    };
+    let cloned_session_id = session_id.to_owned();
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(EditFileResponse::Status {
+                session_id: session_id.clone(),
+                status: "started".to_owned(),
+            })
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+    let answer_stream = edit_messages.map(|item| {
+        Ok(sse::Event::default()
+            .json_data(item)
+            .expect("failed to serialize edit response"))
+    });
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(EditFileResponse::Status {
+                session_id: cloned_session_id,
+                status: "done".to_owned(),
+            })
+            .expect("failed to send done object"))
+    });
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+    Ok(Sse::new(Box::pin(stream)))
 }
 
 /// We will use gpt to generate the lines of the code which should be applied

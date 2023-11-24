@@ -787,3 +787,56 @@ First give your reasoning and then given your selected option in in the format:
         user_action,
     ]
 }
+
+
+pub fn system_prompt_for_git_patch(
+    message: &str,
+    language: &str,
+    symbol_name: &str,
+    symbol_type: &str,
+) -> String {
+    let system_prompt = format!(r#"You are an expert at applying the git patch to the given code snippet for {symbol_name} {symbol_type}.
+
+Your job is to generate the updated {symbol_name} {symbol_type} after applying the git patch.
+
+The reason for applying the git patch is given below, a junior engineer has generated the code and the junior engineer was lazy and sometimes forgets to write code, your job is to generate the final code symbol.
+
+Reason:
+<reason>
+{message}
+</reason>
+
+You have to look at the reason and follow these rules:
+- Then output the code in a single code block.
+- Minimize any other prose.
+- Each code block starts with ``` and // FILEPATH.
+- If you suggest to run a terminal command, use a code block that starts with ```bash.
+- You always answer with {language} code.
+- Modify the code or create new code.
+- Unless directed otherwise, the user is expecting for you to edit their selected code.
+- Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by the user"#);
+    system_prompt.to_owned()
+}
+
+pub fn user_message_for_git_patch(
+    language: &str,
+    symbol_name: &str,
+    symbol_type: &str,
+    git_diff: &str,
+    file_path: &str,
+    symbol_content: &str,
+) -> Vec<String> {
+    let git_diff_patch = format!(r#"git patch:
+```{language}
+{git_diff}
+```"#);
+    let original_symbol = format!(r#"{symbol_name} {symbol_type}
+```{language}
+// FILEPATH: {file_path}
+// BEGIN: be15d9bcejpp
+{symbol_content}
+// END: be15d9bcejpp
+```"#);
+    let additional_prompt = "Do not forget to include the // BEGIN and // END markers in your generated code.";
+    vec![git_diff_patch.to_owned(), original_symbol.to_owned(), additional_prompt.to_owned()]
+}

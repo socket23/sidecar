@@ -83,6 +83,10 @@ impl FunctionInformation {
         }
     }
 
+    pub fn name(&self) -> Option<&str> {
+        self.node_information.as_ref().map(|info| info.get_name())
+    }
+
     pub fn get_node_information(&self) -> Option<&FunctionNodeInformation> {
         self.node_information.as_ref()
     }

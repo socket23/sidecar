@@ -11,7 +11,8 @@ use crate::agent::prompts::diff_accept_prompt;
 use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
-use crate::chunking::text_document::{Position, Range};
+use crate::chunking::text_document::{Position, Range, TextDocument};
+use crate::chunking::types::{ClassInformation, ClassNodeType, FunctionInformation};
 
 use super::types::{ApiResponse, Result};
 
@@ -23,6 +24,17 @@ pub struct EditFileRequest {
     pub language: String,
     pub user_query: String,
     pub session_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum TextEditStreaming {
+    Start,
+    EditStreaming {
+        range: Range,
+        content_up_until_now: String,
+        content_delta: String,
+    },
+    End,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -40,6 +52,9 @@ pub enum EditFileResponse {
         range: Range,
         content: String,
         should_insert: bool,
+    },
+    TextEditStreaming {
+        data: TextEditStreaming,
     },
     Status {
         session_id: String,
@@ -115,21 +130,324 @@ pub async fn file_edit(
         )));
         stream
     } else {
+        let nearest_range_for_symbols = find_nearest_position_for_code_edit(
+            &file_content,
+            &file_path,
+            &new_content,
+            &language,
+            app.language_parsing.clone(),
+        )
+        .await;
+
+    // Now we apply the edits and send it over to the user
         // After generating the git diff we want to send back the responses to the
         // user depending on what edit information we get, we can stream this to the
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
         let file_diff_content = file_diff_content.unwrap();
+        unimplemented!("something over here");
         dbg!(&file_diff_content.join("\n"));
-        let result = process_file_lines_to_gpt(
-            file_diff_content,
-            user_query,
-            session_id,
-            llm_client,
-        )
-        .await;
+        let result =
+            process_file_lines_to_gpt(file_diff_content, user_query, session_id, llm_client).await;
         result
     }
+}
+
+// We use this enum as a placeholder for the different type of variables which we support exporting at the
+// moment
+#[derive(Debug, Clone)]
+enum ClassOrFunction {
+    Class(ClassInformation),
+    Function(FunctionInformation),
+}
+
+impl ClassOrFunction {
+    pub fn content(&self, file_content: &str) -> String {
+        match self {
+            ClassOrFunction::Class(class_information) => class_information.content(file_content),
+            ClassOrFunction::Function(function_information) => {
+                function_information.content(file_content)
+            }
+        }
+    }
+}
+
+async fn find_nearest_position_for_code_edit(
+    file_content: &str,
+    file_path: &str,
+    new_content: &str,
+    language: &str,
+    language_parsing: Arc<TSLanguageParsing>,
+) -> Vec<(Option<Range>, ClassOrFunction)> {
+    // Steps taken:
+    // - First get all the classes and functions which are present in the code blocks provided
+    // - Get the types which are provided in the code block as well (these might be types or anything else in typescript)
+    // - Search the current open file to see if this already exists in the file
+    // - If it exists we have a more restricted area to apply the diff to
+    // - Handle the imports properly as always
+    let language_parser = language_parsing.for_lang(language);
+    if language_parser.is_none() {
+        return vec![];
+    }
+    let language_parser = language_parser.unwrap();
+    if !language_parser.is_valid_code(new_content) {
+        return vec![];
+    }
+    let class_with_funcs_llm = language_parser.generate_file_output(new_content.as_bytes());
+    let class_with_funcs = language_parser.generate_file_output(file_content.as_bytes());
+    // First we want to try and match all the classes as much as possible
+    // then we will look at the individual functions and try to match them
+
+    // These are the functions which are prensent in the class of the file
+    let class_functions_from_file = class_with_funcs_llm
+        .to_vec()
+        .into_iter()
+        .filter_map(|class_with_func| {
+            if class_with_func.class_information.is_some() {
+                Some(class_with_func.function_information)
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    // These are the classes which the llm has generated (we use it to only match with other classes)
+    let classes_llm_generated = class_with_funcs_llm
+        .to_vec()
+        .into_iter()
+        .filter_map(|class_with_func| {
+            if class_with_func.class_information.is_some() {
+                Some(class_with_func.class_information)
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    // These are the classes which are present in the file
+    let classes_from_file = class_with_funcs
+        .to_vec()
+        .into_iter()
+        .filter_map(|class_with_func| {
+            if class_with_func.class_information.is_some() {
+                Some(class_with_func.class_information)
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    // These are the independent functions which the llm has generated
+    let independent_functions_llm_generated = class_with_funcs_llm
+        .into_iter()
+        .filter_map(|class_with_func| {
+            if class_with_func.class_information.is_none() {
+                Some(class_with_func.function_information)
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    // These are the independent functions which are present in the file
+    let independent_functions_from_file = class_with_funcs
+        .into_iter()
+        .filter_map(|class_with_func| {
+            if class_with_func.class_information.is_none() {
+                Some(class_with_func.function_information)
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    // Now we try to check if any of the functions match,
+    // if they do we capture the matching range in the original value, this allows us to have a finer area to apply the diff to
+    let llm_functions_to_range = independent_functions_llm_generated
+        .into_iter()
+        .map(|function_llm| {
+            let node_information = function_llm.get_node_information();
+            match node_information {
+                Some(node_information) => {
+                    let function_name_llm = node_information.get_name();
+                    let parameters_llm = node_information.get_parameters();
+                    let return_type_llm = node_information.get_return_type();
+                    // We have the 3 identifiers above to figure out which function can match with this, if none match then we know
+                    // that this is a new function and we should treat it as such
+                    let mut found_function_vec = independent_functions_from_file
+                        .iter()
+                        .filter_map(|function_information| {
+                            let node_information = function_information.get_node_information();
+                            match node_information {
+                                Some(node_information) => {
+                                    let function_name = node_information.get_name();
+                                    let parameters = node_information.get_parameters();
+                                    let return_type = node_information.get_return_type();
+                                    let score = (function_name_llm == function_name) as usize
+                                        + (parameters_llm == parameters) as usize
+                                        + (return_type_llm == return_type) as usize;
+                                    // We have the 3 identifiers above to figure out which function can match with this, if none match then we know
+                                    // that this is a new function and we should treat it as such
+                                    if score == 0 || function_name_llm != function_name {
+                                        None
+                                    } else {
+                                        Some((score, function_information.clone()))
+                                    }
+                                }
+                                None => None,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    found_function_vec.sort_by(|a, b| b.0.cmp(&a.0));
+                    let found_function = found_function_vec
+                        .first()
+                        .map(|(_, function_information)| function_information);
+                    if let Some(found_function) = found_function {
+                        // We have a match! let's lock onto the range of this function node which we found and then
+                        // we can go about applying the diff to this range
+                        return (Some(found_function.range().clone()), function_llm);
+                    }
+
+                    // Now it might happen that these functions are part of the clas function, in which case
+                    // we should check the class functions as well to figure out if that's the case and we can
+                    // get the correct range that way
+                    let found_function =
+                        class_functions_from_file
+                            .iter()
+                            .find(|function_information| {
+                                let node_information = function_information.get_node_information();
+                                match node_information {
+                                    Some(node_information) => {
+                                        let function_name = node_information.get_name();
+                                        let parameters = node_information.get_parameters();
+                                        let return_type = node_information.get_return_type();
+                                        let score = (function_name_llm == function_name) as usize
+                                            + (parameters_llm == parameters) as usize
+                                            + (return_type_llm == return_type) as usize;
+                                        // We have the 3 identifiers above to figure out which function can match with this, if none match then we know
+                                        // that this is a new function and we should treat it as such
+                                        if score == 0 || function_name_llm != function_name {
+                                            false
+                                        } else {
+                                            true
+                                        }
+                                    }
+                                    None => false,
+                                }
+                            });
+                    if let Some(found_function) = found_function {
+                        // We have a match! let's lock onto the range of this function node which we found and then
+                        // we can go about applying the diff to this range
+                        return (Some(found_function.range().clone()), function_llm);
+                    }
+                    // If the class function finding also fails, then we just return None here :(
+                    // since it might be a new function at this point?
+                    (None, function_llm)
+                }
+                None => (None, function_llm),
+            }
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|(range, function)| (range, ClassOrFunction::Function(function)))
+        .collect::<Vec<_>>();
+
+    // Now we have to try and match the classes in the same way, so we can figure out if we have a smaller range to apply the diff
+    let llm_classes_to_range = classes_llm_generated
+        .into_iter()
+        .map(|llm_class_information| {
+            let class_identifier = llm_class_information.get_name();
+            let class_type = llm_class_information.get_class_type();
+            match class_type {
+                ClassNodeType::ClassDeclaration => {
+                    // Try to find which class in the original file this could match with
+                    let possible_class = classes_from_file
+                        .iter()
+                        .find(|class_information| class_information.get_name() == class_identifier);
+                    match possible_class {
+                        // yay, happy path we found some class, lets return this as the range for the class right now
+                        Some(possible_class) => {
+                            (Some(possible_class.range().clone()), llm_class_information)
+                        }
+                        None => (None, llm_class_information),
+                    }
+                }
+                ClassNodeType::Identifier => (None, llm_class_information),
+            }
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|(range, class)| (range, ClassOrFunction::Class(class)))
+        .collect::<Vec<_>>();
+
+    // TODO(skcd): Now we have classes and functions which are mapped to their actual representations in the file
+    // this is very useful since our diff application can be more coherent now and we can send over more
+    // correct data, but what about the things that we missed? let's get to them in a bit, focus on these first
+
+    // First we have to order the functions and classes in the order of their ranges
+    let mut identified: Vec<(Option<Range>, ClassOrFunction)> = llm_functions_to_range
+        .into_iter()
+        .chain(llm_classes_to_range)
+        .collect();
+    identified.sort_by(|a, b| match (a.0.as_ref(), b.0.as_ref()) {
+        (Some(a_range), Some(b_range)) => a_range.start_byte().cmp(&b_range.start_byte()),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    });
+    // dbg!("are we even here???");
+    // Now we can incrementally apply the edits here
+    // dbg!(&identified);
+
+    identified
+
+    // // To start with, we are going to apply the edits as we see them and incrementally build up
+    // // our file, using difftastic to generate the diff and applying that to the file, since we already
+    // // know the ranges etc, we can do a really good job of applying the diffs since its smaller now
+    // futures::stream::iter(identified.into_iter().map(|identifier| {
+    //     (
+    //         identifier,
+    //         language_parsing.clone(),
+    //         language.to_owned(),
+    //         new_content.to_owned(),
+    //     )
+    // }))
+    // .for_each(
+    //     |(identified, language_parsing, language, llm_content)| async move {
+    //         let (range, class_or_function) = identified;
+    //         let text_document = TextDocument::new(
+    //             file_content.to_owned(),
+    //             Default::default(),
+    //             file_path.to_owned(),
+    //             file_path.to_owned(),
+    //         );
+    //         match range {
+    //             Some(range) => {
+    //                 let document_content = text_document.from_range(&range);
+    //                 let symbol_content = class_or_function.content(&llm_content);
+    //                 dbg!("whats the diff content");
+    //                 dbg!(&document_content);
+    //                 dbg!(&symbol_content);
+    //                 dbg!("finished diff content");
+    //                 let content_diff = generate_file_diff(
+    //                     &document_content,
+    //                     &file_path,
+    //                     &symbol_content,
+    //                     &language,
+    //                     language_parsing,
+    //                 )
+    //                 .await;
+    //                 dbg!("we have something here");
+    //                 if let Some(content_diff) = content_diff {
+    //                     dbg!(&content_diff.join("\n"));
+    //                 }
+    //             }
+    //             None => {}
+    //         }
+    //     },
+    // )
+    // .await;
+    // unimplemented!("something over here");
 }
 
 pub async fn generate_file_diff(
@@ -596,6 +914,19 @@ pub enum LineContentType {
     DiffSeparator,
 }
 
+async fn llm_writing_code(
+    file_lines: Vec<String>,
+    user_query: String,
+    session_id: String,
+    llm_client: Arc<LlmClient>,
+    nearest_range_symbols: Vec<(Option<Range>, ClassOrFunction)>,
+) -> Result<
+Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
+    // Here we have to generate the code using the llm and then we have to apply the diff
+    unimplemented!();
+}
+
 /// We will use gpt to generate the lines of the code which should be applied
 /// to the delta using llm (this is like the machine version of doing git diff(accept/reject))
 async fn process_file_lines_to_gpt(
@@ -666,7 +997,7 @@ async fn process_file_lines_to_gpt(
                     suffix_index = suffix_index + 1;
                     suffix_lines.push(line);
                 }
-                
+
                 // we want to get some suffix here so we can pass that along to the LLM
                 let (delta_lines, edit_file_response) = call_gpt_for_action_resolution(
                     // the index is simply the length of the current lines which are
@@ -812,8 +1143,8 @@ async fn call_gpt_for_action_resolution(
             // the line index to where the current changes will be
             let current_change_size = current_changes.len();
             let incoming_changes_start_index = line_start + current_change_size;
-            let incoming_changes_end_index: usize = incoming_changes_start_index
-                + incoming_changes.len();
+            let incoming_changes_end_index: usize =
+                incoming_changes_start_index + incoming_changes.len();
             let mut changes_str = incoming_changes.join("\n");
             // send an extra \n here because we are inserting the changes and when we join,
             // we are going to miss the last \n so we want to move the pointer to the next line

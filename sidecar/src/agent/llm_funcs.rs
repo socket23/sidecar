@@ -312,7 +312,9 @@ impl LlmClient {
         let gpt4_32k_config = azure_config
             .clone()
             .with_deployment_id("gpt4-32k-access".to_owned());
-        let gpt4_turbo_128k_config = azure_config.clone().with_deployment_id("gpt-4-turbo".to_owned());
+        let gpt4_turbo_128k_config = azure_config
+            .clone()
+            .with_deployment_id("gpt-4-turbo".to_owned());
         let gpt3_5_config = azure_config.with_deployment_id("gpt35-turbo-access".to_owned());
         Self {
             gpt4_client: Client::with_config(gpt4_config),

@@ -8,10 +8,11 @@ use crate::{
         types::{AgentStep, CodeSpan, VariableInformation},
     },
     application::application::Application,
+    chunking::editor_parsing::EditorParsing,
     db::sqlite::SqlDb,
     git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
-    webserver::agent::UserContext, chunking::editor_parsing::EditorParsing,
+    webserver::agent::UserContext,
 };
 
 /// Here we allow the agent to perform search and answer workflow related questions
@@ -902,7 +903,8 @@ impl Agent {
         let extended_user_selected_context = self.get_extended_user_selection_information();
         if let Some(extended_user_selection_context_slice) = extended_user_selected_context {
             let user_selected_context_header = "#### USER SELECTED CONTEXT ####\n";
-            let user_selected_context_tokens = bpe.encode_ordinary(&user_selected_context_header).len();
+            let user_selected_context_tokens =
+                bpe.encode_ordinary(&user_selected_context_header).len();
             if user_selected_context_tokens
                 >= remaining_prompt_tokens - self.model.prompt_tokens_limit
             {
@@ -911,9 +913,8 @@ impl Agent {
                 prompt += user_selected_context_header;
                 remaining_prompt_tokens -= user_selected_context_tokens;
 
-                for extended_user_selected_context in extended_user_selection_context_slice
-                    .iter()
-                    .rev()
+                for extended_user_selected_context in
+                    extended_user_selection_context_slice.iter().rev()
                 {
                     let variable_prompt = extended_user_selected_context.to_prompt();
                     let user_variable_tokens = bpe.encode_ordinary(&variable_prompt).len();

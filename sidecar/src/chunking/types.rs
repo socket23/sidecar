@@ -99,6 +99,10 @@ impl FunctionInformation {
         &self.r#type
     }
 
+    pub fn content(&self, file_content: &str) -> String {
+        file_content[self.range().start_byte()..self.range().end_byte()].to_owned()
+    }
+
     pub fn find_function_in_byte_offset<'a>(
         function_blocks: &'a [&'a Self],
         byte_offset: usize,
@@ -234,6 +238,10 @@ impl ClassInformation {
         &self.range
     }
 
+    pub fn content(&self, content: &str) -> String {
+        content[self.range().start_byte()..self.range().end_byte()].to_string()
+    }
+
     pub fn fold_class_information(mut classes: Vec<Self>) -> Vec<Self> {
         // First we sort the function blocks(which are bodies) based on the start
         // index or the end index
@@ -263,5 +271,30 @@ impl ClassInformation {
         }
 
         filtered_classes
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClassWithFunctions {
+    pub class_information: Option<ClassInformation>,
+    pub function_information: Vec<FunctionInformation>,
+}
+
+impl ClassWithFunctions {
+    pub fn class_functions(
+        class_information: ClassInformation,
+        function_information: Vec<FunctionInformation>,
+    ) -> Self {
+        Self {
+            class_information: Some(class_information),
+            function_information,
+        }
+    }
+
+    pub fn functions(function_information: Vec<FunctionInformation>) -> Self {
+        Self {
+            class_information: None,
+            function_information,
+        }
     }
 }

@@ -24,6 +24,19 @@ impl TextDocument {
             relative_path,
         }
     }
+
+    /// Extracts a substring from the text document based on the given range.
+    ///
+    /// # Arguments
+    ///
+    /// * `range` - The range indicating the start and end positions of the substring.
+    ///
+    /// # Returns
+    ///
+    /// The extracted substring as a `String`.
+    pub fn from_range(&self, range: &Range) -> String {
+        self.text[range.start_byte()..range.end_byte()].to_owned()
+    }
 }
 
 impl TextDocument {

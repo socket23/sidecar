@@ -35,6 +35,12 @@ pub struct RepoRef {
     pub name: String,
 }
 
+impl Default for RepoRef {
+    fn default() -> Self {
+        RepoRef::in_memory("/dev/null").expect("in_memory to be valid")
+    }
+}
+
 impl RepoRef {
     pub fn new(backend: Backend, name: &(impl AsRef<str> + ?Sized)) -> Result<Self, RepoError> {
         let path = Path::new(name.as_ref());
@@ -55,6 +61,10 @@ impl RepoRef {
             backend,
             name: name.as_ref().to_owned(),
         })
+    }
+
+    pub fn in_memory(name: &(impl AsRef<str> + ?Sized)) -> Result<Self, RepoError> {
+        Self::new(Backend::Local, name)
     }
 
     pub fn local(name: &(impl AsRef<str> + ?Sized)) -> Result<Self, RepoError> {

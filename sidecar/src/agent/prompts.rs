@@ -437,7 +437,6 @@ pub fn followup_chat_prompt(
         r#"{context}####
 Your job is to answer the user query.
 
-If you do not have enough information needed to answer the query, do not make up an answer.
 When referring to code, you must provide an example in a code block.
 
 {project_labels_context}
@@ -472,7 +471,7 @@ Respect these rules at all times:
 
 Your job is to answer the user query which is a followup to the conversation we have had.
 
-Provide only as much information and code as is necessary to answer the query, but be concise. Keep number of quoted lines to a minimum when possible. If you do not have enough information needed to answer the query, do not make up an answer.
+Provide only as much information and code as is necessary to answer the query, but be concise. Keep number of quoted lines to a minimum when possible.
 When referring to code, you must provide an example in a code block.
 
 {project_labels_context}

@@ -16,6 +16,8 @@ use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
 use crate::chunking::text_document::{Position, Range, TextDocument};
 use crate::chunking::types::{ClassInformation, ClassNodeType, FunctionInformation};
+use crate::in_line_agent::context_parsing::{generate_selection_context, ContextWindowTracker};
+use crate::in_line_agent::types::ContextSelection;
 
 use super::types::{ApiResponse, Result};
 
@@ -33,13 +35,17 @@ pub struct EditFileRequest {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TextEditStreaming {
-    Start,
+    Start {
+        context_selection: ContextSelection,
+    },
     EditStreaming {
         range: Range,
         content_up_until_now: String,
         content_delta: String,
     },
-    End,
+    End {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -68,15 +74,19 @@ pub enum EditFileResponse {
 }
 
 impl EditFileResponse {
-    fn start_text_edit() -> Self {
+    fn start_text_edit(context_selection: ContextSelection) -> Self {
         Self::TextEditStreaming {
-            data: TextEditStreaming::Start,
+            data: TextEditStreaming::Start {
+                context_selection,
+            },
         }
     }
 
     fn end_text_edit() -> Self {
         Self::TextEditStreaming {
-            data: TextEditStreaming::End,
+            data: TextEditStreaming::End {
+                reason: "done".to_owned(),
+            },
         }
     }
 
@@ -177,6 +187,7 @@ pub async fn file_edit(
             app.language_parsing.clone(),
         )
         .await;
+        dbg!(&nearest_range_for_symbols);
 
         // Now we apply the edits and send it over to the user
         // After generating the git diff we want to send back the responses to the
@@ -973,8 +984,8 @@ async fn llm_writing_code(
             if nearest_range_symbols_index >= nearest_range_symbols_len {
                 break;
             }
-            let (range_maybe, _) = nearest_range_symbols[nearest_range_symbols_index].clone();
-            if let None = range_maybe {
+            let (file_symbol_range_maybe, _) = nearest_range_symbols[nearest_range_symbols_index].clone();
+            if let None = file_symbol_range_maybe {
                 // At this point, we don't have a range, and the rest of the symbols can be concatenated and sent over
                 // the wire
                let merged_symbols = ClassOrFunction::merge_symbols_from_index(
@@ -995,19 +1006,39 @@ async fn llm_writing_code(
                         .collect::<Vec<_>>()
                         .as_mut(),
                 );
-                // now we can send over the events to the client
-                yield EditFileResponse::start_text_edit();
-                yield EditFileResponse::stream_edit(Range::new(
+                // We have to also send the selection context here, since the editor uses
+                // this for figuring out the tabs and spaces for the generated content
+                let replacement_range = Range::new(
+                    Position::new((initial_index as u32).try_into().unwrap(), 0, 0),
                     Position::new((total_file_lines.len() as u32).try_into().unwrap(), 0, 0),
-                    Position::new((total_file_lines.len() as u32).try_into().unwrap(), 100_000, 100_000),
+                );
+                let total_lines_now = total_file_lines.len();
+                let selection_context = generate_selection_context(
+                    total_lines_now as i64,
+                    &replacement_range,
+                    &replacement_range,
+                    &replacement_range,
+                    &language,
+                    total_file_lines,
+                    file_path.to_owned(),
+                    &mut ContextWindowTracker::large_window(),
+                ).to_context_selection();
+                // now we can send over the events to the client
+                yield EditFileResponse::start_text_edit(selection_context);
+                yield EditFileResponse::stream_edit(Range::new(
+                    Position::new((total_lines_now as u32).try_into().unwrap(), 0, 0),
+                    Position::new((total_lines_now as u32).try_into().unwrap(), 100_000, 100_000),
                 ), merged_symbols);
                 yield EditFileResponse::end_text_edit();
                 // we break from the loop here
                 break;
             } else {
                 // we need to start the range here
-                let range = range_maybe.expect("if let None holds true");
-                let start_line = range.start_position().line();
+                let file_symbol_range = file_symbol_range_maybe.expect("if let None holds true");
+                // This is the content of the code symbol from the file
+                let file_code_symbol = file_content[file_symbol_range.start_byte()..file_symbol_range.end_byte()].to_owned();
+
+                let start_line = file_symbol_range.start_position().line();
                 if initial_index < start_line {
                     total_file_lines.push(file_lines[initial_index].to_owned());
                     initial_index = initial_index + 1;
@@ -1020,30 +1051,66 @@ async fn llm_writing_code(
                     let symbol_type = nearest_range_symbols[nearest_range_symbols_index]
                         .1
                         .symbol_type();
-                    let symbol_content = nearest_range_symbols[nearest_range_symbols_index]
+                    let llm_symbol_content = nearest_range_symbols[nearest_range_symbols_index]
                         .1
                         .content(&file_content);
                     let git_diff = generate_file_diff(
-                        &file_content,
+                        &file_code_symbol,
                         &file_path,
-                        &symbol_content,
+                        &llm_symbol_content,
                         &language,
                         cloned_language_parsing.clone(),
                     ).await
-                    .map(|content| content.join("\n")).unwrap_or(symbol_content.to_owned());
+                    .map(|content| content.join("\n")).unwrap_or(llm_symbol_content.to_owned());
 
                     // we have a match with the start of a symbol, so lets try to ask gpt to stream it
                     let messages = vec![
                         llm_funcs::llm::Message::system(&prompts::system_prompt_for_git_patch(&user_query, &language, &symbol_name, &symbol_type))
-                    ].into_iter().chain(prompts::user_message_for_git_patch(&language, &symbol_name, &symbol_type, &git_diff, &file_path, &symbol_content).into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
+                    ].into_iter().chain(
+                        prompts::user_message_for_git_patch(
+                            &language,
+                            &symbol_name,
+                            &symbol_type,
+                            &git_diff,
+                            &file_path,
+                            &file_code_symbol,
+                        )
+                    .into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
                     .collect::<Vec<_>>();
                     // Now we send it over to gpt3.5 and ask it to generate code
                     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<Answer>();
                     let reciever_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|item| either::Left(item));
-                    let llm_answer = llm_client.stream_response(llm_funcs::llm::OpenAIModel::GPT3_5_16k, messages, None, 0.2, None, sender).into_stream().map(|item| either::Right(item));
+                    let llm_answer = llm_client.stream_response(llm_funcs::llm::OpenAIModel::GPT3_5_16k, messages, None, 0.1, None, sender).into_stream().map(|item| either::Right(item));
                     // we drain the answer stream here and send over our incremental edits update
                     let timeout = Duration::from_secs(TIMEOUT_SECS);
-                    yield EditFileResponse::start_text_edit();
+
+                    // over here as well, we need to generate the context selection and send it over
+                    // to the editor for spaces and tabs and everything else
+
+
+                    // First send the start of text edit
+                    // Since we will be rewriting the whole symbol what we know about the ranges
+                    // here are as follows:
+                    // - we have the prefix before this stored in our total_file_lines
+                    // - we have the suffix of the file stored after the symbol range
+                    // - we can combine and send that over
+                    // - in between we can put placeholder because it does not matter
+
+                    let mut suffix = vec![];
+                    file_lines.iter().skip(file_symbol_range.end_line() + 1).take(20).for_each(|line| suffix.push(line.to_owned()));
+                    let total_lines = total_file_lines.len() + (file_symbol_range.end_line() - file_symbol_range.start_line() + 1) + suffix.len();
+                    let empty_lines = vec!["".to_owned(); file_symbol_range.end_line() - file_symbol_range.start_line() + 1];
+                    let selection_context = generate_selection_context(
+                        total_lines as i64,
+                        &file_symbol_range,
+                        &file_symbol_range,
+                        &file_symbol_range,
+                        &language,
+                        total_file_lines.to_vec().into_iter().chain(empty_lines.into_iter()).chain(suffix.into_iter()).collect::<Vec<_>>(),
+                        file_path.to_owned(),
+                        &mut ContextWindowTracker::large_window(),
+                    ).to_context_selection();
+                    yield EditFileResponse::start_text_edit(selection_context);
                     for await item in tokio_stream::StreamExt::timeout(
                         stream::select(reciever_stream, llm_answer),
                         timeout,
@@ -1051,29 +1118,32 @@ async fn llm_writing_code(
                         match item {
                             Ok(Either::Left(answer_item)) => {
                                 if let Some(delta) = answer_item.delta {
-                                    yield EditFileResponse::stream_incremental_edit(&range, answer_item.answer_up_until_now, delta);
+                                    // stream the incremental edits here
+                                    yield EditFileResponse::stream_incremental_edit(&file_symbol_range, answer_item.answer_up_until_now, delta);
                                 }
                             },
                             Ok(Either::Right(Ok(llm_answer))) => {
                                 // Now that we have the final answer, we can update our total lines and move the index to after
+                                // always end the text edit
                                 yield EditFileResponse::end_text_edit();
                                 let code_snippet = llm_answer.split("// BEGIN:").collect::<Vec<_>>().last().unwrap().split("// END:").collect::<Vec<_>>().first().unwrap().to_owned();
                                 total_file_lines.append(
                                     code_snippet.split("\n").collect::<Vec<_>>().into_iter().map(|s| s.to_owned()).collect::<Vec<_>>().as_mut(),
                                 );
-                                initial_index = range.end_position().line() + 1;
+                                initial_index = file_symbol_range.end_position().line() + 1;
                                 nearest_range_symbols_index = nearest_range_symbols_index + 1;
+                                break;
                             },
                             _ => {
                                 // If things fail, then we skip the current symbol which we want to change
                                 // and we want to move to modifying the next range
-                                initial_index = range.end_position().line() + 1;
+                                initial_index = file_symbol_range.end_position().line() + 1;
                                 nearest_range_symbols_index = nearest_range_symbols_index + 1;
+                                // end the text edit always
                                 yield EditFileResponse::end_text_edit();
                             },
                         }
                     }
-                    // yielding the elements from the stream and moving things forward
                 }
             }
         }

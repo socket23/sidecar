@@ -7,7 +7,9 @@ use super::{
     python::python_language_config,
     rust::rust_language_config,
     text_document::{Position, Range},
-    types::{ClassInformation, ClassNodeType, FunctionInformation, FunctionNodeType},
+    types::{
+        ClassInformation, ClassNodeType, ClassWithFunctions, FunctionInformation, FunctionNodeType,
+    },
     typescript::typescript_language_config,
 };
 
@@ -84,6 +86,43 @@ impl TSLanguageConfig {
             .unwrap_or_default()
     }
 
+    pub fn generate_file_output(&self, source_code: &[u8]) -> Vec<ClassWithFunctions> {
+        let function_ranges = self.capture_function_data(source_code);
+        let class_ranges = self.capture_class_data(source_code);
+        let mut classes_with_functions = Vec::new();
+        let mut standalone_functions = Vec::new();
+
+        // This is where we maintain the list of functions which we have already
+        // added to a class
+        let mut added_functions = vec![false; function_ranges.len()];
+
+        for class in class_ranges {
+            let mut functions = Vec::new();
+
+            for (i, function) in function_ranges.iter().enumerate() {
+                if function.range().start_byte() >= class.range().start_byte()
+                    && function.range().end_byte() <= class.range().end_byte()
+                    && function.get_node_information().is_some()
+                {
+                    functions.push(function.clone());
+                    added_functions[i] = true; // Mark function as added
+                }
+            }
+
+            classes_with_functions.push(ClassWithFunctions::class_functions(class, functions));
+        }
+
+        // Add standalone functions, those which are not within any class range
+        for (i, function) in function_ranges.iter().enumerate() {
+            if !added_functions[i] && function.get_node_information().is_some() {
+                standalone_functions.push(function.clone());
+            }
+        }
+
+        classes_with_functions.push(ClassWithFunctions::functions(standalone_functions));
+        classes_with_functions
+    }
+
     // The file outline looks like this:
     // function something(arguments): return_value_something
     // Class something_else
@@ -92,7 +131,7 @@ impl TSLanguageConfig {
     // ...
     // We will generate a proper outline later on, but for now work with this
     // TODO(skcd): This can be greatly improved here
-    pub fn generate_file_outline(&self, source_code: &[u8]) -> String {
+    pub fn generate_file_outline_str(&self, source_code: &[u8]) -> String {
         let function_ranges = self.capture_function_data(source_code);
         let class_ranges = self.capture_class_data(source_code);
         let language = self
@@ -1391,7 +1430,7 @@ impl A {
             .for_lang(language)
             .expect("test to work");
         ts_language_config.capture_class_data(source_code.as_bytes());
-        let outline = ts_language_config.generate_file_outline(source_code.as_bytes());
+        let outline = ts_language_config.generate_file_outline_str(source_code.as_bytes());
         assert_eq!(outline, "```typescript\n\nClass CohereGeneration\n\nClass CohereGenerationDecoderStream\n\n    function parse((line: string)): : CohereGenerationTypes.Chunk | null\n    function transformer((map: (chunk: CohereGenerationTypes.Chunk) => T)): \n    function constructor((map: (chunk: CohereGenerationTypes.Chunk) => T)): \nfunction run((\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n)): : Promise<CohereGenerationTypes.Response>\n\nfunction streamBytes((\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n)): : Promise<ReadableStream<Uint8Array>>\n\nfunction noop((chunk: CohereGenerationTypes.Chunk)): \n\nfunction stream((\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n)): : Promise<ReadableStream<CohereGenerationTypes.Chunk>>\n\nfunction chunkToToken((chunk: CohereGenerationTypes.Chunk)): \n\nfunction streamTokens((\n  request: CohereGenerationTypes.Request,\n  options: CohereGenerationTypes.RequestOptions,\n)): : Promise<ReadableStream<string>>\n\n```");
         assert!(false);
     }

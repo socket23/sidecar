@@ -9,7 +9,7 @@ use tracing::{debug, info};
 use crate::{
     agent::llm_funcs::llm::FunctionCall,
     application::application::Application,
-    chunking::{text_document::Position, editor_parsing::EditorParsing},
+    chunking::{editor_parsing::EditorParsing, text_document::Position},
     db::sqlite::SqlDb,
     indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
@@ -561,10 +561,7 @@ impl CodeSpan {
         }
     }
 
-    pub fn from_active_window(
-        active_window_data: &ActiveWindowData,
-        path_alias: usize,
-    ) -> Self {
+    pub fn from_active_window(active_window_data: &ActiveWindowData, path_alias: usize) -> Self {
         let file_path = active_window_data.file_path.clone();
         let split_content = active_window_data.file_content.lines().collect::<Vec<_>>();
         let alias = path_alias;
@@ -728,10 +725,16 @@ impl Agent {
             .map(|conversation_message| conversation_message.user_variables.as_slice())
     }
 
-    pub fn get_extended_user_selection_information(&self) -> Option<&[ExtendedVariableInformation]> {
+    pub fn get_extended_user_selection_information(
+        &self,
+    ) -> Option<&[ExtendedVariableInformation]> {
         self.conversation_messages
             .last()
-            .map(|conversation_message| conversation_message.extended_variable_information.as_slice())
+            .map(|conversation_message| {
+                conversation_message
+                    .extended_variable_information
+                    .as_slice()
+            })
     }
 
     pub fn get_definition_snippets(&self) -> Option<&[String]> {

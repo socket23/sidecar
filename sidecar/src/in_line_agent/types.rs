@@ -16,10 +16,7 @@ use crate::{
         model,
     },
     application::application::Application,
-    chunking::{
-        editor_parsing::EditorParsing,
-        text_document::DocumentSymbol,
-    },
+    chunking::{editor_parsing::EditorParsing, text_document::DocumentSymbol},
     db::sqlite::SqlDb,
     repo::types::RepoRef,
     webserver::in_line_agent::ProcessInEditorRequest,

@@ -579,7 +579,7 @@ pub async fn followup_chat(
         .for_each(|file_content_value| {
             conversation_message.add_path(file_content_value.file_path.to_owned());
         });
-    
+
     // We also want to add the file path for the active window if it's not already there
     let file_path_len = conversation_message.get_paths().len();
     previous_messages.push(conversation_message);

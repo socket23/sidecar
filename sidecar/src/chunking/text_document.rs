@@ -129,6 +129,14 @@ impl Range {
         self.end_position.byte_offset
     }
 
+    pub fn start_line(&self) -> usize {
+        self.start_position.line
+    }
+
+    pub fn end_line(&self) -> usize {
+        self.end_position.line
+    }
+
     pub fn intersection_size(&self, other: &Range) -> usize {
         let start = self
             .start_position

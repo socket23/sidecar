@@ -21,6 +21,10 @@ impl ContextWindowTracker {
         }
     }
 
+    pub fn large_window() -> Self {
+        Self::new(1_000_100)
+    }
+
     pub fn add_tokens(&mut self, tokens: usize) {
         self.total_tokens += tokens;
     }
@@ -399,6 +403,14 @@ impl SelectionContext {
             ),
         )
     }
+
+    pub fn to_context_selection(self) -> ContextSelection {
+        ContextSelection::new(
+            self.above.to_agent_selection_data(),
+            self.range.to_agent_selection_data(),
+            self.below.to_agent_selection_data(),
+        )
+    }
 }
 
 pub fn generate_selection_context_for_fix(
@@ -489,7 +501,7 @@ pub fn generate_selection_context_for_fix(
     }
 }
 
-fn generate_selection_context(
+pub fn generate_selection_context(
     line_count: i64,
     original_selection: &Range,
     range_to_maintain: &Range,

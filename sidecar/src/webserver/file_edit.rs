@@ -32,19 +32,23 @@ pub struct EditFileRequest {
     pub language: String,
     pub user_query: String,
     pub session_id: String,
+    pub code_block_index: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TextEditStreaming {
     Start {
+        code_block_index: usize,
         context_selection: ContextSelection,
     },
     EditStreaming {
+        code_block_index: usize,
         range: Range,
         content_up_until_now: String,
         content_delta: String,
     },
     End {
+        code_block_index: usize,
         reason: String,
     },
 }
@@ -75,38 +79,42 @@ pub enum EditFileResponse {
 }
 
 impl EditFileResponse {
-    fn start_text_edit(context_selection: ContextSelection) -> Self {
+    fn start_text_edit(context_selection: ContextSelection, code_block_index: usize) -> Self {
         Self::TextEditStreaming {
             data: TextEditStreaming::Start {
                 context_selection,
+                code_block_index,
             },
         }
     }
 
-    fn end_text_edit() -> Self {
+    fn end_text_edit(code_block_index: usize) -> Self {
         Self::TextEditStreaming {
             data: TextEditStreaming::End {
                 reason: "done".to_owned(),
+                code_block_index,
             },
         }
     }
 
-    fn stream_edit(range: Range, content: String) -> Self {
+    fn stream_edit(range: Range, content: String, code_block_index: usize) -> Self {
         Self::TextEditStreaming {
             data: TextEditStreaming::EditStreaming {
                 range,
                 content_up_until_now: content.to_owned(),
                 content_delta: content,
+                code_block_index,
             },
         }
     }
 
-    fn stream_incremental_edit(range: &Range, buf: String, delta: String) -> Self {
+    fn stream_incremental_edit(range: &Range, buf: String, delta: String, code_block_index: usize) -> Self {
         Self::TextEditStreaming {
             data: TextEditStreaming::EditStreaming {
                 range: range.clone(),
                 content_up_until_now: buf,
                 content_delta: delta,
+                code_block_index,
             },
         }
     }
@@ -123,6 +131,7 @@ pub async fn file_edit(
         new_content,
         user_query,
         session_id,
+        code_block_index,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
     // Here we have to first check if the new content is tree-sitter valid, if
@@ -212,6 +221,7 @@ pub async fn file_edit(
             app.language_parsing.clone(),
             file_path,
             nearest_range_for_symbols,
+            code_block_index,
         )
         .await;
         result
@@ -973,6 +983,7 @@ async fn llm_writing_code(
     language_parsing: Arc<TSLanguageParsing>,
     file_path: String,
     nearest_range_symbols: Vec<(Option<Range>, ClassOrFunction)>,
+    code_block_index: usize,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -1022,12 +1033,12 @@ async fn llm_writing_code(
                     &replacement_range,
                 );
                 // now we can send over the events to the client
-                yield EditFileResponse::start_text_edit(selection_context);
+                yield EditFileResponse::start_text_edit(selection_context, code_block_index);
                 yield EditFileResponse::stream_edit(Range::new(
                     Position::new((total_lines_now as u32).try_into().unwrap(), 0, 0),
                     Position::new((total_lines_now as u32).try_into().unwrap(), 100_000, 100_000),
-                ), merged_symbols);
-                yield EditFileResponse::end_text_edit();
+                ), merged_symbols, code_block_index);
+                yield EditFileResponse::end_text_edit(code_block_index);
                 // we break from the loop here
                 break;
             } else {
@@ -1115,7 +1126,7 @@ async fn llm_writing_code(
                         &mut ContextWindowTracker::large_window(),
                     ).to_context_selection();
                     dbg!(&selection_context);
-                    yield EditFileResponse::start_text_edit(selection_context);
+                    yield EditFileResponse::start_text_edit(selection_context, code_block_index);
                     for await item in tokio_stream::StreamExt::timeout(
                         stream::select(reciever_stream, llm_answer),
                         timeout,
@@ -1124,13 +1135,13 @@ async fn llm_writing_code(
                             Ok(Either::Left(answer_item)) => {
                                 if let Some(delta) = answer_item.delta {
                                     // stream the incremental edits here
-                                    yield EditFileResponse::stream_incremental_edit(&file_symbol_range, answer_item.answer_up_until_now, delta);
+                                    yield EditFileResponse::stream_incremental_edit(&file_symbol_range, answer_item.answer_up_until_now, delta, code_block_index);
                                 }
                             },
                             Ok(Either::Right(Ok(llm_answer))) => {
                                 // Now that we have the final answer, we can update our total lines and move the index to after
                                 // always end the text edit
-                                yield EditFileResponse::end_text_edit();
+                                yield EditFileResponse::end_text_edit(code_block_index);
                                 let code_snippet = llm_answer.split("// BEGIN:").collect::<Vec<_>>().last().unwrap().split("// END:").collect::<Vec<_>>().first().unwrap().to_owned();
                                 total_file_lines.append(
                                     code_snippet.split("\n").collect::<Vec<_>>().into_iter().map(|s| s.to_owned()).collect::<Vec<_>>().as_mut(),
@@ -1145,7 +1156,7 @@ async fn llm_writing_code(
                                 initial_index = file_symbol_range.end_position().line() + 1;
                                 nearest_range_symbols_index = nearest_range_symbols_index + 1;
                                 // end the text edit always
-                                yield EditFileResponse::end_text_edit();
+                                yield EditFileResponse::end_text_edit(code_block_index);
                             },
                         }
                     }

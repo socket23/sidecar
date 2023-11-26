@@ -464,6 +464,13 @@ Respect these rules at all times:
 - Code blocks MUST be displayed to the user using markdown
 - Code blocks MUST be displayed to the user using markdown and must ALWAYS include the line numbers
 - If you are going to not edit sections of the code, leave "// rest of code .." as the placeholder string
+- Do NOT write the line number in the codeblock
+    - E.g. Do not write:
+    ```rust
+    1. // rest of code ..
+    2. // rest of code ..
+    ```
+    Here the codeblock has line numbers 1 and 2, do not write the line numbers in the codeblock
 {user_selected_instructions}"#
     );
     let followup_prompt = format!(
@@ -498,7 +505,14 @@ Respect these rules at all times:
     - E.g. Do not simply write: "Bars are [`Foo`]( that return a list filled with `Bar` variants." Instead, write: "Bars are functions that return a list filled with [`Bar`]({location}src/bar.rs#L38-L57) variants."
 - Code blocks MUST be displayed to the user using markdown
 - Code blocks MUST be displayed to the user using markdown and must ALWAYS include the line numbers
-- If you are going to not edit sections of the code, leave "// rest of code .." as the placeholder string
+- If you are going to not edit sections of the code, leave "// rest of code .." as the placeholder string.
+- Do NOT write the line number in the codeblock
+    - E.g. Do not write:
+    ```rust
+    1. // rest of code ..
+    2. // rest of code ..
+    ```
+    Here the codeblock has line numbers 1 and 2, do not write the line numbers in the codeblock
 {user_selected_instructions}"#
     );
 

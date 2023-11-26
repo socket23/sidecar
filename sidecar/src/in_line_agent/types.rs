@@ -79,6 +79,23 @@ impl ContextSelection {
             below: selection_context.below.to_agent_selection_data(),
         }
     }
+
+    pub fn generate_placeholder_for_range(range: &Range) -> Self {
+        let mut lines = vec![];
+        for _ in range.start_line()..=range.end_line() {
+            lines.push(String::new());
+        }
+        Self {
+            above: InLineAgentSelectionData::new(false, 0, 0, vec![]),
+            range: InLineAgentSelectionData::new(
+                true,
+                range.start_line().try_into().unwrap(),
+                range.end_line().try_into().unwrap(),
+                lines,
+            ),
+            below: InLineAgentSelectionData::new(false, 0, 0, vec![]),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

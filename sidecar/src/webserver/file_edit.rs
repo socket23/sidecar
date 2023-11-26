@@ -7,6 +7,7 @@ use axum::{Extension, Json};
 use difftastic::LineInformation;
 use either::Either;
 use futures::{StreamExt, FutureExt, stream};
+use regex::Regex;
 
 use crate::agent::llm_funcs::LlmClient;
 use crate::agent::prompts::diff_accept_prompt;
@@ -194,15 +195,16 @@ pub async fn file_edit(
         // user depending on what edit information we get, we can stream this to the
         // user so they know the agent is working on some action and it will show up
         // as edits on the editor
-        let file_lines = file_content
-            .split("\n")
-            .into_iter()
+        let split_lines = Regex::new(r"\r\n|\r|\n").unwrap();
+        let file_lines: Vec<String> = split_lines
+            .split(&file_content)
             .map(|s| s.to_owned())
-            .collect::<Vec<_>>();
+            .collect();
 
         let result = llm_writing_code(
             file_lines,
             file_content,
+            new_content,
             user_query,
             language,
             session_id,
@@ -288,8 +290,8 @@ async fn find_nearest_position_for_code_edit(
     if !language_parser.is_valid_code(new_content) {
         return vec![];
     }
-    let class_with_funcs_llm = language_parser.generate_file_output(new_content.as_bytes());
-    let class_with_funcs = language_parser.generate_file_output(file_content.as_bytes());
+    let class_with_funcs_llm = language_parser.generate_file_symbols(new_content.as_bytes());
+    let class_with_funcs = language_parser.generate_file_symbols(file_content.as_bytes());
     // First we want to try and match all the classes as much as possible
     // then we will look at the individual functions and try to match them
 
@@ -508,10 +510,12 @@ pub async fn generate_file_diff(
         return None;
     }
     let language_parser = language_parser.unwrap();
-    let validity = language_parser.is_valid_code(file_content);
-    if !validity {
-        return None;
-    }
+    // let validity = language_parser.is_valid_code(file_content);
+    // dbg!("language", language);
+    // if !validity {
+    //     dbg!("file_content is not valid for language parsing");
+    //     return None;
+    // }
     // we can get the extension from the file path
     let file_extension = PathBuf::from(file_path)
         .extension()
@@ -961,6 +965,7 @@ pub enum LineContentType {
 async fn llm_writing_code(
     file_lines: Vec<String>,
     file_content: String,
+    llm_content: String,
     user_query: String,
     language: String,
     session_id: String,
@@ -1013,16 +1018,9 @@ async fn llm_writing_code(
                     Position::new((total_file_lines.len() as u32).try_into().unwrap(), 0, 0),
                 );
                 let total_lines_now = total_file_lines.len();
-                let selection_context = generate_selection_context(
-                    total_lines_now as i64,
+                let selection_context = ContextSelection::generate_placeholder_for_range(
                     &replacement_range,
-                    &replacement_range,
-                    &replacement_range,
-                    &language,
-                    total_file_lines,
-                    file_path.to_owned(),
-                    &mut ContextWindowTracker::large_window(),
-                ).to_context_selection();
+                );
                 // now we can send over the events to the client
                 yield EditFileResponse::start_text_edit(selection_context);
                 yield EditFileResponse::stream_edit(Range::new(
@@ -1037,6 +1035,7 @@ async fn llm_writing_code(
                 let file_symbol_range = file_symbol_range_maybe.expect("if let None holds true");
                 // This is the content of the code symbol from the file
                 let file_code_symbol = file_content[file_symbol_range.start_byte()..file_symbol_range.end_byte()].to_owned();
+                dbg!(&file_code_symbol);
 
                 let start_line = file_symbol_range.start_position().line();
                 if initial_index < start_line {
@@ -1053,7 +1052,8 @@ async fn llm_writing_code(
                         .symbol_type();
                     let llm_symbol_content = nearest_range_symbols[nearest_range_symbols_index]
                         .1
-                        .content(&file_content);
+                        .content(&llm_content);
+                    dbg!(&llm_symbol_content);
                     let git_diff = generate_file_diff(
                         &file_code_symbol,
                         &file_path,
@@ -1097,19 +1097,24 @@ async fn llm_writing_code(
                     // - in between we can put placeholder because it does not matter
 
                     let mut suffix = vec![];
+                    dbg!("how many file lines", file_lines.len());
                     file_lines.iter().skip(file_symbol_range.end_line() + 1).take(20).for_each(|line| suffix.push(line.to_owned()));
+                    dbg!(&suffix.join("\n"));
                     let total_lines = total_file_lines.len() + (file_symbol_range.end_line() - file_symbol_range.start_line() + 1) + suffix.len();
+                    dbg!("what are the total lines", total_lines);
+                    dbg!(&file_symbol_range);
                     let empty_lines = vec!["".to_owned(); file_symbol_range.end_line() - file_symbol_range.start_line() + 1];
                     let selection_context = generate_selection_context(
                         total_lines as i64,
                         &file_symbol_range,
                         &file_symbol_range,
-                        &file_symbol_range,
+                        &Range::new(Position::new(0, 0, 0), Position::new(total_lines - 1, 1000, 1000)),
                         &language,
                         total_file_lines.to_vec().into_iter().chain(empty_lines.into_iter()).chain(suffix.into_iter()).collect::<Vec<_>>(),
                         file_path.to_owned(),
                         &mut ContextWindowTracker::large_window(),
                     ).to_context_selection();
+                    dbg!(&selection_context);
                     yield EditFileResponse::start_text_edit(selection_context);
                     for await item in tokio_stream::StreamExt::timeout(
                         stream::select(reciever_stream, llm_answer),

@@ -378,6 +378,44 @@ impl TSLanguageConfig {
             }
             index = end_index;
         }
+
+        // Now we try to grab the documentation strings so we can add them to the functions as well
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code, None).unwrap();
+        let node = parsed_data.root_node();
+        let mut documentation_string: Vec<String> = vec![];
+        dbg!(String::from_utf8(source_code_vec.to_vec()));
+        let documentation_queries = self.documentation_query.to_vec();
+        documentation_queries
+            .into_iter()
+            .for_each(|documentation_query| {
+                dbg!("whats the documentation query");
+                dbg!(&documentation_query);
+                let query = tree_sitter::Query::new(grammar(), &documentation_query)
+                    .expect("documentation queries are well formed");
+                let mut cursor = tree_sitter::QueryCursor::new();
+                cursor
+                    .captures(&query, node, source_code)
+                    .into_iter()
+                    .for_each(|capture| {
+                        capture.0.captures.into_iter().for_each(|capture| {
+                            dbg!(capture.node.start_byte(), capture.node.end_byte());
+                            let capture_name = query
+                                .capture_names()
+                                .to_vec()
+                                .remove(capture.index.try_into().unwrap());
+                            dbg!(&capture_name);
+                            dbg!(get_string_from_bytes(
+                                &source_code_vec,
+                                capture.node.start_byte(),
+                                capture.node.end_byte(),
+                            ));
+                            if !range_set.contains(&Range::for_tree_node(&capture.node)) {
+                            }
+                        })
+                    });
+            });
         FunctionInformation::fold_function_blocks(compressed_functions)
     }
 
@@ -1424,58 +1462,50 @@ impl A {
     #[test]
     fn test_function_nodes_documentation_for_typescript() {
         let source_code = r#"
-    // Registers a new chat agent
-    /**
-     * Soething over here
-     */
-    function registerAgent(agent: IChatAgent): IDisposable {
-        // ...
-    }
+// Updates an existing chat agent with new metadata
+function updateAgent(id: string, updateMetadata: ICSChatAgentMetadata): void {
+    // ...
+}
 
-    // Updates an existing chat agent with new metadata
-    function updateAgent(id: string, updateMetadata: ICSChatAgentMetadata): void {
-        // ...
-    }
+// Returns the default chat agent
+function getDefaultAgent(): IChatAgent | undefined {
+    // ...
+}
 
-    // Returns the default chat agent
-    function getDefaultAgent(): IChatAgent | undefined {
-        // ...
-    }
+// Returns the secondary chat agent
+function getSecondaryAgent(): IChatAgent | undefined {
+    // ...
+}
 
-    // Returns the secondary chat agent
-    function getSecondaryAgent(): IChatAgent | undefined {
-        // ...
-    }
+// Returns all registered chat agents
+function getAgents(): Array<IChatAgent> {
+    // ...
+}
 
-    // Returns all registered chat agents
-    function getAgents(): Array<IChatAgent> {
-        // ...
-    }
+// Checks if a chat agent with the given id exists
+function hasAgent(id: string): boolean {
+    // ...
+}
 
-    // Checks if a chat agent with the given id exists
-    function hasAgent(id: string): boolean {
-        // ...
-    }
+// Returns a chat agent with the given id
+function getAgent(id: string): IChatAgent | undefined {
+    // ...
+}
 
-    // Returns a chat agent with the given id
-    function getAgent(id: string): IChatAgent | undefined {
-        // ...
-    }
+// Invokes a chat agent with the given id and request
+async function invokeAgent(id: string, request: ICSChatAgentRequest, progress: (part: ICSChatProgress) => void, history: ICSChatMessage[], token: CancellationToken): Promise<ICSChatAgentResult> {
+    // ...
+}
 
-    // Invokes a chat agent with the given id and request
-    async function invokeAgent(id: string, request: ICSChatAgentRequest, progress: (part: ICSChatProgress) => void, history: ICSChatMessage[], token: CancellationToken): Promise<ICSChatAgentResult> {
-        // ...
-    }
+// Returns followups for a chat agent with the given id and session id
+async getFollowups(id: string, sessionId: string, token: CancellationToken): Promise<ICSChatFollowup[]> {
+    // ...
+}
 
-    // Returns followups for a chat agent with the given id and session id
-    async getFollowups(id: string, sessionId: string, token: CancellationToken): Promise<ICSChatFollowup[]> {
-        // ...
-    }
-
-    // Returns edits for a chat agent with the given context
-    async function getEdits(context: ICSChatAgentEditRequest, progress: (part: ICSChatAgentEditRepsonse) => void, token: CancellationToken): Promise<ICSChatAgentEditRepsonse | undefined> {
-        // ...
-    }"#;
+// Returns edits for a chat agent with the given context
+async function getEdits(context: ICSChatAgentEditRequest, progress: (part: ICSChatAgentEditRepsonse) => void, token: CancellationToken): Promise<ICSChatAgentEditRepsonse | undefined> {
+    // ...
+}"#;
         let tree_sitter_parsing = TSLanguageParsing::init();
         let ts_language_config = tree_sitter_parsing.for_lang("typescript").expect("to work");
         let fn_info = ts_language_config.capture_function_data(source_code.as_bytes());

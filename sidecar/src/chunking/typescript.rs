@@ -28,7 +28,7 @@ pub fn typescript_language_config() -> TSLanguageConfig {
         .collect(),
         documentation_query: vec!["((comment) @comment
         (#match? @comment \"^\\\\/\\\\*\\\\*\")) @docComment"
-            .to_owned()],
+            .to_owned(), "(comment) @comment".to_owned()],
         function_query: vec!["[
             (function
                 name: (identifier)? @identifier

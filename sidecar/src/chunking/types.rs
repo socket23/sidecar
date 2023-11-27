@@ -8,6 +8,7 @@ pub struct FunctionNodeInformation {
     parameters: String,
     body: String,
     return_type: String,
+    documentation: Option<String>,
 }
 
 impl FunctionNodeInformation {
@@ -27,6 +28,10 @@ impl FunctionNodeInformation {
         self.return_type = return_type;
     }
 
+    pub fn set_documentation(&mut self, documentation: String) {
+        self.documentation = Some(documentation);
+    }
+
     pub fn get_name(&self) -> &str {
         &self.name
     }
@@ -37,6 +42,10 @@ impl FunctionNodeInformation {
 
     pub fn get_return_type(&self) -> &str {
         &self.return_type
+    }
+
+    pub fn get_documentation(&self) -> Option<&str> {
+        self.documentation.as_deref()
     }
 }
 

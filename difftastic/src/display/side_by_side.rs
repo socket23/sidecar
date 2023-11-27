@@ -588,10 +588,12 @@ pub fn print(
                 );
 
             let show_both = matches!(
-                display_options.display_mode,
+                dbg!(display_options.display_mode),
                 DisplayMode::SideBySideShowBoth
             );
             if no_lhs_changes && !show_both {
+                // This is an unreachable branch for us as we are always
+                // in the sidebysideshowboth mode
                 match rhs_line_num {
                     Some(rhs_line_num) => {
                         let rhs_line = &rhs_colored_lines[rhs_line_num.as_usize()];
@@ -612,6 +614,8 @@ pub fn print(
                     }
                 }
             } else if no_rhs_changes && !show_both {
+                // This is an unreachable branch for us as we are always
+                // in the sidebysideshowboth mode
                 match lhs_line_num {
                     Some(lhs_line_num) => {
                         let lhs_line = &lhs_colored_lines[lhs_line_num.as_usize()];
@@ -725,8 +729,8 @@ pub fn print(
                     };
 
                     // print the left and right line numbers here
-                    // println!("left: {} right: {}", lhs_num, rhs_num);
-                    // println!("{}{}{}{}{}", lhs_num, lhs_line, SPACER, rhs_num, rhs_line);
+                    println!("left: {} right: {}", lhs_num, rhs_num);
+                    println!("{}{}{}{}{}", lhs_num, lhs_line, SPACER, rhs_num, rhs_line);
                 }
             }
 

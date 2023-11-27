@@ -116,7 +116,8 @@ pub fn generate_sidecar_diff(
 ) -> (Vec<LineInformation>, Vec<LineInformation>) {
     let display_options = DisplayOptions::default()
         .set_context_lines(10000)
-        .set_display_width(10000);
+        .set_display_width(10000)
+        .set_display_mode(DisplayMode::SideBySideShowBoth);
     let diff_result = diff_file_content(
         "output",
         None,

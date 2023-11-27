@@ -71,6 +71,11 @@ impl DisplayOptions {
         self.num_context_lines = num_context_lines;
         self
     }
+
+    pub fn set_display_mode(mut self, display_mode: DisplayMode) -> Self {
+        self.display_mode = display_mode;
+        self
+    }
 }
 
 #[derive(Debug, Clone)]

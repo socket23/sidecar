@@ -839,7 +839,7 @@ pub fn user_message_for_git_patch(
     file_path: &str,
     symbol_content: &str,
 ) -> Vec<String> {
-    let git_diff_patch = format!(r#"git patch:
+    let git_diff_patch = format!(r#"git patch for {symbol_name} {symbol_type}:
 ```{language}
 {git_diff}
 ```"#);
@@ -850,6 +850,7 @@ pub fn user_message_for_git_patch(
 {symbol_content}
 // END: be15d9bcejpp
 ```"#);
-    let additional_prompt = "Do not forget to include the // BEGIN and // END markers in your generated code.";
+    let additional_prompt = format!(r#"Do not forget to include the // BEGIN and // END markers in your generated code.
+ONLY WRITE the code for the "{symbol_name} {symbol_type}"."#);
     vec![git_diff_patch.to_owned(), original_symbol.to_owned(), additional_prompt.to_owned()]
 }

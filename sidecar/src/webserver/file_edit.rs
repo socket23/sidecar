@@ -1000,7 +1000,6 @@ async fn llm_writing_code(
         let nearest_range_symbols_len = nearest_range_symbols.len();
         let cloned_language_parsing = language_parsing.clone();
         while initial_index <= total_lines {
-            dbg!("looping", initial_index, total_lines);
             // now we have the symbols and the range we want to replace
             if nearest_range_symbols_index >= nearest_range_symbols_len {
                 break;
@@ -1025,7 +1024,6 @@ async fn llm_writing_code(
 {merged_symbols}
 // END: LLM
 ```"#);
-                dbg!("total_file_lines", total_file_lines.len(), initial_index, total_file_lines.to_vec().join("\n"));
                 // add the rest of the lines to the lines of the file as well
                 total_file_lines.append(
                     file_lines
@@ -1048,7 +1046,6 @@ async fn llm_writing_code(
                 // now we can send over the events to the client
                 yield EditFileResponse::start_text_edit(selection_context, code_block_index);
                 // sending the request
-                dbg!("sending the request to last line");
                 yield EditFileResponse::stream_edit(Range::new(
                     Position::new(total_lines_now - 1, 100_000, 100_000),
                     Position::new(total_lines_now - 1, 100_000, 100_000),

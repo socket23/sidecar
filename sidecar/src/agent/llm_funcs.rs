@@ -406,7 +406,6 @@ impl LlmClient {
         }
         let request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
-        dbg!(&request);
         self.capture_openai_request(request.clone()).await?;
 
         const TOTAL_CHAT_RETRIES: usize = 5;

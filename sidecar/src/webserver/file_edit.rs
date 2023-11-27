@@ -15,7 +15,7 @@ use crate::agent::types::Answer;
 use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
-use crate::chunking::text_document::{Position, Range, TextDocument};
+use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{ClassInformation, ClassNodeType, FunctionInformation};
 use crate::in_line_agent::context_parsing::{generate_selection_context, ContextWindowTracker};
 use crate::in_line_agent::types::ContextSelection;
@@ -108,7 +108,12 @@ impl EditFileResponse {
         }
     }
 
-    fn stream_incremental_edit(range: &Range, buf: String, delta: String, code_block_index: usize) -> Self {
+    fn stream_incremental_edit(
+        range: &Range,
+        buf: String,
+        delta: String,
+        code_block_index: usize,
+    ) -> Self {
         Self::TextEditStreaming {
             data: TextEditStreaming::EditStreaming {
                 range: range.clone(),
@@ -197,7 +202,6 @@ pub async fn file_edit(
             app.language_parsing.clone(),
         )
         .await;
-        dbg!(&nearest_range_for_symbols);
 
         // Now we apply the edits and send it over to the user
         // After generating the git diff we want to send back the responses to the
@@ -534,11 +538,8 @@ pub async fn generate_file_diff(
         .unwrap()
         .to_owned();
     // Cool so the tree is valid, then we can go about generating the diff tree now
-    dbg!("difftastic_output_file_content", &file_content);
-    dbg!("difftastic_new_content", &new_content);
     let difftastic_output =
         difftastic::generate_sidecar_diff(file_content, new_content, &format!(".{file_extension}"));
-    dbg!(&difftastic_output);
     // sanity check here if this is a valid tree
     let diff_file = parse_difftastic_output(
         file_content.to_owned(),
@@ -998,7 +999,8 @@ async fn llm_writing_code(
         let mut nearest_range_symbols_index = 0;
         let nearest_range_symbols_len = nearest_range_symbols.len();
         let cloned_language_parsing = language_parsing.clone();
-        while initial_index < total_lines {
+        while initial_index <= total_lines {
+            dbg!("looping", initial_index, total_lines);
             // now we have the symbols and the range we want to replace
             if nearest_range_symbols_index >= nearest_range_symbols_len {
                 break;
@@ -1014,8 +1016,16 @@ async fn llm_writing_code(
                         .map(|(_, class_or_function)| class_or_function)
                         .collect::<Vec<_>>(),
                     nearest_range_symbols_index,
-                    &file_content,
+                    &llm_content,
                 );
+                let formatted_merged_symbols = format!(r#"```{language}
+// FILEPATH: new_content.ts
+// BEGIN: LLM
+
+{merged_symbols}
+// END: LLM
+```"#);
+                dbg!("total_file_lines", total_file_lines.len(), initial_index, total_file_lines.to_vec().join("\n"));
                 // add the rest of the lines to the lines of the file as well
                 total_file_lines.append(
                     file_lines
@@ -1028,8 +1038,8 @@ async fn llm_writing_code(
                 // We have to also send the selection context here, since the editor uses
                 // this for figuring out the tabs and spaces for the generated content
                 let replacement_range = Range::new(
-                    Position::new((initial_index as u32).try_into().unwrap(), 0, 0),
-                    Position::new((total_file_lines.len() as u32).try_into().unwrap(), 0, 0),
+                    Position::new(initial_index - 1, 100_000, 100_000),
+                    Position::new(total_file_lines.len() - 1, 100_000, 100_000),
                 );
                 let total_lines_now = total_file_lines.len();
                 let selection_context = ContextSelection::generate_placeholder_for_range(
@@ -1037,19 +1047,25 @@ async fn llm_writing_code(
                 );
                 // now we can send over the events to the client
                 yield EditFileResponse::start_text_edit(selection_context, code_block_index);
+                // sending the request
+                dbg!("sending the request to last line");
                 yield EditFileResponse::stream_edit(Range::new(
-                    Position::new((total_lines_now as u32).try_into().unwrap(), 0, 0),
-                    Position::new((total_lines_now as u32).try_into().unwrap(), 100_000, 100_000),
-                ), merged_symbols, code_block_index);
+                    Position::new(total_lines_now - 1, 100_000, 100_000),
+                    Position::new(total_lines_now - 1, 100_000, 100_000),
+                ), formatted_merged_symbols, code_block_index);
                 yield EditFileResponse::end_text_edit(code_block_index);
-                // we break from the loop here
+                // we break from the loop here, since we have nothing else to do after this
                 break;
             } else {
+                // If we are at the limits of the line, then we should break because all replacements here
+                // should happen within the file
+                if initial_index >= total_lines {
+                    break;
+                }
                 // we need to start the range here
                 let file_symbol_range = file_symbol_range_maybe.expect("if let None holds true");
                 // This is the content of the code symbol from the file
                 let file_code_symbol = file_content[file_symbol_range.start_byte()..file_symbol_range.end_byte()].to_owned();
-                dbg!(&file_code_symbol);
 
                 let start_line = file_symbol_range.start_position().line();
                 if initial_index < start_line {
@@ -1067,7 +1083,6 @@ async fn llm_writing_code(
                     let llm_symbol_content = nearest_range_symbols[nearest_range_symbols_index]
                         .1
                         .content(&llm_content);
-                    dbg!(&llm_symbol_content);
                     let git_diff = generate_file_diff(
                         &file_code_symbol,
                         &file_path,
@@ -1075,7 +1090,13 @@ async fn llm_writing_code(
                         &language,
                         cloned_language_parsing.clone(),
                     ).await
-                    .map(|content| content.join("\n")).unwrap_or(llm_symbol_content.to_owned());
+                    .map(|content| {
+                        if content.is_empty() {
+                            llm_symbol_content.to_owned()
+                        } else {
+                            content.join("\n")
+                        }
+                    }).unwrap_or(llm_symbol_content.to_owned());
 
                     // we have a match with the start of a symbol, so lets try to ask gpt to stream it
                     let messages = vec![
@@ -1111,12 +1132,8 @@ async fn llm_writing_code(
                     // - in between we can put placeholder because it does not matter
 
                     let mut suffix = vec![];
-                    dbg!("how many file lines", file_lines.len());
                     file_lines.iter().skip(file_symbol_range.end_line() + 1).take(20).for_each(|line| suffix.push(line.to_owned()));
-                    dbg!(&suffix.join("\n"));
                     let total_lines = total_file_lines.len() + (file_symbol_range.end_line() - file_symbol_range.start_line() + 1) + suffix.len();
-                    dbg!("what are the total lines", total_lines);
-                    dbg!(&file_symbol_range);
                     let empty_lines = vec!["".to_owned(); file_symbol_range.end_line() - file_symbol_range.start_line() + 1];
                     let selection_context = generate_selection_context(
                         total_lines as i64,
@@ -1128,7 +1145,6 @@ async fn llm_writing_code(
                         file_path.to_owned(),
                         &mut ContextWindowTracker::large_window(),
                     ).to_context_selection();
-                    dbg!(&selection_context);
                     yield EditFileResponse::start_text_edit(selection_context, code_block_index);
                     for await item in tokio_stream::StreamExt::timeout(
                         stream::select(reciever_stream, llm_answer),
@@ -1145,7 +1161,7 @@ async fn llm_writing_code(
                                 // Now that we have the final answer, we can update our total lines and move the index to after
                                 // always end the text edit
                                 yield EditFileResponse::end_text_edit(code_block_index);
-                                let code_snippet = llm_answer.split("// BEGIN:").collect::<Vec<_>>().last().unwrap().split("// END:").collect::<Vec<_>>().first().unwrap().to_owned();
+                                let code_snippet = llm_answer.split("// BEGIN: be15d9bcejpp\n").collect::<Vec<_>>().last().unwrap().split("\n// END: be15d9bcejpp\n").collect::<Vec<_>>().first().unwrap().to_owned();
                                 total_file_lines.append(
                                     code_snippet.split("\n").collect::<Vec<_>>().into_iter().map(|s| s.to_owned()).collect::<Vec<_>>().as_mut(),
                                 );
@@ -1520,65 +1536,65 @@ function getContextFromEditor(editor: ICodeEditor, accessor: ServicesAccessor): 
             language_parsing,
         )
         .await;
-    assert!(file_diff.is_some());
-    let git_diff = file_diff.expect("to be present").join("\n");
-//     let expected_git_diff = r#"
-// function getContextFromEditor(editor: ICodeEditor, accessor: ServicesAccessor): IChatCodeBlockActionContext | undefined {
-// <<<<<<<
-// =======
-//     // Get the chat widget service from the accessor
-// >>>>>>>
-//     const chatWidgetService = accessor.get(ICSChatWidgetService);
-// <<<<<<<
-// =======
-//     // Get the model from the editor
-// >>>>>>>
-//     const model = editor.getModel();
-// <<<<<<<
-// =======
-//     // If there is no model, return undefined
-// >>>>>>>
-//     if (!model) {
-//         return;
-//     }
+        assert!(file_diff.is_some());
+        let git_diff = file_diff.expect("to be present").join("\n");
+        //     let expected_git_diff = r#"
+        // function getContextFromEditor(editor: ICodeEditor, accessor: ServicesAccessor): IChatCodeBlockActionContext | undefined {
+        // <<<<<<<
+        // =======
+        //     // Get the chat widget service from the accessor
+        // >>>>>>>
+        //     const chatWidgetService = accessor.get(ICSChatWidgetService);
+        // <<<<<<<
+        // =======
+        //     // Get the model from the editor
+        // >>>>>>>
+        //     const model = editor.getModel();
+        // <<<<<<<
+        // =======
+        //     // If there is no model, return undefined
+        // >>>>>>>
+        //     if (!model) {
+        //         return;
+        //     }
 
-// <<<<<<<
-// =======
-//     // Get the last focused widget from the chat widget service
-// >>>>>>>
-//     const widget = chatWidgetService.lastFocusedWidget;
-// <<<<<<<
-// =======
-//     // If there is no widget, return undefined
-// >>>>>>>
-//     if (!widget) {
-//         return;
-//     }
+        // <<<<<<<
+        // =======
+        //     // Get the last focused widget from the chat widget service
+        // >>>>>>>
+        //     const widget = chatWidgetService.lastFocusedWidget;
+        // <<<<<<<
+        // =======
+        //     // If there is no widget, return undefined
+        // >>>>>>>
+        //     if (!widget) {
+        //         return;
+        //     }
 
-// <<<<<<<
-// =======
-//     // Get the code block info for the editor from the widget
-// >>>>>>>
-//     const codeBlockInfo = widget.getCodeBlockInfoForEditor(model.uri);
-// <<<<<<<
-// =======
-//     // If there is no code block info, return undefined
-// >>>>>>>
-//     if (!codeBlockInfo) {
-//         return;
-//     }
+        // <<<<<<<
+        // =======
+        //     // Get the code block info for the editor from the widget
+        // >>>>>>>
+        //     const codeBlockInfo = widget.getCodeBlockInfoForEditor(model.uri);
+        // <<<<<<<
+        // =======
+        //     // If there is no code block info, return undefined
+        // >>>>>>>
+        //     if (!codeBlockInfo) {
+        //         return;
+        //     }
 
-// <<<<<<<
-// =======
-//     // Return an object containing the element, code block index, code, and language ID
-// >>>>>>>
-//     return {
-//         element: codeBlockInfo.element,
-//         codeBlockIndex: codeBlockInfo.codeBlockIndex,
-//         code: editor.getValue(),
-//         languageId: editor.getModel()!.getLanguageId(),
-//     };
-// }"#;
-//     assert_eq!(git_diff, expected_git_diff);
+        // <<<<<<<
+        // =======
+        //     // Return an object containing the element, code block index, code, and language ID
+        // >>>>>>>
+        //     return {
+        //         element: codeBlockInfo.element,
+        //         codeBlockIndex: codeBlockInfo.codeBlockIndex,
+        //         code: editor.getValue(),
+        //         languageId: editor.getModel()!.getLanguageId(),
+        //     };
+        // }"#;
+        //     assert_eq!(git_diff, expected_git_diff);
     }
 }

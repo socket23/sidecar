@@ -330,13 +330,6 @@ fn expand_above_and_below_selections(
     token_count: &mut ContextWindowTracker,
     selection_limits: SelectionLimits,
 ) {
-    dbg!(&selection_limits);
-    // [sidecar/src/in_line_agent/context_parsing.rs:333] &selection_limits = SelectionLimits {
-    //     above_line_index: 263,
-    //     below_line_index: 517,
-    //     minimum_line_index: 264,
-    //     maximum_line_index: 516,
-    // }
     let mut prepend_line_index = selection_limits.above_line_index;
     let mut append_line_index = selection_limits.below_line_index;
     let mut can_prepend = true;

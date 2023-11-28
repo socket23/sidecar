@@ -147,6 +147,7 @@ pub async fn file_edit(
         app.posthog_client.clone(),
         app.sql.clone(),
         app.user_id.to_owned(),
+        app.llm_config.clone(),
     ));
     let file_diff_content = generate_file_diff(
         &file_content,

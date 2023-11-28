@@ -6,7 +6,7 @@ use std::{
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
-use crate::repo::state::StateSource;
+use crate::{llm::types::LLMType, repo::state::StateSource};
 
 #[derive(Serialize, Deserialize, Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -80,6 +80,13 @@ pub struct Configuration {
     /// reindex the files which have changed
     #[clap(long)]
     pub enable_background_polling: bool,
+
+    #[clap(long, default_value_t = default_llm_type())]
+    #[serde(default = "default_llm_type")]
+    pub llm: LLMType,
+
+    #[clap(long)]
+    pub llm_endpoint: Option<String>,
 }
 
 impl Configuration {
@@ -135,4 +142,8 @@ fn default_qdrant_url() -> String {
 fn default_user_id() -> String {
     let username = whoami::username();
     username
+}
+
+fn default_llm_type() -> LLMType {
+    Default::default()
 }

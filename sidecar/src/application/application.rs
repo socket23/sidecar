@@ -9,6 +9,7 @@ use tracing::{debug, warn};
 use crate::{
     chunking::languages::TSLanguageParsing,
     db::sqlite::{self, SqlDb},
+    llm::types::{LLMCustomConfig, LLMType},
     posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
 };
@@ -38,6 +39,7 @@ pub struct Application {
     pub sql: SqlDb,
     pub posthog_client: Arc<PosthogClient>,
     pub user_id: String,
+    pub llm_config: LLMCustomConfig,
 }
 
 impl Application {
@@ -49,6 +51,11 @@ impl Application {
         debug!(?config, "configuration after loading");
         let repo_pool = config.state_source.initialize_pool()?;
         let config = Arc::new(config);
+        let llm_config = if let Some(llm_endpoint) = config.llm_endpoint.as_ref() {
+            LLMCustomConfig::mistral(llm_endpoint.to_owned())
+        } else {
+            LLMCustomConfig::openai()
+        };
         let sync_queue = SyncQueue::start(config.clone());
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
         let language_parsing = Arc::new(TSLanguageParsing::init());
@@ -73,6 +80,7 @@ impl Application {
             sql: sql_db,
             posthog_client: Arc::new(posthog_client),
             user_id: config.user_id.clone(),
+            llm_config,
         })
     }
 

@@ -5,13 +5,18 @@ use std::sync::Arc;
 /// things.
 use async_openai::config::AzureConfig;
 use async_openai::config::OpenAIConfig;
+use async_openai::error::OpenAIError;
 use async_openai::types::ChatCompletionFunctionCall;
 use async_openai::types::ChatCompletionFunctionsArgs;
 use async_openai::types::ChatCompletionRequestMessageArgs;
+use async_openai::types::ChatCompletionResponseStream;
+use async_openai::types::CompletionResponseStream;
 use async_openai::types::CreateChatCompletionRequest;
 use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::CreateChatCompletionResponse;
+use async_openai::types::CreateCompletionRequest;
 use async_openai::types::CreateCompletionRequestArgs;
+use async_openai::types::CreateCompletionResponse;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
 use futures::StreamExt;
@@ -24,6 +29,8 @@ use crate::chunking::text_document::DocumentSymbol;
 use crate::db::sqlite::SqlDb;
 use crate::in_line_agent::types::ContextSelection;
 use crate::in_line_agent::types::InLineAgentAnswer;
+use crate::llm::types::LLMCustomConfig;
+use crate::llm::types::LLMType;
 use crate::posthog::client::PosthogClient;
 use crate::posthog::client::PosthogEvent;
 
@@ -32,6 +39,8 @@ use super::types::CompletionItem;
 
 pub mod llm {
     use std::collections::HashMap;
+
+    use gix::revwalk::graph::commit::to_owned;
 
     #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct FunctionCall {
@@ -140,6 +149,9 @@ pub mod llm {
         GPT3_5_16k,
         GPT3_5Instruct,
         GPT4_Turbo,
+        // TODO(skcd): Temp hack, lets shoehorn inside OpenAI right now, we make
+        // it move to proper namespaces later
+        OpenHermes2_5Mistral7b,
     }
 
     impl OpenAIModel {
@@ -150,6 +162,7 @@ pub mod llm {
                 OpenAIModel::GPT4_32k => "gpt-4-32k-0613".to_owned(),
                 OpenAIModel::GPT3_5Instruct => "gpt-3.5-turbo-instruct".to_owned(),
                 OpenAIModel::GPT4_Turbo => "gpt-4-1106-preview".to_owned(),
+                OpenAIModel::OpenHermes2_5Mistral7b => "open-hermes-2.5-mistral-7b".to_owned(),
             }
         }
 
@@ -164,6 +177,8 @@ pub mod llm {
                 Ok(OpenAIModel::GPT3_5Instruct)
             } else if model_name == "gpt-4-1106-preview" {
                 Ok(OpenAIModel::GPT4_Turbo)
+            } else if model_name == "open-hermes-2.5-mistral-7b" {
+                Ok(OpenAIModel::OpenHermes2_5Mistral7b)
             } else {
                 Err(anyhow::anyhow!("unknown model name"))
             }
@@ -282,6 +297,12 @@ pub struct LlmClient {
     sql_db: SqlDb,
     user_id: String,
     allowed_user_ids: Vec<String>,
+    //TODO(skcd): We need a better toggle for this, because our prompt engine should also
+    // understand the kind of llm we are using and take that into account
+    // for now, we can keep using the same prompts but the burden of construction
+    // will fall on every place which constructs the prompt
+    custom_llm: Option<Client<OpenAIConfig>>,
+    custom_llm_type: LLMType,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -290,11 +311,58 @@ enum OpenAIEventType {
     RequestAndResponse,
 }
 
+#[derive(Debug, Clone)]
+pub enum ClientEndpoint<'a> {
+    OpenAI(&'a Client<OpenAIConfig>),
+    Azure(&'a Client<AzureConfig>),
+}
+
+impl<'a> ClientEndpoint<'a> {
+    pub async fn create_stream(
+        &'a self,
+        request: CreateChatCompletionRequest,
+    ) -> Result<ChatCompletionResponseStream, OpenAIError> {
+        match self {
+            ClientEndpoint::Azure(client) => client.chat().create_stream(request).await,
+            ClientEndpoint::OpenAI(client) => client.chat().create_stream(request).await,
+        }
+    }
+
+    pub async fn create_stream_completion(
+        &'a self,
+        request: CreateCompletionRequest,
+    ) -> Result<CompletionResponseStream, OpenAIError> {
+        match self {
+            ClientEndpoint::OpenAI(client) => client.completions().create_stream(request).await,
+            ClientEndpoint::Azure(client) => client.completions().create_stream(request).await,
+        }
+    }
+
+    pub async fn create_chat_completion(
+        &'a self,
+        request: CreateChatCompletionRequest,
+    ) -> Result<CreateChatCompletionResponse, OpenAIError> {
+        match self {
+            ClientEndpoint::Azure(client) => client.chat().create(request).await,
+            ClientEndpoint::OpenAI(client) => client.chat().create(request).await,
+        }
+    }
+
+    fn from_azure_client(azure_client: &'a Client<AzureConfig>) -> Self {
+        ClientEndpoint::Azure(azure_client)
+    }
+
+    fn from_openai_client(openai_client: &'a Client<OpenAIConfig>) -> Self {
+        ClientEndpoint::OpenAI(openai_client)
+    }
+}
+
 impl LlmClient {
     pub fn codestory_infra(
         posthog_client: Arc<PosthogClient>,
         sql_db: SqlDb,
         user_id: String,
+        llm_config: LLMCustomConfig,
     ) -> LlmClient {
         let allowed_user_ids = vec!["skcd".to_owned(), "nareshr".to_owned()];
         let api_base = "https://codestory-gpt4.openai.azure.com".to_owned();
@@ -316,6 +384,13 @@ impl LlmClient {
             .clone()
             .with_deployment_id("gpt-4-turbo".to_owned());
         let gpt3_5_config = azure_config.with_deployment_id("gpt35-turbo-access".to_owned());
+        let custom_llm = match llm_config.non_openai_endpoint() {
+            Some(endpoint) => {
+                let config = OpenAIConfig::new().with_api_base(endpoint);
+                Some(Client::with_config(config))
+            }
+            None => None,
+        };
         Self {
             gpt4_client: Client::with_config(gpt4_config),
             gpt432k_client: Client::with_config(gpt4_32k_config),
@@ -326,6 +401,8 @@ impl LlmClient {
             sql_db,
             user_id,
             allowed_user_ids,
+            custom_llm,
+            custom_llm_type: llm_config.llm.clone(),
         }
     }
 
@@ -413,8 +490,8 @@ impl LlmClient {
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
             let stream = client
+                .as_ref()
                 .expect("is_none to work")
-                .chat()
                 .create_stream(request.clone())
                 .await;
             if stream.is_err() {
@@ -507,8 +584,8 @@ impl LlmClient {
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
             let stream = client
+                .as_ref()
                 .expect("is_none to work")
-                .chat()
                 .create_stream(request.clone())
                 .await;
             if stream.is_err() {
@@ -593,8 +670,8 @@ impl LlmClient {
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
             let stream = client
+                .as_ref()
                 .expect("is_none to work")
-                .chat()
                 .create_stream(request.clone())
                 .await;
             if stream.is_err() {
@@ -661,7 +738,7 @@ impl LlmClient {
         if client.is_none() {
             return Err(anyhow::anyhow!("model not found"));
         }
-        let request =
+        let mut request =
             self.create_request(model, messages, functions, temperature, frequency_penalty);
         let request_posthog = request.clone();
         self.capture_openai_request(request.clone()).await?;
@@ -671,8 +748,8 @@ impl LlmClient {
         'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
             let mut buf = String::new();
             let stream = client
+                .as_ref()
                 .expect("is_none to work")
-                .chat()
                 .create_stream(request.clone())
                 .await;
             if stream.is_err() {
@@ -765,9 +842,9 @@ impl LlmClient {
             let request_posthog = completion_request.clone();
             self.capture_openai_request(request_posthog.clone()).await?;
             let completion_stream = client
+                .as_ref()
                 .expect("is_none")
-                .completions()
-                .create_stream(completion_request)
+                .create_stream_completion(completion_request)
                 .await;
             if completion_stream.is_err() {
                 continue 'retry_loop;
@@ -869,9 +946,9 @@ impl LlmClient {
             let mut cloned_request = request.clone();
             cloned_request.stream = Some(false);
             let data = client
+                .as_ref()
                 .expect("is_none to work")
-                .chat()
-                .create(cloned_request)
+                .create_chat_completion(cloned_request)
                 .await;
             match data {
                 Ok(data_okay) => {
@@ -902,24 +979,50 @@ impl LlmClient {
         Ok(None)
     }
 
-    fn get_model(&self, model: &llm::OpenAIModel) -> Option<&Client<AzureConfig>> {
+    fn get_model(&self, model: &llm::OpenAIModel) -> Option<ClientEndpoint> {
+        // If the user has provided a model for us we can use that instead of
+        // doing anything fancy over here
+        if let Some(custom_client) = self.custom_llm.as_ref() {
+            return Some(ClientEndpoint::OpenAI(&custom_client));
+        }
         let client = match model {
-            llm::OpenAIModel::GPT4 => &self.gpt4_client,
-            llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
-            llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
-            llm::OpenAIModel::GPT4_Turbo => &self.gpt4_turbo_client,
+            llm::OpenAIModel::GPT4 => ClientEndpoint::from_azure_client(&self.gpt4_client),
+            llm::OpenAIModel::GPT4_32k => ClientEndpoint::from_azure_client(&self.gpt432k_client),
+            llm::OpenAIModel::GPT3_5_16k => ClientEndpoint::from_azure_client(&self.gpt3_5_client),
+            llm::OpenAIModel::GPT4_Turbo => {
+                ClientEndpoint::from_azure_client(&self.gpt4_turbo_client)
+            }
             llm::OpenAIModel::GPT3_5Instruct => return None,
+            llm::OpenAIModel::OpenHermes2_5Mistral7b => {
+                return self
+                    .custom_llm
+                    .as_ref()
+                    .map(|llm| ClientEndpoint::OpenAI(&llm));
+            }
+            _ => return None,
         };
         Some(client)
     }
 
-    fn get_model_openai(&self, model: &llm::OpenAIModel) -> Option<&Client<OpenAIConfig>> {
+    fn get_model_openai(&self, model: &llm::OpenAIModel) -> Option<ClientEndpoint> {
+        if let Some(custom_client) = self.custom_llm.as_ref() {
+            return Some(ClientEndpoint::OpenAI(&custom_client));
+        }
         let client = match model {
             llm::OpenAIModel::GPT4 => return None,
             llm::OpenAIModel::GPT4_32k => return None,
             llm::OpenAIModel::GPT3_5_16k => return None,
             llm::OpenAIModel::GPT4_Turbo => return None,
-            llm::OpenAIModel::GPT3_5Instruct => &self.gpt3_5_turbo_instruct,
+            llm::OpenAIModel::GPT3_5Instruct => {
+                ClientEndpoint::from_openai_client(&self.gpt3_5_turbo_instruct)
+            }
+            llm::OpenAIModel::OpenHermes2_5Mistral7b => {
+                return self
+                    .custom_llm
+                    .as_ref()
+                    .map(|llm| ClientEndpoint::OpenAI(&llm))
+            }
+            _ => return None,
         };
         Some(client)
     }

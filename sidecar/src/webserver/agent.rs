@@ -58,11 +58,13 @@ pub async fn search_agent(
     }): axumQuery<SearchInformation>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let llm_config = app.llm_config.clone();
     let session_id = uuid::Uuid::new_v4();
     let llm_client = Arc::new(LlmClient::codestory_infra(
         app.posthog_client.clone(),
         app.sql.clone(),
         app.user_id.to_owned(),
+        llm_config,
     ));
     let sql_db = app.sql.clone();
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
@@ -107,6 +109,7 @@ pub async fn semantic_search(
     axumQuery(SemanticSearchQuery { query, reporef }): axumQuery<SemanticSearchQuery>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let llm_config = app.llm_config.clone();
     // The best thing to do here is the following right now:
     // lexical search on the paths of the code
     // and then semantic search on the chunks we have from the file
@@ -117,6 +120,7 @@ pub async fn semantic_search(
         app.posthog_client.clone(),
         app.sql.clone(),
         app.user_id.to_owned(),
+        llm_config,
     ));
     let conversation_id = uuid::Uuid::new_v4();
     let sql_db = app.sql.clone();
@@ -208,11 +212,13 @@ pub async fn hybrid_search(
     // hand-waving the numbers here for whatever works for now
     // - final score -> git_log_score * 4 + lexical_search * 2.5 + semantic_search_score
     // - combine the score as following
+    let llm_config = app.llm_config.clone();
     let session_id = uuid::Uuid::new_v4();
     let llm_client = Arc::new(LlmClient::codestory_infra(
         app.posthog_client.clone(),
         app.sql.clone(),
         app.user_id.to_owned(),
+        llm_config,
     ));
     let conversation_id = uuid::Uuid::new_v4();
     let sql_db = app.sql.clone();
@@ -264,6 +270,7 @@ pub async fn explain(
     }): axumQuery<ExplainRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let llm_config = app.llm_config.clone();
     let user_id = app.user_id.to_owned();
     let posthog_client = app.posthog_client.clone();
     let sql_db = app.sql.clone();
@@ -325,7 +332,12 @@ pub async fn explain(
         reporef: repo_ref,
         session_id,
         conversation_messages: previous_messages,
-        llm_client: Arc::new(LlmClient::codestory_infra(posthog_client, sql_db, user_id)),
+        llm_client: Arc::new(LlmClient::codestory_infra(
+            posthog_client,
+            sql_db,
+            user_id,
+            llm_config,
+        )),
         model: GPT_4,
         sql_db: sql,
         sender,
@@ -540,6 +552,7 @@ pub async fn followup_chat(
         active_window_data,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
+    let llm_config = app.llm_config.clone();
     let session_id = uuid::Uuid::new_v4();
     // Here we do something special, if the user is asking a followup question
     // we just look at the previous conversation message the thread belonged
@@ -599,6 +612,7 @@ pub async fn followup_chat(
             posthog_client,
             sql_db.clone(),
             user_id.to_owned(),
+            llm_config,
         )),
         sql_db,
         previous_messages,
@@ -638,6 +652,7 @@ pub async fn go_to_definition_symbols(
     let posthog_client = app.posthog_client.clone();
     let sql_db = app.sql.clone();
     let user_id = app.user_id.to_owned();
+    let llm_config = app.llm_config.clone();
     let editor_parsing = Default::default();
     let agent = Agent {
         application: app,
@@ -648,6 +663,7 @@ pub async fn go_to_definition_symbols(
             posthog_client,
             sql_db.clone(),
             user_id,
+            llm_config,
         )),
         model: GPT_3_5_TURBO_16K,
         sql_db,

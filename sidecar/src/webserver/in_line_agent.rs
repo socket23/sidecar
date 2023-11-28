@@ -17,7 +17,6 @@ use crate::{
         self,
         types::{InLineAgent, InLineAgentMessage},
     },
-    posthog::client::posthog_client,
     repo::types::RepoRef,
 };
 use axum::response::IntoResponse;
@@ -132,7 +131,6 @@ pub async fn reply_to_user(
         diagnostics_information,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!(&query);
     let editor_parsing: EditorParsing = Default::default();
     // Now we want to handle this and send the data to a prompt which will generate
     // the proper things
@@ -142,6 +140,7 @@ pub async fn reply_to_user(
         app.posthog_client.clone(),
         app.sql.clone(),
         app.user_id.to_owned(),
+        app.llm_config.clone(),
     );
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let inline_agent_message = InLineAgentMessage::start_message(thread_id, query.to_owned());

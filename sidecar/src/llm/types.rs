@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, clap::ValueEnum)]
 pub enum LLMType {
     OpenAI,
     Mistral,

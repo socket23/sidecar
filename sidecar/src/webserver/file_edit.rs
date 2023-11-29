@@ -236,16 +236,16 @@ pub async fn file_edit(
 // We use this enum as a placeholder for the different type of variables which we support exporting at the
 // moment
 #[derive(Debug, Clone)]
-enum ClassOrFunction {
+enum CodeSymbolInformation {
     Class(ClassInformation),
     Function(FunctionInformation),
 }
 
-impl ClassOrFunction {
+impl CodeSymbolInformation {
     pub fn content(&self, file_content: &str) -> String {
         match self {
-            ClassOrFunction::Class(class_information) => class_information.content(file_content),
-            ClassOrFunction::Function(function_information) => {
+            CodeSymbolInformation::Class(class_information) => class_information.content(file_content),
+            CodeSymbolInformation::Function(function_information) => {
                 function_information.content(file_content)
             }
         }
@@ -253,8 +253,8 @@ impl ClassOrFunction {
 
     pub fn name(&self) -> String {
         match self {
-            ClassOrFunction::Class(class_information) => class_information.get_name().to_owned(),
-            ClassOrFunction::Function(function_information) => function_information
+            CodeSymbolInformation::Class(class_information) => class_information.get_name().to_owned(),
+            CodeSymbolInformation::Function(function_information) => function_information
                 .name()
                 .map(|name| name.to_owned())
                 .unwrap_or_default(),
@@ -263,13 +263,13 @@ impl ClassOrFunction {
 
     pub fn symbol_type(&self) -> String {
         match self {
-            ClassOrFunction::Class(_) => "class".to_owned(),
-            ClassOrFunction::Function(_) => "function".to_owned(),
+            CodeSymbolInformation::Class(_) => "class".to_owned(),
+            CodeSymbolInformation::Function(_) => "function".to_owned(),
         }
     }
 
     fn merge_symbols_from_index(
-        symbols_vec: Vec<ClassOrFunction>,
+        symbols_vec: Vec<CodeSymbolInformation>,
         start_index: usize,
         file_content: &str,
     ) -> String {
@@ -290,7 +290,7 @@ async fn find_nearest_position_for_code_edit(
     new_content: &str,
     language: &str,
     language_parsing: Arc<TSLanguageParsing>,
-) -> Vec<(Option<Range>, ClassOrFunction)> {
+) -> Vec<(Option<Range>, CodeSymbolInformation)> {
     // Steps taken:
     // - First get all the classes and functions which are present in the code blocks provided
     // - Get the types which are provided in the code block as well (these might be types or anything else in typescript)
@@ -373,6 +373,7 @@ async fn find_nearest_position_for_code_edit(
         })
         .flatten()
         .collect::<Vec<_>>();
+    // These are the types which are present in the file
     // Now we try to check if any of the functions match,
     // if they do we capture the matching range in the original value, this allows us to have a finer area to apply the diff to
     let llm_functions_to_range = independent_functions_llm_generated
@@ -461,7 +462,7 @@ async fn find_nearest_position_for_code_edit(
         })
         .collect::<Vec<_>>()
         .into_iter()
-        .map(|(range, function)| (range, ClassOrFunction::Function(function)))
+        .map(|(range, function)| (range, CodeSymbolInformation::Function(function)))
         .collect::<Vec<_>>();
 
     // Now we have to try and match the classes in the same way, so we can figure out if we have a smaller range to apply the diff
@@ -489,7 +490,7 @@ async fn find_nearest_position_for_code_edit(
         })
         .collect::<Vec<_>>()
         .into_iter()
-        .map(|(range, class)| (range, ClassOrFunction::Class(class)))
+        .map(|(range, class)| (range, CodeSymbolInformation::Class(class)))
         .collect::<Vec<_>>();
 
     // TODO(skcd): Now we have classes and functions which are mapped to their actual representations in the file
@@ -497,7 +498,7 @@ async fn find_nearest_position_for_code_edit(
     // correct data, but what about the things that we missed? let's get to them in a bit, focus on these first
 
     // First we have to order the functions and classes in the order of their ranges
-    let mut identified: Vec<(Option<Range>, ClassOrFunction)> = llm_functions_to_range
+    let mut identified: Vec<(Option<Range>, CodeSymbolInformation)> = llm_functions_to_range
         .into_iter()
         .chain(llm_classes_to_range)
         .collect();
@@ -987,7 +988,7 @@ async fn llm_writing_code(
     llm_client: Arc<LlmClient>,
     language_parsing: Arc<TSLanguageParsing>,
     file_path: String,
-    nearest_range_symbols: Vec<(Option<Range>, ClassOrFunction)>,
+    nearest_range_symbols: Vec<(Option<Range>, CodeSymbolInformation)>,
     code_block_index: usize,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
@@ -1009,7 +1010,7 @@ async fn llm_writing_code(
             if let None = file_symbol_range_maybe {
                 // At this point, we don't have a range, and the rest of the symbols can be concatenated and sent over
                 // the wire
-               let merged_symbols = ClassOrFunction::merge_symbols_from_index(
+               let merged_symbols = CodeSymbolInformation::merge_symbols_from_index(
                     nearest_range_symbols
                         .to_vec()
                         .into_iter()

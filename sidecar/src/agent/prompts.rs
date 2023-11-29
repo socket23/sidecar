@@ -851,6 +851,6 @@ pub fn user_message_for_git_patch(
 // END: be15d9bcejpp
 ```"#);
     let additional_prompt = format!(r#"Do not forget to include the // BEGIN and // END markers in your generated code.
-ONLY WRITE the code for the "{symbol_name} {symbol_type}"."#);
+ONLY WRITE the code for the "{symbol_name} {symbol_type}" along with any documentation for the RequestOptions types which are provided by me or the git patch"#);
     vec![git_diff_patch.to_owned(), original_symbol.to_owned(), additional_prompt.to_owned()]
 }

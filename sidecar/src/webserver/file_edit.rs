@@ -1036,8 +1036,9 @@ async fn llm_writing_code(
                 );
                 // We have to also send the selection context here, since the editor uses
                 // this for figuring out the tabs and spaces for the generated content
+                let start_line = if initial_index == 0 { 0 } else { initial_index - 1 };
                 let replacement_range = Range::new(
-                    Position::new(initial_index - 1, 100_000, 100_000),
+                    Position::new(start_line, 100_000, 100_000),
                     Position::new(total_file_lines.len() - 1, 100_000, 100_000),
                 );
                 let total_lines_now = total_file_lines.len();

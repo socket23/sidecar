@@ -104,6 +104,12 @@ impl FunctionInformation {
         self.node_information = Some(node_information);
     }
 
+    pub fn set_documentation(&mut self, documentation: String) {
+        if let Some(node_information) = &mut self.node_information {
+            node_information.set_documentation(documentation);
+        }
+    }
+
     pub fn range(&self) -> &Range {
         &self.range
     }
@@ -202,7 +208,7 @@ impl FunctionInformation {
         filtered_function_blocks
     }
 
-    pub fn add_documentation_to_functions(mut function_blocks: Vec<Self>, mut documentation_entries: Vec<(Range, String)>) -> Vec<Self> {
+    pub fn add_documentation_to_functions(mut function_blocks: Vec<Self>, documentation_entries: Vec<(Range, String)>) -> Vec<Self> {
         // First we sort the function blocks based on the start index or the end index
         function_blocks.sort_by(|a, b| {
             a.range()
@@ -210,7 +216,23 @@ impl FunctionInformation {
                 .cmp(&b.range().start_byte())
                 .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
         });
-        function_blocks
+        let documentation_entires = concat_documentation_string(documentation_entries);
+        // now we want to concat the functions to the documentation strings
+        // we will use a 2 pointer approach here and keep track of what the current function is and what the current documentation string is
+        function_blocks.into_iter().map(|mut function_block| {
+            documentation_entires.iter().for_each(|documentation_entry| {
+                if documentation_entry.0.end_line() == function_block.range().start_line() - 1 {
+                    // we have a documentation entry which is right above the function block
+                    // we will add this to the function block
+                    function_block.set_documentation(documentation_entry.1.to_owned());
+                    // we will also update the function block range to include the documentation entry
+                    function_block.range.set_start_position(documentation_entry.0.start_position());
+                }
+            });
+            // Here we will look for the documentation entries which are just one line above the function range and add that to the function
+            // context and update the function block range
+            function_block
+        }).collect()
     }
 }
 

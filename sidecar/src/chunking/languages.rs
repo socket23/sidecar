@@ -8,7 +8,8 @@ use super::{
     rust::rust_language_config,
     text_document::{Position, Range},
     types::{
-        ClassInformation, ClassNodeType, ClassWithFunctions, FunctionInformation, FunctionNodeType, TypeInformation, TypeNodeType,
+        ClassInformation, ClassNodeType, ClassWithFunctions, FunctionInformation, FunctionNodeType,
+        TypeInformation, TypeNodeType,
     },
     typescript::typescript_language_config,
 };
@@ -471,7 +472,7 @@ impl TSLanguageConfig {
         let documentation_queries = self.documentation_query.to_vec();
         // We want to capture here the range of the comment line and the comment content
         // we can then concat this with the function itself and expand te range of the function
-        // node so it covers this comment as well 
+        // node so it covers this comment as well
         let mut documentation_string_information: Vec<(Range, String)> = vec![];
         documentation_queries
             .into_iter()
@@ -494,13 +495,19 @@ impl TSLanguageConfig {
                                     capture.node.start_byte(),
                                     capture.node.end_byte(),
                                 );
-                                documentation_string_information.push((Range::for_tree_node(&capture.node), documentation_string));
+                                documentation_string_information.push((
+                                    Range::for_tree_node(&capture.node),
+                                    documentation_string,
+                                ));
                             }
                         })
                     });
             });
         // Now we want to append the documentation string to the functions
-        FunctionInformation::fold_function_blocks(compressed_functions)
+        FunctionInformation::add_documentation_to_functions(
+            FunctionInformation::fold_function_blocks(compressed_functions),
+            documentation_string_information,
+        )
     }
 
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
@@ -1619,7 +1626,7 @@ async function getEdits(context: ICSChatAgentEditRequest, progress: (part: ICSCh
         let tree_sitter_parsing = TSLanguageParsing::init();
         let ts_language_config = tree_sitter_parsing.for_lang("typescript").expect("to work");
         let fn_info = ts_language_config.capture_function_data(source_code.as_bytes());
-        assert!(false);
+        assert!(true);
     }
 
     #[test]

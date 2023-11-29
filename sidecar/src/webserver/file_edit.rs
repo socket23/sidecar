@@ -16,7 +16,7 @@ use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
 use crate::chunking::text_document::{Position, Range};
-use crate::chunking::types::{ClassInformation, ClassNodeType, FunctionInformation};
+use crate::chunking::types::{ClassInformation, ClassNodeType, FunctionInformation, TypeInformation};
 use crate::in_line_agent::context_parsing::{generate_selection_context, ContextWindowTracker};
 use crate::in_line_agent::types::ContextSelection;
 
@@ -239,6 +239,7 @@ pub async fn file_edit(
 enum CodeSymbolInformation {
     Class(ClassInformation),
     Function(FunctionInformation),
+    Type(TypeInformation),
 }
 
 impl CodeSymbolInformation {
@@ -248,6 +249,7 @@ impl CodeSymbolInformation {
             CodeSymbolInformation::Function(function_information) => {
                 function_information.content(file_content)
             }
+            CodeSymbolInformation::Type(type_information) => type_information.content(file_content),
         }
     }
 
@@ -258,6 +260,7 @@ impl CodeSymbolInformation {
                 .name()
                 .map(|name| name.to_owned())
                 .unwrap_or_default(),
+            CodeSymbolInformation::Type(type_information) => type_information.name.to_owned(),
         }
     }
 
@@ -265,6 +268,7 @@ impl CodeSymbolInformation {
         match self {
             CodeSymbolInformation::Class(_) => "class".to_owned(),
             CodeSymbolInformation::Function(_) => "function".to_owned(),
+            CodeSymbolInformation::Type(_) => "type".to_owned(),
         }
     }
 
@@ -307,6 +311,8 @@ async fn find_nearest_position_for_code_edit(
     }
     let class_with_funcs_llm = language_parser.generate_file_symbols(new_content.as_bytes());
     let class_with_funcs = language_parser.generate_file_symbols(file_content.as_bytes());
+    let types_llm = language_parser.capture_type_data(new_content.as_bytes());
+    let types_file = language_parser.capture_type_data(file_content.as_bytes());
     // First we want to try and match all the classes as much as possible
     // then we will look at the individual functions and try to match them
 
@@ -373,7 +379,7 @@ async fn find_nearest_position_for_code_edit(
         })
         .flatten()
         .collect::<Vec<_>>();
-    // These are the types which are present in the file
+
     // Now we try to check if any of the functions match,
     // if they do we capture the matching range in the original value, this allows us to have a finer area to apply the diff to
     let llm_functions_to_range = independent_functions_llm_generated
@@ -493,6 +499,28 @@ async fn find_nearest_position_for_code_edit(
         .map(|(range, class)| (range, CodeSymbolInformation::Class(class)))
         .collect::<Vec<_>>();
 
+    // Now we try to get the types which the llm has suggested and which might be also present in the file
+    // this allows us to figure out the delta between them
+    let llm_types_to_range = types_llm
+        .into_iter()
+        .map(|llm_type_information| {
+            let type_identifier = llm_type_information.name.to_owned();
+            let possible_type = types_file
+                .iter()
+                .find(|type_information| type_information.name == type_identifier);
+            match possible_type {
+                // yay, happy path we found some type, lets return this as the range for the type right now
+                Some(possible_type) => {
+                    (Some(possible_type.range.clone()), llm_type_information)
+                }
+                None => (None, llm_type_information),
+            }
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|(range, type_information)| (range, CodeSymbolInformation::Type(type_information)))
+        .collect::<Vec<_>>();
+
     // TODO(skcd): Now we have classes and functions which are mapped to their actual representations in the file
     // this is very useful since our diff application can be more coherent now and we can send over more
     // correct data, but what about the things that we missed? let's get to them in a bit, focus on these first
@@ -501,6 +529,7 @@ async fn find_nearest_position_for_code_edit(
     let mut identified: Vec<(Option<Range>, CodeSymbolInformation)> = llm_functions_to_range
         .into_iter()
         .chain(llm_classes_to_range)
+        .chain(llm_types_to_range)
         .collect();
     identified.sort_by(|a, b| match (a.0.as_ref(), b.0.as_ref()) {
         (Some(a_range), Some(b_range)) => a_range.start_byte().cmp(&b_range.start_byte()),

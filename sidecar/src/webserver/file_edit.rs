@@ -16,7 +16,9 @@ use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
 use crate::chunking::text_document::{Position, Range};
-use crate::chunking::types::{ClassInformation, ClassNodeType, FunctionInformation, TypeInformation};
+use crate::chunking::types::{
+    ClassInformation, ClassNodeType, FunctionInformation, TypeInformation,
+};
 use crate::in_line_agent::context_parsing::{generate_selection_context, ContextWindowTracker};
 use crate::in_line_agent::types::ContextSelection;
 
@@ -245,7 +247,9 @@ enum CodeSymbolInformation {
 impl CodeSymbolInformation {
     pub fn content(&self, file_content: &str) -> String {
         match self {
-            CodeSymbolInformation::Class(class_information) => class_information.content(file_content),
+            CodeSymbolInformation::Class(class_information) => {
+                class_information.content(file_content)
+            }
             CodeSymbolInformation::Function(function_information) => {
                 function_information.content(file_content)
             }
@@ -255,7 +259,9 @@ impl CodeSymbolInformation {
 
     pub fn name(&self) -> String {
         match self {
-            CodeSymbolInformation::Class(class_information) => class_information.get_name().to_owned(),
+            CodeSymbolInformation::Class(class_information) => {
+                class_information.get_name().to_owned()
+            }
             CodeSymbolInformation::Function(function_information) => function_information
                 .name()
                 .map(|name| name.to_owned())
@@ -510,9 +516,7 @@ async fn find_nearest_position_for_code_edit(
                 .find(|type_information| type_information.name == type_identifier);
             match possible_type {
                 // yay, happy path we found some type, lets return this as the range for the type right now
-                Some(possible_type) => {
-                    (Some(possible_type.range.clone()), llm_type_information)
-                }
+                Some(possible_type) => (Some(possible_type.range.clone()), llm_type_information),
                 None => (None, llm_type_information),
             }
         })
@@ -1051,7 +1055,6 @@ async fn llm_writing_code(
                 let formatted_merged_symbols = format!(r#"```{language}
 // FILEPATH: new_content.ts
 // BEGIN: LLM
-
 {merged_symbols}
 // END: LLM
 ```"#);

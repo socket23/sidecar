@@ -195,6 +195,49 @@ impl TSLanguageConfig {
         outline
     }
 
+    pub fn capture_documentation_queries(&self, source_code: &[u8]) -> Vec<(Range, String)> {
+        // Now we try to grab the documentation strings so we can add them to the functions as well
+        let mut parser = tree_sitter::Parser::new();
+        let grammar = self.grammar;
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code, None).unwrap();
+        let node = parsed_data.root_node();
+        let mut range_set = HashSet::new();
+        let documentation_queries = self.documentation_query.to_vec();
+        let source_code_vec = source_code.to_vec();
+        // We want to capture here the range of the comment line and the comment content
+        // we can then concat this with the function itself and expand te range of the function
+        // node so it covers this comment as well
+        let mut documentation_string_information: Vec<(Range, String)> = vec![];
+        documentation_queries
+            .into_iter()
+            .for_each(|documentation_query| {
+                let query = tree_sitter::Query::new(grammar(), &documentation_query)
+                    .expect("documentation queries are well formed");
+                let mut cursor = tree_sitter::QueryCursor::new();
+                cursor
+                    .captures(&query, node, source_code)
+                    .into_iter()
+                    .for_each(|capture| {
+                        capture.0.captures.into_iter().for_each(|capture| {
+                            if !range_set.contains(&Range::for_tree_node(&capture.node)) {
+                                let documentation_string = get_string_from_bytes(
+                                    &source_code_vec,
+                                    capture.node.start_byte(),
+                                    capture.node.end_byte(),
+                                );
+                                documentation_string_information.push((
+                                    Range::for_tree_node(&capture.node),
+                                    documentation_string,
+                                ));
+                                range_set.insert(Range::for_tree_node(&capture.node));
+                            }
+                        })
+                    });
+            });
+        documentation_string_information
+    }
+
     pub fn capture_type_data(&self, source_code: &[u8]) -> Vec<TypeInformation> {
         let type_queries = self.type_query.to_vec();
 
@@ -274,7 +317,8 @@ impl TSLanguageConfig {
             }
             index = end_index;
         }
-        compressed_types
+        let documentation_strings = self.capture_documentation_queries(source_code);
+        TypeInformation::add_documentation_to_types(compressed_types, documentation_strings)
     }
 
     pub fn capture_class_data(&self, source_code: &[u8]) -> Vec<ClassInformation> {
@@ -357,7 +401,9 @@ impl TSLanguageConfig {
             }
             index = end_index;
         }
-        compressed_classes
+        let mut documentation_string_information: Vec<(Range, String)> =
+            self.capture_documentation_queries(source_code);
+        ClassInformation::add_documentation_to_classes(compressed_classes, documentation_string_information)
     }
 
     pub fn capture_function_data(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
@@ -464,45 +510,8 @@ impl TSLanguageConfig {
             index = end_index;
         }
 
-        // Now we try to grab the documentation strings so we can add them to the functions as well
-        let mut parser = tree_sitter::Parser::new();
-        parser.set_language(grammar()).unwrap();
-        let parsed_data = parser.parse(source_code, None).unwrap();
-        let node = parsed_data.root_node();
-        let documentation_queries = self.documentation_query.to_vec();
-        // We want to capture here the range of the comment line and the comment content
-        // we can then concat this with the function itself and expand te range of the function
-        // node so it covers this comment as well
-        let mut documentation_string_information: Vec<(Range, String)> = vec![];
-        documentation_queries
-            .into_iter()
-            .for_each(|documentation_query| {
-                let query = tree_sitter::Query::new(grammar(), &documentation_query)
-                    .expect("documentation queries are well formed");
-                let mut cursor = tree_sitter::QueryCursor::new();
-                cursor
-                    .captures(&query, node, source_code)
-                    .into_iter()
-                    .for_each(|capture| {
-                        capture.0.captures.into_iter().for_each(|capture| {
-                            let capture_name = query
-                                .capture_names()
-                                .to_vec()
-                                .remove(capture.index.try_into().unwrap());
-                            if !range_set.contains(&Range::for_tree_node(&capture.node)) {
-                                let documentation_string = get_string_from_bytes(
-                                    &source_code_vec,
-                                    capture.node.start_byte(),
-                                    capture.node.end_byte(),
-                                );
-                                documentation_string_information.push((
-                                    Range::for_tree_node(&capture.node),
-                                    documentation_string,
-                                ));
-                            }
-                        })
-                    });
-            });
+        let mut documentation_string_information: Vec<(Range, String)> =
+            self.capture_documentation_queries(source_code);
         // Now we want to append the documentation string to the functions
         FunctionInformation::add_documentation_to_functions(
             FunctionInformation::fold_function_blocks(compressed_functions),
@@ -1553,6 +1562,7 @@ impl A {
     #[test]
     fn test_type_nodes_for_typescript() {
         let source_code = r#"
+// Some random comment over here
 type SometingElse = {
     a: string,
     b: number,
@@ -1573,6 +1583,7 @@ namespace SomeNamespace {
         let type_information = ts_language_config.capture_type_data(source_code.as_bytes());
         assert_eq!(type_information.len(), 2);
         assert_eq!(type_information[0].name, "SometingElse");
+        assert_eq!(type_information[0].documentation, Some("// Some random comment over here".to_owned()));
         assert_eq!(type_information[1].name, "Something");
     }
 

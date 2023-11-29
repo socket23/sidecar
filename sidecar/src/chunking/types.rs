@@ -208,7 +208,10 @@ impl FunctionInformation {
         filtered_function_blocks
     }
 
-    pub fn add_documentation_to_functions(mut function_blocks: Vec<Self>, documentation_entries: Vec<(Range, String)>) -> Vec<Self> {
+    pub fn add_documentation_to_functions(
+        mut function_blocks: Vec<Self>,
+        documentation_entries: Vec<(Range, String)>,
+    ) -> Vec<Self> {
         // First we sort the function blocks based on the start index or the end index
         function_blocks.sort_by(|a, b| {
             a.range()
@@ -219,20 +222,30 @@ impl FunctionInformation {
         let documentation_entires = concat_documentation_string(documentation_entries);
         // now we want to concat the functions to the documentation strings
         // we will use a 2 pointer approach here and keep track of what the current function is and what the current documentation string is
-        function_blocks.into_iter().map(|mut function_block| {
-            documentation_entires.iter().for_each(|documentation_entry| {
-                if function_block.range().start_line() != 0 && documentation_entry.0.end_line() == function_block.range().start_line() - 1 {
-                    // we have a documentation entry which is right above the function block
-                    // we will add this to the function block
-                    function_block.set_documentation(documentation_entry.1.to_owned());
-                    // we will also update the function block range to include the documentation entry
-                    function_block.range.set_start_position(documentation_entry.0.start_position());
-                }
-            });
-            // Here we will look for the documentation entries which are just one line above the function range and add that to the function
-            // context and update the function block range
-            function_block
-        }).collect()
+        function_blocks
+            .into_iter()
+            .map(|mut function_block| {
+                documentation_entires
+                    .iter()
+                    .for_each(|documentation_entry| {
+                        if function_block.range().start_line() != 0
+                            && documentation_entry.0.end_line()
+                                == function_block.range().start_line() - 1
+                        {
+                            // we have a documentation entry which is right above the function block
+                            // we will add this to the function block
+                            function_block.set_documentation(documentation_entry.1.to_owned());
+                            // we will also update the function block range to include the documentation entry
+                            function_block
+                                .range
+                                .set_start_position(documentation_entry.0.start_position());
+                        }
+                    });
+                // Here we will look for the documentation entries which are just one line above the function range and add that to the function
+                // context and update the function block range
+                function_block
+            })
+            .collect()
     }
 }
 
@@ -257,6 +270,7 @@ pub struct ClassInformation {
     range: Range,
     name: String,
     class_node_type: ClassNodeType,
+    documentation: Option<String>,
 }
 
 impl ClassInformation {
@@ -265,6 +279,7 @@ impl ClassInformation {
             range,
             name,
             class_node_type,
+            documentation: None,
         }
     }
 
@@ -282,6 +297,10 @@ impl ClassInformation {
 
     pub fn range(&self) -> &Range {
         &self.range
+    }
+
+    pub fn set_documentation(&mut self, documentation: String) {
+        self.documentation = Some(documentation);
     }
 
     pub fn content(&self, content: &str) -> String {
@@ -317,6 +336,46 @@ impl ClassInformation {
         }
 
         filtered_classes
+    }
+
+    pub fn add_documentation_to_classes(
+        mut class_blocks: Vec<Self>,
+        documentation_entries: Vec<(Range, String)>,
+    ) -> Vec<Self> {
+        // First we sort the function blocks based on the start index or the end index
+        class_blocks.sort_by(|a, b| {
+            a.range()
+                .start_byte()
+                .cmp(&b.range().start_byte())
+                .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
+        });
+        let documentation_entires = concat_documentation_string(documentation_entries);
+        // now we want to concat the functions to the documentation strings
+        // we will use a 2 pointer approach here and keep track of what the current function is and what the current documentation string is
+        class_blocks
+            .into_iter()
+            .map(|mut class_block| {
+                documentation_entires
+                    .iter()
+                    .for_each(|documentation_entry| {
+                        if class_block.range().start_line() != 0
+                            && documentation_entry.0.end_line()
+                                == class_block.range().start_line() - 1
+                        {
+                            // we have a documentation entry which is right above the function block
+                            // we will add this to the function block
+                            class_block.set_documentation(documentation_entry.1.to_owned());
+                            // we will also update the function block range to include the documentation entry
+                            class_block
+                                .range
+                                .set_start_position(documentation_entry.0.start_position());
+                        }
+                    });
+                // Here we will look for the documentation entries which are just one line above the function range and add that to the function
+                // context and update the function block range
+                class_block
+            })
+            .collect()
     }
 }
 
@@ -356,6 +415,7 @@ pub struct TypeInformation {
     pub range: Range,
     pub name: String,
     pub node_type: TypeNodeType,
+    pub documentation: Option<String>,
 }
 
 impl TypeNodeType {
@@ -374,6 +434,7 @@ impl TypeInformation {
             range,
             name,
             node_type: type_node_type,
+            documentation: None,
         }
     }
 
@@ -383,6 +444,10 @@ impl TypeInformation {
 
     pub fn set_name(&mut self, name: String) {
         self.name = name;
+    }
+
+    pub fn set_documentation(&mut self, documentation: String) {
+        self.documentation = Some(documentation);
     }
 
     pub fn get_type_type(&self) -> &TypeNodeType {
@@ -427,14 +492,54 @@ impl TypeInformation {
 
         filtered_types
     }
+
+    pub fn add_documentation_to_types(
+        mut type_blocks: Vec<Self>,
+        documentation_entries: Vec<(Range, String)>,
+    ) -> Vec<Self> {
+        // First we sort the function blocks based on the start index or the end index
+        type_blocks.sort_by(|a, b| {
+            a.range()
+                .start_byte()
+                .cmp(&b.range().start_byte())
+                .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
+        });
+        let documentation_entires = concat_documentation_string(documentation_entries);
+        // now we want to concat the functions to the documentation strings
+        // we will use a 2 pointer approach here and keep track of what the current function is and what the current documentation string is
+        type_blocks
+            .into_iter()
+            .map(|mut type_block| {
+                documentation_entires
+                    .iter()
+                    .for_each(|documentation_entry| {
+                        if type_block.range().start_line() != 0
+                            && documentation_entry.0.end_line()
+                                == type_block.range().start_line() - 1
+                        {
+                            // we have a documentation entry which is right above the function block
+                            // we will add this to the function block
+                            type_block.set_documentation(documentation_entry.1.to_owned());
+                            // we will also update the function block range to include the documentation entry
+                            type_block
+                                .range
+                                .set_start_position(documentation_entry.0.start_position());
+                        }
+                    });
+                // Here we will look for the documentation entries which are just one line above the function range and add that to the function
+                // context and update the function block range
+                type_block
+            })
+            .collect()
+    }
 }
 
-
-pub fn concat_documentation_string(mut documentation_entries: Vec<(Range, String)>) -> Vec<(Range, String)> {
+pub fn concat_documentation_string(
+    mut documentation_entries: Vec<(Range, String)>,
+) -> Vec<(Range, String)> {
     // we also sort the doucmentation entries based on the start index or the end index
     documentation_entries.sort_by(|a, b| {
-        a.0
-            .start_byte()
+        a.0.start_byte()
             .cmp(&b.0.start_byte())
             .then_with(|| b.0.end_byte().cmp(&a.0.end_byte()))
     });
@@ -453,12 +558,12 @@ pub fn concat_documentation_string(mut documentation_entries: Vec<(Range, String
 
         // iterate over consecutive entries in the comments
         while iterate_index < documentation_entries.len()
-            && current_index_end_line + 1
-                == documentation_entries[iterate_index].0.start_line()
+            && current_index_end_line + 1 == documentation_entries[iterate_index].0.start_line()
         {
             current_index_end_line = documentation_entries[iterate_index].0.end_line();
             documentation_str = documentation_str + "\n" + &documentation_entries[iterate_index].1;
-            documentation_range.set_end_position(documentation_entries[iterate_index].0.end_position());
+            documentation_range
+                .set_end_position(documentation_entries[iterate_index].0.end_position());
             iterate_index += 1;
         }
         concatenated_documentation_queries.push((documentation_range, documentation_str));
@@ -471,18 +576,30 @@ pub fn concat_documentation_string(mut documentation_entries: Vec<(Range, String
 
 #[cfg(test)]
 mod tests {
-    use crate::chunking::text_document::Range;
     use crate::chunking::text_document::Position;
+    use crate::chunking::text_document::Range;
 
     use super::concat_documentation_string;
 
     #[test]
     fn test_documentation_string_concatenation() {
         let documentation_strings = vec![
-            (Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)), "first_comment".to_owned()),
-            (Range::new(Position::new(1, 0, 0), Position::new(1, 0, 0)), "second_comment".to_owned()),
-            (Range::new(Position::new(4, 0, 0), Position::new(6, 0, 0)), "third_multi_line_comment".to_owned()),
-            (Range::new(Position::new(7, 0, 0), Position::new(7, 0, 0)), "fourth_comment".to_owned()),
+            (
+                Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                "first_comment".to_owned(),
+            ),
+            (
+                Range::new(Position::new(1, 0, 0), Position::new(1, 0, 0)),
+                "second_comment".to_owned(),
+            ),
+            (
+                Range::new(Position::new(4, 0, 0), Position::new(6, 0, 0)),
+                "third_multi_line_comment".to_owned(),
+            ),
+            (
+                Range::new(Position::new(7, 0, 0), Position::new(7, 0, 0)),
+                "fourth_comment".to_owned(),
+            ),
         ];
         let final_documentation_strings = concat_documentation_string(documentation_strings);
         assert_eq!(final_documentation_strings.len(), 2);

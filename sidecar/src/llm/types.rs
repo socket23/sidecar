@@ -11,7 +11,7 @@ pub enum LLMType {
 impl Display for LLMType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let desc = match self {
-            LLMType::OpenAI => "openai".to_owned(),
+            LLMType::OpenAI => "open-ai".to_owned(),
             LLMType::Mistral => "mistral".to_owned(),
         };
         f.write_str(&desc)

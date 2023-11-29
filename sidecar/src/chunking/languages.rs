@@ -385,7 +385,6 @@ impl TSLanguageConfig {
         let parsed_data = parser.parse(source_code, None).unwrap();
         let node = parsed_data.root_node();
         let mut documentation_string: Vec<String> = vec![];
-        dbg!(String::from_utf8(source_code_vec.to_vec()));
         let documentation_queries = self.documentation_query.to_vec();
         documentation_queries
             .into_iter()

@@ -311,3 +311,87 @@ impl ClassWithFunctions {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeNodeType {
+    Identifier,
+    TypeDeclaration,
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeInformation {
+    pub range: Range,
+    pub name: String,
+    pub node_type: TypeNodeType,
+}
+
+impl TypeNodeType {
+    pub fn from_str(s: &str) -> Option<TypeNodeType> {
+        match s {
+            "identifier" => Some(Self::Identifier),
+            "type_declaration" => Some(Self::TypeDeclaration),
+            _ => None,
+        }
+    }
+}
+
+impl TypeInformation {
+    pub fn new(range: Range, name: String, type_node_type: TypeNodeType) -> Self {
+        Self {
+            range,
+            name,
+            node_type: type_node_type,
+        }
+    }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
+    pub fn get_type_type(&self) -> &TypeNodeType {
+        &self.node_type
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn content(&self, content: &str) -> String {
+        content[self.range().start_byte()..self.range().end_byte()].to_string()
+    }
+
+    pub fn fold_type_information(mut types: Vec<Self>) -> Vec<Self> {
+        // First we sort the function blocks(which are bodies) based on the start
+        // index or the end index
+        types.sort_by(|a, b| {
+            a.range()
+                .start_byte()
+                .cmp(&b.range().start_byte())
+                .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
+        });
+
+        // Now that these are sorted we only keep the ones which are not overlapping
+        // or fully contained in the other one
+        let mut filtered_types = Vec::new();
+        let mut index = 0;
+
+        while index < types.len() {
+            filtered_types.push(types[index].clone());
+            let mut iterate_index = index + 1;
+            while iterate_index < types.len()
+                && types[index]
+                    .range()
+                    .is_contained(&types[iterate_index].range())
+            {
+                iterate_index += 1;
+            }
+            index = iterate_index;
+        }
+
+        filtered_types
+    }
+}

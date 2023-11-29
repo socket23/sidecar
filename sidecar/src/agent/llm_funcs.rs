@@ -506,7 +506,6 @@ impl LlmClient {
                 match unwrap_stream.next().await {
                     None => {
                         if let Some(answer) = last_answer {
-                            dbg!(&full_answer);
                             self.capture_openai_request_response(
                                 request.clone(),
                                 answer,

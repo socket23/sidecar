@@ -221,7 +221,7 @@ impl FunctionInformation {
         // we will use a 2 pointer approach here and keep track of what the current function is and what the current documentation string is
         function_blocks.into_iter().map(|mut function_block| {
             documentation_entires.iter().for_each(|documentation_entry| {
-                if documentation_entry.0.end_line() == function_block.range().start_line() - 1 {
+                if function_block.range().start_line() != 0 && documentation_entry.0.end_line() == function_block.range().start_line() - 1 {
                     // we have a documentation entry which is right above the function block
                     // we will add this to the function block
                     function_block.set_documentation(documentation_entry.1.to_owned());

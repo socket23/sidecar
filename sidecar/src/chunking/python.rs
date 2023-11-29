@@ -36,5 +36,6 @@ pub fn python_language_config() -> TSLanguageConfig {
             .collect(),
         expression_statements: vec!["expression_statement".to_owned()],
         class_query: vec!["(class_definition) @class_declaration".to_owned()],
+        r#type_query: vec![],
     }
 }

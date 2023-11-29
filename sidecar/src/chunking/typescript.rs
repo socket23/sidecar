@@ -85,5 +85,9 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             "[(abstract_class_declaration name: (type_identifier)? @identifier) (class_declaration name: (type_identifier)? @identifier)] @class_declaration"
                 .to_owned(),
         ],
+        r#type_query: vec![
+            "[(type_alias_declaration name: (type_identifier) @identifier)] @type_declaration"
+                .to_owned(),
+        ],
     }
 }

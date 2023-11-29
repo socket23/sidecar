@@ -69,6 +69,8 @@ pub struct TSLanguageConfig {
 
     /// The queries we use to get the class definitions
     pub class_query: Vec<String>,
+
+    pub r#type_query: Vec<String>,
 }
 
 impl TSLanguageConfig {

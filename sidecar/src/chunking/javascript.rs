@@ -72,5 +72,6 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         class_query: vec![
             "[(class_declaration name: (identifier)? @identifier)] @class_declaration".to_owned(),
         ],
+        r#type_query: vec![],
     }
 }

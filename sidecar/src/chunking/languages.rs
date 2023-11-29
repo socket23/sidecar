@@ -468,13 +468,10 @@ impl TSLanguageConfig {
         parser.set_language(grammar()).unwrap();
         let parsed_data = parser.parse(source_code, None).unwrap();
         let node = parsed_data.root_node();
-        let mut documentation_string: Vec<String> = vec![];
         let documentation_queries = self.documentation_query.to_vec();
         documentation_queries
             .into_iter()
             .for_each(|documentation_query| {
-                dbg!("whats the documentation query");
-                dbg!(&documentation_query);
                 let query = tree_sitter::Query::new(grammar(), &documentation_query)
                     .expect("documentation queries are well formed");
                 let mut cursor = tree_sitter::QueryCursor::new();
@@ -483,17 +480,15 @@ impl TSLanguageConfig {
                     .into_iter()
                     .for_each(|capture| {
                         capture.0.captures.into_iter().for_each(|capture| {
-                            dbg!(capture.node.start_byte(), capture.node.end_byte());
                             let capture_name = query
                                 .capture_names()
                                 .to_vec()
                                 .remove(capture.index.try_into().unwrap());
-                            dbg!(&capture_name);
-                            dbg!(get_string_from_bytes(
+                            get_string_from_bytes(
                                 &source_code_vec,
                                 capture.node.start_byte(),
                                 capture.node.end_byte(),
-                            ));
+                            );
                             if !range_set.contains(&Range::for_tree_node(&capture.node)) {
                             }
                         })

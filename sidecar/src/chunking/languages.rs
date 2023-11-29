@@ -8,7 +8,7 @@ use super::{
     rust::rust_language_config,
     text_document::{Position, Range},
     types::{
-        ClassInformation, ClassNodeType, ClassWithFunctions, FunctionInformation, FunctionNodeType,
+        ClassInformation, ClassNodeType, ClassWithFunctions, FunctionInformation, FunctionNodeType, TypeInformation, TypeNodeType,
     },
     typescript::typescript_language_config,
 };
@@ -192,6 +192,88 @@ impl TSLanguageConfig {
 
         outline = outline + "\n" + "```";
         outline
+    }
+
+    pub fn capture_type_data(&self, source_code: &[u8]) -> Vec<TypeInformation> {
+        let type_queries = self.type_query.to_vec();
+
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code, None).unwrap();
+        let node = parsed_data.root_node();
+
+        let mut type_nodes = vec![];
+        let mut range_set = HashSet::new();
+        type_queries.into_iter().for_each(|type_query| {
+            let query = tree_sitter::Query::new(grammar(), &type_query)
+                .expect("type queries are well formed");
+            let mut cursor = tree_sitter::QueryCursor::new();
+            cursor
+                .captures(&query, node, source_code)
+                .into_iter()
+                .for_each(|capture| {
+                    capture.0.captures.into_iter().for_each(|capture| {
+                        let capture_name = query
+                            .capture_names()
+                            .to_vec()
+                            .remove(capture.index.try_into().unwrap());
+                        let capture_type = TypeNodeType::from_str(&capture_name);
+                        if !range_set.contains(&Range::for_tree_node(&capture.node)) {
+                            if let Some(capture_type) = capture_type {
+                                type_nodes.push(TypeInformation::new(
+                                    Range::for_tree_node(&capture.node),
+                                    "not_set".to_owned(),
+                                    capture_type,
+                                ));
+                                range_set.insert(Range::for_tree_node(&capture.node));
+                            }
+                        }
+                    })
+                })
+        });
+
+        // Now we iterate again and try to get the name of the types as well
+        // and generate the final representation
+        // the nodes are ordered in this way:
+        // type_node
+        // - identifier
+        let mut index = 0;
+        let mut compressed_types = vec![];
+        while index < type_nodes.len() {
+            let start_index = index;
+            if type_nodes[start_index].get_type_type() != &TypeNodeType::TypeDeclaration {
+                index += 1;
+                continue;
+            }
+            compressed_types.push(type_nodes[start_index].clone());
+            let mut end_index = start_index + 1;
+            let mut type_identifier = None;
+            while end_index < type_nodes.len()
+                && type_nodes[end_index].get_type_type() != &TypeNodeType::TypeDeclaration
+            {
+                match type_nodes[end_index].get_type_type() {
+                    TypeNodeType::Identifier => {
+                        type_identifier = Some(get_string_from_bytes(
+                            &source_code.to_vec(),
+                            type_nodes[end_index].range().start_byte(),
+                            type_nodes[end_index].range().end_byte(),
+                        ));
+                    }
+                    _ => {}
+                }
+                end_index += 1;
+            }
+
+            match (compressed_types.last_mut(), type_identifier) {
+                (Some(type_information), Some(type_name)) => {
+                    type_information.set_name(type_name);
+                }
+                _ => {}
+            }
+            index = end_index;
+        }
+        compressed_types
     }
 
     pub fn capture_class_data(&self, source_code: &[u8]) -> Vec<ClassInformation> {
@@ -1458,6 +1540,32 @@ impl A {
             .expect("test to work");
         let function_data = ts_language_config.capture_function_data(source_code.as_bytes());
         assert!(true);
+    }
+
+    #[test]
+    fn test_type_nodes_for_typescript() {
+        let source_code = r#"
+type SometingElse = {
+    a: string,
+    b: number,
+};
+
+namespace SomeNamespace {
+    export type Something = {
+        a: string,
+        b: number,
+    };
+}
+        "#;
+        let language = "typescript";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("test to work");
+        let type_information = ts_language_config.capture_type_data(source_code.as_bytes());
+        assert_eq!(type_information.len(), 2);
+        assert_eq!(type_information[0].name, "SometingElse");
+        assert_eq!(type_information[1].name, "Something");
     }
 
     #[test]

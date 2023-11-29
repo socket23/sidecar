@@ -137,6 +137,10 @@ impl Range {
         self.end_position.line
     }
 
+    pub fn set_end_position(&mut self, position: Position) {
+        self.end_position = position;
+    }
+
     pub fn intersection_size(&self, other: &Range) -> usize {
         let start = self
             .start_position

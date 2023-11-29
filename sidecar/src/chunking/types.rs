@@ -201,6 +201,17 @@ impl FunctionInformation {
 
         filtered_function_blocks
     }
+
+    pub fn add_documentation_to_functions(mut function_blocks: Vec<Self>, mut documentation_entries: Vec<(Range, String)>) -> Vec<Self> {
+        // First we sort the function blocks based on the start index or the end index
+        function_blocks.sort_by(|a, b| {
+            a.range()
+                .start_byte()
+                .cmp(&b.range().start_byte())
+                .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
+        });
+        function_blocks
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -393,5 +404,65 @@ impl TypeInformation {
         }
 
         filtered_types
+    }
+}
+
+
+pub fn concat_documentation_string(mut documentation_entries: Vec<(Range, String)>) -> Vec<(Range, String)> {
+    // we also sort the doucmentation entries based on the start index or the end index
+    documentation_entries.sort_by(|a, b| {
+        a.0
+            .start_byte()
+            .cmp(&b.0.start_byte())
+            .then_with(|| b.0.end_byte().cmp(&a.0.end_byte()))
+    });
+    // We also want to concat the documentation entires if they are right after one another for example:
+    // // This is a comment
+    // // This is another comment
+    // fn foo() {}
+    // We want to make sure that we concat the comments into one
+    let mut documentation_index = 0;
+    let mut concatenated_documentation_queries: Vec<(Range, String)> = Vec::new();
+    while documentation_index < documentation_entries.len() {
+        let mut iterate_index = documentation_index + 1;
+        let mut current_index_end_line = documentation_entries[documentation_index].0.end_line();
+        let mut documentation_str = documentation_entries[documentation_index].1.to_owned();
+        let mut documentation_range = documentation_entries[documentation_index].0.clone();
+
+        // iterate over consecutive entries in the comments
+        while iterate_index < documentation_entries.len()
+            && current_index_end_line + 1
+                == documentation_entries[iterate_index].0.start_line()
+        {
+            current_index_end_line = documentation_entries[iterate_index].0.end_line();
+            documentation_str = documentation_str + "\n" + &documentation_entries[iterate_index].1;
+            documentation_range.set_end_position(documentation_entries[iterate_index].0.end_position());
+            iterate_index += 1;
+        }
+        concatenated_documentation_queries.push((documentation_range, documentation_str));
+        documentation_index = iterate_index;
+        // either we hit the end of we have a bunch of documentation entries which are consecutive
+        // we know what the comment should be and we can add a new entry
+    }
+    concatenated_documentation_queries
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::chunking::text_document::Range;
+    use crate::chunking::text_document::Position;
+
+    use super::concat_documentation_string;
+
+    #[test]
+    fn test_documentation_string_concatenation() {
+        let documentation_strings = vec![
+            (Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)), "first_comment".to_owned()),
+            (Range::new(Position::new(1, 0, 0), Position::new(1, 0, 0)), "second_comment".to_owned()),
+            (Range::new(Position::new(4, 0, 0), Position::new(6, 0, 0)), "third_multi_line_comment".to_owned()),
+            (Range::new(Position::new(7, 0, 0), Position::new(7, 0, 0)), "fourth_comment".to_owned()),
+        ];
+        let final_documentation_strings = concat_documentation_string(documentation_strings);
+        assert_eq!(final_documentation_strings.len(), 2);
     }
 }

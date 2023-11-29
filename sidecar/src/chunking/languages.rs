@@ -469,6 +469,10 @@ impl TSLanguageConfig {
         let parsed_data = parser.parse(source_code, None).unwrap();
         let node = parsed_data.root_node();
         let documentation_queries = self.documentation_query.to_vec();
+        // We want to capture here the range of the comment line and the comment content
+        // we can then concat this with the function itself and expand te range of the function
+        // node so it covers this comment as well 
+        let mut documentation_string_information: Vec<(Range, String)> = vec![];
         documentation_queries
             .into_iter()
             .for_each(|documentation_query| {
@@ -484,16 +488,18 @@ impl TSLanguageConfig {
                                 .capture_names()
                                 .to_vec()
                                 .remove(capture.index.try_into().unwrap());
-                            get_string_from_bytes(
-                                &source_code_vec,
-                                capture.node.start_byte(),
-                                capture.node.end_byte(),
-                            );
                             if !range_set.contains(&Range::for_tree_node(&capture.node)) {
+                                let documentation_string = get_string_from_bytes(
+                                    &source_code_vec,
+                                    capture.node.start_byte(),
+                                    capture.node.end_byte(),
+                                );
+                                documentation_string_information.push((Range::for_tree_node(&capture.node), documentation_string));
                             }
                         })
                     });
             });
+        // Now we want to append the documentation string to the functions
         FunctionInformation::fold_function_blocks(compressed_functions)
     }
 

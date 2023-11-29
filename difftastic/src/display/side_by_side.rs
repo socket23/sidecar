@@ -588,6 +588,7 @@ pub fn print(
                 );
 
             let show_both = matches!(
+                display_options.display_mode,
                 DisplayMode::SideBySideShowBoth
             );
             if no_lhs_changes && !show_both {

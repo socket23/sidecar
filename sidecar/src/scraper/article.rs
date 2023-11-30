@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::Result;
+use anyhow::Context;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::header::HeaderMap;
@@ -31,7 +33,7 @@ impl Extractor for DefaultExtractor {
     }
 }
 
-trait Extractor {
+pub trait Extractor {
     fn url(&self) -> &Url;
 
     fn title<'a>(&self, doc: &'a Document) -> Option<String> {
@@ -382,6 +384,81 @@ const BAD_NODE_NAMES: &[&str; 9] = &[
 ];
 const ATTR_TO_CHECK: [&str; 3] = ["id", "class", "name"];
 
+pub struct ArticleBuilder {
+    url: Option<Url>,
+    timeout: Option<Duration>,
+    language: Option<Language>,
+    browser_user_agent: Option<String>,
+}
+
+impl ArticleBuilder {
+    fn new<T: IntoUrl>(url: T) -> Result<Self> {
+        let url = url.into_url()?;
+
+        Ok(ArticleBuilder { 
+            url: Some(url),
+            timeout: None,
+            language: None,
+            browser_user_agent: None,
+        })
+    }
+
+    pub async fn get_with_extractor<TExtract: Extractor>(
+        self,
+        extractor: &TExtract,
+    ) -> Result<Article> {
+        let url = self
+            .url
+            .context("Url of the article must be initialized.")?;
+
+        let builder = {
+            let timeout = self.timeout.unwrap_or_else(|| Duration::from_secs(5));
+
+            let mut headers = HeaderMap::with_capacity(1);
+
+            headers.insert(
+                USER_AGENT,
+                self.browser_user_agent
+                    .map(|x| x.parse())
+                    .unwrap_or_else(|| {
+                        format!("codestory/{} codestory-sidecar-doc-scraper", env!("CARGO_PKG_VERSION"))
+                            .parse()
+                    })
+                    .context("Failed to parse user agent header.")?,
+            );
+
+            reqwest::Client::builder()
+                .default_headers(headers)
+                .redirect(Policy::limited(2))
+                .timeout(timeout)
+        };
+
+        let client = builder.build()?;
+        let response = client.get(url).send().await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow! (
+                "request failed"
+            ));
+        }
+
+        let url = response.url().to_owned();
+        let doc = Document::from_read(&*response.bytes().await?)
+            .context(format!("Failed to parse document from {}", url))?;
+
+        let content = extractor
+            .article_content(&doc, self.language.clone())
+            .into_owned();
+
+        Ok(Article {
+            url,
+            doc,
+            content,
+            language: self.language.unwrap_or_default(),
+        })
+    }
+}
+
 struct DefaultDocumentCleaner {
     url: Url,
 }
@@ -392,7 +469,7 @@ impl DocumentCleaner for DefaultDocumentCleaner {
     }
 }
 
-trait DocumentCleaner {
+pub trait DocumentCleaner {
     fn clean_node_text(&self, node: Node) -> String {
         fn recur_text<T: DocumentCleaner + ?Sized>(
             node: Node,
@@ -611,7 +688,7 @@ fn list() -> impl Predicate {
 }
 
 #[derive(Debug, Clone)]
-struct ArticleTextNode<'a> {
+pub struct ArticleTextNode<'a> {
     inner: Node<'a>,
 }
 

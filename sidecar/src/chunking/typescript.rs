@@ -89,5 +89,8 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             "[(type_alias_declaration name: (type_identifier) @identifier)] @type_declaration"
                 .to_owned(),
         ],
+        namespace_types: vec![
+            "export_statement".to_owned(),
+        ],
     }
 }

@@ -72,6 +72,10 @@ pub struct TSLanguageConfig {
     pub class_query: Vec<String>,
 
     pub r#type_query: Vec<String>,
+
+    /// The namespaces of the symbols which can be applied to a code symbols
+    /// in case of typescript it can be `export` keyword
+    pub namespace_types: Vec<String>,
 }
 
 impl TSLanguageConfig {
@@ -265,6 +269,25 @@ impl TSLanguageConfig {
                         let capture_type = TypeNodeType::from_str(&capture_name);
                         if !range_set.contains(&Range::for_tree_node(&capture.node)) {
                             if let Some(capture_type) = capture_type {
+                                if capture_type == TypeNodeType::TypeDeclaration {
+                                    // if we have the type declaration here, we want to check if
+                                    // we should go to the parent of this node and check if its
+                                    // an export stament here, since if that's the case
+                                    // we want to handle that too
+                                    let parent_node = capture.node.parent();
+                                    if let Some(parent_node) = parent_node {
+                                        if self.namespace_types.contains(&parent_node.kind().to_owned()) {
+                                            type_nodes.push(TypeInformation::new(
+                                                Range::for_tree_node(&parent_node),
+                                                "not_set_parent_node".to_owned(),
+                                                capture_type,
+                                            ));
+                                            // to the range set we add the range of the current capture node
+                                            range_set.insert(Range::for_tree_node(&capture.node));
+                                            return;
+                                        }
+                                    }
+                                }
                                 type_nodes.push(TypeInformation::new(
                                     Range::for_tree_node(&capture.node),
                                     "not_set".to_owned(),
@@ -349,6 +372,23 @@ impl TSLanguageConfig {
                         let capture_type = ClassNodeType::from_str(&capture_name);
                         if !range_set.contains(&Range::for_tree_node(&capture.node)) {
                             if let Some(capture_type) = capture_type {
+                                // if we have the type declaration here, we want to check if
+                                // we should go to the parent of this node and check if its
+                                // an export stament here, since if that's the case
+                                // we want to handle that too
+                                let parent_node = capture.node.parent();
+                                if let Some(parent_node) = parent_node {
+                                    if self.namespace_types.contains(&parent_node.kind().to_owned()) {
+                                        class_nodes.push(ClassInformation::new(
+                                            Range::for_tree_node(&capture.node),
+                                            "not_set_parent".to_owned(),
+                                            capture_type,
+                                        ));
+                                        // to the range set we add the range of the current capture node
+                                        range_set.insert(Range::for_tree_node(&capture.node));
+                                        return;
+                                    }
+                                };
                                 class_nodes.push(ClassInformation::new(
                                     Range::for_tree_node(&capture.node),
                                     "not_set".to_owned(),
@@ -401,7 +441,7 @@ impl TSLanguageConfig {
             }
             index = end_index;
         }
-        let mut documentation_string_information: Vec<(Range, String)> =
+        let documentation_string_information: Vec<(Range, String)> =
             self.capture_documentation_queries(source_code);
         ClassInformation::add_documentation_to_classes(compressed_classes, documentation_string_information)
     }
@@ -436,6 +476,24 @@ impl TSLanguageConfig {
                         let capture_type = FunctionNodeType::from_str(&capture_name);
                         if !range_set.contains(&Range::for_tree_node(&capture.node)) {
                             if let Some(capture_type) = capture_type {
+                                if capture_type == FunctionNodeType::Function {
+                                    // if we have the type declaration here, we want to check if
+                                    // we should go to the parent of this node and check if its
+                                    // an export stament here, since if that's the case
+                                    // we want to handle that too
+                                    let parent_node = capture.node.parent();
+                                    if let Some(parent_node) = parent_node {
+                                        if self.namespace_types.contains(&parent_node.kind().to_owned()) {
+                                            function_nodes.push(FunctionInformation::new(
+                                                Range::for_tree_node(&parent_node),
+                                                capture_type,
+                                            ));
+                                            // to the range set we add the range of the current capture node
+                                            range_set.insert(Range::for_tree_node(&capture.node));
+                                            return;
+                                        }
+                                    }
+                                }
                                 function_nodes.push(FunctionInformation::new(
                                     Range::for_tree_node(&capture.node),
                                     capture_type,
@@ -1568,6 +1626,12 @@ type SometingElse = {
     b: number,
 };
 
+// something else over here as comment
+export type SomethingInterface = {
+    a: string,
+    b: number,
+};
+
 namespace SomeNamespace {
     export type Something = {
         a: string,
@@ -1581,10 +1645,10 @@ namespace SomeNamespace {
             .for_lang(language)
             .expect("test to work");
         let type_information = ts_language_config.capture_type_data(source_code.as_bytes());
-        assert_eq!(type_information.len(), 2);
+        assert_eq!(type_information.len(), 3);
         assert_eq!(type_information[0].name, "SometingElse");
         assert_eq!(type_information[0].documentation, Some("// Some random comment over here".to_owned()));
-        assert_eq!(type_information[1].name, "Something");
+        assert_eq!(type_information[1].name, "SomethingInterface");
     }
 
     #[test]

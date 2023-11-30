@@ -60,5 +60,6 @@ pub fn rust_language_config() -> TSLanguageConfig {
             ] @class_declaration"
             .to_owned()],
         r#type_query: vec![],
+        namespace_types: vec![],
     }
 }

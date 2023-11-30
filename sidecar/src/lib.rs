@@ -10,6 +10,7 @@ pub mod indexes;
 pub mod llm;
 pub mod posthog;
 pub mod repo;
+pub mod scraper;
 pub mod semantic_search;
 pub mod state;
 pub mod webserver;

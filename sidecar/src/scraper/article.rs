@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Deref;
+use std::str::FromStr;
 
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -17,6 +19,194 @@ use select::predicate::Predicate;
 use url::Url;
 
 include!(concat!(env!("OUT_DIR"), "/languages.rs"));
+
+#[derive(Debug)]
+struct DefaultExtractor {
+    url: Url,
+}
+
+impl Extractor for DefaultExtractor {
+    fn url(&self) -> &Url {
+        &self.url
+    }
+}
+
+trait Extractor {
+    fn url(&self) -> &Url;
+
+    fn title<'a>(&self, doc: &'a Document) -> Option<String> {
+        if let Some(title) = doc.find(Name("title")).next() {
+            return Some(title.text())
+        }
+
+        if let Some(title) = self.meta_content(doc, Attr("property", "og:title")) {
+            return Some(title)
+        }
+
+        if let Some(title) = self.meta_content(doc, Attr("name", "og:title")) {
+            return Some(title)
+        }
+
+        if let Some(title) = doc
+            .find(Name("h1"))
+            .filter_map(|node| node.as_text().map(str::trim))
+            .next()
+        {
+            return Some(title.to_owned())
+        }
+        None
+    }
+
+    fn base_url(&self, doc: &Document) -> Option<Url> {
+        doc.find(Name("base"))
+            .filter_map(|n| n.attr("href"))
+            .filter_map(|href| Url::parse(href).ok())
+            .next()
+    }
+
+    fn meta_language(&self, doc: &Document) -> Option<Language> {
+        let mut unknown_language = None;
+
+        if let Some(meta) = self.meta_content(doc, Attr("http-equiv", "Content-Language")) {
+            match Language::from_str(&meta) {
+                Ok(lang) => return Some(lang),
+                Err(lang) => {
+                    unknown_language = Some(lang);
+                }
+            }
+        }
+
+        if let Some(meta) = self.meta_content(doc, Attr("name", "lang")) {
+            match Language::from_str(&meta) {
+                Ok(lang) => return Some(lang),
+                Err(lang) => {
+                    unknown_language = Some(lang);
+                }
+            }
+        }
+
+        unknown_language
+    }
+
+    fn meta_content<'a, 'b>(
+        &self,
+        doc: &'a Document,
+        attr: Attr<&'b str, &'b str>,
+    ) -> Option<String> {
+        doc.find(Name("head").descendant(Name("meta").and(attr)))
+            .filter_map(|node| {
+                node.attr("content")
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_owned())
+            })
+            .next()
+    }
+
+    fn meta_site_name<'a>(&self, doc: &'a Document) -> Option<String> {
+        self.meta_content(doc, Attr("property", "og:site_name"))
+    }
+
+    fn meta_description<'a>(&self, doc: &'a Document) -> Option<String> {
+        [("property", "description"), ("name", "description")]
+            .iter()
+            .filter_map(|(k, v)| self.meta_content(doc, Attr(k, v)))
+            .next()
+    }
+
+    fn icon<'a>(&self, doc: &'a Document) -> String {
+        doc.find(Name("head").descendant(
+            Name("link").and(Attr("rel", "icon").or(Attr("rel", "shortcut icon"))),
+        ))
+        .find_map(|node| node.attr("href").map(str::trim).filter(|s| !s.is_empty()))
+        .unwrap_or("/favicon.ico")
+        .to_owned()
+    }
+
+    fn text<'a>(&self, doc: &'a Document, lang: Language) -> Option<String> {
+        self.text_with_cleaner(
+            doc,
+            lang,
+            DefaultDocumentCleaner {
+                url: self.url().clone(),
+            }
+        )
+    }
+
+    fn text_with_cleaner<'a, T: DocumentCleaner>(
+        &self,
+        doc: &'a Document,
+        lang: Language,
+        cleaner: T,
+    ) -> Option<String> {
+        self.article_node(doc, lang)
+            .map(|n| cleaner.clean_node_text(*n).into())
+    }
+
+    fn article_node<'a>(&self, doc: &'a Document, lang: Language) -> Option<ArticleTextNode<'a>> {
+        let mut iter =
+            doc.find(Name("body").descendant(ArticleTextNodeExtractor::article_body_predicate()));
+        if let Some(node) = iter.next() {
+            if iter.next().is_none() {
+                return Some(ArticleTextNode::new(node))
+            }
+        }
+        ArticleTextNodeExtractor::calculate_best_node(doc, lang)
+    }
+
+    fn all_urls<'a>(&self, doc: &'a Document) -> Vec<String> {
+        let mut uniques = HashSet::new();
+        doc.find(Name("a"))
+            .filter_map(|n| n.attr("href").map(str::trim))
+            .filter(|href| uniques.insert(*href))
+            .map(|s| s.to_owned())
+            .collect()
+    }
+
+    fn article_content<'a>(&self, doc: &'a Document, lang: Option<Language>) -> ArticleContent {
+        let mut builder = ArticleContent::builder();
+
+        let lang = if let Some(meta_lang) = self.meta_language(doc) {
+            builder = builder.language(meta_lang.clone());
+            meta_lang
+        } else {
+            lang.unwrap_or_default()
+        };
+
+        if let Some(description) = self.meta_description(doc) {
+            builder = builder.description(description);
+        }
+
+        if let Some(title) = self.title(doc) {
+            builder = builder.title(title);
+        }
+
+        builder = builder.icon(self.icon(doc));
+
+        if let Some(text_node) = self.article_node(doc, lang) {
+            builder = builder.text(text_node.clean_text(self.url()));
+        }
+
+        builder.build()
+    }
+
+    fn canonical_link(&self, doc: &Document) -> Option<Url> {
+        if let Some(link) = doc
+            .find(Name("link").and(Attr("rel", "canonical")))
+            .filter_map(|node| node.attr("href"))
+            .next()
+        {
+            return Url::parse(link).ok()
+        }
+
+        if let Some(meta) = self.meta_content(doc, Attr("property", "og:url")) {
+            return Url::parse(&meta).ok()
+        }
+
+        None
+    }
+}
+
 
 // Different websites have different ways of storing the article content.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -56,6 +246,41 @@ impl Language {
     }
 }
 
+impl FromStr for Language {
+    type Err = Language;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ar" | "arabic" => Ok(Language::Arabic),
+            "ru" | "russian" => Ok(Language::Russian),
+            "nl" | "dutch" => Ok(Language::Dutch),
+            "de" | "german" => Ok(Language::German),
+            "en" | "english" => Ok(Language::English),
+            "es" | "spanish" => Ok(Language::Spanish),
+            "fr" | "french" => Ok(Language::French),
+            "he" | "hebrew" => Ok(Language::Hebrew),
+            "it" | "italian" => Ok(Language::Italian),
+            "ko" | "korean" => Ok(Language::Korean),
+            "no" | "norwegian" => Ok(Language::Norwegian),
+            "fa" | "persian" => Ok(Language::Persian),
+            "pl" | "polish" => Ok(Language::Polish),
+            "pt" | "portuguese" => Ok(Language::Portuguese),
+            "sv" | "swedish" => Ok(Language::Swedish),
+            "hu" | "hungarian" => Ok(Language::Hungarian),
+            "fi" | "finnish" => Ok(Language::Finnish),
+            "da" | "danish" => Ok(Language::Danish),
+            "zh" | "chinese" => Ok(Language::Chinese),
+            "id" | "indonesian" => Ok(Language::Indonesian),
+            "vi" | "vietnamese" => Ok(Language::Vietnamese),
+            "sw" | "swahili" => Ok(Language::Swahili),
+            "tr" | "turkish" => Ok(Language::Turkish),
+            "el" | "greek" => Ok(Language::Greek),
+            "uk" | "ukrainian" => Ok(Language::Ukrainian),
+            s => Err(Language::Other(s.to_string())),
+        }
+    }
+}
+
 pub struct Article {
     pub url: Url,
     pub doc: Document,
@@ -73,7 +298,7 @@ pub struct ArticleContent {
 }
 
 impl ArticleContent {
-    fn builder<'a>() -> ArticleContentBuilder<'a> {
+    fn builder() -> ArticleContentBuilder {
         ArticleContentBuilder::default()
     }
 
@@ -89,26 +314,26 @@ impl ArticleContent {
 }
 
 #[derive(Debug, Default)]
-struct ArticleContentBuilder<'a> {
-    title: Option<&'a str>,
-    icon: Option<&'a str>,
-    description: Option<&'a str>,
-    text: Option<&'a str>,
+struct ArticleContentBuilder {
+    title: Option<String>,
+    icon: Option<String>,
+    description: Option<String>,
+    text: Option<String>,
     language: Option<Language>,
 }
 
-impl<'a> ArticleContentBuilder<'a> {
-    fn title(mut self, title: &'a str) -> Self {
+impl ArticleContentBuilder {
+    fn title(mut self, title: String) -> Self {
         self.title = Some(title);
         self
     }
 
-    fn icon(mut self, icon: &'a str) -> Self {
+    fn icon(mut self, icon: String) -> Self {
         self.icon = Some(icon);
         self
     }
 
-    fn text(mut self, text: &'a str) -> Self {
+    fn text(mut self, text: String) -> Self {
         self.text = Some(text);
         self
     }
@@ -118,7 +343,7 @@ impl<'a> ArticleContentBuilder<'a> {
         self
     }
 
-    fn description(mut self, description: &'a str) -> Self {
+    fn description(mut self, description: String) -> Self {
         self.description = Some(description);
         self
     }

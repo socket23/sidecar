@@ -1,10 +1,17 @@
-use std::io::Write;
+use std::io::{Write, BufWriter};
 use std::{
+    collections::HashMap,
     env,
     ffi::OsStr,
     fs::{read_dir, read_to_string, File},
     path::Path,
 };
+
+#[derive(serde::Deserialize)]
+struct Language {
+    r#type: String,
+    aliases: Option<Vec<String>>,
+}
 
 fn main() {
     // Copy over the model files to where the binary gets generated at
@@ -48,6 +55,36 @@ fn main() {
         hasher.finalize()
     )
     .unwrap();
+
+    // Now we load the languages.yml and then create the extension and the case mapping
+    let langs_file = File::open("./languages.yml").unwrap();
+    let langs: HashMap<String, Language> = serde_yaml::from_reader(langs_file).unwrap();
+    let languages_path = Path::new(&env::var("OUT_DIR").unwrap()).join("languages.rs");
+    let mut ext_map = phf_codegen::Map::new();
+    let mut case_map = phf_codegen::Map::new();
+    for (name, data) in langs
+        .into_iter()
+        .filter(|(_, d)| d.r#type == "programming" || d.r#type == "prose")
+    {
+        let name_lower = name.to_ascii_lowercase();
+
+        for alias in data.aliases.unwrap_or_default() {
+            ext_map.entry(alias, &format!("\"{name_lower}\""));
+        }
+
+        case_map.entry(name_lower, &format!("\"{name}\""));
+    }
+
+    write!(
+        BufWriter::new(File::create(languages_path).unwrap()),
+        "pub static EXT_MAP: phf::Map<&str, &str> = \n{};\n\
+         pub static PROPER_CASE_MAP: phf::Map<&str, &str> = \n{};\n",
+        ext_map.build(),
+        case_map.build(),
+    )
+    .unwrap();
+
+    println!("cargo:rerun-if-changed=./languages.yml");
 }
 
 // fn copy_model_files() {

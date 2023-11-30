@@ -73,6 +73,7 @@ fancy-regex = "0.12.0"
 
 difftastic = { path = "../difftastic" }
 whoami = "1.4.1"
+select = "0.6.0"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = [ "resource" ] }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::Deref;
 
 use anyhow::Result;
@@ -47,6 +48,12 @@ pub enum Language {
     Greek,
     Ukrainian,
     Other(String),
+}
+
+impl Language {
+    fn stopword_count(&self, txt: &str) -> Option<usize> {
+        Some(ArticleTextNodeExtractor::words(txt).count())
+    }
 }
 
 pub struct Article {
@@ -401,34 +408,223 @@ impl<'a> Deref for ArticleTextNode<'a> {
     }
 }
 
-// struct ArticleTextNodeExtractor;
+struct ArticleTextNodeExtractor;
 
-// impl ArticleTextNodeExtractor {
-//     const MINIMUM_STOPWORD_COUNT: usize = 5;
-//     const MAX_DISTANCE_FROM_NODE: usize = 3;
+impl ArticleTextNodeExtractor {
+    const MINIMUM_STOPWORD_COUNT: usize = 5;
+    const MAX_DISTANCE_FROM_NODE: usize = 3;
 
-//     fn article_body_predicate() -> for<'r, 's> fn(&'r Node<'s>) -> bool {
-//         |node| {
-//             for (k, v) in ARTICLE_BODY_ATTR.iter().cloned() {
-//                 if Attr(k, v).matches(node) {
-//                     return true;
-//                 }
-//             }
-//             false
-//         }
-//     }
+    fn article_body_predicate() -> for<'r, 's> fn(&'r Node<'s>) -> bool {
+        |node| {
+            for (k, v) in ARTICLE_BODY_ATTR.iter().cloned() {
+                if Attr(k, v).matches(node) {
+                    return true;
+                }
+            }
+            false
+        }
+    }
 
-//     fn calculate_best_node(doc: &Document, lang: Language) -> Option<ArticleTextNode> {
-//         let mut starting_boost = 1.0;
+    fn calculate_best_node(doc: &Document, lang: Language) -> Option<ArticleTextNode> {
+        let mut starting_boost = 1.0;
 
-//         let mut common_best_node = doc.find(
-//             Name("article")
-//                 .or(Name("main"))
-//                 .or(Attr("id", "main"))
-//                 .or(Attr("id", "content"))
-//                 .or(Attr("id", "doc-content"))
-//                 .or(Attr("id", "contents"))
-//                 .or(Attr("class", "book-body")),
-//         );
-//     }
-// }
+        let mut common_best_nodes = doc.find(
+            Name("article")
+                .or(Name("main"))
+                .or(Attr("id", "main"))
+                .or(Attr("id", "content"))
+                .or(Attr("id", "doc-content"))
+                .or(Attr("id", "contents"))
+                .or(Attr("class", "book-body")),
+        );
+
+        if let Some(main_tag) = common_best_nodes.next() {
+            if common_best_nodes.next().is_none() {
+                return Some(ArticleTextNode::new(main_tag));
+            }
+        }
+
+        let text_nodes: Vec<_> = ArticleTextNodeExtractor::nodes_to_check(doc)
+            .filter(|n| !ArticleTextNodeExtractor::is_high_link_density(n))
+            .filter_map(|node| {
+                if let Some(stats) = node
+                    .children()
+                    .find_map(|n| n.as_text())
+                    .and_then(|text| lang.stopword_count(text))
+                {
+                    if stats > 2 {
+                        return Some((node, stats))
+                    }
+                }
+                None
+            })
+            .collect();
+
+        let mut nodes_score = HashMap::with_capacity(text_nodes.len());
+
+        let nodes_number = text_nodes.len();
+
+        let negative_scoring = 0.0;
+
+        let bottom_negativescroe_nodes = nodes_number as f64 * 0.25;
+
+        for (i, (node, stats)) in text_nodes.iter().enumerate() {
+            let mut boost_score = 0.0;
+
+            if ArticleTextNodeExtractor::is_boostable(node, lang.clone()) {
+                boost_score = (1.0 / starting_boost) * 50.0;
+                starting_boost += 1.0;
+            }
+
+            if nodes_number > 15 {
+                let score = (nodes_number - i) as f64;
+                if score <= bottom_negativescroe_nodes {
+                    let booster = bottom_negativescroe_nodes - score;
+                    boost_score = booster.powf(2.0) * -1.0;
+
+                    let negative_score = boost_score.abs() * negative_scoring;
+                    if negative_score > 40.0 {
+                        boost_score = 5.0;
+                    }
+                }
+            }
+
+            let upscore = stats + boost_score as usize;
+
+            if let Some(parent) = node.parent() {
+                let (score, cnt) = nodes_score.entry(parent.index()).or_insert((0usize, 0usize));
+                *score += upscore;
+                *cnt += 1;
+
+                // also update additional parent levels
+
+                if let Some(parent_parent) = parent.parent() {
+                    let (score, cnt) = nodes_score
+                        .entry(parent_parent.index())
+                        .or_insert((0usize, 0usize));
+                    *score += upscore / 2;
+                    *cnt += 1;
+
+                    if let Some(parent_2) = parent_parent.parent() {
+                        let (score, cnt) = nodes_score
+                            .entry(parent_2.index())
+                            .or_insert((0usize, 0usize));
+                        *score += upscore / 3;
+                        *cnt += 1;
+                    }
+                }
+            }
+        }
+        let mut index = nodes_score.keys().cloned().next();
+        let mut top_score = 0;
+        for (idx, (score, _)) in nodes_score {
+            if score > top_score {
+                top_score = score;
+                index = Some(idx);
+            }
+        }
+        index.map(|i| ArticleTextNode::new(Node::new(doc, i).unwrap()))
+    }
+
+    fn is_boostable(node: &Node, lang: Language) -> bool {
+        let mut steps_away = 0;
+        while let Some(sibling) = node.prev().filter(|n| n.is(Name("p"))) {
+            if steps_away >= ArticleTextNodeExtractor::MAX_DISTANCE_FROM_NODE {
+                return false;
+            }
+            if let Some(stats) = sibling
+                .children()
+                .find_map(|n| n.as_text())
+                .and_then(|txt| lang.stopword_count(txt))
+            {
+                if stats > ArticleTextNodeExtractor::MINIMUM_STOPWORD_COUNT {
+                    return true;
+                }
+            }
+            steps_away += 1;
+        }
+        false
+    }
+
+    fn nodes_to_check(doc: &Document) -> impl Iterator<Item = Node> {
+        TextNodeFind::new(doc)
+    }
+
+    fn is_high_link_density(node: &Node) -> bool {
+        let links = node
+            .find(Name("a"))
+            .filter_map(|n| n.children().find_map(|n| n.as_text()));
+
+        if let Some(words) = node.as_text().map(|s| s.split_whitespace()) {
+            let words_number = words.count();
+            if words_number == 0 {
+                return true;
+            }
+
+            let (num_links, num_link_words) = links.fold((0usize, 0usize), |(links, sum), n| {
+                (links + 1, sum + n.split_whitespace().count())
+            });
+
+            if num_links == 0 {
+                return false;
+            }
+
+            let link_divisor = num_link_words as f64 / num_links as f64;
+            let score = link_divisor * num_links as f64;
+
+            score >= 1.0
+        } else {
+            links.count() > 0
+        }
+    }
+
+    fn words(text: &str) -> impl Iterator<Item = &str> {
+        text.split(|c: char| c.is_whitespace() || is_punctuation(c))
+            .filter(|s| !s.is_empty())
+    }
+}
+
+fn is_punctuation(c: char) -> bool {
+    PUNCTUATION.contains(c)
+}
+
+
+struct TextNodeFind<'a> {
+    document: &'a Document,
+    next: usize,
+}
+
+impl<'a> TextNodeFind<'a> {
+    fn is_text_node(node: &Node<'a>) -> bool {
+        Name("p").or(Name("pre").or(Name("td"))).matches(node)
+    }
+
+    fn is_bad(node: &Node<'a>) -> bool {
+        Name("figure")
+            .or(Name("media"))
+            .or(Name("aside"))
+            .matches(node)
+    }
+
+    fn new(document: &'a Document) -> Self {
+        Self { document, next: 0 }
+    }
+}
+
+impl<'a> Iterator for TextNodeFind<'a> {
+    type Item = Node<'a>;
+
+    fn next(&mut self) -> Option<Node<'a>> {
+        while self.next < self.document.nodes.len() {
+            let node = self.document.nth(self.next).unwrap();
+            self.next += 1;
+            if Self::is_bad(&node) {
+                self.next += node.descendants().count();
+            }
+            if Self::is_text_node(&node) {
+                return Some(node)
+            }
+        }
+        None
+    }
+}

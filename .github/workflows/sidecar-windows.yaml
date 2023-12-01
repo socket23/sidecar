@@ -34,6 +34,10 @@ jobs:
       with:
         python-version: '3.9'
 
+    # This updates the environment variable
+    - name: Set CLOUDSDK_PYTHON environment variable
+      run: echo "CLOUDSDK_PYTHON=$(which python)" >> $GITHUB_ENV
+
     # Install gcp skcd
     - name: Setup GCP SDK
       uses: 'google-github-actions/setup-gcloud@v0'

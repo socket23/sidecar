@@ -23,11 +23,11 @@ jobs:
     
     - name: Run 7z action
       run: |
-        7z a -t7z "sidecar_test.7z" "onnxruntime/" "qdrant/" "models/" "src\\agent\\llm_funcs.rs"
+        7z a -t7z "sidecar_test.7z" "sidecar/onnxruntime/" "sidecar/qdrant/" "sidecar/models/"
 
     - name: Run 7z action again
       run: |
-        7z a -t7z "sidecar_test.7z" "onnxruntime/" "qdrant/" "models/" "src/agent/llm_funcs.rs"
+        7z a -t7z "sidecar_test.7z" "sidecar/onnxruntime/" "sidecar/qdrant/" "sidecar/models/" "src/agent/llm_funcs.rs"
 
     # Install gcp skcd
     - name: Setup GCP SDK

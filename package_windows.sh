@@ -1,4 +1,4 @@
-pathsToZip="onnxruntime/ qdrant/ models/"
+pathsToZip="sidecar/onnxruntime/ sidecar/qdrant/ sidecar/models/"
 
 # Destination of the zip file
 zipFileDestination="sidecar_test.7z"

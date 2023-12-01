@@ -13,7 +13,6 @@ use reqwest::header::USER_AGENT;
 use reqwest::redirect::Policy;
 use reqwest::IntoUrl;
 use select::document::Document;
-use select::node::Descendants;
 use select::node::Node;
 use select::predicate::Attr;
 use select::predicate::Name;

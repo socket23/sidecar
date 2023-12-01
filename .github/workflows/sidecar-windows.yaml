@@ -29,6 +29,14 @@ jobs:
       run: |
         7z a -t7z "sidecar_test.7z" "sidecar/onnxruntime/" "sidecar/qdrant/" "sidecar/models/"
 
+    - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+    - name: Export gcloud related env variable
+        run: export CLOUDSDK_PYTHON="/usr/bin/python3"
+
     # Install gcp skcd
     - name: Setup GCP SDK
       uses: 'google-github-actions/setup-gcloud@v0'

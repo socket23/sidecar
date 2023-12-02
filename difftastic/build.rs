@@ -24,7 +24,9 @@ impl TreeSitterParser {
         // and https://github.com/Wilfred/difftastic/issues/339.
         let rustc_supports_whole_archive = !rustc::is_max_version("1.60.0").unwrap_or(false);
 
-        let dir = PathBuf::from(&self.src_dir);
+        let owned_src_dir = self.src_dir.to_owned();
+        let dir_parts = owned_src_dir.split('/').into_iter().collect::<Vec<_>>();
+        let dir = PathBuf::from_iter(dir_parts.into_iter());
 
         let mut c_files = vec!["parser.c"];
         let mut cpp_files = vec![];

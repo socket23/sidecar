@@ -34,6 +34,20 @@ jobs:
       with:
         python-version: '3.9'
 
+    - name: Install Rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Build
+      run: |
+        cargo build --release
+    
+    # Now run the .sh script which does the building and packaging
+    - name: Build and package
+      run: |
+        ./package_windows_bin.sh
+
     # This updates the environment variable
     - name: Set CLOUDSDK_PYTHON environment variable
       run: echo "CLOUDSDK_PYTHON=$(which python)" >> $GITHUB_ENV
@@ -60,20 +74,6 @@ jobs:
         gcloud config set project ${{ env.GCP_PROJECT_ID }}
         # Copy the built binary to the GCP bucket
         gsutil cp sidecar_test.7z "gs://sidecar-bin/windows/sidecar_test.zip"
-
-    - name: Install Rust
-      run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-    - name: Build
-      run: |
-        cargo build --release
-    
-    # Now run the .sh script which does the building and packaging
-    - name: Build and package
-      run: |
-        ./package_windows_bin.sh
     
     # Github action parser for sure, something to test it out too quickly
     - name: Compile the 7z

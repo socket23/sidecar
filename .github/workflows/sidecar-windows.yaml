@@ -64,22 +64,6 @@ jobs:
       with:
         credentials_json: '${{ secrets.GCP_GAE_SA_KEY }}'
     
-    - name: Upload to GCP for testing
-      env:
-        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
-        GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-      run: |
-        # Set your GCP project
-        gcloud config set project ${{ env.GCP_PROJECT_ID }}
-        # Copy the built binary to the GCP bucket
-        gsutil cp sidecar_test.7z "gs://sidecar-bin/windows/sidecar_test.zip"
-    
-    # Github action parser for sure, something to test it out too quickly
-    - name: Compile the 7z
-      run: |
-        7z a -t7z "sidecar.7z" "onnxruntime/" "qdrant/" "target\\release\\webserver" "models/"
-
     - name: Upload to GCP bucket generated zip file
       env:
         GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -89,4 +73,4 @@ jobs:
         # Set your GCP project
         gcloud config set project ${{ env.GCP_PROJECT_ID }}
         # Copy the built binary to the GCP bucket
-        gsutil cp sidecar.zip "gs://sidecar-bin/windows/sidecar.zip"
+        gsutil cp sidecar.7z "gs://sidecar-bin/windows/sidecar.7z"

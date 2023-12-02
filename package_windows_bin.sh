@@ -6,4 +6,4 @@ pathsToZip="sidecar/onnxruntime/ sidecar/qdrant/ target/release/webserver.exe si
 zipFileDestination="sidecar.7z"
 
 # Use 7z command to create the archive
-7z a -t7z $zipFileDestination $pathsToZip
+7z a -tzip $zipFileDestination $pathsToZip

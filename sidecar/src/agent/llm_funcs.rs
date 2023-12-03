@@ -296,7 +296,6 @@ pub struct LlmClient {
     posthog_client: Arc<PosthogClient>,
     sql_db: SqlDb,
     user_id: String,
-    allowed_user_ids: Vec<String>,
     //TODO(skcd): We need a better toggle for this, because our prompt engine should also
     // understand the kind of llm we are using and take that into account
     // for now, we can keep using the same prompts but the burden of construction
@@ -364,7 +363,6 @@ impl LlmClient {
         user_id: String,
         llm_config: LLMCustomConfig,
     ) -> LlmClient {
-        let allowed_user_ids = vec!["skcd".to_owned(), "nareshr".to_owned()];
         let api_base = "https://codestory-gpt4.openai.azure.com".to_owned();
         let api_key = "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned();
         let api_version = "2023-08-01-preview".to_owned();
@@ -400,7 +398,6 @@ impl LlmClient {
             posthog_client,
             sql_db,
             user_id,
-            allowed_user_ids,
             custom_llm,
             custom_llm_type: llm_config.llm.clone(),
         }
@@ -412,26 +409,24 @@ impl LlmClient {
         response: R,
         answer: Option<String>,
     ) -> anyhow::Result<()> {
-        if self.allowed_user_ids.contains(&self.user_id) {
-            let mut tx = self.sql_db.begin().await?;
-            let request_str = serde_json::to_string(&request)?;
-            let response_str = serde_json::to_string(&response)?;
-            let event_type_str = serde_json::to_string(&OpenAIEventType::RequestAndResponse)?;
-            let _ = sqlx::query! {
-                r#"
+        let mut tx = self.sql_db.begin().await?;
+        let request_str = serde_json::to_string(&request)?;
+        let response_str = serde_json::to_string(&response)?;
+        let event_type_str = serde_json::to_string(&OpenAIEventType::RequestAndResponse)?;
+        let _ = sqlx::query! {
+            r#"
                 INSERT INTO openai_llm_data (user_id, prompt, response, answer, event_type)
                 VALUES (?, ?, ?, ?, ?)
                 "#,
-                self.user_id,
-                request_str,
-                response_str,
-                answer,
-                event_type_str,
-            }
-            .execute(&mut *tx)
-            .await?;
-            tx.commit().await?;
+            self.user_id,
+            request_str,
+            response_str,
+            answer,
+            event_type_str,
         }
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         let mut event = PosthogEvent::new("openai_response_request_stream_response");
         let _ = event.insert_prop("response", response);
         let _ = event.insert_prop("request", request);
@@ -445,23 +440,21 @@ impl LlmClient {
         &self,
         request: T,
     ) -> anyhow::Result<()> {
-        if self.allowed_user_ids.contains(&self.user_id) {
-            let mut tx = self.sql_db.begin().await?;
-            let request_str = serde_json::to_string(&request)?;
-            let event_type_str = serde_json::to_string(&OpenAIEventType::Request)?;
-            let _ = sqlx::query! {
-                r#"
+        let mut tx = self.sql_db.begin().await?;
+        let request_str = serde_json::to_string(&request)?;
+        let event_type_str = serde_json::to_string(&OpenAIEventType::Request)?;
+        let _ = sqlx::query! {
+            r#"
                 INSERT INTO openai_llm_data (user_id, prompt, event_type)
                 VALUES (?, ?, ?)
                 "#,
-                self.user_id,
-                request_str,
-                event_type_str,
-            }
-            .execute(&mut *tx)
-            .await?;
-            tx.commit().await?;
+            self.user_id,
+            request_str,
+            event_type_str,
         }
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         let mut event = PosthogEvent::new("openai_request");
         let _ = event.insert_prop("request", request);
         let _ = self.posthog_client.capture(event).await;

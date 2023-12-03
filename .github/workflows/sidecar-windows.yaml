@@ -77,4 +77,4 @@ jobs:
         # Set your GCP project
         gcloud config set project ${{ env.GCP_PROJECT_ID }}
         # Copy the built binary to the GCP bucket
-        gsutil cp sidecar.7z "gs://sidecar-bin/windows/sidecar.7z"
+        gsutil cp sidecar.zip "gs://sidecar-bin/windows/sidecar.zip"

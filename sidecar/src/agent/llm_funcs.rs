@@ -285,11 +285,11 @@ impl From<&llm::Message> for tiktoken_rs::ChatCompletionRequestMessage {
 }
 
 pub struct LlmClient {
-    gpt4_client: Client<AzureConfig>,
-    gpt432k_client: Client<AzureConfig>,
-    gpt3_5_client: Client<AzureConfig>,
-    gpt3_5_turbo_instruct: Client<OpenAIConfig>,
-    gpt4_turbo_client: Client<AzureConfig>,
+    gpt4_client: ClientEndpoint,
+    gpt432k_client: ClientEndpoint,
+    gpt3_5_client: ClientEndpoint,
+    gpt3_5_turbo_instruct: ClientEndpoint,
+    gpt4_turbo_client: ClientEndpoint,
     posthog_client: Arc<PosthogClient>,
     sql_db: SqlDb,
     user_id: String,
@@ -297,7 +297,7 @@ pub struct LlmClient {
     // understand the kind of llm we are using and take that into account
     // for now, we can keep using the same prompts but the burden of construction
     // will fall on every place which constructs the prompt
-    custom_llm: Option<Client<OpenAIConfig>>,
+    custom_llm: Option<ClientEndpoint>,
     custom_llm_type: LLMType,
 }
 
@@ -308,14 +308,14 @@ enum OpenAIEventType {
 }
 
 #[derive(Debug, Clone)]
-pub enum ClientEndpoint<'a> {
-    OpenAI(&'a Client<OpenAIConfig>),
-    Azure(&'a Client<AzureConfig>),
+pub enum ClientEndpoint {
+    OpenAI(Client<OpenAIConfig>),
+    Azure(Client<AzureConfig>),
 }
 
-impl<'a> ClientEndpoint<'a> {
+impl ClientEndpoint {
     pub async fn create_stream(
-        &'a self,
+        &self,
         request: CreateChatCompletionRequest,
     ) -> Result<ChatCompletionResponseStream, OpenAIError> {
         match self {
@@ -325,7 +325,7 @@ impl<'a> ClientEndpoint<'a> {
     }
 
     pub async fn create_stream_completion(
-        &'a self,
+        &self,
         request: CreateCompletionRequest,
     ) -> Result<CompletionResponseStream, OpenAIError> {
         match self {
@@ -335,7 +335,7 @@ impl<'a> ClientEndpoint<'a> {
     }
 
     pub async fn create_chat_completion(
-        &'a self,
+        &self,
         request: CreateChatCompletionRequest,
     ) -> Result<CreateChatCompletionResponse, OpenAIError> {
         match self {
@@ -344,11 +344,11 @@ impl<'a> ClientEndpoint<'a> {
         }
     }
 
-    fn from_azure_client(azure_client: &'a Client<AzureConfig>) -> Self {
+    fn from_azure_client(azure_client: Client<AzureConfig>) -> Self {
         ClientEndpoint::Azure(azure_client)
     }
 
-    fn from_openai_client(openai_client: &'a Client<OpenAIConfig>) -> Self {
+    fn from_openai_client(openai_client: Client<OpenAIConfig>) -> Self {
         ClientEndpoint::OpenAI(openai_client)
     }
 }
@@ -382,20 +382,50 @@ impl LlmClient {
         let custom_llm = match llm_config.non_openai_endpoint() {
             Some(endpoint) => {
                 let config = OpenAIConfig::new().with_api_base(endpoint);
-                Some(Client::with_config(config))
+                Some(ClientEndpoint::OpenAI(Client::with_config(config)))
             }
             None => None,
         };
         Self {
-            gpt4_client: Client::with_config(gpt4_config),
-            gpt432k_client: Client::with_config(gpt4_32k_config),
-            gpt3_5_client: Client::with_config(gpt3_5_config),
-            gpt3_5_turbo_instruct: Client::with_config(openai_config),
-            gpt4_turbo_client: Client::with_config(gpt4_turbo_128k_config),
+            gpt4_client: ClientEndpoint::Azure(Client::with_config(gpt4_config)),
+            gpt432k_client: ClientEndpoint::Azure(Client::with_config(gpt4_32k_config)),
+            gpt3_5_client: ClientEndpoint::Azure(Client::with_config(gpt3_5_config)),
+            gpt3_5_turbo_instruct: ClientEndpoint::OpenAI(Client::with_config(openai_config)),
+            gpt4_turbo_client: ClientEndpoint::Azure(Client::with_config(gpt4_turbo_128k_config)),
             posthog_client,
             sql_db,
             user_id,
             custom_llm,
+            custom_llm_type: llm_config.llm.clone(),
+        }
+    }
+
+    pub fn user_key_openai(
+        posthog_client: Arc<PosthogClient>,
+        sql_db: SqlDb,
+        user_id: String,
+        llm_config: LLMCustomConfig,
+        api_key: String,
+    ) -> LlmClient {
+        let openai_config = OpenAIConfig::new().with_api_key(api_key);
+
+        let gpt4_client = ClientEndpoint::OpenAI(Client::with_config(openai_config.clone()));
+        let gpt432k_client = ClientEndpoint::OpenAI(Client::with_config(openai_config.clone()));
+        let gpt3_5_client = ClientEndpoint::OpenAI(Client::with_config(openai_config.clone()));
+        let gpt3_5_turbo_instruct =
+            ClientEndpoint::OpenAI(Client::with_config(openai_config.clone()));
+        let gpt4_turbo_client = ClientEndpoint::OpenAI(Client::with_config(openai_config));
+
+        LlmClient {
+            gpt4_client,
+            gpt432k_client,
+            gpt3_5_client,
+            gpt3_5_turbo_instruct,
+            gpt4_turbo_client,
+            posthog_client,
+            sql_db,
+            user_id,
+            custom_llm: None,
             custom_llm_type: llm_config.llm.clone(),
         }
     }
@@ -968,48 +998,38 @@ impl LlmClient {
         Ok(None)
     }
 
-    fn get_model(&self, model: &llm::OpenAIModel) -> Option<ClientEndpoint> {
+    fn get_model(&self, model: &llm::OpenAIModel) -> Option<&ClientEndpoint> {
         // If the user has provided a model for us we can use that instead of
         // doing anything fancy over here
         if let Some(custom_client) = self.custom_llm.as_ref() {
-            return Some(ClientEndpoint::OpenAI(&custom_client));
+            return Some(custom_client);
         }
         let client = match model {
-            llm::OpenAIModel::GPT4 => ClientEndpoint::from_azure_client(&self.gpt4_client),
-            llm::OpenAIModel::GPT4_32k => ClientEndpoint::from_azure_client(&self.gpt432k_client),
-            llm::OpenAIModel::GPT3_5_16k => ClientEndpoint::from_azure_client(&self.gpt3_5_client),
-            llm::OpenAIModel::GPT4_Turbo => {
-                ClientEndpoint::from_azure_client(&self.gpt4_turbo_client)
-            }
+            llm::OpenAIModel::GPT4 => &self.gpt4_client,
+            llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
+            llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
+            llm::OpenAIModel::GPT4_Turbo => &self.gpt4_turbo_client,
             llm::OpenAIModel::GPT3_5Instruct => return None,
             llm::OpenAIModel::OpenHermes2_5Mistral7b => {
-                return self
-                    .custom_llm
-                    .as_ref()
-                    .map(|llm| ClientEndpoint::OpenAI(&llm));
+                return self.custom_llm.as_ref();
             }
             _ => return None,
         };
         Some(client)
     }
 
-    fn get_model_openai(&self, model: &llm::OpenAIModel) -> Option<ClientEndpoint> {
+    fn get_model_openai(&self, model: &llm::OpenAIModel) -> Option<&ClientEndpoint> {
         if let Some(custom_client) = self.custom_llm.as_ref() {
-            return Some(ClientEndpoint::OpenAI(&custom_client));
+            return Some(custom_client);
         }
         let client = match model {
             llm::OpenAIModel::GPT4 => return None,
             llm::OpenAIModel::GPT4_32k => return None,
             llm::OpenAIModel::GPT3_5_16k => return None,
             llm::OpenAIModel::GPT4_Turbo => return None,
-            llm::OpenAIModel::GPT3_5Instruct => {
-                ClientEndpoint::from_openai_client(&self.gpt3_5_turbo_instruct)
-            }
+            llm::OpenAIModel::GPT3_5Instruct => &self.gpt3_5_turbo_instruct,
             llm::OpenAIModel::OpenHermes2_5Mistral7b => {
-                return self
-                    .custom_llm
-                    .as_ref()
-                    .map(|llm| ClientEndpoint::OpenAI(&llm))
+                return self.custom_llm.as_ref();
             }
             _ => return None,
         };

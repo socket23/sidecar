@@ -34,6 +34,7 @@ pub struct EditFileRequest {
     pub user_query: String,
     pub session_id: String,
     pub code_block_index: usize,
+    pub openai_key: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -138,18 +139,30 @@ pub async fn file_edit(
         user_query,
         session_id,
         code_block_index,
+        openai_key,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
     // Here we have to first check if the new content is tree-sitter valid, if
     // thats the case only then can we apply it to the file
     // First we check if the output generated is valid by itself, if it is then
     // we can think about applying the changes to the file
-    let llm_client = Arc::new(LlmClient::codestory_infra(
-        app.posthog_client.clone(),
-        app.sql.clone(),
-        app.user_id.to_owned(),
-        app.llm_config.clone(),
-    ));
+    let llm_client = if let Some(openai_key) = openai_key {
+        Arc::new(LlmClient::user_key_openai(
+            app.posthog_client.clone(),
+            app.sql.clone(),
+            app.user_id.to_owned(),
+            app.llm_config.clone(),
+            openai_key,
+        ))
+    } else {
+        Arc::new(LlmClient::codestory_infra(
+            app.posthog_client.clone(),
+            app.sql.clone(),
+            app.user_id.to_owned(),
+            app.llm_config.clone(),
+        ))
+    };
+
     let file_diff_content = generate_file_diff(
         &file_content,
         &file_path,
@@ -158,6 +171,7 @@ pub async fn file_edit(
         app.language_parsing.clone(),
     )
     .await;
+
     if let None = file_diff_content {
         let cloned_session_id = session_id.clone();
         let init_stream = futures::stream::once(async move {

@@ -662,7 +662,7 @@ impl InLineAgent {
             .collect::<Vec<_>>();
         // we emphasize again that it needs to always put the //BEGIN and //END
         let user_query = &self.editor_request.query;
-        let user_query = format!("{user_query}\nDo not forget to include the // BEGIN and // END markers in your generated code.");
+        let user_query = format!("{user_query}\nDo not forget to include the // BEGIN, // END and // FILEPATH markers in your generated code.");
         user_messages.push(llm_funcs::llm::Message::user(&user_query));
 
         let mut final_messages = vec![llm_funcs::llm::Message::system(
@@ -923,6 +923,8 @@ impl InLineAgent {
             selection_prompt.push("I am working with the following code:".to_owned());
             selection_prompt.push(format!("```{language}"));
             selection_prompt.push(format!("// FILEPATH: {fs_file_path}"));
+            selection_prompt.push("// BEGIN".to_owned());
+            selection_prompt.push("// END".to_owned());
             selection_prompt.push("```".to_owned());
         }
         prompts.push(selection_prompt.join("\n"));

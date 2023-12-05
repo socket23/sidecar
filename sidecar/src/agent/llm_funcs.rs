@@ -118,7 +118,7 @@ pub mod llm {
         pub temperature: Option<f32>,
         pub presence_penalty: Option<f32>,
         pub frequency_penalty: Option<f32>,
-        pub model: Option<String>,
+        pub model: String,
         #[serde(default)]
         pub extra_stop_sequences: Vec<String>,
         pub session_reference_id: Option<String>,

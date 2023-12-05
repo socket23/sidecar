@@ -16,7 +16,6 @@ use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::CreateChatCompletionResponse;
 use async_openai::types::CreateCompletionRequest;
 use async_openai::types::CreateCompletionRequestArgs;
-use async_openai::types::CreateCompletionResponse;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
 use futures::StreamExt;
@@ -31,16 +30,14 @@ use crate::in_line_agent::types::ContextSelection;
 use crate::in_line_agent::types::InLineAgentAnswer;
 use crate::llm::types::LLMCustomConfig;
 use crate::llm::types::LLMType;
-use crate::posthog::client::PosthogClient;
-use crate::posthog::client::PosthogEvent;
+use crate::reporting::posthog::client::PosthogClient;
+use crate::reporting::posthog::client::PosthogEvent;
 
 use super::types::Answer;
 use super::types::CompletionItem;
 
 pub mod llm {
     use std::collections::HashMap;
-
-    use gix::revwalk::graph::commit::to_owned;
 
     #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct FunctionCall {

@@ -471,6 +471,7 @@ pub struct FollowupChatRequest {
     pub user_context: UserContext,
     pub project_labels: Vec<String>,
     pub active_window_data: Option<ActiveWindowData>,
+    pub openai_key: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -550,6 +551,7 @@ pub async fn followup_chat(
         user_context,
         project_labels,
         active_window_data,
+        openai_key,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_config = app.llm_config.clone();
@@ -604,23 +606,45 @@ pub async fn followup_chat(
     let action = AgentAction::Answer {
         paths: (0..file_path_len).collect(),
     };
-    let agent = Agent::prepare_for_followup(
-        app,
-        repo_ref,
-        session_id,
-        Arc::new(LlmClient::codestory_infra(
-            posthog_client,
-            sql_db.clone(),
-            user_id.to_owned(),
-            llm_config,
-        )),
-        sql_db,
-        previous_messages,
-        sender,
-        user_context,
-        project_labels,
-        Default::default(),
-    );
+
+    let agent = if let Some(openai_user_key) = openai_key {
+        Agent::prepare_for_followup(
+            app,
+            repo_ref,
+            session_id,
+            Arc::new(LlmClient::user_key_openai(
+                posthog_client,
+                sql_db.clone(),
+                user_id.to_owned(),
+                llm_config,
+                openai_user_key,
+            )),
+            sql_db,
+            previous_messages,
+            sender,
+            user_context,
+            project_labels,
+            Default::default(),
+        )
+    } else {
+        Agent::prepare_for_followup(
+            app,
+            repo_ref,
+            session_id,
+            Arc::new(LlmClient::codestory_infra(
+                posthog_client,
+                sql_db.clone(),
+                user_id.to_owned(),
+                llm_config,
+            )),
+            sql_db,
+            previous_messages,
+            sender,
+            user_context,
+            project_labels,
+            Default::default(),
+        )
+    };
 
     generate_agent_stream(agent, action, receiver).await
 }
@@ -631,6 +655,7 @@ pub struct GotoDefinitionSymbolsRequest {
     pub language: String,
     pub repo_ref: RepoRef,
     pub thread_id: uuid::Uuid,
+    pub openai_key: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -647,6 +672,7 @@ pub async fn go_to_definition_symbols(
         language,
         repo_ref,
         thread_id,
+        openai_key,
     }): Json<GotoDefinitionSymbolsRequest>,
 ) -> Result<impl IntoResponse> {
     let posthog_client = app.posthog_client.clone();
@@ -659,12 +685,22 @@ pub async fn go_to_definition_symbols(
         reporef: repo_ref,
         session_id: uuid::Uuid::new_v4(),
         conversation_messages: vec![],
-        llm_client: Arc::new(LlmClient::codestory_infra(
-            posthog_client,
-            sql_db.clone(),
-            user_id,
-            llm_config,
-        )),
+        llm_client: if let Some(user_key_openai) = &openai_key {
+            Arc::new(LlmClient::user_key_openai(
+                posthog_client,
+                sql_db.clone(),
+                user_id,
+                llm_config,
+                user_key_openai.to_owned(),
+            ))
+        } else {
+            Arc::new(LlmClient::codestory_infra(
+                posthog_client,
+                sql_db.clone(),
+                user_id,
+                llm_config,
+            ))
+        },
         model: GPT_3_5_TURBO_16K,
         sql_db,
         sender: tokio::sync::mpsc::channel(100).0,

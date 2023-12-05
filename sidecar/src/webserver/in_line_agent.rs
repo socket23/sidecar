@@ -87,6 +87,7 @@ pub struct ProcessInEditorRequest {
     pub text_document_web: TextDocumentWeb,
     pub thread_id: uuid::Uuid,
     pub diagnostics_information: Option<DiagnosticInformationFromEditor>,
+    pub openai_key: Option<String>,
 }
 
 impl ProcessInEditorRequest {
@@ -129,6 +130,7 @@ pub async fn reply_to_user(
         thread_id,
         text_document_web,
         diagnostics_information,
+        openai_key,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
     let editor_parsing: EditorParsing = Default::default();
@@ -136,12 +138,22 @@ pub async fn reply_to_user(
     // the proper things
     // Here we will handle how the in-line agent will handle the work
     let sql_db = app.sql.clone();
-    let llm_client = LlmClient::codestory_infra(
-        app.posthog_client.clone(),
-        app.sql.clone(),
-        app.user_id.to_owned(),
-        app.llm_config.clone(),
-    );
+    let llm_client = if let Some(user_key_openai) = &openai_key {
+        LlmClient::user_key_openai(
+            app.posthog_client.clone(),
+            app.sql.clone(),
+            app.user_id.to_owned(),
+            app.llm_config.clone(),
+            user_key_openai.to_owned(),
+        )
+    } else {
+        LlmClient::codestory_infra(
+            app.posthog_client.clone(),
+            app.sql.clone(),
+            app.user_id.to_owned(),
+            app.llm_config.clone(),
+        )
+    };
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let inline_agent_message = InLineAgentMessage::start_message(thread_id, query.to_owned());
     snippet_information =
@@ -161,6 +173,7 @@ pub async fn reply_to_user(
             text_document_web,
             thread_id,
             diagnostics_information,
+            openai_key,
         },
         vec![inline_agent_message],
         sender,

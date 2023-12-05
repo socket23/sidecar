@@ -8,9 +8,9 @@ use async_openai::types::Role;
 use async_openai::Client;
 use futures::StreamExt;
 use sidecar::agent::prompts;
-use sidecar::posthog::client::client;
-use sidecar::posthog::client::PosthogClient;
-use sidecar::posthog::client::PosthogEvent;
+use sidecar::reporting::posthog::client::client;
+use sidecar::reporting::posthog::client::PosthogClient;
+use sidecar::reporting::posthog::client::PosthogEvent;
 
 // Note: This does not work as posthog uses an internal blocking reqwest client
 // we should not be using that and instead fork it and create our own

@@ -1,16 +1,7 @@
-use std::{collections::HashSet, sync::Arc};
-
 use difftastic::LineInformation;
 /// Here we are going to parse the diff stat output and see if we can figure
 /// out what kind of merging questions we should ask to the LLM
 use serde::{Deserialize, Serialize};
-use sidecar::{
-    agent::{
-        llm_funcs,
-        prompts::{self, diff_accept_prompt},
-    },
-    posthog::client::posthog_client,
-};
 
 fn get_content_from_file_line_information(
     content: &str,

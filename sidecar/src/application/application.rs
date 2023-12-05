@@ -9,8 +9,8 @@ use tracing::{debug, warn};
 use crate::{
     chunking::languages::TSLanguageParsing,
     db::sqlite::{self, SqlDb},
-    llm::types::{LLMCustomConfig, LLMType},
-    posthog::client::{posthog_client, PosthogClient},
+    llm::types::LLMCustomConfig,
+    reporting::posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
 };
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};

@@ -414,8 +414,11 @@ impl SelectionContext {
 }
 
 pub fn generate_selection_context_for_fix(
+    // this is the total line count in the file
     line_count: i64,
+    // this is the range we are interested in fixing
     fix_range_of_interest: &Range,
+    // range which is under the selection from the error
     selection_range: &Range,
     language: &str,
     lines: Vec<String>,
@@ -446,9 +449,9 @@ pub fn generate_selection_context_for_fix(
     let mut should_expand = true;
     let middle_line =
         (selection_range.start_position().line() + selection_range.end_position().line()) / 2;
-    let size = std::cmp::max(
-        middle_line - selection_range.start_position().line(),
-        selection_range.end_position().line() - middle_line,
+    let size = std::cmp::min(
+        middle_line - fix_range_of_interest.start_position().line(),
+        fix_range_of_interest.end_position().line() - middle_line,
     );
     in_range.append_line(middle_line, token_count);
     for index in 1..=size {

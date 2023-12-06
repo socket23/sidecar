@@ -523,9 +523,14 @@ impl InLineAgent {
                 .into_iter()
                 .map(|prompt| llm_funcs::llm::Message::user(&prompt)),
         );
-        prompts.push(llm_funcs::llm::Message::user(
-            "Do not forget to include the // BEGIN and // END markers in your generated code.",
-        ));
+        let in_range_start_marker = selection_context.range.start_marker();
+        let in_range_end_marker = selection_context.range.end_marker();
+        prompts.push(
+            llm_funcs::llm::Message::user(&format!(
+                "Do not forget to include the // BEGIN and // END markers in your generated code. Only change the code inside of the selection, delimited by markers: {in_range_start_marker} and {in_range_end_marker}"
+            )
+            .to_owned()),
+        );
         let last_exchange = self.get_last_agent_message();
         last_exchange.message_state = MessageState::StreamingAnswer;
         let document_symbol = {

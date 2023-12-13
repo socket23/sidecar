@@ -46,7 +46,9 @@ impl TextDocument {
 }
 
 // These are always 0 indexed
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, std::hash::Hash)]
+#[derive(
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq, std::hash::Hash,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
     line: usize,
@@ -98,7 +100,9 @@ impl Position {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq, std::hash::Hash)]
+#[derive(
+    Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq, std::hash::Hash,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Range {
     start_position: Position,
@@ -210,6 +214,10 @@ impl Range {
         } else {
             return expanded_range.clone();
         }
+    }
+
+    pub fn contains(&self, other: &Range) -> bool {
+        self.start_byte() <= other.start_byte() && self.end_byte() >= other.end_byte()
     }
 }
 

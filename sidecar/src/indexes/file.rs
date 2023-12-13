@@ -12,18 +12,22 @@ use tantivy::{doc, schema::Schema, IndexWriter, Term};
 use tokio::runtime::Handle;
 use tracing::{debug, info, trace, warn};
 
-use crate::repo::{
-    filesystem::MAX_LINE_COUNT,
-    iterator::{FileSource, RepositoryDirectory, RepositoryFile},
-};
 use crate::{
     application::background::SyncPipes,
+    chunking::{scope_graph::SymbolLocations, tree_sitter_file::TreeSitterFile},
     repo::{
         filesystem::{BranchFilter, FileWalker, GitWalker},
         iterator::RepoDirectoryEntry,
         types::{RepoMetadata, RepoRef, Repository},
     },
     state::schema_version::get_schema_version,
+};
+use crate::{
+    chunking::languages::TSLanguageParsing,
+    repo::{
+        filesystem::MAX_LINE_COUNT,
+        iterator::{FileSource, RepositoryDirectory, RepositoryFile},
+    },
 };
 
 use super::{
@@ -252,6 +256,7 @@ impl File {
                         &cache_keys,
                         last_commit,
                         workload.cache.parent(),
+                        self.language_parsing.clone(),
                     )
                     .ok_or(anyhow::anyhow!("failed to build document"))?;
                 writer.add_document(doc)?;
@@ -274,6 +279,7 @@ impl RepositoryFile {
         cache_keys: &CacheKeys,
         last_commit: i64,
         file_cache: &FileCache,
+        language_parsing: Arc<TSLanguageParsing>,
     ) -> Option<tantivy::schema::Document> {
         let Workload {
             relative_path,
@@ -307,11 +313,26 @@ impl RepositoryFile {
         let lines_avg = self.buffer.len() as f64 / self.buffer.lines().count() as f64;
 
         // Get the language of the file
-        let language = "not_detected_language".to_owned();
-        // let language = hyperpolyglot::detect(&self.pathbuf)
-        //     .unwrap_or(None)
-        //     .map(|detection| detection.language().to_ascii_lowercase())
-        //     .unwrap_or("not_detected_language".to_owned());
+        let language = language_parsing
+            .detect_lang(&relative_path_str)
+            .unwrap_or("not_detected_language".to_owned());
+
+        let symbol_locations = {
+            // build a syntax aware representation of the file
+            let scope_graph = TreeSitterFile::try_build(
+                self.buffer.as_bytes(),
+                &language,
+                language_parsing.clone(),
+            )
+            .and_then(TreeSitterFile::scope_graph);
+
+            match scope_graph {
+                // we have a graph, use that
+                Ok(graph) => SymbolLocations::TreeSitter(graph),
+                // no graph, it's empty
+                Err(_) => SymbolLocations::Empty,
+            }
+        };
 
         let file_extension = self
             .pathbuf
@@ -355,6 +376,7 @@ impl RepositoryFile {
             schema.avg_line_length => lines_avg,
             schema.symbols => String::default(),
             schema.branches => "HEAD".to_owned(),
+            schema.symbol_locations => bincode::serialize(&symbol_locations).unwrap(),
         ))
     }
 }

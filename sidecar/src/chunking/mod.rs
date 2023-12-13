@@ -3,6 +3,8 @@ mod javascript;
 pub mod languages;
 mod python;
 mod rust;
+pub mod scope_graph;
 pub mod text_document;
+pub mod tree_sitter_file;
 pub mod types;
 mod typescript;

@@ -649,7 +649,7 @@ impl Indexes {
 
         Ok(Self {
             file: Indexer::create(
-                File::new(sql_db.clone(), semantic),
+                File::new(sql_db.clone(), semantic, language_parsing.clone()),
                 config.index_path("content").as_ref(),
                 config.buffer_size,
                 config.max_threads,

@@ -46,7 +46,9 @@ impl TextDocument {
 }
 
 // These are always 0 indexed
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, std::hash::Hash)]
+#[derive(
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq, std::hash::Hash,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
     line: usize,
@@ -96,9 +98,26 @@ impl Position {
     pub fn set_byte_offset(&mut self, byte_offset: usize) {
         self.byte_offset = byte_offset;
     }
+
+    pub fn from_byte(byte: usize, line_end_indices: &[u32]) -> Self {
+        let line = line_end_indices
+            .iter()
+            .position(|&line_end_byte| (line_end_byte as usize) > byte)
+            .unwrap_or(0);
+
+        let column = line
+            .checked_sub(1)
+            .and_then(|idx| line_end_indices.get(idx))
+            .map(|&prev_line_end| byte.saturating_sub(prev_line_end as usize))
+            .unwrap_or(byte);
+
+        Self::new(line, column, byte)
+    }
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq, std::hash::Hash)]
+#[derive(
+    Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq, std::hash::Hash,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Range {
     start_position: Position,
@@ -111,6 +130,14 @@ impl Range {
             start_position,
             end_position,
         }
+    }
+
+    pub fn set_start_byte(&mut self, byte: usize) {
+        self.start_position.set_byte_offset(byte);
+    }
+
+    pub fn set_end_byte(&mut self, byte: usize) {
+        self.end_position.set_byte_offset(byte);
     }
 
     pub fn start_position(&self) -> Position {
@@ -210,6 +237,16 @@ impl Range {
         } else {
             return expanded_range.clone();
         }
+    }
+
+    pub fn contains(&self, other: &Range) -> bool {
+        self.start_byte() <= other.start_byte() && self.end_byte() >= other.end_byte()
+    }
+
+    pub fn from_byte_range(range: std::ops::Range<usize>, line_end_indices: &[u32]) -> Range {
+        let start = Position::from_byte(range.start, line_end_indices);
+        let end = Position::from_byte(range.end, line_end_indices);
+        Self::new(start, end)
     }
 }
 

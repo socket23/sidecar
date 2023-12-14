@@ -17,6 +17,7 @@ use super::indexer::{get_text_field, get_u64_field};
 #[derive(Clone)]
 pub struct File {
     pub schema: Schema,
+    pub language_parsing: Arc<TSLanguageParsing>,
     pub(super) semantic: Option<SemanticClient>,
     /// Unique ID for the file in a repo
     pub unique_hash: Field,
@@ -64,10 +65,17 @@ pub struct File {
 
     // The commit hash for this file
     pub commit_hash: Field,
+
+    // The symbol locations for the file
+    pub symbol_locations: Field,
 }
 
 impl File {
-    pub fn new(sql: SqlDb, semantic: Option<SemanticClient>) -> Self {
+    pub fn new(
+        sql: SqlDb,
+        semantic: Option<SemanticClient>,
+        language_parsing: Arc<TSLanguageParsing>,
+    ) -> Self {
         let mut builder = tantivy::schema::SchemaBuilder::new();
         let trigram = TextOptions::default().set_stored().set_indexing_options(
             TextFieldIndexing::default()
@@ -104,10 +112,13 @@ impl File {
         let is_directory = builder.add_bool_field("is_directory", FAST);
         let commit_frequency = builder.add_u64_field("commit_frequency", FAST);
         let commit_hash = builder.add_text_field("commit_hash", STRING);
+        let symbol_locations =
+            builder.add_bytes_field("symbol_locations", BytesOptions::default().set_stored());
 
         Self {
             sql,
             semantic,
+            language_parsing,
             repo_disk_path,
             relative_path,
             unique_hash,
@@ -127,6 +138,7 @@ impl File {
             branches,
             commit_frequency,
             commit_hash,
+            symbol_locations,
         }
     }
 }

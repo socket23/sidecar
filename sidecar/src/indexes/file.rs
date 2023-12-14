@@ -8,16 +8,19 @@ use std::{
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use tantivy::{doc, schema::Schema, IndexWriter, Term};
+use tantivy::{
+    doc,
+    schema::{Field, Schema},
+    IndexWriter, Term,
+};
 use tokio::runtime::Handle;
 use tracing::{debug, info, trace, warn};
 
-use crate::repo::{
-    filesystem::MAX_LINE_COUNT,
-    iterator::{FileSource, RepositoryDirectory, RepositoryFile},
-};
 use crate::{
     application::background::SyncPipes,
+    chunking::{
+        scope_graph::SymbolLocations, text_document::Range, tree_sitter_file::TreeSitterFile,
+    },
     repo::{
         filesystem::{BranchFilter, FileWalker, GitWalker},
         iterator::RepoDirectoryEntry,
@@ -25,10 +28,17 @@ use crate::{
     },
     state::schema_version::get_schema_version,
 };
+use crate::{
+    chunking::languages::TSLanguageParsing,
+    repo::{
+        filesystem::MAX_LINE_COUNT,
+        iterator::{FileSource, RepositoryDirectory, RepositoryFile},
+    },
+};
 
 use super::{
     caching::{CacheKeys, FileCache, FileCacheSnapshot},
-    indexer::Indexable,
+    indexer::{DocumentRead, Indexable},
     schema::File,
 };
 
@@ -252,6 +262,7 @@ impl File {
                         &cache_keys,
                         last_commit,
                         workload.cache.parent(),
+                        self.language_parsing.clone(),
                     )
                     .ok_or(anyhow::anyhow!("failed to build document"))?;
                 writer.add_document(doc)?;
@@ -274,6 +285,7 @@ impl RepositoryFile {
         cache_keys: &CacheKeys,
         last_commit: i64,
         file_cache: &FileCache,
+        language_parsing: Arc<TSLanguageParsing>,
     ) -> Option<tantivy::schema::Document> {
         let Workload {
             relative_path,
@@ -307,11 +319,26 @@ impl RepositoryFile {
         let lines_avg = self.buffer.len() as f64 / self.buffer.lines().count() as f64;
 
         // Get the language of the file
-        let language = "not_detected_language".to_owned();
-        // let language = hyperpolyglot::detect(&self.pathbuf)
-        //     .unwrap_or(None)
-        //     .map(|detection| detection.language().to_ascii_lowercase())
-        //     .unwrap_or("not_detected_language".to_owned());
+        let language = language_parsing
+            .detect_lang(&relative_path_str)
+            .unwrap_or("not_detected_language".to_owned());
+
+        let symbol_locations = {
+            // build a syntax aware representation of the file
+            let scope_graph = TreeSitterFile::try_build(
+                self.buffer.as_bytes(),
+                &language,
+                language_parsing.clone(),
+            )
+            .and_then(TreeSitterFile::scope_graph);
+
+            match scope_graph {
+                // we have a graph, use that
+                Ok(graph) => SymbolLocations::TreeSitter(graph),
+                // no graph, it's empty
+                Err(_) => SymbolLocations::Empty,
+            }
+        };
 
         let file_extension = self
             .pathbuf
@@ -355,6 +382,7 @@ impl RepositoryFile {
             schema.avg_line_length => lines_avg,
             schema.symbols => String::default(),
             schema.branches => "HEAD".to_owned(),
+            schema.symbol_locations => bincode::serialize(&symbol_locations).unwrap(),
         ))
     }
 }
@@ -400,5 +428,87 @@ impl RepositoryDirectory {
                 schema.avg_line_length => f64::default(),
                 schema.symbols => String::default(),
         )
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct ContentDocument {
+    pub content: String,
+    pub relative_path: String,
+    pub repo_name: String,
+    pub repo_ref: String,
+    pub line_end_indices: Vec<u32>,
+    pub symbol_locations: SymbolLocations,
+    pub indexed: bool,
+}
+
+impl std::hash::Hash for ContentDocument {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.repo_ref.hash(state);
+        self.relative_path.hash(state);
+        self.content.hash(state);
+    }
+}
+
+impl PartialEq for ContentDocument {
+    fn eq(&self, other: &Self) -> bool {
+        self.repo_ref == other.repo_ref
+            && self.relative_path == other.relative_path
+            && self.content == other.content
+    }
+}
+impl Eq for ContentDocument {}
+
+fn read_text_field(doc: &tantivy::Document, field: Field) -> String {
+    let Some(field) = doc.get_first(field) else {
+        return Default::default();
+    };
+
+    field.as_text().unwrap().into()
+}
+
+impl ContentDocument {
+    pub fn hoverable_ranges(
+        &self,
+        language: &str,
+        language_parsing: Arc<TSLanguageParsing>,
+    ) -> Option<Vec<Range>> {
+        TreeSitterFile::try_build(self.content.as_bytes(), language, language_parsing)
+            .and_then(TreeSitterFile::hoverable_ranges)
+            .ok()
+    }
+
+    pub fn read_document(schema: &File, doc: tantivy::Document) -> Self {
+        let relative_path = read_text_field(&doc, schema.relative_path);
+        let repo_ref = read_text_field(&doc, schema.repo_ref);
+        let repo_name = read_text_field(&doc, schema.repo_name);
+        let content = read_text_field(&doc, schema.content);
+
+        let line_end_indices = doc
+            .get_first(schema.line_end_indices)
+            .unwrap()
+            .as_bytes()
+            .unwrap()
+            .chunks_exact(4)
+            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect();
+
+        let symbol_locations = bincode::deserialize(
+            doc.get_first(schema.symbol_locations)
+                .unwrap()
+                .as_bytes()
+                .unwrap(),
+        )
+        .unwrap_or_default();
+
+        ContentDocument {
+            relative_path,
+            repo_name,
+            repo_ref,
+            content,
+            symbol_locations,
+            line_end_indices,
+            indexed: true,
+        }
     }
 }

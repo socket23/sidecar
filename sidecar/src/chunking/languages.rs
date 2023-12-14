@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::Path};
 
 use crate::chunking::types::FunctionNodeInformation;
 
@@ -54,7 +54,7 @@ pub struct TSLanguageConfig {
 
     /// Namespaces defined by this language,
     /// E.g.: type namespace, variable namespace, function namespace
-    pub namespaces: Vec<String>,
+    pub namespaces: Vec<Vec<String>>,
 
     /// The documentation query which will be used by this language
     pub documentation_query: Vec<String>,
@@ -76,6 +76,16 @@ pub struct TSLanguageConfig {
     /// The namespaces of the symbols which can be applied to a code symbols
     /// in case of typescript it can be `export` keyword
     pub namespace_types: Vec<String>,
+
+    /// Hoverable queries are used to get identifier which we can hover over
+    /// or written another way these are the important parts of the document
+    /// which a user can move their marker over and get back data
+    pub hoverable_query: String,
+
+    /// What are the different scopes which are present in the language we can
+    /// infer that using the scope query to get the local definitions and the
+    /// scopes which should be hoisted upwards
+    pub scope_query: String,
 }
 
 impl TSLanguageConfig {
@@ -276,7 +286,10 @@ impl TSLanguageConfig {
                                     // we want to handle that too
                                     let parent_node = capture.node.parent();
                                     if let Some(parent_node) = parent_node {
-                                        if self.namespace_types.contains(&parent_node.kind().to_owned()) {
+                                        if self
+                                            .namespace_types
+                                            .contains(&parent_node.kind().to_owned())
+                                        {
                                             type_nodes.push(TypeInformation::new(
                                                 Range::for_tree_node(&parent_node),
                                                 "not_set_parent_node".to_owned(),
@@ -378,7 +391,10 @@ impl TSLanguageConfig {
                                 // we want to handle that too
                                 let parent_node = capture.node.parent();
                                 if let Some(parent_node) = parent_node {
-                                    if self.namespace_types.contains(&parent_node.kind().to_owned()) {
+                                    if self
+                                        .namespace_types
+                                        .contains(&parent_node.kind().to_owned())
+                                    {
                                         class_nodes.push(ClassInformation::new(
                                             Range::for_tree_node(&capture.node),
                                             "not_set_parent".to_owned(),
@@ -443,7 +459,10 @@ impl TSLanguageConfig {
         }
         let documentation_string_information: Vec<(Range, String)> =
             self.capture_documentation_queries(source_code);
-        ClassInformation::add_documentation_to_classes(compressed_classes, documentation_string_information)
+        ClassInformation::add_documentation_to_classes(
+            compressed_classes,
+            documentation_string_information,
+        )
     }
 
     pub fn capture_function_data(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
@@ -483,7 +502,10 @@ impl TSLanguageConfig {
                                     // we want to handle that too
                                     let parent_node = capture.node.parent();
                                     if let Some(parent_node) = parent_node {
-                                        if self.namespace_types.contains(&parent_node.kind().to_owned()) {
+                                        if self
+                                            .namespace_types
+                                            .contains(&parent_node.kind().to_owned())
+                                        {
                                             function_nodes.push(FunctionInformation::new(
                                                 Range::for_tree_node(&parent_node),
                                                 capture_type,
@@ -890,6 +912,16 @@ impl TSLanguageParsing {
         found_node
             .map(|node| Range::for_tree_node(&node))
             .unwrap_or(range.clone())
+    }
+
+    pub fn detect_lang(&self, path: &str) -> Option<String> {
+        // Here we look at the path extension from path and use that for detecting
+        // the language
+        Path::new(path)
+            .extension()
+            .map(|extension| extension.to_str())
+            .flatten()
+            .map(|ext| ext.to_string())
     }
 }
 
@@ -1647,7 +1679,10 @@ namespace SomeNamespace {
         let type_information = ts_language_config.capture_type_data(source_code.as_bytes());
         assert_eq!(type_information.len(), 3);
         assert_eq!(type_information[0].name, "SometingElse");
-        assert_eq!(type_information[0].documentation, Some("// Some random comment over here".to_owned()));
+        assert_eq!(
+            type_information[0].documentation,
+            Some("// Some random comment over here".to_owned())
+        );
         assert_eq!(type_information[1].name, "SomethingInterface");
     }
 

@@ -537,13 +537,6 @@ impl ContentDocument {
             .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect();
 
-        let lines_avg = buffer.len() as f64 / buffer.lines().count() as f64;
-
-        // Get the language of the file
-        let language = language_parsing
-            .detect_lang(&relative_path_str)
-            .unwrap_or("not_detected_language".to_owned());
-
         let symbol_locations = {
             // build a syntax aware representation of the file
             let scope_graph =
@@ -557,11 +550,6 @@ impl ContentDocument {
                 Err(_) => SymbolLocations::Empty,
             }
         };
-
-        let file_extension = Path::new(relative_path)
-            .extension()
-            .map(|extension| extension.to_str())
-            .flatten();
 
         Self {
             relative_path: relative_path_str,

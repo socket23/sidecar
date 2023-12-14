@@ -8,15 +8,24 @@ pub fn rust_language_config() -> TSLanguageConfig {
         file_extensions: &["rs"],
         grammar: tree_sitter_rust::language,
         namespaces: vec![vec![
+            // variables
             "const",
-            "var",
-            "func",
-            "module",
+            "function",
+            "variable",
+            // types
             "struct",
+            "enum",
+            "union",
+            "typedef",
             "interface",
-            "type",
-            "member",
+            // fields
+            "field",
+            "enumerator",
+            // namespacing
+            "module",
+            // misc
             "label",
+            "lifetime",
         ]
         .into_iter()
         .map(|s| s.to_owned())

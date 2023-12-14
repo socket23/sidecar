@@ -1,7 +1,9 @@
 pub mod editor_parsing;
 mod javascript;
 pub mod languages;
+pub mod navigation;
 mod python;
+pub mod refdef;
 mod rust;
 pub mod scope_graph;
 pub mod text_document;

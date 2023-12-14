@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Range as OpsRange;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -6,10 +7,13 @@ use petgraph::Graph;
 use petgraph::{visit::EdgeRef, Direction};
 use serde::Deserialize;
 use serde::Serialize;
+use smallvec::smallvec;
+use smallvec::SmallVec;
 use tracing::warn;
 use tree_sitter::QueryCursor;
 
 use super::languages::{TSLanguageConfig, TSLanguageParsing};
+use super::navigation::Snippet;
 use super::text_document::Range;
 
 pub type NodeIndex = petgraph::graph::NodeIndex<u32>;
@@ -256,6 +260,28 @@ impl ScopeGraph {
             root_idx,
             lang,
         }
+    }
+
+    pub fn is_definition(&self, node_idx: NodeIndex) -> bool {
+        matches!(self.graph[node_idx], NodeKind::Def(_))
+    }
+
+    pub fn is_reference(&self, node_idx: NodeIndex) -> bool {
+        matches!(self.graph[node_idx], NodeKind::Ref(_))
+    }
+
+    pub fn is_import(&self, node_idx: NodeIndex) -> bool {
+        matches!(self.graph[node_idx], NodeKind::Import(_))
+    }
+
+    pub fn node_by_range(&self, start_byte: usize, end_byte: usize) -> Option<NodeIndex> {
+        self.graph
+            .node_indices()
+            .filter(|&idx| self.is_definition(idx) || self.is_reference(idx) || self.is_import(idx))
+            .find(|&idx| {
+                let node = self.graph[idx].range();
+                start_byte >= node.start_byte() && end_byte <= node.end_byte()
+            })
     }
 
     pub fn symbols(&self, language_parsing: Arc<TSLanguageParsing>) -> Vec<Symbol> {
@@ -613,4 +639,119 @@ pub fn scope_res_generic(
     }
 
     scope_graph
+}
+
+/// A marker indicating a subset of some source text, with a list of highlighted ranges.
+///
+/// This doesn't store the actual text data itself, just the position information for simplified
+/// merging.
+#[derive(Serialize, Debug, PartialEq, Eq)]
+pub struct Location {
+    /// The subset's byte range in the original input string.
+    pub byte_range: OpsRange<usize>,
+
+    /// The subset's line range in the original input string.
+    pub line_range: OpsRange<usize>,
+
+    /// A set of byte ranges denoting highlighted text indices, on the subset string.
+    pub highlights: SmallVec<[OpsRange<usize>; 2]>,
+}
+
+impl Location {
+    /// Reify this `Location` into a `Snippet`, given the source string and symbols list.
+    pub fn reify(self, s: &str, symbols: &[Symbol]) -> Snippet {
+        Snippet {
+            data: s[self.byte_range.clone()].to_owned(),
+            line_range: self.line_range.clone(),
+            symbols: symbols
+                .iter()
+                .filter(|s| {
+                    s.range.start_line() >= self.line_range.start
+                        && s.range.end_line() <= self.line_range.end
+                })
+                .cloned()
+                .map(|mut sym| {
+                    let start_byte = sym.range.start_byte() - self.byte_range.start;
+                    let end_byte = sym.range.end_byte() - self.byte_range.start;
+                    sym.range.set_start_byte(start_byte);
+                    sym.range.set_end_byte(end_byte);
+                    sym
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Snipper {
+    pub context_before: usize,
+    pub context_after: usize,
+    pub find_symbols: bool,
+    pub case_sensitive: bool,
+}
+
+impl Default for Snipper {
+    fn default() -> Self {
+        Self {
+            context_before: 0,
+            context_after: 0,
+            find_symbols: false,
+            case_sensitive: true,
+        }
+    }
+}
+
+impl Snipper {
+    pub fn context(mut self, before: usize, after: usize) -> Self {
+        self.context_before = before;
+        self.context_after = after;
+        self
+    }
+
+    pub fn find_symbols(mut self, find_symbols: bool) -> Self {
+        self.find_symbols = find_symbols;
+        self
+    }
+
+    pub fn case_sensitive(mut self, case_sensitive: bool) -> Self {
+        self.case_sensitive = case_sensitive;
+        self
+    }
+
+    pub fn expand<'a>(
+        &'a self,
+        highlight: std::ops::Range<usize>,
+        text: &'a str,
+        line_ends: &'a [u32],
+    ) -> Location {
+        let start = text[..highlight.start]
+            .rmatch_indices('\n')
+            .nth(self.context_before)
+            .map(|(i, _)| i + 1)
+            .unwrap_or(0);
+
+        let end = text[highlight.end..]
+            .match_indices('\n')
+            .nth(self.context_after)
+            .map(|(i, _)| i + highlight.end)
+            .unwrap_or(text.len());
+
+        let line_end = line_ends
+            .iter()
+            .position(|i| end <= *i as usize)
+            .unwrap_or(line_ends.len());
+
+        let line_start = line_ends
+            .iter()
+            .rev()
+            .position(|i| (*i as usize) < start)
+            .map(|i| line_ends.len() - i)
+            .unwrap_or(0);
+
+        Location {
+            byte_range: start..end,
+            line_range: line_start..line_end,
+            highlights: smallvec![(highlight.start - start)..(highlight.end - start)],
+        }
+    }
 }

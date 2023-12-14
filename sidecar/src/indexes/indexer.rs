@@ -6,6 +6,8 @@ use std::{fs, path::Path};
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use smallvec::SmallVec;
 use tantivy::collector::TopDocs;
 use tantivy::query::{BooleanQuery, Query as TantivyQuery, QueryParser, TermQuery};
@@ -33,6 +35,7 @@ use crate::{
 
 use super::caching::FileCache;
 use super::code_snippet::CodeSnippetDocument;
+use super::file::ContentDocument;
 use super::query::{case_permutations, trigrams, Query};
 use super::schema::{CodeSnippet, CodeSnippetTokenizer, File};
 
@@ -253,6 +256,71 @@ impl Indexer<File> {
             }
             _ => Err(anyhow::anyhow!("too many results for path: {}", path)),
         }
+    }
+
+    pub async fn get_by_path_content_document(
+        &self,
+        path: &str,
+        reporef: &RepoRef,
+    ) -> anyhow::Result<Option<ContentDocument>> {
+        let searcher = self.reader.searcher();
+        let file_index = searcher.index();
+
+        let query_parser = QueryParser::for_index(
+            file_index,
+            vec![self.source.repo_ref, self.source.relative_path],
+        );
+
+        let query_string = format!(r#"repo_ref:"{reporef}" AND relative_path:"{path}""#);
+        let query = query_parser
+            .parse_query(&query_string)
+            .expect("failed to parse tantivy query");
+        // Now we use the query along with the searcher and get back the results
+        let container = TopDocs::with_limit(1);
+        let results = searcher
+            .search(&query, &container)
+            .expect("search_index to not fail");
+
+        match results.as_slice() {
+            [] => Ok(None),
+            [(_, doc_address)] => {
+                let doc = searcher.doc(*doc_address).expect("doc to exist");
+                let file_doc = ContentDocument::read_document(&self.source, doc);
+                Ok(Some(file_doc))
+            }
+            _ => Err(anyhow::anyhow!("too many results for path: {}", path)),
+        }
+    }
+
+    // Produce all files in a repo
+    //
+    // TODO: Look at this again when:
+    //  - directory retrieval is ready
+    //  - unified referencing is ready
+    pub async fn by_repo(&self, repo_ref: &RepoRef) -> Vec<ContentDocument> {
+        let searcher = self.reader.searcher();
+
+        let mut query = vec![];
+
+        // repo query
+        query.push(Box::new(TermQuery::new(
+            Term::from_field_text(self.source.repo_ref, &repo_ref.to_string()),
+            IndexRecordOption::Basic,
+        )) as Box<dyn TantivyQuery>);
+
+        let query = BooleanQuery::intersection(query);
+        let collector = TopDocs::with_limit(500);
+        searcher
+            .search(&query, &collector)
+            .expect("failed to search index")
+            .into_par_iter()
+            .map(|(_, doc_addr)| {
+                let retrieved_doc = searcher
+                    .doc(doc_addr)
+                    .expect("failed to get document by address");
+                ContentDocument::read_document(&self.source, retrieved_doc)
+            })
+            .collect()
     }
 }
 

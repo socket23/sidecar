@@ -511,4 +511,66 @@ impl ContentDocument {
             indexed: true,
         }
     }
+
+    pub fn build_document(
+        repo_ref: &RepoRef,
+        content: &[u8],
+        language: &str,
+        relative_path: &str,
+        language_parsing: Arc<TSLanguageParsing>,
+    ) -> Self {
+        let relative_path_str = format!("{}", relative_path);
+        #[cfg(windows)]
+        let relative_path_str = relative_path_str.replace('\\', "/");
+        let mut buffer = String::from_utf8_lossy(content).to_string();
+
+        // add an NL if this file is not NL-terminated
+        if !buffer.ends_with('\n') {
+            buffer += "\n";
+        }
+
+        let line_end_indices = buffer
+            .match_indices('\n')
+            .flat_map(|(i, _)| u32::to_le_bytes(i as u32))
+            .collect::<Vec<_>>()
+            .chunks_exact(4)
+            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect();
+
+        let lines_avg = buffer.len() as f64 / buffer.lines().count() as f64;
+
+        // Get the language of the file
+        let language = language_parsing
+            .detect_lang(&relative_path_str)
+            .unwrap_or("not_detected_language".to_owned());
+
+        let symbol_locations = {
+            // build a syntax aware representation of the file
+            let scope_graph =
+                TreeSitterFile::try_build(content, &language, language_parsing.clone())
+                    .and_then(TreeSitterFile::scope_graph);
+
+            match scope_graph {
+                // we have a graph, use that
+                Ok(graph) => SymbolLocations::TreeSitter(graph),
+                // no graph, it's empty
+                Err(_) => SymbolLocations::Empty,
+            }
+        };
+
+        let file_extension = Path::new(relative_path)
+            .extension()
+            .map(|extension| extension.to_str())
+            .flatten();
+
+        Self {
+            relative_path: relative_path_str,
+            repo_name: "unknown".to_owned(),
+            repo_ref: repo_ref.to_string(),
+            content: buffer,
+            symbol_locations,
+            line_end_indices,
+            indexed: false,
+        }
+    }
 }

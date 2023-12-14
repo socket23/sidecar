@@ -2,11 +2,18 @@ use axum::{response::IntoResponse, Extension, Json};
 
 use crate::{
     application::application::Application,
-    chunking::{navigation::FileSymbols, refdef::refdef, text_document::Range},
+    chunking::{
+        navigation::FileSymbols,
+        refdef::{refdef, refdef_runtime},
+        text_document::Range,
+    },
     repo::types::RepoRef,
 };
 
-use super::types::{ApiResponse, Result};
+use super::{
+    in_line_agent::{fix_snippet_information, SnippetInformation, TextDocumentWeb},
+    types::{ApiResponse, Result},
+};
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TokenInformationRequest {
@@ -14,8 +21,8 @@ pub struct TokenInformationRequest {
     pub relative_path: String,
     pub range: Range,
     pub hovered_text: String,
-    pub content: String,
-    pub language: String,
+    pub snippet_information: SnippetInformation,
+    pub text_document_web: TextDocumentWeb,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -32,8 +39,8 @@ pub async fn token_information(
         relative_path,
         range,
         hovered_text,
-        content,
-        language,
+        mut snippet_information,
+        text_document_web,
     }): Json<TokenInformationRequest>,
 ) -> Result<impl IntoResponse> {
     let source_doc = app
@@ -51,17 +58,35 @@ pub async fn token_information(
             "Failed to find source file when getting info by repo"
         ));
 
-    // Now we send over all this data to the ref/def logic
-    Ok(refdef(
-        app.indexes.clone(),
+    let snippet_information =
+        fix_snippet_information(snippet_information, text_document_web.utf8_array.as_slice());
+
+    // Lets try to get results from a single file for now and see how we can scale
+    // this later for multiple files
+    Ok(refdef_runtime(
         &repo_ref,
         &hovered_text,
-        &range,
-        &source_doc,
-        &language,
-        app.language_parsing,
+        &snippet_information.to_range(),
+        &relative_path,
+        text_document_web.utf8_array.as_slice(),
+        text_document_web.language.as_str(),
+        app.language_parsing.clone(),
     )
     .await
     .map(|results| Json(TokenInformationResponse { data: results }))
     .unwrap_or(Json(TokenInformationResponse { data: vec![] })))
+
+    // Now we send over all this data to the ref/def logic
+    // Ok(refdef(
+    //     app.indexes.clone(),
+    //     &repo_ref,
+    //     &hovered_text,
+    //     &range,
+    //     &source_doc,
+    //     &language,
+    //     app.language_parsing,
+    // )
+    // .await
+    // .map(|results| Json(TokenInformationResponse { data: results }))
+    // .unwrap_or(Json(TokenInformationResponse { data: vec![] })))
 }

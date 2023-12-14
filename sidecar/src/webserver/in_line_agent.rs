@@ -256,7 +256,7 @@ fn line_column_to_byte_offset(
     None
 }
 
-fn fix_snippet_information(
+pub fn fix_snippet_information(
     mut snippet_information: SnippetInformation,
     text_bytes: &[u8],
 ) -> SnippetInformation {

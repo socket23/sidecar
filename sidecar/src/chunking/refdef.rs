@@ -242,7 +242,7 @@ pub async fn refdef_runtime(
             // let doc = ContentDocument::read_document(file_source, retrieved_doc);
             // TODO(skcd): Fix the hoverable ranges logic because we need the language
             // etc to match up properly
-            let hoverable_ranges = doc.hoverable_ranges(language, language_parsing)?;
+            let hoverable_ranges = doc.hoverable_ranges(language, language_parsing.clone())?;
             let data = target
                 .find_iter(&doc.content)
                 .map(|m| Range::from_byte_range(m.range(), &doc.line_end_indices))
@@ -252,31 +252,50 @@ pub async fn refdef_runtime(
                     !(text_range.start_byte() >= range.start_byte()
                         && text_range.end_byte() <= range.end_byte())
                 })
-                .map(|range| {
+                .map(|mut range| {
                     let start_byte = range.start_byte();
                     let end_byte = range.end_byte();
-                    let is_def = doc
+                    let (is_def, local_range) = doc
                         .symbol_locations
                         .scope_graph()
-                        .and_then(|graph| {
-                            graph
+                        .map(|graph| {
+                            let is_definition = graph
                                 .node_by_range(start_byte, end_byte)
                                 .map(|idx| matches!(graph.graph[idx], NodeKind::Def(_)))
+                                .unwrap_or_default();
+                            let full_range = graph.node_by_range(start_byte, end_byte).map(|idx| {
+                                let node = &graph.graph[idx];
+                                match node {
+                                    NodeKind::Def(local_scope) => {
+                                        Some(local_scope.local_scope.range)
+                                    }
+                                    _ => None,
+                                }
+                            });
+                            (is_definition, full_range.flatten())
                         })
-                        .map(|d| {
+                        .map(|(d, range)| {
                             if d {
-                                OccurrenceKind::Definition
+                                (OccurrenceKind::Definition, range)
                             } else {
-                                OccurrenceKind::Reference
+                                (OccurrenceKind::Reference, range)
                             }
                         })
+                        .unwrap_or_default();
+                    if let Some(local_range) = local_range {
+                        range = local_range;
+                    }
+                    let symbols: Vec<_> = doc
+                        .symbol_locations
+                        .scope_graph()
+                        .map(|graph| graph.symbols(language_parsing.clone()))
                         .unwrap_or_default();
                     let highlight = start_byte..end_byte;
                     // TODO(skcd): Fix the snipper logic here, we can just make this
                     // easier
                     let snippet = Snipper::default()
                         .expand(highlight, &doc.content, &doc.line_end_indices)
-                        .reify(&doc.content, &[]);
+                        .reify(&doc.content, symbols.as_slice());
 
                     Occurrence {
                         kind: is_def,

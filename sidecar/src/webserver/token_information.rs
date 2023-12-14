@@ -19,7 +19,6 @@ use super::{
 pub struct TokenInformationRequest {
     pub repo_ref: RepoRef,
     pub relative_path: String,
-    pub range: Range,
     pub hovered_text: String,
     pub snippet_information: SnippetInformation,
     pub text_document_web: TextDocumentWeb,
@@ -37,26 +36,25 @@ pub async fn token_information(
     Json(TokenInformationRequest {
         repo_ref,
         relative_path,
-        range,
         hovered_text,
-        mut snippet_information,
+        snippet_information,
         text_document_web,
     }): Json<TokenInformationRequest>,
 ) -> Result<impl IntoResponse> {
-    let source_doc = app
-        .indexes
-        .file
-        .get_by_path_content_document(&relative_path, &repo_ref)
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?
-        .ok_or_else(|| anyhow::anyhow!("No file found with the file path"))?;
-    let all_docs = app.indexes.file.by_repo(&repo_ref).await;
-    let _ = all_docs
-        .iter()
-        .position(|doc| doc.relative_path == relative_path)
-        .ok_or(anyhow::anyhow!(
-            "Failed to find source file when getting info by repo"
-        ));
+    // let source_doc = app
+    //     .indexes
+    //     .file
+    //     .get_by_path_content_document(&relative_path, &repo_ref)
+    //     .await
+    //     .map_err(|e| anyhow::anyhow!(e))?
+    //     .ok_or_else(|| anyhow::anyhow!("No file found with the file path"))?;
+    // let all_docs = app.indexes.file.by_repo(&repo_ref).await;
+    // let _ = all_docs
+    //     .iter()
+    //     .position(|doc| doc.relative_path == relative_path)
+    //     .ok_or(anyhow::anyhow!(
+    //         "Failed to find source file when getting info by repo"
+    //     ));
 
     let snippet_information =
         fix_snippet_information(snippet_information, text_document_web.utf8_array.as_slice());

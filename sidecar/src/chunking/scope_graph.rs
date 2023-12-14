@@ -99,7 +99,7 @@ impl NameSpaceMethods for NameSpaces {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash, Eq)]
 pub struct LocalScope {
     pub range: Range,
 }
@@ -157,12 +157,17 @@ impl<'a> Iterator for ScopeStack<'a> {
 pub struct LocalDef {
     pub range: Range,
     pub symbol_id: Option<SymbolId>,
+    pub local_scope: LocalScope,
 }
 
 impl LocalDef {
     /// Initialize a new definition
-    pub fn new(range: Range, symbol_id: Option<SymbolId>) -> Self {
-        Self { range, symbol_id }
+    pub fn new(range: Range, symbol_id: Option<SymbolId>, local_scope: LocalScope) -> Self {
+        Self {
+            range,
+            symbol_id,
+            local_scope,
+        }
     }
 
     pub fn name<'a>(&self, buffer: &'a [u8]) -> &'a [u8] {
@@ -295,10 +300,13 @@ impl ScopeGraph {
                 NodeKind::Def(LocalDef {
                     range,
                     symbol_id: Some(symbol_id),
-                    ..
+                    local_scope,
                 }) => Some(Symbol {
                     kind: symbol_id.name(namespaces.clone()).to_owned(), // FIXME: this should use SymbolId::name
-                    range: *range,
+                    range: {
+                        dbg!(local_scope);
+                        *range
+                    },
                 }),
                 _ => None,
             })
@@ -332,6 +340,34 @@ impl ScopeGraph {
             let new_idx = self.graph.add_node(new_scope);
             self.graph
                 .add_edge(new_idx, parent_scope, EdgeKind::ScopeToScope);
+        }
+    }
+
+    /// We try to find the tightest local scope which contains this range
+    fn find_tightest_local_scope(&self, range: &Range) -> LocalScope {
+        let mut current_node = self.root_idx;
+        loop {
+            let mut found = false;
+            for edge in self.graph.edges_directed(current_node, Direction::Incoming) {
+                if let EdgeKind::ScopeToScope = edge.weight() {
+                    let node = &self.graph[edge.source()];
+                    if let NodeKind::Scope(scope) = node {
+                        if scope.range.contains(range) {
+                            current_node = edge.source();
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if !found {
+                break;
+            }
+        }
+        if let NodeKind::Scope(scope) = &self.graph[current_node] {
+            scope.clone()
+        } else {
+            unreachable!()
         }
     }
 
@@ -614,7 +650,8 @@ pub fn scope_res_generic(
             for range in ranges {
                 // if the symbol is present, is it one of the supported symbols for this language?
                 let symbol_id = symbol.and_then(|s| namespaces.symbol_id_of(s));
-                let local_def = LocalDef::new(*range, symbol_id);
+                let local_scope = scope_graph.find_tightest_local_scope(range);
+                let local_def = LocalDef::new(*range, symbol_id, local_scope);
 
                 match scoping {
                     Scoping::Hoisted => scope_graph.insert_hoisted_def(local_def),

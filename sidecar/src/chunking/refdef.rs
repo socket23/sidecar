@@ -247,7 +247,10 @@ pub async fn refdef_runtime(
                 .find_iter(&doc.content)
                 .map(|m| Range::from_byte_range(m.range(), &doc.line_end_indices))
                 .filter(|range| hoverable_ranges.iter().any(|r| r.contains(range)))
-                // why is this line below important??
+                // the line below is extremely important as we use this to identify
+                // if the hoverable range is contained within our text selection
+                // this way when we do goto-def/references we are going to do it
+                // for symbols which are inside the hoverable range
                 .filter(|range| {
                     !(text_range.start_byte() >= range.start_byte()
                         && text_range.end_byte() <= range.end_byte())

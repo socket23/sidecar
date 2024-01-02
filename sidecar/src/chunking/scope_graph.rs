@@ -173,6 +173,10 @@ impl LocalDef {
     pub fn name<'a>(&self, buffer: &'a [u8]) -> &'a [u8] {
         &buffer[self.range.start_byte()..self.range.end_byte()]
     }
+
+    pub fn range<'a>(&'a self) -> &'a Range {
+        &self.local_scope.range
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -234,7 +238,10 @@ impl NodeKind {
     pub fn range(&self) -> Range {
         match self {
             Self::Scope(l) => l.range,
-            Self::Def(d) => d.range,
+            // This change is important here because otherwise we just capture
+            // the tree node for the identifier for this local def, but instead
+            // what we want is the full scope of the definition
+            Self::Def(d) => d.local_scope.range,
             Self::Ref(r) => r.range,
             Self::Import(i) => i.range,
         }
@@ -289,6 +296,24 @@ impl ScopeGraph {
             })
     }
 
+    pub fn tightest_node_for_range(&self, start_byte: usize, end_byte: usize) -> Option<NodeIndex> {
+        let mut node_idxs = self
+            .graph
+            .node_indices()
+            .filter(|&idx| self.is_definition(idx))
+            .filter(|&idx| {
+                let node = self.graph[idx].range();
+                node.start_byte() >= start_byte && node.end_byte() <= end_byte
+            })
+            .collect::<Vec<_>>();
+        node_idxs.sort_by(|a, b| {
+            let first_node = self.graph[a.clone()].range().byte_size();
+            let second_node = self.graph[b.clone()].range().byte_size();
+            first_node.cmp(&second_node)
+        });
+        node_idxs.get(0).map(|val| val.clone())
+    }
+
     pub fn symbols(&self, language_parsing: Arc<TSLanguageParsing>) -> Vec<Symbol> {
         let namespaces = language_parsing
             .for_lang(&self.lang)
@@ -300,13 +325,10 @@ impl ScopeGraph {
                 NodeKind::Def(LocalDef {
                     range,
                     symbol_id: Some(symbol_id),
-                    local_scope,
+                    ..
                 }) => Some(Symbol {
                     kind: symbol_id.name(namespaces.clone()).to_owned(), // FIXME: this should use SymbolId::name
-                    range: {
-                        dbg!(local_scope);
-                        *range
-                    },
+                    range: *range,
                 }),
                 _ => None,
             })

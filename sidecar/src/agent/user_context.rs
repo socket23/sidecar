@@ -492,7 +492,7 @@ fn merge_consecutive_chunks(
             let mut final_code_snippets = Vec::new();
             let mut current_code_snippet = code_snippets.remove(0);
             for code_snippet in code_snippets {
-                if code_snippet.start_line - current_code_snippet.end_line
+                if code_snippet.end_line - current_code_snippet.start_line
                     <= CHUNK_MERGE_DISTANCE as u64
                 {
                     // We can merge these two code snippets

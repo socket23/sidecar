@@ -66,6 +66,9 @@ impl<'a> TreeSitterFile<'a> {
         })
     }
 
+    /// These are all the ranges which can be hovered over in a document
+    /// this helps us figure out which ranges we can perform go-to-def/reference
+    /// and use that for getting more information
     pub fn hoverable_ranges(self) -> Result<Vec<Range>, TreeSitterFileError> {
         let hoverable_query = self.language.hoverable_query.to_owned();
         let query = tree_sitter::Query::new((self.language.grammar)(), &hoverable_query)

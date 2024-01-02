@@ -119,10 +119,6 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             (property_signature)
           ] @local.scope
           
-          
-          
-          
-          
           (function_declaration
             (identifier) @hoist.definition.function)
           

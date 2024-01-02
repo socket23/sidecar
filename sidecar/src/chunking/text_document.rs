@@ -243,10 +243,16 @@ impl Range {
         self.start_byte() <= other.start_byte() && self.end_byte() >= other.end_byte()
     }
 
+    /// From byte range helps us get the position while also fixing the
+    /// line and the column values which is the position for the byte
     pub fn from_byte_range(range: std::ops::Range<usize>, line_end_indices: &[u32]) -> Range {
         let start = Position::from_byte(range.start, line_end_indices);
         let end = Position::from_byte(range.end, line_end_indices);
         Self::new(start, end)
+    }
+
+    pub fn byte_size(&self) -> usize {
+        self.end_byte() + 1 - self.start_byte()
     }
 }
 

@@ -77,6 +77,7 @@ impl LLMClient for OllamaClient {
         while let Some(chunk) = response.chunk().await? {
             let value = serde_json::from_slice::<OllamaResponse>(chunk.to_vec().as_slice())?;
             buffered_string.push_str(&value.response);
+            dbg!(&buffered_string);
             sender.send(LLMClientCompletionResponse::new(
                 buffered_string.to_owned(),
                 Some(value.response),
@@ -90,7 +91,7 @@ impl LLMClient for OllamaClient {
         &self,
         request: LLMClientCompletionRequest,
     ) -> Result<String, LLMClientError> {
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let result = self.stream_completion(request, sender).await?;
         Ok(result)
     }

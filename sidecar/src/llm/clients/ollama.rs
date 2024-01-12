@@ -20,7 +20,7 @@ struct OllamaResponse {
 }
 
 #[derive(serde::Serialize)]
-pub struct OllamaClientRequest {
+struct OllamaClientRequest {
     prompt: String,
     model: String,
     temperature: f32,

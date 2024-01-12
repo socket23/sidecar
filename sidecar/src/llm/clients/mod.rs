@@ -2,4 +2,5 @@
 //! so we can be happy while the provider client takes care of the details
 
 mod ollama;
+mod togetherai;
 mod types;

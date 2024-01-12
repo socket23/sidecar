@@ -6,7 +6,10 @@ use tokio::sync::mpsc::UnboundedSender;
 pub enum LLMType {
     Mixtral,
     MistralInstruct,
-    OpenAI,
+    Gpt4,
+    GPT3_5_16k,
+    Gpt4_32k,
+    Gpt4Turbo,
     Custom(String),
 }
 
@@ -34,6 +37,10 @@ impl LLMClientMessage {
 
     pub fn content(&self) -> &str {
         &self.message
+    }
+
+    pub fn role(&self) -> &LLMClientRole {
+        &self.role
     }
 }
 

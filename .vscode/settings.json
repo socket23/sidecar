@@ -32,6 +32,7 @@
     "NOFILE",
     "notifyqueue",
     "Nwlf",
+    "Ollama",
     "oneshot",
     "openai",
     "pathbuf",

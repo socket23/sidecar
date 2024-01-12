@@ -2,30 +2,65 @@ use async_trait::async_trait;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum LLMType {
+    Mixtral,
+    MistralInstruct,
+    OpenAI,
+    Custom(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum LLMClientRole {
+    System,
+    User,
+    Assistant,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct LLMClientMessage {
+    role: LLMClientRole,
+    message: String,
+}
+
+impl LLMClientMessage {
+    pub fn new(role: LLMClientRole, message: String) -> Self {
+        Self { role, message }
+    }
+
+    pub fn user(message: String) -> Self {
+        Self::new(LLMClientRole::User, message)
+    }
+
+    pub fn content(&self) -> &str {
+        &self.message
+    }
+}
+
 pub struct LLMClientCompletionRequest {
-    model: String,
-    prompt: String,
+    model: LLMType,
+    messages: Vec<LLMClientMessage>,
     temperature: f32,
     frequency_penalty: Option<f32>,
 }
 
 impl LLMClientCompletionRequest {
     pub fn new(
-        model: String,
-        prompt: String,
+        model: LLMType,
+        messages: Vec<LLMClientMessage>,
         temperature: f32,
         frequency_penalty: Option<f32>,
     ) -> Self {
         Self {
             model,
-            prompt,
+            messages,
             temperature,
             frequency_penalty,
         }
     }
 
-    pub fn prompt(&self) -> &str {
-        &self.prompt
+    pub fn messages(&self) -> &[LLMClientMessage] {
+        self.messages.as_slice()
     }
 
     pub fn temperature(&self) -> f32 {
@@ -36,7 +71,7 @@ impl LLMClientCompletionRequest {
         self.frequency_penalty
     }
 
-    pub fn model(&self) -> &str {
+    pub fn model(&self) -> &LLMType {
         &self.model
     }
 }

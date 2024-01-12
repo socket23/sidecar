@@ -6,6 +6,8 @@ use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;
 use super::types::LLMClientCompletionResponse;
 use super::types::LLMClientError;
+use super::types::LLMClientMessage;
+use super::types::LLMType;
 
 pub struct OllamaClient {
     pub client: reqwest::Client,
@@ -22,7 +24,7 @@ struct OllamaResponse {
 #[derive(serde::Serialize)]
 struct OllamaClientRequest {
     prompt: String,
-    model: String,
+    model: LLMType,
     temperature: f32,
     stream: bool,
     raw: bool,
@@ -31,9 +33,14 @@ struct OllamaClientRequest {
 }
 
 impl OllamaClientRequest {
-    pub fn from_request(request: super::types::LLMClientCompletionRequest) -> Self {
+    pub fn from_request(request: LLMClientCompletionRequest) -> Self {
         Self {
-            prompt: request.prompt().to_owned(),
+            prompt: request
+                .messages()
+                .into_iter()
+                .map(|message| message.content().to_owned())
+                .collect::<Vec<_>>()
+                .join("\n"),
             model: request.model().to_owned(),
             temperature: request.temperature(),
             stream: true,
@@ -77,7 +84,6 @@ impl LLMClient for OllamaClient {
         while let Some(chunk) = response.chunk().await? {
             let value = serde_json::from_slice::<OllamaResponse>(chunk.to_vec().as_slice())?;
             buffered_string.push_str(&value.response);
-            dbg!(&buffered_string);
             sender.send(LLMClientCompletionResponse::new(
                 buffered_string.to_owned(),
                 Some(value.response),

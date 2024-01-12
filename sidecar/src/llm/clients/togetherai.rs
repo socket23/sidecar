@@ -1,6 +1,7 @@
-use async_trait::async_trait;
-
 use crate::llm::provider::TogetherAIProvider;
+use async_trait::async_trait;
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 
 use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;
@@ -26,8 +27,8 @@ struct TogetherAIRequest {
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct TogetherAIResponse {
     choices: Vec<Choice>,
-    id: String,
-    token: Token,
+    // id: String,
+    // token: Token,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -87,24 +88,30 @@ impl LLMClient for TogetherAIClient {
     ) -> Result<String, LLMClientError> {
         let model = request.model().to_owned();
         let together_ai_request = TogetherAIRequest::from_request(request);
-        let mut response = self
+        let mut response_stream = self
             .client
             .post(self.inference_endpoint())
             .bearer_auth(self.provider_details.api_key.to_owned())
-            .header("Content-Type", "application/json")
             .json(&together_ai_request)
             .send()
-            .await?;
+            .await?
+            .bytes_stream()
+            .eventsource();
 
         let mut buffered_string = "".to_owned();
-        while let Some(chunk) = response.chunk().await? {
-            let value = serde_json::from_slice::<TogetherAIResponse>(chunk.to_vec().as_slice())?;
-            buffered_string.push_str(&value.choices[0].text);
-            sender.send(LLMClientCompletionResponse::new(
-                buffered_string.to_owned(),
-                Some(value.choices[0].text.to_owned()),
-                model.to_owned(),
-            ))?;
+        while let Some(event) = response_stream.next().await {
+            match event {
+                Ok(event) => {
+                    let value = serde_json::from_str::<TogetherAIResponse>(&event.data)?;
+                    buffered_string = buffered_string + &value.choices[0].text;
+                    sender.send(LLMClientCompletionResponse::new(
+                        buffered_string.to_owned(),
+                        Some(value.choices[0].text.to_owned()),
+                        model.to_owned(),
+                    ))?;
+                }
+                Err(_) => {}
+            }
         }
 
         Ok(buffered_string)

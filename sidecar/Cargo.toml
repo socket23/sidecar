@@ -12,7 +12,7 @@ dynamic-ort = ["ort/load-dynamic"]
 ee = []
 
 [dependencies]
-async-trait = "0.1.73"
+async-trait = "0.1.77"
 ndarray = "0.15.6"
 smallvec = { version = "1.11.0", features = ["serde"]}
 ort = { git = "https://github.com/bloopai/ort", branch = "env-builder-telemetry" }

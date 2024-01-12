@@ -20,6 +20,20 @@ pub enum LLMClientRole {
     Assistant,
 }
 
+impl LLMClientRole {
+    pub fn is_system(&self) -> bool {
+        matches!(self, LLMClientRole::System)
+    }
+
+    pub fn is_user(&self) -> bool {
+        matches!(self, LLMClientRole::User)
+    }
+
+    pub fn is_assistant(&self) -> bool {
+        matches!(self, LLMClientRole::Assistant)
+    }
+}
+
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct LLMClientMessage {
     role: LLMClientRole,
@@ -33,6 +47,10 @@ impl LLMClientMessage {
 
     pub fn user(message: String) -> Self {
         Self::new(LLMClientRole::User, message)
+    }
+
+    pub fn assistant(message: String) -> Self {
+        Self::new(LLMClientRole::Assistant, message)
     }
 
     pub fn content(&self) -> &str {

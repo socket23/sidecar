@@ -3,7 +3,7 @@
 use sidecar::llm::{
     clients::{
         togetherai::TogetherAIClient,
-        types::{LLMClient, LLMClientCompletionRequest},
+        types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMType},
     },
     provider::TogetherAIProvider,
 };
@@ -19,9 +19,11 @@ async fn main() {
 
     let prompt = "<s>[INST] Hi my name is .. what? my name is .. who? my name is... [/INST]";
     let request = LLMClientCompletionRequest::new(
-        "mistralai/Mixtral-8x7B-Instruct-v0.1".to_owned(),
-        prompt.to_owned(),
-        0.5,
+        LLMType::Mixtral,
+        vec![LLMClientMessage::user(
+            "<s>[INST] Can you write me a python function which adds 2 numbers [/INST]".to_owned(),
+        )],
+        0.7,
         None,
     );
     let response = client.completion(request).await;

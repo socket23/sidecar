@@ -7,6 +7,8 @@ use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;
 use super::types::LLMClientCompletionResponse;
 use super::types::LLMClientError;
+use super::types::LLMClientMessage;
+use super::types::LLMType;
 
 pub struct TogetherAIClient {
     pub client: reqwest::Client,
@@ -47,8 +49,20 @@ struct Token {
 impl TogetherAIRequest {
     pub fn from_request(request: LLMClientCompletionRequest) -> Self {
         Self {
-            prompt: request.prompt().to_owned(),
-            model: request.model().to_owned(),
+            prompt: {
+                if request.messages().len() == 1 {
+                    request.messages()[0].content().to_owned()
+                } else {
+                    request
+                        .messages()
+                        .into_iter()
+                        .map(|message| message.content().to_owned())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                }
+            },
+            // TODO(skcd): Proper error handling here
+            model: TogetherAIClient::model_str(request.model()).expect("to be present"),
             temperature: request.temperature(),
             stream_tokens: true,
             frequency_penalty: request.frequency_penalty(),
@@ -69,6 +83,15 @@ impl TogetherAIClient {
     pub fn inference_endpoint(&self) -> String {
         format!("{}/inference", self.base_url)
     }
+
+    pub fn model_str(model: &LLMType) -> Option<String> {
+        match model {
+            LLMType::OpenAI => None,
+            LLMType::Mixtral => Some("mistralai/Mixtral-8x7B-Instruct-v0.1".to_owned()),
+            LLMType::MistralInstruct => Some("mistralai/Mistral-8x7B-Instruct-v0.1".to_owned()),
+            LLMType::Custom(model) => Some(model.to_owned()),
+        }
+    }
 }
 
 #[async_trait]
@@ -86,7 +109,11 @@ impl LLMClient for TogetherAIClient {
         request: LLMClientCompletionRequest,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
-        let model = request.model().to_owned();
+        let model = TogetherAIClient::model_str(request.model());
+        if model.is_none() {
+            return Err(LLMClientError::FailedToGetResponse);
+        }
+        let model = model.expect("is_none check above to work");
         let together_ai_request = TogetherAIRequest::from_request(request);
         let mut response_stream = self
             .client
@@ -102,6 +129,9 @@ impl LLMClient for TogetherAIClient {
         while let Some(event) = response_stream.next().await {
             match event {
                 Ok(event) => {
+                    if &event.data == "[DONE]" {
+                        continue;
+                    }
                     let value = serde_json::from_str::<TogetherAIResponse>(&event.data)?;
                     buffered_string = buffered_string + &value.choices[0].text;
                     sender.send(LLMClientCompletionResponse::new(
@@ -110,7 +140,9 @@ impl LLMClient for TogetherAIClient {
                         model.to_owned(),
                     ))?;
                 }
-                Err(_) => {}
+                Err(e) => {
+                    dbg!(e);
+                }
             }
         }
 

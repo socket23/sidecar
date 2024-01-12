@@ -28,7 +28,7 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
 
     let model_name = "codestory-finetune-inline:latest".to_owned();
 
-    let request_body = serde_json::json!({
+    let mut request_body = serde_json::json!({
         "model": model_name,
         "prompt": instruction,
         "temperature": 0.7,

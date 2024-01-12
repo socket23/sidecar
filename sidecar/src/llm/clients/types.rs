@@ -10,6 +10,20 @@ pub struct LLMClientCompletionRequest {
 }
 
 impl LLMClientCompletionRequest {
+    pub fn new(
+        model: String,
+        prompt: String,
+        temperature: f32,
+        frequency_penalty: Option<f32>,
+    ) -> Self {
+        Self {
+            model,
+            prompt,
+            temperature,
+            frequency_penalty,
+        }
+    }
+
     pub fn prompt(&self) -> &str {
         &self.prompt
     }

@@ -23,6 +23,15 @@ pub struct TogetherAIProvider {
     pub model_name: String,
 }
 
+impl TogetherAIProvider {
+    pub fn new(api_key: String, model_name: String) -> Self {
+        Self {
+            api_key,
+            model_name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct OllamaProvider {
     pub model_name: String,

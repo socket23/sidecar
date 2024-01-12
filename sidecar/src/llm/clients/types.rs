@@ -53,6 +53,9 @@ pub enum LLMClientError {
 
     #[error("serde failed: {0}")]
     SerdeError(#[from] serde_json::Error),
+
+    #[error("send error over channel: {0}")]
+    SendError(#[from] tokio::sync::mpsc::error::SendError<LLMClientCompletionResponse>),
 }
 
 #[async_trait]

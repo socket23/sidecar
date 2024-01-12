@@ -81,7 +81,7 @@ impl LLMClient for OllamaClient {
                 buffered_string.to_owned(),
                 Some(value.response),
                 value.model,
-            ));
+            ))?;
         }
         Ok(buffered_string)
     }

@@ -39,5 +39,27 @@ do different things.
 
 # What we want to do today?
 - UX support for configuring different parts of the editor (simple one)
-- get our finetuned model to run with ollama so we can start testing it
+- get our finetuned model to run with ollama so we can start testing it [done]
 - no changes to prompt yet (we will get to it later)
+
+
+
+Either we set a single model for everything, or we can set different models for different parts.
+- sidebar chat (add model name to the config)
+- inline chat (add model name to the config for this)
+
+Need to think
+- tab completion
+
+
+- sidebar chat (GPT4)
+- reranking of code snippets (uses a mix of GPT4 and GPT4_Turbo, GPT3.5)
+- inline chat (uses GPT 3.5)
+- export to codebase (uses GPT 3.5)
+
+
+- If we are using the inline chat, what if we exceed the context length? we still need a reranker of sorts
+
+<start>
+- Change the inline chat interface
+</start>

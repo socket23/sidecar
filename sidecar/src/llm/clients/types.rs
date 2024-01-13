@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use std::fmt;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LLMType {
     Mixtral,
     MistralInstruct,
@@ -11,6 +12,29 @@ pub enum LLMType {
     Gpt4_32k,
     Gpt4Turbo,
     Custom(String),
+}
+
+impl LLMType {
+    pub fn is_openai(&self) -> bool {
+        matches!(
+            self,
+            LLMType::Gpt4 | LLMType::GPT3_5_16k | LLMType::Gpt4_32k | LLMType::Gpt4Turbo
+        )
+    }
+}
+
+impl fmt::Display for LLMType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LLMType::Mixtral => write!(f, "Mixtral"),
+            LLMType::MistralInstruct => write!(f, "MistralInstruct"),
+            LLMType::Gpt4 => write!(f, "Gpt4"),
+            LLMType::GPT3_5_16k => write!(f, "GPT3_5_16k"),
+            LLMType::Gpt4_32k => write!(f, "Gpt4_32k"),
+            LLMType::Gpt4Turbo => write!(f, "Gpt4Turbo"),
+            LLMType::Custom(s) => write!(f, "Custom({})", s),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

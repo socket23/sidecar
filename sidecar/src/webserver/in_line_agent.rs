@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use axum::{response::sse, Extension, Json};
 use llm_client::{clients::types::LLMType, provider::LLMProviderAPIKeys};
@@ -11,7 +11,6 @@ use super::{
     types::Result,
 };
 use crate::{
-    agent::llm_funcs::LlmClient,
     application::application::Application,
     chunking::{
         editor_parsing::EditorParsing,
@@ -160,22 +159,6 @@ pub async fn reply_to_user(
     // the proper things
     // Here we will handle how the in-line agent will handle the work
     let sql_db = app.sql.clone();
-    let llm_client = if let Some(user_key_openai) = &openai_key {
-        LlmClient::user_key_openai(
-            app.posthog_client.clone(),
-            app.sql.clone(),
-            app.user_id.to_owned(),
-            app.llm_config.clone(),
-            user_key_openai.to_owned(),
-        )
-    } else {
-        LlmClient::codestory_infra(
-            app.posthog_client.clone(),
-            app.sql.clone(),
-            app.user_id.to_owned(),
-            app.llm_config.clone(),
-        )
-    };
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let inline_agent_message = InLineAgentMessage::start_message(thread_id, query.to_owned());
     snippet_information =
@@ -185,7 +168,6 @@ pub async fn reply_to_user(
         app,
         repo_ref.clone(),
         sql_db,
-        Arc::new(llm_client),
         llm_broker,
         editor_parsing,
         ProcessInEditorRequest {
@@ -242,7 +224,6 @@ fn line_column_to_byte_offset(
     target_column: usize,
 ) -> Option<usize> {
     // Keep track of the current line and column in the input text
-    let mut current_line = 0;
     let mut current_byte_offset = 0;
 
     for (index, line) in lines.iter().enumerate() {
@@ -273,7 +254,6 @@ fn line_column_to_byte_offset(
 
         // Increment the byte offset by the length of the current line and its newline
         current_byte_offset += line.len() + "\n".len(); // add 1 for the newline character
-        current_line += 1;
     }
 
     // Line requested is beyond the input text line count

@@ -250,7 +250,6 @@ pub struct InLineAgent {
     repo_ref: RepoRef,
     session_id: uuid::Uuid,
     inline_agent_messages: Vec<InLineAgentMessage>,
-    llm_client: Arc<LlmClient>,
     llm_broker: Arc<LLMBroker>,
     sql_db: SqlDb,
     editor_parsing: EditorParsing,
@@ -264,7 +263,6 @@ impl InLineAgent {
         application: Application,
         repo_ref: RepoRef,
         sql_db: SqlDb,
-        llm_client: Arc<LlmClient>,
         llm_broker: Arc<LLMBroker>,
         editor_parsing: EditorParsing,
         editor_request: ProcessInEditorRequest,
@@ -276,17 +274,12 @@ impl InLineAgent {
             repo_ref,
             session_id: uuid::Uuid::new_v4(),
             inline_agent_messages: messages,
-            llm_client,
             llm_broker,
             sql_db,
             sender,
             editor_request,
             editor_parsing,
         }
-    }
-
-    fn get_llm_client(&self) -> Arc<LlmClient> {
-        self.llm_client.clone()
     }
 
     fn get_llm_broker(&self) -> Arc<LLMBroker> {

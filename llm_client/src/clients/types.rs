@@ -154,6 +154,12 @@ pub enum LLMClientError {
 
     #[error("send error over channel: {0}")]
     SendError(#[from] tokio::sync::mpsc::error::SendError<LLMClientCompletionResponse>),
+
+    #[error("unsupported model")]
+    UnSupportedModel,
+
+    #[error("OpenAI api error: {0}")]
+    OpenAPIError(#[from] async_openai::error::OpenAIError),
 }
 
 #[async_trait]

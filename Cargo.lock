@@ -2946,6 +2946,7 @@ name = "llm_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-openai",
  "async-trait",
  "eventsource-stream",
  "futures",

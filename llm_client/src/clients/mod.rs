@@ -2,5 +2,6 @@
 //! so we can be happy while the provider client takes care of the details
 
 pub mod ollama;
+pub mod openai;
 pub mod togetherai;
 pub mod types;

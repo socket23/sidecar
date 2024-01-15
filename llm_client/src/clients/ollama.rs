@@ -6,7 +6,6 @@ use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;
 use super::types::LLMClientCompletionResponse;
 use super::types::LLMClientError;
-use super::types::LLMClientMessage;
 use super::types::LLMType;
 
 pub struct OllamaClient {

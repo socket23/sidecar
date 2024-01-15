@@ -2,6 +2,7 @@
 members = [
     "sidecar",
     "difftastic",
+    "llm_client",
 ]
 
 

@@ -2,6 +2,8 @@
 
 use async_trait::async_trait;
 
+use crate::provider::LLMProviderAPIKeys;
+
 use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;
 use super::types::LLMClientCompletionResponse;
@@ -66,8 +68,13 @@ impl OllamaClient {
 
 #[async_trait]
 impl LLMClient for OllamaClient {
+    fn client(&self) -> &crate::provider::LLMProvider {
+        &crate::provider::LLMProvider::Ollama
+    }
+
     async fn stream_completion(
         &self,
+        _api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
@@ -94,10 +101,11 @@ impl LLMClient for OllamaClient {
 
     async fn completion(
         &self,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
     ) -> Result<String, LLMClientError> {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let result = self.stream_completion(request, sender).await?;
+        let result = self.stream_completion(api_key, request, sender).await?;
         Ok(result)
     }
 }

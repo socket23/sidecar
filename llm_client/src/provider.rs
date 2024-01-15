@@ -7,9 +7,23 @@
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum LLMProvider {
+    OpenAI,
+    TogetherAI,
+    Ollama,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub enum LLMProviderAPIKeys {
     OpenAI(OpenAIProvider),
     TogetherAI(TogetherAIProvider),
     Ollama(OllamaProvider),
+    OpenAIAzureConfig(AzureConfig),
+}
+
+impl LLMProviderAPIKeys {
+    pub fn is_openai(&self) -> bool {
+        matches!(self, LLMProviderAPIKeys::OpenAI(_))
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -20,37 +34,20 @@ pub struct OpenAIProvider {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct TogetherAIProvider {
     pub api_key: String,
-    pub model_name: String,
 }
 
 impl TogetherAIProvider {
-    pub fn new(api_key: String, model_name: String) -> Self {
-        Self {
-            api_key,
-            model_name,
-        }
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
     }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct OllamaProvider {
-    pub model_name: String,
-}
+pub struct OllamaProvider {}
 
-impl LLMProvider {
-    pub fn get_api_key(&self) -> Option<&str> {
-        match self {
-            LLMProvider::OpenAI(provider) => Some(&provider.api_key),
-            LLMProvider::TogetherAI(provider) => Some(&provider.api_key),
-            LLMProvider::Ollama(_) => None,
-        }
-    }
-
-    pub fn model_name(&self) -> Option<&str> {
-        match self {
-            LLMProvider::OpenAI(_) => None,
-            LLMProvider::TogetherAI(provider) => Some(&provider.model_name),
-            LLMProvider::Ollama(provider) => Some(&provider.model_name),
-        }
-    }
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct AzureConfig {
+    pub deployment_id: String,
+    pub api_base: String,
+    pub api_key: String,
 }

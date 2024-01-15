@@ -79,6 +79,10 @@ impl LLMClientMessage {
         Self::new(LLMClientRole::Assistant, message)
     }
 
+    pub fn system(message: String) -> Self {
+        Self::new(LLMClientRole::System, message)
+    }
+
     pub fn content(&self) -> &str {
         &self.message
     }
@@ -108,6 +112,15 @@ impl LLMClientCompletionRequest {
             temperature,
             frequency_penalty,
         }
+    }
+
+    pub fn from_messages(messages: Vec<LLMClientMessage>, model: LLMType) -> Self {
+        Self::new(model, messages, 0.0, None)
+    }
+
+    pub fn set_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
     }
 
     pub fn messages(&self) -> &[LLMClientMessage] {
@@ -140,6 +153,18 @@ impl LLMClientCompletionResponse {
             delta,
             model,
         }
+    }
+
+    pub fn answer_up_until_now(&self) -> &str {
+        &self.answer_up_until_now
+    }
+
+    pub fn delta(&self) -> Option<&str> {
+        self.delta.as_deref()
+    }
+
+    pub fn model(&self) -> &str {
+        &self.model
     }
 }
 

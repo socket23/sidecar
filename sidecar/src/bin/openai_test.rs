@@ -48,7 +48,7 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
     let mut message_builder = ChatCompletionRequestMessageArgs::default();
     let system_message = message_builder
         .role(Role::System)
-        .content("Write me a hip-hop song about how computer science is amazing")
+        .content("message")
         .build()
         .unwrap();
     let user_message = ChatCompletionRequestMessageArgs::default()
@@ -57,10 +57,11 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
         .build()
         .unwrap();
     let chat_request_args = request_args
-        .model("gpt-4".to_owned())
-        .messages(vec![system_message, user_message])
+        .model("gpt-3.5-turbo-16k-0613".to_owned())
+        .messages(vec![system_message])
         .build()
         .unwrap();
+    dbg!(&chat_request_args);
     let mut event = PosthogEvent::new("rust_something");
     let start_time = std::time::Instant::now();
     let _ = event.insert_prop("request", chat_request_args.clone());
@@ -86,25 +87,29 @@ fn posthog_client() -> PosthogClient {
     )
 }
 
-async fn llm_request() {
-    // use sidecar::agent::llm_funcs::LlmClient;
+// async fn llm_request() {
+//     use sidecar::agent::llm_funcs::LlmClient;
 
-    // let client = LlmClient::codestory_infra(Arc::new(posthog_client()));
+//     let client = LlmClient::codestory_infra(Arc::new(posthog_client()));
 
-    // let messages = vec![sidecar::agent::llm_funcs::llm::Message::system(
-    //     "chose one of the functions when the user wants to do code search with the keywords: sentence transformers",
-    // )];
-    // let functions = serde_json::from_value::<Vec<sidecar::agent::llm_funcs::llm::Function>>(
-    //     prompts::functions(false), // Only add proc if there are paths in context
-    // )
-    // .unwrap();
-    // let _ = client
-    //     .stream_function_call(
-    //         sidecar::agent::llm_funcs::llm::OpenAIModel::GPT4,
-    //         messages,
-    //         functions,
-    //         0.0,
-    //         None,
-    //     )
-    //     .await;
-}
+//     let messages = vec![sidecar::agent::llm_funcs::llm::Message::system(
+//         "write something for me!!!!",
+//     )];
+//     let functions = serde_json::from_value::<Vec<sidecar::agent::llm_funcs::llm::Function>>(
+//         prompts::functions(false), // Only add proc if there are paths in context
+//     )
+//     .unwrap();
+
+//     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+//     let response = client
+//         .stream_response(
+//             sidecar::agent::llm_funcs::llm::OpenAIModel::GPT4,
+//             messages,
+//             None,
+//             0.0,
+//             None,
+//             sender,
+//         )
+//         .await;
+//     dbg!(&response);
+// }

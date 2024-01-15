@@ -4509,6 +4509,7 @@ dependencies = [
  "git-version",
  "gix",
  "ignore",
+ "llm_client",
  "memchr",
  "ndarray",
  "nix",

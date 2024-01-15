@@ -2,16 +2,20 @@
 
 use async_openai::{
     config::OpenAIConfig,
-    types::{ChatCompletionRequestMessage, CreateChatCompletionRequestArgs},
+    types::{
+        ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
+        CreateChatCompletionRequestArgs, Role,
+    },
     Client,
 };
 use async_trait::async_trait;
+use futures::StreamExt;
 
-use crate::llm::provider::{LLMProvider, OpenAIProvider};
+use crate::provider::OpenAIProvider;
 
 use super::types::{
-    LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientError, LLMClientMessage,
-    LLMType,
+    LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientError,
+    LLMClientMessage, LLMClientRole, LLMType,
 };
 
 pub struct OpenAIClient {
@@ -36,29 +40,41 @@ impl OpenAIClient {
         }
     }
 
-    pub fn messages(&self, messages: &[LLMClientMessage]) -> Vec<ChatCompletionRequestMessage> {
-        messages
+    pub fn messages(
+        &self,
+        messages: &[LLMClientMessage],
+    ) -> Result<Vec<ChatCompletionRequestMessage>, LLMClientError> {
+        let formatted_messages = messages
             .into_iter()
             .map(|message| {
                 let role = message.role();
                 match role {
-                    LLMClientRole::User => {
-                        ChatCompletionRequestMessage::User(message.content().to_owned())
-                    }
-                    LLMClientRole::System => {
-                        ChatCompletionRequestMessage::System(message.content().to_owned())
-                    }
-                    LLMClientRole::Assistant => {
-                        ChatCompletionRequestMessage::Assistant(message.content().to_owned())
-                    }
+                    LLMClientRole::User => ChatCompletionRequestMessageArgs::default()
+                        .role(Role::User)
+                        .content(message.content().to_owned())
+                        .build()
+                        .map_err(|e| LLMClientError::OpenAPIError(e)),
+                    LLMClientRole::System => ChatCompletionRequestMessageArgs::default()
+                        .role(Role::System)
+                        .content(message.content().to_owned())
+                        .build()
+                        .map_err(|e| LLMClientError::OpenAPIError(e)),
+                    LLMClientRole::Assistant => ChatCompletionRequestMessageArgs::default()
+                        .role(Role::Assistant)
+                        .content(message.content().to_owned())
+                        .build()
+                        .map_err(|e| LLMClientError::OpenAPIError(e)),
                 }
             })
-            .collect()
+            .collect::<Vec<_>>();
+        formatted_messages
+            .into_iter()
+            .collect::<Result<Vec<ChatCompletionRequestMessage>, LLMClientError>>()
     }
 }
 
 #[async_trait]
-impl LLMProvider for OpenAIClient {
+impl LLMClient for OpenAIClient {
     async fn stream_completion(
         &self,
         request: LLMClientCompletionRequest,
@@ -66,13 +82,13 @@ impl LLMProvider for OpenAIClient {
     ) -> Result<String, LLMClientError> {
         let model = self.model(request.model());
         if model.is_none() {
-            return Err(LLMClientError::ModelNotSupported);
+            return Err(LLMClientError::UnSupportedModel);
         }
         let model = model.unwrap();
-        let messages = self.messages(request.messages());
+        let messages = self.messages(request.messages())?;
         let mut request_builder_args = CreateChatCompletionRequestArgs::default();
         let mut request_builder = request_builder_args
-            .model(model)
+            .model(model.to_owned())
             .messages(messages)
             .temperature(request.temperature())
             .stream(true);
@@ -86,14 +102,19 @@ impl LLMProvider for OpenAIClient {
         while let Some(response) = stream.next().await {
             match response {
                 Ok(response) => {
-                    let response = response.choices().get(0).unwrap();
-                    let text = response.text().to_owned();
-                    buffer.push_str(&text);
-                    let _ = sender.send(LLMClientCompletionResponse::new(
-                        buffer.to_owned(),
-                        Some(text),
-                        model.to_owned(),
-                    ));
+                    let response = response
+                        .choices
+                        .get(0)
+                        .ok_or(LLMClientError::FailedToGetResponse)?;
+                    let text = response.delta.content.to_owned();
+                    if let Some(text) = text {
+                        buffer.push_str(&text);
+                        let _ = sender.send(LLMClientCompletionResponse::new(
+                            buffer.to_owned(),
+                            Some(text),
+                            model.to_owned(),
+                        ));
+                    }
                 }
                 Err(err) => {
                     dbg!(err);
@@ -101,6 +122,7 @@ impl LLMProvider for OpenAIClient {
                 }
             }
         }
+        Ok(buffer)
     }
 
     async fn completion(

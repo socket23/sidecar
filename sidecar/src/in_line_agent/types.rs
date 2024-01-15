@@ -1,9 +1,17 @@
+use either::Either;
+use futures::pin_mut;
 use futures::stream;
+use futures::FutureExt;
 use futures::StreamExt;
 use llm_client::broker::LLMBroker;
+use llm_client::clients::types::LLMClientCompletionRequest;
+use llm_client::clients::types::LLMClientCompletionResponse;
+use llm_client::clients::types::LLMClientMessage;
 use regex::Regex;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::chunking::text_document::Range;
 use crate::chunking::types::FunctionInformation;
@@ -244,7 +252,6 @@ pub struct InLineAgent {
     inline_agent_messages: Vec<InLineAgentMessage>,
     llm_client: Arc<LlmClient>,
     llm_broker: Arc<LLMBroker>,
-    model: model::AnswerModel,
     sql_db: SqlDb,
     editor_parsing: EditorParsing,
     // TODO(skcd): Break this out and don't use cross crate dependency like this
@@ -271,7 +278,6 @@ impl InLineAgent {
             inline_agent_messages: messages,
             llm_client,
             llm_broker,
-            model: model::GPT_3_5_TURBO_16K,
             sql_db,
             sender,
             editor_request,
@@ -281,6 +287,10 @@ impl InLineAgent {
 
     fn get_llm_client(&self) -> Arc<LlmClient> {
         self.llm_client.clone()
+    }
+
+    fn get_llm_broker(&self) -> Arc<LLMBroker> {
+        self.llm_broker.clone()
     }
 
     fn last_agent_message(&self) -> Option<&InLineAgentMessage> {
@@ -368,12 +378,23 @@ impl InLineAgent {
     }
 
     async fn decide_action(&mut self, query: &str) -> anyhow::Result<InLineAgentAction> {
-        let model = llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?;
+        let model = self.editor_request.fast_model();
         let system_prompt = prompts::decide_function_to_use(query);
-        let messages = vec![llm_funcs::llm::Message::system(&system_prompt)];
+        let request = LLMClientCompletionRequest::from_messages(
+            vec![LLMClientMessage::system(system_prompt)],
+            model.clone(),
+        );
+        let provider = self
+            .editor_request
+            .provider_for_fast_model()
+            .ok_or(anyhow::anyhow!(
+                "No provider found for fast model: {:?}",
+                model
+            ))?;
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
-            .get_llm_client()
-            .response(model, messages, None, 0.0, None)
+            .get_llm_broker()
+            .stream_completion(provider.clone(), request, sender)
             .await?;
         let last_exchange = self.get_last_agent_message();
         // We add that we took a action to decide what we should do next
@@ -436,24 +457,25 @@ impl InLineAgent {
                 &fs_file_path,
                 &request,
             );
+            let fast_model = self.editor_request.fast_model();
+            let provider = self
+                .editor_request
+                .provider_for_fast_model()
+                .ok_or(anyhow::anyhow!(
+                    "No provider found for fast model: {:?}",
+                    fast_model
+                ))?;
             let self_ = &*self;
             stream::iter(messages_list)
                 .map(|messages| (messages, answer_sender.clone()))
                 .for_each(|((messages, document_symbol), answer_sender)| async move {
+                    let fast_model = self_.editor_request.fast_model();
                     let (proxy_sender, _proxy_receiver) = tokio::sync::mpsc::unbounded_channel();
+                    let request =
+                        LLMClientCompletionRequest::from_messages(messages, fast_model.clone());
                     let answer = self_
-                        .get_llm_client()
-                        .stream_response_inline_agent(
-                            llm_funcs::llm::OpenAIModel::get_model(&self_.model.model_name)
-                                .expect("openai model getting to always work"),
-                            messages.messages,
-                            None,
-                            0.2,
-                            None,
-                            proxy_sender,
-                            Some(document_symbol.clone()),
-                            None,
-                        )
+                        .get_llm_broker()
+                        .stream_completion(provider.clone(), request, proxy_sender)
                         .await;
                     // we send the answer after we have generated the whole thing
                     // not in between as its not proactive updates
@@ -514,23 +536,23 @@ impl InLineAgent {
         );
         let user_prompts = self.fix_generation_prompt(&selection_context);
         let related_prompts = self.fix_diagnostics_prompt();
-        let mut prompts = vec![llm_funcs::llm::Message::system(
-            &prompts::fix_system_prompt(&self.editor_request.language()),
-        )];
+        let mut prompts = vec![LLMClientMessage::system(prompts::fix_system_prompt(
+            &self.editor_request.language(),
+        ))];
         prompts.extend(
             user_prompts
                 .into_iter()
-                .map(|prompt| llm_funcs::llm::Message::user(&prompt)),
+                .map(|prompt| LLMClientMessage::user(prompt)),
         );
         prompts.extend(
             related_prompts
                 .into_iter()
-                .map(|prompt| llm_funcs::llm::Message::user(&prompt)),
+                .map(|prompt| LLMClientMessage::user(prompt)),
         );
         let in_range_start_marker = selection_context.range.start_marker();
         let in_range_end_marker = selection_context.range.end_marker();
         prompts.push(
-            llm_funcs::llm::Message::user(&format!(
+            LLMClientMessage::user(format!(
                 "Do not forget to include the // BEGIN and // END markers in your generated code. Only change the code inside of the selection, delimited by markers: {in_range_start_marker} and {in_range_end_marker}"
             )
             .to_owned()),
@@ -544,24 +566,49 @@ impl InLineAgent {
                 response_range.end_position(),
             )
         };
-        let self_ = &*self;
         let selection_context = ContextSelection::from_selection_context(selection_context);
-        let answer = self
-            .get_llm_client()
-            .stream_response_inline_agent(
-                llm_funcs::llm::OpenAIModel::get_model(&self_.model.model_name)
-                    .expect("openai model getting to always work"),
-                prompts,
-                None,
-                0.2,
-                None,
-                answer_sender,
-                Some(document_symbol),
-                Some(selection_context.clone()),
-            )
-            .await;
-        // Now we need to create the prompts for diagnostics
-        // now we need to get the diagnostics prompts
+
+        // Set things up for querying the LLM
+        let provider = self
+            .editor_request
+            .provider_for_fast_model()
+            .ok_or(anyhow::anyhow!(
+                "No provider found for fast model: {:?}",
+                self.editor_request.fast_model()
+            ))?;
+        let fast_model = self.editor_request.fast_model();
+        let (sender, receiver) =
+            tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
+        let receiver_stream = UnboundedReceiverStream::new(receiver).map(Either::Left);
+        let llm_broker = self.get_llm_broker().clone();
+        let answer_stream = {
+            let request = LLMClientCompletionRequest::from_messages(prompts, fast_model.clone());
+            llm_broker
+                .stream_completion(provider.clone(), request, sender)
+                .into_stream()
+        }
+        .map(Either::Right);
+
+        let merged_stream = stream::select(receiver_stream, answer_stream);
+        // this worked out somehow?
+        pin_mut!(merged_stream);
+
+        // Play with the streams here so we can send incremental updates ASAP
+        while let Some(item) = merged_stream.next().await {
+            match item {
+                Either::Left(receiver_element) => {
+                    let _ = answer_sender.send(InLineAgentAnswer {
+                        answer_up_until_now: receiver_element.answer_up_until_now().to_owned(),
+                        delta: receiver_element.delta().map(|delta| delta.to_owned()),
+                        state: Default::default(),
+                        document_symbol: Some(document_symbol.clone()),
+                        context_selection: Some(selection_context.clone()),
+                    });
+                }
+                Either::Right(_) => {}
+            }
+        }
+
         Ok(())
     }
 
@@ -667,36 +714,63 @@ impl InLineAgent {
         let mut user_messages = self
             .edit_generation_prompt(self.editor_request.language(), response)
             .into_iter()
-            .map(|message| llm_funcs::llm::Message::user(&message))
+            .map(|message| LLMClientMessage::user(message))
             .collect::<Vec<_>>();
         // we emphasize again that it needs to always put the //BEGIN and //END
         let user_query = &self.editor_request.query;
         let user_query = format!("{user_query}\nDo not forget to include the // BEGIN, // END and // FILEPATH markers in your generated code.");
-        user_messages.push(llm_funcs::llm::Message::user(&user_query));
+        user_messages.push(LLMClientMessage::user(user_query));
 
-        let mut final_messages = vec![llm_funcs::llm::Message::system(
-            &prompts::in_line_edit_system_prompt(self.editor_request.language()),
+        let mut final_messages = vec![LLMClientMessage::system(
+            prompts::in_line_edit_system_prompt(self.editor_request.language()),
         )];
         final_messages.extend(user_messages);
 
         // Now that we have the user-messages we can send it over the wire
         let last_exchange = self.get_last_agent_message();
         last_exchange.message_state = MessageState::StreamingAnswer;
-        let self_ = &*self;
-        let answer = self
-            .get_llm_client()
-            .stream_response_inline_agent(
-                llm_funcs::llm::OpenAIModel::get_model(&self_.model.model_name)
-                    .expect("openai model getting to always work"),
-                final_messages,
-                None,
-                0.2,
-                None,
-                answer_sender,
-                Some(document_symbol),
-                Some(selection_context.clone()),
-            )
-            .await;
+
+        let fast_model = self.editor_request.fast_model();
+        let (sender, receiver) =
+            tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
+        let receiver_stream = UnboundedReceiverStream::new(receiver).map(Either::Left);
+        let llm_broker = self.get_llm_broker().clone();
+        let provider = self
+            .editor_request
+            .provider_for_fast_model()
+            .ok_or(anyhow::anyhow!(
+                "No provider found for fast model: {:?}",
+                fast_model
+            ))?;
+        let answer_stream = {
+            let request =
+                LLMClientCompletionRequest::from_messages(final_messages, fast_model.clone());
+            llm_broker
+                .stream_completion(provider.clone(), request, sender)
+                .into_stream()
+        }
+        .map(Either::Right);
+
+        let merged_stream = stream::select(receiver_stream, answer_stream);
+        // this worked out somehow?
+        pin_mut!(merged_stream);
+
+        // Play with the streams here so we can send incremental updates ASAP
+        while let Some(item) = merged_stream.next().await {
+            match item {
+                Either::Left(receiver_element) => {
+                    let _ = answer_sender.send(InLineAgentAnswer {
+                        answer_up_until_now: receiver_element.answer_up_until_now().to_owned(),
+                        delta: receiver_element.delta().map(|delta| delta.to_owned()),
+                        state: Default::default(),
+                        document_symbol: Some(document_symbol.clone()),
+                        context_selection: Some(selection_context.clone()),
+                    });
+                }
+                Either::Right(_) => {}
+            }
+        }
+
         Ok(())
     }
 
@@ -706,27 +780,27 @@ impl InLineAgent {
         language: &str,
         file_path: &str,
         query: &str,
-    ) -> Vec<(llm_funcs::llm::Messages, DocumentSymbol)> {
+    ) -> Vec<(Vec<LLMClientMessage>, DocumentSymbol)> {
         document_symbols
             .into_iter()
             .map(|document_symbol| {
-                let system_message = llm_funcs::llm::Message::system(
-                    &prompts::documentation_system_prompt(language, document_symbol.kind.is_some()),
+                let system_message = LLMClientMessage::system(
+                    prompts::documentation_system_prompt(language, document_symbol.kind.is_some()),
                 );
                 // Here we want to generate the context for the prompt
-                let code_selection_prompt = llm_funcs::llm::Message::user(
-                    &self.document_symbol_prompt(&document_symbol, language, file_path),
-                );
+                let code_selection_prompt = LLMClientMessage::user(self.document_symbol_prompt(
+                    &document_symbol,
+                    language,
+                    file_path,
+                ));
                 let user_prompt = format!(
                     "{} {}. Do not forget to include the FILEPATH marker in your generated code.",
                     self.document_symbol_metadata(&document_symbol, language,),
                     query,
                 );
-                let metadata_prompt = llm_funcs::llm::Message::user(&user_prompt);
+                let metadata_prompt = LLMClientMessage::user(user_prompt);
                 (
-                    llm_funcs::llm::Messages {
-                        messages: vec![system_message, code_selection_prompt, metadata_prompt],
-                    },
+                    vec![system_message, code_selection_prompt, metadata_prompt],
                     document_symbol,
                 )
             })

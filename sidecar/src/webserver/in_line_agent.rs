@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::{response::sse, Extension, Json};
+use llm_client::{clients::types::LLMType, provider::LLMProviderAPIKeys};
 use rand::seq::SliceRandom;
 use regex::Regex;
 use serde_json::json;
@@ -121,6 +122,21 @@ impl ProcessInEditorRequest {
 
     pub fn fs_file_path(&self) -> &str {
         &self.text_document_web.fs_file_path
+    }
+
+    /// Grabs the fast model from the model configuration
+    pub fn fast_model(&self) -> LLMType {
+        self.model_config
+            .as_ref()
+            .map(|model_config| model_config.slow_model.clone())
+            .unwrap_or(LLMType::GPT3_5_16k)
+    }
+
+    /// Grabs the provider required for the fast model
+    pub fn provider_for_fast_model(&self) -> Option<&LLMProviderAPIKeys> {
+        self.model_config
+            .as_ref()
+            .and_then(|model_config| model_config.provider_for_slow_model())
     }
 }
 

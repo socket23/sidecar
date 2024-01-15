@@ -5,7 +5,7 @@
 //! - Ollama
 //! - together.ai
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
 pub enum LLMProvider {
     OpenAI,
     TogetherAI,

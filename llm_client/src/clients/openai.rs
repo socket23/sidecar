@@ -82,10 +82,12 @@ impl OpenAIClient {
                 Ok(OpenAIClientType::OpenAIClient(Client::with_config(config)))
             }
             LLMProviderAPIKeys::OpenAIAzureConfig(azure_config) => {
+                dbg!(&azure_config);
                 let config = AzureConfig::new()
                     .with_api_base(azure_config.api_base)
                     .with_api_key(azure_config.api_key)
-                    .with_deployment_id(azure_config.deployment_id);
+                    .with_deployment_id(azure_config.deployment_id)
+                    .with_api_version(azure_config.api_version);
                 Ok(OpenAIClientType::AzureClient(Client::with_config(config)))
             }
             _ => Err(LLMClientError::WrongAPIKeyType),
@@ -128,23 +130,33 @@ impl LLMClient for OpenAIClient {
         // just works and we need it right now
         match client {
             OpenAIClientType::AzureClient(client) => {
-                let mut stream = client.chat().create_stream(request).await?;
+                let stream_maybe = client.chat().create_stream(request).await;
+                if stream_maybe.is_err() {
+                    return Err(LLMClientError::OpenAPIError(stream_maybe.err().unwrap()));
+                } else {
+                    dbg!("no error here");
+                }
+                let mut stream = stream_maybe.unwrap();
                 while let Some(response) = stream.next().await {
                     match response {
                         Ok(response) => {
-                            let response = response
+                            let delta = response
                                 .choices
                                 .get(0)
-                                .ok_or(LLMClientError::FailedToGetResponse)?;
-                            let text = response.delta.content.to_owned();
-                            if let Some(text) = text {
-                                buffer.push_str(&text);
-                                let _ = sender.send(LLMClientCompletionResponse::new(
-                                    buffer.to_owned(),
-                                    Some(text),
-                                    model.to_owned(),
-                                ));
-                            }
+                                .map(|choice| choice.delta.content.to_owned())
+                                .flatten()
+                                .unwrap_or("".to_owned());
+                            let _value = response
+                                .choices
+                                .get(0)
+                                .map(|choice| choice.delta.content.as_ref())
+                                .flatten();
+                            buffer.push_str(&delta);
+                            let _ = sender.send(LLMClientCompletionResponse::new(
+                                buffer.to_owned(),
+                                Some(delta),
+                                model.to_owned(),
+                            ));
                         }
                         Err(err) => {
                             dbg!(err);

@@ -32,8 +32,39 @@ impl LLMClientConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Model {
-    pub name: LLMType,
     pub context_length: u32,
     pub temperature: f32,
     pub provider: LLMProvider,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LLMClientConfig;
+
+    #[test]
+    fn test_json_should_convert_properly() {
+        let data = r#"
+        {
+			"slow_model": "GPT3_5_16k",
+			"fast_model": "GPT3_5_16k",
+			"models": {
+				"GPT3_5_16k": {
+					"context_length": 16000,
+					"temperature": 0.2,
+					"provider": "Azure"
+				}
+			},
+			"providers": [
+				{
+					"OpenAIAzureConfig": {
+						"deployment_id": "gpt35-turbo-access",
+						"api_base": "https://codestory-gpt4.openai.azure.com",
+						"api_key": "89ca8a49a33344c9b794b3dabcbbc5d0"
+					}
+				}
+			]
+		}
+        "#;
+        assert!(serde_json::from_str::<LLMClientConfig>(data).is_ok());
+    }
 }

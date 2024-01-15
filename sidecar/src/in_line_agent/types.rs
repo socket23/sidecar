@@ -154,15 +154,22 @@ impl Default for MessageState {
 
 impl InLineAgentAction {
     pub fn from_gpt_response(response: &str) -> anyhow::Result<Self> {
-        match response.trim() {
-            "code" => Ok(Self::Code),
-            "doc" => Ok(Self::Doc),
-            "edit" => Ok(Self::Edit),
-            "tests" => Ok(Self::Tests),
-            "fix" => Ok(Self::Fix),
-            "explain" => Ok(Self::Explain),
-            "unknown" => Ok(Self::Unknown),
-            _ => Ok(Self::Unknown),
+        if response.contains("code") {
+            Ok(Self::Code)
+        } else if response.contains("doc") {
+            Ok(Self::Doc)
+        } else if response.contains("edit") {
+            Ok(Self::Edit)
+        } else if response.contains("tests") {
+            Ok(Self::Tests)
+        } else if response.contains("fix") {
+            Ok(Self::Fix)
+        } else if response.contains("explain") {
+            Ok(Self::Explain)
+        } else if response.contains("unknown") {
+            Ok(Self::Unknown)
+        } else {
+            Ok(Self::Unknown)
         }
     }
 }

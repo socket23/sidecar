@@ -86,4 +86,5 @@ pub struct AzureConfig {
     pub deployment_id: String,
     pub api_base: String,
     pub api_key: String,
+    pub api_version: String,
 }

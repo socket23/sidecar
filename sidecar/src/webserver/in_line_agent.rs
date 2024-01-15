@@ -91,7 +91,7 @@ pub struct ProcessInEditorRequest {
     pub thread_id: uuid::Uuid,
     pub diagnostics_information: Option<DiagnosticInformationFromEditor>,
     pub openai_key: Option<String>,
-    pub model_config: Option<LLMClientConfig>,
+    pub model_config: LLMClientConfig,
 }
 
 impl ProcessInEditorRequest {
@@ -125,17 +125,24 @@ impl ProcessInEditorRequest {
 
     /// Grabs the fast model from the model configuration
     pub fn fast_model(&self) -> LLMType {
-        self.model_config
-            .as_ref()
-            .map(|model_config| model_config.slow_model.clone())
-            .unwrap_or(LLMType::GPT3_5_16k)
+        self.model_config.slow_model.clone()
     }
 
     /// Grabs the provider required for the fast model
     pub fn provider_for_fast_model(&self) -> Option<&LLMProviderAPIKeys> {
+        // we first need to get the model configuration for the slow model
+        // which will give us the model and the context around it
+        let model = self.model_config.models.get(&self.model_config.fast_model);
+        if let None = model {
+            return None;
+        }
+        let model = model.expect("is_none above to hold");
+        let provider = &model.provider;
+        // get the related provider if its present
         self.model_config
-            .as_ref()
-            .and_then(|model_config| model_config.provider_for_slow_model())
+            .providers
+            .iter()
+            .find(|p| p.key(provider).is_some())
     }
 }
 
@@ -153,6 +160,7 @@ pub async fn reply_to_user(
         model_config,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!(&model_config);
     let editor_parsing: EditorParsing = Default::default();
     let llm_broker = app.llm_broker.clone();
     // Now we want to handle this and send the data to a prompt which will generate

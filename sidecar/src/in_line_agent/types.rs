@@ -1,5 +1,6 @@
 use futures::stream;
 use futures::StreamExt;
+use llm_client::broker::LLMBroker;
 use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
@@ -242,6 +243,7 @@ pub struct InLineAgent {
     session_id: uuid::Uuid,
     inline_agent_messages: Vec<InLineAgentMessage>,
     llm_client: Arc<LlmClient>,
+    llm_broker: Arc<LLMBroker>,
     model: model::AnswerModel,
     sql_db: SqlDb,
     editor_parsing: EditorParsing,
@@ -256,6 +258,7 @@ impl InLineAgent {
         repo_ref: RepoRef,
         sql_db: SqlDb,
         llm_client: Arc<LlmClient>,
+        llm_broker: Arc<LLMBroker>,
         editor_parsing: EditorParsing,
         editor_request: ProcessInEditorRequest,
         messages: Vec<InLineAgentMessage>,
@@ -267,6 +270,7 @@ impl InLineAgent {
             session_id: uuid::Uuid::new_v4(),
             inline_agent_messages: messages,
             llm_client,
+            llm_broker,
             model: model::GPT_3_5_TURBO_16K,
             sql_db,
             sender,

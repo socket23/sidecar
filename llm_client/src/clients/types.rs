@@ -3,6 +3,8 @@ use std::fmt;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::provider::{LLMProvider, LLMProviderAPIKeys};
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LLMType {
     Mixtral,
@@ -160,18 +162,25 @@ pub enum LLMClientError {
 
     #[error("OpenAI api error: {0}")]
     OpenAPIError(#[from] async_openai::error::OpenAIError),
+
+    #[error("Wrong api key type")]
+    WrongAPIKeyType,
 }
 
 #[async_trait]
 pub trait LLMClient {
+    fn client(&self) -> &LLMProvider;
+
     async fn stream_completion(
         &self,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError>;
 
     async fn completion(
         &self,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
     ) -> Result<String, LLMClientError>;
 }

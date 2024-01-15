@@ -1,7 +1,7 @@
 //! Client which can help us talk to openai
 
 use async_openai::{
-    config::OpenAIConfig,
+    config::{AzureConfig, OpenAIConfig},
     types::{
         ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
         CreateChatCompletionRequestArgs, Role,
@@ -11,23 +11,23 @@ use async_openai::{
 use async_trait::async_trait;
 use futures::StreamExt;
 
-use crate::provider::OpenAIProvider;
+use crate::provider::LLMProviderAPIKeys;
 
 use super::types::{
     LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientError,
     LLMClientMessage, LLMClientRole, LLMType,
 };
 
-pub struct OpenAIClient {
-    client: Client<OpenAIConfig>,
+enum OpenAIClientType {
+    AzureClient(Client<AzureConfig>),
+    OpenAIClient(Client<OpenAIConfig>),
 }
 
+pub struct OpenAIClient {}
+
 impl OpenAIClient {
-    pub fn new(provider: OpenAIProvider) -> Self {
-        let config = OpenAIConfig::new().with_api_key(provider.api_key);
-        Self {
-            client: Client::with_config(config),
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 
     pub fn model(&self, model: &LLMType) -> Option<String> {
@@ -71,12 +71,37 @@ impl OpenAIClient {
             .into_iter()
             .collect::<Result<Vec<ChatCompletionRequestMessage>, LLMClientError>>()
     }
+
+    fn generate_openai_client(
+        &self,
+        api_key: LLMProviderAPIKeys,
+    ) -> Result<OpenAIClientType, LLMClientError> {
+        match api_key {
+            LLMProviderAPIKeys::OpenAI(api_key) => {
+                let config = OpenAIConfig::new().with_api_key(api_key.api_key);
+                Ok(OpenAIClientType::OpenAIClient(Client::with_config(config)))
+            }
+            LLMProviderAPIKeys::OpenAIAzureConfig(azure_config) => {
+                let config = AzureConfig::new()
+                    .with_api_base(azure_config.api_base)
+                    .with_api_key(azure_config.api_key)
+                    .with_deployment_id(azure_config.deployment_id);
+                Ok(OpenAIClientType::AzureClient(Client::with_config(config)))
+            }
+            _ => Err(LLMClientError::WrongAPIKeyType),
+        }
+    }
 }
 
 #[async_trait]
 impl LLMClient for OpenAIClient {
+    fn client(&self) -> &crate::provider::LLMProvider {
+        &crate::provider::LLMProvider::OpenAI
+    }
+
     async fn stream_completion(
         &self,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
@@ -97,28 +122,61 @@ impl LLMClient for OpenAIClient {
         }
         let request = request_builder.build()?;
         let mut buffer = String::new();
-        let mut stream = self.client.chat().create_stream(request).await?;
+        let client = self.generate_openai_client(api_key)?;
 
-        while let Some(response) = stream.next().await {
-            match response {
-                Ok(response) => {
-                    let response = response
-                        .choices
-                        .get(0)
-                        .ok_or(LLMClientError::FailedToGetResponse)?;
-                    let text = response.delta.content.to_owned();
-                    if let Some(text) = text {
-                        buffer.push_str(&text);
-                        let _ = sender.send(LLMClientCompletionResponse::new(
-                            buffer.to_owned(),
-                            Some(text),
-                            model.to_owned(),
-                        ));
+        // TODO(skcd): Bad code :| we are repeating too many things but this
+        // just works and we need it right now
+        match client {
+            OpenAIClientType::AzureClient(client) => {
+                let mut stream = client.chat().create_stream(request).await?;
+                while let Some(response) = stream.next().await {
+                    match response {
+                        Ok(response) => {
+                            let response = response
+                                .choices
+                                .get(0)
+                                .ok_or(LLMClientError::FailedToGetResponse)?;
+                            let text = response.delta.content.to_owned();
+                            if let Some(text) = text {
+                                buffer.push_str(&text);
+                                let _ = sender.send(LLMClientCompletionResponse::new(
+                                    buffer.to_owned(),
+                                    Some(text),
+                                    model.to_owned(),
+                                ));
+                            }
+                        }
+                        Err(err) => {
+                            dbg!(err);
+                            break;
+                        }
                     }
                 }
-                Err(err) => {
-                    dbg!(err);
-                    break;
+            }
+            OpenAIClientType::OpenAIClient(client) => {
+                let mut stream = client.chat().create_stream(request).await?;
+                while let Some(response) = stream.next().await {
+                    match response {
+                        Ok(response) => {
+                            let response = response
+                                .choices
+                                .get(0)
+                                .ok_or(LLMClientError::FailedToGetResponse)?;
+                            let text = response.delta.content.to_owned();
+                            if let Some(text) = text {
+                                buffer.push_str(&text);
+                                let _ = sender.send(LLMClientCompletionResponse::new(
+                                    buffer.to_owned(),
+                                    Some(text),
+                                    model.to_owned(),
+                                ));
+                            }
+                        }
+                        Err(err) => {
+                            dbg!(err);
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -127,10 +185,11 @@ impl LLMClient for OpenAIClient {
 
     async fn completion(
         &self,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
     ) -> Result<String, LLMClientError> {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let result = self.stream_completion(request, sender).await?;
+        let result = self.stream_completion(api_key, request, sender).await?;
         Ok(result)
     }
 }

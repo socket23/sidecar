@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 
+use crate::provider::LLMProviderAPIKeys;
 use crate::provider::TogetherAIProvider;
 
 use super::types::LLMClient;
@@ -13,7 +14,6 @@ use super::types::LLMType;
 pub struct TogetherAIClient {
     pub client: reqwest::Client,
     pub base_url: String,
-    pub provider_details: TogetherAIProvider,
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
@@ -71,12 +71,11 @@ impl TogetherAIRequest {
 }
 
 impl TogetherAIClient {
-    pub fn new(provider_details: TogetherAIProvider) -> Self {
+    pub fn new() -> Self {
         let client = reqwest::Client::new();
         Self {
             client,
             base_url: "https://api.together.xyz".to_owned(),
-            provider_details,
         }
     }
 
@@ -92,20 +91,36 @@ impl TogetherAIClient {
             _ => None,
         }
     }
+
+    fn generate_together_ai_bearer_key(
+        &self,
+        api_key: LLMProviderAPIKeys,
+    ) -> Result<String, LLMClientError> {
+        match api_key {
+            LLMProviderAPIKeys::TogetherAI(api_key) => Ok(api_key.api_key),
+            _ => Err(LLMClientError::WrongAPIKeyType),
+        }
+    }
 }
 
 #[async_trait]
 impl LLMClient for TogetherAIClient {
+    fn client(&self) -> &crate::provider::LLMProvider {
+        &crate::provider::LLMProvider::TogetherAI
+    }
+
     async fn completion(
         &self,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
     ) -> Result<String, LLMClientError> {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        self.stream_completion(request, sender).await
+        self.stream_completion(api_key, request, sender).await
     }
 
     async fn stream_completion(
         &self,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
@@ -118,7 +133,7 @@ impl LLMClient for TogetherAIClient {
         let mut response_stream = self
             .client
             .post(self.inference_endpoint())
-            .bearer_auth(self.provider_details.api_key.to_owned())
+            .bearer_auth(self.generate_together_ai_bearer_key(api_key)?.to_owned())
             .json(&together_ai_request)
             .send()
             .await?

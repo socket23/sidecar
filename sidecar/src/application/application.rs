@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use llm_client::broker::LLMBroker;
 use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
@@ -40,6 +41,7 @@ pub struct Application {
     pub posthog_client: Arc<PosthogClient>,
     pub user_id: String,
     pub llm_config: LLMCustomConfig,
+    pub llm_broker: Arc<LLMBroker>,
 }
 
 impl Application {
@@ -81,6 +83,7 @@ impl Application {
             posthog_client: Arc::new(posthog_client),
             user_id: config.user_id.clone(),
             llm_config,
+            llm_broker: Arc::new(LLMBroker::new()),
         })
     }
 

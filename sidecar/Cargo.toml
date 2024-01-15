@@ -74,6 +74,7 @@ petgraph = { version = "0.6.4", default-features = false, features = ["serde-1"]
 bincode = "1.3.3"
 
 difftastic = { path = "../difftastic" }
+llm_client = { path = "../llm_client" }
 whoami = "1.4.1"
 select = "0.6.0"
 url = "2.5.0"

@@ -13,16 +13,16 @@ use crate::{
             LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientError,
         },
     },
-    provider::{self, LLMProvider, LLMProviderAPIKeys},
+    provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
 pub struct LLMBroker {
-    pub providers: HashMap<LLMProvider, Box<dyn LLMClient>>,
+    pub providers: HashMap<LLMProvider, Box<dyn LLMClient + Send + Sync>>,
 }
 
 impl LLMBroker {
     pub fn new() -> Self {
-        let mut broker = Self {
+        let broker = Self {
             providers: HashMap::new(),
         };
         broker
@@ -31,7 +31,11 @@ impl LLMBroker {
             .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
     }
 
-    pub fn add_provider(mut self, provider: LLMProvider, client: Box<dyn LLMClient>) -> Self {
+    pub fn add_provider(
+        mut self,
+        provider: LLMProvider,
+        client: Box<dyn LLMClient + Send + Sync>,
+    ) -> Self {
         self.providers.insert(provider, client);
         self
     }

@@ -1,7 +1,6 @@
 pub fn decide_function_to_use(user_query: &str) -> String {
     let system_prompt = format!(
-        r#"
-When asked for your name, you must respond with "Aide".
+        r#"When asked for your name, you must respond with "Aide".
 Follow the user's requirements carefully & to the letter.
 Your responses should be informative and logical.
 You should always adhere to technical information.
@@ -59,8 +58,7 @@ Request: Add a dog to this comment.
 Response: unknown
 
 Request: {user_query}
-Response:
-    "#
+Response:"#
     );
     system_prompt
 }

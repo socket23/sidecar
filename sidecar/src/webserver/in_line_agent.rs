@@ -5,7 +5,10 @@ use rand::seq::SliceRandom;
 use regex::Regex;
 use serde_json::json;
 
-use super::{in_line_agent_stream::generate_in_line_agent_stream, types::Result};
+use super::{
+    in_line_agent_stream::generate_in_line_agent_stream, model_selection::LLMClientConfig,
+    types::Result,
+};
 use crate::{
     agent::llm_funcs::LlmClient,
     application::application::Application,
@@ -88,6 +91,7 @@ pub struct ProcessInEditorRequest {
     pub thread_id: uuid::Uuid,
     pub diagnostics_information: Option<DiagnosticInformationFromEditor>,
     pub openai_key: Option<String>,
+    pub model_config: Option<LLMClientConfig>,
 }
 
 impl ProcessInEditorRequest {
@@ -131,9 +135,11 @@ pub async fn reply_to_user(
         text_document_web,
         diagnostics_information,
         openai_key,
+        model_config,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
     let editor_parsing: EditorParsing = Default::default();
+    let llm_broker = app.llm_broker.clone();
     // Now we want to handle this and send the data to a prompt which will generate
     // the proper things
     // Here we will handle how the in-line agent will handle the work
@@ -164,6 +170,7 @@ pub async fn reply_to_user(
         repo_ref.clone(),
         sql_db,
         Arc::new(llm_client),
+        llm_broker,
         editor_parsing,
         ProcessInEditorRequest {
             query: query.to_owned(),
@@ -174,6 +181,7 @@ pub async fn reply_to_user(
             thread_id,
             diagnostics_information,
             openai_key,
+            model_config,
         },
         vec![inline_agent_message],
         sender,

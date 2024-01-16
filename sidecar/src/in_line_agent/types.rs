@@ -6,8 +6,10 @@ use futures::StreamExt;
 use llm_client::broker::LLMBroker;
 use llm_client::clients::types::LLMClientCompletionRequest;
 use llm_client::clients::types::LLMClientCompletionResponse;
+use llm_client::clients::types::LLMClientCompletionStringRequest;
 use llm_client::clients::types::LLMClientMessage;
 use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
+use llm_prompts::in_line_edit::types::InLineEditPromptResponse;
 use llm_prompts::in_line_edit::types::InLineEditRequest;
 use regex::Regex;
 use std::sync::Arc;
@@ -717,27 +719,24 @@ impl InLineAgent {
             )
         };
 
-        // We create the prompts here
-        let mut user_messages = self
-            .edit_generation_prompt(self.editor_request.language(), response)
-            .into_iter()
-            .map(|message| LLMClientMessage::user(message))
-            .collect::<Vec<_>>();
-        // we emphasize again that it needs to always put the //BEGIN and //END
-        let user_query = &self.editor_request.query;
-        let user_query = format!("{user_query}\nDo not forget to include the // BEGIN, // END and // FILEPATH markers in your generated code.");
-        user_messages.push(LLMClientMessage::user(user_query));
+        // which model are we going to use
+        let fast_model = self.editor_request.fast_model();
 
-        let mut final_messages = vec![LLMClientMessage::system(
-            prompts::in_line_edit_system_prompt(self.editor_request.language()),
-        )];
-        final_messages.extend(user_messages);
+        // inline edit prompt
+        let inline_edit_request = self.inline_edit_request(
+            self.editor_request.language(),
+            response,
+            &self.editor_request.query,
+        );
+        // Now we try to get the request we have to send from the inline edit broker
+        let prompt = self
+            .llm_prompt_formatter
+            .get_prompt(&fast_model, inline_edit_request)?;
 
         // Now that we have the user-messages we can send it over the wire
         let last_exchange = self.get_last_agent_message();
         last_exchange.message_state = MessageState::StreamingAnswer;
 
-        let fast_model = self.editor_request.fast_model();
         let (sender, receiver) =
             tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
         let receiver_stream = UnboundedReceiverStream::new(receiver).map(Either::Left);
@@ -750,11 +749,34 @@ impl InLineAgent {
                 fast_model
             ))?;
         let answer_stream = {
-            let request =
-                LLMClientCompletionRequest::from_messages(final_messages, fast_model.clone());
-            llm_broker
-                .stream_completion(provider.clone(), request, sender)
-                .into_stream()
+            match prompt {
+                InLineEditPromptResponse::Chat(chat) => {
+                    let request =
+                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone());
+                    llm_broker
+                        .stream_answer(
+                            provider.clone(),
+                            futures::future::Either::Left(request),
+                            sender,
+                        )
+                        .into_stream()
+                }
+                InLineEditPromptResponse::Completion(prompt) => {
+                    let request = LLMClientCompletionStringRequest::new(
+                        fast_model.clone(),
+                        prompt,
+                        0.0,
+                        None,
+                    );
+                    llm_broker
+                        .stream_answer(
+                            provider.clone(),
+                            futures::future::Either::Right(request),
+                            sender,
+                        )
+                        .into_stream()
+                }
+            }
         }
         .map(Either::Right);
 

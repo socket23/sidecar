@@ -5,7 +5,7 @@ use llm_client::clients::types::LLMType;
 use super::{
     mistral::MistralLineEditPrompt,
     openai::OpenAILineEditPrompt,
-    types::{InLineEditPrompt, InLineEditPromptError},
+    types::{InLineEditPrompt, InLineEditPromptError, InLineEditPromptResponse, InLineEditRequest},
 };
 
 pub struct InLineEditPromptBroker {
@@ -36,12 +36,21 @@ impl InLineEditPromptBroker {
         self
     }
 
-    pub fn get_prompt_generator(
+    fn get_prompt_generator(
         &self,
         llm_type: &LLMType,
     ) -> Result<&Box<dyn InLineEditPrompt + Send + Sync>, InLineEditPromptError> {
         self.prompt_generators
             .get(llm_type)
             .ok_or(InLineEditPromptError::ModelNotSupported)
+    }
+
+    pub fn get_prompt(
+        &self,
+        llm_type: &LLMType,
+        request: InLineEditRequest,
+    ) -> Result<InLineEditPromptResponse, InLineEditPromptError> {
+        let prompt_generator = self.get_prompt_generator(llm_type)?;
+        Ok(prompt_generator.inline_edit(request))
     }
 }

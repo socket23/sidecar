@@ -144,6 +144,11 @@ impl ProcessInEditorRequest {
             .iter()
             .find(|p| p.key(provider).is_some())
     }
+
+    /// Are we using OpenAI models
+    pub fn using_openai_models(&self) -> bool {
+        self.model_config.fast_model.is_openai()
+    }
 }
 
 pub async fn reply_to_user(

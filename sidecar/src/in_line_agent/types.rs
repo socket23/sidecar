@@ -308,6 +308,8 @@ impl InLineAgent {
         action: InLineAgentAction,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
     ) -> anyhow::Result<Option<InLineAgentAction>> {
+        // If we are using OSS models we take a different route (especially
+        // for smaller models since they can't follow the commands properly)
         match action {
             InLineAgentAction::DecideAction { query } => {
                 // Decide the action we are want to take here

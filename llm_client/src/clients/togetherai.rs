@@ -3,7 +3,6 @@ use eventsource_stream::Eventsource;
 use futures::StreamExt;
 
 use crate::provider::LLMProviderAPIKeys;
-use crate::provider::TogetherAIProvider;
 
 use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;

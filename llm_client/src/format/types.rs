@@ -8,6 +8,24 @@ pub trait LLMFormatting {
     fn to_prompt(&self, messages: Vec<LLMClientMessage>) -> String;
 }
 
+pub struct DummyLLMFormatting {}
+
+impl DummyLLMFormatting {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl LLMFormatting for DummyLLMFormatting {
+    fn to_prompt(&self, messages: Vec<LLMClientMessage>) -> String {
+        messages
+            .into_iter()
+            .map(|message| message.content().to_owned())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TokenizerConfig {
     add_bos_token: bool,

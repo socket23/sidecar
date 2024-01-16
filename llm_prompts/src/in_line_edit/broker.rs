@@ -9,7 +9,7 @@ use super::{
 };
 
 pub struct InLineEditPromptBroker {
-    prompt_generators: HashMap<LLMType, Box<dyn InLineEditPrompt>>,
+    prompt_generators: HashMap<LLMType, Box<dyn InLineEditPrompt + Send + Sync>>,
 }
 
 impl InLineEditPromptBroker {
@@ -30,7 +30,7 @@ impl InLineEditPromptBroker {
     pub fn insert_prompt_generator(
         mut self,
         llm_type: LLMType,
-        prompt_generator: Box<dyn InLineEditPrompt>,
+        prompt_generator: Box<dyn InLineEditPrompt + Send + Sync>,
     ) -> Self {
         self.prompt_generators.insert(llm_type, prompt_generator);
         self
@@ -39,7 +39,7 @@ impl InLineEditPromptBroker {
     pub fn get_prompt_generator(
         &self,
         llm_type: &LLMType,
-    ) -> Result<&Box<dyn InLineEditPrompt>, InLineEditPromptError> {
+    ) -> Result<&Box<dyn InLineEditPrompt + Send + Sync>, InLineEditPromptError> {
         self.prompt_generators
             .get(llm_type)
             .ok_or(InLineEditPromptError::ModelNotSupported)

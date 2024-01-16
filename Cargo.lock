@@ -4518,6 +4518,7 @@ dependencies = [
  "gix",
  "ignore",
  "llm_client",
+ "llm_prompts",
  "memchr",
  "ndarray",
  "nix",

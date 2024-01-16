@@ -7,9 +7,9 @@ use llm_client::broker::LLMBroker;
 use llm_client::clients::types::LLMClientCompletionRequest;
 use llm_client::clients::types::LLMClientCompletionResponse;
 use llm_client::clients::types::LLMClientMessage;
+use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
 use regex::Regex;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -258,6 +258,7 @@ pub struct InLineAgent {
     session_id: uuid::Uuid,
     inline_agent_messages: Vec<InLineAgentMessage>,
     llm_broker: Arc<LLMBroker>,
+    llm_prompt_formatter: Arc<InLineEditPromptBroker>,
     sql_db: SqlDb,
     editor_parsing: EditorParsing,
     // TODO(skcd): Break this out and don't use cross crate dependency like this
@@ -271,6 +272,7 @@ impl InLineAgent {
         repo_ref: RepoRef,
         sql_db: SqlDb,
         llm_broker: Arc<LLMBroker>,
+        llm_prompt_formatter: Arc<InLineEditPromptBroker>,
         editor_parsing: EditorParsing,
         editor_request: ProcessInEditorRequest,
         messages: Vec<InLineAgentMessage>,
@@ -282,6 +284,7 @@ impl InLineAgent {
             session_id: uuid::Uuid::new_v4(),
             inline_agent_messages: messages,
             llm_broker,
+            llm_prompt_formatter,
             sql_db,
             sender,
             editor_request,

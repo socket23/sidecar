@@ -165,9 +165,9 @@ pub async fn reply_to_user(
         model_config,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!(&model_config);
     let editor_parsing: EditorParsing = Default::default();
     let llm_broker = app.llm_broker.clone();
+    let inline_edit_prompt = app.inline_prompt_edit.clone();
     // Now we want to handle this and send the data to a prompt which will generate
     // the proper things
     // Here we will handle how the in-line agent will handle the work
@@ -182,6 +182,7 @@ pub async fn reply_to_user(
         repo_ref.clone(),
         sql_db,
         llm_broker,
+        inline_edit_prompt,
         editor_parsing,
         ProcessInEditorRequest {
             query: query.to_owned(),

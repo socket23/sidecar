@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use llm_client::broker::LLMBroker;
+use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
 use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
@@ -42,6 +43,7 @@ pub struct Application {
     pub user_id: String,
     pub llm_config: LLMCustomConfig,
     pub llm_broker: Arc<LLMBroker>,
+    pub inline_prompt_edit: Arc<InLineEditPromptBroker>,
 }
 
 impl Application {
@@ -63,7 +65,6 @@ impl Application {
         let language_parsing = Arc::new(TSLanguageParsing::init());
         let semantic_client = SemanticClient::new(config.clone(), language_parsing.clone()).await;
         let posthog_client = posthog_client(&config.user_id);
-        debug!("semantic client presence: {}", semantic_client.is_some());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -84,6 +85,7 @@ impl Application {
             user_id: config.user_id.clone(),
             llm_config,
             llm_broker: Arc::new(LLMBroker::new()),
+            inline_prompt_edit: Arc::new(InLineEditPromptBroker::new()),
         })
     }
 

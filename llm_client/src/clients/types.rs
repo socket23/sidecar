@@ -99,6 +99,31 @@ pub struct LLMClientCompletionRequest {
     frequency_penalty: Option<f32>,
 }
 
+pub struct LLMClientCompletionStringRequest {
+    model: LLMType,
+    prompt: String,
+    temperature: f32,
+    frequency_penalty: Option<f32>,
+}
+
+impl LLMClientCompletionStringRequest {
+    pub fn model(&self) -> &LLMType {
+        &self.model
+    }
+
+    pub fn temperature(&self) -> f32 {
+        self.temperature
+    }
+
+    pub fn frequency_penalty(&self) -> Option<f32> {
+        self.frequency_penalty
+    }
+
+    pub fn prompt(&self) -> &str {
+        &self.prompt
+    }
+}
+
 impl LLMClientCompletionRequest {
     pub fn new(
         model: LLMType,
@@ -190,6 +215,9 @@ pub enum LLMClientError {
 
     #[error("Wrong api key type")]
     WrongAPIKeyType,
+
+    #[error("OpenAI does not support completion")]
+    OpenAIDoesNotSupportCompletion,
 }
 
 #[async_trait]
@@ -207,5 +235,12 @@ pub trait LLMClient {
         &self,
         api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
+    ) -> Result<String, LLMClientError>;
+
+    async fn stream_prompt_completion(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionStringRequest,
+        sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError>;
 }

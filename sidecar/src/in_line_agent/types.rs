@@ -8,10 +8,12 @@ use llm_client::clients::types::LLMClientCompletionRequest;
 use llm_client::clients::types::LLMClientCompletionResponse;
 use llm_client::clients::types::LLMClientMessage;
 use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
+use llm_prompts::in_line_edit::types::InLineEditRequest;
 use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use whoami::lang;
 
 use crate::chunking::text_document::Range;
 use crate::chunking::types::FunctionInformation;
@@ -935,6 +937,93 @@ impl InLineAgent {
             .to_owned(),
         );
         prompts
+    }
+
+    /// Generate the inline edit request
+    fn inline_edit_request(
+        &self,
+        language: &str,
+        selection_with_outline: SelectionWithOutlines,
+        user_query: &str,
+    ) -> InLineEditRequest {
+        let mut above_context = None;
+        let mut below_context = None;
+        let mut in_range_context = None;
+        let has_surrounding_context = selection_with_outline.selection_context.above.has_context()
+            || selection_with_outline.selection_context.below.has_context()
+            || !selection_with_outline.outline_above.is_empty()
+            || !selection_with_outline.outline_below.is_empty();
+
+        let prompt_with_outline = |outline: String, fs_file_path: &str| -> String {
+            return vec![
+                format!("```{language}"),
+                format!("// FILEPATH: {fs_file_path}"),
+                outline,
+                "```".to_owned(),
+            ]
+            .join("\n");
+        };
+
+        let prompt_with_content = |context: &ContextParserInLineEdit| -> String {
+            let prompt_parts = context.generate_prompt(has_surrounding_context);
+            let mut answer = vec![];
+            answer.extend(prompt_parts.into_iter());
+            answer.join("\n")
+        };
+
+        if !selection_with_outline.outline_above.is_empty() {
+            above_context = Some(prompt_with_outline(
+                selection_with_outline.outline_above.to_owned(),
+                self.editor_request.fs_file_path(),
+            ));
+        }
+
+        if selection_with_outline.selection_context.above.has_context() {
+            above_context = Some(prompt_with_content(
+                &selection_with_outline.selection_context.above,
+            ));
+        }
+
+        if selection_with_outline.selection_context.below.has_context() {
+            below_context = Some(prompt_with_content(
+                &selection_with_outline.selection_context.below,
+            ));
+        }
+
+        if !selection_with_outline.outline_below.is_empty() {
+            below_context = Some(prompt_with_outline(
+                selection_with_outline.outline_below.to_owned(),
+                self.editor_request.fs_file_path(),
+            ));
+        }
+
+        let mut selection_prompt = vec![];
+        if selection_with_outline.selection_context.range.has_context() {
+            selection_prompt.extend(
+                selection_with_outline
+                    .selection_context
+                    .range
+                    .generate_prompt(has_surrounding_context)
+                    .into_iter(),
+            );
+        } else {
+            let fs_file_path = self.editor_request.fs_file_path();
+            selection_prompt.push(format!("```{language}"));
+            selection_prompt.push(format!("// FILEPATH: {fs_file_path}"));
+            selection_prompt.push("// BEGIN".to_owned());
+            selection_prompt.push("// END".to_owned());
+            selection_prompt.push("```".to_owned());
+        }
+        in_range_context = Some(selection_prompt.join("\n"));
+        InLineEditRequest::new(
+            above_context,
+            below_context,
+            in_range_context,
+            user_query.to_owned(),
+            selection_with_outline.fs_file_path(),
+            vec![],
+            language.to_owned(),
+        )
     }
 
     fn edit_generation_prompt(

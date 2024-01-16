@@ -613,6 +613,10 @@ impl SelectionWithOutlines {
             self.selection_context.below.to_agent_selection_data(),
         )
     }
+
+    pub fn fs_file_path(&self) -> String {
+        self.selection_context.above.fs_file_path.to_owned()
+    }
 }
 
 pub fn generate_context_for_range(

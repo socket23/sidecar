@@ -204,4 +204,13 @@ impl LLMClient for OpenAIClient {
         let result = self.stream_completion(api_key, request, sender).await?;
         Ok(result)
     }
+
+    async fn stream_prompt_completion(
+        &self,
+        _api_key: LLMProviderAPIKeys,
+        _request: super::types::LLMClientCompletionStringRequest,
+        _sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+    ) -> Result<String, LLMClientError> {
+        Err(LLMClientError::OpenAIDoesNotSupportCompletion)
+    }
 }

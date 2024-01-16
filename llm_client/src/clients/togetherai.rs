@@ -1,12 +1,14 @@
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::provider::LLMProviderAPIKeys;
 
 use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;
 use super::types::LLMClientCompletionResponse;
+use super::types::LLMClientCompletionStringRequest;
 use super::types::LLMClientError;
 use super::types::LLMType;
 
@@ -67,6 +69,16 @@ impl TogetherAIRequest {
             frequency_penalty: request.frequency_penalty(),
         }
     }
+
+    pub fn from_string_request(request: LLMClientCompletionStringRequest) -> Self {
+        Self {
+            prompt: request.prompt().to_owned(),
+            model: TogetherAIClient::model_str(request.model()).expect("to be present"),
+            temperature: request.temperature(),
+            stream_tokens: true,
+            frequency_penalty: request.frequency_penalty(),
+        }
+    }
 }
 
 impl TogetherAIClient {
@@ -80,6 +92,10 @@ impl TogetherAIClient {
 
     pub fn inference_endpoint(&self) -> String {
         format!("{}/inference", self.base_url)
+    }
+
+    pub fn completion_endpoint(&self) -> String {
+        format!("{}/completions", self.base_url)
     }
 
     pub fn model_str(model: &LLMType) -> Option<String> {
@@ -117,11 +133,57 @@ impl LLMClient for TogetherAIClient {
         self.stream_completion(api_key, request, sender).await
     }
 
+    async fn stream_prompt_completion(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionStringRequest,
+        sender: UnboundedSender<LLMClientCompletionResponse>,
+    ) -> Result<String, LLMClientError> {
+        let model = TogetherAIClient::model_str(request.model());
+        if model.is_none() {
+            return Err(LLMClientError::FailedToGetResponse);
+        }
+        let model = model.expect("is_none check above to work");
+        let together_ai_request = TogetherAIRequest::from_string_request(request);
+        let mut response_stream = self
+            .client
+            .post(self.inference_endpoint())
+            .bearer_auth(self.generate_together_ai_bearer_key(api_key)?.to_owned())
+            .json(&together_ai_request)
+            .send()
+            .await?
+            .bytes_stream()
+            .eventsource();
+
+        let mut buffered_string = "".to_owned();
+        while let Some(event) = response_stream.next().await {
+            match event {
+                Ok(event) => {
+                    if &event.data == "[DONE]" {
+                        continue;
+                    }
+                    let value = serde_json::from_str::<TogetherAIResponse>(&event.data)?;
+                    buffered_string = buffered_string + &value.choices[0].text;
+                    sender.send(LLMClientCompletionResponse::new(
+                        buffered_string.to_owned(),
+                        Some(value.choices[0].text.to_owned()),
+                        model.to_owned(),
+                    ))?;
+                }
+                Err(e) => {
+                    dbg!(e);
+                }
+            }
+        }
+
+        Ok(buffered_string)
+    }
+
     async fn stream_completion(
         &self,
         api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
-        sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+        sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
         let model = TogetherAIClient::model_str(request.model());
         if model.is_none() {

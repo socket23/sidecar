@@ -1,12 +1,14 @@
 //! Ollama client here so we can send requests to it
 
 use async_trait::async_trait;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::provider::LLMProviderAPIKeys;
 
 use super::types::LLMClient;
 use super::types::LLMClientCompletionRequest;
 use super::types::LLMClientCompletionResponse;
+use super::types::LLMClientCompletionStringRequest;
 use super::types::LLMClientError;
 use super::types::LLMType;
 
@@ -47,6 +49,17 @@ impl OllamaClientRequest {
             stream: true,
             raw: true,
             frequency_penalty: request.frequency_penalty(),
+        }
+    }
+
+    pub fn from_string_request(request: LLMClientCompletionStringRequest) -> Self {
+        Self {
+            prompt: request.prompt().to_owned(),
+            model: request.model().to_owned(),
+            temperature: request.temperature(),
+            stream: true,
+            raw: true,
+            frequency_penalty: None,
         }
     }
 }
@@ -107,5 +120,32 @@ impl LLMClient for OllamaClient {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let result = self.stream_completion(api_key, request, sender).await?;
         Ok(result)
+    }
+
+    async fn stream_prompt_completion(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionStringRequest,
+        sender: UnboundedSender<LLMClientCompletionResponse>,
+    ) -> Result<String, LLMClientError> {
+        let ollama_request = OllamaClientRequest::from_string_request(request);
+        let mut response = self
+            .client
+            .post(self.generation_endpoint())
+            .json(&ollama_request)
+            .send()
+            .await?;
+
+        let mut buffered_string = "".to_owned();
+        while let Some(chunk) = response.chunk().await? {
+            let value = serde_json::from_slice::<OllamaResponse>(chunk.to_vec().as_slice())?;
+            buffered_string.push_str(&value.response);
+            sender.send(LLMClientCompletionResponse::new(
+                buffered_string.to_owned(),
+                Some(value.response),
+                value.model,
+            ))?;
+        }
+        Ok(buffered_string)
     }
 }

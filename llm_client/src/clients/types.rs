@@ -107,6 +107,20 @@ pub struct LLMClientCompletionStringRequest {
 }
 
 impl LLMClientCompletionStringRequest {
+    pub fn new(
+        model: LLMType,
+        prompt: String,
+        temperature: f32,
+        frequency_penalty: Option<f32>,
+    ) -> Self {
+        Self {
+            model,
+            prompt,
+            temperature,
+            frequency_penalty,
+        }
+    }
+
     pub fn model(&self) -> &LLMType {
         &self.model
     }

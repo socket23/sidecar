@@ -4,13 +4,16 @@
 
 use std::collections::HashMap;
 
+use futures::future::Either;
+
 use crate::{
     clients::{
         ollama::OllamaClient,
         openai::OpenAIClient,
         togetherai::TogetherAIClient,
         types::{
-            LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientError,
+            LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse,
+            LLMClientCompletionStringRequest, LLMClientError,
         },
     },
     provider::{LLMProvider, LLMProviderAPIKeys},
@@ -19,6 +22,8 @@ use crate::{
 pub struct LLMBroker {
     pub providers: HashMap<LLMProvider, Box<dyn LLMClient + Send + Sync>>,
 }
+
+pub type LLMBrokerResponse = Result<String, LLMClientError>;
 
 impl LLMBroker {
     pub fn new() -> Self {
@@ -40,12 +45,27 @@ impl LLMBroker {
         self
     }
 
+    pub async fn stream_answer(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest>,
+        sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+    ) -> LLMBrokerResponse {
+        match request {
+            Either::Left(request) => self.stream_completion(api_key, request, sender).await,
+            Either::Right(request) => {
+                self.stream_string_completion(api_key, request, sender)
+                    .await
+            }
+        }
+    }
+
     pub async fn stream_completion(
         &self,
         api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
-    ) -> Result<String, LLMClientError> {
+    ) -> LLMBrokerResponse {
         let provider_type = match &api_key {
             LLMProviderAPIKeys::Ollama(_) => LLMProvider::Ollama,
             LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
@@ -55,6 +75,28 @@ impl LLMBroker {
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
             provider.stream_completion(api_key, request, sender).await
+        } else {
+            Err(LLMClientError::UnSupportedModel)
+        }
+    }
+
+    pub async fn stream_string_completion(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionStringRequest,
+        sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+    ) -> LLMBrokerResponse {
+        let provider_type = match &api_key {
+            LLMProviderAPIKeys::Ollama(_) => LLMProvider::Ollama,
+            LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
+        };
+        let provider = self.providers.get(&provider_type);
+        if let Some(provider) = provider {
+            provider
+                .stream_prompt_completion(api_key, request, sender)
+                .await
         } else {
             Err(LLMClientError::UnSupportedModel)
         }

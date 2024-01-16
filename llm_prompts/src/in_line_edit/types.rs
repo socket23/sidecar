@@ -2,7 +2,7 @@
 //! chat. We take care to send the data here properly (after filtering/reranking etc)
 //! and let the LLM decide what we want to do with it
 
-use llm_client::{clients::types::LLMClientMessage, format::types::LLMFormatting};
+use llm_client::clients::types::LLMClientMessage;
 
 pub struct InLineEditRequest {
     above: Option<String>,

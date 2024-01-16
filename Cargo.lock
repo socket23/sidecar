@@ -2960,6 +2960,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "llm_prompts"
+version = "0.1.0"
+
+[[package]]
 name = "lock_api"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

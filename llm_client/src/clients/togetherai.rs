@@ -142,7 +142,6 @@ impl LLMClient for TogetherAIClient {
 
         let mut buffered_string = "".to_owned();
         while let Some(event) = response_stream.next().await {
-            dbg!(&event);
             match event {
                 Ok(event) => {
                     if &event.data == "[DONE]" {

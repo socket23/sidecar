@@ -3,6 +3,7 @@ members = [
     "sidecar",
     "difftastic",
     "llm_client",
+    "llm_prompts",
 ]
 
 

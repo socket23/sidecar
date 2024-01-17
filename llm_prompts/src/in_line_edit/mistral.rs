@@ -91,8 +91,9 @@ Code you have to edit:
 {extra_instruction}
 ```{language}
 // FILEPATH: {file_path}
-// BEGIN:"#
+// BEGIN: ed8c6549bwf9"#
         );
+        dbg!(&prompt);
         InLineEditPromptResponse::completion(prompt)
     }
 }

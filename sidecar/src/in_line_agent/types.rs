@@ -328,6 +328,8 @@ impl InLineAgent {
                     }
                     if query.starts_with("/fix") {
                         return Ok(Some(InLineAgentAction::Fix));
+                    } else if query.starts_with("/doc") {
+                        return Ok(Some(InLineAgentAction::Doc));
                     } else {
                         return Ok(Some(InLineAgentAction::Code));
                     }

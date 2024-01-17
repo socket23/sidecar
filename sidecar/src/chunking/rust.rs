@@ -52,9 +52,9 @@ pub fn rust_language_config() -> TSLanguageConfig {
             "trait_item",    // Represents the declaration of a trait.
             "impl_item",     // Represents an implementation block.
             "function_item", // Represents a standalone function declaration.
-            "method_item",   // Represents a method within an impl block.
-            "mod_item",      // Represents a module declaration.
-            "use_item",      // Represents the use keyword to import modules or paths.
+            // "method_item",   // Represents a method within an impl block.
+            // "use_item", // Represents the use keyword to import modules or paths.
+            "mod_item", // Represents a module declaration.
         ]
         .into_iter()
         .map(|s| s.to_owned())

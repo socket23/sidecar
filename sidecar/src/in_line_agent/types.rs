@@ -326,7 +326,11 @@ impl InLineAgent {
                     if let Some(last_exchange) = self.last_agent_message() {
                         self.sender.send(last_exchange.clone()).await?;
                     }
-                    return Ok(Some(InLineAgentAction::Code));
+                    if query.starts_with("/fix") {
+                        return Ok(Some(InLineAgentAction::Fix));
+                    } else {
+                        return Ok(Some(InLineAgentAction::Code));
+                    }
                 }
                 let next_action = self.decide_action(&query).await?;
 

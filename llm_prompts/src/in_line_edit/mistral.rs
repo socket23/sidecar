@@ -27,9 +27,9 @@ impl MistralLineEditPrompt {
 
     /// We try to get the inline edit prompt for the code here, so we can ask
     /// the LLM to generate the prompt
-    fn code_context(&self, code_context: &InLineEditRequest) -> String {
+    fn code_context(&self, above: Option<&String>, below: Option<&String>) -> String {
         // Do we have some code context above?
-        let above = if let Some(above) = code_context.above() {
+        let above = if let Some(above) = above {
             format!(
                 r#"Code Context above the selection:
 {above}
@@ -40,7 +40,7 @@ impl MistralLineEditPrompt {
         };
 
         // Do we have some code context below?
-        let below = if let Some(below) = code_context.below() {
+        let below = if let Some(below) = below {
             format!(
                 r#"Code Context below the selection:
 {below}
@@ -59,7 +59,7 @@ impl MistralLineEditPrompt {
 impl InLineEditPrompt for MistralLineEditPrompt {
     fn inline_edit(&self, request: InLineEditRequest) -> InLinePromptResponse {
         let extra_data_context = self.extra_code_context(request.extra_data());
-        let code_context = self.code_context(&request);
+        let code_context = self.code_context(request.above(), request.below());
         let user_query = request.user_query();
         let language = request.language();
         let file_path = request.file_path();
@@ -96,7 +96,30 @@ Code you have to edit:
     }
 
     fn inline_fix(&self, request: InLineFixRequest) -> InLinePromptResponse {
-        unimplemented!();
+        let code_context = self.code_context(request.above(), request.below());
+        let language = request.language();
+        let errors = request.diagnostics_prompts().join("\n");
+        let in_range_code_context = request.in_range();
+        let file_path = request.file_path();
+        let selection_context = format!(
+            r#"Your task is to fix the errors in the code using the errors provided
+{errors}
+
+Code you have to edit:
+{in_range_code_context}"#
+        );
+        let prompt = format!(
+            r#"[INST] You are an expert software engineer. You have to fix the errors present in the code, the context is given below:
+{code_context}
+
+{selection_context}
+
+You have to fix the code below, generate the code without any explanation [/INST]
+```{language}
+// FILEPATH: {file_path}
+// BEGIN: ed8c6549bwf9"#
+        );
+        InLinePromptResponse::completion(prompt)
     }
 }
 

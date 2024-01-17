@@ -1040,27 +1040,35 @@ impl InLineAgent {
             || !selection_with_outline.outline_above.is_empty()
             || !selection_with_outline.outline_below.is_empty();
 
-        let prompt_with_outline = |outline: String, fs_file_path: &str| -> String {
-            return vec![
-                format!("```{language}"),
-                format!("// FILEPATH: {fs_file_path}"),
-                outline,
-                "```".to_owned(),
-            ]
-            .join("\n");
-        };
+        let prompt_with_outline =
+            |outline: String, fs_file_path: &str, start_marker: &str, end_marker: &str| -> String {
+                return vec![
+                    format!("```{language}"),
+                    start_marker.to_owned(),
+                    format!("// FILEPATH: {fs_file_path}"),
+                    outline,
+                    end_marker.to_owned(),
+                    "```".to_owned(),
+                ]
+                .join("\n");
+            };
 
         let prompt_with_content = |context: &ContextParserInLineEdit| -> String {
             let prompt_parts = context.generate_prompt(has_surrounding_context);
             let mut answer = vec![];
             answer.extend(prompt_parts.into_iter());
-            answer.join("\n")
+            answer.join("\n").trim().to_owned()
         };
 
         if !selection_with_outline.outline_above.is_empty() {
             above_context = Some(prompt_with_outline(
                 selection_with_outline.outline_above.to_owned(),
                 self.editor_request.fs_file_path(),
+                selection_with_outline
+                    .selection_context
+                    .above
+                    .start_marker(),
+                selection_with_outline.selection_context.above.end_marker(),
             ));
         }
 
@@ -1078,8 +1086,13 @@ impl InLineAgent {
 
         if !selection_with_outline.outline_below.is_empty() {
             below_context = Some(prompt_with_outline(
-                selection_with_outline.outline_below.to_owned(),
+                selection_with_outline.outline_below.trim().to_owned(),
                 self.editor_request.fs_file_path(),
+                selection_with_outline
+                    .selection_context
+                    .below
+                    .start_marker(),
+                selection_with_outline.selection_context.below.end_marker(),
             ));
         }
 

@@ -9,10 +9,18 @@ use thiserror::Error;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tokenizers::Tokenizer;
 
-use crate::clients::types::{LLMClientMessage, LLMClientRole, LLMType};
+use crate::{
+    clients::types::{LLMClientMessage, LLMClientRole, LLMType},
+    format::{
+        mistral::MistralInstructFormatting,
+        mixtral::MixtralInstructFormatting,
+        types::{LLMFormatting, TokenizerError},
+    },
+};
 
 pub struct LLMTokenizer {
     pub tokenizers: HashMap<LLMType, Tokenizer>,
+    pub formatters: HashMap<LLMType, Box<dyn LLMFormatting + Send + Sync>>,
 }
 
 #[derive(Error, Debug)]
@@ -28,6 +36,9 @@ pub enum LLMTokenizerError {
 
     #[error("anyhow error: {0}")]
     AnyhowError(#[from] anyhow::Error),
+
+    #[error("tokenizer error: {0}")]
+    TokenizerErrorInternal(#[from] TokenizerError),
 }
 
 pub enum LLMTokenizerInput {
@@ -36,6 +47,35 @@ pub enum LLMTokenizerInput {
 }
 
 impl LLMTokenizer {
+    pub fn new() -> Result<Self, LLMTokenizerError> {
+        let tokenizer = Self {
+            tokenizers: HashMap::new(),
+            formatters: HashMap::new(),
+        };
+        let updated_tokenizer = tokenizer
+            .add_llm_type(
+                LLMType::Mixtral,
+                Box::new(MixtralInstructFormatting::new()?),
+            )
+            .add_llm_type(
+                LLMType::MistralInstruct,
+                Box::new(MistralInstructFormatting::new()?),
+            );
+        Ok(updated_tokenizer)
+    }
+
+    fn add_llm_type(
+        mut self,
+        llm_type: LLMType,
+        formatter: Box<dyn LLMFormatting + Send + Sync>,
+    ) -> Self {
+        // This can be falliable, since soe llms might have formatting support
+        // and if they don't thats fine
+        let _ = self.load_tokenizer(&llm_type);
+        self.formatters.insert(llm_type, formatter);
+        self
+    }
+
     fn to_openai_tokenizer(&self, model: &LLMType) -> Option<String> {
         match model {
             LLMType::GPT3_5_16k => Some("gpt-3.5-turbo-16k-0613".to_owned()),
@@ -46,7 +86,7 @@ impl LLMTokenizer {
         }
     }
 
-    pub fn tokenizer(
+    pub fn count_tokens(
         &self,
         model: &LLMType,
         input: LLMTokenizerInput,
@@ -98,10 +138,28 @@ impl LLMTokenizer {
                         )),
                     }
                 } else {
-                    // we can't use the openai tokenizer
-                    Err(LLMTokenizerError::TokenizerError(
-                        "Only openai models are supported for messages".to_owned(),
-                    ))
+                    let prompt = self
+                        .formatters
+                        .get(model)
+                        .map(|formatter| formatter.to_prompt(messages));
+                    match prompt {
+                        Some(prompt) => {
+                            let num_tokens = self.tokenizers.get(model).map(|tokenizer| {
+                                tokenizer
+                                    .encode(prompt, false)
+                                    .map(|encoding| encoding.len())
+                            });
+                            match num_tokens {
+                                Some(Ok(num_tokens)) => Ok(num_tokens),
+                                _ => Err(LLMTokenizerError::TokenizerError(
+                                    "Failed to encode prompt".to_owned(),
+                                )),
+                            }
+                        }
+                        None => Err(LLMTokenizerError::TokenizerError(
+                            "No formatter found for model".to_owned(),
+                        )),
+                    }
                 }
             }
         }
@@ -141,7 +199,6 @@ impl LLMTokenizer {
         let tokenizer = match model {
             LLMType::MistralInstruct => {
                 let config = include_str!("configs/mistral.json");
-                let loaded_tokenizer = Tokenizer::from_str(&config);
                 Some(Tokenizer::from_str(config)?)
             }
             LLMType::Mixtral => {

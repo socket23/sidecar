@@ -232,6 +232,12 @@ pub enum LLMClientError {
 
     #[error("OpenAI does not support completion")]
     OpenAIDoesNotSupportCompletion,
+
+    #[error("Sqlite setup error")]
+    SqliteSetupError,
+
+    #[error("tokio mspc error")]
+    TokioMpscSendError,
 }
 
 #[async_trait]

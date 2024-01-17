@@ -173,7 +173,6 @@ impl FunctionInformation {
                 end_position = selection_end_function.range().end_position();
             }
         }
-        dbg!(&start_position, &end_position);
         Range::new(start_position, end_position)
     }
 

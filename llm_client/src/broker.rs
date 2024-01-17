@@ -2,9 +2,10 @@
 //! without us having to worry about the specifics, just pass in the message and the
 //! provider we take care of the rest
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use futures::future::Either;
+use sqlx::SqlitePool;
 
 use crate::{
     clients::{
@@ -16,24 +17,31 @@ use crate::{
             LLMClientCompletionStringRequest, LLMClientError,
         },
     },
+    config::LLMBrokerConfiguration,
     provider::{LLMProvider, LLMProviderAPIKeys},
+    sqlite,
 };
+
+pub type SqlDb = Arc<SqlitePool>;
 
 pub struct LLMBroker {
     pub providers: HashMap<LLMProvider, Box<dyn LLMClient + Send + Sync>>,
+    db: SqlDb,
 }
 
 pub type LLMBrokerResponse = Result<String, LLMClientError>;
 
 impl LLMBroker {
-    pub fn new() -> Self {
+    pub async fn new(config: LLMBrokerConfiguration) -> Result<Self, LLMClientError> {
+        let sqlite = Arc::new(sqlite::init(config).await?);
         let broker = Self {
             providers: HashMap::new(),
+            db: sqlite,
         };
-        broker
+        Ok(broker
             .add_provider(LLMProvider::OpenAI, Box::new(OpenAIClient::new()))
             .add_provider(LLMProvider::Ollama, Box::new(OllamaClient::new()))
-            .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
+            .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new())))
     }
 
     pub fn add_provider(

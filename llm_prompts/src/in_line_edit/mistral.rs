@@ -93,7 +93,6 @@ Code you have to edit:
 // FILEPATH: {file_path}
 // BEGIN: ed8c6549bwf9"#
         );
-        dbg!(&prompt);
         InLineEditPromptResponse::completion(prompt)
     }
 }

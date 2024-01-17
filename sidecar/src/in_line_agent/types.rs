@@ -16,7 +16,6 @@ use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use whoami::lang;
 
 use crate::chunking::text_document::Range;
 use crate::chunking::types::FunctionInformation;
@@ -25,10 +24,6 @@ use crate::in_line_agent::context_parsing::generate_context_for_range;
 use crate::in_line_agent::context_parsing::ContextParserInLineEdit;
 use crate::in_line_agent::context_parsing::EditExpandedSelectionRange;
 use crate::{
-    agent::{
-        llm_funcs::{self, LlmClient},
-        model,
-    },
     application::application::Application,
     chunking::{editor_parsing::EditorParsing, text_document::DocumentSymbol},
     db::sqlite::SqlDb,
@@ -317,11 +312,21 @@ impl InLineAgent {
         action: InLineAgentAction,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
     ) -> anyhow::Result<Option<InLineAgentAction>> {
-        // If we are using OSS models we take a different route (especially
-        // for smaller models since they can't follow the commands properly)
         match action {
             InLineAgentAction::DecideAction { query } => {
-                // Decide the action we are want to take here
+                // If we are using OSS models we take a different route (especially
+                // for smaller models since they can't follow the commands properly)
+                if !self.editor_request.fast_model().is_openai() {
+                    let last_exchange = self.get_last_agent_message();
+                    // We add that we took a action to decide what we should do next
+                    last_exchange.add_agent_action(InLineAgentAction::DecideAction {
+                        query: query.to_owned(),
+                    });
+                    if let Some(last_exchange) = self.last_agent_message() {
+                        self.sender.send(last_exchange.clone()).await?;
+                    }
+                    return Ok(Some(InLineAgentAction::Code));
+                }
                 let next_action = self.decide_action(&query).await?;
 
                 // Send it to the answer sender so we can show it on the frontend

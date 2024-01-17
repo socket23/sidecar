@@ -11,6 +11,7 @@ use llm_client::clients::types::LLMClientMessage;
 use llm_client::clients::types::LLMType;
 use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
 use llm_prompts::in_line_edit::types::InLineEditRequest;
+use llm_prompts::in_line_edit::types::InLineFixRequest;
 use llm_prompts::in_line_edit::types::InLinePromptResponse;
 use regex::Regex;
 use std::sync::Arc;
@@ -552,29 +553,6 @@ impl InLineAgent {
             self.editor_request.fs_file_path().to_owned(),
             &mut token_tracker,
         );
-        let user_prompts = self.fix_generation_prompt(&selection_context);
-        let related_prompts = self.fix_diagnostics_prompt();
-        let mut prompts = vec![LLMClientMessage::system(prompts::fix_system_prompt(
-            &self.editor_request.language(),
-        ))];
-        prompts.extend(
-            user_prompts
-                .into_iter()
-                .map(|prompt| LLMClientMessage::user(prompt)),
-        );
-        prompts.extend(
-            related_prompts
-                .into_iter()
-                .map(|prompt| LLMClientMessage::user(prompt)),
-        );
-        let in_range_start_marker = selection_context.range.start_marker();
-        let in_range_end_marker = selection_context.range.end_marker();
-        prompts.push(
-            LLMClientMessage::user(format!(
-                "Do not forget to include the // BEGIN and // END markers in your generated code. Only change the code inside of the selection, delimited by markers: {in_range_start_marker} and {in_range_end_marker}"
-            )
-            .to_owned()),
-        );
         let last_exchange = self.get_last_agent_message();
         last_exchange.message_state = MessageState::StreamingAnswer;
         let document_symbol = {
@@ -584,32 +562,70 @@ impl InLineAgent {
                 response_range.end_position(),
             )
         };
-        let selection_context = ContextSelection::from_selection_context(selection_context);
 
-        // Set things up for querying the LLM
+        // Now we invoke the inline edit broker to get the response for the fixes
+
+        let related_prompts = self.fix_diagnostics_prompt();
+        let fix_request = self.inline_fix_request(
+            self.editor_request.language(),
+            &selection_context,
+            related_prompts,
+        );
+        let fast_model = self.editor_request.fast_model();
+        // Now we try to get the request we have to send from the inline edit broker
+        let prompt = self
+            .llm_prompt_formatter
+            .get_fix_prompt(&fast_model, fix_request)?;
+
+        // send the request to the llm client
+        let (sender, receiver) =
+            tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
+        let receiver_stream = UnboundedReceiverStream::new(receiver).map(Either::Left);
+        let llm_broker = self.get_llm_broker().clone();
         let provider = self
             .editor_request
             .provider_for_fast_model()
             .ok_or(anyhow::anyhow!(
                 "No provider found for fast model: {:?}",
-                self.editor_request.fast_model()
+                fast_model
             ))?;
-        let fast_model = self.editor_request.fast_model();
-        let (sender, receiver) =
-            tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
-        let receiver_stream = UnboundedReceiverStream::new(receiver).map(Either::Left);
-        let llm_broker = self.get_llm_broker().clone();
         let answer_stream = {
-            let request = LLMClientCompletionRequest::from_messages(prompts, fast_model.clone());
-            llm_broker
-                .stream_completion(provider.clone(), request, sender)
-                .into_stream()
+            match prompt {
+                InLinePromptResponse::Chat(chat) => {
+                    let request =
+                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone());
+                    llm_broker
+                        .stream_answer(
+                            provider.clone(),
+                            futures::future::Either::Left(request),
+                            sender,
+                        )
+                        .into_stream()
+                }
+                InLinePromptResponse::Completion(prompt) => {
+                    let request = LLMClientCompletionStringRequest::new(
+                        fast_model.clone(),
+                        prompt,
+                        0.0,
+                        None,
+                    );
+                    llm_broker
+                        .stream_answer(
+                            provider.clone(),
+                            futures::future::Either::Right(request),
+                            sender,
+                        )
+                        .into_stream()
+                }
+            }
         }
         .map(Either::Right);
 
         let merged_stream = stream::select(receiver_stream, answer_stream);
         // this worked out somehow?
         pin_mut!(merged_stream);
+
+        let context_selection = selection_context.to_context_selection();
 
         // Play with the streams here so we can send incremental updates ASAP
         while let Some(item) = merged_stream.next().await {
@@ -620,7 +636,7 @@ impl InLineAgent {
                         delta: receiver_element.delta().map(|delta| delta.to_owned()),
                         state: Default::default(),
                         document_symbol: Some(document_symbol.clone()),
-                        context_selection: Some(selection_context.clone()),
+                        context_selection: Some(context_selection.clone()),
                         model: self.editor_request.fast_model(),
                     });
                 }
@@ -973,6 +989,38 @@ impl InLineAgent {
         prompts
     }
 
+    fn inline_fix_request(
+        &self,
+        language: &str,
+        selection: &SelectionContext,
+        diagnostics: Vec<String>,
+    ) -> InLineFixRequest {
+        let mut above_context = None;
+        let mut below_context = None;
+        if selection.above.has_context() {
+            let mut above_prompts = vec![];
+            above_prompts.extend(selection.above.generate_prompt(true));
+            above_context = Some(above_prompts.join("\n"));
+        }
+
+        if selection.below.has_context() {
+            let mut below_prompts = vec![];
+            below_prompts.extend(selection.below.generate_prompt(true));
+            below_context = Some(below_prompts.join("\n"));
+        }
+
+        let in_range = selection.range.generate_prompt(true).join("\n");
+
+        InLineFixRequest::new(
+            above_context,
+            below_context,
+            in_range,
+            diagnostics,
+            language.to_owned(),
+            selection.range.fs_file_path().to_owned(),
+        )
+    }
+
     /// Generate the inline edit request
     fn inline_edit_request(
         &self,
@@ -1058,88 +1106,6 @@ impl InLineAgent {
             vec![],
             language.to_owned(),
         )
-    }
-
-    fn edit_generation_prompt(
-        &self,
-        language: &str,
-        selection_with_outline: SelectionWithOutlines,
-    ) -> Vec<String> {
-        let mut prompts = vec![];
-        let has_surrounding_context = selection_with_outline.selection_context.above.has_context()
-            || selection_with_outline.selection_context.below.has_context()
-            || !selection_with_outline.outline_above.is_empty()
-            || !selection_with_outline.outline_below.is_empty();
-
-        let prompt_with_outline = |heading: &str, outline: String, fs_file_path: &str| -> String {
-            return vec![
-                heading.to_owned(),
-                format!("```{language}"),
-                format!("// FILEPATH: {fs_file_path}"),
-                outline,
-                "```".to_owned(),
-            ]
-            .join("\n");
-        };
-
-        let prompt_with_content = |heading: &str, context: &ContextParserInLineEdit| -> String {
-            let prompt_parts = context.generate_prompt(has_surrounding_context);
-            let mut answer = vec![heading.to_owned()];
-            answer.extend(prompt_parts.into_iter());
-            answer.join("\n")
-        };
-
-        if !selection_with_outline.outline_above.is_empty() {
-            prompts.push(prompt_with_outline(
-                "I have the following code above:",
-                selection_with_outline.outline_above.to_owned(),
-                self.editor_request.fs_file_path(),
-            ));
-        }
-
-        if selection_with_outline.selection_context.above.has_context() {
-            prompts.push(prompt_with_content(
-                "I have the following code above the selection:",
-                &selection_with_outline.selection_context.above,
-            ));
-        }
-
-        if selection_with_outline.selection_context.below.has_context() {
-            prompts.push(prompt_with_content(
-                "I have the following code below the selection:",
-                &selection_with_outline.selection_context.below,
-            ));
-        }
-
-        if !selection_with_outline.outline_below.is_empty() {
-            prompts.push(prompt_with_outline(
-                "I have the following code below:",
-                selection_with_outline.outline_below.to_owned(),
-                self.editor_request.fs_file_path(),
-            ));
-        }
-
-        let mut selection_prompt = vec![];
-        if selection_with_outline.selection_context.range.has_context() {
-            selection_prompt.push("I have the following code in the selection".to_owned());
-            selection_prompt.extend(
-                selection_with_outline
-                    .selection_context
-                    .range
-                    .generate_prompt(has_surrounding_context)
-                    .into_iter(),
-            );
-        } else {
-            let fs_file_path = self.editor_request.fs_file_path();
-            selection_prompt.push("I am working with the following code:".to_owned());
-            selection_prompt.push(format!("```{language}"));
-            selection_prompt.push(format!("// FILEPATH: {fs_file_path}"));
-            selection_prompt.push("// BEGIN".to_owned());
-            selection_prompt.push("// END".to_owned());
-            selection_prompt.push("```".to_owned());
-        }
-        prompts.push(selection_prompt.join("\n"));
-        prompts
     }
 }
 

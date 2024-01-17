@@ -14,6 +14,24 @@ pub struct InLineFixRequest {
 }
 
 impl InLineFixRequest {
+    pub fn new(
+        above: Option<String>,
+        below: Option<String>,
+        in_range: String,
+        diagnostics_prompts: Vec<String>,
+        language: String,
+        file_path: String,
+    ) -> Self {
+        Self {
+            above,
+            below,
+            in_range,
+            diagnostics_prompts,
+            language,
+            file_path,
+        }
+    }
+
     pub fn above(&self) -> Option<&String> {
         self.above.as_ref()
     }

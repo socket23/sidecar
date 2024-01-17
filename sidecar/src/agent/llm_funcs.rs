@@ -24,10 +24,7 @@ use tracing::debug;
 use tracing::error;
 use tracing::warn;
 
-use crate::chunking::text_document::DocumentSymbol;
 use crate::db::sqlite::SqlDb;
-use crate::in_line_agent::types::ContextSelection;
-use crate::in_line_agent::types::InLineAgentAnswer;
 use crate::llm::types::LLMCustomConfig;
 use crate::llm::types::LLMType;
 use crate::reporting::posthog::client::PosthogClient;
@@ -559,99 +556,6 @@ impl LlmClient {
                                 delta: Some(delta.to_owned()),
                             })
                             .expect("sending answer should not fail");
-                    }
-                    Some(Err(e)) => {
-                        warn!(?e, "openai stream error, retrying");
-                        continue 'retry_loop;
-                    }
-                }
-            }
-
-            return Ok(buf);
-        }
-        Err(anyhow::anyhow!(
-            "failed to get response from openai".to_owned()
-        ))
-    }
-
-    // TODO(skcd): This needs to move somewhere else, cause we are x-poulluting
-    // things between the agent and the in-line agent
-    pub async fn stream_response_inline_agent(
-        &self,
-        model: llm::OpenAIModel,
-        messages: Vec<llm::Message>,
-        functions: Option<Vec<llm::Function>>,
-        temperature: f32,
-        frequency_penalty: Option<f32>,
-        sender: tokio::sync::mpsc::UnboundedSender<InLineAgentAnswer>,
-        document_symbol: Option<DocumentSymbol>,
-        context_selection: Option<ContextSelection>,
-    ) -> anyhow::Result<String> {
-        let client = self.get_model(&model);
-        if client.is_none() {
-            return Err(anyhow::anyhow!("model not found"));
-        }
-        let request =
-            self.create_request(model, messages, functions, temperature, frequency_penalty);
-        self.capture_openai_request(request.clone()).await?;
-
-        const TOTAL_CHAT_RETRIES: usize = 5;
-
-        let mut last_answer = None;
-        let mut full_answer = None;
-
-        'retry_loop: for _ in 0..TOTAL_CHAT_RETRIES {
-            let mut buf = String::new();
-            let stream = client
-                .as_ref()
-                .expect("is_none to work")
-                .create_stream(request.clone())
-                .await;
-            if stream.is_err() {
-                continue 'retry_loop;
-            }
-            let unwrap_stream = stream.expect("is_err check above to work");
-            tokio::pin!(unwrap_stream);
-
-            loop {
-                match unwrap_stream.next().await {
-                    None => {
-                        if let Some(answer) = last_answer {
-                            self.capture_openai_request_response(
-                                request.clone(),
-                                answer,
-                                full_answer,
-                            )
-                            .await?;
-                        }
-                        break;
-                    }
-                    Some(Ok(s)) => {
-                        let delta = &s
-                            .choices
-                            .get(0)
-                            .map(|choice| choice.delta.content.clone())
-                            .flatten()
-                            .unwrap_or("".to_owned());
-                        buf += delta;
-                        full_answer = Some(buf.to_owned());
-                        sender
-                            .send(InLineAgentAnswer {
-                                answer_up_until_now: buf.to_owned(),
-                                delta: Some(delta.to_owned()),
-                                state: Default::default(),
-                                document_symbol: document_symbol.clone(),
-                                context_selection: context_selection.clone(),
-                            })
-                            .expect("sending answer should not fail");
-                        let value = s
-                            .choices
-                            .get(0)
-                            .map(|choice| choice.delta.content.as_ref())
-                            .flatten();
-                        if value.is_some() {
-                            last_answer = Some(s);
-                        }
                     }
                     Some(Err(e)) => {
                         warn!(?e, "openai stream error, retrying");

@@ -25,6 +25,7 @@ impl InLineEditPromptBroker {
                 LLMType::MistralInstruct,
                 Box::new(MistralLineEditPrompt::new()),
             )
+            .insert_prompt_generator(LLMType::Mixtral, Box::new(MistralLineEditPrompt::new()))
     }
 
     pub fn insert_prompt_generator(

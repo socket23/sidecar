@@ -101,7 +101,7 @@ impl TogetherAIClient {
     pub fn model_str(model: &LLMType) -> Option<String> {
         match model {
             LLMType::Mixtral => Some("mistralai/Mixtral-8x7B-Instruct-v0.1".to_owned()),
-            LLMType::MistralInstruct => Some("mistralai/Mistral-8x7B-Instruct-v0.1".to_owned()),
+            LLMType::MistralInstruct => Some("mistralai/Mistral-7B-Instruct-v0.1".to_owned()),
             LLMType::Custom(model) => Some(model.to_owned()),
             _ => None,
         }

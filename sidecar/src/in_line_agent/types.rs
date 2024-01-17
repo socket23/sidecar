@@ -8,6 +8,7 @@ use llm_client::clients::types::LLMClientCompletionRequest;
 use llm_client::clients::types::LLMClientCompletionResponse;
 use llm_client::clients::types::LLMClientCompletionStringRequest;
 use llm_client::clients::types::LLMClientMessage;
+use llm_client::clients::types::LLMType;
 use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
 use llm_prompts::in_line_edit::types::InLineEditPromptResponse;
 use llm_prompts::in_line_edit::types::InLineEditRequest;
@@ -119,6 +120,7 @@ pub struct InLineAgentAnswer {
     // We also send the document symbol in question along the wire
     pub document_symbol: Option<DocumentSymbol>,
     pub context_selection: Option<ContextSelection>,
+    pub model: LLMType,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -457,6 +459,7 @@ impl InLineAgent {
                 state: MessageState::Errored,
                 document_symbol: None,
                 context_selection: None,
+                model: self.editor_request.fast_model(),
             })?;
         } else {
             last_exchange.message_state = MessageState::StreamingAnswer;
@@ -496,6 +499,7 @@ impl InLineAgent {
                                 state: Default::default(),
                                 document_symbol: Some(document_symbol.clone()),
                                 context_selection: None,
+                                model: self_.editor_request.fast_model(),
                             })
                             .unwrap();
                     }
@@ -612,6 +616,7 @@ impl InLineAgent {
                         state: Default::default(),
                         document_symbol: Some(document_symbol.clone()),
                         context_selection: Some(selection_context.clone()),
+                        model: self.editor_request.fast_model(),
                     });
                 }
                 Either::Right(_) => {}
@@ -737,6 +742,7 @@ impl InLineAgent {
         let last_exchange = self.get_last_agent_message();
         last_exchange.message_state = MessageState::StreamingAnswer;
 
+        // send the request to the llm client
         let (sender, receiver) =
             tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
         let receiver_stream = UnboundedReceiverStream::new(receiver).map(Either::Left);
@@ -794,6 +800,7 @@ impl InLineAgent {
                         state: Default::default(),
                         document_symbol: Some(document_symbol.clone()),
                         context_selection: Some(selection_context.clone()),
+                        model: self.editor_request.fast_model(),
                     });
                 }
                 Either::Right(_) => {}

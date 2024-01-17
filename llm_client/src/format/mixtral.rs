@@ -1,4 +1,4 @@
-use crate::llm::clients::types::LLMClientMessage;
+use crate::clients::types::LLMClientMessage;
 
 use super::types::{LLMFormatting, TokenizerConfig, TokenizerError};
 
@@ -53,7 +53,8 @@ impl LLMFormatting for MixtralInstructFormatting {
 
 #[cfg(test)]
 mod tests {
-    use crate::llm::clients::types::LLMClientMessage;
+
+    use crate::clients::types::LLMClientMessage;
 
     use super::LLMFormatting;
     use super::MixtralInstructFormatting;
@@ -64,7 +65,7 @@ mod tests {
             LLMClientMessage::user("user_msg1".to_owned()),
             LLMClientMessage::assistant("assistant_msg1".to_owned()),
         ];
-        let mistral_formatting = MistralInstructFormatting::new().unwrap();
+        let mistral_formatting = MixtralInstructFormatting::new().unwrap();
         assert_eq!(
             mistral_formatting.to_prompt(messages),
             "<s>[INST] user_msg1 [/INST]assistant_msg1</s>",

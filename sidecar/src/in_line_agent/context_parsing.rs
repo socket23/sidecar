@@ -152,6 +152,10 @@ impl ContextParserInLineEdit {
         }
     }
 
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
     pub fn start_marker(&self) -> &str {
         &self.start_marker
     }

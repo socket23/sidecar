@@ -4,6 +4,36 @@
 
 use llm_client::clients::types::LLMClientMessage;
 
+pub struct InLineFixRequest {
+    above: Option<String>,
+    below: Option<String>,
+    in_range: Option<String>,
+    diagnostics_prompts: Vec<String>,
+    language: String,
+}
+
+impl InLineFixRequest {
+    pub fn above(&self) -> Option<&String> {
+        self.above.as_ref()
+    }
+
+    pub fn below(&self) -> Option<&String> {
+        self.below.as_ref()
+    }
+
+    pub fn in_range(&self) -> Option<&String> {
+        self.in_range.as_ref()
+    }
+
+    pub fn diagnostics_prompts(&self) -> &[String] {
+        &self.diagnostics_prompts
+    }
+
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+}
+
 pub struct InLineEditRequest {
     above: Option<String>,
     below: Option<String>,
@@ -70,18 +100,18 @@ impl InLineEditRequest {
 /// We might end up calling the chat or the completion endpoint for a LLM,
 /// its important that we support both
 #[derive(Debug)]
-pub enum InLineEditPromptResponse {
+pub enum InLinePromptResponse {
     Completion(String),
     Chat(Vec<LLMClientMessage>),
 }
 
-impl InLineEditPromptResponse {
+impl InLinePromptResponse {
     pub fn completion(completion: String) -> Self {
-        InLineEditPromptResponse::Completion(completion)
+        InLinePromptResponse::Completion(completion)
     }
 
     pub fn get_completion(self) -> Option<String> {
-        if let InLineEditPromptResponse::Completion(completion) = self {
+        if let InLinePromptResponse::Completion(completion) = self {
             Some(completion)
         } else {
             None
@@ -92,7 +122,9 @@ impl InLineEditPromptResponse {
 /// Should we send context here as the above, below and in line context, or do we
 /// just send the data as it is?
 pub trait InLineEditPrompt {
-    fn inline_edit(&self, request: InLineEditRequest) -> InLineEditPromptResponse;
+    fn inline_edit(&self, request: InLineEditRequest) -> InLinePromptResponse;
+
+    fn inline_fix(&self, request: InLineFixRequest) -> InLinePromptResponse;
 }
 
 /// The error type which we will return if we do not support that model yet

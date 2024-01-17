@@ -5,7 +5,7 @@ use llm_client::clients::types::LLMType;
 use super::{
     mistral::MistralLineEditPrompt,
     openai::OpenAILineEditPrompt,
-    types::{InLineEditPrompt, InLineEditPromptError, InLineEditPromptResponse, InLineEditRequest},
+    types::{InLineEditPrompt, InLineEditPromptError, InLineEditRequest, InLinePromptResponse},
 };
 
 pub struct InLineEditPromptBroker {
@@ -50,7 +50,7 @@ impl InLineEditPromptBroker {
         &self,
         llm_type: &LLMType,
         request: InLineEditRequest,
-    ) -> Result<InLineEditPromptResponse, InLineEditPromptError> {
+    ) -> Result<InLinePromptResponse, InLineEditPromptError> {
         let prompt_generator = self.get_prompt_generator(llm_type)?;
         Ok(prompt_generator.inline_edit(request))
     }

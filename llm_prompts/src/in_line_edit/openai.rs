@@ -1,8 +1,9 @@
 use llm_client::clients::types::LLMClientMessage;
 
 use super::types::InLineEditPrompt;
-use super::types::InLineEditPromptResponse;
 use super::types::InLineEditRequest;
+use super::types::InLineFixRequest;
+use super::types::InLinePromptResponse;
 
 pub struct OpenAILineEditPrompt {}
 
@@ -13,7 +14,7 @@ impl OpenAILineEditPrompt {
 }
 
 impl OpenAILineEditPrompt {
-    fn system_message(&self, language: &str) -> String {
+    fn system_message_inline_edit(&self, language: &str) -> String {
         format!(
             r#"You are an AI programming assistant.
 When asked for your name, you must respond with "Aide".
@@ -27,6 +28,24 @@ Follow the user's requirements carefully & to the letter.
 - Modify the code or create new code.
 - Unless directed otherwise, the user is expecting for you to edit their selected code.
 - Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by the user
+You must decline to answer if the question is not related to a developer.
+If the question is related to a developer, you must respond with content related to a developer."#
+        )
+    }
+
+    fn system_message_fix(&self, language: &str) -> String {
+        format!(
+            r#"You are an AI programming assistant.
+When asked for your name, you must respond with "Aide".
+Follow the user's requirements carefully & to the letter.
+- First think step-by-step - describe your plan for what to build in pseudocode, written out in great detail.
+- Then output the code in a single code block.
+- Minimize any other prose.
+- Each code block starts with ``` and // FILEPATH.
+- If you suggest to run a terminal command, use a code block that starts with ```bash.
+- You always answer with {language} code.
+- Modify the code or create new code.
+- Unless directed otherwise, the user is expecting for you to edit their selected code.
 You must decline to answer if the question is not related to a developer.
 If the question is related to a developer, you must respond with content related to a developer."#
         )
@@ -56,7 +75,7 @@ If the question is related to a developer, you must respond with content related
 }
 
 impl InLineEditPrompt for OpenAILineEditPrompt {
-    fn inline_edit(&self, request: InLineEditRequest) -> InLineEditPromptResponse {
+    fn inline_edit(&self, request: InLineEditRequest) -> InLinePromptResponse {
         // Here we create the messages for the openai, since we have flexibility
         // and the llms are in general smart we can just send the chat messages
         // instead of the completion(which has been deprecated)
@@ -66,7 +85,9 @@ impl InLineEditPrompt for OpenAILineEditPrompt {
         let language = request.language();
 
         let mut messages = vec![];
-        messages.push(LLMClientMessage::system(self.system_message(language)));
+        messages.push(LLMClientMessage::system(
+            self.system_message_inline_edit(language),
+        ));
         if let Some(above) = self.above_selection(above) {
             messages.push(LLMClientMessage::user(above));
         }
@@ -81,6 +102,10 @@ impl InLineEditPrompt for OpenAILineEditPrompt {
         messages.push(LLMClientMessage::system(format!(
             r#"Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by me"#
         )));
-        InLineEditPromptResponse::Chat(messages)
+        InLinePromptResponse::Chat(messages)
+    }
+
+    fn inline_fix(&self, request: InLineFixRequest) -> InLinePromptResponse {
+        unimplemented!();
     }
 }

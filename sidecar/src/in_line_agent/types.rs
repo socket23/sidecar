@@ -10,6 +10,8 @@ use llm_client::clients::types::LLMClientCompletionStringRequest;
 use llm_client::clients::types::LLMClientMessage;
 use llm_client::clients::types::LLMType;
 use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
+use llm_prompts::in_line_edit::types::InLineDocNode;
+use llm_prompts::in_line_edit::types::InLineDocRequest;
 use llm_prompts::in_line_edit::types::InLineEditRequest;
 use llm_prompts::in_line_edit::types::InLineFixRequest;
 use llm_prompts::in_line_edit::types::InLinePromptResponse;
@@ -482,40 +484,94 @@ impl InLineAgent {
                 &request,
             );
             let fast_model = self.editor_request.fast_model();
-            let provider = self
-                .editor_request
-                .provider_for_fast_model()
-                .ok_or(anyhow::anyhow!(
-                    "No provider found for fast model: {:?}",
-                    fast_model
-                ))?;
             let self_ = &*self;
+            let provider =
+                self_
+                    .editor_request
+                    .provider_for_fast_model()
+                    .ok_or(anyhow::anyhow!(
+                        "No provider found for fast model: {:?}",
+                        fast_model
+                    ))?;
+            let fast_model = self_.editor_request.fast_model();
             stream::iter(messages_list)
-                .map(|messages| (messages, answer_sender.clone()))
-                .for_each(|((messages, document_symbol), answer_sender)| async move {
-                    let fast_model = self_.editor_request.fast_model();
-                    let (proxy_sender, _proxy_receiver) = tokio::sync::mpsc::unbounded_channel();
-                    let request =
-                        LLMClientCompletionRequest::from_messages(messages, fast_model.clone());
-                    let answer = self_
-                        .get_llm_broker()
-                        .stream_completion(provider.clone(), request, proxy_sender)
-                        .await;
-                    // we send the answer after we have generated the whole thing
-                    // not in between as its not proactive updates
-                    if let Ok(answer) = answer {
-                        answer_sender
-                            .send(InLineAgentAnswer {
-                                answer_up_until_now: answer.to_owned(),
-                                delta: Some(answer.to_owned()),
-                                state: Default::default(),
-                                document_symbol: Some(document_symbol.clone()),
-                                context_selection: None,
-                                model: self_.editor_request.fast_model(),
-                            })
-                            .unwrap();
-                    }
-                })
+                .map(|messages| (messages, answer_sender.clone(), fast_model.clone()))
+                .for_each(
+                    |((doc_generation_request, document_symbol), answer_sender, fast_model)| async move {
+                        let prompt = self_
+                            .llm_prompt_formatter
+                            .get_doc_prompt(&fast_model, doc_generation_request);
+                        if let Err(_) = prompt {
+                            return;
+                        }
+                        let context_selection = ContextSelection::generate_placeholder_for_range(&document_symbol.range());
+                        let prompt = prompt.expect("if let Err above to hold");
+                        // send the request to the llm client
+                        let (sender, receiver) =
+                            tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
+                        let receiver_stream =
+                            UnboundedReceiverStream::new(receiver).map(Either::Left);
+                        let llm_broker = self_.get_llm_broker().clone();
+                        let answer_stream = {
+                            match prompt {
+                                InLinePromptResponse::Chat(chat) => {
+                                    let request = LLMClientCompletionRequest::from_messages(
+                                        chat,
+                                        fast_model.clone(),
+                                    );
+                                    llm_broker
+                                        .stream_answer(
+                                            provider.clone(),
+                                            futures::future::Either::Left(request),
+                                            sender,
+                                        )
+                                        .into_stream()
+                                }
+                                InLinePromptResponse::Completion(prompt) => {
+                                    let request = LLMClientCompletionStringRequest::new(
+                                        fast_model.clone(),
+                                        prompt,
+                                        0.0,
+                                        None,
+                                    );
+                                    llm_broker
+                                        .stream_answer(
+                                            provider.clone(),
+                                            futures::future::Either::Right(request),
+                                            sender,
+                                        )
+                                        .into_stream()
+                                }
+                            }
+                        }
+                        .map(Either::Right);
+
+                        let merged_stream = stream::select(receiver_stream, answer_stream);
+                        // this worked out somehow?
+                        pin_mut!(merged_stream);
+
+                        // Play with the streams here so we can send incremental updates ASAP
+                        while let Some(item) = merged_stream.next().await {
+                            match item {
+                                Either::Left(receiver_element) => {
+                                    let _ = answer_sender.send(InLineAgentAnswer {
+                                        answer_up_until_now: receiver_element
+                                            .answer_up_until_now()
+                                            .to_owned(),
+                                        delta: receiver_element
+                                            .delta()
+                                            .map(|delta| delta.to_owned()),
+                                        state: Default::default(),
+                                        document_symbol: Some(document_symbol.clone()),
+                                        context_selection: Some(context_selection.clone()),
+                                        model: self_.editor_request.fast_model(),
+                                    });
+                                }
+                                Either::Right(_) => {}
+                            }
+                        }
+                    },
+                )
                 .await;
         }
         // here we can have a case where we didn't detect any documentation node
@@ -843,29 +899,23 @@ impl InLineAgent {
         language: &str,
         file_path: &str,
         query: &str,
-    ) -> Vec<(Vec<LLMClientMessage>, DocumentSymbol)> {
+    ) -> Vec<(InLineDocRequest, DocumentSymbol)> {
         document_symbols
             .into_iter()
             .map(|document_symbol| {
-                let system_message = LLMClientMessage::system(
-                    prompts::documentation_system_prompt(language, document_symbol.kind.is_some()),
-                );
                 // Here we want to generate the context for the prompt
                 let code_selection_prompt = LLMClientMessage::user(self.document_symbol_prompt(
                     &document_symbol,
                     language,
                     file_path,
                 ));
-                let user_prompt = format!(
-                    "{} {}. Do not forget to include the FILEPATH marker in your generated code.",
-                    self.document_symbol_metadata(&document_symbol, language,),
-                    query,
+                let inline_doc_request = InLineDocRequest::new(
+                    self.document_symbol_prompt(&document_symbol, language, file_path),
+                    self.inline_doc_node(&document_symbol),
+                    language.to_owned(),
+                    file_path.to_owned(),
                 );
-                let metadata_prompt = LLMClientMessage::user(user_prompt);
-                (
-                    vec![system_message, code_selection_prompt, metadata_prompt],
-                    document_symbol,
-                )
+                (inline_doc_request, document_symbol)
             })
             .collect::<Vec<_>>()
     }
@@ -881,36 +931,18 @@ impl InLineAgent {
             r#"I have the following code in the selection:
 ```{language}
 // FILEPATH: {file_path}
+// BEGIN: ed8c6549bwf9
 {code}
-```
-"#
+// END: ed8c6549bwf9
+```"#
         );
         prompt_string
     }
 
-    fn document_symbol_metadata(&self, document_symbol: &DocumentSymbol, language: &str) -> String {
-        let comment_type = match language {
-            "typescript" | "typescriptreact" => match document_symbol.kind {
-                Some(_) => "a TSDoc comment".to_owned(),
-                None => "TSDoc comment".to_owned(),
-            },
-            "javascript" | "javascriptreact" => match document_symbol.kind {
-                Some(_) => "a JSDoc comment".to_owned(),
-                None => "JSDoc comment".to_owned(),
-            },
-            "python" => "docstring".to_owned(),
-            "rust" => "Rustdoc comment".to_owned(),
-            _ => "documentation comment".to_owned(),
-        };
-
-        // Now we want to generate the document symbol metadata properly
-        match &document_symbol.name {
-            Some(name) => {
-                format!("Please add {comment_type} for {name}.")
-            }
-            None => {
-                format!("Please add {comment_type} for the selection.")
-            }
+    fn inline_doc_node(&self, document_symbol: &DocumentSymbol) -> InLineDocNode {
+        match document_symbol.name.as_ref() {
+            Some(name) => InLineDocNode::Node(name.to_owned()),
+            None => InLineDocNode::Selection,
         }
     }
 

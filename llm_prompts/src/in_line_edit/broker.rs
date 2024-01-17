@@ -6,8 +6,8 @@ use super::{
     mistral::MistralLineEditPrompt,
     openai::OpenAILineEditPrompt,
     types::{
-        InLineEditPrompt, InLineEditPromptError, InLineEditRequest, InLineFixRequest,
-        InLinePromptResponse,
+        InLineDocRequest, InLineEditPrompt, InLineEditPromptError, InLineEditRequest,
+        InLineFixRequest, InLinePromptResponse,
     },
 };
 
@@ -65,5 +65,14 @@ impl InLineEditPromptBroker {
     ) -> Result<InLinePromptResponse, InLineEditPromptError> {
         let prompt_generator = self.get_prompt_generator(llm_type)?;
         Ok(prompt_generator.inline_fix(request))
+    }
+
+    pub fn get_doc_prompt(
+        &self,
+        llm_type: &LLMType,
+        request: InLineDocRequest,
+    ) -> Result<InLinePromptResponse, InLineEditPromptError> {
+        let prompt_generator = self.get_prompt_generator(llm_type)?;
+        Ok(prompt_generator.inline_doc(request))
     }
 }

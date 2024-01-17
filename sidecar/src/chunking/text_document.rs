@@ -282,6 +282,10 @@ impl DocumentSymbol {
             code: "edit".to_owned(),
         }
     }
+
+    pub fn range(&self) -> Range {
+        Range::new(self.start_position.clone(), self.end_position.clone())
+    }
 }
 
 impl DocumentSymbol {

@@ -106,6 +106,29 @@ impl InLineEditPrompt for OpenAILineEditPrompt {
     }
 
     fn inline_fix(&self, request: InLineFixRequest) -> InLinePromptResponse {
-        unimplemented!();
+        let above = request.above();
+        let below = request.below();
+        let in_range = request.in_range();
+        let language = request.language();
+
+        let mut messages = vec![];
+        messages.push(LLMClientMessage::system(self.system_message_fix(language)));
+        if let Some(above) = self.above_selection(above) {
+            messages.push(LLMClientMessage::user(above));
+        }
+        if let Some(below) = self.below_selection(below) {
+            messages.push(LLMClientMessage::user(below));
+        }
+        messages.push(LLMClientMessage::user(in_range.to_owned()));
+        messages.extend(
+            request
+                .diagnostics_prompts()
+                .into_iter()
+                .map(|diagnostic_prompt| LLMClientMessage::user(diagnostic_prompt.to_owned())),
+        );
+        messages.push(
+            LLMClientMessage::user("Do not forget to include the // BEGIN and // END markers in your generated code. Only change the code inside of the selection, delimited by the markers: // BEGIN: ed8c6549bwf9 and // END: ed8c6549bwf9".to_owned())
+        );
+        InLinePromptResponse::Chat(messages)
     }
 }

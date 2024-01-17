@@ -7,9 +7,10 @@ use llm_client::clients::types::LLMClientMessage;
 pub struct InLineFixRequest {
     above: Option<String>,
     below: Option<String>,
-    in_range: Option<String>,
+    in_range: String,
     diagnostics_prompts: Vec<String>,
     language: String,
+    file_path: String,
 }
 
 impl InLineFixRequest {
@@ -21,7 +22,7 @@ impl InLineFixRequest {
         self.below.as_ref()
     }
 
-    pub fn in_range(&self) -> Option<&String> {
+    pub fn in_range(&self) -> &str {
         self.in_range.as_ref()
     }
 
@@ -31,6 +32,10 @@ impl InLineFixRequest {
 
     pub fn language(&self) -> &str {
         &self.language
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
     }
 }
 

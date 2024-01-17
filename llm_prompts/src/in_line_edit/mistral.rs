@@ -1,8 +1,7 @@
-use llm_client::format::types::LLMFormatting;
-
 use super::types::InLineEditPrompt;
-use super::types::InLineEditPromptResponse;
 use super::types::InLineEditRequest;
+use super::types::InLineFixRequest;
+use super::types::InLinePromptResponse;
 
 pub struct MistralLineEditPrompt {}
 
@@ -58,7 +57,7 @@ impl MistralLineEditPrompt {
 }
 
 impl InLineEditPrompt for MistralLineEditPrompt {
-    fn inline_edit(&self, request: InLineEditRequest) -> InLineEditPromptResponse {
+    fn inline_edit(&self, request: InLineEditRequest) -> InLinePromptResponse {
         let extra_data_context = self.extra_code_context(request.extra_data());
         let code_context = self.code_context(&request);
         let user_query = request.user_query();
@@ -93,7 +92,11 @@ Code you have to edit:
 // FILEPATH: {file_path}
 // BEGIN: ed8c6549bwf9"#
         );
-        InLineEditPromptResponse::completion(prompt)
+        InLinePromptResponse::completion(prompt)
+    }
+
+    fn inline_fix(&self, request: InLineFixRequest) -> InLinePromptResponse {
+        unimplemented!();
     }
 }
 

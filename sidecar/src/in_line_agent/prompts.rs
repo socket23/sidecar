@@ -132,8 +132,7 @@ Follow the user's requirements carefully & to the letter.
 - Modify the code or create new code.
 - Unless directed otherwise, the user is expecting for you to edit their selected code.
 You must decline to answer if the question is not related to a developer.
-If the question is related to a developer, you must respond with content related to a developer.    
-    "#
+If the question is related to a developer, you must respond with content related to a developer."#
     );
     system_prompt
 }

@@ -10,8 +10,8 @@ use llm_client::clients::types::LLMClientCompletionStringRequest;
 use llm_client::clients::types::LLMClientMessage;
 use llm_client::clients::types::LLMType;
 use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
-use llm_prompts::in_line_edit::types::InLineEditPromptResponse;
 use llm_prompts::in_line_edit::types::InLineEditRequest;
+use llm_prompts::in_line_edit::types::InLinePromptResponse;
 use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
@@ -761,7 +761,7 @@ impl InLineAgent {
             ))?;
         let answer_stream = {
             match prompt {
-                InLineEditPromptResponse::Chat(chat) => {
+                InLinePromptResponse::Chat(chat) => {
                     let request =
                         LLMClientCompletionRequest::from_messages(chat, fast_model.clone());
                     llm_broker
@@ -772,7 +772,7 @@ impl InLineAgent {
                         )
                         .into_stream()
                 }
-                InLineEditPromptResponse::Completion(prompt) => {
+                InLinePromptResponse::Completion(prompt) => {
                     let request = LLMClientCompletionStringRequest::new(
                         fast_model.clone(),
                         prompt,

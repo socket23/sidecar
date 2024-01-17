@@ -2953,6 +2953,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sqlx",
  "thiserror",
  "tiktoken-rs",
  "tokenizers",

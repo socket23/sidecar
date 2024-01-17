@@ -1,3 +1,6 @@
+use super::doc_helpers::documentation_type;
+use super::doc_helpers::selection_type;
+use super::types::InLineDocRequest;
 use super::types::InLineEditPrompt;
 use super::types::InLineEditRequest;
 use super::types::InLineFixRequest;
@@ -120,6 +123,24 @@ You have to fix the code below, generate the code without any explanation [/INST
 // BEGIN: ed8c6549bwf9"#
         );
         InLinePromptResponse::completion(prompt)
+    }
+
+    fn inline_doc(&self, request: InLineDocRequest) -> InLinePromptResponse {
+        let comment_type = documentation_type(&request);
+        let selection_type = selection_type(&request);
+        let in_range = request.in_range();
+        let language = request.language();
+        let file_path = request.file_path();
+        let prompt = format!(
+            r#"[INST] You are an expert software engineer. You have to generate {comment_type} for {selection_type}, the {selection_type} is given below:
+{in_range}
+
+Add {comment_type} and generate the code without any explanation [/INST]
+```{language}
+// FILEPATH: {file_path}
+// BEGIN: ed8c6549bwf9"#
+        );
+        InLinePromptResponse::Completion(prompt)
     }
 }
 

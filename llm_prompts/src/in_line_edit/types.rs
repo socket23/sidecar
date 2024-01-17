@@ -4,6 +4,66 @@
 
 use llm_client::clients::types::LLMClientMessage;
 
+pub enum InLineDocNode {
+    /// This might just be a selection of code
+    Selection,
+    /// We might have a single symbol in the selection
+    Node(String),
+}
+
+pub struct InLineDocRequest {
+    in_range: String,
+    is_identifier_node: InLineDocNode,
+    language: String,
+    file_path: String,
+}
+
+impl InLineDocRequest {
+    pub fn new(
+        in_range: String,
+        is_identifier_node: InLineDocNode,
+        language: String,
+        file_path: String,
+    ) -> Self {
+        Self {
+            in_range,
+            is_identifier_node,
+            language,
+            file_path,
+        }
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
+
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+
+    pub fn identifier_node(&self) -> &InLineDocNode {
+        &self.is_identifier_node
+    }
+
+    pub fn in_range(&self) -> &str {
+        &self.in_range
+    }
+
+    pub fn is_identifier_node(&self) -> bool {
+        match self.is_identifier_node {
+            InLineDocNode::Node(_) => true,
+            InLineDocNode::Selection => false,
+        }
+    }
+
+    pub fn identifier_node_str(&self) -> Option<&str> {
+        match self.is_identifier_node {
+            InLineDocNode::Node(ref node) => Some(node),
+            InLineDocNode::Selection => None,
+        }
+    }
+}
+
 pub struct InLineFixRequest {
     above: Option<String>,
     below: Option<String>,
@@ -148,6 +208,8 @@ pub trait InLineEditPrompt {
     fn inline_edit(&self, request: InLineEditRequest) -> InLinePromptResponse;
 
     fn inline_fix(&self, request: InLineFixRequest) -> InLinePromptResponse;
+
+    fn inline_doc(&self, request: InLineDocRequest) -> InLinePromptResponse;
 }
 
 /// The error type which we will return if we do not support that model yet

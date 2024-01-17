@@ -1,5 +1,8 @@
 use llm_client::clients::types::LLMClientMessage;
 
+use crate::in_line_edit::doc_helpers::document_symbol_metadata;
+
+use super::types::InLineDocRequest;
 use super::types::InLineEditPrompt;
 use super::types::InLineEditRequest;
 use super::types::InLineFixRequest;
@@ -49,6 +52,36 @@ Follow the user's requirements carefully & to the letter.
 You must decline to answer if the question is not related to a developer.
 If the question is related to a developer, you must respond with content related to a developer."#
         )
+    }
+
+    fn documentation_system_prompt(&self, language: &str, is_identifier_node: bool) -> String {
+        if is_identifier_node {
+            let system_prompt = format!(
+                r#"You are an AI programming assistant.
+When asked for your name, you must respond with "Aide".
+Follow the user's requirements carefully & to the letter.
+- Each code block must ALWAYS STARTS and include ```{language} and // FILEPATH
+- You always answer with {language} code.
+- When the user asks you to document something, you must answer in the form of a {language} code block.
+- Your documentation should not include just the name of the function, think about what the function is really doing.
+- When generating the documentation, be sure to understand what the function is doing and include that as part of the documentation and then generate the documentation.
+- DO NOT modify the code which you will be generating"#
+            );
+            system_prompt.to_owned()
+        } else {
+            let system_prompt = format!(
+                r#"You are an AI programming assistant.
+When asked for your name, you must respond with "Aide".
+Follow the user's requirements carefully & to the letter.
+- Each code block must ALWAYS STARTS and include ```{language} and // FILEPATH
+- You always answer with {language} code.
+- When the user asks you to document something, you must answer in the form of a {language} code block.
+- Your documentation should not include just the code selection, think about what the selection is really doing.
+- When generating the documentation, be sure to understand what the selection is doing and include that as part of the documentation and then generate the documentation.
+- DO NOT modify the code which you will be generating"#
+            );
+            system_prompt.to_owned()
+        }
     }
 
     fn above_selection(&self, above_context: Option<&String>) -> Option<String> {
@@ -129,6 +162,17 @@ impl InLineEditPrompt for OpenAILineEditPrompt {
         messages.push(
             LLMClientMessage::user("Do not forget to include the // BEGIN and // END markers in your generated code. Only change the code inside of the selection, delimited by the markers: // BEGIN: ed8c6549bwf9 and // END: ed8c6549bwf9".to_owned())
         );
+        InLinePromptResponse::Chat(messages)
+    }
+
+    fn inline_doc(&self, request: InLineDocRequest) -> InLinePromptResponse {
+        let system_prompt =
+            self.documentation_system_prompt(request.language(), request.is_identifier_node());
+        let mut messages = vec![];
+        messages.push(LLMClientMessage::system(system_prompt));
+        messages.push(LLMClientMessage::user(request.in_range().to_owned()));
+        messages.push(LLMClientMessage::user(document_symbol_metadata(&request)));
+        messages.push(LLMClientMessage::user("Do not forget to the include the // BEGIN and // END markers in your generated code. Only change the code provided to you in the selection".to_owned()));
         InLinePromptResponse::Chat(messages)
     }
 }

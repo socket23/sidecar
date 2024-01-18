@@ -89,39 +89,6 @@ pub async fn search_agent(
     generate_agent_stream(agent, action, receiver).await
 }
 
-// Here we are experimenting with lexical search:
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-struct SearchQuery {
-    query: String,
-    repo: RepoRef,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-struct SearchResponseForLexicalSearch {
-    code_documents: Vec<CodeSnippetDocument>,
-    repo: RepoRef,
-}
-
-impl ApiResponse for SearchResponseForLexicalSearch {}
-
-impl ApiResponse for SearchQuery {}
-
-pub async fn lexical_search(
-    axumQuery(SemanticSearchQuery { query, reporef }): axumQuery<SemanticSearchQuery>,
-    Extension(app): Extension<Application>,
-) -> Result<impl IntoResponse> {
-    let documents = app
-        .indexes
-        .code_snippet
-        .lexical_search(&reporef, &query, 10)
-        .await
-        .expect("lexical search to not fail");
-    Ok(json(SearchResponseForLexicalSearch {
-        code_documents: documents,
-        repo: reporef,
-    }))
-}
-
 // Here we are going to provide a hybrid search index which combines both the
 // lexical and the semantic search together
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]

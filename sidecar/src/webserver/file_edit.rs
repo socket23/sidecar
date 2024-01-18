@@ -151,7 +151,6 @@ pub async fn file_edit(
             app.posthog_client.clone(),
             app.sql.clone(),
             app.user_id.to_owned(),
-            app.llm_config.clone(),
             openai_key,
         ))
     } else {
@@ -159,7 +158,6 @@ pub async fn file_edit(
             app.posthog_client.clone(),
             app.sql.clone(),
             app.user_id.to_owned(),
-            app.llm_config.clone(),
         ))
     };
 

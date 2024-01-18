@@ -19,14 +19,13 @@ use async_openai::types::CreateCompletionRequestArgs;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
 use futures::StreamExt;
+use llm_client::clients::types::LLMType;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
 
 use crate::db::sqlite::SqlDb;
-use crate::llm::types::LLMCustomConfig;
-use crate::llm::types::LLMType;
 use crate::reporting::posthog::client::PosthogClient;
 use crate::reporting::posthog::client::PosthogEvent;
 
@@ -290,12 +289,6 @@ pub struct LlmClient {
     posthog_client: Arc<PosthogClient>,
     sql_db: SqlDb,
     user_id: String,
-    //TODO(skcd): We need a better toggle for this, because our prompt engine should also
-    // understand the kind of llm we are using and take that into account
-    // for now, we can keep using the same prompts but the burden of construction
-    // will fall on every place which constructs the prompt
-    custom_llm: Option<ClientEndpoint>,
-    custom_llm_type: LLMType,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -355,7 +348,6 @@ impl LlmClient {
         posthog_client: Arc<PosthogClient>,
         sql_db: SqlDb,
         user_id: String,
-        llm_config: LLMCustomConfig,
     ) -> LlmClient {
         let api_base = "https://codestory-gpt4.openai.azure.com".to_owned();
         let api_key = "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned();
@@ -376,13 +368,6 @@ impl LlmClient {
             .clone()
             .with_deployment_id("gpt-4-turbo".to_owned());
         let gpt3_5_config = azure_config.with_deployment_id("gpt35-turbo-access".to_owned());
-        let custom_llm = match llm_config.non_openai_endpoint() {
-            Some(endpoint) => {
-                let config = OpenAIConfig::new().with_api_base(endpoint);
-                Some(ClientEndpoint::OpenAI(Client::with_config(config)))
-            }
-            None => None,
-        };
         Self {
             gpt4_client: ClientEndpoint::Azure(Client::with_config(gpt4_config)),
             gpt432k_client: ClientEndpoint::Azure(Client::with_config(gpt4_32k_config)),
@@ -392,8 +377,6 @@ impl LlmClient {
             posthog_client,
             sql_db,
             user_id,
-            custom_llm,
-            custom_llm_type: llm_config.llm.clone(),
         }
     }
 
@@ -401,7 +384,6 @@ impl LlmClient {
         posthog_client: Arc<PosthogClient>,
         sql_db: SqlDb,
         user_id: String,
-        llm_config: LLMCustomConfig,
         api_key: String,
     ) -> LlmClient {
         let openai_config = OpenAIConfig::new().with_api_key(api_key);
@@ -422,8 +404,6 @@ impl LlmClient {
             posthog_client,
             sql_db,
             user_id,
-            custom_llm: None,
-            custom_llm_type: llm_config.llm.clone(),
         }
     }
 
@@ -827,36 +807,24 @@ impl LlmClient {
     fn get_model(&self, model: &llm::OpenAIModel) -> Option<&ClientEndpoint> {
         // If the user has provided a model for us we can use that instead of
         // doing anything fancy over here
-        if let Some(custom_client) = self.custom_llm.as_ref() {
-            return Some(custom_client);
-        }
         let client = match model {
             llm::OpenAIModel::GPT4 => &self.gpt4_client,
             llm::OpenAIModel::GPT4_32k => &self.gpt432k_client,
             llm::OpenAIModel::GPT3_5_16k => &self.gpt3_5_client,
             llm::OpenAIModel::GPT4_Turbo => &self.gpt4_turbo_client,
             llm::OpenAIModel::GPT3_5Instruct => return None,
-            llm::OpenAIModel::OpenHermes2_5Mistral7b => {
-                return self.custom_llm.as_ref();
-            }
             _ => return None,
         };
         Some(client)
     }
 
     fn get_model_openai(&self, model: &llm::OpenAIModel) -> Option<&ClientEndpoint> {
-        if let Some(custom_client) = self.custom_llm.as_ref() {
-            return Some(custom_client);
-        }
         let client = match model {
             llm::OpenAIModel::GPT4 => return None,
             llm::OpenAIModel::GPT4_32k => return None,
             llm::OpenAIModel::GPT3_5_16k => return None,
             llm::OpenAIModel::GPT4_Turbo => return None,
             llm::OpenAIModel::GPT3_5Instruct => &self.gpt3_5_turbo_instruct,
-            llm::OpenAIModel::OpenHermes2_5Mistral7b => {
-                return self.custom_llm.as_ref();
-            }
             _ => return None,
         };
         Some(client)

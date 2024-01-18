@@ -14,7 +14,10 @@ use crate::{
     db::sqlite::SqlDb,
     indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
-    webserver::agent::{ActiveWindowData, UserContext},
+    webserver::{
+        agent::{ActiveWindowData, UserContext},
+        model_selection::LLMClientConfig,
+    },
 };
 
 use super::{
@@ -668,6 +671,7 @@ pub struct Agent {
     pub user_context: Option<UserContext>,
     pub project_labels: Vec<String>,
     pub editor_parsing: EditorParsing,
+    pub model_config: LLMClientConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

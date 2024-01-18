@@ -1,4 +1,5 @@
 use super::agent_stream::generate_agent_stream;
+use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
 use std::collections::HashSet;
@@ -17,7 +18,6 @@ use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
-use crate::indexes::code_snippet::CodeSnippetDocument;
 use crate::repo::types::RepoRef;
 
 use super::types::ApiResponse;
@@ -27,12 +27,13 @@ fn default_thread_id() -> uuid::Uuid {
     uuid::Uuid::new_v4()
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SearchInformation {
     pub query: String,
     pub reporef: RepoRef,
     #[serde(default = "default_thread_id")]
     pub thread_id: uuid::Uuid,
+    pub model_config: LLMClientConfig,
 }
 
 impl ApiResponse for SearchInformation {}
@@ -55,6 +56,7 @@ pub async fn search_agent(
         query,
         reporef,
         thread_id,
+        model_config,
     }): axumQuery<SearchInformation>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
@@ -86,6 +88,7 @@ pub async fn search_agent(
         previous_conversation_message,
         sender,
         Default::default(),
+        model_config,
     );
 
     generate_agent_stream(agent, action, receiver).await
@@ -97,6 +100,7 @@ pub async fn search_agent(
 pub struct HybridSearchQuery {
     query: String,
     repo: RepoRef,
+    model_config: LLMClientConfig,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -112,7 +116,11 @@ impl ApiResponse for HybridSearchResponse {}
 /// and lexical search along with statistics from the git log to generate the
 /// best code spans which are relevant
 pub async fn hybrid_search(
-    axumQuery(HybridSearchQuery { query, repo }): axumQuery<HybridSearchQuery>,
+    axumQuery(HybridSearchQuery {
+        query,
+        repo,
+        model_config,
+    }): axumQuery<HybridSearchQuery>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     // Here we want to do the following:
@@ -146,6 +154,7 @@ pub async fn hybrid_search(
         vec![], // we don't have a previous conversation message here
         sender,
         Default::default(),
+        model_config,
     );
     let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
     Ok(json(HybridSearchResponse {
@@ -164,6 +173,7 @@ pub struct ExplainRequest {
     repo_ref: RepoRef,
     #[serde(default = "default_thread_id")]
     thread_id: uuid::Uuid,
+    model_config: LLMClientConfig,
 }
 
 /// We are going to handle the explain function here, but its going to be very
@@ -179,6 +189,7 @@ pub async fn explain(
         end_line,
         repo_ref,
         thread_id,
+        model_config,
     }): axumQuery<ExplainRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
@@ -258,6 +269,7 @@ pub async fn explain(
         user_context: None,
         project_labels: vec![],
         editor_parsing,
+        model_config,
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -386,6 +398,7 @@ pub struct FollowupChatRequest {
     pub project_labels: Vec<String>,
     pub active_window_data: Option<ActiveWindowData>,
     pub openai_key: Option<String>,
+    pub model_config: LLMClientConfig,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -466,6 +479,7 @@ pub async fn followup_chat(
         project_labels,
         active_window_data,
         openai_key,
+        model_config,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_config = app.llm_config.clone();
@@ -541,6 +555,7 @@ pub async fn followup_chat(
             user_context,
             project_labels,
             Default::default(),
+            model_config,
         )
     } else {
         Agent::prepare_for_followup(
@@ -560,6 +575,7 @@ pub async fn followup_chat(
             user_context,
             project_labels,
             Default::default(),
+            model_config,
         )
     };
 
@@ -573,6 +589,7 @@ pub struct GotoDefinitionSymbolsRequest {
     pub repo_ref: RepoRef,
     pub thread_id: uuid::Uuid,
     pub openai_key: Option<String>,
+    pub model_config: LLMClientConfig,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -590,6 +607,7 @@ pub async fn go_to_definition_symbols(
         repo_ref,
         thread_id,
         openai_key,
+        model_config,
     }): Json<GotoDefinitionSymbolsRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_broker = app.llm_broker.clone();
@@ -626,6 +644,7 @@ pub async fn go_to_definition_symbols(
         user_context: None,
         project_labels: vec![],
         editor_parsing,
+        model_config,
     };
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     Ok(json(GotoDefinitionSymbolsResponse {

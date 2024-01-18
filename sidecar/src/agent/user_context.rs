@@ -6,6 +6,8 @@ use std::sync::Arc;
 
 use futures::stream;
 use futures::StreamExt;
+use llm_client::clients::types::LLMType;
+use llm_client::tokenizer::tokenizer::LLMTokenizer;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 use tantivy::collector::TopDocs;
@@ -34,7 +36,7 @@ impl Agent {
         &mut self,
         messages: Vec<llm_funcs::llm::Message>,
     ) -> anyhow::Result<()> {
-        let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
+        let model = self.slow_llm_model();
         let query = query_from_messages(messages.as_slice());
 
         let history_token_limit = self.model.history_tokens_limit;
@@ -72,8 +74,10 @@ impl Agent {
         let code_spans = if user_context.is_empty() {
             match open_file_data {
                 Some(open_file) => {
-                    let file_tokens = bpe.encode_ordinary(&open_file.file_content).len();
-                    if file_tokens <= prompt_token_limit {
+                    let file_tokens_len = self
+                        .llm_tokenizer
+                        .count_tokens_using_tokenizer(model, &open_file.file_content)?;
+                    if file_tokens_len <= prompt_token_limit {
                         // we are good, no need to filter things out here
                         vec![CodeSpan::from_active_window(open_file, 0)]
                     } else {
@@ -84,13 +88,8 @@ impl Agent {
                             file_content: open_file.file_content.clone(),
                             language: open_file.language.clone(),
                         }];
-                        self.truncate_files_to_fit_in_limit(
-                            files,
-                            messages,
-                            prompt_token_limit,
-                            &bpe,
-                        )
-                        .await?
+                        self.truncate_files_to_fit_in_limit(files, messages, prompt_token_limit)
+                            .await?
                     }
                 }
                 None => {
@@ -108,12 +107,11 @@ impl Agent {
                     user_variables,
                     file_content.clone(),
                     prompt_token_limit,
-                    &bpe,
                 )
                 .await?;
             // Save this to the last message
             self.save_extended_code_selection_variables(selection_variables)?;
-            self.truncate_files_to_fit_in_limit(file_content, messages, remaining_tokens, &bpe)
+            self.truncate_files_to_fit_in_limit(file_content, messages, remaining_tokens)
                 .await?
         };
         // Now we update the code spans which we have selected
@@ -135,7 +133,6 @@ impl Agent {
         user_variables: Vec<VariableInformation>,
         file_content_map: Vec<FileContentValue>,
         prompt_token_limit: usize,
-        bpe: &tiktoken_rs::CoreBPE,
         // We return here the extended variable information and the tokens which remain
     ) -> anyhow::Result<(Vec<ExtendedVariableInformation>, usize)> {
         // Here we will try to get the enclosing span of the context which the user has selected
@@ -174,24 +171,31 @@ impl Agent {
                 let start_line = start_line as usize;
                 let end_line = end_line as usize;
                 let content = file_lines[start_line..end_line].join("\n");
-                let tokens = bpe.encode_ordinary(&content).len();
-                if tokens_used + tokens >= prompt_token_limit {
-                    return None;
-                } else {
-                    tokens_used += tokens;
+                let tokens = self
+                    .llm_tokenizer
+                    .count_tokens_using_tokenizer(self.slow_llm_model(), &content);
+                match tokens {
+                    Ok(tokens) => {
+                        if tokens_used + tokens >= prompt_token_limit {
+                            return None;
+                        } else {
+                            tokens_used += tokens;
+                        }
+                        Some(ExtendedVariableInformation::new(
+                            selection_variable.to_agent_type(),
+                            Some(CodeSpan::new(
+                                file_path,
+                                file_path_alias.expect("is_none check above to work"),
+                                start_line as u64,
+                                end_line as u64,
+                                content.to_owned(),
+                                Some(1.0),
+                            )),
+                            content,
+                        ))
+                    }
+                    Err(_) => None,
                 }
-                Some(ExtendedVariableInformation::new(
-                    selection_variable.to_agent_type(),
-                    Some(CodeSpan::new(
-                        file_path,
-                        file_path_alias.expect("is_none check above to work"),
-                        start_line as u64,
-                        end_line as u64,
-                        content.to_owned(),
-                        Some(1.0),
-                    )),
-                    content,
-                ))
             })
             .collect::<Vec<_>>();
 
@@ -205,7 +209,6 @@ impl Agent {
         files: Vec<FileContentValue>,
         messages: Vec<llm_funcs::llm::Message>,
         prompt_token_limit: usize,
-        bpe: &tiktoken_rs::CoreBPE,
     ) -> anyhow::Result<Vec<CodeSpan>> {
         let query = query_from_messages(messages.as_slice());
         let previous_message = messages;
@@ -295,9 +298,10 @@ impl Agent {
             self.get_llm_client(),
             candidates,
             prompt_token_limit,
-            bpe,
+            self.slow_llm_model(),
+            self.llm_tokenizer.clone(),
         )
-        .await;
+        .await?;
         let code_snippets = merge_consecutive_chunks(ranked_candidates)
             .into_iter()
             .map(|code_snippet| {
@@ -379,8 +383,9 @@ async fn re_rank_code_snippets(
     llm_client: Arc<LlmClient>,
     candidates: Vec<QuickCodeSnippetDocument>,
     prompt_token_limit: usize,
-    encoder: &tiktoken_rs::CoreBPE,
-) -> Vec<QuickCodeSnippetDocument> {
+    model: &LLMType,
+    tokenizer: Arc<LLMTokenizer>,
+) -> anyhow::Result<Vec<QuickCodeSnippetDocument>> {
     let mut logprob_scored = stream::iter(
         candidates
             .into_iter()
@@ -452,14 +457,14 @@ async fn re_rank_code_snippets(
     for (_, candidate) in logprob_scored.into_iter() {
         // This is not exactly correct as we are missing the tokens from the proper formatting of
         // the code snippet, but because we have some headroom this is okay
-        current_tokens_used += encoder.encode_ordinary(&candidate.content).len();
+        current_tokens_used += tokenizer.count_tokens_using_tokenizer(model, &candidate.content)?;
         if current_tokens_used >= prompt_token_limit {
             break;
         } else {
             final_candidates.push(candidate);
         }
     }
-    final_candidates
+    Ok(final_candidates)
 }
 
 fn merge_consecutive_chunks(

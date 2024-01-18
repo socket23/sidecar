@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::Context;
-use llm_client::{broker::LLMBroker, tokenizer::tokenizer::LLMTokenizer};
+use llm_client::{broker::LLMBroker, clients::types::LLMType, tokenizer::tokenizer::LLMTokenizer};
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tokio::sync::mpsc::Sender;
@@ -706,6 +706,14 @@ pub enum ConversationState {
 }
 
 impl Agent {
+    pub fn slow_llm_model(&self) -> &LLMType {
+        &self.model_config.slow_model
+    }
+
+    pub fn fast_llm_model(&self) -> &LLMType {
+        &self.model_config.fast_model
+    }
+
     pub fn get_llm_client(&self) -> Arc<LlmClient> {
         self.llm_client.clone()
     }

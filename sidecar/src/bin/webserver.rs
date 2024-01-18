@@ -144,10 +144,6 @@ fn agent_router() -> Router {
             get(sidecar::webserver::agent::search_agent),
         )
         .route(
-            "/lexical_search",
-            get(sidecar::webserver::agent::lexical_search),
-        )
-        .route(
             "/hybrid_search",
             get(sidecar::webserver::agent::hybrid_search),
         )

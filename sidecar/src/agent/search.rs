@@ -27,7 +27,7 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use futures::StreamExt;
-use llm_client::broker::LLMBroker;
+use llm_client::{broker::LLMBroker, tokenizer::tokenizer::LLMTokenizer};
 use once_cell::sync::OnceCell;
 use rake::StopWords;
 use tiktoken_rs::CoreBPE;
@@ -93,6 +93,7 @@ impl Agent {
         sender: Sender<ConversationMessage>,
         editor_parsing: EditorParsing,
         model_config: LLMClientConfig,
+        llm_tokenizer: Arc<LLMTokenizer>,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
         let conversation_message = ConversationMessage::search_message(
@@ -115,6 +116,7 @@ impl Agent {
             project_labels: vec![],
             editor_parsing,
             model_config,
+            llm_tokenizer,
         };
         agent
     }
@@ -132,6 +134,7 @@ impl Agent {
         project_labels: Vec<String>,
         editor_parsing: EditorParsing,
         model_config: LLMClientConfig,
+        llm_tokenizer: Arc<LLMTokenizer>,
     ) -> Self {
         let agent = Agent {
             application,
@@ -147,6 +150,7 @@ impl Agent {
             project_labels,
             editor_parsing,
             model_config,
+            llm_tokenizer,
         };
         agent
     }
@@ -164,6 +168,7 @@ impl Agent {
         sender: Sender<ConversationMessage>,
         editor_parsing: EditorParsing,
         model_config: LLMClientConfig,
+        llm_tokenizer: Arc<LLMTokenizer>,
     ) -> Self {
         let conversation_message = ConversationMessage::semantic_search(
             conversation_id,
@@ -185,6 +190,7 @@ impl Agent {
             project_labels: vec![],
             editor_parsing,
             model_config,
+            llm_tokenizer,
         };
         agent
     }

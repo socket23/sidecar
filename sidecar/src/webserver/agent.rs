@@ -61,6 +61,7 @@ pub async fn search_agent(
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     let llm_config = app.llm_config.clone();
+    let llm_tokenizer = app.llm_tokenizer.clone();
     let session_id = uuid::Uuid::new_v4();
     let llm_broker = app.llm_broker.clone();
     let llm_client = Arc::new(LlmClient::codestory_infra(
@@ -89,6 +90,7 @@ pub async fn search_agent(
         sender,
         Default::default(),
         model_config,
+        llm_tokenizer,
     );
 
     generate_agent_stream(agent, action, receiver).await
@@ -131,6 +133,7 @@ pub async fn hybrid_search(
     // - final score -> git_log_score * 4 + lexical_search * 2.5 + semantic_search_score
     // - combine the score as following
     let llm_broker = app.llm_broker.clone();
+    let llm_tokenizer = app.llm_tokenizer.clone();
     let llm_config = app.llm_config.clone();
     let session_id = uuid::Uuid::new_v4();
     let llm_client = Arc::new(LlmClient::codestory_infra(
@@ -155,6 +158,7 @@ pub async fn hybrid_search(
         sender,
         Default::default(),
         model_config,
+        llm_tokenizer,
     );
     let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
     Ok(json(HybridSearchResponse {
@@ -194,6 +198,7 @@ pub async fn explain(
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     let llm_broker = app.llm_broker.clone();
+    let llm_tokenizer = app.llm_tokenizer.clone();
     let llm_config = app.llm_config.clone();
     let user_id = app.user_id.to_owned();
     let posthog_client = app.posthog_client.clone();
@@ -270,6 +275,7 @@ pub async fn explain(
         project_labels: vec![],
         editor_parsing,
         model_config,
+        llm_tokenizer,
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -489,6 +495,7 @@ pub async fn followup_chat(
     // to and use that as context for grounding the agent response. In the future
     // we can obviously add more context using @ symbols etc
     let llm_broker = app.llm_broker.clone();
+    let llm_tokenizer = app.llm_tokenizer.clone();
     let posthog_client = app.posthog_client.clone();
     let user_id = app.user_id.to_owned();
     let sql_db = app.sql.clone();
@@ -556,6 +563,7 @@ pub async fn followup_chat(
             project_labels,
             Default::default(),
             model_config,
+            llm_tokenizer,
         )
     } else {
         Agent::prepare_for_followup(
@@ -576,6 +584,7 @@ pub async fn followup_chat(
             project_labels,
             Default::default(),
             model_config,
+            llm_tokenizer,
         )
     };
 
@@ -610,6 +619,7 @@ pub async fn go_to_definition_symbols(
         model_config,
     }): Json<GotoDefinitionSymbolsRequest>,
 ) -> Result<impl IntoResponse> {
+    let llm_tokenizer = app.llm_tokenizer.clone();
     let llm_broker = app.llm_broker.clone();
     let posthog_client = app.posthog_client.clone();
     let sql_db = app.sql.clone();
@@ -645,6 +655,7 @@ pub async fn go_to_definition_symbols(
         project_labels: vec![],
         editor_parsing,
         model_config,
+        llm_tokenizer,
     };
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     Ok(json(GotoDefinitionSymbolsResponse {

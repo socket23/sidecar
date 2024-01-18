@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::Context;
-use llm_client::broker::LLMBroker;
+use llm_client::{broker::LLMBroker, tokenizer::tokenizer::LLMTokenizer};
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tokio::sync::mpsc::Sender;
@@ -672,6 +672,7 @@ pub struct Agent {
     pub project_labels: Vec<String>,
     pub editor_parsing: EditorParsing,
     pub model_config: LLMClientConfig,
+    pub llm_tokenizer: Arc<LLMTokenizer>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

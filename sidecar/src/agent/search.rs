@@ -27,6 +27,7 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use futures::StreamExt;
+use llm_client::broker::LLMBroker;
 use once_cell::sync::OnceCell;
 use rake::StopWords;
 use tiktoken_rs::CoreBPE;
@@ -85,6 +86,7 @@ impl Agent {
         session_id: uuid::Uuid,
         query: &str,
         llm_client: Arc<LlmClient>,
+        llm_broker: Arc<LLMBroker>,
         conversation_id: uuid::Uuid,
         sql_db: SqlDb,
         mut previous_conversations: Vec<ConversationMessage>,
@@ -104,6 +106,7 @@ impl Agent {
             session_id,
             conversation_messages: previous_conversations,
             llm_client,
+            llm_broker,
             model: model::GPT_4,
             sql_db,
             sender,
@@ -119,6 +122,7 @@ impl Agent {
         reporef: RepoRef,
         session_id: uuid::Uuid,
         llm_client: Arc<LlmClient>,
+        llm_broker: Arc<LLMBroker>,
         sql_db: SqlDb,
         conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
@@ -132,6 +136,7 @@ impl Agent {
             session_id,
             conversation_messages: conversations,
             llm_client,
+            llm_broker,
             model: model::GPT_4,
             sql_db,
             sender,
@@ -148,6 +153,7 @@ impl Agent {
         session_id: uuid::Uuid,
         query: &str,
         llm_client: Arc<LlmClient>,
+        llm_broker: Arc<LLMBroker>,
         conversation_id: uuid::Uuid,
         sql_db: SqlDb,
         mut previous_conversations: Vec<ConversationMessage>,
@@ -166,6 +172,7 @@ impl Agent {
             session_id,
             conversation_messages: previous_conversations,
             llm_client,
+            llm_broker,
             model: model::GPT_4,
             sql_db,
             sender,

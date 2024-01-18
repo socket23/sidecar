@@ -60,6 +60,7 @@ pub async fn search_agent(
 ) -> Result<impl IntoResponse> {
     let llm_config = app.llm_config.clone();
     let session_id = uuid::Uuid::new_v4();
+    let llm_broker = app.llm_broker.clone();
     let llm_client = Arc::new(LlmClient::codestory_infra(
         app.posthog_client.clone(),
         app.sql.clone(),
@@ -79,6 +80,7 @@ pub async fn search_agent(
         session_id,
         &query,
         llm_client,
+        llm_broker,
         thread_id,
         sql_db,
         previous_conversation_message,
@@ -120,6 +122,7 @@ pub async fn hybrid_search(
     // hand-waving the numbers here for whatever works for now
     // - final score -> git_log_score * 4 + lexical_search * 2.5 + semantic_search_score
     // - combine the score as following
+    let llm_broker = app.llm_broker.clone();
     let llm_config = app.llm_config.clone();
     let session_id = uuid::Uuid::new_v4();
     let llm_client = Arc::new(LlmClient::codestory_infra(
@@ -137,6 +140,7 @@ pub async fn hybrid_search(
         session_id,
         &query,
         llm_client,
+        llm_broker,
         conversation_id,
         sql_db,
         vec![], // we don't have a previous conversation message here
@@ -178,6 +182,7 @@ pub async fn explain(
     }): axumQuery<ExplainRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let llm_broker = app.llm_broker.clone();
     let llm_config = app.llm_config.clone();
     let user_id = app.user_id.to_owned();
     let posthog_client = app.posthog_client.clone();
@@ -246,6 +251,7 @@ pub async fn explain(
             user_id,
             llm_config,
         )),
+        llm_broker,
         model: GPT_4,
         sql_db: sql,
         sender,
@@ -468,6 +474,7 @@ pub async fn followup_chat(
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future
     // we can obviously add more context using @ symbols etc
+    let llm_broker = app.llm_broker.clone();
     let posthog_client = app.posthog_client.clone();
     let user_id = app.user_id.to_owned();
     let sql_db = app.sql.clone();
@@ -527,6 +534,7 @@ pub async fn followup_chat(
                 llm_config,
                 openai_user_key,
             )),
+            llm_broker,
             sql_db,
             previous_messages,
             sender,
@@ -545,6 +553,7 @@ pub async fn followup_chat(
                 user_id.to_owned(),
                 llm_config,
             )),
+            llm_broker,
             sql_db,
             previous_messages,
             sender,
@@ -583,6 +592,7 @@ pub async fn go_to_definition_symbols(
         openai_key,
     }): Json<GotoDefinitionSymbolsRequest>,
 ) -> Result<impl IntoResponse> {
+    let llm_broker = app.llm_broker.clone();
     let posthog_client = app.posthog_client.clone();
     let sql_db = app.sql.clone();
     let user_id = app.user_id.to_owned();
@@ -609,6 +619,7 @@ pub async fn go_to_definition_symbols(
                 llm_config,
             ))
         },
+        llm_broker,
         model: GPT_3_5_TURBO_16K,
         sql_db,
         sender: tokio::sync::mpsc::channel(100).0,

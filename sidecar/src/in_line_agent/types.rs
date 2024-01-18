@@ -419,7 +419,7 @@ impl InLineAgent {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .get_llm_broker()
-            .stream_completion(provider.clone(), request, sender)
+            .stream_completion(provider.clone(), request, vec![("event_type".to_owned(), "decide_action".to_owned())].into_iter().collect(), sender)
             .await?;
         let last_exchange = self.get_last_agent_message();
         // We add that we took a action to decide what we should do next
@@ -523,6 +523,7 @@ impl InLineAgent {
                                         .stream_answer(
                                             provider.clone(),
                                             futures::future::Either::Left(request),
+                                            vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
                                         )
                                         .into_stream()
@@ -538,6 +539,7 @@ impl InLineAgent {
                                         .stream_answer(
                                             provider.clone(),
                                             futures::future::Either::Right(request),
+                                            vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
                                         )
                                         .into_stream()
@@ -660,6 +662,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Left(request),
+                            vec![("event_type".to_owned(), "fix".to_owned())].into_iter().collect(),
                             sender,
                         )
                         .into_stream()
@@ -675,6 +678,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Right(request),
+                            vec![("event_type".to_owned(), "fix".to_owned())].into_iter().collect(),
                             sender,
                         )
                         .into_stream()
@@ -846,6 +850,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Left(request),
+                            vec![("event_type".to_owned(), "edit".to_owned())].into_iter().collect(),
                             sender,
                         )
                         .into_stream()
@@ -861,6 +866,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Right(request),
+                            vec![("event_type".to_owned(), "edit".to_owned())].into_iter().collect(),
                             sender,
                         )
                         .into_stream()

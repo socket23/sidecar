@@ -1,6 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::Context;
+use llm_client::broker::LLMBroker;
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tokio::sync::mpsc::Sender;
@@ -660,6 +661,7 @@ pub struct Agent {
     pub session_id: uuid::Uuid,
     pub conversation_messages: Vec<ConversationMessage>,
     pub llm_client: Arc<LlmClient>,
+    pub llm_broker: Arc<LLMBroker>,
     pub model: model::AnswerModel,
     pub sql_db: SqlDb,
     pub sender: Sender<ConversationMessage>,

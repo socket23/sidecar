@@ -92,6 +92,7 @@ impl LLMClientMessage {
     }
 }
 
+#[derive(Clone)]
 pub struct LLMClientCompletionRequest {
     model: LLMType,
     messages: Vec<LLMClientMessage>,
@@ -99,6 +100,7 @@ pub struct LLMClientCompletionRequest {
     frequency_penalty: Option<f32>,
 }
 
+#[derive(Clone)]
 pub struct LLMClientCompletionStringRequest {
     model: LLMType,
     prompt: String,
@@ -238,6 +240,12 @@ pub enum LLMClientError {
 
     #[error("tokio mspc error")]
     TokioMpscSendError,
+
+    #[error("Failed to store in sqlite DB")]
+    FailedToStoreInDB,
+
+    #[error("Sqlx erorr: {0}")]
+    SqlxError(#[from] sqlx::Error)
 }
 
 #[async_trait]

@@ -24,7 +24,6 @@ use crate::indexes::schema::QuickCodeSnippet;
 use crate::indexes::schema::QuickCodeSnippetDocument;
 use crate::webserver::agent::FileContentValue;
 use crate::webserver::agent::VariableInformation;
-use crate::webserver::agent::VariableType;
 
 use super::llm_funcs::LlmClient;
 use super::types::Agent;

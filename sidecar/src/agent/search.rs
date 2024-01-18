@@ -12,7 +12,7 @@ use crate::{
     db::sqlite::SqlDb,
     git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
-    webserver::agent::UserContext,
+    webserver::{agent::UserContext, model_selection::LLMClientConfig},
 };
 
 /// Here we allow the agent to perform search and answer workflow related questions
@@ -92,6 +92,7 @@ impl Agent {
         mut previous_conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
         editor_parsing: EditorParsing,
+        model_config: LLMClientConfig,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
         let conversation_message = ConversationMessage::search_message(
@@ -113,6 +114,7 @@ impl Agent {
             user_context: None,
             project_labels: vec![],
             editor_parsing,
+            model_config,
         };
         agent
     }
@@ -129,6 +131,7 @@ impl Agent {
         user_context: UserContext,
         project_labels: Vec<String>,
         editor_parsing: EditorParsing,
+        model_config: LLMClientConfig,
     ) -> Self {
         let agent = Agent {
             application,
@@ -143,6 +146,7 @@ impl Agent {
             user_context: Some(user_context),
             project_labels,
             editor_parsing,
+            model_config,
         };
         agent
     }
@@ -159,6 +163,7 @@ impl Agent {
         mut previous_conversations: Vec<ConversationMessage>,
         sender: Sender<ConversationMessage>,
         editor_parsing: EditorParsing,
+        model_config: LLMClientConfig,
     ) -> Self {
         let conversation_message = ConversationMessage::semantic_search(
             conversation_id,
@@ -179,6 +184,7 @@ impl Agent {
             user_context: None,
             project_labels: vec![],
             editor_parsing,
+            model_config,
         };
         agent
     }

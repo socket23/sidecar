@@ -170,28 +170,42 @@ impl LLMTokenizer {
         model: &LLMType,
         prompt: &str,
     ) -> Result<usize, LLMTokenizerError> {
-        let tokenizer = self.tokenizers.get(model);
-        match tokenizer {
-            Some(tokenizer) => {
-                // Now over here we will try to figure out how to pass the
-                // values around
-                let results = tokenizer.encode_batch(vec![prompt], false);
-                if let Ok(results) = results {
-                    match results.first() {
-                        Some(result) => Ok(result.len()),
-                        None => Err(LLMTokenizerError::TokenizerError(
-                            "No results found".to_owned(),
-                        )),
+        if model.is_openai() {
+            let tokenizer = self.tokenizers.get(model);
+            match tokenizer {
+                Some(tokenizer) => {
+                    // Now over here we will try to figure out how to pass the
+                    // values around
+                    let results = tokenizer.encode_batch(vec![prompt], false);
+                    if let Ok(results) = results {
+                        match results.first() {
+                            Some(result) => Ok(result.len()),
+                            None => Err(LLMTokenizerError::TokenizerError(
+                                "No results found".to_owned(),
+                            )),
+                        }
+                    } else {
+                        Err(LLMTokenizerError::TokenizerError(
+                            "Failed to encode batch".to_owned(),
+                        ))
                     }
-                } else {
-                    Err(LLMTokenizerError::TokenizerError(
-                        "Failed to encode batch".to_owned(),
-                    ))
+                }
+                None => {
+                    return Err(LLMTokenizerError::TokenizerNotFound(model.clone()));
                 }
             }
-            None => {
-                return Err(LLMTokenizerError::TokenizerNotFound(model.clone()));
+        } else {
+            // If we are using openai model, then we have to use the bpe config
+            // and count the number of tokens
+            let model = self.to_openai_tokenizer(model);
+            if let None = model {
+                return Err(LLMTokenizerError::TokenizerError(
+                    "OpenAI model not found".to_owned(),
+                ));
             }
+            let model = model.expect("if let None to hold");
+            let bpe = tiktoken_rs::get_bpe_from_model(&model)?;
+            Ok(bpe.encode_ordinary(prompt).len())
         }
     }
 

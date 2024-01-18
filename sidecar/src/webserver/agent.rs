@@ -89,65 +89,6 @@ pub async fn search_agent(
     generate_agent_stream(agent, action, receiver).await
 }
 
-// TODO(skcd): Add write files and other things here
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct SemanticSearchQuery {
-    pub query: String,
-    pub reporef: RepoRef,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct SemanticSearchResponse {
-    session_id: uuid::Uuid,
-    query: String,
-    code_spans: Vec<CodeSpan>,
-}
-
-impl ApiResponse for SemanticSearchResponse {}
-
-pub async fn semantic_search(
-    axumQuery(SemanticSearchQuery { query, reporef }): axumQuery<SemanticSearchQuery>,
-    Extension(app): Extension<Application>,
-) -> Result<impl IntoResponse> {
-    let llm_config = app.llm_config.clone();
-    // The best thing to do here is the following right now:
-    // lexical search on the paths of the code
-    // and then semantic search on the chunks we have from the file
-    // we return at this point, because the latency is too high, and this is
-    // okay as it is
-    let session_id = uuid::Uuid::new_v4();
-    let llm_client = Arc::new(LlmClient::codestory_infra(
-        app.posthog_client.clone(),
-        app.sql.clone(),
-        app.user_id.to_owned(),
-        llm_config,
-    ));
-    let conversation_id = uuid::Uuid::new_v4();
-    let sql_db = app.sql.clone();
-    let (sender, _) = tokio::sync::mpsc::channel(100);
-    let mut agent = Agent::prepare_for_semantic_search(
-        app,
-        reporef,
-        session_id,
-        &query,
-        llm_client,
-        conversation_id,
-        sql_db,
-        vec![], // we don't have a previous conversation message here
-        sender,
-        Default::default(),
-    );
-    let code_spans = agent
-        .semantic_search()
-        .await
-        .expect("semantic_search to not fail");
-    Ok(json(SemanticSearchResponse {
-        session_id,
-        query,
-        code_spans,
-    }))
-}
-
 // Here we are experimenting with lexical search:
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct SearchQuery {

@@ -19,6 +19,7 @@ use async_openai::types::CreateCompletionRequestArgs;
 use async_openai::types::FunctionCall;
 use async_openai::Client;
 use futures::StreamExt;
+use llm_client::clients::types::LLMClientMessage;
 use llm_client::clients::types::LLMType;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 use tracing::debug;
@@ -234,6 +235,43 @@ impl llm::Role {
             llm::Role::Function => "function".to_owned(),
             llm::Role::System => "system".to_owned(),
             llm::Role::User => "user".to_owned(),
+        }
+    }
+}
+
+impl TryFrom<&llm::Message> for LLMClientMessage {
+    type Error = anyhow::Error;
+    fn try_from(m: &llm::Message) -> anyhow::Result<LLMClientMessage> {
+        match m {
+            llm::Message::PlainText { ref role, content } => match role {
+                &llm::Role::Assistant => Ok(LLMClientMessage::assistant(content.to_owned())),
+                &llm::Role::System => Ok(LLMClientMessage::system(content.to_owned())),
+                &llm::Role::User => Ok(LLMClientMessage::user(content.to_owned())),
+                &llm::Role::Function => Ok(LLMClientMessage::function(content.to_owned())),
+            },
+            llm::Message::FunctionCall {
+                role,
+                function_call,
+                content: _,
+            } => match role {
+                &llm::Role::Assistant => Ok(LLMClientMessage::function_call(
+                    function_call
+                        .name
+                        .as_ref()
+                        .map(|name| name.to_owned())
+                        .unwrap_or_default(),
+                    function_call.arguments.to_owned(),
+                )),
+                _ => Err(anyhow::anyhow!("Invalid role found")),
+            },
+            llm::Message::FunctionReturn {
+                role: _,
+                name,
+                content,
+            } => Ok(LLMClientMessage::function_return(
+                name.to_owned(),
+                content.to_owned(),
+            )),
         }
     }
 }

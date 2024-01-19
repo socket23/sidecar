@@ -4,7 +4,7 @@ use async_openai::{
     config::{AzureConfig, OpenAIConfig},
     types::{
         ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
-        CreateChatCompletionRequestArgs, Role,
+        CreateChatCompletionRequestArgs, FunctionCall, Role,
     },
     Client,
 };
@@ -59,11 +59,35 @@ impl OpenAIClient {
                         .content(message.content().to_owned())
                         .build()
                         .map_err(|e| LLMClientError::OpenAPIError(e)),
-                    LLMClientRole::Assistant => ChatCompletionRequestMessageArgs::default()
-                        .role(Role::Assistant)
-                        .content(message.content().to_owned())
-                        .build()
-                        .map_err(|e| LLMClientError::OpenAPIError(e)),
+                    // the assistant is the one which ends up calling the function, so we need to
+                    // handle the case where the function is called by the assistant here
+                    LLMClientRole::Assistant => match message.get_function_call() {
+                        Some(function_call) => ChatCompletionRequestMessageArgs::default()
+                            .role(Role::Function)
+                            .function_call(FunctionCall {
+                                name: function_call.name().to_owned(),
+                                arguments: function_call.arguments().to_owned(),
+                            })
+                            .build()
+                            .map_err(|e| LLMClientError::OpenAPIError(e)),
+                        None => ChatCompletionRequestMessageArgs::default()
+                            .role(Role::Assistant)
+                            .content(message.content().to_owned())
+                            .build()
+                            .map_err(|e| LLMClientError::OpenAPIError(e)),
+                    },
+                    LLMClientRole::Function => match message.get_function_call() {
+                        Some(function_call) => ChatCompletionRequestMessageArgs::default()
+                            .role(Role::Function)
+                            .content(message.content().to_owned())
+                            .function_call(FunctionCall {
+                                name: function_call.name().to_owned(),
+                                arguments: function_call.arguments().to_owned(),
+                            })
+                            .build()
+                            .map_err(|e| LLMClientError::OpenAPIError(e)),
+                        None => Err(LLMClientError::FunctionCallNotPresent),
+                    },
                 }
             })
             .collect::<Vec<_>>();

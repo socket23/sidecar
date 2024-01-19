@@ -128,6 +128,12 @@ impl LLMTokenizer {
                                             name: None,
                                             function_call: None,
                                         },
+                                        LLMClientRole::Function => ChatCompletionRequestMessage {
+                                            role: "function".to_owned(),
+                                            content: Some(content.to_owned()),
+                                            name: None,
+                                            function_call: None,
+                                        },
                                     }
                                 })
                                 .collect::<Vec<_>>()

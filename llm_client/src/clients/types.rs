@@ -44,6 +44,10 @@ pub enum LLMClientRole {
     System,
     User,
     Assistant,
+    // function calling is weird, its only supported by openai right now
+    // and not other LLMs, so we are going to make this work with the formatters
+    // and still keep it as it is
+    Function,
 }
 
 impl LLMClientRole {
@@ -61,14 +65,73 @@ impl LLMClientRole {
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
+pub struct LLMClientMessageFunctionCall {
+    name: String,
+    // arguments are generally given as a JSON string, so we keep it as a string
+    // here, validate in the upper handlers for this
+    arguments: String,
+}
+
+impl LLMClientMessageFunctionCall {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn arguments(&self) -> &str {
+        &self.arguments
+    }
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct LLMClientMessageFunctionReturn {
+    name: String,
+    content: String,
+}
+
+impl LLMClientMessageFunctionReturn {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
 pub struct LLMClientMessage {
     role: LLMClientRole,
     message: String,
+    function_call: Option<LLMClientMessageFunctionCall>,
+    function_return: Option<LLMClientMessageFunctionReturn>,
 }
 
 impl LLMClientMessage {
     pub fn new(role: LLMClientRole, message: String) -> Self {
-        Self { role, message }
+        Self {
+            role,
+            message,
+            function_call: None,
+            function_return: None,
+        }
+    }
+
+    pub fn function_call(name: String, arguments: String) -> Self {
+        Self {
+            role: LLMClientRole::Assistant,
+            message: "".to_owned(),
+            function_call: Some(LLMClientMessageFunctionCall { name, arguments }),
+            function_return: None,
+        }
+    }
+
+    pub fn function_return(name: String, content: String) -> Self {
+        Self {
+            role: LLMClientRole::Function,
+            message: "".to_owned(),
+            function_call: None,
+            function_return: Some(LLMClientMessageFunctionReturn { name, content }),
+        }
     }
 
     pub fn user(message: String) -> Self {
@@ -87,8 +150,20 @@ impl LLMClientMessage {
         &self.message
     }
 
+    pub fn function(message: String) -> Self {
+        Self::new(LLMClientRole::Function, message)
+    }
+
     pub fn role(&self) -> &LLMClientRole {
         &self.role
+    }
+
+    pub fn get_function_call(&self) -> Option<&LLMClientMessageFunctionCall> {
+        self.function_call.as_ref()
+    }
+
+    pub fn get_function_return(&self) -> Option<&LLMClientMessageFunctionReturn> {
+        self.function_return.as_ref()
     }
 }
 
@@ -245,7 +320,10 @@ pub enum LLMClientError {
     FailedToStoreInDB,
 
     #[error("Sqlx erorr: {0}")]
-    SqlxError(#[from] sqlx::Error)
+    SqlxError(#[from] sqlx::Error),
+
+    #[error("Function calling role but not function call present")]
+    FunctionCallNotPresent,
 }
 
 #[async_trait]

@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use llm_client::clients::types::LLMType;
 
+#[derive(Debug)]
 pub struct AnswerModel {
     pub llm_type: LLMType,
     /// The number of tokens reserved for the answer

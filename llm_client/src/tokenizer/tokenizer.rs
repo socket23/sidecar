@@ -183,18 +183,13 @@ impl LLMTokenizer {
                 Some(tokenizer) => {
                     // Now over here we will try to figure out how to pass the
                     // values around
-                    let results = tokenizer.encode_batch(vec![prompt], false);
-                    if let Ok(results) = results {
-                        match results.first() {
-                            Some(result) => Ok(result.len()),
-                            None => Err(LLMTokenizerError::TokenizerError(
-                                "No results found".to_owned(),
-                            )),
-                        }
-                    } else {
-                        Err(LLMTokenizerError::TokenizerError(
-                            "Failed to encode batch".to_owned(),
-                        ))
+                    let result = tokenizer.encode(prompt, false);
+                    match result {
+                        Ok(encoding) => Ok(encoding.len()),
+                        Err(e) => Err(LLMTokenizerError::TokenizerError(format!(
+                            "Failed to encode prompt: {}",
+                            e
+                        ))),
                     }
                 }
                 None => {

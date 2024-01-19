@@ -940,9 +940,10 @@ impl Agent {
         // early if we reach a heuristic limit.
         let slow_model = self.slow_llm_model();
         let answer_model = self.chat_broker.get_answer_model(slow_model)?;
-        let mut remaining_prompt_tokens = self
-            .llm_tokenizer
-            .count_tokens_using_tokenizer(slow_model, &prompt)?;
+        let mut remaining_prompt_tokens = answer_model.total_tokens
+            - self
+                .llm_tokenizer
+                .count_tokens_using_tokenizer(slow_model, &prompt)?;
 
         // we have to show the selected snippets which the user has selected
         // we have to show the selected snippets to the prompt as well
@@ -952,8 +953,8 @@ impl Agent {
             let user_selected_context_tokens = self
                 .llm_tokenizer
                 .count_tokens_using_tokenizer(slow_model, user_selected_context_header)?;
-            if user_selected_context_tokens
-                >= remaining_prompt_tokens - answer_model.prompt_tokens_limit
+            if user_selected_context_tokens + answer_model.prompt_tokens_limit
+                >= remaining_prompt_tokens
             {
                 info!("we can't set user selected context because of prompt limit");
             } else {
@@ -967,8 +968,8 @@ impl Agent {
                     let user_variable_tokens = self
                         .llm_tokenizer
                         .count_tokens_using_tokenizer(slow_model, &variable_prompt)?;
-                    if user_variable_tokens
-                        > remaining_prompt_tokens - answer_model.prompt_tokens_limit
+                    if user_variable_tokens + answer_model.prompt_tokens_limit
+                        > remaining_prompt_tokens
                     {
                         info!("breaking at {} tokens", remaining_prompt_tokens);
                         break;

@@ -39,9 +39,10 @@ impl Agent {
     ) -> anyhow::Result<()> {
         let model = self.slow_llm_model();
         let query = query_from_messages(messages.as_slice());
+        let answer_model = self.chat_broker.get_answer_model(model)?;
 
-        let history_token_limit = self.model.history_tokens_limit;
-        let mut prompt_token_limit = self.model.prompt_tokens_limit;
+        let history_token_limit = answer_model.history_tokens_limit;
+        let mut prompt_token_limit = answer_model.prompt_tokens_limit;
 
         // we look at our messages and check how many more tokens we can save
         // and send over

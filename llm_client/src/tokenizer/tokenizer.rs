@@ -176,7 +176,8 @@ impl LLMTokenizer {
         model: &LLMType,
         prompt: &str,
     ) -> Result<usize, LLMTokenizerError> {
-        if model.is_openai() {
+        // we have the custom tokenizers already loaded, if this is not the openai loop
+        if !model.is_openai() {
             let tokenizer = self.tokenizers.get(model);
             match tokenizer {
                 Some(tokenizer) => {

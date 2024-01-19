@@ -11,7 +11,6 @@ use axum::{extract::Query as axumQuery, Extension, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::agent::llm_funcs::LlmClient;
-use crate::agent::model::{GPT_3_5_TURBO_16K, GPT_4};
 use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
@@ -263,7 +262,6 @@ pub async fn explain(
         conversation_messages: previous_messages,
         llm_client: Arc::new(LlmClient::codestory_infra(posthog_client, sql_db, user_id)),
         llm_broker,
-        model: GPT_4,
         sql_db: sql,
         sender,
         user_context: None,
@@ -585,80 +583,6 @@ pub async fn followup_chat(
     };
 
     generate_agent_stream(agent, action, receiver).await
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct GotoDefinitionSymbolsRequest {
-    pub code_snippet: String,
-    pub language: String,
-    pub repo_ref: RepoRef,
-    pub thread_id: uuid::Uuid,
-    pub openai_key: Option<String>,
-    pub model_config: LLMClientConfig,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct GotoDefinitionSymbolsResponse {
-    symbols: Vec<String>,
-}
-
-impl ApiResponse for GotoDefinitionSymbolsResponse {}
-
-pub async fn go_to_definition_symbols(
-    Extension(app): Extension<Application>,
-    Json(GotoDefinitionSymbolsRequest {
-        code_snippet,
-        language,
-        repo_ref,
-        thread_id,
-        openai_key,
-        model_config,
-    }): Json<GotoDefinitionSymbolsRequest>,
-) -> Result<impl IntoResponse> {
-    let chat_broker = app.chat_broker.clone();
-    let llm_tokenizer = app.llm_tokenizer.clone();
-    let llm_broker = app.llm_broker.clone();
-    let posthog_client = app.posthog_client.clone();
-    let sql_db = app.sql.clone();
-    let user_id = app.user_id.to_owned();
-    let editor_parsing = Default::default();
-    let agent = Agent {
-        application: app,
-        reporef: repo_ref,
-        session_id: uuid::Uuid::new_v4(),
-        conversation_messages: vec![],
-        llm_client: if let Some(user_key_openai) = &openai_key {
-            Arc::new(LlmClient::user_key_openai(
-                posthog_client,
-                sql_db.clone(),
-                user_id,
-                user_key_openai.to_owned(),
-            ))
-        } else {
-            Arc::new(LlmClient::codestory_infra(
-                posthog_client,
-                sql_db.clone(),
-                user_id,
-            ))
-        },
-        llm_broker,
-        model: GPT_3_5_TURBO_16K,
-        sql_db,
-        sender: tokio::sync::mpsc::channel(100).0,
-        user_context: None,
-        project_labels: vec![],
-        editor_parsing,
-        model_config,
-        llm_tokenizer,
-        chat_broker,
-    };
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    Ok(json(GotoDefinitionSymbolsResponse {
-        symbols: agent
-            .goto_definition_symbols(&code_snippet, &language, sender)
-            .await
-            .expect("goto_definition_symbols to not fail"),
-    }))
 }
 
 #[cfg(test)]

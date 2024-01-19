@@ -19,7 +19,6 @@ use crate::{
 /// we will later use this for code planning and also code editing
 use super::{
     llm_funcs::LlmClient,
-    model,
     types::{Agent, AgentState, Answer, ConversationMessage, ExtendedVariableInformation},
 };
 
@@ -27,8 +26,12 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use futures::StreamExt;
-use llm_client::{broker::LLMBroker, tokenizer::tokenizer::LLMTokenizer};
-use llm_prompts::chat::broker::LLMChatModelBroker;
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::{LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientMessage},
+    tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerInput},
+};
+use llm_prompts::{answer_model::AnswerModel, chat::broker::LLMChatModelBroker};
 use once_cell::sync::OnceCell;
 use rake::StopWords;
 use tiktoken_rs::CoreBPE;
@@ -111,7 +114,6 @@ impl Agent {
             conversation_messages: previous_conversations,
             llm_client,
             llm_broker,
-            model: model::GPT_4,
             sql_db,
             sender,
             user_context: None,
@@ -147,7 +149,6 @@ impl Agent {
             conversation_messages: conversations,
             llm_client,
             llm_broker,
-            model: model::GPT_4,
             sql_db,
             sender,
             user_context: Some(user_context),
@@ -189,7 +190,6 @@ impl Agent {
             conversation_messages: previous_conversations,
             llm_client,
             llm_broker,
-            model: model::GPT_4,
             sql_db,
             sender,
             user_context: None,
@@ -742,7 +742,7 @@ impl Agent {
     pub async fn answer(
         &mut self,
         path_aliases: &[usize],
-        sender: tokio::sync::mpsc::UnboundedSender<Answer>,
+        sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String> {
         if self.user_context.is_some() {
             let message = self
@@ -791,29 +791,47 @@ impl Agent {
             ),
         };
         let system_message = llm_funcs::llm::Message::system(&system_prompt);
+
+        let answer_model = self.chat_broker.get_answer_model(self.slow_llm_model())?;
         let history = {
             let h = self.utter_history(None).collect::<Vec<_>>();
-            let system_headroom = tiktoken_rs::num_tokens_from_messages(
-                self.model.tokenizer,
-                &[(&system_message).into()],
+            let system_headroom = self.llm_tokenizer.count_tokens(
+                self.slow_llm_model(),
+                LLMTokenizerInput::Messages(vec![LLMClientMessage::system(
+                    system_prompt.to_owned(),
+                )]),
             )?;
-            let headroom = self.model.answer_tokens + system_headroom;
-            trim_utter_history(h, headroom, &self.model)?
+            let headroom = answer_model.answer_tokens + system_headroom;
+            trim_utter_history(h, headroom, answer_model, self.llm_tokenizer.clone())?
         };
         let messages = Some(system_message)
             .into_iter()
             .chain(history.into_iter())
             .collect::<Vec<_>>();
 
+        let provider_keys = self
+            .provider_for_slow_llm()
+            .ok_or(anyhow::anyhow!("no provider keys found for slow model"))?;
+
+        let request = LLMClientCompletionRequest::new(
+            self.slow_llm_model().clone(),
+            messages
+                .into_iter()
+                .map(|message| (&message).try_into())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?,
+            0.1,
+            None,
+        );
         let reply = self
-            .llm_client
-            .clone()
-            .stream_response(
-                llm::OpenAIModel::get_model(self.model.model_name)?,
-                messages,
-                None,
-                0.1,
-                None,
+            .llm_broker
+            .stream_completion(
+                provider_keys.clone(),
+                request,
+                vec![("event_type".to_owned(), "followup_question".to_owned())]
+                    .into_iter()
+                    .collect(),
                 sender,
             )
             .await?;
@@ -915,24 +933,27 @@ impl Agent {
             }
         }
 
-        let code_spans = self.dedup_code_spans(aliases.as_slice()).await;
+        let code_spans = self.dedup_code_spans(aliases.as_slice()).await?;
 
         // Sometimes, there are just too many code chunks in the context, and deduplication still
         // doesn't trim enough chunks. So, we enforce a hard limit here that stops adding tokens
         // early if we reach a heuristic limit.
-        let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer)?;
-        let mut remaining_prompt_tokens =
-            tiktoken_rs::get_completion_max_tokens(self.model.tokenizer, &prompt)?;
+        let slow_model = self.slow_llm_model();
+        let answer_model = self.chat_broker.get_answer_model(slow_model)?;
+        let mut remaining_prompt_tokens = self
+            .llm_tokenizer
+            .count_tokens_using_tokenizer(slow_model, &prompt)?;
 
         // we have to show the selected snippets which the user has selected
         // we have to show the selected snippets to the prompt as well
         let extended_user_selected_context = self.get_extended_user_selection_information();
         if let Some(extended_user_selection_context_slice) = extended_user_selected_context {
             let user_selected_context_header = "#### USER SELECTED CONTEXT ####\n";
-            let user_selected_context_tokens =
-                bpe.encode_ordinary(&user_selected_context_header).len();
+            let user_selected_context_tokens = self
+                .llm_tokenizer
+                .count_tokens_using_tokenizer(slow_model, user_selected_context_header)?;
             if user_selected_context_tokens
-                >= remaining_prompt_tokens - self.model.prompt_tokens_limit
+                >= remaining_prompt_tokens - answer_model.prompt_tokens_limit
             {
                 info!("we can't set user selected context because of prompt limit");
             } else {
@@ -943,9 +964,11 @@ impl Agent {
                     extended_user_selection_context_slice.iter().rev()
                 {
                     let variable_prompt = extended_user_selected_context.to_prompt();
-                    let user_variable_tokens = bpe.encode_ordinary(&variable_prompt).len();
+                    let user_variable_tokens = self
+                        .llm_tokenizer
+                        .count_tokens_using_tokenizer(slow_model, &variable_prompt)?;
                     if user_variable_tokens
-                        > remaining_prompt_tokens - self.model.prompt_tokens_limit
+                        > remaining_prompt_tokens - answer_model.prompt_tokens_limit
                     {
                         info!("breaking at {} tokens", remaining_prompt_tokens);
                         break;
@@ -971,9 +994,11 @@ impl Agent {
                 self.get_absolute_path(self.reporef(), &code_span.file_path)
             );
 
-            let snippet_tokens = bpe.encode_ordinary(&formatted_snippet).len();
+            let snippet_tokens = self
+                .llm_tokenizer
+                .count_tokens_using_tokenizer(slow_model, &formatted_snippet)?;
 
-            if snippet_tokens >= remaining_prompt_tokens - self.model.prompt_tokens_limit {
+            if snippet_tokens >= remaining_prompt_tokens - answer_model.prompt_tokens_limit {
                 info!("breaking at {} tokens", remaining_prompt_tokens);
                 break;
             }
@@ -1013,15 +1038,14 @@ impl Agent {
         Ok(prompt)
     }
 
-    async fn dedup_code_spans(&mut self, aliases: &[usize]) -> Vec<CodeSpan> {
+    async fn dedup_code_spans(&mut self, aliases: &[usize]) -> anyhow::Result<Vec<CodeSpan>> {
         /// The ratio of code tokens to context size.
         ///
         /// Making this closure to 1 means that more of the context is taken up by source code.
         const CONTEXT_CODE_RATIO: f32 = 0.5;
 
-        let bpe = tiktoken_rs::get_bpe_from_model(self.model.tokenizer).unwrap();
-        let context_size = tiktoken_rs::model::get_context_size(self.model.tokenizer);
-        let max_tokens = (context_size as f32 * CONTEXT_CODE_RATIO) as usize;
+        let answer_model = self.chat_broker.get_answer_model(self.slow_llm_model())?;
+        let max_tokens = (answer_model.total_tokens as f32 * CONTEXT_CODE_RATIO) as usize;
 
         // Note: The end line number here is *not* inclusive.
         let mut spans_by_path = HashMap::<_, Vec<_>>::new();
@@ -1076,7 +1100,10 @@ impl Agent {
                     let line_end = span.end as usize;
                     let range = line_start..line_end;
                     let snippet = lines_by_file.get(path).unwrap()[range].join("\n");
-                    bpe.encode_ordinary(&snippet).len()
+                    // Ideally this will not fail, but when it does we are so screwed
+                    self.llm_tokenizer
+                        .count_tokens_using_tokenizer(self.slow_llm_model(), &snippet)
+                        .unwrap_or_default()
                 })
                 .sum::<usize>();
 
@@ -1136,7 +1163,7 @@ impl Agent {
 
         debug!(?spans_by_path, "expanded spans");
 
-        spans_by_path
+        Ok(spans_by_path
             .into_iter()
             .flat_map(|(path, spans)| spans.into_iter().map(move |s| (path.clone(), s)))
             .map(|(path, span)| {
@@ -1147,7 +1174,7 @@ impl Agent {
                 let path_alias = self.get_path_alias(&path);
                 CodeSpan::new(path, path_alias, span.start, span.end, snippet, None)
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -1187,15 +1214,28 @@ fn merge_overlapping(a: &mut Range<u64>, b: Range<u64>) -> Option<Range<u64>> {
 fn trim_utter_history(
     mut history: Vec<llm_funcs::llm::Message>,
     headroom: usize,
-    model: &model::AnswerModel,
+    answer_model: &AnswerModel,
+    llm_tokenizer: Arc<LLMTokenizer>,
 ) -> Result<Vec<llm_funcs::llm::Message>> {
-    let mut tiktoken_msgs: Vec<tiktoken_rs::ChatCompletionRequestMessage> =
-        history.iter().map(|m| m.into()).collect::<Vec<_>>();
+    let model = &answer_model.llm_type;
+    let context_length = answer_model.total_tokens;
+    let mut llm_messages: Vec<LLMClientMessage> = history
+        .iter()
+        .map(|m| m.try_into())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
 
     // remove the earliest messages, one by one, until we can accommodate into prompt
-    while tiktoken_rs::get_chat_completion_max_tokens(model.tokenizer, &tiktoken_msgs)? < headroom {
-        if !tiktoken_msgs.is_empty() {
-            tiktoken_msgs.remove(0);
+    // what we are getting here is basically context_length - tokens < headroom
+    // written another way we can make this look like: context_length < headroom + tokens
+    while context_length
+        < headroom
+            + llm_tokenizer
+                .count_tokens(model, LLMTokenizerInput::Messages(llm_messages.to_vec()))?
+    {
+        if !llm_messages.is_empty() {
+            llm_messages.remove(0);
             history.remove(0);
         } else {
             return Err(anyhow!("could not find message to trim"));

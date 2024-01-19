@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::clients::types::LLMType;
+use llm_client::clients::types::LLMType;
 
 pub struct AnswerModel {
     pub llm_type: LLMType,

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use llm_client::{
     broker::LLMBroker, config::LLMBrokerConfiguration, tokenizer::tokenizer::LLMTokenizer,
 };
-use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
+use llm_prompts::{chat::broker::LLMChatModelBroker, in_line_edit::broker::InLineEditPromptBroker};
 use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
@@ -45,6 +45,7 @@ pub struct Application {
     pub llm_broker: Arc<LLMBroker>,
     pub inline_prompt_edit: Arc<InLineEditPromptBroker>,
     pub llm_tokenizer: Arc<LLMTokenizer>,
+    pub chat_broker: Arc<LLMChatModelBroker>,
 }
 
 impl Application {
@@ -64,6 +65,7 @@ impl Application {
         let llm_broker =
             LLMBroker::new(LLMBrokerConfiguration::new(config.index_dir.clone())).await?;
         let llm_tokenizer = Arc::new(LLMTokenizer::new()?);
+        let chat_broker = Arc::new(LLMChatModelBroker::init());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -85,6 +87,7 @@ impl Application {
             llm_broker: Arc::new(llm_broker),
             inline_prompt_edit: Arc::new(InLineEditPromptBroker::new()),
             llm_tokenizer,
+            chat_broker,
         })
     }
 

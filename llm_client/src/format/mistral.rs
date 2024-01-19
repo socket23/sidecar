@@ -37,8 +37,32 @@ impl LLMFormatting for MistralInstructFormatting {
                 let eos_token = self.tokenizer_config.eos_token();
                 if message.role().is_system() || message.role().is_user() {
                     format!("[INST] {content} [/INST]")
+                } else if message.role().is_function() {
+                    // This will be formatted as a function call as well
+                    match message.get_function_call() {
+                        Some(function_call) => {
+                            let function_call = serde_json::to_string(function_call)
+                                .expect("serde deserialize to not fail");
+                            format!("[INST] {function_call} [/INST]")
+                        }
+                        None => {
+                            // not entirely correct, we will make it better with more testing
+                            format!("[INST] {content} [/INST]")
+                        }
+                    }
                 } else {
-                    format!("{content}{eos_token} ")
+                    // we are in an assistant message now, so we can have a function
+                    // call which we have to format
+                    match message.get_function_call() {
+                        Some(function_call) => {
+                            let function_call = serde_json::to_string(function_call)
+                                .expect("serde deserialize to not fail");
+                            format!("{content}{function_call}{eos_token} ")
+                        }
+                        None => {
+                            format!("{content}{eos_token} ")
+                        }
+                    }
                 }
             })
             .collect::<Vec<_>>()

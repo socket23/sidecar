@@ -33,6 +33,9 @@ impl LLMFormatting for MixtralInstructFormatting {
         // First the messages have to be alternating, if that's not enforced then we run into problems
         // but since thats the case, we can do something better, which is to to just send consecutive messages
         // from human and assistant together
+        // for handling function calls we will define that in 2 ways:
+        // if the message is about a function return: then we proxy that as a user message
+        // if the message is about a function call, then we keep it as an assistant message and push the json
         let formatted_message = messages
             .into_iter()
             .skip_while(|message| message.role().is_assistant())
@@ -41,8 +44,32 @@ impl LLMFormatting for MixtralInstructFormatting {
                 let eos_token = self.tokenizer_config.eos_token();
                 if message.role().is_system() || message.role().is_user() {
                     format!("[INST] {content} [/INST]")
+                } else if message.role().is_function() {
+                    // This will be formatted as a function call as well
+                    match message.get_function_call() {
+                        Some(function_call) => {
+                            let function_call = serde_json::to_string(function_call)
+                                .expect("serde deserialize to not fail");
+                            format!("[INST] {function_call} [/INST]")
+                        }
+                        None => {
+                            // not entirely correct, we will make it better with more testing
+                            format!("[INST] {content} [/INST]")
+                        }
+                    }
                 } else {
-                    format!("{content}{eos_token}")
+                    // we are in an assistant message now, so we can have a function
+                    // call which we have to format
+                    match message.get_function_call() {
+                        Some(function_call) => {
+                            let function_call = serde_json::to_string(function_call)
+                                .expect("serde deserialize to not fail");
+                            format!("{content}{function_call}{eos_token}")
+                        }
+                        None => {
+                            format!("{content}{eos_token}")
+                        }
+                    }
                 }
             })
             .collect::<Vec<_>>()

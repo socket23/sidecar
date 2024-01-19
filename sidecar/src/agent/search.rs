@@ -28,6 +28,7 @@ use anyhow::Context;
 use anyhow::Result;
 use futures::StreamExt;
 use llm_client::{broker::LLMBroker, tokenizer::tokenizer::LLMTokenizer};
+use llm_prompts::chat::broker::LLMChatModelBroker;
 use once_cell::sync::OnceCell;
 use rake::StopWords;
 use tiktoken_rs::CoreBPE;
@@ -94,6 +95,7 @@ impl Agent {
         editor_parsing: EditorParsing,
         model_config: LLMClientConfig,
         llm_tokenizer: Arc<LLMTokenizer>,
+        chat_broker: Arc<LLMChatModelBroker>,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
         let conversation_message = ConversationMessage::search_message(
@@ -117,6 +119,7 @@ impl Agent {
             editor_parsing,
             model_config,
             llm_tokenizer,
+            chat_broker,
         };
         agent
     }
@@ -135,6 +138,7 @@ impl Agent {
         editor_parsing: EditorParsing,
         model_config: LLMClientConfig,
         llm_tokenizer: Arc<LLMTokenizer>,
+        chat_broker: Arc<LLMChatModelBroker>,
     ) -> Self {
         let agent = Agent {
             application,
@@ -151,6 +155,7 @@ impl Agent {
             editor_parsing,
             model_config,
             llm_tokenizer,
+            chat_broker,
         };
         agent
     }
@@ -169,6 +174,7 @@ impl Agent {
         editor_parsing: EditorParsing,
         model_config: LLMClientConfig,
         llm_tokenizer: Arc<LLMTokenizer>,
+        chat_broker: Arc<LLMChatModelBroker>,
     ) -> Self {
         let conversation_message = ConversationMessage::semantic_search(
             conversation_id,
@@ -191,6 +197,7 @@ impl Agent {
             editor_parsing,
             model_config,
             llm_tokenizer,
+            chat_broker,
         };
         agent
     }

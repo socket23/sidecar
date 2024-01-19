@@ -60,6 +60,7 @@ pub async fn search_agent(
     }): axumQuery<SearchInformation>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let chat_broker = app.chat_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
     let session_id = uuid::Uuid::new_v4();
     let llm_broker = app.llm_broker.clone();
@@ -89,6 +90,7 @@ pub async fn search_agent(
         Default::default(),
         model_config,
         llm_tokenizer,
+        chat_broker,
     );
 
     generate_agent_stream(agent, action, receiver).await
@@ -130,6 +132,7 @@ pub async fn hybrid_search(
     // hand-waving the numbers here for whatever works for now
     // - final score -> git_log_score * 4 + lexical_search * 2.5 + semantic_search_score
     // - combine the score as following
+    let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
     let session_id = uuid::Uuid::new_v4();
@@ -155,6 +158,7 @@ pub async fn hybrid_search(
         Default::default(),
         model_config,
         llm_tokenizer,
+        chat_broker,
     );
     let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
     Ok(json(HybridSearchResponse {
@@ -193,6 +197,7 @@ pub async fn explain(
     }): axumQuery<ExplainRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
     let user_id = app.user_id.to_owned();
@@ -266,6 +271,7 @@ pub async fn explain(
         editor_parsing,
         model_config,
         llm_tokenizer,
+        chat_broker,
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -483,6 +489,7 @@ pub async fn followup_chat(
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future
     // we can obviously add more context using @ symbols etc
+    let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
     let posthog_client = app.posthog_client.clone();
@@ -552,6 +559,7 @@ pub async fn followup_chat(
             Default::default(),
             model_config,
             llm_tokenizer,
+            chat_broker,
         )
     } else {
         Agent::prepare_for_followup(
@@ -572,6 +580,7 @@ pub async fn followup_chat(
             Default::default(),
             model_config,
             llm_tokenizer,
+            chat_broker,
         )
     };
 
@@ -606,6 +615,7 @@ pub async fn go_to_definition_symbols(
         model_config,
     }): Json<GotoDefinitionSymbolsRequest>,
 ) -> Result<impl IntoResponse> {
+    let chat_broker = app.chat_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
     let llm_broker = app.llm_broker.clone();
     let posthog_client = app.posthog_client.clone();
@@ -640,6 +650,7 @@ pub async fn go_to_definition_symbols(
         editor_parsing,
         model_config,
         llm_tokenizer,
+        chat_broker,
     };
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     Ok(json(GotoDefinitionSymbolsResponse {

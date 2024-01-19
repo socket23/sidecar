@@ -1,8 +1,13 @@
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::Context;
-use llm_client::{broker::LLMBroker, clients::types::LLMType, tokenizer::tokenizer::LLMTokenizer};
-use llm_prompts::chat::broker::LLMChatModelBroker;
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::{LLMClientCompletionRequest, LLMClientCompletionResponse, LLMType},
+    provider::LLMProviderAPIKeys,
+    tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerInput},
+};
+use llm_prompts::{answer_model::AnswerModel, chat::broker::LLMChatModelBroker};
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tokio::sync::mpsc::Sender;
@@ -23,7 +28,7 @@ use crate::{
 
 use super::{
     llm_funcs::{self, LlmClient},
-    model, prompts,
+    prompts,
     search::stop_words,
 };
 
@@ -42,6 +47,15 @@ pub struct Answer {
     // when streaming we often times want to send the delta so we can show
     // the output in a streaming fashion
     pub delta: Option<String>,
+}
+
+impl Answer {
+    pub fn from_llm_completion(llm_completion: LLMClientCompletionResponse) -> Self {
+        Self {
+            answer_up_until_now: llm_completion.answer_up_until_now().to_owned(),
+            delta: llm_completion.delta().map(|delta| delta.to_owned()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -360,7 +374,10 @@ impl ConversationMessage {
         self.generated_answer_context.as_deref()
     }
 
-    pub fn answer_update(session_id: uuid::Uuid, answer_update: Answer) -> Self {
+    pub fn answer_update(
+        session_id: uuid::Uuid,
+        llm_completion: LLMClientCompletionResponse,
+    ) -> Self {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -375,7 +392,7 @@ impl ConversationMessage {
             code_spans: vec![],
             open_files: vec![],
             conversation_state: ConversationState::StreamingAnswer,
-            answer: Some(answer_update),
+            answer: Some(Answer::from_llm_completion(llm_completion)),
             created_at: current_time,
             last_updated: current_time,
             // We use this to send it over the wire, this is pretty bad anyways
@@ -666,7 +683,6 @@ pub struct Agent {
     pub conversation_messages: Vec<ConversationMessage>,
     pub llm_client: Arc<LlmClient>,
     pub llm_broker: Arc<LLMBroker>,
-    pub model: model::AnswerModel,
     pub sql_db: SqlDb,
     pub sender: Sender<ConversationMessage>,
     pub user_context: Option<UserContext>,
@@ -714,6 +730,23 @@ impl Agent {
 
     pub fn fast_llm_model(&self) -> &LLMType {
         &self.model_config.fast_model
+    }
+
+    pub fn provider_for_slow_llm(&self) -> Option<&LLMProviderAPIKeys> {
+        // Grabs the provider required for the slow model
+        // we first need to get the model configuration for the slow model
+        // which will give us the model and the context around it
+        let model = self.model_config.models.get(&self.model_config.fast_model);
+        if let None = model {
+            return None;
+        }
+        let model = model.expect("is_none above to hold");
+        let provider = &model.provider;
+        // get the related provider if its present
+        self.model_config
+            .providers
+            .iter()
+            .find(|p| p.key(provider).is_some())
     }
 
     pub fn get_llm_client(&self) -> Arc<LlmClient> {
@@ -939,7 +972,7 @@ impl Agent {
     pub async fn iterate(
         &mut self,
         action: AgentAction,
-        answer_sender: tokio::sync::mpsc::UnboundedSender<Answer>,
+        answer_sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> anyhow::Result<Option<AgentAction>> {
         // Now we will go about iterating over the action and figure out what the
         // next best action should be
@@ -1015,7 +1048,7 @@ impl Agent {
             let _ = self.sender.send(last_conversation.clone()).await;
         }
 
-        let functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
+        let _functions = serde_json::from_value::<Vec<llm_funcs::llm::Function>>(
             prompts::functions(self.paths().next().is_some()), // Only add proc if there are paths in context
         )
         .unwrap();
@@ -1025,63 +1058,55 @@ impl Agent {
         ))];
         history.extend(self.history()?);
 
-        let trimmed_history = trim_history(history.clone(), self.model.clone())?;
+        let slow_llm = self.slow_llm_model();
+        let answer_model = self.chat_broker.get_answer_model(&slow_llm)?;
 
-        let response = self
-            .get_llm_client()
-            .stream_function_call(
-                llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?,
-                trimmed_history,
-                functions,
-                0.0,
-                None,
-            )
-            .await?;
+        let _trimmed_history =
+            trim_history(history.clone(), self.llm_tokenizer.clone(), answer_model)?;
 
-        if let Some(response) = response {
-            AgentAction::from_gpt_response(&response).map(|response| Some(response))
-        } else {
-            Ok(None)
-        }
-    }
+        Ok(None)
 
-    pub async fn goto_definition_symbols(
-        &self,
-        code_snippet: &str,
-        language: &str,
-        sender: tokio::sync::mpsc::UnboundedSender<Answer>,
-    ) -> anyhow::Result<Vec<String>> {
-        let model = llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?;
-        let system_prompt = prompts::extract_goto_definition_symbols_from_snippet(language);
-        let messages = vec![
-            llm_funcs::llm::Message::system(&system_prompt),
-            llm_funcs::llm::Message::user(&format!("```{code_snippet}```")),
-        ];
-        let response = self
-            .get_llm_client()
-            .stream_response(model, messages, None, 0.0, None, sender)
-            .await;
-        response.map(|str_response| {
-            str_response
-                .trim()
-                .split(",")
-                .map(|response| response.trim().to_owned())
-                .collect()
-        })
+        // TODO(skcd): Bring back function calling when we want to
+        // let response = self
+        //     .get_llm_client()
+        //     .stream_function_call(
+        //         llm_funcs::llm::OpenAIModel::get_model(self.model.model_name)?,
+        //         trimmed_history,
+        //         functions,
+        //         0.0,
+        //         None,
+        //     )
+        //     .await?;
+
+        // if let Some(response) = response {
+        //     AgentAction::from_gpt_response(&response).map(|response| Some(response))
+        // } else {
+        //     Ok(None)
+        // }
     }
 }
 
 fn trim_history(
     mut history: Vec<llm_funcs::llm::Message>,
-    model: model::AnswerModel,
+    tokenizer: Arc<LLMTokenizer>,
+    model: &AnswerModel,
 ) -> anyhow::Result<Vec<llm_funcs::llm::Message>> {
     const HIDDEN: &str = "[HIDDEN]";
 
     let mut tiktoken_msgs: Vec<ChatCompletionRequestMessage> =
         history.iter().map(|m| m.into()).collect::<Vec<_>>();
 
-    while tiktoken_rs::get_chat_completion_max_tokens(model.tokenizer, &tiktoken_msgs)?
-        < model.history_tokens_limit
+    let messages = history
+        .iter()
+        .map(|m| m.try_into())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    while tokenizer.count_tokens(
+        &model.llm_type,
+        LLMTokenizerInput::Messages(messages.to_vec()),
+    )? < model.history_tokens_limit
     {
         let _ = history
             .iter_mut()

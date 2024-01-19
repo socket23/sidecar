@@ -62,6 +62,10 @@ impl LLMClientRole {
     pub fn is_assistant(&self) -> bool {
         matches!(self, LLMClientRole::Assistant)
     }
+
+    pub fn is_function(&self) -> bool {
+        matches!(self, LLMClientRole::Function)
+    }
 }
 
 #[derive(serde::Serialize, Debug, Clone)]

@@ -8,6 +8,7 @@ use futures::stream;
 use futures::StreamExt;
 use llm_client::clients::types::LLMType;
 use llm_client::tokenizer::tokenizer::LLMTokenizer;
+use llm_client::tokenizer::tokenizer::LLMTokenizerInput;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 use tantivy::collector::TopDocs;
@@ -44,13 +45,16 @@ impl Agent {
 
         // we look at our messages and check how many more tokens we can save
         // and send over
-        let history_tokens_in_use = tiktoken_rs::num_tokens_from_messages(
-            self.model.tokenizer,
-            messages
-                .iter()
-                .map(|message| message.into())
-                .collect::<Vec<_>>()
-                .as_slice(),
+        let history_tokens_in_use = self.llm_tokenizer.count_tokens(
+            model,
+            LLMTokenizerInput::Messages(
+                messages
+                    .iter()
+                    .map(|message| message.try_into())
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
         )?;
 
         // we get additional breathing room if we are using less history tokens

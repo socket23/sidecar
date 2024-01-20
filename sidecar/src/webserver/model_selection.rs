@@ -19,6 +19,19 @@ impl LLMClientConfig {
     pub fn provider_for_slow_model(&self) -> Option<&LLMProviderAPIKeys> {
         // we first need to get the model configuration for the slow model
         // which will give us the model and the context around it
+        let model = self.models.get(&self.slow_model);
+        if let None = model {
+            return None;
+        }
+        let model = model.expect("is_none above to hold");
+        let provider = &model.provider;
+        // get the related provider if its present
+        self.providers.iter().find(|p| p.key(provider).is_some())
+    }
+
+    pub fn provider_for_fast_model(&self) -> Option<&LLMProviderAPIKeys> {
+        // we first need to get the model configuration for the slow model
+        // which will give us the model and the context around it
         let model = self.models.get(&self.fast_model);
         if let None = model {
             return None;

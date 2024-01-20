@@ -2964,8 +2964,10 @@ dependencies = [
 name = "llm_prompts"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "llm_client",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

@@ -3,11 +3,15 @@ use std::{str::FromStr, sync::Arc};
 use anyhow::Context;
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientCompletionResponse, LLMType},
+    clients::types::{LLMClientCompletionResponse, LLMType},
     provider::LLMProviderAPIKeys,
     tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerInput},
 };
-use llm_prompts::{answer_model::AnswerModel, chat::broker::LLMChatModelBroker};
+use llm_prompts::{
+    answer_model::AnswerModel,
+    chat::broker::LLMChatModelBroker,
+    reranking::{broker::ReRankBroker, types::ReRankStrategy},
+};
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
 use tokio::sync::mpsc::Sender;
@@ -27,7 +31,7 @@ use crate::{
 };
 
 use super::{
-    llm_funcs::{self, LlmClient},
+    llm_funcs::{self},
     prompts,
     search::stop_words,
 };
@@ -681,7 +685,6 @@ pub struct Agent {
     /// interactions happening across a single thread
     pub session_id: uuid::Uuid,
     pub conversation_messages: Vec<ConversationMessage>,
-    pub llm_client: Arc<LlmClient>,
     pub llm_broker: Arc<LLMBroker>,
     pub sql_db: SqlDb,
     pub sender: Sender<ConversationMessage>,
@@ -691,6 +694,7 @@ pub struct Agent {
     pub model_config: LLMClientConfig,
     pub llm_tokenizer: Arc<LLMTokenizer>,
     pub chat_broker: Arc<LLMChatModelBroker>,
+    pub reranker: Arc<ReRankBroker>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -724,12 +728,34 @@ pub enum ConversationState {
 }
 
 impl Agent {
+    // Listwise is the best we can just assume that for now
+    pub fn reranking_strategy(&self) -> ReRankStrategy {
+        ReRankStrategy::ListWise
+    }
+
     pub fn slow_llm_model(&self) -> &LLMType {
         &self.model_config.slow_model
     }
 
     pub fn fast_llm_model(&self) -> &LLMType {
         &self.model_config.fast_model
+    }
+
+    pub fn provider_for_llm(&self, llm_type: &LLMType) -> Option<&LLMProviderAPIKeys> {
+        // Grabs the provider required for the slow model
+        // we first need to get the model configuration for the slow model
+        // which will give us the model and the context around it
+        let model = self.model_config.models.get(llm_type);
+        if let None = model {
+            return None;
+        }
+        let model = model.expect("is_none above to hold");
+        let provider = &model.provider;
+        // get the related provider if its present
+        self.model_config
+            .providers
+            .iter()
+            .find(|p| p.key(provider).is_some())
     }
 
     pub fn provider_for_slow_llm(&self) -> Option<&LLMProviderAPIKeys> {
@@ -747,10 +773,6 @@ impl Agent {
             .providers
             .iter()
             .find(|p| p.key(provider).is_some())
-    }
-
-    pub fn get_llm_client(&self) -> Arc<LlmClient> {
-        self.llm_client.clone()
     }
 
     pub fn reporef(&self) -> &RepoRef {
@@ -1106,7 +1128,10 @@ fn trim_history(
     while tokenizer.count_tokens(
         &model.llm_type,
         LLMTokenizerInput::Messages(messages.to_vec()),
-    )? < model.history_tokens_limit
+    )? < model
+        .history_tokens_limit
+        .try_into()
+        .expect("usize to i64 to not fail")
     {
         let _ = history
             .iter_mut()

@@ -20,8 +20,8 @@ use super::{
     },
 };
 
-const SLIDING_WINDOW: usize = 10;
-const TOP_K: usize = 5;
+const SLIDING_WINDOW: i64 = 10;
+const TOP_K: i64 = 5;
 
 pub struct ReRankBroker {
     rerankers: HashMap<LLMType, Box<dyn ReRankCodeSpan + Send + Sync>>,
@@ -131,13 +131,20 @@ impl ReRankBroker {
                 .map(|digest| digest.get_code_span())
                 .collect());
         }
-        let mut end_index = min(SLIDING_WINDOW, digests.len()) - 1;
-        while end_index < digests.len() {
+        let mut end_index: i64 = (min(
+            SLIDING_WINDOW,
+            digests.len().try_into().expect("conversion to not fail"),
+        ) - 1)
+            .try_into()
+            .expect("conversion to work");
+        while end_index < digests.len() as i64 {
             // Now that we are in the window, we have to take the elements from
             // (end_index - SLIDING_WINDOW)::(end_index)
             // and rank them, once we have these ranked
             // we move our window forward by TOP_K and repeat the process
-            let code_spans = digests[max(end_index - SLIDING_WINDOW, 0)..=end_index]
+            let index_start: usize = max(end_index - SLIDING_WINDOW, 0).try_into().unwrap();
+            let end_index_usize = end_index.try_into().expect("to work");
+            let code_spans = digests[index_start..=end_index_usize]
                 .iter()
                 .map(|digest| digest.clone().get_code_span())
                 .collect::<Vec<_>>();
@@ -170,7 +177,11 @@ impl ReRankBroker {
                 // Now we will in place replace the code spans from the digests from our start position
                 // with the elements in this list
                 for (index, code_span_digest) in updated_list.into_iter().enumerate() {
-                    digests[end_index - SLIDING_WINDOW + index] = code_span_digest;
+                    let index_i64: i64 = index.try_into().expect("to work");
+                    let new_index: usize = (max(end_index - SLIDING_WINDOW, 0) + index_i64)
+                        .try_into()
+                        .expect("to work");
+                    digests[new_index] = code_span_digest;
                 }
 
                 // Now move the window forward

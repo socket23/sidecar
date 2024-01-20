@@ -9,16 +9,16 @@ use llm_client::clients::types::LLMType;
 pub struct AnswerModel {
     pub llm_type: LLMType,
     /// The number of tokens reserved for the answer
-    pub answer_tokens: usize,
+    pub answer_tokens: i64,
 
     /// The number of tokens reserved for the prompt
-    pub prompt_tokens_limit: usize,
+    pub prompt_tokens_limit: i64,
 
     /// The number of tokens reserved for history
-    pub history_tokens_limit: usize,
+    pub history_tokens_limit: i64,
 
     /// The total number of tokens reserved for the model
-    pub total_tokens: usize,
+    pub total_tokens: i64,
 }
 
 // GPT-3.5-16k Turbo has 16,385 tokens

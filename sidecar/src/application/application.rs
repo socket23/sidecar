@@ -6,7 +6,10 @@ use std::sync::Arc;
 use llm_client::{
     broker::LLMBroker, config::LLMBrokerConfiguration, tokenizer::tokenizer::LLMTokenizer,
 };
-use llm_prompts::{chat::broker::LLMChatModelBroker, in_line_edit::broker::InLineEditPromptBroker};
+use llm_prompts::{
+    chat::broker::LLMChatModelBroker, in_line_edit::broker::InLineEditPromptBroker,
+    reranking::broker::ReRankBroker,
+};
 use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
@@ -46,6 +49,7 @@ pub struct Application {
     pub inline_prompt_edit: Arc<InLineEditPromptBroker>,
     pub llm_tokenizer: Arc<LLMTokenizer>,
     pub chat_broker: Arc<LLMChatModelBroker>,
+    pub reranker: Arc<ReRankBroker>,
 }
 
 impl Application {
@@ -66,6 +70,7 @@ impl Application {
             LLMBroker::new(LLMBrokerConfiguration::new(config.index_dir.clone())).await?;
         let llm_tokenizer = Arc::new(LLMTokenizer::new()?);
         let chat_broker = Arc::new(LLMChatModelBroker::init());
+        let reranker = Arc::new(ReRankBroker::new());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -88,6 +93,7 @@ impl Application {
             inline_prompt_edit: Arc::new(InLineEditPromptBroker::new()),
             llm_tokenizer,
             chat_broker,
+            reranker,
         })
     }
 

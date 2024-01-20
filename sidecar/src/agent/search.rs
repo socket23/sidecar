@@ -1,11 +1,8 @@
 use crate::{
     agent::{
-        llm_funcs::{
-            self,
-            llm::{self, Message},
-        },
+        llm_funcs::{self},
         prompts,
-        types::{AgentStep, CodeSpan, VariableInformation},
+        types::{CodeSpan, VariableInformation},
     },
     application::application::Application,
     chunking::editor_parsing::EditorParsing,
@@ -17,13 +14,9 @@ use crate::{
 
 /// Here we allow the agent to perform search and answer workflow related questions
 /// we will later use this for code planning and also code editing
-use super::{
-    llm_funcs::LlmClient,
-    types::{Agent, AgentState, Answer, ConversationMessage, ExtendedVariableInformation},
-};
+use super::types::{Agent, AgentState, ConversationMessage, ExtendedVariableInformation};
 
 use anyhow::anyhow;
-use anyhow::Context;
 use anyhow::Result;
 use futures::StreamExt;
 use llm_client::{
@@ -31,7 +24,9 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientMessage},
     tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerInput},
 };
-use llm_prompts::{answer_model::AnswerModel, chat::broker::LLMChatModelBroker};
+use llm_prompts::{
+    answer_model::AnswerModel, chat::broker::LLMChatModelBroker, reranking::broker::ReRankBroker,
+};
 use once_cell::sync::OnceCell;
 use rake::StopWords;
 use tiktoken_rs::CoreBPE;
@@ -89,7 +84,6 @@ impl Agent {
         reporef: RepoRef,
         session_id: uuid::Uuid,
         query: &str,
-        llm_client: Arc<LlmClient>,
         llm_broker: Arc<LLMBroker>,
         conversation_id: uuid::Uuid,
         sql_db: SqlDb,
@@ -99,6 +93,7 @@ impl Agent {
         model_config: LLMClientConfig,
         llm_tokenizer: Arc<LLMTokenizer>,
         chat_broker: Arc<LLMChatModelBroker>,
+        reranker: Arc<ReRankBroker>,
     ) -> Self {
         // We will take care of the search here, and use that for the next steps
         let conversation_message = ConversationMessage::search_message(
@@ -112,7 +107,6 @@ impl Agent {
             reporef,
             session_id,
             conversation_messages: previous_conversations,
-            llm_client,
             llm_broker,
             sql_db,
             sender,
@@ -122,6 +116,7 @@ impl Agent {
             model_config,
             llm_tokenizer,
             chat_broker,
+            reranker,
         };
         agent
     }
@@ -130,7 +125,6 @@ impl Agent {
         application: Application,
         reporef: RepoRef,
         session_id: uuid::Uuid,
-        llm_client: Arc<LlmClient>,
         llm_broker: Arc<LLMBroker>,
         sql_db: SqlDb,
         conversations: Vec<ConversationMessage>,
@@ -141,13 +135,13 @@ impl Agent {
         model_config: LLMClientConfig,
         llm_tokenizer: Arc<LLMTokenizer>,
         chat_broker: Arc<LLMChatModelBroker>,
+        reranker: Arc<ReRankBroker>,
     ) -> Self {
         let agent = Agent {
             application,
             reporef,
             session_id,
             conversation_messages: conversations,
-            llm_client,
             llm_broker,
             sql_db,
             sender,
@@ -157,6 +151,7 @@ impl Agent {
             model_config,
             llm_tokenizer,
             chat_broker,
+            reranker,
         };
         agent
     }
@@ -166,7 +161,6 @@ impl Agent {
         reporef: RepoRef,
         session_id: uuid::Uuid,
         query: &str,
-        llm_client: Arc<LlmClient>,
         llm_broker: Arc<LLMBroker>,
         conversation_id: uuid::Uuid,
         sql_db: SqlDb,
@@ -176,6 +170,7 @@ impl Agent {
         model_config: LLMClientConfig,
         llm_tokenizer: Arc<LLMTokenizer>,
         chat_broker: Arc<LLMChatModelBroker>,
+        reranker: Arc<ReRankBroker>,
     ) -> Self {
         let conversation_message = ConversationMessage::semantic_search(
             conversation_id,
@@ -188,7 +183,6 @@ impl Agent {
             reporef,
             session_id,
             conversation_messages: previous_conversations,
-            llm_client,
             llm_broker,
             sql_db,
             sender,
@@ -198,6 +192,7 @@ impl Agent {
             model_config,
             llm_tokenizer,
             chat_broker,
+            reranker,
         };
         agent
     }
@@ -323,32 +318,32 @@ impl Agent {
         if self.application.semantic_client.is_none() {
             return Err(anyhow::anyhow!("no semantic client defined"));
         }
-        let mut results_semantic = self
+        let results_semantic = self
             .application
             .semantic_client
             .as_ref()
             .expect("is_none to hold")
             .search(query, self.reporef(), CODE_SEARCH_LIMIT, 0, 0.0, true)
             .await?;
-        let hyde_snippets = self.hyde(query).await?;
-        if !hyde_snippets.is_empty() {
-            let hyde_snippets = hyde_snippets.first().unwrap();
-            let hyde_search = self
-                .application
-                .semantic_client
-                .as_ref()
-                .expect("is_none to hold")
-                .search(
-                    hyde_snippets,
-                    self.reporef(),
-                    CODE_SEARCH_LIMIT,
-                    0,
-                    0.3,
-                    true,
-                )
-                .await?;
-            results_semantic.extend(hyde_search);
-        }
+        // let hyde_snippets = self.hyde(query).await?;
+        // if !hyde_snippets.is_empty() {
+        //     let hyde_snippets = hyde_snippets.first().unwrap();
+        //     let hyde_search = self
+        //         .application
+        //         .semantic_client
+        //         .as_ref()
+        //         .expect("is_none to hold")
+        //         .search(
+        //             hyde_snippets,
+        //             self.reporef(),
+        //             CODE_SEARCH_LIMIT,
+        //             0,
+        //             0.3,
+        //             true,
+        //         )
+        //         .await?;
+        //     results_semantic.extend(hyde_search);
+        // }
 
         // Now we do a lexical search as well this is to help figure out which
         // snippets are relevant
@@ -472,271 +467,216 @@ impl Agent {
         self.save_code_snippets_response(query, code_snippets)
     }
 
-    /// This just uses the semantic search and nothing else
-    pub async fn code_search_pure_semantic(&mut self, query: &str) -> Result<String> {
-        const CODE_SEARCH_LIMIT: u64 = 10;
-        // If we don't have semantic client we skip this one
-        if self.application.semantic_client.is_none() {
-            return Ok("".to_string());
-        }
-        let mut results = self
-            .application
-            .semantic_client
-            .as_ref()
-            .expect("is_none to hold")
-            .search(query, self.reporef(), CODE_SEARCH_LIMIT, 0, 0.0, true)
-            .await?;
-        let hyde_snippets = self.hyde(query).await?;
-        if !hyde_snippets.is_empty() {
-            let hyde_snippet = hyde_snippets.first().unwrap();
-            let hyde_search = self
-                .application
-                .semantic_client
-                .as_ref()
-                .expect("is_none to hold")
-                .search(
-                    hyde_snippet,
-                    self.reporef(),
-                    CODE_SEARCH_LIMIT,
-                    0,
-                    0.3,
-                    true,
-                )
-                .await?;
-            results.extend(hyde_search);
-        }
+    // async fn hyde(&self, query: &str) -> Result<Vec<String>> {
+    //     let prompt = vec![Message::system(&prompts::hypothetical_document_prompt(
+    //         query,
+    //     ))];
 
-        let mut code_snippets = results
-            .into_iter()
-            .map(|result| {
-                let path_alias = self.get_path_alias(&result.relative_path);
-                // convert it to a code snippet here
-                let code_span = CodeSpan::new(
-                    result.relative_path,
-                    path_alias,
-                    result.start_line,
-                    result.end_line,
-                    result.text,
-                    result.score,
-                );
-                code_span
-            })
-            .collect::<Vec<_>>();
+    //     let response = self
+    //         .get_llm_client()
+    //         .response(llm::OpenAIModel::GPT3_5_16k, prompt, None, 0.0, None)
+    //         .await?;
 
-        code_snippets.sort_by(|a, b| a.alias.cmp(&b.alias).then(a.start_line.cmp(&b.start_line)));
+    //     debug!("hyde response");
 
-        self.save_code_snippets_response(query, code_snippets)
-    }
+    //     let documents = prompts::try_parse_hypothetical_documents(&response);
 
-    async fn hyde(&self, query: &str) -> Result<Vec<String>> {
-        let prompt = vec![Message::system(&prompts::hypothetical_document_prompt(
-            query,
-        ))];
+    //     for doc in documents.iter() {
+    //         info!(?doc, "hyde generated snippet");
+    //     }
 
-        let response = self
-            .get_llm_client()
-            .response(llm::OpenAIModel::GPT3_5_16k, prompt, None, 0.0, None)
-            .await?;
+    //     Ok(documents)
+    // }
 
-        debug!("hyde response");
+    pub async fn process_files(&mut self, _query: &str, _path_aliases: &[usize]) -> Result<String> {
+        Ok("".to_owned())
+        // const MAX_CHUNK_LINE_LENGTH: usize = 20;
+        // const CHUNK_MERGE_DISTANCE: usize = 10;
+        // const MAX_TOKENS: usize = 15400;
 
-        let documents = prompts::try_parse_hypothetical_documents(&response);
+        // let paths = path_aliases
+        //     .iter()
+        //     .copied()
+        //     .map(|i| self.paths().nth(i).ok_or(i).map(str::to_owned))
+        //     .collect::<Result<Vec<_>, _>>()
+        //     .map_err(|i| anyhow!("invalid path alias {i}"))?;
 
-        for doc in documents.iter() {
-            info!(?doc, "hyde generated snippet");
-        }
+        // debug!(?query, ?paths, "processing file");
 
-        Ok(documents)
-    }
+        // // Immutable reborrow of `self`, to copy freely to async closures.
+        // let self_ = &*self;
+        // let chunks = futures::stream::iter(paths.clone())
+        //     .map(|path| async move {
+        //         tracing::debug!(?path, "reading file");
 
-    pub async fn process_files(&mut self, query: &str, path_aliases: &[usize]) -> Result<String> {
-        const MAX_CHUNK_LINE_LENGTH: usize = 20;
-        const CHUNK_MERGE_DISTANCE: usize = 10;
-        const MAX_TOKENS: usize = 15400;
+        //         let lines = self_
+        //             .get_file_content(&path)
+        //             .await?
+        //             .with_context(|| format!("path does not exist in the index: {path}"))?
+        //             .lines()
+        //             .enumerate()
+        //             .map(|(i, line)| format!("{} {line}", i + 1))
+        //             .collect::<Vec<_>>();
 
-        let paths = path_aliases
-            .iter()
-            .copied()
-            .map(|i| self.paths().nth(i).ok_or(i).map(str::to_owned))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|i| anyhow!("invalid path alias {i}"))?;
+        //         let bpe = tiktoken_rs::get_bpe_from_model("gpt-3.5-turbo")?;
 
-        debug!(?query, ?paths, "processing file");
+        //         let iter =
+        //             tokio::task::spawn_blocking(|| trim_lines_by_tokens(lines, bpe, MAX_TOKENS))
+        //                 .await
+        //                 .context("failed to split by token")?;
 
-        // Immutable reborrow of `self`, to copy freely to async closures.
-        let self_ = &*self;
-        let chunks = futures::stream::iter(paths.clone())
-            .map(|path| async move {
-                tracing::debug!(?path, "reading file");
+        //         Result::<_>::Ok((iter, path.clone()))
+        //     })
+        //     // Buffer file loading to load multiple paths at once
+        //     .buffered(10)
+        //     .map(|result| async {
+        //         let (lines, path) = result?;
 
-                let lines = self_
-                    .get_file_content(&path)
-                    .await?
-                    .with_context(|| format!("path does not exist in the index: {path}"))?
-                    .lines()
-                    .enumerate()
-                    .map(|(i, line)| format!("{} {line}", i + 1))
-                    .collect::<Vec<_>>();
+        //         // The unwraps here should never fail, we generated this string above to always
+        //         // have the same format.
+        //         let start_line = lines[0]
+        //             .split_once(' ')
+        //             .unwrap()
+        //             .0
+        //             .parse::<usize>()
+        //             .unwrap()
+        //             - 1;
 
-                let bpe = tiktoken_rs::get_bpe_from_model("gpt-3.5-turbo")?;
+        //         // We store the lines separately, so that we can reference them later to trim
+        //         // this snippet by line number.
+        //         let contents = lines.join("\n");
+        //         let prompt = prompts::file_explanation(query, &path, &contents);
 
-                let iter =
-                    tokio::task::spawn_blocking(|| trim_lines_by_tokens(lines, bpe, MAX_TOKENS))
-                        .await
-                        .context("failed to split by token")?;
+        //         let json = self
+        //             .get_llm_client()
+        //             .response(
+        //                 llm_funcs::llm::OpenAIModel::GPT3_5_16k,
+        //                 vec![llm_funcs::llm::Message::system(&prompt)],
+        //                 None,
+        //                 0.0,
+        //                 Some(0.2),
+        //             )
+        //             .await?;
 
-                Result::<_>::Ok((iter, path.clone()))
-            })
-            // Buffer file loading to load multiple paths at once
-            .buffered(10)
-            .map(|result| async {
-                let (lines, path) = result?;
+        //         #[derive(
+        //             serde::Deserialize,
+        //             serde::Serialize,
+        //             PartialEq,
+        //             Eq,
+        //             PartialOrd,
+        //             Ord,
+        //             Copy,
+        //             Clone,
+        //             Debug,
+        //         )]
+        //         struct Range {
+        //             start: usize,
+        //             end: usize,
+        //         }
 
-                // The unwraps here should never fail, we generated this string above to always
-                // have the same format.
-                let start_line = lines[0]
-                    .split_once(' ')
-                    .unwrap()
-                    .0
-                    .parse::<usize>()
-                    .unwrap()
-                    - 1;
+        //         #[derive(serde::Serialize)]
+        //         struct RelevantChunk {
+        //             #[serde(flatten)]
+        //             range: Range,
+        //             code: String,
+        //         }
 
-                // We store the lines separately, so that we can reference them later to trim
-                // this snippet by line number.
-                let contents = lines.join("\n");
-                let prompt = prompts::file_explanation(query, &path, &contents);
+        //         let mut line_ranges: Vec<Range> = serde_json::from_str::<Vec<Range>>(&json)?
+        //             .into_iter()
+        //             .filter(|r| r.start > 0 && r.end > 0)
+        //             .map(|mut r| {
+        //                 r.end = r.end.min(r.start + MAX_CHUNK_LINE_LENGTH); // Cap relevant chunk size by line number
+        //                 r
+        //             })
+        //             .map(|r| Range {
+        //                 start: r.start - 1,
+        //                 end: r.end,
+        //             })
+        //             .collect();
 
-                let json = self
-                    .get_llm_client()
-                    .response(
-                        llm_funcs::llm::OpenAIModel::GPT3_5_16k,
-                        vec![llm_funcs::llm::Message::system(&prompt)],
-                        None,
-                        0.0,
-                        Some(0.2),
-                    )
-                    .await?;
+        //         line_ranges.sort();
+        //         line_ranges.dedup();
 
-                #[derive(
-                    serde::Deserialize,
-                    serde::Serialize,
-                    PartialEq,
-                    Eq,
-                    PartialOrd,
-                    Ord,
-                    Copy,
-                    Clone,
-                    Debug,
-                )]
-                struct Range {
-                    start: usize,
-                    end: usize,
-                }
+        //         let relevant_chunks = line_ranges
+        //             .into_iter()
+        //             .fold(Vec::<Range>::new(), |mut exps, next| {
+        //                 if let Some(prev) = exps.last_mut() {
+        //                     if prev.end + CHUNK_MERGE_DISTANCE >= next.start {
+        //                         prev.end = next.end;
+        //                         return exps;
+        //                     }
+        //                 }
 
-                #[derive(serde::Serialize)]
-                struct RelevantChunk {
-                    #[serde(flatten)]
-                    range: Range,
-                    code: String,
-                }
+        //                 exps.push(next);
+        //                 exps
+        //             })
+        //             .into_iter()
+        //             .filter_map(|range| {
+        //                 Some(RelevantChunk {
+        //                     range,
+        //                     code: lines
+        //                         .get(
+        //                             range.start.saturating_sub(start_line)
+        //                                 ..=range.end.saturating_sub(start_line),
+        //                         )?
+        //                         .iter()
+        //                         .map(|line| line.split_once(' ').unwrap().1)
+        //                         .collect::<Vec<_>>()
+        //                         .join("\n"),
+        //                 })
+        //             })
+        //             .collect::<Vec<_>>();
 
-                let mut line_ranges: Vec<Range> = serde_json::from_str::<Vec<Range>>(&json)?
-                    .into_iter()
-                    .filter(|r| r.start > 0 && r.end > 0)
-                    .map(|mut r| {
-                        r.end = r.end.min(r.start + MAX_CHUNK_LINE_LENGTH); // Cap relevant chunk size by line number
-                        r
-                    })
-                    .map(|r| Range {
-                        start: r.start - 1,
-                        end: r.end,
-                    })
-                    .collect();
+        //         Ok::<_, anyhow::Error>((relevant_chunks, path))
+        //     });
 
-                line_ranges.sort();
-                line_ranges.dedup();
+        // let processed = chunks
+        //     .boxed()
+        //     .buffered(5)
+        //     .filter_map(|res| async { res.ok() })
+        //     .collect::<Vec<_>>()
+        //     .await;
 
-                let relevant_chunks = line_ranges
-                    .into_iter()
-                    .fold(Vec::<Range>::new(), |mut exps, next| {
-                        if let Some(prev) = exps.last_mut() {
-                            if prev.end + CHUNK_MERGE_DISTANCE >= next.start {
-                                prev.end = next.end;
-                                return exps;
-                            }
-                        }
+        // let mut chunks = processed
+        //     .into_iter()
+        //     .flat_map(|(relevant_chunks, path)| {
+        //         let alias = self.get_path_alias(&path);
 
-                        exps.push(next);
-                        exps
-                    })
-                    .into_iter()
-                    .filter_map(|range| {
-                        Some(RelevantChunk {
-                            range,
-                            code: lines
-                                .get(
-                                    range.start.saturating_sub(start_line)
-                                        ..=range.end.saturating_sub(start_line),
-                                )?
-                                .iter()
-                                .map(|line| line.split_once(' ').unwrap().1)
-                                .collect::<Vec<_>>()
-                                .join("\n"),
-                        })
-                    })
-                    .collect::<Vec<_>>();
+        //         relevant_chunks.into_iter().map(move |c| {
+        //             CodeSpan::new(
+        //                 path.clone(),
+        //                 alias,
+        //                 c.range.start.try_into().unwrap(),
+        //                 c.range.end.try_into().unwrap(),
+        //                 c.code,
+        //                 None,
+        //             )
+        //         })
+        //     })
+        //     .collect::<Vec<_>>();
 
-                Ok::<_, anyhow::Error>((relevant_chunks, path))
-            });
+        // chunks.sort_by(|a, b| a.alias.cmp(&b.alias).then(a.start_line.cmp(&b.start_line)));
 
-        let processed = chunks
-            .boxed()
-            .buffered(5)
-            .filter_map(|res| async { res.ok() })
-            .collect::<Vec<_>>()
-            .await;
+        // for chunk in chunks.iter().filter(|c| !c.is_empty()) {
+        //     let last_conversation_message = self.get_last_conversation_message();
+        //     last_conversation_message.add_code_spans(chunk.clone());
+        // }
 
-        let mut chunks = processed
-            .into_iter()
-            .flat_map(|(relevant_chunks, path)| {
-                let alias = self.get_path_alias(&path);
+        // let response = chunks
+        //     .iter()
+        //     .filter(|c| !c.is_empty())
+        //     .map(|c| c.to_string())
+        //     .collect::<Vec<_>>()
+        //     .join("\n\n");
 
-                relevant_chunks.into_iter().map(move |c| {
-                    CodeSpan::new(
-                        path.clone(),
-                        alias,
-                        c.range.start.try_into().unwrap(),
-                        c.range.end.try_into().unwrap(),
-                        c.code,
-                        None,
-                    )
-                })
-            })
-            .collect::<Vec<_>>();
+        // let last_exchange = self.get_last_conversation_message();
+        // last_exchange.add_agent_step(AgentStep::Proc {
+        //     query: query.to_owned(),
+        //     paths,
+        //     response: response.to_owned(),
+        // });
 
-        chunks.sort_by(|a, b| a.alias.cmp(&b.alias).then(a.start_line.cmp(&b.start_line)));
-
-        for chunk in chunks.iter().filter(|c| !c.is_empty()) {
-            let last_conversation_message = self.get_last_conversation_message();
-            last_conversation_message.add_code_spans(chunk.clone());
-        }
-
-        let response = chunks
-            .iter()
-            .filter(|c| !c.is_empty())
-            .map(|c| c.to_string())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-
-        let last_exchange = self.get_last_conversation_message();
-        last_exchange.add_agent_step(AgentStep::Proc {
-            query: query.to_owned(),
-            paths,
-            response: response.to_owned(),
-        });
-
-        Ok(response)
+        // Ok(response)
     }
 
     pub async fn answer(
@@ -749,7 +689,7 @@ impl Agent {
                 .utter_history(Some(2))
                 .map(|message| message.to_owned())
                 .collect::<Vec<_>>();
-            let _ = self.answer_context_from_user_data(message).await;
+            let _ = self.answer_context_using_user_data(message).await;
         }
         let context = self.answer_context(path_aliases).await?;
         let system_prompt = match self.get_last_conversation_message_agent_state() {
@@ -800,7 +740,7 @@ impl Agent {
                 LLMTokenizerInput::Messages(vec![LLMClientMessage::system(
                     system_prompt.to_owned(),
                 )]),
-            )?;
+            )? as i64;
             let headroom = answer_model.answer_tokens + system_headroom;
             trim_utter_history(h, headroom, answer_model, self.llm_tokenizer.clone())?
         };
@@ -940,19 +880,20 @@ impl Agent {
         // early if we reach a heuristic limit.
         let slow_model = self.slow_llm_model();
         let answer_model = self.chat_broker.get_answer_model(slow_model)?;
-        let mut remaining_prompt_tokens = answer_model.total_tokens
-            - self
-                .llm_tokenizer
-                .count_tokens_using_tokenizer(slow_model, &prompt)?;
+        let prompt_tokens_used: i64 =
+            self.llm_tokenizer
+                .count_tokens_using_tokenizer(slow_model, &prompt)? as i64;
+        let mut remaining_prompt_tokens: i64 = answer_model.total_tokens - prompt_tokens_used;
 
         // we have to show the selected snippets which the user has selected
         // we have to show the selected snippets to the prompt as well
         let extended_user_selected_context = self.get_extended_user_selection_information();
         if let Some(extended_user_selection_context_slice) = extended_user_selected_context {
             let user_selected_context_header = "#### USER SELECTED CONTEXT ####\n";
-            let user_selected_context_tokens = self
+            let user_selected_context_tokens: i64 = self
                 .llm_tokenizer
-                .count_tokens_using_tokenizer(slow_model, user_selected_context_header)?;
+                .count_tokens_using_tokenizer(slow_model, user_selected_context_header)?
+                as i64;
             if user_selected_context_tokens + answer_model.prompt_tokens_limit
                 >= remaining_prompt_tokens
             {
@@ -967,7 +908,8 @@ impl Agent {
                     let variable_prompt = extended_user_selected_context.to_prompt();
                     let user_variable_tokens = self
                         .llm_tokenizer
-                        .count_tokens_using_tokenizer(slow_model, &variable_prompt)?;
+                        .count_tokens_using_tokenizer(slow_model, &variable_prompt)?
+                        as i64;
                     if user_variable_tokens + answer_model.prompt_tokens_limit
                         > remaining_prompt_tokens
                     {
@@ -995,9 +937,10 @@ impl Agent {
                 self.get_absolute_path(self.reporef(), &code_span.file_path)
             );
 
-            let snippet_tokens = self
+            let snippet_tokens: i64 = self
                 .llm_tokenizer
-                .count_tokens_using_tokenizer(slow_model, &formatted_snippet)?;
+                .count_tokens_using_tokenizer(slow_model, &formatted_snippet)?
+                as i64;
 
             if snippet_tokens >= remaining_prompt_tokens - answer_model.prompt_tokens_limit {
                 info!("breaking at {} tokens", remaining_prompt_tokens);
@@ -1214,7 +1157,7 @@ fn merge_overlapping(a: &mut Range<u64>, b: Range<u64>) -> Option<Range<u64>> {
 
 fn trim_utter_history(
     mut history: Vec<llm_funcs::llm::Message>,
-    headroom: usize,
+    headroom: i64,
     answer_model: &AnswerModel,
     llm_tokenizer: Arc<LLMTokenizer>,
 ) -> Result<Vec<llm_funcs::llm::Message>> {
@@ -1231,9 +1174,11 @@ fn trim_utter_history(
     // what we are getting here is basically context_length - tokens < headroom
     // written another way we can make this look like: context_length < headroom + tokens
     while context_length
-        < headroom
+        < (headroom as usize
             + llm_tokenizer
-                .count_tokens(model, LLMTokenizerInput::Messages(llm_messages.to_vec()))?
+                .count_tokens(model, LLMTokenizerInput::Messages(llm_messages.to_vec()))?)
+        .try_into()
+        .unwrap()
     {
         if !llm_messages.is_empty() {
             llm_messages.remove(0);

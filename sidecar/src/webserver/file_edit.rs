@@ -6,11 +6,12 @@ use axum::response::{sse, IntoResponse, Sse};
 use axum::{Extension, Json};
 use difftastic::LineInformation;
 use either::Either;
-use futures::{stream, FutureExt, StreamExt};
+use futures::FutureExt;
+use futures::{stream, StreamExt};
+use llm_client::broker::LLMBroker;
+use llm_client::clients::types::LLMClientCompletionRequest;
 use regex::Regex;
 
-use crate::agent::llm_funcs::LlmClient;
-use crate::agent::types::Answer;
 use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
@@ -21,6 +22,7 @@ use crate::chunking::types::{
 use crate::in_line_agent::context_parsing::{generate_selection_context, ContextWindowTracker};
 use crate::in_line_agent::types::ContextSelection;
 
+use super::model_selection::LLMClientConfig;
 use super::types::{ApiResponse, Result};
 
 const TIMEOUT_SECS: u64 = 60;
@@ -35,6 +37,7 @@ pub struct EditFileRequest {
     pub session_id: String,
     pub code_block_index: usize,
     pub openai_key: Option<String>,
+    pub model_config: LLMClientConfig,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -140,27 +143,14 @@ pub async fn file_edit(
         session_id,
         code_block_index,
         openai_key,
+        model_config,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
     // Here we have to first check if the new content is tree-sitter valid, if
     // thats the case only then can we apply it to the file
     // First we check if the output generated is valid by itself, if it is then
     // we can think about applying the changes to the file
-    let llm_client = if let Some(openai_key) = openai_key {
-        Arc::new(LlmClient::user_key_openai(
-            app.posthog_client.clone(),
-            app.sql.clone(),
-            app.user_id.to_owned(),
-            openai_key,
-        ))
-    } else {
-        Arc::new(LlmClient::codestory_infra(
-            app.posthog_client.clone(),
-            app.sql.clone(),
-            app.user_id.to_owned(),
-        ))
-    };
-
+    let llm_broker = app.llm_broker.clone();
     let file_diff_content = generate_file_diff(
         &file_content,
         &file_path,
@@ -235,11 +225,12 @@ pub async fn file_edit(
             user_query,
             language,
             session_id,
-            llm_client,
+            llm_broker,
             app.language_parsing.clone(),
             file_path,
             nearest_range_for_symbols,
             code_block_index,
+            model_config,
         )
         .await;
         result
@@ -569,13 +560,6 @@ pub async fn generate_file_diff(
     if language_parser.is_none() {
         return None;
     }
-    let language_parser = language_parser.unwrap();
-    // let validity = language_parser.is_valid_code(file_content);
-    // dbg!("language", language);
-    // if !validity {
-    //     dbg!("file_content is not valid for language parsing");
-    //     return None;
-    // }
     // we can get the extension from the file path
     let file_extension = PathBuf::from(file_path)
         .extension()
@@ -1029,14 +1013,22 @@ async fn llm_writing_code(
     user_query: String,
     language: String,
     session_id: String,
-    llm_client: Arc<LlmClient>,
+    llm_broker: Arc<LLMBroker>,
     language_parsing: Arc<TSLanguageParsing>,
     file_path: String,
     nearest_range_symbols: Vec<(Option<Range>, CodeSymbolInformation)>,
     code_block_index: usize,
+    model_config: LLMClientConfig,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
+    // We want to know the provider api keys for the fast model
+    let provider_api_key = model_config
+        .provider_for_fast_model()
+        .expect("to be present")
+        .clone();
+    let fast_model = model_config.fast_model.clone();
+
     // Here we have to generate the code using the llm and then we have to apply the diff
     let edit_messages = async_stream::stream! {
         let mut initial_index = 0;
@@ -1156,9 +1148,24 @@ async fn llm_writing_code(
                     .into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
                     .collect::<Vec<_>>();
                     // Now we send it over to gpt3.5 and ask it to generate code
-                    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<Answer>();
-                    let reciever_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|item| either::Left(item));
-                    let llm_answer = llm_client.stream_response(llm_funcs::llm::OpenAIModel::GPT3_5_16k, messages, None, 0.1, None, sender).into_stream().map(|item| either::Right(item));
+                    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+                    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|item| either::Left(item));
+                    let llm_answer = llm_broker.stream_completion(
+                        provider_api_key.clone(),
+                        LLMClientCompletionRequest::new(
+                            fast_model.clone(),
+                            messages
+                                .into_iter()
+                                .map(|message| (&message).try_into())
+                                .collect::<Vec<_>>()
+                                .into_iter()
+                                .collect::<Result<Vec<_>, _>>().expect("conversion to not fail"),
+                            0.1,
+                            None,
+                        ),
+                        vec![("event_type".to_owned(), "edit_file".to_owned())].into_iter().collect(),
+                        sender,
+                    ).into_stream().map(|response| either::Right(response));
                     // we drain the answer stream here and send over our incremental edits update
                     let timeout = Duration::from_secs(TIMEOUT_SECS);
 
@@ -1190,14 +1197,19 @@ async fn llm_writing_code(
                     ).to_context_selection();
                     yield EditFileResponse::start_text_edit(selection_context, code_block_index);
                     for await item in tokio_stream::StreamExt::timeout(
-                        stream::select(reciever_stream, llm_answer),
+                        stream::select(receiver_stream, llm_answer),
                         timeout,
                     ) {
                         match item {
                             Ok(Either::Left(answer_item)) => {
-                                if let Some(delta) = answer_item.delta {
+                                if let Some(delta) = answer_item.delta() {
                                     // stream the incremental edits here
-                                    yield EditFileResponse::stream_incremental_edit(&file_symbol_range, answer_item.answer_up_until_now, delta, code_block_index);
+                                    yield EditFileResponse::stream_incremental_edit(
+                                        &file_symbol_range,
+                                        answer_item.answer_up_until_now().to_owned(),
+                                        delta.to_owned(),
+                                        code_block_index,
+                                    );
                                 }
                             },
                             Ok(Either::Right(Ok(llm_answer))) => {

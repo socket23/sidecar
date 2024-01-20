@@ -3,14 +3,12 @@ use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use axum::response::IntoResponse;
 use axum::{extract::Query as axumQuery, Extension, Json};
 /// We will invoke the agent to get the answer, we are moving to an agent based work
 use serde::{Deserialize, Serialize};
 
-use crate::agent::llm_funcs::LlmClient;
 use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
@@ -59,15 +57,11 @@ pub async fn search_agent(
     }): axumQuery<SearchInformation>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let reranker = app.reranker.clone();
     let chat_broker = app.chat_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
     let session_id = uuid::Uuid::new_v4();
     let llm_broker = app.llm_broker.clone();
-    let llm_client = Arc::new(LlmClient::codestory_infra(
-        app.posthog_client.clone(),
-        app.sql.clone(),
-        app.user_id.to_owned(),
-    ));
     let sql_db = app.sql.clone();
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let action = AgentAction::Query(query.clone());
@@ -80,7 +74,6 @@ pub async fn search_agent(
         reporef,
         session_id,
         &query,
-        llm_client,
         llm_broker,
         thread_id,
         sql_db,
@@ -90,6 +83,7 @@ pub async fn search_agent(
         model_config,
         llm_tokenizer,
         chat_broker,
+        reranker,
     );
 
     generate_agent_stream(agent, action, receiver).await
@@ -131,15 +125,11 @@ pub async fn hybrid_search(
     // hand-waving the numbers here for whatever works for now
     // - final score -> git_log_score * 4 + lexical_search * 2.5 + semantic_search_score
     // - combine the score as following
+    let reranker = app.reranker.clone();
     let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
     let session_id = uuid::Uuid::new_v4();
-    let llm_client = Arc::new(LlmClient::codestory_infra(
-        app.posthog_client.clone(),
-        app.sql.clone(),
-        app.user_id.to_owned(),
-    ));
     let conversation_id = uuid::Uuid::new_v4();
     let sql_db = app.sql.clone();
     let (sender, _) = tokio::sync::mpsc::channel(100);
@@ -148,7 +138,6 @@ pub async fn hybrid_search(
         repo,
         session_id,
         &query,
-        llm_client,
         llm_broker,
         conversation_id,
         sql_db,
@@ -158,6 +147,7 @@ pub async fn hybrid_search(
         model_config,
         llm_tokenizer,
         chat_broker,
+        reranker,
     );
     let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
     Ok(json(HybridSearchResponse {
@@ -196,6 +186,7 @@ pub async fn explain(
     }): axumQuery<ExplainRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
+    let reranker = app.reranker.clone();
     let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
@@ -260,7 +251,6 @@ pub async fn explain(
         reporef: repo_ref,
         session_id,
         conversation_messages: previous_messages,
-        llm_client: Arc::new(LlmClient::codestory_infra(posthog_client, sql_db, user_id)),
         llm_broker,
         sql_db: sql,
         sender,
@@ -270,6 +260,7 @@ pub async fn explain(
         model_config,
         llm_tokenizer,
         chat_broker,
+        reranker,
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -487,6 +478,7 @@ pub async fn followup_chat(
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future
     // we can obviously add more context using @ symbols etc
+    let reranker = app.reranker.clone();
     let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
@@ -542,12 +534,6 @@ pub async fn followup_chat(
             app,
             repo_ref,
             session_id,
-            Arc::new(LlmClient::user_key_openai(
-                posthog_client,
-                sql_db.clone(),
-                user_id.to_owned(),
-                openai_user_key,
-            )),
             llm_broker,
             sql_db,
             previous_messages,
@@ -558,17 +544,13 @@ pub async fn followup_chat(
             model_config,
             llm_tokenizer,
             chat_broker,
+            reranker,
         )
     } else {
         Agent::prepare_for_followup(
             app,
             repo_ref,
             session_id,
-            Arc::new(LlmClient::codestory_infra(
-                posthog_client,
-                sql_db.clone(),
-                user_id.to_owned(),
-            )),
             llm_broker,
             sql_db,
             previous_messages,
@@ -579,6 +561,7 @@ pub async fn followup_chat(
             model_config,
             llm_tokenizer,
             chat_broker,
+            reranker,
         )
     };
 

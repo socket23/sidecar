@@ -1,4 +1,3 @@
-use futures::StreamExt;
 use llm_client::clients::types::LLMClientMessage;
 use tiktoken_rs::FunctionCall as tiktoken_rs_FunctionCall;
 
@@ -103,49 +102,6 @@ pub mod llm {
 
         #[error("incorrect configuration")]
         BadConfiguration,
-    }
-
-    #[derive(Debug, Clone)]
-    pub enum OpenAIModel {
-        GPT4,
-        GPT4_32k,
-        GPT3_5_16k,
-        GPT3_5Instruct,
-        GPT4_Turbo,
-        // TODO(skcd): Temp hack, lets shoehorn inside OpenAI right now, we make
-        // it move to proper namespaces later
-        OpenHermes2_5Mistral7b,
-    }
-
-    impl OpenAIModel {
-        pub fn model_name(&self) -> String {
-            match self {
-                OpenAIModel::GPT3_5_16k => "gpt-3.5-turbo-16k-0613".to_owned(),
-                OpenAIModel::GPT4 => "gpt-4-0613".to_owned(),
-                OpenAIModel::GPT4_32k => "gpt-4-32k-0613".to_owned(),
-                OpenAIModel::GPT3_5Instruct => "gpt-3.5-turbo-instruct".to_owned(),
-                OpenAIModel::GPT4_Turbo => "gpt-4-1106-preview".to_owned(),
-                OpenAIModel::OpenHermes2_5Mistral7b => "open-hermes-2.5-mistral-7b".to_owned(),
-            }
-        }
-
-        pub fn get_model(model_name: &str) -> anyhow::Result<OpenAIModel> {
-            if model_name == "gpt-3.5-turbo-16k-0613" {
-                Ok(OpenAIModel::GPT3_5_16k)
-            } else if model_name == "gpt-4-0613" {
-                Ok(OpenAIModel::GPT4)
-            } else if model_name == "gpt-4-32k-0613" {
-                Ok(OpenAIModel::GPT4_32k)
-            } else if model_name == "gpt-3.5-turbo-instruct" {
-                Ok(OpenAIModel::GPT3_5Instruct)
-            } else if model_name == "gpt-4-1106-preview" {
-                Ok(OpenAIModel::GPT4_Turbo)
-            } else if model_name == "open-hermes-2.5-mistral-7b" {
-                Ok(OpenAIModel::OpenHermes2_5Mistral7b)
-            } else {
-                Err(anyhow::anyhow!("unknown model name"))
-            }
-        }
     }
 
     pub type Result = std::result::Result<String, Error>;

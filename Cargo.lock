@@ -2966,6 +2966,8 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "llm_client",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]

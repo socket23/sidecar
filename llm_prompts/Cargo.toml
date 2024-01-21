@@ -9,4 +9,6 @@ edition = "2021"
 llm_client = { path = "../llm_client" }
 thiserror = "1.0.56"
 futures = "0.3.28"
+serde_json = "1.0.107"
+serde = { version = "1.0.188", features = ["derive"] }
 tokio = { version = "1.32.0", features = ["full"] }

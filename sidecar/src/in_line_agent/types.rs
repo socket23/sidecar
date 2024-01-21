@@ -419,7 +419,14 @@ impl InLineAgent {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .get_llm_broker()
-            .stream_completion(provider.clone(), request, vec![("event_type".to_owned(), "decide_action".to_owned())].into_iter().collect(), sender)
+            .stream_completion(
+                provider.clone(),
+                request,
+                vec![("event_type".to_owned(), "decide_action".to_owned())]
+                    .into_iter()
+                    .collect(),
+                sender,
+            )
             .await?;
         let last_exchange = self.get_last_agent_message();
         // We add that we took a action to decide what we should do next
@@ -506,6 +513,7 @@ impl InLineAgent {
                         }
                         let context_selection = ContextSelection::generate_placeholder_for_range(&document_symbol.range());
                         let prompt = prompt.expect("if let Err above to hold");
+                        dbg!(&prompt);
                         // send the request to the llm client
                         let (sender, receiver) =
                             tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();
@@ -518,7 +526,7 @@ impl InLineAgent {
                                     let request = LLMClientCompletionRequest::from_messages(
                                         chat,
                                         fast_model.clone(),
-                                    );
+                                    ).set_temperature(0.2);
                                     llm_broker
                                         .stream_answer(
                                             provider.clone(),
@@ -532,7 +540,7 @@ impl InLineAgent {
                                     let request = LLMClientCompletionStringRequest::new(
                                         fast_model.clone(),
                                         prompt,
-                                        0.0,
+                                        0.2,
                                         None,
                                     );
                                     llm_broker
@@ -662,7 +670,9 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Left(request),
-                            vec![("event_type".to_owned(), "fix".to_owned())].into_iter().collect(),
+                            vec![("event_type".to_owned(), "fix".to_owned())]
+                                .into_iter()
+                                .collect(),
                             sender,
                         )
                         .into_stream()
@@ -678,7 +688,9 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Right(request),
-                            vec![("event_type".to_owned(), "fix".to_owned())].into_iter().collect(),
+                            vec![("event_type".to_owned(), "fix".to_owned())]
+                                .into_iter()
+                                .collect(),
                             sender,
                         )
                         .into_stream()
@@ -845,12 +857,15 @@ impl InLineAgent {
             match prompt {
                 InLinePromptResponse::Chat(chat) => {
                     let request =
-                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone());
+                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone())
+                            .set_temperature(0.2);
                     llm_broker
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Left(request),
-                            vec![("event_type".to_owned(), "edit".to_owned())].into_iter().collect(),
+                            vec![("event_type".to_owned(), "edit".to_owned())]
+                                .into_iter()
+                                .collect(),
                             sender,
                         )
                         .into_stream()
@@ -859,14 +874,16 @@ impl InLineAgent {
                     let request = LLMClientCompletionStringRequest::new(
                         fast_model.clone(),
                         prompt,
-                        0.0,
+                        0.2,
                         None,
                     );
                     llm_broker
                         .stream_answer(
                             provider.clone(),
                             futures::future::Either::Right(request),
-                            vec![("event_type".to_owned(), "edit".to_owned())].into_iter().collect(),
+                            vec![("event_type".to_owned(), "edit".to_owned())]
+                                .into_iter()
+                                .collect(),
                             sender,
                         )
                         .into_stream()

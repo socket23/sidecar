@@ -1,11 +1,15 @@
 use async_trait::async_trait;
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use std::fmt;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::provider::{LLMProvider, LLMProviderAPIKeys};
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LLMType {
     Mixtral,
     MistralInstruct,
@@ -14,6 +18,52 @@ pub enum LLMType {
     Gpt4_32k,
     Gpt4Turbo,
     Custom(String),
+}
+
+impl Serialize for LLMType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            LLMType::Custom(s) => serializer.serialize_str(s),
+            _ => serializer.serialize_str(&format!("{:?}", self)),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for LLMType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct LLMTypeVisitor;
+
+        impl<'de> Visitor<'de> for LLMTypeVisitor {
+            type Value = LLMType;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string representing an LLMType")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<LLMType, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    "Mixtral" => Ok(LLMType::Mixtral),
+                    "MistralInstruct" => Ok(LLMType::MistralInstruct),
+                    "Gpt4" => Ok(LLMType::Gpt4),
+                    "GPT3_5_16k" => Ok(LLMType::GPT3_5_16k),
+                    "Gpt4_32k" => Ok(LLMType::Gpt4_32k),
+                    "Gpt4Turbo" => Ok(LLMType::Gpt4Turbo),
+                    _ => Ok(LLMType::Custom(value.to_string())),
+                }
+            }
+        }
+
+        deserializer.deserialize_string(LLMTypeVisitor)
+    }
 }
 
 impl LLMType {
@@ -353,4 +403,16 @@ pub trait LLMClient {
         request: LLMClientCompletionStringRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LLMType;
+
+    #[test]
+    fn test_llm_type_from_string() {
+        let llm_type = LLMType::Custom("skcd_testing".to_owned());
+        let str_llm_type = serde_json::to_string(&llm_type).expect("to work");
+        assert_eq!(str_llm_type, "");
+    }
 }

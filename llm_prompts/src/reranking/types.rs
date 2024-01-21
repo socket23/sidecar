@@ -91,9 +91,15 @@ pub struct CodeSpanDigest {
 
 impl CodeSpanDigest {
     pub fn new(code_span: CodeSpan, file_path: &str, index: usize) -> Self {
+        // TODO(skcd): Add proper error handling here
+        let base_name = std::path::Path::new(file_path)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
         Self {
             code_span,
-            hash: format!("{}::{}", file_path, index),
+            hash: format!("{}::{}", base_name, index),
         }
     }
 
@@ -313,4 +319,10 @@ pub trait ReRankCodeSpan {
         &self,
         request: ReRankCodeSpanRequest,
     ) -> Result<ReRankCodeSpanResponse, ReRankCodeSpanError>;
+
+    fn parse_listwise_output(
+        &self,
+        llm_output: String,
+        rerank_request: ReRankListWiseResponse,
+    ) -> Result<Vec<CodeSpanDigest>, ReRankCodeSpanError>;
 }

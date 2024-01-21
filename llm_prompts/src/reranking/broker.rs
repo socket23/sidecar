@@ -16,7 +16,7 @@ use super::{
     openai::OpenAIReRank,
     types::{
         CodeSpan, CodeSpanDigest, ReRankCodeSpan, ReRankCodeSpanError, ReRankCodeSpanRequest,
-        ReRankCodeSpanResponse, ReRankStrategy,
+        ReRankCodeSpanResponse, ReRankListWiseResponse, ReRankStrategy,
     },
 };
 
@@ -75,38 +75,19 @@ impl ReRankBroker {
 
     fn order_code_digests_listwise(
         &self,
+        llm_type: &LLMType,
         response: String,
-        code_digests: Vec<CodeSpanDigest>,
-    ) -> Vec<CodeSpanDigest> {
-        let split_parts: Vec<String> = response
-            .lines()
-            .into_iter()
-            .map(|line| line.to_owned())
-            .collect();
-        // We have the ordering from the split parts so we use that to get the
-        // order
-        let mut code_digests: HashMap<String, CodeSpanDigest> = code_digests
-            .into_iter()
-            .map(|code_digest| (code_digest.hash().to_owned(), code_digest))
-            .collect();
-
-        // Now create the ordered list by removing elements from the hashmap
-        // and adding them to the vector, if any element is not found then
-        // remove them from the list
-        let mut final_list = vec![];
-        for part in split_parts {
-            if let Some(code_digest) = code_digests.remove(&part) {
-                final_list.push(code_digest);
-            }
+        rerank_list_request: ReRankListWiseResponse,
+    ) -> Result<Vec<CodeSpanDigest>, ReRankCodeSpanError> {
+        if let Some(reranker) = self.rerankers.get(llm_type) {
+            let mut reranked_code_spans =
+                reranker.parse_listwise_output(response, rerank_list_request)?;
+            reranked_code_spans.reverse();
+            // revers it here since we want the most relevant one to be at the right and not the left
+            Ok(reranked_code_spans)
+        } else {
+            Err(ReRankCodeSpanError::ModelNotFound)
         }
-        // There might be elements which are not found in the list (LLM hallucinations)
-        // we just iterate over the remaining elements and add them to the list
-        for (_, code_digest) in code_digests {
-            final_list.push(code_digest);
-        }
-        // Now reverse the final_list so the most relevant code is moved to the top
-        final_list.reverse();
-        final_list
     }
 
     pub async fn listwise_reranking(
@@ -142,6 +123,7 @@ impl ReRankBroker {
             // (end_index - SLIDING_WINDOW)::(end_index)
             // and rank them, once we have these ranked
             // we move our window forward by TOP_K and repeat the process
+            let llm_type = request.llm_type().clone();
             let index_start: usize = max(end_index - SLIDING_WINDOW, 0).try_into().unwrap();
             let end_index_usize = end_index.try_into().expect("to work");
             let code_spans = digests[index_start..=end_index_usize]
@@ -154,12 +136,11 @@ impl ReRankBroker {
                 request.token_limit(),
                 code_spans,
                 request.strategy().clone(),
-                request.llm_type().clone(),
+                llm_type.clone(),
             );
             let prompt = self.rerank_prompt(request)?;
             if let ReRankCodeSpanResponse::ListWise(listwise_request) = prompt {
-                let prompt = listwise_request.prompt;
-                let code_span_digests = listwise_request.code_span_digests;
+                let prompt = listwise_request.prompt.to_owned();
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
                 let response = client_broker
                     .stream_answer(
@@ -173,7 +154,8 @@ impl ReRankBroker {
                     .await?;
 
                 // We have the updated list
-                let updated_list = self.order_code_digests_listwise(response, code_span_digests);
+                let updated_list =
+                    self.order_code_digests_listwise(&llm_type, response, listwise_request)?;
                 // Now we will in place replace the code spans from the digests from our start position
                 // with the elements in this list
                 for (index, code_span_digest) in updated_list.into_iter().enumerate() {

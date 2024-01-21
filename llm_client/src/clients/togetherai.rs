@@ -144,7 +144,7 @@ impl LLMClient for TogetherAIClient {
             return Err(LLMClientError::FailedToGetResponse);
         }
         let model = model.expect("is_none check above to work");
-        let together_ai_request = dbg!(TogetherAIRequest::from_string_request(request));
+        let together_ai_request = TogetherAIRequest::from_string_request(request);
         let mut response_stream = self
             .client
             .post(self.inference_endpoint())

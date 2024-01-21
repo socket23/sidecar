@@ -24,6 +24,10 @@ impl Agent {
         // - we perform the reranking on them
         // - we save the updated code snippets in the conversation message as context
         let reranking_model = self.fast_llm_model();
+        info!(
+            event_name = "answer_context_using_user_data",
+            model = %reranking_model,
+        );
         let slow_model = self.slow_llm_model();
         let query = query_from_messages(messages.as_slice());
         let answer_model = self.chat_broker.get_answer_model(slow_model)?;

@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use llm_client::clients::types::{LLMClientCompletionRequest, LLMClientMessage};
 
 use super::types::{
-    CodeSpan, ReRankCodeSpan, ReRankCodeSpanError, ReRankCodeSpanRequest, ReRankCodeSpanResponse,
-    ReRankPointWisePrompt, ReRankStrategy,
+    CodeSpan, CodeSpanDigest, ReRankCodeSpan, ReRankCodeSpanError, ReRankCodeSpanRequest,
+    ReRankCodeSpanResponse, ReRankListWiseResponse, ReRankPointWisePrompt, ReRankStrategy,
 };
 
 pub struct OpenAIReRank {}
@@ -136,5 +138,37 @@ impl ReRankCodeSpan for OpenAIReRank {
                 self.pointwise_reranking(request)
             }
         })
+    }
+
+    fn parse_listwise_output(
+        &self,
+        llm_output: String,
+        rerank_request: ReRankListWiseResponse,
+    ) -> Result<Vec<CodeSpanDigest>, ReRankCodeSpanError> {
+        // In case of OpenAI things are a bit easier, since the list is properly formatted
+        // almost always and we can just grab the ids from the list and rank the
+        // code snippets based that.
+        let mut output = llm_output.split("\n");
+        let mut code_spans_mapping: HashMap<String, CodeSpanDigest> = rerank_request
+            .code_span_digests
+            .into_iter()
+            .map(|code_span_digest| (code_span_digest.hash().to_owned(), code_span_digest))
+            .collect();
+        let mut reranked_code_snippets: Vec<CodeSpanDigest> = vec![];
+        while let Some(line) = output.next() {
+            let line_output = line.trim();
+            if line_output.contains("</ranking>") {
+                break;
+            }
+            let possible_id = line.trim();
+            if let Some(code_span) = code_spans_mapping.remove(possible_id) {
+                reranked_code_snippets.push(code_span);
+            }
+        }
+        // Add back the remaining code snippets to the list
+        code_spans_mapping.into_iter().for_each(|(_, code_span)| {
+            reranked_code_snippets.push(code_span);
+        });
+        Ok(reranked_code_snippets)
     }
 }

@@ -2968,6 +2968,7 @@ dependencies = [
  "llm_client",
  "serde",
  "serde_json",
+ "sqlx",
  "thiserror",
  "tokio",
 ]

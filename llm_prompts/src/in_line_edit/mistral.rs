@@ -75,12 +75,12 @@ impl InLineEditPrompt for MistralLineEditPrompt {
 Code you have to edit:
 {in_range_code_context}"#
                 ),
-                "Rewrite the code without any explanation [/INST]",
+                "Rewrite the code [/INST]",
             )
         } else {
             (
                 format!(r#"Follow the user instruction and generate code: {user_query}"#),
-                "Generate the code without any explanation [/INST]",
+                "Generate the code [/INST]",
             )
         };
         // Now we want to create the prompt for the LLM
@@ -93,7 +93,8 @@ Code you have to edit:
 {extra_instruction}
 ```{language}
 // FILEPATH: {file_path}
-// BEGIN: ed8c6549bwf9"#
+// BEGIN: ed8c6549bwf9
+"#
         );
         InLinePromptResponse::completion(prompt)
     }
@@ -120,7 +121,8 @@ Code you have to edit:
 You have to fix the code below, generate the code without any explanation [/INST]
 ```{language}
 // FILEPATH: {file_path}
-// BEGIN: ed8c6549bwf9"#
+// BEGIN: ed8c6549bwf9
+"#
         );
         InLinePromptResponse::completion(prompt)
     }
@@ -138,7 +140,8 @@ You have to fix the code below, generate the code without any explanation [/INST
 Add {comment_type} and generate the selected code, do not for the // END marker [/INST]
 ```{language}
 // FILEPATH: {file_path}
-// BEGIN: ed8c6549bwf9"#
+// BEGIN: ed8c6549bwf9
+"#
         );
         InLinePromptResponse::Completion(prompt)
     }
@@ -180,7 +183,8 @@ in_range_context
 Rewrite the code without any explanation [/INST]
 ```rust
 // FILEPATH: testing/path/something.rs
-// BEGIN:"#;
+// BEGIN:
+"#;
         assert_eq!(
             prompt.get_completion().expect("to have completion type"),
             expected_output

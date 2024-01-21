@@ -25,7 +25,7 @@ impl MistralReRank {
                 let user_query = user_query.to_owned();
                 let hash = code_span_digest.hash();
                 let data = code_span_digest.data();
-                let prompt = format!(r#"[INST] You are an expert software developer responsible for helping detect whether the retrieved snippet of code is relevant to the query. For a given input, you need to output a single word: "Yes" or "No" indicating the retrieved snippet is relevant to the query.
+                let prompt = format!(r#"<s>[INST] You are an expert software developer responsible for helping detect whether the retrieved snippet of code is relevant to the query. For a given input, you need to output a single word: "Yes" or "No" indicating the retrieved snippet is relevant to the query.
 Query: Where is the FastAPI server?
 Code Snippet:
 ```/Users/skcd/server/main.py
@@ -88,7 +88,7 @@ Relevant:"#);
             .join("\n");
         // Now we create the prompt for this reranking
         let prompt = format!(
-            r#"[INST] You are an expert at ranking the code snippets for the user query. You have the order the list of code snippets from the most relevant to the least relevant. As an example
+            r#"<s>[INST] You are an expert at ranking the code snippets for the user query. You have the order the list of code snippets from the most relevant to the least relevant. As an example
 <code_snippets>
 add.rs::0
 ```

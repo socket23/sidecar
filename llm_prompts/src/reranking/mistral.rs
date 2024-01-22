@@ -84,8 +84,9 @@ Relevant: "#);
             .map(|code_span_digest| {
                 let identifier = code_span_digest.hash();
                 let data = code_span_digest.data();
+                let span_identifier = code_span_digest.get_span_identifier();
                 format!(
-                    "<id>\n{identifier}\n</id>\n<code_snippet>\n```\n{data}\n```\n<code_snippet>\n"
+                    "<id>\n{identifier}\n</id>\n<code_snippet>\n```\n{span_identifier}\n{data}\n```\n<code_snippet>\n"
                 )
             })
             .collect::<Vec<String>>()

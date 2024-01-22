@@ -81,7 +81,8 @@ Relevant:"#);
             .map(|code_span_digest| {
                 let identifier = code_span_digest.hash();
                 let data = code_span_digest.data();
-                format!("{identifier}\n```\n{data}\n```\n")
+                let span_identifier = code_span_digest.get_span_identifier();
+                format!("{identifier}\n```\n{span_identifier}\n{data}\n```\n")
             })
             .collect::<Vec<String>>()
             .join("\n");
@@ -91,6 +92,7 @@ Relevant:"#);
 <code_snippets>
 add.rs::0
 ```
+// FILEPATH: add.rs:0-2
 fn add(a: i32, b: i32) -> i32 {{
     a + b
 }}
@@ -98,6 +100,7 @@ fn add(a: i32, b: i32) -> i32 {{
 
 subtract.rs::0
 ```
+// FILEPATH: subtract.rs:0-2
 fn subtract(a: i32, b: i32) -> i32 {{
     a - b
 }}
@@ -110,12 +113,20 @@ add.rs::0
 subtract.rs::0
 </ranking>
 
+The user query might contain a selection of line ranges in the following format:
+[#file:foo.rs:4-10](values:file:foo.rs:4-10) this means the line range from 4 to 10 is selected by the user in the file foo.rs
+
 The user has asked the following query: {user_query}
 <code_snippets>
 {code_snippets}
 </code_snippets>
 
-The final reranking:
+As a reminder the user query is:
+<user_query>
+{user_query}
+</user_query>
+
+The final reranking ordered from the most relevant to the least relevant is:
 <ranking>"#
         );
         let llm_prompt = LLMClientCompletionRequest::from_messages(

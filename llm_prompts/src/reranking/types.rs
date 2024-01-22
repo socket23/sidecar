@@ -118,6 +118,15 @@ impl CodeSpanDigest {
     pub fn get_code_span(self) -> CodeSpan {
         self.code_span
     }
+
+    pub fn get_span_identifier(&self) -> String {
+        format!(
+            "// FILEPATH: {}:{}-{}",
+            self.file_path(),
+            self.code_span.start_line(),
+            self.code_span.end_line()
+        )
+    }
 }
 
 impl CodeSpan {

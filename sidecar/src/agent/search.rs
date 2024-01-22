@@ -752,6 +752,9 @@ impl Agent {
         let provider_keys = self
             .provider_for_slow_llm()
             .ok_or(anyhow::anyhow!("no provider keys found for slow model"))?;
+        let provider_config = self
+            .provider_config_for_slow_model()
+            .ok_or(anyhow::anyhow!("no provider config found for slow model"))?;
 
         let request = LLMClientCompletionRequest::new(
             self.slow_llm_model().clone(),
@@ -769,6 +772,7 @@ impl Agent {
             .stream_completion(
                 provider_keys.clone(),
                 request,
+                provider_config.clone(),
                 vec![("event_type".to_owned(), "followup_question".to_owned())]
                     .into_iter()
                     .collect(),

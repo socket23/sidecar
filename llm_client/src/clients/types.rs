@@ -73,6 +73,10 @@ impl LLMType {
             LLMType::Gpt4 | LLMType::GPT3_5_16k | LLMType::Gpt4_32k | LLMType::Gpt4Turbo
         )
     }
+
+    pub fn is_custom(&self) -> bool {
+        matches!(self, LLMType::Custom(_))
+    }
 }
 
 impl fmt::Display for LLMType {

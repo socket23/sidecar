@@ -106,7 +106,6 @@ impl OpenAIClient {
                 Ok(OpenAIClientType::OpenAIClient(Client::with_config(config)))
             }
             LLMProviderAPIKeys::OpenAIAzureConfig(azure_config) => {
-                dbg!(&azure_config);
                 let config = AzureConfig::new()
                     .with_api_base(azure_config.api_base)
                     .with_api_key(azure_config.api_key)

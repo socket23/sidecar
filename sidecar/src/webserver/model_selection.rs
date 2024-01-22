@@ -2,7 +2,7 @@
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{LLMProvider, LLMProviderAPIKeys},
+    provider::{AzureConfig, AzureOpenAIDeploymentId, LLMProvider, LLMProviderAPIKeys},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,6 +13,14 @@ pub struct LLMClientConfig {
     pub fast_model: LLMType,
     pub models: HashMap<LLMType, Model>,
     pub providers: Vec<LLMProviderAPIKeys>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LLMClientLoggingConfig {
+    pub slow_model: LLMType,
+    pub fast_model: LLMType,
+    pub models: HashMap<LLMType, LLMProvider>,
+    pub providers: Vec<LLMProvider>,
 }
 
 impl LLMClientConfig {
@@ -48,6 +56,35 @@ impl LLMClientConfig {
         self.models
             .get(&self.fast_model)
             .map(|model_config| &model_config.provider)
+    }
+
+    fn nullify_azure_config(&self) -> AzureOpenAIDeploymentId {
+        AzureOpenAIDeploymentId {
+            deployment_id: "".to_owned(),
+        }
+    }
+
+    pub fn logging_config(&self) -> LLMClientLoggingConfig {
+        LLMClientLoggingConfig {
+            slow_model: self.slow_model.clone(),
+            fast_model: self.fast_model.clone(),
+            models: self
+                .models
+                .iter()
+                .map(|(model_type, model_config)| {
+                    let provider = match model_config.provider.clone() {
+                        LLMProvider::Azure(_) => LLMProvider::Azure(self.nullify_azure_config()),
+                        _ => model_config.provider.clone(),
+                    };
+                    (model_type.clone(), provider.clone())
+                })
+                .collect(),
+            providers: self
+                .providers
+                .iter()
+                .map(|provider| provider.provider_type())
+                .collect(),
+        }
     }
 }
 

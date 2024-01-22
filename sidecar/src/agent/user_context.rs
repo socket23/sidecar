@@ -8,6 +8,7 @@ use tracing::info;
 
 use crate::agent::llm_funcs;
 use crate::agent::types::CodeSpan;
+use crate::webserver::agent::ActiveWindowData;
 use crate::webserver::agent::FileContentValue;
 use crate::webserver::agent::VariableInformation;
 
@@ -87,19 +88,42 @@ impl Agent {
                         );
                         vec![code_span]
                     } else {
-                        // we are not good, need to truncate here until we fit
-                        // in the prompt limit
-                        let files = vec![FileContentValue {
-                            file_path: active_window.file_path.clone(),
-                            file_content: active_window.file_content.clone(),
-                            language: active_window.language.clone(),
-                        }];
-                        // We have to do something here to handle this properly?
-                        // we have to truncate the files here if required
-                        let file_code_spans = self
-                            .truncate_files(prompt_token_limit, reranking_model, &query, files)
-                            .await?;
-                        LLMCodeSpan::merge_consecutive_spans(file_code_spans)
+                        // First we check if the file section in view is relevant
+                        // to us, and if it is we are good we can use that as context
+                        // for a faster answer
+                        let file_content_in_view_len =
+                            self.llm_tokenizer.count_tokens_using_tokenizer(
+                                slow_model,
+                                &active_window.visible_range_content,
+                            )? as i64;
+                        if file_content_in_view_len <= prompt_token_limit {
+                            vec![LLMCodeSpan::new(
+                                active_window.file_path.clone(),
+                                active_window
+                                    .start_line
+                                    .try_into()
+                                    .expect("converstion to work"),
+                                active_window
+                                    .end_line
+                                    .try_into()
+                                    .expect("converstion to work"),
+                                active_window.visible_range_content.to_owned(),
+                            )]
+                        } else {
+                            // we are not good, need to truncate here until we fit
+                            // in the prompt limit
+                            let files = vec![FileContentValue {
+                                file_path: active_window.file_path.clone(),
+                                file_content: active_window.file_content.clone(),
+                                language: active_window.language.clone(),
+                            }];
+                            // We have to do something here to handle this properly?
+                            // we have to truncate the files here if required
+                            let file_code_spans = self
+                                .truncate_files(prompt_token_limit, reranking_model, &query, files)
+                                .await?;
+                            LLMCodeSpan::merge_consecutive_spans(file_code_spans)
+                        }
                     }
                 }
                 None => {
@@ -109,8 +133,17 @@ impl Agent {
         } else {
             // we have user context here, so we need to create the code spans
             // and perform the truncation here
-            let user_selected_variables = user_context.variables;
-            let user_selected_files = user_context.file_content_map;
+            let user_selected_variables = match open_file_data {
+                Some(active_file) => {
+                    merge_active_window_with_user_variables(active_file, user_context.variables)
+                }
+                None => user_context.variables,
+            };
+            info!(
+                event_name = "user_selected_variables",
+                user_selected_variables = ?user_selected_variables,
+            );
+            // let user_selected_files = user_context.file_content_map;
             // we prioritize filling the context with the user selected variables
             // first and then we can iterate over the files
             let user_selected_code_spans = self
@@ -121,35 +154,35 @@ impl Agent {
                     user_selected_variables,
                 )
                 .await?;
-            // count the tokens from this codespan
-            let tokens_used = self.llm_tokenizer.count_tokens(
-                slow_model,
-                LLMTokenizerInput::Prompt(
-                    user_selected_code_spans
-                        .iter()
-                        .map(|code_span| code_span.to_prompt())
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                ),
-            )? as i64;
-            let remaining_tokens = prompt_token_limit - tokens_used;
-            let mut file_code_spans = vec![];
-            if remaining_tokens > 0 {
-                file_code_spans = self
-                    .truncate_files(
-                        remaining_tokens,
-                        reranking_model,
-                        &query,
-                        user_selected_files,
-                    )
-                    .await?;
-            }
-            let final_code_spans = user_selected_code_spans
-                .into_iter()
-                .chain(file_code_spans.into_iter())
-                .collect::<Vec<_>>();
+            // // count the tokens from this codespan
+            // let tokens_used = self.llm_tokenizer.count_tokens(
+            //     slow_model,
+            //     LLMTokenizerInput::Prompt(
+            //         user_selected_code_spans
+            //             .iter()
+            //             .map(|code_span| code_span.to_prompt())
+            //             .collect::<Vec<_>>()
+            //             .join("\n"),
+            //     ),
+            // )? as i64;
+            // let remaining_tokens = prompt_token_limit - tokens_used;
+            // let mut file_code_spans = vec![];
+            // if remaining_tokens > 0 {
+            //     file_code_spans = self
+            //         .truncate_files(
+            //             remaining_tokens,
+            //             reranking_model,
+            //             &query,
+            //             user_selected_files,
+            //         )
+            //         .await?;
+            // }
+            // let final_code_spans = user_selected_code_spans
+            //     .into_iter()
+            //     .chain(file_code_spans.into_iter())
+            //     .collect::<Vec<_>>();
             // Now we can merge the code spans again
-            LLMCodeSpan::merge_consecutive_spans(final_code_spans)
+            LLMCodeSpan::merge_consecutive_spans(user_selected_code_spans)
         };
 
         // Now we update the code spans which we have selected
@@ -280,6 +313,7 @@ impl Agent {
         let code_spans = user_selected_variables
             .into_iter()
             .map(|variable| {
+                let start_line = variable.start_position.line;
                 language_parsing
                     .chunk_file(
                         &variable.fs_file_path,
@@ -294,8 +328,11 @@ impl Agent {
                     .map(|span| {
                         let code_span = LLMCodeSpan::new(
                             variable.fs_file_path.to_owned(),
-                            span.start.try_into().expect("to work"),
-                            span.end.try_into().expect("to work"),
+                            // We fix the start lines here because the line numbers
+                            // of the chunks will be relative to this chunk, but
+                            // we want them relative to the file
+                            (span.start + start_line).try_into().expect("to work"),
+                            (span.end + start_line).try_into().expect("to work"),
                             span.data.expect("data to be present"),
                         );
                         code_span
@@ -371,4 +408,31 @@ fn query_from_messages(messages: &[llm_funcs::llm::Message]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn merge_active_window_with_user_variables(
+    active_window: &ActiveWindowData,
+    user_variables: Vec<VariableInformation>,
+) -> Vec<VariableInformation> {
+    let mut user_variables = user_variables;
+    // First we check if the has any selected variable which falls in the range
+    // of the active window of the user, if it does, we do not include that and
+    // just include the active window selection, if thats not the case, then
+    // we add the active window selection as a user variable
+    user_variables = user_variables
+        .into_iter()
+        .filter(|user_variable| {
+            if user_variable.variable_type.selection()
+                && user_variable.start_position.line >= active_window.start_line
+                && user_variable.end_position.line <= active_window.end_line
+                && active_window.file_path == user_variable.fs_file_path
+            {
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+    user_variables.push(VariableInformation::from_user_active_window(active_window));
+    user_variables
 }

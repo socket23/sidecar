@@ -4,7 +4,7 @@ use anyhow::Context;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionResponse, LLMType},
-    provider::LLMProviderAPIKeys,
+    provider::{LLMProvider, LLMProviderAPIKeys},
     tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerInput},
 };
 use llm_prompts::{
@@ -758,6 +758,13 @@ impl Agent {
             .find(|p| p.key(provider).is_some())
     }
 
+    pub fn provider_config_for_llm(&self, llm_type: &LLMType) -> Option<&LLMProvider> {
+        self.model_config
+            .models
+            .get(llm_type)
+            .map(|model_config| &model_config.provider)
+    }
+
     pub fn provider_for_slow_llm(&self) -> Option<&LLMProviderAPIKeys> {
         // Grabs the provider required for the slow model
         // we first need to get the model configuration for the slow model
@@ -773,6 +780,13 @@ impl Agent {
             .providers
             .iter()
             .find(|p| p.key(provider).is_some())
+    }
+
+    pub fn provider_config_for_slow_model(&self) -> Option<&LLMProvider> {
+        self.model_config
+            .models
+            .get(&self.model_config.slow_model)
+            .map(|model_config| &model_config.provider)
     }
 
     pub fn reporef(&self) -> &RepoRef {

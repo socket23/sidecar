@@ -1027,6 +1027,10 @@ async fn llm_writing_code(
         .provider_for_fast_model()
         .expect("to be present")
         .clone();
+    let provider_config = model_config
+        .provider_config_for_fast_model()
+        .expect("to be present")
+        .clone();
     let fast_model = model_config.fast_model.clone();
 
     // Here we have to generate the code using the llm and then we have to apply the diff
@@ -1163,6 +1167,7 @@ async fn llm_writing_code(
                             0.1,
                             None,
                         ),
+                        provider_config.clone(),
                         vec![("event_type".to_owned(), "edit_file".to_owned())].into_iter().collect(),
                         sender,
                     ).into_stream().map(|response| either::Right(response));

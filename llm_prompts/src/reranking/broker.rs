@@ -7,7 +7,9 @@ use std::{
 use futures::stream;
 use futures::StreamExt;
 use llm_client::{
-    broker::LLMBroker, clients::types::LLMType, provider::LLMProviderAPIKeys,
+    broker::LLMBroker,
+    clients::types::LLMType,
+    provider::{LLMProvider, LLMProviderAPIKeys},
     tokenizer::tokenizer::LLMTokenizer,
 };
 
@@ -94,6 +96,7 @@ impl ReRankBroker {
         &self,
         api_keys: LLMProviderAPIKeys,
         request: ReRankCodeSpanRequest,
+        provider: LLMProvider,
         client_broker: Arc<LLMBroker>,
         tokenizer: Arc<LLMTokenizer>,
     ) -> Result<Vec<CodeSpan>, ReRankCodeSpanError> {
@@ -145,6 +148,7 @@ impl ReRankBroker {
                 let response = client_broker
                     .stream_answer(
                         api_keys.clone(),
+                        provider.clone(),
                         prompt,
                         vec![("event_type".to_owned(), "listwise_reranking".to_owned())]
                             .into_iter()
@@ -190,6 +194,7 @@ impl ReRankBroker {
     pub async fn pointwise_reranking(
         &self,
         api_keys: LLMProviderAPIKeys,
+        provider: LLMProvider,
         request: ReRankCodeSpanRequest,
         client_broker: Arc<LLMBroker>,
         tokenizer: Arc<LLMTokenizer>,
@@ -234,6 +239,7 @@ impl ReRankBroker {
                     client_broker
                         .stream_answer(
                             api_keys.clone(),
+                            provider.clone(),
                             prompt,
                             vec![("event_type".to_owned(), "pointwise_reranking".to_owned())]
                                 .into_iter()
@@ -274,6 +280,7 @@ impl ReRankBroker {
     pub async fn rerank(
         &self,
         api_keys: LLMProviderAPIKeys,
+        provider: LLMProvider,
         request: ReRankCodeSpanRequest,
         // we need the broker here to get the right client
         client_broker: Arc<LLMBroker>,
@@ -283,13 +290,25 @@ impl ReRankBroker {
         let strategy = request.strategy();
         match strategy {
             ReRankStrategy::ListWise => {
-                self.listwise_reranking(api_keys, request, client_broker, tokenizer_broker)
-                    .await
+                self.listwise_reranking(
+                    api_keys,
+                    request,
+                    provider,
+                    client_broker,
+                    tokenizer_broker,
+                )
+                .await
             }
             ReRankStrategy::PointWise => {
                 // We need to generate the prompt for this
-                self.pointwise_reranking(api_keys, request, client_broker, tokenizer_broker)
-                    .await
+                self.pointwise_reranking(
+                    api_keys,
+                    provider,
+                    request,
+                    client_broker,
+                    tokenizer_broker,
+                )
+                .await
             }
         }
     }

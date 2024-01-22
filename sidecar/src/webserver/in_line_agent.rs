@@ -1,10 +1,14 @@
 use std::time::Duration;
 
 use axum::{response::sse, Extension, Json};
-use llm_client::{clients::types::LLMType, provider::LLMProviderAPIKeys};
+use llm_client::{
+    clients::types::LLMType,
+    provider::{LLMProvider, LLMProviderAPIKeys},
+};
 use rand::seq::SliceRandom;
 use regex::Regex;
 use serde_json::json;
+use tracing::info;
 
 use super::{
     in_line_agent_stream::generate_in_line_agent_stream, model_selection::LLMClientConfig,
@@ -125,7 +129,7 @@ impl ProcessInEditorRequest {
 
     /// Grabs the fast model from the model configuration
     pub fn fast_model(&self) -> LLMType {
-        self.model_config.slow_model.clone()
+        self.model_config.fast_model.clone()
     }
 
     /// Grabs the provider required for the fast model
@@ -143,6 +147,13 @@ impl ProcessInEditorRequest {
             .providers
             .iter()
             .find(|p| p.key(provider).is_some())
+    }
+
+    pub fn provider_config_for_fast_model(&self) -> Option<&LLMProvider> {
+        self.model_config
+            .models
+            .get(&self.model_config.fast_model)
+            .map(|model_config| &model_config.provider)
     }
 
     /// Are we using OpenAI models
@@ -165,6 +176,7 @@ pub async fn reply_to_user(
         model_config,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
+    info!(event_name = "in_editor_request", model_config = ?model_config);
     let editor_parsing: EditorParsing = Default::default();
     let llm_broker = app.llm_broker.clone();
     let inline_edit_prompt = app.inline_prompt_edit.clone();

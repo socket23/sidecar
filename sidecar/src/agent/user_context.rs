@@ -194,6 +194,9 @@ impl Agent {
         let provider_keys = self
             .provider_for_llm(reranking_model)
             .ok_or(anyhow::anyhow!("no provider keys found for slow model"))?;
+        let provider_config = self
+            .provider_config_for_llm(reranking_model)
+            .ok_or(anyhow::anyhow!("no provider config found for slow model"))?;
         let language_parsing = self.application.language_parsing.clone();
         let code_spans = file_content_map
             .into_iter()
@@ -243,6 +246,7 @@ impl Agent {
             .reranker
             .rerank(
                 provider_keys.clone(),
+                provider_config.clone(),
                 rerank_request,
                 self.llm_broker.clone(),
                 self.llm_tokenizer.clone(),
@@ -268,6 +272,10 @@ impl Agent {
         let provider_keys = self
             .provider_for_llm(reranking_model)
             .ok_or(anyhow::anyhow!("no provider keys found for slow model"))?;
+        let provider_config = self
+            .provider_config_for_llm(reranking_model)
+            .ok_or(anyhow::anyhow!("no provider config found for slow model"))?;
+
         let language_parsing = self.application.language_parsing.clone();
         let code_spans = user_selected_variables
             .into_iter()
@@ -317,6 +325,7 @@ impl Agent {
             .reranker
             .rerank(
                 provider_keys.clone(),
+                provider_config.clone(),
                 rerank_request,
                 self.llm_broker.clone(),
                 self.llm_tokenizer.clone(),

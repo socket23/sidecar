@@ -19,6 +19,7 @@ use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tracing::info;
 
 use crate::chunking::text_document::Range;
 use crate::chunking::types::FunctionInformation;
@@ -319,6 +320,12 @@ impl InLineAgent {
             InLineAgentAction::DecideAction { query } => {
                 // If we are using OSS models we take a different route (especially
                 // for smaller models since they can't follow the commands properly)
+                info!(
+                    event_name = "inline_edit_agent",
+                    is_openai = self.editor_request.fast_model().is_openai(),
+                    is_custom = self.editor_request.fast_model().is_custom(),
+                    fast_model = ?self.editor_request.fast_model(),
+                );
                 if !self.editor_request.fast_model().is_openai() {
                     let last_exchange = self.get_last_agent_message();
                     // We add that we took a action to decide what we should do next
@@ -333,11 +340,20 @@ impl InLineAgent {
                     } else if query.starts_with("/doc") {
                         return Ok(Some(InLineAgentAction::Doc));
                     } else {
+                        info!(
+                            event_name = "inline_agent_decide_action",
+                            query = ?query,
+                        );
                         return Ok(Some(InLineAgentAction::Code));
                     }
                 }
+                info!(
+                    event_name = "inline_agent_decide_action_gpt",
+                    query = ?query,
+                );
                 let next_action = self.decide_action(&query).await?;
 
+                info!(event_name = "inline_agent_last_message_gpt",);
                 // Send it to the answer sender so we can show it on the frontend
                 if let Some(last_exchange) = self.last_agent_message() {
                     self.sender.send(last_exchange.clone()).await?;
@@ -416,12 +432,20 @@ impl InLineAgent {
                 "No provider found for fast model: {:?}",
                 model
             ))?;
+        let provider_config =
+            self.editor_request
+                .provider_config_for_fast_model()
+                .ok_or(anyhow::anyhow!(
+                    "No provider config found for fast model: {:?}",
+                    model
+                ))?;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .get_llm_broker()
             .stream_completion(
                 provider.clone(),
                 request,
+                provider_config.clone(),
                 vec![("event_type".to_owned(), "decide_action".to_owned())]
                     .into_iter()
                     .collect(),
@@ -500,6 +524,13 @@ impl InLineAgent {
                         "No provider found for fast model: {:?}",
                         fast_model
                     ))?;
+            let provider_config_fast = self_
+                .editor_request
+                .provider_config_for_fast_model()
+                .ok_or(anyhow::anyhow!(
+                    "No provider config found for fast model: {:?}",
+                    fast_model
+                ))?;
             let fast_model = self_.editor_request.fast_model();
             stream::iter(messages_list)
                 .map(|messages| (messages, answer_sender.clone(), fast_model.clone()))
@@ -530,6 +561,7 @@ impl InLineAgent {
                                     llm_broker
                                         .stream_answer(
                                             provider.clone(),
+                                            provider_config_fast.clone(),
                                             futures::future::Either::Left(request),
                                             vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
@@ -546,6 +578,7 @@ impl InLineAgent {
                                     llm_broker
                                         .stream_answer(
                                             provider.clone(),
+                                            provider_config_fast.clone(),
                                             futures::future::Either::Right(request),
                                             vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
@@ -661,6 +694,13 @@ impl InLineAgent {
                 "No provider found for fast model: {:?}",
                 fast_model
             ))?;
+        let provider_config =
+            self.editor_request
+                .provider_config_for_fast_model()
+                .ok_or(anyhow::anyhow!(
+                    "No provider config found for fast model: {:?}",
+                    fast_model
+                ))?;
         let answer_stream = {
             match prompt {
                 InLinePromptResponse::Chat(chat) => {
@@ -669,6 +709,7 @@ impl InLineAgent {
                     llm_broker
                         .stream_answer(
                             provider.clone(),
+                            provider_config.clone(),
                             futures::future::Either::Left(request),
                             vec![("event_type".to_owned(), "fix".to_owned())]
                                 .into_iter()
@@ -687,6 +728,7 @@ impl InLineAgent {
                     llm_broker
                         .stream_answer(
                             provider.clone(),
+                            provider_config.clone(),
                             futures::future::Either::Right(request),
                             vec![("event_type".to_owned(), "fix".to_owned())]
                                 .into_iter()
@@ -853,6 +895,13 @@ impl InLineAgent {
                 "No provider found for fast model: {:?}",
                 fast_model
             ))?;
+        let provider_config =
+            self.editor_request
+                .provider_config_for_fast_model()
+                .ok_or(anyhow::anyhow!(
+                    "No provider config found for fast model: {:?}",
+                    fast_model
+                ))?;
         let answer_stream = {
             match prompt {
                 InLinePromptResponse::Chat(chat) => {
@@ -862,6 +911,7 @@ impl InLineAgent {
                     llm_broker
                         .stream_answer(
                             provider.clone(),
+                            provider_config.clone(),
                             futures::future::Either::Left(request),
                             vec![("event_type".to_owned(), "edit".to_owned())]
                                 .into_iter()
@@ -880,6 +930,7 @@ impl InLineAgent {
                     llm_broker
                         .stream_answer(
                             provider.clone(),
+                            provider_config.clone(),
                             futures::future::Either::Right(request),
                             vec![("event_type".to_owned(), "edit".to_owned())]
                                 .into_iter()

@@ -274,6 +274,12 @@ pub enum VariableType {
     Selection,
 }
 
+impl VariableType {
+    pub fn selection(&self) -> bool {
+        self == &VariableType::Selection
+    }
+}
+
 impl Into<crate::agent::types::VariableType> for VariableType {
     fn into(self) -> crate::agent::types::VariableType {
         match self {
@@ -317,6 +323,24 @@ impl VariableInformation {
         }
     }
 
+    pub fn from_user_active_window(active_window: &ActiveWindowData) -> Self {
+        Self {
+            start_position: Position {
+                line: active_window.start_line.try_into().unwrap(),
+                character: 0,
+            },
+            end_position: Position {
+                line: active_window.end_line.try_into().unwrap(),
+                character: 1000,
+            },
+            fs_file_path: active_window.file_path.to_owned(),
+            name: "active_window".to_owned(),
+            variable_type: VariableType::Selection,
+            content: active_window.visible_range_content.to_owned(),
+            language: active_window.language.to_owned(),
+        }
+    }
+
     pub fn is_selection(&self) -> bool {
         self.variable_type == VariableType::Selection
     }
@@ -346,6 +370,11 @@ pub struct ActiveWindowData {
     pub file_path: String,
     pub file_content: String,
     pub language: String,
+    pub visible_range_content: String,
+    // start line and end line here refer to the range of the active window for
+    // the user
+    pub start_line: usize,
+    pub end_line: usize,
 }
 
 impl UserContext {

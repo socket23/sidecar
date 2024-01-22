@@ -1008,7 +1008,7 @@ impl Agent {
                 .push(code_span.start_line..code_span.end_line);
         }
 
-        debug!(?spans_by_path, "expanding code spans");
+        // debug!(?spans_by_path, "expanding code spans");
 
         let self_ = &*self;
         // Map of path -> line list
@@ -1021,7 +1021,7 @@ impl Agent {
                     .await
                     .unwrap()
                     .unwrap_or_else(|| panic!("path did not exist in the index: {path}"))
-                    .split('\n')
+                    .split("\n")
                     .map(str::to_owned)
                     .collect::<Vec<_>>();
 
@@ -1030,86 +1030,89 @@ impl Agent {
             .collect::<HashMap<_, _>>()
             .await;
 
-        // Total number of lines to try and expand by, per loop iteration.
-        const TOTAL_LINE_INC: usize = 100;
+        // // Total number of lines to try and expand by, per loop iteration.
+        // const TOTAL_LINE_INC: usize = 100;
 
-        // We keep track of whether any spans were changed below, so that we know when to break
-        // out of this loop.
-        let mut changed = true;
+        // // We keep track of whether any spans were changed below, so that we know when to break
+        // // out of this loop.
+        // let mut changed = true;
 
-        while !spans_by_path.is_empty() && changed {
-            changed = false;
+        // while !spans_by_path.is_empty() && changed {
+        //     changed = false;
 
-            let tokens = spans_by_path
-                .iter()
-                .flat_map(|(path, spans)| spans.iter().map(move |s| (path, s)))
-                .map(|(path, span)| {
-                    let line_start = span.start as usize;
-                    let line_end = span.end as usize;
-                    let range = line_start..line_end;
-                    let snippet = lines_by_file.get(path).unwrap()[range].join("\n");
-                    // Ideally this will not fail, but when it does we are so screwed
-                    self.llm_tokenizer
-                        .count_tokens_using_tokenizer(self.slow_llm_model(), &snippet)
-                        .unwrap_or_default()
-                })
-                .sum::<usize>();
+        //     let tokens = spans_by_path
+        //         .iter()
+        //         .flat_map(|(path, spans)| spans.iter().map(move |s| (path, s)))
+        //         .map(|(path, span)| {
+        //             let line_start = span.start as usize;
+        //             let line_end = span.end as usize;
+        //             let range = line_start..line_end;
+        //             let snippet = lines_by_file.get(path).unwrap()[range].join("\n");
+        //             // Ideally this will not fail, but when it does we are so screwed
+        //             self.llm_tokenizer
+        //                 .count_tokens_using_tokenizer(self.slow_llm_model(), &snippet)
+        //                 .unwrap_or_default()
+        //         })
+        //         .sum::<usize>();
 
-            // First, we grow the spans if possible.
-            if tokens < max_tokens {
-                // NB: We divide TOTAL_LINE_INC by 2, because we expand in 2 directions.
-                let range_step = (TOTAL_LINE_INC / 2)
-                    / spans_by_path
-                        .values()
-                        .map(|spans| spans.len())
-                        .sum::<usize>()
-                        .max(1);
+        //     // First, we grow the spans if possible.
+        //     if tokens < max_tokens {
+        //         // NB: We divide TOTAL_LINE_INC by 2, because we expand in 2 directions.
+        //         let range_step = (TOTAL_LINE_INC / 2)
+        //             / spans_by_path
+        //                 .values()
+        //                 .map(|spans| spans.len())
+        //                 .sum::<usize>()
+        //                 .max(1);
 
-                let range_step = range_step.max(1);
+        //         let range_step = range_step.max(1);
 
-                for (path, span) in spans_by_path
-                    .iter_mut()
-                    .flat_map(|(path, spans)| spans.iter_mut().map(move |s| (path, s)))
-                {
-                    let file_lines = lines_by_file.get(path.as_str()).unwrap().len();
+        //         for (path, span) in spans_by_path
+        //             .iter_mut()
+        //             .flat_map(|(path, spans)| spans.iter_mut().map(move |s| (path, s)))
+        //         {
+        //             let file_lines = lines_by_file.get(path.as_str()).unwrap().len();
 
-                    let old_span = span.clone();
+        //             let old_span = span.clone();
 
-                    span.start = span.start.saturating_sub(range_step as u64);
+        //             span.start = span.start.saturating_sub(range_step as u64);
 
-                    // Expand the end line forwards, capping at the total number of lines.
-                    span.end += range_step as u64;
-                    span.end = span.end.min(file_lines as u64);
+        //             // Expand the end line forwards, capping at the total number of lines.
+        //             span.end += range_step as u64;
+        //             span.end = span.end.min(file_lines as u64);
 
-                    if *span != old_span {
-                        changed = true;
-                    }
-                }
-            }
+        //             if *span != old_span {
+        //                 changed = true;
+        //             }
+        //         }
+        //     }
 
-            // Next, we merge any overlapping spans.
-            for spans in spans_by_path.values_mut() {
-                *spans = std::mem::take(spans)
-                    .into_iter()
-                    .fold(Vec::new(), |mut a, next| {
-                        // There is some rightward drift here, which could be fixed once if-let
-                        // chains are stabilized.
-                        if let Some(prev) = a.last_mut() {
-                            if let Some(next) = merge_overlapping(prev, next) {
-                                a.push(next);
-                            } else {
-                                changed = true;
-                            }
-                        } else {
-                            a.push(next);
-                        }
+        //     // Next, we merge any overlapping spans.
+        //     for spans in spans_by_path.values_mut() {
+        //         *spans = std::mem::take(spans)
+        //             .into_iter()
+        //             .fold(Vec::new(), |mut a, next| {
+        //                 // There is some rightward drift here, which could be fixed once if-let
+        //                 // chains are stabilized.
+        //                 if let Some(prev) = a.last_mut() {
+        //                     if let Some(next) = merge_overlapping(prev, next) {
+        //                         a.push(next);
+        //                     } else {
+        //                         changed = true;
+        //                     }
+        //                 } else {
+        //                     a.push(next);
+        //                 }
 
-                        a
-                    });
-            }
-        }
+        //                 a
+        //             });
+        //     }
+        // }
 
-        debug!(?spans_by_path, "expanded spans");
+        debug!(
+            event_name = "selected_spans",
+            spans_by_path = ?spans_by_path,
+        );
 
         Ok(spans_by_path
             .into_iter()
@@ -1123,39 +1126,6 @@ impl Agent {
                 CodeSpan::new(path, path_alias, span.start, span.end, snippet, None)
             })
             .collect())
-    }
-}
-
-fn trim_lines_by_tokens(lines: Vec<String>, bpe: CoreBPE, max_tokens: usize) -> Vec<String> {
-    let line_tokens = lines
-        .iter()
-        .map(|line| bpe.encode_ordinary(line).len())
-        .collect::<Vec<_>>();
-
-    let mut trimmed_lines = Vec::new();
-
-    // Push lines to `trimmed_lines` until we reach the maximum number of tokens.
-    let mut i = 0usize;
-    let mut tokens = 0usize;
-    while i < lines.len() && tokens < max_tokens {
-        tokens += line_tokens[i];
-        trimmed_lines.push(lines[i].clone());
-        i += 1;
-    }
-
-    trimmed_lines
-}
-
-fn merge_overlapping(a: &mut Range<u64>, b: Range<u64>) -> Option<Range<u64>> {
-    if a.end >= b.start {
-        // `b` might be contained in `a`, which allows us to discard it.
-        if a.end < b.end {
-            a.end = b.end;
-        }
-
-        None
-    } else {
-        Some(b)
     }
 }
 

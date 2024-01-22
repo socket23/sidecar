@@ -16,6 +16,7 @@ use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
+use crate::reporting::posthog::client::PosthogEvent;
 
 use super::types::ApiResponse;
 use super::types::Result;
@@ -474,6 +475,11 @@ pub async fn followup_chat(
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
+    let user_id = app.user_id.to_owned();
+    let mut event = PosthogEvent::new("model_config");
+    let _ = event.insert_prop("config", model_config.logging_config());
+    let _ = event.insert_prop("user_id", user_id);
+    let _ = app.posthog_client.capture(event).await;
     // Here we do something special, if the user is asking a followup question
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future
@@ -482,8 +488,6 @@ pub async fn followup_chat(
     let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
-    let posthog_client = app.posthog_client.clone();
-    let user_id = app.user_id.to_owned();
     let sql_db = app.sql.clone();
     let mut previous_messages =
         ConversationMessage::load_from_db(sql_db.clone(), &repo_ref, thread_id)

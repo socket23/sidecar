@@ -34,6 +34,20 @@ impl LLMProviderAPIKeys {
         matches!(self, LLMProviderAPIKeys::OpenAI(_))
     }
 
+    pub fn provider_type(&self) -> LLMProvider {
+        match self {
+            LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
+            LLMProviderAPIKeys::Ollama(_) => LLMProvider::Ollama,
+            LLMProviderAPIKeys::OpenAIAzureConfig(_) => {
+                LLMProvider::Azure(AzureOpenAIDeploymentId {
+                    deployment_id: "".to_owned(),
+                })
+            }
+            LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
+        }
+    }
+
     // Gets the relevant key from the llm provider
     pub fn key(&self, llm_provider: &LLMProvider) -> Option<Self> {
         match llm_provider {

@@ -25,6 +25,7 @@ use crate::{
         types::{InLineAgent, InLineAgentMessage},
     },
     repo::types::RepoRef,
+    reporting::posthog::client::PosthogEvent,
 };
 use axum::response::IntoResponse;
 
@@ -177,6 +178,11 @@ pub async fn reply_to_user(
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
     info!(event_name = "in_editor_request", model_config = ?model_config);
+    let mut event = PosthogEvent::new("model_config");
+    let _ = event.insert_prop("user_id", app.user_id.clone());
+    let _ = event.insert_prop("config", model_config.logging_config());
+    let _ = app.posthog_client.capture(event).await;
+
     let editor_parsing: EditorParsing = Default::default();
     let llm_broker = app.llm_broker.clone();
     let inline_edit_prompt = app.inline_prompt_edit.clone();

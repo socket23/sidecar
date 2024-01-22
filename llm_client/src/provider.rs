@@ -16,6 +16,7 @@ pub enum LLMProvider {
     OpenAI,
     TogetherAI,
     Ollama,
+    LMStudio,
     Azure(AzureOpenAIDeploymentId),
 }
 
@@ -25,6 +26,7 @@ pub enum LLMProviderAPIKeys {
     TogetherAI(TogetherAIProvider),
     Ollama(OllamaProvider),
     OpenAIAzureConfig(AzureConfig),
+    LMStudio(LMStudioConfig),
 }
 
 impl LLMProviderAPIKeys {
@@ -52,6 +54,13 @@ impl LLMProviderAPIKeys {
             LLMProvider::Ollama => {
                 if let LLMProviderAPIKeys::Ollama(key) = self {
                     Some(LLMProviderAPIKeys::Ollama(key.clone()))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::LMStudio => {
+                if let LLMProviderAPIKeys::LMStudio(key) = self {
+                    Some(LLMProviderAPIKeys::LMStudio(key.clone()))
                 } else {
                     None
                 }
@@ -104,6 +113,17 @@ pub struct AzureConfig {
     pub api_base: String,
     pub api_key: String,
     pub api_version: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct LMStudioConfig {
+    pub api_base: String,
+}
+
+impl LMStudioConfig {
+    pub fn api_base(&self) -> &str {
+        &self.api_base
+    }
 }
 
 #[cfg(test)]

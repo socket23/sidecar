@@ -9,6 +9,7 @@ use sqlx::SqlitePool;
 
 use crate::{
     clients::{
+        lmstudio::LMStudioClient,
         ollama::OllamaClient,
         openai::OpenAIClient,
         togetherai::TogetherAIClient,
@@ -41,7 +42,8 @@ impl LLMBroker {
         Ok(broker
             .add_provider(LLMProvider::OpenAI, Box::new(OpenAIClient::new()))
             .add_provider(LLMProvider::Ollama, Box::new(OllamaClient::new()))
-            .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new())))
+            .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
+            .add_provider(LLMProvider::LMStudio, Box::new(LMStudioClient::new())))
     }
 
     pub fn add_provider(
@@ -89,6 +91,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
+            LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -143,6 +146,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
+            LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

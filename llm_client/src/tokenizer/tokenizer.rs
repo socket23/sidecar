@@ -12,6 +12,7 @@ use tokenizers::Tokenizer;
 use crate::{
     clients::types::{LLMClientMessage, LLMClientRole, LLMType},
     format::{
+        deepseekcoder::DeepSeekCoderFormatting,
         mistral::MistralInstructFormatting,
         mixtral::MixtralInstructFormatting,
         types::{LLMFormatting, TokenizerError},
@@ -60,6 +61,10 @@ impl LLMTokenizer {
             .add_llm_type(
                 LLMType::MistralInstruct,
                 Box::new(MistralInstructFormatting::new()?),
+            )
+            .add_llm_type(
+                LLMType::DeepSeekCoder,
+                Box::new(DeepSeekCoderFormatting::new()),
             );
         Ok(updated_tokenizer)
     }
@@ -221,11 +226,27 @@ impl LLMTokenizer {
                 let config = include_str!("configs/mixtral.json");
                 Some(Tokenizer::from_str(config)?)
             }
+            LLMType::DeepSeekCoder => {
+                let config = include_str!("configs/deepseekcoder.json");
+                Some(Tokenizer::from_str(config)?)
+            }
             _ => None,
         };
         if let Some(tokenizer) = tokenizer {
             self.tokenizers.insert(model.clone(), tokenizer);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+    use tokenizers::Tokenizer;
+
+    #[test]
+    fn test_loading_deepseek_tokenizer_works() {
+        let tokenizer_file = include_str!("configs/deepseekcoder.json");
+        let _ = Tokenizer::from_str(tokenizer_file).unwrap();
     }
 }

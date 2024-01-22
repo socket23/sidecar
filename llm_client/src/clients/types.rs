@@ -17,6 +17,7 @@ pub enum LLMType {
     GPT3_5_16k,
     Gpt4_32k,
     Gpt4Turbo,
+    DeepSeekCoder,
     Custom(String),
 }
 
@@ -57,6 +58,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "GPT3_5_16k" => Ok(LLMType::GPT3_5_16k),
                     "Gpt4_32k" => Ok(LLMType::Gpt4_32k),
                     "Gpt4Turbo" => Ok(LLMType::Gpt4Turbo),
+                    "DeepSeekCoder" => Ok(LLMType::DeepSeekCoder),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -88,6 +90,7 @@ impl fmt::Display for LLMType {
             LLMType::GPT3_5_16k => write!(f, "GPT3_5_16k"),
             LLMType::Gpt4_32k => write!(f, "Gpt4_32k"),
             LLMType::Gpt4Turbo => write!(f, "Gpt4Turbo"),
+            LLMType::DeepSeekCoder => write!(f, "DeepSeekCoder"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

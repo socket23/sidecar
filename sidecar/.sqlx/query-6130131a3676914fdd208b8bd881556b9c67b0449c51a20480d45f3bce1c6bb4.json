@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT prompt, response FROM openai_llm_data WHERE event_type like \"%RequestAndResponse%\"",
+  "query": "SELECT prompt, response FROM openai_llm_data WHERE event_type like \"%RequestAndResponse%\" AND prompt like \"%when asked for your name%\"",
   "describe": {
     "columns": [
       {
@@ -22,5 +22,5 @@
       true
     ]
   },
-  "hash": "b45225043caa8f7658478efccfba17ffadbf4f3b4c7f23bc5eaa638192ba4698"
+  "hash": "6130131a3676914fdd208b8bd881556b9c67b0449c51a20480d45f3bce1c6bb4"
 }

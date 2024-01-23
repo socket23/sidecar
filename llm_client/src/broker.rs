@@ -92,6 +92,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
+            LLMProviderAPIKeys::CodeStory => LLMProvider::OpenAI,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -147,6 +148,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
+            LLMProviderAPIKeys::CodeStory => LLMProvider::OpenAI,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

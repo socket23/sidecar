@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn read_all_entries(sql_db: SqlDb) -> anyhow::Result<()> {
     let rows = sqlx::query! {
-        "SELECT prompt, response FROM openai_llm_data WHERE event_type like \"%RequestAndResponse%\""
+        "SELECT prompt, response FROM openai_llm_data WHERE event_type like \"%RequestAndResponse%\" AND prompt like \"%when asked for your name%\""
     }
     .fetch_all(sql_db.as_ref()).await.expect("to work");
     println!("{:?}", rows.len());

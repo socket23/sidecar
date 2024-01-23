@@ -13,11 +13,13 @@ use crate::webserver::agent::FileContentValue;
 use crate::webserver::agent::VariableInformation;
 
 use super::types::Agent;
+use super::types::AgentAnswerStreamEvent;
 
 impl Agent {
     pub async fn answer_context_using_user_data(
         &mut self,
         messages: Vec<llm_funcs::llm::Message>,
+        sender: tokio::sync::mpsc::UnboundedSender<AgentAnswerStreamEvent>,
     ) -> anyhow::Result<()> {
         // multiple steps here so lets break it down for now:
         // - we get all the variables which are mentioned
@@ -120,7 +122,13 @@ impl Agent {
                             // We have to do something here to handle this properly?
                             // we have to truncate the files here if required
                             let file_code_spans = self
-                                .truncate_files(prompt_token_limit, reranking_model, &query, files)
+                                .truncate_files(
+                                    prompt_token_limit,
+                                    reranking_model,
+                                    &query,
+                                    files,
+                                    sender,
+                                )
                                 .await?;
                             LLMCodeSpan::merge_consecutive_spans(file_code_spans)
                         }
@@ -152,6 +160,7 @@ impl Agent {
                     &slow_model,
                     &query,
                     user_selected_variables,
+                    sender,
                 )
                 .await?;
             // // count the tokens from this codespan
@@ -221,7 +230,9 @@ impl Agent {
         reranking_model: &LLMType,
         user_query: &str,
         file_content_map: Vec<FileContentValue>,
+        sender: tokio::sync::mpsc::UnboundedSender<AgentAnswerStreamEvent>,
     ) -> anyhow::Result<Vec<LLMCodeSpan>> {
+        sender.send(AgentAnswerStreamEvent::ReRankingStarted)?;
         // we do the same magic as before, its just that we have a teeny tiny
         // less amount of tokens to work with, but thats fine too
         let provider_keys = self
@@ -290,6 +301,7 @@ impl Agent {
             model = %reranking_model,
             time_taken = ?start_time.elapsed(),
         );
+        sender.send(AgentAnswerStreamEvent::ReRankingFinished)?;
 
         // We then merge the code spans together which are consecutive
         Ok(LLMCodeSpan::merge_consecutive_spans(code_spans))
@@ -301,6 +313,7 @@ impl Agent {
         reranking_model: &LLMType,
         user_query: &str,
         user_selected_variables: Vec<VariableInformation>,
+        sender: tokio::sync::mpsc::UnboundedSender<AgentAnswerStreamEvent>,
     ) -> anyhow::Result<Vec<LLMCodeSpan>> {
         let provider_keys = self
             .provider_for_llm(reranking_model)
@@ -357,6 +370,7 @@ impl Agent {
             model = %reranking_model,
         );
         let start_time = std::time::Instant::now();
+        sender.send(AgentAnswerStreamEvent::ReRankingStarted)?;
         // Let the reranker do it's magic
         let code_spans = self
             .reranker
@@ -373,7 +387,7 @@ impl Agent {
             model = %reranking_model,
             time_taken = ?start_time.elapsed(),
         );
-
+        sender.send(AgentAnswerStreamEvent::ReRankingFinished)?;
         // We then merge the code spans together which are consecutive
         Ok(LLMCodeSpan::merge_consecutive_spans(code_spans))
     }

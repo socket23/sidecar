@@ -14,11 +14,13 @@ use crate::{
 
 /// Here we allow the agent to perform search and answer workflow related questions
 /// we will later use this for code planning and also code editing
-use super::types::{Agent, AgentState, ConversationMessage, ExtendedVariableInformation};
+use super::types::{
+    Agent, AgentAnswerStreamEvent, AgentState, ConversationMessage, ExtendedVariableInformation,
+};
 
 use anyhow::anyhow;
 use anyhow::Result;
-use futures::StreamExt;
+use futures::{pin_mut, FutureExt, StreamExt};
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientMessage},
@@ -31,6 +33,7 @@ use once_cell::sync::OnceCell;
 use rake::StopWords;
 use tiktoken_rs::CoreBPE;
 use tokio::sync::mpsc::Sender;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, info};
 
 use std::{
@@ -682,14 +685,16 @@ impl Agent {
     pub async fn answer(
         &mut self,
         path_aliases: &[usize],
-        sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+        sender: tokio::sync::mpsc::UnboundedSender<AgentAnswerStreamEvent>,
     ) -> Result<String> {
         if self.user_context.is_some() {
             let message = self
                 .utter_history(Some(2))
                 .map(|message| message.to_owned())
                 .collect::<Vec<_>>();
-            let _ = self.answer_context_using_user_data(message).await;
+            let _ = self
+                .answer_context_using_user_data(message, sender.clone())
+                .await;
         }
         let context = self.answer_context(path_aliases).await?;
         let system_prompt = match self.get_last_conversation_message_agent_state() {
@@ -767,8 +772,10 @@ impl Agent {
             0.1,
             None,
         );
-        let reply = self
-            .llm_broker
+        let (answer_sender, answer_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let answer_receiver = UnboundedReceiverStream::new(answer_receiver).map(either::Left);
+        let llm_broker = self.llm_broker.clone();
+        let reply = llm_broker
             .stream_completion(
                 provider_keys.clone(),
                 request,
@@ -776,15 +783,36 @@ impl Agent {
                 vec![("event_type".to_owned(), "followup_question".to_owned())]
                     .into_iter()
                     .collect(),
-                sender,
+                answer_sender,
             )
-            .await?;
+            .into_stream()
+            .map(either::Right);
 
-        let last_message = self.get_last_conversation_message();
-        last_message.set_answer(reply.to_owned());
-        last_message.set_generated_answer_context(context);
-
-        Ok(reply)
+        let merged_stream = futures::stream::select(answer_receiver, reply);
+        let mut final_answer = None;
+        pin_mut!(merged_stream);
+        while let Some(value) = merged_stream.next().await {
+            match value {
+                either::Left(llm_answer) => {
+                    // we need to send the answer via the stream here
+                    sender.send(AgentAnswerStreamEvent::LLMAnswer(llm_answer));
+                }
+                either::Right(reply) => {
+                    final_answer = Some(reply);
+                    break;
+                }
+            }
+        }
+        match final_answer {
+            Some(Ok(reply)) => {
+                let last_message = self.get_last_conversation_message();
+                last_message.set_answer(reply.to_owned());
+                last_message.set_generated_answer_context(context);
+                Ok(reply)
+            }
+            Some(Err(e)) => Err(e.into()),
+            None => Err(anyhow::anyhow!("no answer from llm")),
+        }
     }
 
     fn utter_history(

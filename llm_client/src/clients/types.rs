@@ -228,7 +228,7 @@ impl LLMClientMessage {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LLMClientCompletionRequest {
     model: LLMType,
     messages: Vec<LLMClientMessage>,

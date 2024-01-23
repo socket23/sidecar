@@ -829,7 +829,7 @@ impl Agent {
         // Grabs the provider required for the slow model
         // we first need to get the model configuration for the slow model
         // which will give us the model and the context around it
-        let model = self.model_config.models.get(&self.model_config.fast_model);
+        let model = self.model_config.models.get(&self.model_config.slow_model);
         if let None = model {
             return None;
         }

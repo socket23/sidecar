@@ -795,7 +795,7 @@ impl Agent {
             match value {
                 either::Left(llm_answer) => {
                     // we need to send the answer via the stream here
-                    sender.send(AgentAnswerStreamEvent::LLMAnswer(llm_answer));
+                    let _ = sender.send(AgentAnswerStreamEvent::LLMAnswer(llm_answer));
                 }
                 either::Right(reply) => {
                     final_answer = Some(reply);

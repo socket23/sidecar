@@ -378,35 +378,84 @@ impl ConversationMessage {
         self.generated_answer_context.as_deref()
     }
 
-    pub fn answer_update(
-        session_id: uuid::Uuid,
-        llm_completion: LLMClientCompletionResponse,
-    ) -> Self {
+    pub fn answer_update(session_id: uuid::Uuid, answer_event: AgentAnswerStreamEvent) -> Self {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        Self {
-            message_id: uuid::Uuid::new_v4(),
-            session_id,
-            query: String::new(),
-            steps_taken: vec![],
-            agent_state: AgentState::Finish,
-            file_paths: vec![],
-            code_spans: vec![],
-            open_files: vec![],
-            conversation_state: ConversationState::StreamingAnswer,
-            answer: Some(Answer::from_llm_completion(llm_completion)),
-            created_at: current_time,
-            last_updated: current_time,
-            // We use this to send it over the wire, this is pretty bad anyways
-            // but its fine to do things this way
-            generated_answer_context: None,
-            definitions_interested_in: vec![],
-            user_variables: vec![],
-            user_context: Default::default(),
-            active_window_data: None,
-            extended_variable_information: vec![],
+        match answer_event {
+            AgentAnswerStreamEvent::LLMAnswer(llm_completion) => {
+                Self {
+                    message_id: uuid::Uuid::new_v4(),
+                    session_id,
+                    query: String::new(),
+                    steps_taken: vec![],
+                    agent_state: AgentState::Finish,
+                    file_paths: vec![],
+                    code_spans: vec![],
+                    open_files: vec![],
+                    conversation_state: ConversationState::StreamingAnswer,
+                    answer: Some(Answer::from_llm_completion(llm_completion)),
+                    created_at: current_time,
+                    last_updated: current_time,
+                    // We use this to send it over the wire, this is pretty bad anyways
+                    // but its fine to do things this way
+                    generated_answer_context: None,
+                    definitions_interested_in: vec![],
+                    user_variables: vec![],
+                    user_context: Default::default(),
+                    active_window_data: None,
+                    extended_variable_information: vec![],
+                }
+            }
+            AgentAnswerStreamEvent::ReRankingFinished => {
+                Self {
+                    message_id: uuid::Uuid::new_v4(),
+                    session_id,
+                    query: String::new(),
+                    steps_taken: vec![],
+                    agent_state: AgentState::Finish,
+                    file_paths: vec![],
+                    code_spans: vec![],
+                    open_files: vec![],
+                    conversation_state: ConversationState::ReRankingFinished,
+                    answer: None,
+                    created_at: current_time,
+                    last_updated: current_time,
+                    // We use this to send it over the wire, this is pretty bad anyways
+                    // but its fine to do things this way
+                    generated_answer_context: None,
+                    definitions_interested_in: vec![],
+                    user_variables: vec![],
+                    user_context: Default::default(),
+                    active_window_data: None,
+                    extended_variable_information: vec![],
+                }
+            }
+            AgentAnswerStreamEvent::ReRankingStarted => {
+                Self {
+                    message_id: uuid::Uuid::new_v4(),
+                    session_id,
+                    query: String::new(),
+                    steps_taken: vec![],
+                    agent_state: AgentState::Finish,
+                    file_paths: vec![],
+                    code_spans: vec![],
+                    open_files: vec![],
+                    conversation_state: ConversationState::ReRankingStarted,
+                    answer: None,
+                    created_at: current_time,
+                    last_updated: current_time,
+                    // We use this to send it over the wire, this is pretty bad anyways
+                    // but its fine to do things this way
+                    generated_answer_context: None,
+                    definitions_interested_in: vec![],
+                    user_variables: vec![],
+                    user_context: Default::default(),
+                    active_window_data: None,
+                    extended_variable_information: vec![],
+                }
+            }
         }
     }
 
@@ -697,6 +746,13 @@ pub struct Agent {
     pub reranker: Arc<ReRankBroker>,
 }
 
+pub enum AgentAnswerStreamEvent {
+    LLMAnswer(LLMClientCompletionResponse),
+    // Do I like this? fuck no, but we are using this cause its easier for now
+    ReRankingStarted,
+    ReRankingFinished,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum AgentState {
     // We will end up doing a search
@@ -725,6 +781,10 @@ pub enum ConversationState {
     Started,
     StreamingAnswer,
     Finished,
+    // if we start the reranking, we should signal that here
+    ReRankingStarted,
+    // if we finish the reranking, we should signal that here
+    ReRankingFinished,
 }
 
 impl Agent {
@@ -1008,7 +1068,7 @@ impl Agent {
     pub async fn iterate(
         &mut self,
         action: AgentAction,
-        answer_sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+        answer_sender: tokio::sync::mpsc::UnboundedSender<AgentAnswerStreamEvent>,
     ) -> anyhow::Result<Option<AgentAction>> {
         // Now we will go about iterating over the action and figure out what the
         // next best action should be

@@ -24,10 +24,20 @@ struct OllamaResponse {
     done: bool,
 }
 
+impl LLMType {
+    pub fn to_ollama_model(&self) -> Result<String, LLMClientError> {
+        match self {
+            LLMType::MistralInstruct => Ok("mistral".to_owned()),
+            LLMType::Mixtral => Ok("mixtral".to_owned()),
+            _ => Err(LLMClientError::UnSupportedModel),
+        }
+    }
+}
+
 #[derive(serde::Serialize)]
 struct OllamaClientRequest {
     prompt: String,
-    model: LLMType,
+    model: String,
     temperature: f32,
     stream: bool,
     raw: bool,
@@ -36,31 +46,33 @@ struct OllamaClientRequest {
 }
 
 impl OllamaClientRequest {
-    pub fn from_request(request: LLMClientCompletionRequest) -> Self {
-        Self {
+    pub fn from_request(request: LLMClientCompletionRequest) -> Result<Self, LLMClientError> {
+        Ok(Self {
             prompt: request
                 .messages()
                 .into_iter()
                 .map(|message| message.content().to_owned())
                 .collect::<Vec<_>>()
                 .join("\n"),
-            model: request.model().to_owned(),
+            model: request.model().to_ollama_model()?,
             temperature: request.temperature(),
             stream: true,
             raw: true,
             frequency_penalty: request.frequency_penalty(),
-        }
+        })
     }
 
-    pub fn from_string_request(request: LLMClientCompletionStringRequest) -> Self {
-        Self {
+    pub fn from_string_request(
+        request: LLMClientCompletionStringRequest,
+    ) -> Result<Self, LLMClientError> {
+        Ok(Self {
             prompt: request.prompt().to_owned(),
-            model: request.model().to_owned(),
+            model: request.model().to_ollama_model()?,
             temperature: request.temperature(),
             stream: true,
             raw: true,
             frequency_penalty: None,
-        }
+        })
     }
 }
 
@@ -91,7 +103,7 @@ impl LLMClient for OllamaClient {
         request: LLMClientCompletionRequest,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
-        let ollama_request = OllamaClientRequest::from_request(request);
+        let ollama_request = OllamaClientRequest::from_request(request)?;
         let mut response = self
             .client
             .post(self.generation_endpoint())
@@ -128,7 +140,7 @@ impl LLMClient for OllamaClient {
         request: LLMClientCompletionStringRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
-        let ollama_request = OllamaClientRequest::from_string_request(request);
+        let ollama_request = OllamaClientRequest::from_string_request(request)?;
         let mut response = self
             .client
             .post(self.generation_endpoint())

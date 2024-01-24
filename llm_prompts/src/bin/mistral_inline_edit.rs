@@ -150,9 +150,8 @@ The edited code is:
     .await
     .expect("broker to startup");
 
-    let api_key = LLMProviderAPIKeys::TogetherAI(TogetherAIProvider::new(
-        "cc10d6774e67efef2004b85efdb81a3c9ba0b7682cc33d59c30834183502208d".to_owned(),
-    ));
+    let api_key =
+        LLMProviderAPIKeys::TogetherAI(TogetherAIProvider::new("some_key_here".to_owned()));
     let request = LLMClientCompletionStringRequest::new(
         LLMType::MistralInstruct,
         prompt.to_owned(),

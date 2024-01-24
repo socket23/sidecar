@@ -28,28 +28,36 @@ impl MistralReRank {
                 let hash = code_span_digest.hash();
                 let data = code_span_digest.data();
                 let prompt = format!(r#"<s>[INST] You are an expert software developer responsible for helping detect whether the retrieved snippet of code is relevant to the query. For a given input, you need to output a single word: "Yes" or "No" indicating the retrieved snippet is relevant to the query.
-Query: Where is the FastAPI server?
+Query: Where is the client for OpenAI defined?
 Code Snippet:
-```/Users/skcd/server/main.py
-from fastapi import FastAPI
-app = FastAPI()
-@app.get("/")
-def read_root():
-    return {{"Hello": "World"}}
+```/Users/skcd/client/openai.rs
+pub struct OpenAIClient {{}}
+
+impl OpenAIClient {{
+    pub fn new() -> Self {{
+        Self {{}}
+    }}
 ```
 Relevant: Yes
 
-Query: Where in the documentation does it talk about the UI?
+Query: Where do we handle the errors in the webview?
 Snippet:
-```/Users/skcd/bubble_sort/src/lib.rs
-fn bubble_sort<T: Ord>(arr: &mut [T]) {{
-    for i in 0..arr.len() {{
-        for j in 1..arr.len() - i {{
-            if arr[j - 1] > arr[j] {{
-                arr.swap(j - 1, j);
-            }}
+```/Users/skcd/algorithm/dfs.rs
+pub fn dfs(graph: &Graph, start: NodeId) -> Vec<NodeId> {{
+    let mut visited = HashSet::new();
+    let mut stack = vec![start];
+    let mut result = vec![];
+    while let Some(node) = stack.pop() {{
+        if visited.contains(&node) {{
+            continue;
+        }}
+        visited.insert(node);
+        result.push(node);
+        for neighbor in graph.neighbors(node) {{
+            stack.push(neighbor);
         }}
     }}
+    result
 }}
 ```
 Relevant: No

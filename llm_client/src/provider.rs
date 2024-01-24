@@ -111,23 +111,7 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
-            LLMProvider::CodeStory(codestory_llm_type) => match codestory_llm_type.llm_type {
-                Some(LLMType::Gpt4) => Some(LLMProviderAPIKeys::OpenAIAzureConfig(AzureConfig {
-                    deployment_id: "gpt4-access".to_owned(),
-                    api_base: "https://codestory-gpt4.openai.azure.com".to_owned(),
-                    api_key: "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned(),
-                    api_version: "2023-08-01-preview".to_owned(),
-                })),
-                Some(LLMType::GPT3_5_16k) => {
-                    Some(LLMProviderAPIKeys::OpenAIAzureConfig(AzureConfig {
-                        deployment_id: "gpt35-turbo-access".to_owned(),
-                        api_base: "https://codestory-gpt4.openai.azure.com".to_owned(),
-                        api_key: "89ca8a49a33344c9b794b3dabcbbc5d0".to_owned(),
-                        api_version: "2023-08-01-preview".to_owned(),
-                    }))
-                }
-                _ => None,
-            },
+            LLMProvider::CodeStory(_) => Some(LLMProviderAPIKeys::CodeStory),
         }
     }
 }

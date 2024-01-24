@@ -9,6 +9,7 @@ use sqlx::SqlitePool;
 
 use crate::{
     clients::{
+        codestory::CodeStoryClient,
         lmstudio::LMStudioClient,
         ollama::OllamaClient,
         openai::OpenAIClient,
@@ -19,7 +20,7 @@ use crate::{
         },
     },
     config::LLMBrokerConfiguration,
-    provider::{LLMProvider, LLMProviderAPIKeys},
+    provider::{CodeStoryLLMType, LLMProvider, LLMProviderAPIKeys},
     sqlite,
 };
 
@@ -43,7 +44,12 @@ impl LLMBroker {
             .add_provider(LLMProvider::OpenAI, Box::new(OpenAIClient::new()))
             .add_provider(LLMProvider::Ollama, Box::new(OllamaClient::new()))
             .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
-            .add_provider(LLMProvider::LMStudio, Box::new(LMStudioClient::new())))
+            .add_provider(
+                LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None }),
+                Box::new(CodeStoryClient::new(
+                    "https://codestory-provider-dot-anton-390822.ue.r.appspot.com",
+                )),
+            ))
     }
 
     pub fn add_provider(
@@ -92,7 +98,9 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
-            LLMProviderAPIKeys::CodeStory => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::CodeStory => {
+                LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None })
+            }
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -148,7 +156,9 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
-            LLMProviderAPIKeys::CodeStory => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::CodeStory => {
+                LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None })
+            }
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

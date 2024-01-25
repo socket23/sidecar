@@ -44,6 +44,7 @@ impl LLMBroker {
             .add_provider(LLMProvider::OpenAI, Box::new(OpenAIClient::new()))
             .add_provider(LLMProvider::Ollama, Box::new(OllamaClient::new()))
             .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
+            .add_provider(LLMProvider::LMStudio, Box::new(LMStudioClient::new()))
             .add_provider(
                 LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None }),
                 Box::new(CodeStoryClient::new(

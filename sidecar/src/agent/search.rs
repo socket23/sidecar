@@ -34,7 +34,7 @@ use rake::StopWords;
 use tiktoken_rs::CoreBPE;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -1147,7 +1147,14 @@ impl Agent {
             .flat_map(|(path, spans)| spans.into_iter().map(move |s| (path.clone(), s)))
             .map(|(path, span)| {
                 let line_start = span.start as usize;
-                let line_end = span.end as usize;
+                let mut line_end = span.end as usize;
+                if line_end >= lines_by_file.get(&path).unwrap().len() {
+                    warn!(
+                        "line end is greater than the number of lines in the file {}",
+                        path
+                    );
+                    line_end = lines_by_file.get(&path).unwrap().len() - 1;
+                }
                 let snippet = lines_by_file.get(&path).unwrap()[line_start..line_end].join("\n");
 
                 let path_alias = self.get_path_alias(&path);

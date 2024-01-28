@@ -20,7 +20,7 @@ use crate::{
         },
     },
     config::LLMBrokerConfiguration,
-    provider::{CodeStoryLLMType, LLMProvider, LLMProviderAPIKeys},
+    provider::{CodeStoryLLMTypes, LLMProvider, LLMProviderAPIKeys},
     sqlite,
 };
 
@@ -46,7 +46,9 @@ impl LLMBroker {
             .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
             .add_provider(LLMProvider::LMStudio, Box::new(LMStudioClient::new()))
             .add_provider(
-                LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None }),
+                LLMProvider::CodeStory(
+
+                    CodeStoryLLMTypes { llm_type: None }),
                 Box::new(CodeStoryClient::new(
                     "https://codestory-provider-dot-anton-390822.ue.r.appspot.com",
                 )),
@@ -100,7 +102,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
             LLMProviderAPIKeys::CodeStory => {
-                LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None })
+                LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
         };
         let provider = self.providers.get(&provider_type);
@@ -158,7 +160,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
             LLMProviderAPIKeys::CodeStory => {
-                LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None })
+                LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
         };
         let provider = self.providers.get(&provider_type);

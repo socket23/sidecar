@@ -11,6 +11,7 @@ use futures::{stream, StreamExt};
 use llm_client::broker::LLMBroker;
 use llm_client::clients::types::LLMClientCompletionRequest;
 use regex::Regex;
+use tracing::info;
 
 use crate::agent::{llm_funcs, prompts};
 use crate::application::application::Application;
@@ -146,6 +147,7 @@ pub async fn file_edit(
         model_config,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
+    info!(event_name = "file_edit", file_path = file_path.as_str(),);
     // Here we have to first check if the new content is tree-sitter valid, if
     // thats the case only then can we apply it to the file
     // First we check if the output generated is valid by itself, if it is then
@@ -1154,6 +1156,9 @@ async fn llm_writing_code(
                     // Now we send it over to gpt3.5 and ask it to generate code
                     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
                     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|item| either::Left(item));
+                    info!(
+                        event_name = "llm_writing_code",
+                    );
                     let llm_answer = llm_broker.stream_completion(
                         provider_api_key.clone(),
                         LLMClientCompletionRequest::new(

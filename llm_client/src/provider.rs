@@ -14,8 +14,8 @@ pub struct AzureOpenAIDeploymentId {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
-pub struct CodeStoryLLMType {
-    // shoe horning the llm type here so we can provide the correct api keys
+pub struct CodeStoryLLMTypes {
+    // shoehorning the llm type here so we can provide the correct api keys
     pub llm_type: Option<LLMType>,
 }
 
@@ -25,7 +25,7 @@ pub enum LLMProvider {
     TogetherAI,
     Ollama,
     LMStudio,
-    CodeStory(CodeStoryLLMType),
+    CodeStory(CodeStoryLLMTypes),
     Azure(AzureOpenAIDeploymentId),
 }
 
@@ -56,7 +56,7 @@ impl LLMProviderAPIKeys {
             }
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
             LLMProviderAPIKeys::CodeStory => {
-                LLMProvider::CodeStory(CodeStoryLLMType { llm_type: None })
+                LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
         }
     }

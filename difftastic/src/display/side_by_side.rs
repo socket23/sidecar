@@ -729,8 +729,9 @@ pub fn print(
                     };
 
                     // print the left and right line numbers here
-                    println!("left: {} right: {}", lhs_num, rhs_num);
-                    println!("{}{}{}{}{}", lhs_num, lhs_line, SPACER, rhs_num, rhs_line);
+                    // println!("left: {} right: {}", lhs_num, rhs_num);
+                    // println!("{}{}{}{}{}", lhs_num, lhs_line, SPACER, rhs_num, rhs_line);
+                    println!("");
                 }
             }
 

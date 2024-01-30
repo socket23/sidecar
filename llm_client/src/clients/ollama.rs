@@ -29,6 +29,13 @@ impl LLMType {
         match self {
             LLMType::MistralInstruct => Ok("mistral".to_owned()),
             LLMType::Mixtral => Ok("mixtral".to_owned()),
+            LLMType::Custom(custom) => {
+                if custom == "codestory/export-to-codebase-openhermes-full" {
+                    Ok("codestory-finetune-export-to-codebase:latest".to_owned())
+                } else {
+                    Err(LLMClientError::UnSupportedModel)
+                }
+            }
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }
@@ -140,6 +147,7 @@ impl LLMClient for OllamaClient {
         request: LLMClientCompletionStringRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
+        let prompt = request.prompt().to_owned();
         let ollama_request = OllamaClientRequest::from_string_request(request)?;
         let mut response = self
             .client
@@ -152,12 +160,14 @@ impl LLMClient for OllamaClient {
         while let Some(chunk) = response.chunk().await? {
             let value = serde_json::from_slice::<OllamaResponse>(chunk.to_vec().as_slice())?;
             buffered_string.push_str(&value.response);
+            println!("{}", &buffered_string);
             sender.send(LLMClientCompletionResponse::new(
                 buffered_string.to_owned(),
                 Some(value.response),
                 value.model,
             ))?;
         }
+        println!("request\n:{}", prompt);
         Ok(buffered_string)
     }
 }

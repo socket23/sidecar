@@ -18,8 +18,24 @@ pub struct TogetherAIClient {
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
-struct TogetherAIRequest {
+struct TogetherAIRequestString {
     prompt: String,
+    model: String,
+    temperature: f32,
+    stream_tokens: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f32>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+struct TogetherAIMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+struct TogetherAIRequestMessages {
+    messages: Vec<TogetherAIMessage>,
     model: String,
     temperature: f32,
     stream_tokens: bool,
@@ -35,8 +51,23 @@ struct TogetherAIResponse {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-struct Choice {
+struct TogetherAIRequestCompletion {
+    choices: Vec<ChoiceCompletion>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct ChoiceCompletion {
     text: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct Delta {
+    content: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct Choice {
+    delta: Delta,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -47,29 +78,26 @@ struct Token {
     special: bool,
 }
 
-impl TogetherAIRequest {
+impl TogetherAIRequestMessages {
     pub fn from_request(request: LLMClientCompletionRequest) -> Self {
         Self {
-            prompt: {
-                if request.messages().len() == 1 {
-                    request.messages()[0].content().to_owned()
-                } else {
-                    request
-                        .messages()
-                        .into_iter()
-                        .map(|message| message.content().to_owned())
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                }
-            },
-            // TODO(skcd): Proper error handling here
+            messages: request
+                .messages()
+                .into_iter()
+                .map(|message| TogetherAIMessage {
+                    role: message.role().to_string(),
+                    content: message.content().to_owned(),
+                })
+                .collect::<Vec<_>>(),
             model: TogetherAIClient::model_str(request.model()).expect("to be present"),
             temperature: request.temperature(),
             stream_tokens: true,
             frequency_penalty: request.frequency_penalty(),
         }
     }
+}
 
+impl TogetherAIRequestString {
     pub fn from_string_request(request: LLMClientCompletionStringRequest) -> Self {
         Self {
             prompt: request.prompt().to_owned(),
@@ -86,16 +114,16 @@ impl TogetherAIClient {
         let client = reqwest::Client::new();
         Self {
             client,
-            base_url: "https://api.together.xyz".to_owned(),
+            base_url: "https://api.together.xyz/v1".to_owned(),
         }
     }
 
     pub fn inference_endpoint(&self) -> String {
-        format!("{}/inference", self.base_url)
+        format!("{}/completions", self.base_url)
     }
 
     pub fn completion_endpoint(&self) -> String {
-        format!("{}/completions", self.base_url)
+        format!("{}/chat/completions", self.base_url)
     }
 
     pub fn model_str(model: &LLMType) -> Option<String> {
@@ -145,7 +173,7 @@ impl LLMClient for TogetherAIClient {
             return Err(LLMClientError::FailedToGetResponse);
         }
         let model = model.expect("is_none check above to work");
-        let together_ai_request = TogetherAIRequest::from_string_request(request);
+        let together_ai_request = TogetherAIRequestString::from_string_request(request);
         let mut response_stream = self
             .client
             .post(self.inference_endpoint())
@@ -163,8 +191,9 @@ impl LLMClient for TogetherAIClient {
                     if &event.data == "[DONE]" {
                         continue;
                     }
-                    let value = serde_json::from_str::<TogetherAIResponse>(&event.data)?;
+                    let value = serde_json::from_str::<TogetherAIRequestCompletion>(&event.data)?;
                     buffered_string = buffered_string + &value.choices[0].text;
+                    println!("{}", &buffered_string);
                     sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
                         Some(value.choices[0].text.to_owned()),
@@ -191,10 +220,10 @@ impl LLMClient for TogetherAIClient {
             return Err(LLMClientError::FailedToGetResponse);
         }
         let model = model.expect("is_none check above to work");
-        let together_ai_request = TogetherAIRequest::from_request(request);
+        let together_ai_request = TogetherAIRequestMessages::from_request(request);
         let mut response_stream = self
             .client
-            .post(self.inference_endpoint())
+            .post(self.completion_endpoint())
             .bearer_auth(self.generate_together_ai_bearer_key(api_key)?.to_owned())
             .json(&together_ai_request)
             .send()
@@ -209,13 +238,16 @@ impl LLMClient for TogetherAIClient {
                     if &event.data == "[DONE]" {
                         continue;
                     }
-                    let value = serde_json::from_str::<TogetherAIResponse>(&event.data)?;
-                    buffered_string = buffered_string + &value.choices[0].text;
-                    sender.send(LLMClientCompletionResponse::new(
-                        buffered_string.to_owned(),
-                        Some(value.choices[0].text.to_owned()),
-                        model.to_owned(),
-                    ))?;
+                    let value = serde_json::from_str::<TogetherAIResponse>(&event.data);
+                    if let Ok(value) = value {
+                        buffered_string = buffered_string + &value.choices[0].delta.content;
+                        println!("{}", &buffered_string);
+                        sender.send(LLMClientCompletionResponse::new(
+                            buffered_string.to_owned(),
+                            Some(value.choices[0].delta.content.to_owned()),
+                            model.to_owned(),
+                        ))?;
+                    }
                 }
                 Err(e) => {
                     dbg!(e);

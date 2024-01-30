@@ -126,6 +126,15 @@ impl LLMClientRole {
     pub fn is_function(&self) -> bool {
         matches!(self, LLMClientRole::Function)
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            LLMClientRole::System => "system".to_owned(),
+            LLMClientRole::User => "user".to_owned(),
+            LLMClientRole::Assistant => "assistant".to_owned(),
+            LLMClientRole::Function => "function".to_owned(),
+        }
+    }
 }
 
 #[derive(serde::Serialize, Debug, Clone)]

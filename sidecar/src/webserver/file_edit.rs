@@ -9,7 +9,7 @@ use either::Either;
 use futures::FutureExt;
 use futures::{stream, StreamExt};
 use llm_client::broker::LLMBroker;
-use llm_client::clients::types::LLMClientCompletionRequest;
+use llm_client::clients::types::{LLMClientCompletionRequest, LLMType};
 use regex::Regex;
 use tracing::info;
 
@@ -1139,43 +1139,55 @@ async fn llm_writing_code(
                         }
                     }).unwrap_or(llm_symbol_content.to_owned());
 
-                    // we have a match with the start of a symbol, so lets try to ask gpt to stream it
-                    let messages = vec![
-                        llm_funcs::llm::Message::system(&prompts::system_prompt_for_git_patch(&user_query, &language, &symbol_name, &symbol_type))
-                    ].into_iter().chain(
-                        prompts::user_message_for_git_patch(
-                            &language,
-                            &symbol_name,
-                            &symbol_type,
-                            &git_diff,
-                            &file_path,
-                            &file_code_symbol,
-                        )
-                    .into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
-                    .collect::<Vec<_>>();
-                    // Now we send it over to gpt3.5 and ask it to generate code
                     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
                     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|item| either::Left(item));
-                    info!(
-                        event_name = "llm_writing_code",
-                    );
-                    let llm_answer = llm_broker.stream_completion(
-                        provider_api_key.clone(),
-                        LLMClientCompletionRequest::new(
-                            fast_model.clone(),
-                            messages
-                                .into_iter()
-                                .map(|message| (&message).try_into())
-                                .collect::<Vec<_>>()
-                                .into_iter()
-                                .collect::<Result<Vec<_>, _>>().expect("conversion to not fail"),
-                            0.1,
-                            None,
-                        ),
-                        provider_config.clone(),
-                        vec![("event_type".to_owned(), "edit_file".to_owned())].into_iter().collect(),
-                        sender,
-                    ).into_stream().map(|response| either::Right(response));
+
+                    let llm_answer = match fast_model {
+                        LLMType::Custom(ref custom) => {
+                            if custom == "" {
+                                // Then we need to send over the new prompt format for gpt inline edit
+                            }
+                            unimplemented!();
+                        },
+                        _ => {
+                            // we have a match with the start of a symbol, so lets try to ask gpt to stream it
+                            let messages = vec![
+                                llm_funcs::llm::Message::system(&prompts::system_prompt_for_git_patch(&user_query, &language, &symbol_name, &symbol_type))
+                            ].into_iter().chain(
+                                prompts::user_message_for_git_patch(
+                                    &language,
+                                    &symbol_name,
+                                    &symbol_type,
+                                    &git_diff,
+                                    &file_path,
+                                    &file_code_symbol,
+                                )
+                            .into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
+                            .collect::<Vec<_>>();
+                            info!(
+                                event_name = "llm_writing_code",
+                            );
+                            let llm_answer = llm_broker.stream_answer(
+                                provider_api_key.clone(),
+                                provider_config.clone(),
+                                futures::future::Either::Left(LLMClientCompletionRequest::new(
+                                    fast_model.clone(),
+                                    messages
+                                        .into_iter()
+                                        .map(|message| (&message).try_into())
+                                        .collect::<Vec<_>>()
+                                        .into_iter()
+                                        .collect::<Result<Vec<_>, _>>().expect("conversion to not fail"),
+                                    0.1,
+                                    None,
+                                )),
+                                vec![("event_type".to_owned(), "edit_file".to_owned())].into_iter().collect(),
+                                sender,
+                            ).into_stream().map(|response| either::Right(response));
+                            llm_answer
+                        }
+                    };
+
                     // we drain the answer stream here and send over our incremental edits update
                     let timeout = Duration::from_secs(TIMEOUT_SECS);
 

@@ -29,6 +29,7 @@ impl LLMType {
         match self {
             LLMType::MistralInstruct => Ok("mistral".to_owned()),
             LLMType::Mixtral => Ok("mixtral".to_owned()),
+            LLMType::CodeLLama70BInstruct => Ok("codellama70b".to_owned()),
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }

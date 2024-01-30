@@ -78,6 +78,15 @@ pub const MIXTRAL: AnswerModel = AnswerModel {
     total_tokens: 32000,
 };
 
+// CodeLLaMA70B has 100k tokens in total
+pub const CODE_LLAMA_70B: AnswerModel = AnswerModel {
+    llm_type: LLMType::CodeLLama70BInstruct,
+    answer_tokens: 1024 * 4,
+    prompt_tokens_limit: 2500 * 4,
+    history_tokens_limit: 2048 * 4,
+    total_tokens: 32769,
+};
+
 pub struct LLMAnswerModelBroker {
     pub models: HashMap<LLMType, AnswerModel>,
 }
@@ -94,6 +103,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(GPT_4_TURBO_128K)
             .add_answer_model(MISTRAL_INSTRUCT)
             .add_answer_model(MIXTRAL)
+            .add_answer_model(CODE_LLAMA_70B)
     }
 
     pub fn add_answer_model(mut self, model: AnswerModel) -> Self {

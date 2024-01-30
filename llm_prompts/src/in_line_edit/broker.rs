@@ -5,6 +5,7 @@ use llm_client::clients::types::LLMType;
 use super::{
     mistral::MistralLineEditPrompt,
     openai::OpenAILineEditPrompt,
+    codellama::CodeLlamaLineEditPrompt,
     types::{
         InLineDocRequest, InLineEditPrompt, InLineEditPromptError, InLineEditRequest,
         InLineFixRequest, InLinePromptResponse,
@@ -29,6 +30,7 @@ impl InLineEditPromptBroker {
                 Box::new(MistralLineEditPrompt::new()),
             )
             .insert_prompt_generator(LLMType::Mixtral, Box::new(MistralLineEditPrompt::new()))
+            .insert_prompt_generator(LLMType::CodeLLama70BInstruct, Box::new(CodeLlamaLineEditPrompt::new()))
     }
 
     pub fn insert_prompt_generator(

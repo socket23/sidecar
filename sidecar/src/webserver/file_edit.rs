@@ -9,7 +9,9 @@ use either::Either;
 use futures::FutureExt;
 use futures::{stream, StreamExt};
 use llm_client::broker::LLMBroker;
-use llm_client::clients::types::LLMClientCompletionRequest;
+use llm_client::clients::types::{
+    LLMClientCompletionRequest, LLMClientCompletionStringRequest, LLMType,
+};
 use regex::Regex;
 use tracing::info;
 
@@ -1139,43 +1141,95 @@ async fn llm_writing_code(
                         }
                     }).unwrap_or(llm_symbol_content.to_owned());
 
-                    // we have a match with the start of a symbol, so lets try to ask gpt to stream it
-                    let messages = vec![
-                        llm_funcs::llm::Message::system(&prompts::system_prompt_for_git_patch(&user_query, &language, &symbol_name, &symbol_type))
-                    ].into_iter().chain(
-                        prompts::user_message_for_git_patch(
-                            &language,
-                            &symbol_name,
-                            &symbol_type,
-                            &git_diff,
-                            &file_path,
-                            &file_code_symbol,
-                        )
-                    .into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
-                    .collect::<Vec<_>>();
-                    // Now we send it over to gpt3.5 and ask it to generate code
                     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
                     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|item| either::Left(item));
-                    info!(
-                        event_name = "llm_writing_code",
-                    );
-                    let llm_answer = llm_broker.stream_completion(
-                        provider_api_key.clone(),
-                        LLMClientCompletionRequest::new(
-                            fast_model.clone(),
-                            messages
-                                .into_iter()
-                                .map(|message| (&message).try_into())
-                                .collect::<Vec<_>>()
-                                .into_iter()
-                                .collect::<Result<Vec<_>, _>>().expect("conversion to not fail"),
-                            0.1,
-                            None,
-                        ),
-                        provider_config.clone(),
-                        vec![("event_type".to_owned(), "edit_file".to_owned())].into_iter().collect(),
-                        sender,
-                    ).into_stream().map(|response| either::Right(response));
+
+                    let llm_answer = match fast_model {
+                        LLMType::Custom(ref custom_llm) => {
+                            if custom_llm == "codestory/export-to-codebase-openhermes-full" {
+                                // We can send it using ollama, so lets do that
+                                let prompt = format!(r#"<|im_start|>system
+You have to take the code which is provided to you in ## Code Context and apply the changes made by a junior engineer to it, which is provided in the ## Export to codebase.
+The junior engineer is lazy and sometimes forgets to write the whole code and leaves `// rest of code ..` or `// ..` in the code, so you have to make sure that you complete the code completely from the original code context when generating the final code.
+Make sure the code which you generate is complete with the changes applied from the ## Export to codebase section and do not be lazy and leave comments like `// rest of code ..` or `// ..`
+The code needs to be generated in typescript.<|im_end|>
+<|im_start|>user
+## Code Context:
+```typescript
+// FILEPATH: {file_path}
+// BEGIN: abpxx6d04wxr
+{file_code_symbol}
+// END: abpxx6d04wxr
+```
+
+## Export to codebase
+{llm_symbol_content}
+
+Now you have to generate the code after applying the edits mentioned in the ## Export to codebase section making sure that we complete the whole code from the ## Code Context and make sure not to leave any `// rest of code..` or `// ..` comments.
+Just generate the final code starting with a single code block enclosed in ```typescript and ending with ```
+Remember to APPLY THE EDITS from the ## Export to codebase section and make sure to complete the code from the ## Code Context section.
+## Final Output:<|im_end|>
+<|im_start|>assistant"#
+                                );
+                                info!(
+                                    event_name = "llm_writing_code",
+                                );
+                                let llm_answer = llm_broker.stream_answer(
+                                    provider_api_key.clone(),
+                                    provider_config.clone(),
+                                    futures::future::Either::Right(LLMClientCompletionStringRequest::new(
+                                        fast_model.clone(),
+                                        prompt,
+                                        0.7,
+                                        None,
+                                    )),
+                                    vec![("event_type".to_owned(), "edit_file".to_owned())].into_iter().collect(),
+                                    sender,
+                                ).into_stream();
+                                llm_answer
+                            } else {
+                                unimplemented!("no other custom type suppported yet");
+                            }
+                        },
+                        _ => {
+                            // we have a match with the start of a symbol, so lets try to ask gpt to stream it
+                            let messages = vec![
+                                llm_funcs::llm::Message::system(&prompts::system_prompt_for_git_patch(&user_query, &language, &symbol_name, &symbol_type))
+                            ].into_iter().chain(
+                                prompts::user_message_for_git_patch(
+                                    &language,
+                                    &symbol_name,
+                                    &symbol_type,
+                                    &git_diff,
+                                    &file_path,
+                                    &file_code_symbol,
+                                )
+                            .into_iter().map(|s| llm_funcs::llm::Message::user(&s)))
+                            .collect::<Vec<_>>();
+                            info!(
+                                event_name = "llm_writing_code",
+                            );
+                            let llm_answer = llm_broker.stream_answer(
+                                provider_api_key.clone(),
+                                provider_config.clone(),
+                                futures::future::Either::Left(LLMClientCompletionRequest::new(
+                                    fast_model.clone(),
+                                    messages
+                                        .into_iter()
+                                        .map(|message| (&message).try_into())
+                                        .collect::<Vec<_>>()
+                                        .into_iter()
+                                        .collect::<Result<Vec<_>, _>>().expect("conversion to not fail"),
+                                    0.1,
+                                    None,
+                                )),
+                                vec![("event_type".to_owned(), "edit_file".to_owned())].into_iter().collect(),
+                                sender,
+                            ).into_stream();
+                            llm_answer
+                        }
+                    }.map(|item| either::Right(item));
+
                     // we drain the answer stream here and send over our incremental edits update
                     let timeout = Duration::from_secs(TIMEOUT_SECS);
 

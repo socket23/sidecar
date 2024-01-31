@@ -13,6 +13,7 @@ use crate::{
     clients::types::{LLMClientMessage, LLMClientRole, LLMType},
     format::{
         deepseekcoder::DeepSeekCoderFormatting,
+        llama70b::CodeLLama70BInstructFormatting,
         mistral::MistralInstructFormatting,
         mixtral::MixtralInstructFormatting,
         types::{LLMFormatting, TokenizerError},
@@ -65,6 +66,10 @@ impl LLMTokenizer {
             .add_llm_type(
                 LLMType::DeepSeekCoder,
                 Box::new(DeepSeekCoderFormatting::new()),
+            )
+            .add_llm_type(
+                LLMType::CodeLLama70BInstruct,
+                Box::new(CodeLLama70BInstructFormatting::new()?),
             );
         Ok(updated_tokenizer)
     }
@@ -228,6 +233,10 @@ impl LLMTokenizer {
             }
             LLMType::DeepSeekCoder => {
                 let config = include_str!("configs/deepseekcoder.json");
+                Some(Tokenizer::from_str(config)?)
+            }
+            LLMType::CodeLLama70BInstruct => {
+                let config = include_str!("configs/mistral.json");
                 Some(Tokenizer::from_str(config)?)
             }
             _ => None,

@@ -18,6 +18,7 @@ pub enum LLMType {
     Gpt4_32k,
     Gpt4Turbo,
     DeepSeekCoder,
+    CodeLLama70BInstruct,
     Custom(String),
 }
 
@@ -59,6 +60,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "Gpt4_32k" => Ok(LLMType::Gpt4_32k),
                     "Gpt4Turbo" => Ok(LLMType::Gpt4Turbo),
                     "DeepSeekCoder" => Ok(LLMType::DeepSeekCoder),
+                    "CodeLLama70BInstruct" => Ok(LLMType::CodeLLama70BInstruct),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -91,6 +93,7 @@ impl fmt::Display for LLMType {
             LLMType::Gpt4_32k => write!(f, "Gpt4_32k"),
             LLMType::Gpt4Turbo => write!(f, "Gpt4Turbo"),
             LLMType::DeepSeekCoder => write!(f, "DeepSeekCoder"),
+            LLMType::CodeLLama70BInstruct => write!(f, "CodeLLama70BInstruct"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }
@@ -122,6 +125,15 @@ impl LLMClientRole {
 
     pub fn is_function(&self) -> bool {
         matches!(self, LLMClientRole::Function)
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            LLMClientRole::System => "system".to_owned(),
+            LLMClientRole::User => "user".to_owned(),
+            LLMClientRole::Assistant => "assistant".to_owned(),
+            LLMClientRole::Function => "function".to_owned(),
+        }
     }
 }
 

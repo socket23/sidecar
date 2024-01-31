@@ -37,6 +37,7 @@ impl ReRankBroker {
         rerankers.insert(LLMType::Gpt4_32k, Box::new(OpenAIReRank::new()));
         rerankers.insert(LLMType::MistralInstruct, Box::new(MistralReRank::new()));
         rerankers.insert(LLMType::Mixtral, Box::new(MistralReRank::new()));
+        rerankers.insert(LLMType::CodeLLama70BInstruct, Box::new(OpenAIReRank::new()));
         Self { rerankers }
     }
 

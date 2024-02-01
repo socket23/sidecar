@@ -687,6 +687,7 @@ impl Agent {
         path_aliases: &[usize],
         sender: tokio::sync::mpsc::UnboundedSender<AgentAnswerStreamEvent>,
     ) -> Result<String> {
+        println!("generating answer");
         if self.user_context.is_some() {
             let message = self
                 .utter_history(Some(2))
@@ -697,6 +698,7 @@ impl Agent {
                 .await;
         }
         let context = self.answer_context(path_aliases).await?;
+        println!("do we reach this point");
         let system_prompt = match self.get_last_conversation_message_agent_state() {
             &AgentState::Explain => prompts::explain_article_prompt(
                 path_aliases.len() != 1,

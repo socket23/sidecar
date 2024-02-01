@@ -128,7 +128,7 @@ Respect these rules at all times:
     2. // rest of code ..
     ```
     Here the codeblock has line numbers 1 and 2, do not write the line numbers in the codeblock
-- You are given the code which the user has selected explicitly in the USER SELECTED CODE section
+- Only use the code context provided to you in the message.
 - Pay special attention to the USER SELECTED CODE as these code snippets are specially selected by the user in their query <step> Source: assistant
 
  [#file:types.rs:52-66](values:file:types.rs:52-66) can you explain this code is doing? <step> Source: assistant

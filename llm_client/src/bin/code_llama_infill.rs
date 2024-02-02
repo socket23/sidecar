@@ -13,8 +13,7 @@ async fn main() {
     });
     let togetherai = TogetherAIClient::new();
     let prompt =
-        "<PRE> # This function is recursive\ndef compute_gcd(x, y): <SUF>return result <MID>"
-            .to_owned();
+        "<PRE> # non recursive\ndef compute_gcd(x, y): <SUF>return result <MID>".to_owned();
     let request =
         LLMClientCompletionStringRequest::new(LLMType::CodeLlama13BInstruct, prompt, 0.2, None);
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();

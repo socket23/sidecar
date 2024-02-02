@@ -102,7 +102,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .nest("/in_editor", in_editor_router())
         .nest("/tree_sitter", tree_sitter_router())
         .nest("/file", file_operations_router())
-        .nest("/navigation", token_information_router());
+        .nest("/navigation", token_information_router())
+        .nest("/inline_completion", inline_completion());
 
     api = api.route("/health", get(sidecar::webserver::health::health));
 

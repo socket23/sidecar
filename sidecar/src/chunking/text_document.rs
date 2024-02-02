@@ -164,6 +164,14 @@ impl Range {
         self.end_position.line
     }
 
+    pub fn start_column(&self) -> usize {
+        self.start_position.character
+    }
+
+    pub fn end_column(&self) -> usize {
+        self.end_position.character
+    }
+
     pub fn set_end_position(&mut self, position: Position) {
         self.end_position = position;
     }

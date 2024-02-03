@@ -110,6 +110,15 @@ pub const CODE_LLAMA_13B: AnswerModel = AnswerModel {
     inline_completion_tokens: Some(2056),
 };
 
+pub const DEEPSEEK_CODER_1_3B_INSTRUCT: AnswerModel = AnswerModel {
+    llm_type: LLMType::DeepSeekCoder1_3BInstruct,
+    answer_tokens: 1024 * 4,
+    prompt_tokens_limit: 2500 * 4,
+    history_tokens_limit: 2048 * 4,
+    total_tokens: 16_000,
+    inline_completion_tokens: Some(2056),
+};
+
 pub struct LLMAnswerModelBroker {
     pub models: HashMap<LLMType, AnswerModel>,
 }
@@ -128,6 +137,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(MIXTRAL)
             .add_answer_model(CODE_LLAMA_13B)
             .add_answer_model(CODE_LLAMA_70B)
+            .add_answer_model(DEEPSEEK_CODER_1_3B_INSTRUCT)
     }
 
     fn add_answer_model(mut self, model: AnswerModel) -> Self {

@@ -72,7 +72,6 @@ pub async fn inline_completion(
         id,
     }): Json<InlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!(&model_config);
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
@@ -97,8 +96,8 @@ pub async fn inline_completion(
     let stream = Abortable::new(completions, abort_request);
     Ok(Sse::new(Box::pin(stream.filter_map(
         |completion| async move {
-            // dbg!("completion is coming along");
-            // dbg!(&completion);
+            dbg!("completion is coming along");
+            dbg!(&completion);
             match completion {
                 Ok(completion) => Some(
                     sse::Event::default()

@@ -30,6 +30,7 @@ impl LLMType {
             LLMType::MistralInstruct => Ok("mistral".to_owned()),
             LLMType::Mixtral => Ok("mixtral".to_owned()),
             LLMType::CodeLLama70BInstruct => Ok("codellama70b".to_owned()),
+            LLMType::DeepSeekCoder1_3BInstruct => Ok("deepseek-coder:1.3b-instruct".to_owned()),
             LLMType::Custom(custom) => {
                 if custom == "codestory/export-to-codebase-openhermes-full" {
                     Ok("codestory-finetune-export-to-codebase:latest".to_owned())

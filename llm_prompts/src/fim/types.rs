@@ -75,10 +75,11 @@ impl FillInMiddleBroker {
     pub fn format_context(
         &self,
         request: FillInMiddleRequest,
+        model: &LLMType,
     ) -> Result<FillInMiddleResponse, FillInMiddleError> {
         let formatter = self
             .providers
-            .get(&LLMType::CodeLlama13BInstruct)
+            .get(model)
             .ok_or(FillInMiddleError::UnknownLLMType)?;
         Ok(formatter.fill_in_middle(request))
     }

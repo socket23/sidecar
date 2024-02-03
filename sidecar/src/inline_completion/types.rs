@@ -41,7 +41,7 @@ pub enum InLineCompletionError {
     #[error("Language Not supported: {0}")]
     LanguageNotSupported(String),
 
-    #[error("tokenizer error: {0}")]
+    #[error("tokenizer formatting error: {0}")]
     LLMTokenizerError(#[from] llm_client::format::types::TokenizerError),
 
     #[error("tokenizer error: {0}")]

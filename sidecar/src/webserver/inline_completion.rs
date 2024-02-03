@@ -28,11 +28,15 @@ pub struct InlineCompletionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct InlineCompletion {
     pub insert_text: String,
+    pub insert_range: Range,
 }
 
 impl InlineCompletion {
-    pub fn new(insert_text: String) -> Self {
-        Self { insert_text }
+    pub fn new(insert_text: String, insert_range: Range) -> Self {
+        Self {
+            insert_text,
+            insert_range,
+        }
     }
 }
 

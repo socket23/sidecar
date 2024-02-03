@@ -50,6 +50,12 @@ impl LLMClientConfig {
         self.providers.iter().find(|p| p.key(provider).is_some())
     }
 
+    pub fn fast_model_temperature(&self) -> Option<f32> {
+        self.models
+            .get(&self.fast_model)
+            .map(|model_config| model_config.temperature)
+    }
+
     pub fn provider_config_for_fast_model(&self) -> Option<&LLMProvider> {
         // we first need to get the model configuration for the slow model
         // which will give us the model and the context around it

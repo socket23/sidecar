@@ -469,5 +469,6 @@ pub fn javascript_language_config() -> TSLanguageConfig {
           (identifier) @local.reference)        
         "#
         .to_owned(),
+        comment_prefix: "//".to_owned(),
     }
 }

@@ -2,6 +2,8 @@ use regex::Regex;
 
 use crate::chunking::text_document::{Position, Range};
 
+use super::context::types::DocumentLines;
+
 /// We are going to fix the range here based on the text document
 /// following this convention because the byte offset from vscode
 /// is different from the byte offset in rust

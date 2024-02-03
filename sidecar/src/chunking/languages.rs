@@ -86,6 +86,10 @@ pub struct TSLanguageConfig {
     /// infer that using the scope query to get the local definitions and the
     /// scopes which should be hoisted upwards
     pub scope_query: String,
+
+    /// The comment prefix for the language, typescript is like // and rust
+    /// is like //, python is like #
+    pub comment_prefix: String,
 }
 
 impl TSLanguageConfig {

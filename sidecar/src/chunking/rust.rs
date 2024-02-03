@@ -543,5 +543,6 @@ pub fn rust_language_config() -> TSLanguageConfig {
            type: (type_identifier) @local.reference)        
         "#
         .to_owned(),
+        comment_prefix: "///".to_owned(),
     }
 }

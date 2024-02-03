@@ -7,14 +7,15 @@ use llm_client::{
     broker::LLMBroker, config::LLMBrokerConfiguration, tokenizer::tokenizer::LLMTokenizer,
 };
 use llm_prompts::{
-    chat::broker::LLMChatModelBroker, in_line_edit::broker::InLineEditPromptBroker,
+    answer_model::LLMAnswerModelBroker, chat::broker::LLMChatModelBroker,
+    fim::types::FillInMiddleBroker, in_line_edit::broker::InLineEditPromptBroker,
     reranking::broker::ReRankBroker,
 };
 use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
 use crate::{
-    chunking::languages::TSLanguageParsing,
+    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     db::sqlite::{self, SqlDb},
     reporting::posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
@@ -49,7 +50,10 @@ pub struct Application {
     pub inline_prompt_edit: Arc<InLineEditPromptBroker>,
     pub llm_tokenizer: Arc<LLMTokenizer>,
     pub chat_broker: Arc<LLMChatModelBroker>,
+    pub fill_in_middle_broker: Arc<FillInMiddleBroker>,
     pub reranker: Arc<ReRankBroker>,
+    pub answer_models: Arc<LLMAnswerModelBroker>,
+    pub editor_parsing: Arc<EditorParsing>,
 }
 
 impl Application {
@@ -71,6 +75,9 @@ impl Application {
         let llm_tokenizer = Arc::new(LLMTokenizer::new()?);
         let chat_broker = Arc::new(LLMChatModelBroker::init());
         let reranker = Arc::new(ReRankBroker::new());
+        let fill_in_middle_broker = Arc::new(FillInMiddleBroker::new());
+        let answer_models = Arc::new(LLMAnswerModelBroker::new());
+        let editor_parsing = Arc::new(EditorParsing::default());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -92,8 +99,11 @@ impl Application {
             llm_broker: Arc::new(llm_broker),
             inline_prompt_edit: Arc::new(InLineEditPromptBroker::new()),
             llm_tokenizer,
+            fill_in_middle_broker,
             chat_broker,
             reranker,
+            answer_models,
+            editor_parsing,
         })
     }
 

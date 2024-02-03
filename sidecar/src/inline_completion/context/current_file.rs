@@ -52,7 +52,6 @@ impl CurrentFileContext {
         mut self,
         document_lines: &DocumentLines,
     ) -> Result<CurrentFilePrefixSuffix, InLineCompletionError> {
-        let num_lines = document_lines.len();
         let current_line_number = self.cursor_position.line() as usize;
         // Get the current line's content from the cursor position
         // TODO: log here if we get the spaces and tabs at the start of it
@@ -93,14 +92,14 @@ impl CurrentFileContext {
         let mut current_token_count = 0;
 
         let mut iteration_number = 0;
-        let mut prefix_line = current_line_number - 1;
-        let mut suffix_line = current_line_number + 1;
+        let mut prefix_line: i64 = current_line_number as i64 - 1;
+        let mut suffix_line: i64 = current_line_number as i64 + 1;
         while current_token_count < self.token_limit {
             // we take in the 3:1 ratio, so we prefer strings from the prefix
             // more over strings from the suffix
             if iteration_number % 4 != 0 {
                 if prefix_line >= 0 {
-                    let line = document_lines.get_line(prefix_line);
+                    let line = document_lines.get_line(prefix_line as usize);
                     let tokens = self
                         .tokenizer
                         .count_tokens_using_tokenizer(&self.llm_type, line)?;
@@ -112,8 +111,8 @@ impl CurrentFileContext {
                     prefix_line -= 1;
                 }
             } else {
-                if suffix_line < document_lines.len() {
-                    let line = document_lines.get_line(suffix_line);
+                if suffix_line < document_lines.len() as i64 {
+                    let line = document_lines.get_line(suffix_line as usize);
                     let tokens = self
                         .tokenizer
                         .count_tokens_using_tokenizer(&self.llm_type, line)?;
@@ -125,6 +124,7 @@ impl CurrentFileContext {
                     suffix_line += 1;
                 }
             }
+            iteration_number = iteration_number + 1;
         }
 
         prefix.reverse();
@@ -151,7 +151,7 @@ impl CurrentFileContext {
         // line n ... [cursor_line -1.end()]
         let prefix = CodeSelection::new(
             Range::new(
-                document_lines.start_position_at_line(prefix_line + 1),
+                document_lines.start_position_at_line((prefix_line + 1) as usize),
                 document_lines.end_position_at_line(current_line_number),
             ),
             self.file_path.clone(),
@@ -170,7 +170,7 @@ impl CurrentFileContext {
         let suffix = CodeSelection::new(
             Range::new(
                 document_lines.start_position_at_line(current_line_number + 1),
-                document_lines.end_position_at_line(suffix_line - 1),
+                document_lines.end_position_at_line((suffix_line - 1) as usize),
             ),
             self.file_path.clone(),
             suffix.join("\n"),

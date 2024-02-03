@@ -133,7 +133,7 @@ impl FillInMiddleCompletionAgent {
                 ))?;
 
         // Now we send a request over to our provider and get a response for this
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let completion = self
             .llm_broker
             .stream_string_completion(

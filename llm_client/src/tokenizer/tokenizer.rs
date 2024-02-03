@@ -64,7 +64,7 @@ impl LLMTokenizer {
                 Box::new(MistralInstructFormatting::new()?),
             )
             .add_llm_type(
-                LLMType::DeepSeekCoder,
+                LLMType::DeepSeekCoder1_3BInstruct,
                 Box::new(DeepSeekCoderFormatting::new()),
             )
             .add_llm_type(
@@ -235,7 +235,7 @@ impl LLMTokenizer {
                 let config = include_str!("configs/mixtral.json");
                 Some(Tokenizer::from_str(config)?)
             }
-            LLMType::DeepSeekCoder => {
+            LLMType::DeepSeekCoder1_3BInstruct => {
                 let config = include_str!("configs/deepseekcoder.json");
                 Some(Tokenizer::from_str(config)?)
             }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use llm_client::clients::types::LLMType;
 
-use super::codellama::CodeLlamaFillInMiddleFormatter;
+use super::{codellama::CodeLlamaFillInMiddleFormatter, deepseek::DeepSeekFillInMiddleFormatter};
 
 #[derive(thiserror::Error, Debug)]
 pub enum FillInMiddleError {
@@ -52,10 +52,15 @@ impl FillInMiddleBroker {
         let broker = Self {
             providers: HashMap::new(),
         };
-        broker.add_llm(
-            LLMType::CodeLlama13BInstruct,
-            Box::new(CodeLlamaFillInMiddleFormatter::new()),
-        )
+        broker
+            .add_llm(
+                LLMType::CodeLlama13BInstruct,
+                Box::new(CodeLlamaFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::DeepSeekCoder1_3BInstruct,
+                Box::new(DeepSeekFillInMiddleFormatter::new()),
+            )
     }
 
     fn add_llm(

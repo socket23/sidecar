@@ -25,6 +25,7 @@ pub struct InlineCompletionRequest {
     pub position: Position,
     pub indentation: Option<String>,
     pub model_config: LLMClientConfig,
+    pub id: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -65,12 +66,9 @@ pub async fn inline_completion(
         position,
         indentation,
         model_config,
+        id,
     }): Json<InlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!("we are over here");
-    println!("we are getting here");
-    println!("{:?}", &model_config);
-    error!(event_name = "inline_completion",);
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
         app.llm_broker.clone(),
         app.llm_tokenizer.clone(),
@@ -86,6 +84,7 @@ pub async fn inline_completion(
             position,
             indentation,
             model_config,
+            id,
         })
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
     Ok(Sse::new(Box::pin(completions.filter_map(

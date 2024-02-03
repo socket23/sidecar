@@ -25,6 +25,8 @@ struct TogetherAIRequestString {
     stream_tokens: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<Vec<String>>,
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
@@ -41,6 +43,8 @@ struct TogetherAIRequestMessages {
     stream_tokens: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<Vec<String>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -93,6 +97,9 @@ impl TogetherAIRequestMessages {
             temperature: request.temperature(),
             stream_tokens: true,
             frequency_penalty: request.frequency_penalty(),
+            stop: request
+                .stop_words()
+                .map(|stop_words| stop_words.into_iter().map(|s| s.to_owned()).collect()),
         }
     }
 }
@@ -105,6 +112,9 @@ impl TogetherAIRequestString {
             temperature: request.temperature(),
             stream_tokens: true,
             frequency_penalty: request.frequency_penalty(),
+            stop: request
+                .stop_words()
+                .map(|stop_words| stop_words.into_iter().map(|s| s.to_owned()).collect()),
         }
     }
 }

@@ -70,6 +70,10 @@ impl LLMTokenizer {
             .add_llm_type(
                 LLMType::CodeLLama70BInstruct,
                 Box::new(CodeLLama70BInstructFormatting::new()?),
+            )
+            .add_llm_type(
+                LLMType::CodeLlama13BInstruct,
+                Box::new(CodeLLama70BInstructFormatting::new()?),
             );
         Ok(updated_tokenizer)
     }
@@ -236,6 +240,10 @@ impl LLMTokenizer {
                 Some(Tokenizer::from_str(config)?)
             }
             LLMType::CodeLLama70BInstruct => {
+                let config = include_str!("configs/mistral.json");
+                Some(Tokenizer::from_str(config)?)
+            }
+            LLMType::CodeLlama13BInstruct => {
                 let config = include_str!("configs/mistral.json");
                 Some(Tokenizer::from_str(config)?)
             }

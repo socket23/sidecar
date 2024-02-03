@@ -46,9 +46,7 @@ impl LLMBroker {
             .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
             .add_provider(LLMProvider::LMStudio, Box::new(LMStudioClient::new()))
             .add_provider(
-                LLMProvider::CodeStory(
-
-                    CodeStoryLLMTypes { llm_type: None }),
+                LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None }),
                 Box::new(CodeStoryClient::new(
                     "https://codestory-provider-dot-anton-390822.ue.r.appspot.com",
                 )),
@@ -146,8 +144,20 @@ impl LLMBroker {
         }
     }
 
-    pub async fn stream_string_completion(
-        &self,
+    pub async fn stream_string_completion_owned(
+        value: Arc<Self>,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionStringRequest,
+        metadata: HashMap<String, String>,
+        sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+    ) -> LLMBrokerResponse {
+        value
+            .stream_string_completion(api_key, request, metadata, sender)
+            .await
+    }
+
+    pub async fn stream_string_completion<'a>(
+        &'a self,
         api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionStringRequest,
         metadata: HashMap<String, String>,

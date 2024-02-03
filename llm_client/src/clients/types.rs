@@ -277,6 +277,11 @@ impl LLMClientCompletionStringRequest {
         }
     }
 
+    pub fn set_stop_words(mut self, stop_words: Vec<String>) -> Self {
+        self.stop_words = Some(stop_words);
+        self
+    }
+
     pub fn model(&self) -> &LLMType {
         &self.model
     }

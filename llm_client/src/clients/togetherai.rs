@@ -194,6 +194,7 @@ impl LLMClient for TogetherAIClient {
                     }
                     let value = serde_json::from_str::<TogetherAIRequestCompletion>(&event.data)?;
                     buffered_string = buffered_string + &value.choices[0].text;
+                    println!("==============");
                     println!("{}", &buffered_string);
                     sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),

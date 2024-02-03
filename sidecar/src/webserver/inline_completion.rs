@@ -2,7 +2,10 @@ use axum::{
     response::{sse, IntoResponse, Sse},
     Extension, Json,
 };
-use futures::StreamExt;
+use futures::{
+    stream::{AbortHandle, Abortable},
+    StreamExt,
+};
 use tracing::error;
 
 use crate::{
@@ -69,6 +72,9 @@ pub async fn inline_completion(
         id,
     }): Json<InlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!(&model_config);
+    let fill_in_middle_state = app.fill_in_middle_state.clone();
+    let abort_request = fill_in_middle_state.insert(id.clone());
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
         app.llm_broker.clone(),
         app.llm_tokenizer.clone(),
@@ -87,8 +93,12 @@ pub async fn inline_completion(
             id,
         })
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
-    Ok(Sse::new(Box::pin(completions.filter_map(
+    // this is how we can abort the running stream if the client disconnects
+    let stream = Abortable::new(completions, abort_request);
+    Ok(Sse::new(Box::pin(stream.filter_map(
         |completion| async move {
+            // dbg!("completion is coming along");
+            // dbg!(&completion);
             match completion {
                 Ok(completion) => Some(
                     sse::Event::default()
@@ -98,4 +108,23 @@ pub async fn inline_completion(
             }
         },
     ))))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CancelInlineCompletionRequest {
+    id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CancelInlineCompletionResponse {}
+
+impl ApiResponse for CancelInlineCompletionResponse {}
+
+pub async fn cancel_inline_completion(
+    Extension(app): Extension<Application>,
+    Json(CancelInlineCompletionRequest { id }): Json<CancelInlineCompletionRequest>,
+) -> Result<impl IntoResponse> {
+    let fill_in_middle_state = app.fill_in_middle_state.clone();
+    fill_in_middle_state.cancel(&id);
+    Ok(Json(CancelInlineCompletionResponse {}))
 }

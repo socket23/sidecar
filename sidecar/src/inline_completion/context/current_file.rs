@@ -94,7 +94,10 @@ impl CurrentFileContext {
         let mut iteration_number = 0;
         let mut prefix_line: i64 = current_line_number as i64 - 1;
         let mut suffix_line: i64 = current_line_number as i64 + 1;
-        while current_token_count < self.token_limit {
+        while current_token_count < self.token_limit
+            && prefix_line >= 0
+            && suffix_line < document_lines.len() as i64
+        {
             // we take in the 3:1 ratio, so we prefer strings from the prefix
             // more over strings from the suffix
             if iteration_number % 4 != 0 {

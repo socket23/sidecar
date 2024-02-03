@@ -1,6 +1,9 @@
-use std::sync::Arc;
+use std::pin::Pin;
+use std::{sync::Arc, time::Duration};
 
 use axum::Json;
+use futures::{pin_mut, FutureExt, Stream};
+use futures::{stream, StreamExt};
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionStringRequest, LLMType},
@@ -58,6 +61,9 @@ pub enum InLineCompletionError {
 
     #[error("LLMClient error: {0}")]
     LLMClientError(#[from] llm_client::clients::types::LLMClientError),
+
+    #[error("terminated streamed completion")]
+    InlineCompletionTerminated,
 }
 
 struct InLineCompletionData {
@@ -83,10 +89,13 @@ impl FillInMiddleCompletionAgent {
         }
     }
 
-    pub async fn completion(
+    pub fn completion(
         &self,
         completion_request: InlineCompletionRequest,
-    ) -> Result<InlineCompletionResponse, InLineCompletionError> {
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<InlineCompletionResponse, InLineCompletionError>> + Send>>,
+        InLineCompletionError,
+    > {
         // Now that we have the position, we want to create the request for the fill
         // in the middle request.
         let model_config = &completion_request.model_config;
@@ -132,36 +141,57 @@ impl FillInMiddleCompletionAgent {
                     completion_context.suffix.content().to_owned(),
                 ))?;
 
+        let arced_document_lines = Arc::new(document_lines);
+
         // Now we send a request over to our provider and get a response for this
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let completion = self
-            .llm_broker
-            .stream_string_completion(
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let completion_receiver_stream =
+            tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(either::Left);
+        // pin_mut!(merged_stream);
+
+        let llm_broker = self.llm_broker.clone();
+        Ok(Box::pin({
+            // ugly, ugly, ugly, but type-safe so yay :))
+            let completion = LLMBroker::stream_string_completion_owned(
+                llm_broker,
                 fast_model_api_key,
                 LLMClientCompletionStringRequest::new(
                     fast_model.clone(),
                     formatted_string.filled,
                     temperature,
                     None,
-                ),
+                )
+                .set_stop_words(vec!["\n\n".to_owned(), "```".to_owned()]),
                 vec![("event_type".to_owned(), "fill_in_middle".to_owned())]
                     .into_iter()
                     .collect(),
                 sender,
             )
-            .await?;
+            .into_stream()
+            .map(either::Right);
 
-        // we need to find the updated position for this when we join this
-        // string to our current cursor position
-        // so we do the following for this
-        // join it to the current line and then count the new line and column numbers along with
-        // the byte offset
-
-        // Now we want to generate the prompt from the prefix and the suffix
-        // Process the data and generate the responses for the user
-        Ok(InlineCompletionResponse::new(vec![InlineCompletion::new(
-            completion.to_owned(),
-            insert_range(completion_request.position, &document_lines, &completion),
-        )]))
+            let merged_stream = stream::select(completion_receiver_stream, completion);
+            merged_stream
+                .map(move |item| (item, arced_document_lines.clone()))
+                .map(move |(item, document_lines)| match item {
+                    either::Left(response) => {
+                        Ok(InlineCompletionResponse::new(vec![InlineCompletion::new(
+                            response.answer_up_until_now().to_owned(),
+                            insert_range(
+                                completion_request.position,
+                                &document_lines,
+                                response.answer_up_until_now(),
+                            ),
+                        )]))
+                    }
+                    either::Right(Ok(response)) => {
+                        Ok(InlineCompletionResponse::new(vec![InlineCompletion::new(
+                            response.to_owned(),
+                            insert_range(completion_request.position, &document_lines, &response),
+                        )]))
+                    }
+                    _ => Err(InLineCompletionError::InlineCompletionTerminated),
+                })
+        }))
     }
 }

@@ -544,7 +544,6 @@ impl InLineAgent {
                         }
                         let context_selection = ContextSelection::generate_placeholder_for_range(&document_symbol.range());
                         let prompt = prompt.expect("if let Err above to hold");
-                        dbg!(&prompt);
                         // send the request to the llm client
                         let (sender, receiver) =
                             tokio::sync::mpsc::unbounded_channel::<LLMClientCompletionResponse>();

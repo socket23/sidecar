@@ -41,6 +41,12 @@ impl EditorParsing {
             .find(|config| config.language_ids.contains(&language))
     }
 
+    pub fn for_file_path(&self, file_path: &str) -> Option<&TSLanguageConfig> {
+        self.configs
+            .iter()
+            .find(|config| config.file_extensions.contains(&file_path))
+    }
+
     fn is_node_identifier(
         &self,
         node: &tree_sitter::Node,

@@ -62,6 +62,7 @@
     "tanvity",
     "thiserror",
     "tiktoken",
+    "vllm",
     "webserver",
     "yolo"
   ],

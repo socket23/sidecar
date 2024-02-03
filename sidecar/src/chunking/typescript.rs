@@ -101,8 +101,6 @@ pub fn typescript_language_config() -> TSLanguageConfig {
          (type_identifier)] @hoverable
         "#.to_owned(),
         scope_query: r#"
-
-
         [
             (statement_block)
             (class_body)
@@ -372,5 +370,6 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             (identifier) @local.reference)
           
         "#.to_owned(),
+        comment_prefix: "//".to_owned(),
     }
 }

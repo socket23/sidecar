@@ -134,12 +134,13 @@ impl FillInMiddleCompletionAgent {
         )
         .generate_context(&document_lines)?;
 
-        let formatted_string =
-            self.fill_in_middle_broker
-                .format_context(FillInMiddleRequest::new(
-                    completion_context.prefix.content().to_owned(),
-                    completion_context.suffix.content().to_owned(),
-                ))?;
+        let formatted_string = self.fill_in_middle_broker.format_context(
+            FillInMiddleRequest::new(
+                completion_context.prefix.content().to_owned(),
+                completion_context.suffix.content().to_owned(),
+            ),
+            &fast_model,
+        )?;
 
         dbg!(formatted_string.filled.clone());
 

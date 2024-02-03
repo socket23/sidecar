@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use regex::Regex;
 use tracing::debug;
 
@@ -42,9 +44,19 @@ impl EditorParsing {
     }
 
     pub fn for_file_path(&self, file_path: &str) -> Option<&TSLanguageConfig> {
-        self.configs
-            .iter()
-            .find(|config| config.file_extensions.contains(&file_path))
+        let file_path = PathBuf::from(file_path);
+        let file_extension = file_path
+            .extension()
+            .map(|extension| extension.to_str())
+            .map(|extension| extension.to_owned())
+            .flatten();
+        match file_extension {
+            Some(extension) => self
+                .configs
+                .iter()
+                .find(|config| config.file_extensions.contains(&extension)),
+            None => None,
+        }
     }
 
     fn is_node_identifier(

@@ -20,7 +20,10 @@ use crate::{
     },
 };
 
-use super::context::current_file::CurrentFileContext;
+use super::{
+    context::{current_file::CurrentFileContext, types::DocumentLines},
+    helpers::insert_range,
+};
 
 pub struct FillInMiddleCompletionAgent {
     llm_broker: Arc<LLMBroker>,
@@ -109,17 +112,18 @@ impl FillInMiddleCompletionAgent {
         }
         let token_limit = token_limit.expect("if let None to hold");
 
+        let document_lines = DocumentLines::from_file_content(&completion_request.text);
+
         // Now we generate the prefix and the suffix here
         let completion_context = CurrentFileContext::new(
             completion_request.filepath,
-            completion_request.text,
             completion_request.position,
             token_limit as usize,
             self.llm_tokenizer.clone(),
             self.editor_parsing.clone(),
             fast_model.clone(),
         )
-        .generate_context()?;
+        .generate_context(&document_lines)?;
 
         let formatted_string =
             self.fill_in_middle_broker
@@ -147,10 +151,17 @@ impl FillInMiddleCompletionAgent {
             )
             .await?;
 
+        // we need to find the updated position for this when we join this
+        // string to our current cursor position
+        // so we do the following for this
+        // join it to the current line and then count the new line and column numbers along with
+        // the byte offset
+
         // Now we want to generate the prompt from the prefix and the suffix
         // Process the data and generate the responses for the user
         Ok(InlineCompletionResponse::new(vec![InlineCompletion::new(
-            completion,
+            completion.to_owned(),
+            insert_range(completion_request.position, document_lines, &completion),
         )]))
     }
 }

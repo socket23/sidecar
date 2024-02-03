@@ -22,7 +22,6 @@ use super::types::CurrentFilePrefixSuffix;
 // Grabs the current file context from the cursor position
 pub struct CurrentFileContext {
     file_path: String,
-    file_content: String,
     cursor_position: Position,
     token_limit: usize,
     tokenizer: Arc<LLMTokenizer>,
@@ -33,7 +32,6 @@ pub struct CurrentFileContext {
 impl CurrentFileContext {
     pub fn new(
         file_path: String,
-        file_content: String,
         cursor_position: Position,
         token_limit: usize,
         tokenizer: Arc<LLMTokenizer>,
@@ -42,7 +40,6 @@ impl CurrentFileContext {
     ) -> Self {
         Self {
             file_path,
-            file_content,
             cursor_position,
             token_limit,
             tokenizer,
@@ -51,8 +48,10 @@ impl CurrentFileContext {
         }
     }
 
-    pub fn generate_context(mut self) -> Result<CurrentFilePrefixSuffix, InLineCompletionError> {
-        let document_lines = DocumentLines::from_file_content(&self.file_content);
+    pub fn generate_context(
+        mut self,
+        document_lines: &DocumentLines,
+    ) -> Result<CurrentFilePrefixSuffix, InLineCompletionError> {
         let num_lines = document_lines.len();
         let current_line_number = self.cursor_position.line() as usize;
         // Get the current line's content from the cursor position

@@ -72,3 +72,36 @@ fn line_column_to_byte_offset(
     // Line requested is beyond the input text line count
     None
 }
+
+pub fn insert_range(
+    current_position: Position,
+    document_lines: DocumentLines,
+    text: &str,
+) -> Range {
+    // so we first get the current line content
+    let current_line = document_lines.get_line(current_position.line() as usize);
+    let final_string = current_line.to_owned() + text;
+    // now we can count the lines and the number of bytes and characters in the inserted snippet
+    let lines = final_string.lines().collect::<Vec<_>>();
+    let byte_offset = final_string.len();
+    if lines.len() >= 1 {
+        let final_line_number = (lines.len() - 1 + current_position.line()) as usize;
+        let final_column_position = lines[lines.len() - 1].chars().count();
+        // else we are going to insert from the current position to the end position
+        let new_range = Range::new(
+            current_position,
+            Position::new(
+                final_line_number,
+                final_column_position,
+                (byte_offset
+                    + document_lines
+                        .start_position_at_line(current_position.line())
+                        .to_byte_offset()) as usize,
+            ),
+        );
+        new_range
+    } else {
+        // just return the current position
+        Range::new(current_position.clone(), current_position)
+    }
+}

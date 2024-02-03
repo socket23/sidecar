@@ -75,7 +75,7 @@ fn line_column_to_byte_offset(
 
 pub fn insert_range(
     current_position: Position,
-    document_lines: DocumentLines,
+    document_lines: &DocumentLines,
     text: &str,
 ) -> Range {
     // so we first get the current line content

@@ -249,6 +249,7 @@ pub struct LLMClientCompletionRequest {
     messages: Vec<LLMClientMessage>,
     temperature: f32,
     frequency_penalty: Option<f32>,
+    stop_words: Option<Vec<String>>,
 }
 
 #[derive(Clone)]
@@ -257,6 +258,7 @@ pub struct LLMClientCompletionStringRequest {
     prompt: String,
     temperature: f32,
     frequency_penalty: Option<f32>,
+    stop_words: Option<Vec<String>>,
 }
 
 impl LLMClientCompletionStringRequest {
@@ -271,6 +273,7 @@ impl LLMClientCompletionStringRequest {
             prompt,
             temperature,
             frequency_penalty,
+            stop_words: None,
         }
     }
 
@@ -289,6 +292,10 @@ impl LLMClientCompletionStringRequest {
     pub fn prompt(&self) -> &str {
         &self.prompt
     }
+
+    pub fn stop_words(&self) -> Option<&[String]> {
+        self.stop_words.as_deref()
+    }
 }
 
 impl LLMClientCompletionRequest {
@@ -303,6 +310,7 @@ impl LLMClientCompletionRequest {
             messages,
             temperature,
             frequency_penalty,
+            stop_words: None,
         }
     }
 
@@ -329,6 +337,10 @@ impl LLMClientCompletionRequest {
 
     pub fn model(&self) -> &LLMType {
         &self.model
+    }
+
+    pub fn stop_words(&self) -> Option<&[String]> {
+        self.stop_words.as_deref()
     }
 }
 

@@ -161,7 +161,7 @@ impl FillInMiddleCompletionAgent {
         // Process the data and generate the responses for the user
         Ok(InlineCompletionResponse::new(vec![InlineCompletion::new(
             completion.to_owned(),
-            insert_range(completion_request.position, document_lines, &completion),
+            insert_range(completion_request.position, &document_lines, &completion),
         )]))
     }
 }

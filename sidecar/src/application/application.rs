@@ -17,6 +17,7 @@ use tracing::{debug, warn};
 use crate::{
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     db::sqlite::{self, SqlDb},
+    inline_completion::state::FillInMiddleState,
     reporting::posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
 };
@@ -54,6 +55,7 @@ pub struct Application {
     pub reranker: Arc<ReRankBroker>,
     pub answer_models: Arc<LLMAnswerModelBroker>,
     pub editor_parsing: Arc<EditorParsing>,
+    pub fill_in_middle_state: Arc<FillInMiddleState>,
 }
 
 impl Application {
@@ -78,6 +80,7 @@ impl Application {
         let fill_in_middle_broker = Arc::new(FillInMiddleBroker::new());
         let answer_models = Arc::new(LLMAnswerModelBroker::new());
         let editor_parsing = Arc::new(EditorParsing::default());
+        let fill_in_middle_state = Arc::new(FillInMiddleState::new());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -104,6 +107,7 @@ impl Application {
             reranker,
             answer_models,
             editor_parsing,
+            fill_in_middle_state,
         })
     }
 

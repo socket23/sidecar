@@ -82,6 +82,7 @@ url = "2.5.0"
 tree-sitter-md = "0.1.7"
 phf = "0.11.2"
 eventsource-stream = "0.2.3"
+dashmap = "5.5.3"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = [ "resource" ] }

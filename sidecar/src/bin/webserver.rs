@@ -195,8 +195,13 @@ fn token_information_router() -> Router {
 
 fn inline_completion() -> Router {
     use axum::routing::*;
-    Router::new().route(
-        "/inline_completion",
-        post(sidecar::webserver::inline_completion::inline_completion),
-    )
+    Router::new()
+        .route(
+            "/inline_completion",
+            post(sidecar::webserver::inline_completion::inline_completion),
+        )
+        .route(
+            "/cancel_inline_completion",
+            post(sidecar::webserver::inline_completion::cancel_inline_completion),
+        )
 }

@@ -60,6 +60,10 @@ impl CurrentFileContext {
             content = document_lines.get_line(current_line_number),
         );
         let current_line = document_lines.get_line(current_line_number);
+        let prefix_line_part = current_line[..self.cursor_position.column() as usize].to_owned();
+        let suffix_line_part = current_line[self.cursor_position.column() as usize..].to_owned();
+        // we want to get the current line prefix and the suffix here
+        // so we can send it over to the LLM
         // reduce our token limit by the current line's token count
         let current_line_token_count = self
             .tokenizer
@@ -132,7 +136,7 @@ impl CurrentFileContext {
 
         prefix.reverse();
         // push the current line content to the prefix
-        prefix.push(current_line.to_owned());
+        prefix.push(prefix_line_part.to_owned());
         // now check if we have a possible file path,
         // this should only happen if the line in prefix starts with not a ' ' or '/t'
         if let Some(file_path) = possible_file_path {
@@ -170,6 +174,10 @@ impl CurrentFileContext {
         // lin[cursor_position]e 3
         // ..
         // line n ... [cursor_line + 1.start()]
+        // only insert the suffix part here if its not empty
+        if suffix_line_part != "" {
+            suffix.insert(0, suffix_line_part);
+        }
         let suffix = CodeSelection::new(
             Range::new(
                 document_lines.start_position_at_line(current_line_number + 1),

@@ -1,6 +1,7 @@
 {
   "cSpell.words": [
     "aarch",
+    "Abortable",
     "appender",
     "axflow",
     "bigram",
@@ -11,6 +12,7 @@
     "chunker",
     "codestory",
     "consts",
+    "dashmap",
     "debouncer",
     "deepseek",
     "deepseekcoder",

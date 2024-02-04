@@ -55,6 +55,7 @@ impl CurrentFileContext {
         let current_line_number = self.cursor_position.line() as usize;
         // Get the current line's content from the cursor position
         // TODO: log here if we get the spaces and tabs at the start of it
+        dbg!(&self.cursor_position);
         info!(
             event_name = "current_line_content",
             content = document_lines.get_line(current_line_number),
@@ -99,8 +100,7 @@ impl CurrentFileContext {
         let mut prefix_line: i64 = current_line_number as i64 - 1;
         let mut suffix_line: i64 = current_line_number as i64 + 1;
         while current_token_count < self.token_limit
-            && prefix_line >= 0
-            && suffix_line < document_lines.len() as i64
+            && (prefix_line >= 0 || suffix_line < document_lines.len() as i64)
         {
             // we take in the 3:1 ratio, so we prefer strings from the prefix
             // more over strings from the suffix
@@ -156,6 +156,8 @@ impl CurrentFileContext {
         // line 3
         // ..
         // line n ... [cursor_line -1.end()]
+        dbg!(prefix_line + 1);
+        dbg!(current_line_number);
         let prefix = CodeSelection::new(
             Range::new(
                 document_lines.start_position_at_line((prefix_line + 1) as usize),
@@ -178,6 +180,8 @@ impl CurrentFileContext {
         if suffix_line_part != "" {
             suffix.insert(0, suffix_line_part);
         }
+        dbg!(current_line_number + 1);
+        dbg!(suffix_line - 1);
         let suffix = CodeSelection::new(
             Range::new(
                 document_lines.start_position_at_line(current_line_number + 1),

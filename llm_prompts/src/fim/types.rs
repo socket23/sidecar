@@ -61,6 +61,10 @@ impl FillInMiddleBroker {
                 LLMType::DeepSeekCoder1_3BInstruct,
                 Box::new(DeepSeekFillInMiddleFormatter::new()),
             )
+            .add_llm(
+                LLMType::DeepSeekCoder6BInstruct,
+                Box::new(DeepSeekFillInMiddleFormatter::new()),
+            )
     }
 
     fn add_llm(

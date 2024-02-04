@@ -74,6 +74,10 @@ impl LLMTokenizer {
             .add_llm_type(
                 LLMType::CodeLlama13BInstruct,
                 Box::new(CodeLLama70BInstructFormatting::new()?),
+            )
+            .add_llm_type(
+                LLMType::DeepSeekCoder6BInstruct,
+                Box::new(DeepSeekCoderFormatting::new()),
             );
         Ok(updated_tokenizer)
     }

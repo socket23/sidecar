@@ -63,6 +63,10 @@ impl CurrentFileContext {
         let current_line = document_lines.get_line(current_line_number);
         let prefix_line_part = current_line[..self.cursor_position.column() as usize].to_owned();
         let suffix_line_part = current_line[self.cursor_position.column() as usize..].to_owned();
+
+        // Now we get the prefix end part and the suffix start part
+        let prefix_end_part = self.cursor_position.clone();
+        let suffix_start_part = self.cursor_position.clone();
         // we want to get the current line prefix and the suffix here
         // so we can send it over to the LLM
         // reduce our token limit by the current line's token count
@@ -138,7 +142,8 @@ impl CurrentFileContext {
         // push the current line content to the prefix
         prefix.push(prefix_line_part.to_owned());
         // now check if we have a possible file path,
-        // this should only happen if the line in prefix starts with not a ' ' or '/t'
+        // this should only happen if the line in prefix does not starts with
+        //  not a ' ' or '/t'
         if let Some(file_path) = possible_file_path {
             if !prefix[0].starts_with(' ') && !prefix[0].starts_with('\t') {
                 // TODO(skcd): This can get expensive cause we are reshuffling the array
@@ -161,7 +166,7 @@ impl CurrentFileContext {
         let prefix = CodeSelection::new(
             Range::new(
                 document_lines.start_position_at_line((prefix_line + 1) as usize),
-                document_lines.end_position_at_line(current_line_number),
+                document_lines.end_position_at_line(prefix_end_part.line()),
             ),
             self.file_path.clone(),
             prefix.join("\n"),
@@ -184,7 +189,7 @@ impl CurrentFileContext {
         dbg!(suffix_line - 1);
         let suffix = CodeSelection::new(
             Range::new(
-                document_lines.start_position_at_line(current_line_number + 1),
+                document_lines.start_position_at_line(suffix_start_part.line()),
                 document_lines.end_position_at_line((suffix_line - 1) as usize),
             ),
             self.file_path.clone(),

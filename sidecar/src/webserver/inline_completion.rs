@@ -6,7 +6,7 @@ use futures::{
     stream::{AbortHandle, Abortable},
     StreamExt,
 };
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     application::application::Application,
@@ -50,11 +50,15 @@ impl InlineCompletion {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InlineCompletionResponse {
     pub completions: Vec<InlineCompletion>,
+    pub prompt: String,
 }
 
 impl InlineCompletionResponse {
-    pub fn new(completions: Vec<InlineCompletion>) -> Self {
-        Self { completions }
+    pub fn new(completions: Vec<InlineCompletion>, prompt: String) -> Self {
+        Self {
+            completions,
+            prompt,
+        }
     }
 }
 
@@ -72,6 +76,9 @@ pub async fn inline_completion(
         id,
     }): Json<InlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
+    info!(event_name = "inline_completion", id = &id,);
+    info!(mode_config = ?model_config);
+    dbg!(&model_config);
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(

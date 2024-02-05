@@ -8,9 +8,10 @@ use llm_client::{
 async fn main() {
     let api_key = LLMProviderAPIKeys::Ollama(OllamaProvider {});
     let client = OllamaClient::new();
-    let prompt = "<｜fim▁begin｜>function add(a<｜fim▁hole｜>)<｜fim▁end｜>";
+    let prompt =
+        "<｜fim▁begin｜>// Path: testing.ts\nfunction subtract(a<｜fim▁hole｜>)<｜fim▁end｜>";
     let request = LLMClientCompletionStringRequest::new(
-        llm_client::clients::types::LLMType::DeepSeekCoder1_3BInstruct,
+        llm_client::clients::types::LLMType::DeepSeekCoder6BInstruct,
         prompt.to_owned(),
         0.2,
         None,

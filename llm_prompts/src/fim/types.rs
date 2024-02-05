@@ -29,6 +29,7 @@ impl FillInMiddleRequest {
     }
 }
 
+#[derive(Clone)]
 pub struct FillInMiddleResponse {
     pub filled: String,
 }

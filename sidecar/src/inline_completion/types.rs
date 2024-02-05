@@ -160,7 +160,7 @@ impl FillInMiddleCompletionAgent {
                 fast_model_api_key,
                 LLMClientCompletionStringRequest::new(
                     fast_model.clone(),
-                    formatted_string.filled,
+                    formatted_string.filled.to_owned(),
                     temperature,
                     None,
                 )
@@ -175,24 +175,26 @@ impl FillInMiddleCompletionAgent {
 
             let merged_stream = stream::select(completion_receiver_stream, completion);
             merged_stream
-                .map(move |item| (item, arced_document_lines.clone()))
-                .map(move |(item, document_lines)| match item {
-                    either::Left(response) => {
-                        Ok(InlineCompletionResponse::new(vec![InlineCompletion::new(
+                .map(move |item| (item, arced_document_lines.clone(), formatted_string.clone()))
+                .map(move |(item, document_lines, formatted_string)| match item {
+                    either::Left(response) => Ok(InlineCompletionResponse::new(
+                        vec![InlineCompletion::new(
                             response.answer_up_until_now().to_owned(),
                             insert_range(
                                 completion_request.position,
                                 &document_lines,
                                 response.answer_up_until_now(),
                             ),
-                        )]))
-                    }
-                    either::Right(Ok(response)) => {
-                        Ok(InlineCompletionResponse::new(vec![InlineCompletion::new(
+                        )],
+                        formatted_string.filled.to_owned(),
+                    )),
+                    either::Right(Ok(response)) => Ok(InlineCompletionResponse::new(
+                        vec![InlineCompletion::new(
                             response.to_owned(),
                             insert_range(completion_request.position, &document_lines, &response),
-                        )]))
-                    }
+                        )],
+                        formatted_string.filled.to_owned(),
+                    )),
                     _ => Err(InLineCompletionError::InlineCompletionTerminated),
                 })
         }))

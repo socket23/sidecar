@@ -27,6 +27,8 @@ struct TogetherAIRequestString {
     frequency_penalty: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stop: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<usize>,
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
@@ -115,6 +117,7 @@ impl TogetherAIRequestString {
             stop: request
                 .stop_words()
                 .map(|stop_words| stop_words.into_iter().map(|s| s.to_owned()).collect()),
+            max_tokens: request.get_max_tokens(),
         }
     }
 }

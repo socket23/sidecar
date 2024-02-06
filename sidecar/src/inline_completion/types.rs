@@ -162,7 +162,10 @@ impl FillInMiddleCompletionAgent {
                     temperature,
                     None,
                 )
-                .set_stop_words(vec!["\n\n".to_owned(), "```".to_owned()]),
+                .set_stop_words(vec!["\n\n".to_owned(), "```".to_owned()])
+                // we only allow for 256 tokens so we can quickly get back the response
+                // and terminate if we are gonig through a bad request
+                .set_max_tokens(256),
                 vec![("event_type".to_owned(), "fill_in_middle".to_owned())]
                     .into_iter()
                     .collect(),

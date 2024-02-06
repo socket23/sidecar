@@ -253,6 +253,7 @@ pub struct LLMClientCompletionRequest {
     temperature: f32,
     frequency_penalty: Option<f32>,
     stop_words: Option<Vec<String>>,
+    max_tokens: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -262,6 +263,7 @@ pub struct LLMClientCompletionStringRequest {
     temperature: f32,
     frequency_penalty: Option<f32>,
     stop_words: Option<Vec<String>>,
+    max_tokens: Option<usize>,
 }
 
 impl LLMClientCompletionStringRequest {
@@ -277,6 +279,7 @@ impl LLMClientCompletionStringRequest {
             temperature,
             frequency_penalty,
             stop_words: None,
+            max_tokens: None,
         }
     }
 
@@ -304,6 +307,15 @@ impl LLMClientCompletionStringRequest {
     pub fn stop_words(&self) -> Option<&[String]> {
         self.stop_words.as_deref()
     }
+
+    pub fn set_max_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_tokens = Some(max_tokens);
+        self
+    }
+
+    pub fn get_max_tokens(&self) -> Option<usize> {
+        self.max_tokens
+    }
 }
 
 impl LLMClientCompletionRequest {
@@ -319,6 +331,7 @@ impl LLMClientCompletionRequest {
             temperature,
             frequency_penalty,
             stop_words: None,
+            max_tokens: None,
         }
     }
 
@@ -349,6 +362,15 @@ impl LLMClientCompletionRequest {
 
     pub fn stop_words(&self) -> Option<&[String]> {
         self.stop_words.as_deref()
+    }
+
+    pub fn set_max_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_tokens = Some(max_tokens);
+        self
+    }
+
+    pub fn get_max_tokens(&self) -> Option<usize> {
+        self.max_tokens
     }
 }
 

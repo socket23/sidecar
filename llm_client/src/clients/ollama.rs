@@ -44,13 +44,20 @@ impl LLMType {
     }
 }
 
+#[derive(serde::Serialize, Debug, Clone)]
+struct OllamaClientOptions {
+    temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_predict: Option<usize>,
+}
+
 #[derive(serde::Serialize)]
 struct OllamaClientRequest {
     prompt: String,
     model: String,
-    temperature: f32,
     stream: bool,
     raw: bool,
+    options: OllamaClientOptions,
     #[serde(skip_serializing_if = "Option::is_none")]
     frequency_penalty: Option<f32>,
 }
@@ -65,7 +72,10 @@ impl OllamaClientRequest {
                 .collect::<Vec<_>>()
                 .join("\n"),
             model: request.model().to_ollama_model()?,
-            temperature: request.temperature(),
+            options: OllamaClientOptions { 
+                temperature: request.temperature(), 
+                num_predict: request.get_max_tokens() 
+            },
             stream: true,
             raw: true,
             frequency_penalty: request.frequency_penalty(),
@@ -78,7 +88,10 @@ impl OllamaClientRequest {
         Ok(Self {
             prompt: request.prompt().to_owned(),
             model: request.model().to_ollama_model()?,
-            temperature: request.temperature(),
+            options: OllamaClientOptions { 
+                temperature: request.temperature(), 
+                num_predict: request.get_max_tokens() 
+            },
             stream: true,
             raw: true,
             frequency_penalty: None,

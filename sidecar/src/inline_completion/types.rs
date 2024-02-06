@@ -162,7 +162,14 @@ impl FillInMiddleCompletionAgent {
                     temperature,
                     None,
                 )
-                .set_stop_words(vec!["\n\n".to_owned(), "```".to_owned()])
+                // we are dumping the same eot for different models here, which
+                // is fine but we can change this later
+                .set_stop_words(vec![
+                    "\n\n".to_owned(),
+                    "```".to_owned(),
+                    "<EOT>".to_owned(),
+                    "</s>".to_owned(),
+                ])
                 // we only allow for 256 tokens so we can quickly get back the response
                 // and terminate if we are gonig through a bad request
                 .set_max_tokens(256),

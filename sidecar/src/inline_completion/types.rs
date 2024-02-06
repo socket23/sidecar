@@ -142,8 +142,6 @@ impl FillInMiddleCompletionAgent {
             &fast_model,
         )?;
 
-        dbg!(formatted_string.filled.clone());
-
         let arced_document_lines = Arc::new(document_lines);
 
         // Now we send a request over to our provider and get a response for this

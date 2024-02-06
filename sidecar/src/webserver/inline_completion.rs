@@ -78,7 +78,6 @@ pub async fn inline_completion(
 ) -> Result<impl IntoResponse> {
     info!(event_name = "inline_completion", id = &id,);
     info!(mode_config = ?model_config);
-    dbg!(&model_config);
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
@@ -96,9 +95,10 @@ pub async fn inline_completion(
             position,
             indentation,
             model_config,
-            id,
+            id: id.to_owned(),
         })
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
+    dbg!(format!("completion streaming start: {}", id));
     // this is how we can abort the running stream if the client disconnects
     let stream = Abortable::new(completions, abort_request);
     Ok(Sse::new(Box::pin(stream.filter_map(
@@ -130,6 +130,7 @@ pub async fn cancel_inline_completion(
     Extension(app): Extension<Application>,
     Json(CancelInlineCompletionRequest { id }): Json<CancelInlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!(format!("completion streaming end: {}", &id));
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     fill_in_middle_state.cancel(&id);
     Ok(Json(CancelInlineCompletionResponse {}))

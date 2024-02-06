@@ -37,7 +37,7 @@ impl Default for EditorParsing {
 }
 
 impl EditorParsing {
-    fn ts_language_config(&self, language: &str) -> Option<&TSLanguageConfig> {
+    pub fn ts_language_config(&self, language: &str) -> Option<&TSLanguageConfig> {
         self.configs
             .iter()
             .find(|config| config.language_ids.contains(&language))

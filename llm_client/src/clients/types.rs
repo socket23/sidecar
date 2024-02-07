@@ -18,6 +18,7 @@ pub enum LLMType {
     Gpt4_32k,
     Gpt4Turbo,
     DeepSeekCoder1_3BInstruct,
+    DeepSeekCoder33BInstruct,
     DeepSeekCoder6BInstruct,
     CodeLLama70BInstruct,
     CodeLlama13BInstruct,
@@ -67,6 +68,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "CodeLLama70BInstruct" => Ok(LLMType::CodeLLama70BInstruct),
                     "CodeLlama13BInstruct" => Ok(LLMType::CodeLlama13BInstruct),
                     "CodeLlama7BInstruct" => Ok(LLMType::CodeLlama7BInstruct),
+                    "DeepSeekCoder33BInstruct" => Ok(LLMType::DeepSeekCoder33BInstruct),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -103,6 +105,7 @@ impl fmt::Display for LLMType {
             LLMType::CodeLLama70BInstruct => write!(f, "CodeLLama70BInstruct"),
             LLMType::CodeLlama13BInstruct => write!(f, "CodeLlama13BInstruct"),
             LLMType::CodeLlama7BInstruct => write!(f, "CodeLlama7BInstruct"),
+            LLMType::DeepSeekCoder33BInstruct => write!(f, "DeepSeekCoder33BInstruct"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

@@ -17,7 +17,7 @@ use crate::{
         types::{
             LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse,
             LLMClientCompletionStringRequest, LLMClientError,
-        },
+        }, openai_compatible::OpenAICompatibleClient,
     },
     config::LLMBrokerConfiguration,
     provider::{CodeStoryLLMTypes, LLMProvider, LLMProviderAPIKeys},
@@ -45,6 +45,7 @@ impl LLMBroker {
             .add_provider(LLMProvider::Ollama, Box::new(OllamaClient::new()))
             .add_provider(LLMProvider::TogetherAI, Box::new(TogetherAIClient::new()))
             .add_provider(LLMProvider::LMStudio, Box::new(LMStudioClient::new()))
+            .add_provider(LLMProvider::OpenAICompatible, Box::new(OpenAICompatibleClient::new()))
             .add_provider(
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None }),
                 Box::new(CodeStoryClient::new(
@@ -102,6 +103,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::CodeStory => {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
+            LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -171,7 +173,8 @@ impl LLMBroker {
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
             LLMProviderAPIKeys::CodeStory => {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
-            }
+            },
+            LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

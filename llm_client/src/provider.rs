@@ -27,6 +27,7 @@ pub enum LLMProvider {
     LMStudio,
     CodeStory(CodeStoryLLMTypes),
     Azure(AzureOpenAIDeploymentId),
+    OpenAICompatible,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -36,6 +37,7 @@ pub enum LLMProviderAPIKeys {
     Ollama(OllamaProvider),
     OpenAIAzureConfig(AzureConfig),
     LMStudio(LMStudioConfig),
+    OpenAICompatible(OpenAIComptaibleConfig),
     CodeStory,
 }
 
@@ -58,6 +60,7 @@ impl LLMProviderAPIKeys {
             LLMProviderAPIKeys::CodeStory => {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
+            LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
         }
     }
 
@@ -112,6 +115,13 @@ impl LLMProviderAPIKeys {
                 }
             }
             LLMProvider::CodeStory(_) => Some(LLMProviderAPIKeys::CodeStory),
+            LLMProvider::OpenAICompatible => {
+                if let LLMProviderAPIKeys::OpenAICompatible(openai_compatible) = self {
+                    Some(LLMProviderAPIKeys::OpenAICompatible(openai_compatible.clone()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -130,6 +140,12 @@ impl TogetherAIProvider {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
     }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct OpenAIComptaibleConfig {
+    pub api_key: String,
+    pub api_base: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]

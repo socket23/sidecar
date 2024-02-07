@@ -7,3 +7,4 @@ pub mod ollama;
 pub mod openai;
 pub mod togetherai;
 pub mod types;
+pub mod openai_compatible;

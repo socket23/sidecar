@@ -76,6 +76,10 @@ impl LLMTokenizer {
                 Box::new(CodeLLama70BInstructFormatting::new()?),
             )
             .add_llm_type(
+                LLMType::CodeLlama7BInstruct,
+                Box::new(CodeLLama70BInstructFormatting::new()?),
+            )
+            .add_llm_type(
                 LLMType::DeepSeekCoder6BInstruct,
                 Box::new(DeepSeekCoderFormatting::new()),
             );
@@ -248,6 +252,10 @@ impl LLMTokenizer {
                 Some(Tokenizer::from_str(config)?)
             }
             LLMType::CodeLlama13BInstruct => {
+                let config = include_str!("configs/mistral.json");
+                Some(Tokenizer::from_str(config)?)
+            }
+            LLMType::CodeLlama7BInstruct => {
                 let config = include_str!("configs/mistral.json");
                 Some(Tokenizer::from_str(config)?)
             }

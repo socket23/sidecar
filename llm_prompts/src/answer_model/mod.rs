@@ -110,6 +110,19 @@ pub const CODE_LLAMA_13B: AnswerModel = AnswerModel {
     inline_completion_tokens: Some(2056),
 };
 
+pub const CODE_LLAMA_7B: AnswerModel = AnswerModel {
+    llm_type: LLMType::CodeLlama7BInstruct,
+    answer_tokens: 1024 * 4,
+    prompt_tokens_limit: 2500 * 4,
+    history_tokens_limit: 2048 * 4,
+    total_tokens: 16_000,
+    // we run this very hot, so keep the context length on the lower end here
+    // by default, only give out around 2056 tokens
+    // another option is providing hosted version of this via togetherAI or
+    // vllm hosted by us
+    inline_completion_tokens: Some(2056),
+};
+
 pub const DEEPSEEK_CODER_1_3B_INSTRUCT: AnswerModel = AnswerModel {
     llm_type: LLMType::DeepSeekCoder1_3BInstruct,
     answer_tokens: 1024 * 4,
@@ -146,6 +159,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(MIXTRAL)
             .add_answer_model(CODE_LLAMA_13B)
             .add_answer_model(CODE_LLAMA_70B)
+            .add_answer_model(CODE_LLAMA_7B)
             .add_answer_model(DEEPSEEK_CODER_1_3B_INSTRUCT)
             .add_answer_model(DEEPSEEK_CODER_6B)
     }

@@ -145,6 +145,7 @@ impl TogetherAIClient {
             LLMType::MistralInstruct => Some("mistralai/Mistral-7B-Instruct-v0.1".to_owned()),
             LLMType::CodeLLama70BInstruct => Some("codellama/CodeLlama-70b-Instruct-hf".to_owned()),
             LLMType::CodeLlama13BInstruct => Some("codellama/CodeLlama-13b-Instruct-hf".to_owned()),
+            LLMType::CodeLlama7BInstruct => Some("codellama/CodeLlama-7b-Instruct-hf".to_owned()),
             LLMType::Custom(model) => Some(model.to_owned()),
             _ => None,
         }

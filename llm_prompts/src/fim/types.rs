@@ -59,6 +59,10 @@ impl FillInMiddleBroker {
                 Box::new(CodeLlamaFillInMiddleFormatter::new()),
             )
             .add_llm(
+                LLMType::CodeLlama7BInstruct,
+                Box::new(CodeLlamaFillInMiddleFormatter::new()),
+            )
+            .add_llm(
                 LLMType::DeepSeekCoder1_3BInstruct,
                 Box::new(DeepSeekFillInMiddleFormatter::new()),
             )

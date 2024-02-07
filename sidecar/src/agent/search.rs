@@ -687,7 +687,6 @@ impl Agent {
         path_aliases: &[usize],
         sender: tokio::sync::mpsc::UnboundedSender<AgentAnswerStreamEvent>,
     ) -> Result<String> {
-        println!("generating answer");
         if self.user_context.is_some() {
             let message = self
                 .utter_history(Some(2))

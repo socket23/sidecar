@@ -137,7 +137,7 @@ You have to fix the code below, generate the code without any explanation [/INST
             r#"[INST] You are an expert software engineer. You have to generate {comment_type} for {selection_type}, the {selection_type} is given below:
 {in_range}
 
-Add {comment_type} and generate the selected code, do not for the // END marker [/INST]
+Add {comment_type} and generate the selected code, do not forget the // END marker [/INST]
 ```{language}
 // FILEPATH: {file_path}
 // BEGIN: ed8c6549bwf9

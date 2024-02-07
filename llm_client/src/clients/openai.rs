@@ -36,6 +36,7 @@ impl OpenAIClient {
             LLMType::Gpt4 => Some("gpt-4-0613".to_owned()),
             LLMType::Gpt4Turbo => Some("gpt-4-1106-preview".to_owned()),
             LLMType::Gpt4_32k => Some("gpt-4-32k-0613".to_owned()),
+            LLMType::DeepSeekCoder33BInstruct => Some("deepseek-coder-33b".to_owned()),
             _ => None,
         }
     }
@@ -99,7 +100,23 @@ impl OpenAIClient {
     fn generate_openai_client(
         &self,
         api_key: LLMProviderAPIKeys,
+        llm_model: &LLMType,
     ) -> Result<OpenAIClientType, LLMClientError> {
+        // special escape hatch for deepseek-coder-33b
+        if matches!(llm_model, LLMType::DeepSeekCoder33BInstruct) {
+            // if we have deepseek coder 33b right now, then we should return an openai
+            // client right here, this is a hack to get things working and the provider
+            // needs to be updated to support this
+            return match api_key {
+                LLMProviderAPIKeys::OpenAIAzureConfig(api_key) => {
+                    let config = OpenAIConfig::new().with_api_key(api_key.api_key).with_api_base(api_key.api_base);
+                    Ok(OpenAIClientType::OpenAIClient(Client::with_config(config)))
+                }
+                _ => {
+                    Err(LLMClientError::WrongAPIKeyType)
+                }
+            };
+        }
         match api_key {
             LLMProviderAPIKeys::OpenAI(api_key) => {
                 let config = OpenAIConfig::new().with_api_key(api_key.api_key);
@@ -130,7 +147,8 @@ impl LLMClient for OpenAIClient {
         request: LLMClientCompletionRequest,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
-        let model = self.model(request.model());
+        let llm_model = request.model();
+        let model = self.model(llm_model);
         if model.is_none() {
             return Err(LLMClientError::UnSupportedModel);
         }
@@ -147,7 +165,7 @@ impl LLMClient for OpenAIClient {
         }
         let request = request_builder.build()?;
         let mut buffer = String::new();
-        let client = self.generate_openai_client(api_key)?;
+        let client = self.generate_openai_client(api_key, llm_model)?;
 
         // TODO(skcd): Bad code :| we are repeating too many things but this
         // just works and we need it right now

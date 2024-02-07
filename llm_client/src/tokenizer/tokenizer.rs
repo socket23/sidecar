@@ -267,6 +267,10 @@ impl LLMTokenizer {
                 let config = include_str!("configs/deepseekcoder.json");
                 Some(Tokenizer::from_str(config)?)
             }
+            LLMType::DeepSeekCoder33BInstruct => {
+                let config = include_str!("configs/deepseekcoder.json");
+                Some(Tokenizer::from_str(config)?)
+            }
             _ => None,
         };
         if let Some(tokenizer) = tokenizer {

@@ -9,7 +9,7 @@ use super::{
     types::{
         InLineDocRequest, InLineEditPrompt, InLineEditPromptError, InLineEditRequest,
         InLineFixRequest, InLinePromptResponse,
-    },
+    }, deepseekcoder::DeepSeekCoderLinEditPrompt,
 };
 
 pub struct InLineEditPromptBroker {
@@ -30,7 +30,12 @@ impl InLineEditPromptBroker {
                 Box::new(MistralLineEditPrompt::new()),
             )
             .insert_prompt_generator(LLMType::Mixtral, Box::new(MistralLineEditPrompt::new()))
+            .insert_prompt_generator(LLMType::CodeLlama7BInstruct, Box::new(CodeLlamaLineEditPrompt::new()))
+            .insert_prompt_generator(LLMType::CodeLlama13BInstruct, Box::new(CodeLlamaLineEditPrompt::new()))
             .insert_prompt_generator(LLMType::CodeLLama70BInstruct, Box::new(CodeLlamaLineEditPrompt::new()))
+            .insert_prompt_generator(LLMType::DeepSeekCoder6BInstruct, Box::new(DeepSeekCoderLinEditPrompt::new()))
+            .insert_prompt_generator(LLMType::DeepSeekCoder1_3BInstruct, Box::new(DeepSeekCoderLinEditPrompt::new()))
+            .insert_prompt_generator(LLMType::DeepSeekCoder33BInstruct, Box::new(DeepSeekCoderLinEditPrompt::new()))
     }
 
     pub fn insert_prompt_generator(

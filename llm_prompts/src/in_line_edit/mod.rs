@@ -4,3 +4,4 @@ pub mod mistral;
 pub mod openai;
 pub mod codellama;
 pub mod types;
+pub mod deepseekcoder;

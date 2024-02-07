@@ -146,6 +146,7 @@ impl TogetherAIClient {
             LLMType::CodeLLama70BInstruct => Some("codellama/CodeLlama-70b-Instruct-hf".to_owned()),
             LLMType::CodeLlama13BInstruct => Some("codellama/CodeLlama-13b-Instruct-hf".to_owned()),
             LLMType::CodeLlama7BInstruct => Some("codellama/CodeLlama-7b-Instruct-hf".to_owned()),
+            LLMType::DeepSeekCoder33BInstruct => Some("deepseek-ai/deepseek-coder-33b-instruct".to_owned()),
             LLMType::Custom(model) => Some(model.to_owned()),
             _ => None,
         }
@@ -208,8 +209,6 @@ impl LLMClient for TogetherAIClient {
                     }
                     let value = serde_json::from_str::<TogetherAIRequestCompletion>(&event.data)?;
                     buffered_string = buffered_string + &value.choices[0].text;
-                    println!("====================");
-                    println!("{}", &buffered_string);
                     sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
                         Some(value.choices[0].text.to_owned()),

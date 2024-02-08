@@ -169,6 +169,7 @@ impl FillInMiddleCompletionAgent {
                     "```".to_owned(),
                     "<EOT>".to_owned(),
                     "</s>".to_owned(),
+                    "<｜end▁of▁sentence｜>".to_owned(),
                 ])
                 // we only allow for 256 tokens so we can quickly get back the response
                 // and terminate if we are gonig through a bad request

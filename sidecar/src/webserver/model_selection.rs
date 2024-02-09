@@ -103,7 +103,9 @@ pub struct Model {
 
 #[cfg(test)]
 mod tests {
-    use llm_client::provider::{AzureConfig, LLMProviderAPIKeys, OllamaProvider};
+    use llm_client::provider::{
+        AzureConfig, CodeStoryLLMTypes, LLMProvider, LLMProviderAPIKeys, OllamaProvider,
+    };
 
     use super::LLMClientConfig;
 
@@ -111,6 +113,16 @@ mod tests {
     fn test_json_should_convert_properly() {
         let data = r#"
         {"slow_model":"MistralInstruct","fast_model":"Gpt4","models":{"Gpt4Turbo":{"context_length":128000,"temperature":0.2,"provider":{"Azure":{"deployment_id":""}}},"Gpt4_32k":{"context_length":32768,"temperature":0.2,"provider":{"Azure":{"deployment_id":""}}},"Gpt4":{"context_length":8192,"temperature":0.2,"provider":{"Azure":{"deployment_id":"gpt4-access"}}},"GPT3_5_16k":{"context_length":16385,"temperature":0.2,"provider":{"Azure":{"deployment_id":"gpt35-turbo-access"}}},"GPT3_5":{"context_length":4096,"temperature":0.2,"provider":{"Azure":{"deployment_id":""}}},"Mixtral":{"context_length":32000,"temperature":0.2,"provider":"TogetherAI"},"MistralInstruct":{"context_length":8000,"temperature":0.2,"provider":"TogetherAI"}},"providers":[{"OpenAI":{"api_key":""}},{"OpenAIAzureConfig":{"deployment_id":"","api_base":"https://codestory-gpt4.openai.azure.com","api_key":"89ca8a49a33344c9b794b3dabcbbc5d0","api_version":"2023-08-01-preview"}},{"TogetherAI":{"api_key":"cc10d6774e67efef2004b85efdb81a3c9ba0b7682cc33d59c30834183502208d"}},{"Ollama":{}}]}
+        "#;
+        assert!(serde_json::from_str::<LLMClientConfig>(data).is_ok());
+    }
+
+    #[test]
+    fn test_json_should_convert_properly_codestory() {
+        let provider = LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None });
+        println!("{:?}", serde_json::to_string(&provider));
+        let data = r#"
+        {"slow_model":"DeepSeekCoder33BInstruct","fast_model":"DeepSeekCoder33BInstruct","models":{"Gpt4":{"context_length":8192,"temperature":0.2,"provider":"CodeStory"}},"providers":["CodeStory",{"OpenAIAzureConfig":{"deployment_id":"","api_base":"https://codestory-gpt4.openai.azure.com","api_key":"89ca8a49a33344c9b794b3dabcbbc5d0","api_version":"2023-08-01-preview"}},{"TogetherAI":{"api_key":"cc10d6774e67efef2004b85efdb81a3c9ba0b7682cc33d59c30834183502208d"}},{"OpenAICompatible":{"api_key":"somethingelse","api_base":"testendpoint"}},{"Ollama":{}}]}
         "#;
         assert!(serde_json::from_str::<LLMClientConfig>(data).is_ok());
     }

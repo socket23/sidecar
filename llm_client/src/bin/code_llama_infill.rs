@@ -19,7 +19,8 @@ async fn main() {
         prompt.to_owned(),
         0.2,
         None,
-    );
+    )
+    .set_max_tokens(100);
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = togetherai
         .stream_prompt_completion(api_key, request, sender)

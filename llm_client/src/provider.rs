@@ -117,7 +117,9 @@ impl LLMProviderAPIKeys {
             LLMProvider::CodeStory(_) => Some(LLMProviderAPIKeys::CodeStory),
             LLMProvider::OpenAICompatible => {
                 if let LLMProviderAPIKeys::OpenAICompatible(openai_compatible) = self {
-                    Some(LLMProviderAPIKeys::OpenAICompatible(openai_compatible.clone()))
+                    Some(LLMProviderAPIKeys::OpenAICompatible(
+                        openai_compatible.clone(),
+                    ))
                 } else {
                     None
                 }
@@ -201,5 +203,12 @@ mod tests {
         });
         let string_provider_keys = serde_json::to_string(&provider_keys).expect("to work");
         assert_eq!(string_provider_keys, "",);
+    }
+
+    #[test]
+    fn test_reading_from_string_for_provider_keys() {
+        let provider_keys = LLMProviderAPIKeys::CodeStory;
+        let string_provider_keys = serde_json::to_string(&provider_keys).expect("to work");
+        assert_eq!(string_provider_keys, "\"CodeStory\"");
     }
 }

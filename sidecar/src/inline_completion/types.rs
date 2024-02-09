@@ -205,7 +205,10 @@ impl FillInMiddleCompletionAgent {
                         )],
                         formatted_string.filled.to_owned(),
                     )),
-                    _ => Err(InLineCompletionError::InlineCompletionTerminated),
+                    either::Right(Err(e)) => {
+                        println!("{:?}", e);
+                        Err(InLineCompletionError::InlineCompletionTerminated)
+                    }
                 })
         }))
     }

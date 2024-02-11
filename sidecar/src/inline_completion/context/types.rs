@@ -27,7 +27,7 @@ impl DocumentLines {
         let lines: Vec<_> = content
             .lines()
             .enumerate()
-            .map(|(idx, line)| {
+            .map(|(_, line)| {
                 // so here we will store the start and end byte position since we can
                 // literally count the content size of the line and maintain
                 // a running total of things

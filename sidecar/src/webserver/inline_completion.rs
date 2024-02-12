@@ -103,8 +103,8 @@ pub async fn inline_completion(
     let stream = Abortable::new(completions, abort_request);
     Ok(Sse::new(Box::pin(stream.filter_map(
         |completion| async move {
-            // dbg!("completion is coming along");
-            // dbg!(&completion);
+            dbg!("completion is coming along");
+            dbg!(&completion);
             match completion {
                 Ok(completion) => Some(
                     sse::Event::default()

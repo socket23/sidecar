@@ -2,21 +2,28 @@
 
 use async_openai::{
     config::{AzureConfig, OpenAIConfig},
+    error::OpenAIError,
     types::{
-        ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
-        CreateChatCompletionRequestArgs, FunctionCall, Role, CreateCompletionRequestArgs,
+        ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, Choice,
+        CreateChatCompletionRequestArgs, CreateCompletionRequestArgs, FunctionCall, Role,
     },
     Client,
 };
 use async_trait::async_trait;
 use futures::StreamExt;
+use sqlx::types::chrono::Local;
 
 use crate::provider::LLMProviderAPIKeys;
 
 use super::types::{
-    LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientError,
-    LLMClientMessage, LLMClientRole, LLMType, LLMClientCompletionStringRequest,
+    LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse,
+    LLMClientCompletionStringRequest, LLMClientError, LLMClientMessage, LLMClientRole, LLMType,
 };
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct PartialOpenAIResponse {
+    choices: Vec<Choice>,
+}
 
 enum OpenAIClientType {
     AzureClient(Client<AzureConfig>),
@@ -38,6 +45,7 @@ impl OpenAICompatibleClient {
             LLMType::Gpt4_32k => Some("gpt-4-32k-0613".to_owned()),
             LLMType::DeepSeekCoder33BInstruct => Some("deepseek-coder-33b".to_owned()),
             LLMType::DeepSeekCoder6BInstruct => Some("deepseek-coder-6b".to_owned()),
+            LLMType::CodeLlama13BInstruct => Some("codellama-13b".to_owned()),
             _ => None,
         }
     }
@@ -105,7 +113,9 @@ impl OpenAICompatibleClient {
     ) -> Result<OpenAIClientType, LLMClientError> {
         match api_key {
             LLMProviderAPIKeys::OpenAICompatible(openai_compatible) => {
-                let config = OpenAIConfig::new().with_api_key(openai_compatible.api_key).with_api_base(openai_compatible.api_base);
+                let config = OpenAIConfig::new()
+                    .with_api_key(openai_compatible.api_key)
+                    .with_api_base(openai_compatible.api_base);
                 Ok(OpenAIClientType::OpenAIClient(Client::with_config(config)))
             }
             _ => Err(LLMClientError::WrongAPIKeyType),
@@ -119,10 +129,12 @@ impl OpenAICompatibleClient {
     ) -> Result<Client<OpenAIConfig>, LLMClientError> {
         match api_key {
             LLMProviderAPIKeys::OpenAICompatible(openai_compatible) => {
-                let config = OpenAIConfig::new().with_api_key(openai_compatible.api_key).with_api_base(openai_compatible.api_base);
+                let config = OpenAIConfig::new()
+                    .with_api_key(openai_compatible.api_key)
+                    .with_api_base(openai_compatible.api_base);
                 Ok(Client::with_config(config))
             }
-            _ => Err(LLMClientError::WrongAPIKeyType)
+            _ => Err(LLMClientError::WrongAPIKeyType),
         }
     }
 }
@@ -259,6 +271,12 @@ impl LLMClient for OpenAICompatibleClient {
         if let Some(frequency_penalty) = request.frequency_penalty() {
             request_builder = request_builder.frequency_penalty(frequency_penalty);
         }
+        if let Some(stop_tokens) = request.stop_words() {
+            request_builder = request_builder.stop(stop_tokens.to_vec());
+        }
+        if let Some(max_tokens) = request.get_max_tokens() {
+            request_builder = request_builder.max_tokens(max_tokens as u16);
+        }
         let request = request_builder.build()?;
         let mut buffer = String::new();
         let client = self.generate_completion_openai_client(api_key, llm_model)?;
@@ -272,6 +290,9 @@ impl LLMClient for OpenAICompatibleClient {
                         .ok_or(LLMClientError::FailedToGetResponse)?;
                     let text = response.text.to_owned();
                     buffer.push_str(&text);
+                    dbg!("{}", &Local::now());
+                    println!("{}", &buffer);
+                    println!("========");
                     let _ = sender.send(LLMClientCompletionResponse::new(
                         buffer.to_owned(),
                         Some(text),
@@ -279,7 +300,43 @@ impl LLMClient for OpenAICompatibleClient {
                     ));
                 }
                 Err(err) => {
-                    dbg!(err);
+                    match err {
+                        OpenAIError::JSONDeserialize(error) => {
+                            let string_error = error.to_string();
+                            // now that we have the string error, we can see
+                            // if we can parse it properly by chopping off the
+                            // prefix here: `failed deserialization of: `
+                            if let Some(stripped_string) =
+                                string_error.strip_prefix("failed deserialization of:")
+                            {
+                                let choices =
+                                    serde_json::from_str::<PartialOpenAIResponse>(stripped_string);
+                                match choices {
+                                    Ok(choices) => {
+                                        let response = choices
+                                            .choices
+                                            .get(0)
+                                            .ok_or(LLMClientError::FailedToGetResponse)?;
+                                        let text = response.text.to_owned();
+                                        buffer.push_str(&text);
+                                        let _ = sender.send(LLMClientCompletionResponse::new(
+                                            buffer.to_owned(),
+                                            Some(text),
+                                            model.to_owned(),
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        dbg!(e);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            dbg!(err);
+                            break;
+                        }
+                    }
                     break;
                 }
             }

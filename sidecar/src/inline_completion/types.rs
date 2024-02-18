@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::{sync::Arc, time::Duration};
 
 use axum::Json;
+use chrono::Local;
 use futures::{pin_mut, FutureExt, Stream};
 use futures::{stream, StreamExt};
 use llm_client::{
@@ -121,6 +122,7 @@ impl FillInMiddleCompletionAgent {
         }
         let token_limit = token_limit.expect("if let None to hold");
 
+        dbg!("generating_context_start", Local::now());
         let document_lines = DocumentLines::from_file_content(&completion_request.text);
 
         // Now we generate the prefix and the suffix here
@@ -141,6 +143,7 @@ impl FillInMiddleCompletionAgent {
             ),
             &fast_model,
         )?;
+        dbg!("generating_context_end", Local::now());
 
         let arced_document_lines = Arc::new(document_lines);
 
@@ -174,7 +177,7 @@ impl FillInMiddleCompletionAgent {
                     "<step>".to_owned(),
                 ])
                 // we only allow for 256 tokens so we can quickly get back the response
-                // and terminate if we are gonig through a bad request
+                // and terminate if we are going through a bad request
                 .set_max_tokens(256),
                 vec![("event_type".to_owned(), "fill_in_middle".to_owned())]
                     .into_iter()
@@ -196,13 +199,16 @@ impl FillInMiddleCompletionAgent {
                                 &document_lines,
                                 response.answer_up_until_now(),
                             ),
+                            response.delta().map(|v| v.to_owned()),
                         )],
                         formatted_string.filled.to_owned(),
                     )),
                     either::Right(Ok(response)) => Ok(InlineCompletionResponse::new(
+                        // this gets sent at the very end
                         vec![InlineCompletion::new(
                             response.to_owned(),
                             insert_range(completion_request.position, &document_lines, &response),
+                            None,
                         )],
                         formatted_string.filled.to_owned(),
                     )),

@@ -2,6 +2,7 @@ use axum::{
     response::{sse, IntoResponse, Sse},
     Extension, Json,
 };
+use chrono::prelude::*;
 use futures::{
     stream::{AbortHandle, Abortable},
     StreamExt,
@@ -36,13 +37,16 @@ pub struct InlineCompletionRequest {
 pub struct InlineCompletion {
     pub insert_text: String,
     pub insert_range: Range,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delta: Option<String>,
 }
 
 impl InlineCompletion {
-    pub fn new(insert_text: String, insert_range: Range) -> Self {
+    pub fn new(insert_text: String, insert_range: Range, delta: Option<String>) -> Self {
         Self {
             insert_text,
             insert_range,
+            delta,
         }
     }
 }
@@ -78,6 +82,7 @@ pub async fn inline_completion(
 ) -> Result<impl IntoResponse> {
     info!(event_name = "inline_completion", id = &id,);
     info!(mode_config = ?model_config);
+    dbg!("inline_completion_start", Local::now());
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
@@ -98,13 +103,15 @@ pub async fn inline_completion(
             id: id.to_owned(),
         })
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
-    dbg!(format!("completion streaming start: {}", id));
+    dbg!("generating_context_finished", Local::now());
+    // dbg!(format!("completion streaming start: {}", id));
     // this is how we can abort the running stream if the client disconnects
     let stream = Abortable::new(completions, abort_request);
     Ok(Sse::new(Box::pin(stream.filter_map(
         |completion| async move {
-            dbg!("completion is coming along");
+            // dbg!("completion is coming along");
             dbg!(&completion);
+            dbg!(Local::now());
             match completion {
                 Ok(completion) => Some(
                     sse::Event::default()

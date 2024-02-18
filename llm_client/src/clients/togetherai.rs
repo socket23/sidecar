@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use sqlx::types::chrono::Local;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::provider::LLMProviderAPIKeys;
@@ -146,7 +147,9 @@ impl TogetherAIClient {
             LLMType::CodeLLama70BInstruct => Some("codellama/CodeLlama-70b-Instruct-hf".to_owned()),
             LLMType::CodeLlama13BInstruct => Some("codellama/CodeLlama-13b-Instruct-hf".to_owned()),
             LLMType::CodeLlama7BInstruct => Some("codellama/CodeLlama-7b-Instruct-hf".to_owned()),
-            LLMType::DeepSeekCoder33BInstruct => Some("deepseek-ai/deepseek-coder-33b-instruct".to_owned()),
+            LLMType::DeepSeekCoder33BInstruct => {
+                Some("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
+            }
             LLMType::Custom(model) => Some(model.to_owned()),
             _ => None,
         }

@@ -62,7 +62,17 @@ impl ClipboardContext {
         // Now we try to add some prefix to this from the clipboard context and see if can fit any
         let mut string_up_until_now = "".to_owned();
         for line in self.clipboard_context.lines() {
-            string_up_until_now = string_up_until_now + &format!("\n{line}");
+            // check if the line has a whitespace at the start
+            if line
+                .chars()
+                .next()
+                .map(|char| char.is_whitespace())
+                .unwrap_or_default()
+            {
+                string_up_until_now = string_up_until_now + &format!("\n{comment_style}{line}");
+            } else {
+                string_up_until_now = string_up_until_now + &format!("\n{comment_style} {line}");
+            }
             let completion_string = format!(r#"{comment_style} Clipboard:\n{string_up_until_now}"#);
             let tokens_used = tokenizer
                 // we pay the const twice here, once for copying the completion_string here and

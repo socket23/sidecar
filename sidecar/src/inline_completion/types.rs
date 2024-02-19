@@ -15,6 +15,10 @@ use llm_prompts::{
     fim::types::{FillInMiddleBroker, FillInMiddleRequest},
 };
 
+use crate::inline_completion::context::clipboard_context::{
+    ClipboardContext, ClipboardContextString,
+};
+use crate::inline_completion::context::types::CompletionContext;
 use crate::{
     chunking::editor_parsing::EditorParsing,
     inline_completion::helpers::fix_vscode_position,
@@ -65,6 +69,12 @@ pub enum InLineCompletionError {
 
     #[error("terminated streamed completion")]
     InlineCompletionTerminated,
+
+    #[error("Tokenizer not found: {0}")]
+    TokenizerNotFound(LLMType),
+
+    #[error("Tokenization error: {0}")]
+    TokenizationError(LLMType),
 }
 
 struct InLineCompletionData {
@@ -120,10 +130,32 @@ impl FillInMiddleCompletionAgent {
         if let None = token_limit {
             return Err(InLineCompletionError::LLMNotSupported(fast_model));
         }
-        let token_limit = token_limit.expect("if let None to hold");
+        let mut token_limit = token_limit.expect("if let None to hold");
 
         dbg!("generating_context_start", Local::now());
         let document_lines = DocumentLines::from_file_content(&completion_request.text);
+
+        let mut prefix = None;
+        if let Some(completion_context) = completion_request.cliboard_content {
+            let clipboard_context = ClipboardContext::new(
+                completion_context,
+                self.llm_tokenizer.clone(),
+                fast_model.clone(),
+                self.editor_parsing.clone(),
+                completion_request.filepath.to_owned(),
+            )
+            .get_clipboard_context(100)?;
+            match clipboard_context {
+                ClipboardContextString::TruncatedToLimit(
+                    clipboard_context,
+                    clipboard_tokens_used,
+                ) => {
+                    token_limit = token_limit - clipboard_tokens_used;
+                    prefix = Some(clipboard_context);
+                }
+                _ => {}
+            }
+        };
 
         // Now we generate the prefix and the suffix here
         let completion_context = CurrentFileContext::new(
@@ -137,10 +169,20 @@ impl FillInMiddleCompletionAgent {
         .generate_context(&document_lines)?;
 
         let formatted_string = self.fill_in_middle_broker.format_context(
-            FillInMiddleRequest::new(
-                completion_context.prefix.content().to_owned(),
-                completion_context.suffix.content().to_owned(),
-            ),
+            match prefix {
+                Some(prefix) => FillInMiddleRequest::new(
+                    format!(
+                        "{}\n{}",
+                        prefix,
+                        completion_context.prefix.content().to_owned()
+                    ),
+                    completion_context.suffix.content().to_owned(),
+                ),
+                None => FillInMiddleRequest::new(
+                    completion_context.prefix.content().to_owned(),
+                    completion_context.suffix.content().to_owned(),
+                ),
+            },
             &fast_model,
         )?;
         dbg!("generating_context_end", Local::now());

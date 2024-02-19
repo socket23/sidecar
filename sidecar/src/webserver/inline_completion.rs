@@ -30,6 +30,7 @@ pub struct InlineCompletionRequest {
     pub indentation: Option<String>,
     pub model_config: LLMClientConfig,
     pub id: String,
+    pub cliboard_content: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -78,6 +79,7 @@ pub async fn inline_completion(
         indentation,
         model_config,
         id,
+        cliboard_content,
     }): Json<InlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
     info!(event_name = "inline_completion", id = &id,);
@@ -101,6 +103,7 @@ pub async fn inline_completion(
             indentation,
             model_config,
             id: id.to_owned(),
+            cliboard_content,
         })
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
     // dbg!("generating_context_finished", Local::now());

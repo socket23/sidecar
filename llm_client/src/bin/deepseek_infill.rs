@@ -1,5 +1,7 @@
 use llm_client::clients::codestory::CodeStoryClient;
+use llm_client::clients::togetherai::TogetherAIClient;
 use llm_client::clients::types::LLMClient;
+use llm_client::provider::TogetherAIProvider;
 use llm_client::{
     clients::{ollama::OllamaClient, types::LLMClientCompletionStringRequest},
     provider::{LLMProviderAPIKeys, OllamaProvider},
@@ -7,10 +9,14 @@ use llm_client::{
 
 #[tokio::main]
 async fn main() {
-    let api_key = LLMProviderAPIKeys::Ollama(OllamaProvider {});
-    let client = OllamaClient::new();
+    let api_key = LLMProviderAPIKeys::TogetherAI(TogetherAIProvider::new(
+        "cc10d6774e67efef2004b85efdb81a3c9ba0b7682cc33d59c30834183502208d".to_owned(),
+    ));
+    // let api_key = LLMProviderAPIKeys::Ollama(OllamaProvider {});
+    let client = TogetherAIClient::new();
+    // when we add comments to the prompt it still works
     let prompt =
-        "<｜fim▁begin｜>// Path: testing.ts\nfunction subtract(a<｜fim▁hole｜>)<｜fim▁end｜>";
+        "<｜fim▁begin｜>// Clipboard: function add(a: number, b: number) {\n\t#We are going to add 2 numbers\n\treturn a + b;\n}\n// Path: testing.ts\nfunction subtract(a<｜fim▁hole｜>)<｜fim▁end｜>";
     let request = LLMClientCompletionStringRequest::new(
         llm_client::clients::types::LLMType::DeepSeekCoder6BInstruct,
         prompt.to_owned(),
@@ -22,9 +28,6 @@ async fn main() {
     //     .stream_prompt_completion(api_key, request, sender)
     //     .await;
     // println!("{}", response.expect("to work"));
-    let codestory_client =
-        CodeStoryClient::new("https://codestory-provider-dot-anton-390822.ue.r.appspot.com");
-    let codestory_api_key = LLMProviderAPIKeys::CodeStory;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let request = LLMClientCompletionStringRequest::new(
         llm_client::clients::types::LLMType::DeepSeekCoder33BInstruct,
@@ -33,8 +36,8 @@ async fn main() {
         None,
     )
     .set_max_tokens(100);
-    let response = codestory_client
-        .stream_prompt_completion(codestory_api_key, request, sender)
+    let response = client
+        .stream_prompt_completion(api_key, request, sender)
         .await;
     println!("{}", response.expect("to work"));
 }

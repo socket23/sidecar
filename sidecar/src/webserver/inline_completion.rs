@@ -103,15 +103,15 @@ pub async fn inline_completion(
             id: id.to_owned(),
         })
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
-    dbg!("generating_context_finished", Local::now());
+    // dbg!("generating_context_finished", Local::now());
     // dbg!(format!("completion streaming start: {}", id));
     // this is how we can abort the running stream if the client disconnects
     let stream = Abortable::new(completions, abort_request);
     Ok(Sse::new(Box::pin(stream.filter_map(
         |completion| async move {
             // dbg!("completion is coming along");
-            dbg!(&completion);
-            dbg!(Local::now());
+            // dbg!(&completion);
+            // dbg!(Local::now());
             match completion {
                 Ok(completion) => Some(
                     sse::Event::default()

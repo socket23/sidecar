@@ -390,5 +390,6 @@ pub fn python_language_config() -> TSLanguageConfig {
         "#
         .to_owned(),
         comment_prefix: "#".to_owned(),
+        end_of_line: None,
     }
 }

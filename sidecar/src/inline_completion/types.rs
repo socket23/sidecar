@@ -31,13 +31,21 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct FillInMiddleStreamContext {
+    file_path: String,
     prefix_at_cursor_position: String,
+    editor_parsing: Arc<EditorParsing>,
 }
 
 impl FillInMiddleStreamContext {
-    fn new(prefix_at_cursor_position: String) -> Self {
+    fn new(
+        file_path: String,
+        prefix_at_cursor_position: String,
+        editor_parsing: Arc<EditorParsing>,
+    ) -> Self {
         Self {
+            file_path,
             prefix_at_cursor_position,
+            editor_parsing,
         }
     }
 }
@@ -171,7 +179,9 @@ impl FillInMiddleCompletionAgent {
 
         // Now we are going to grab the current line prefix
         let cursor_prefix = Arc::new(FillInMiddleStreamContext::new(
+            completion_request.filepath.to_owned(),
             document_lines.prefix_at_line(completion_request.position)?,
+            self.editor_parsing.clone(),
         ));
 
         // Now we generate the prefix and the suffix here
@@ -333,8 +343,26 @@ fn check_terminating_condition(
     inserted_text: String,
     context: Arc<FillInMiddleStreamContext>,
 ) -> bool {
+    let file_path = context.file_path.clone();
     let final_completion_from_prefix =
         context.prefix_at_cursor_position.to_owned() + &inserted_text;
+
+    // TODO(skcd): I am not too sure about this yet....
+    // let end_of_line_detection = context
+    //     .editor_parsing
+    //     .for_file_path(&file_path)
+    //     .map(|language_config| language_config.end_of_line.clone())
+    //     .flatten();
+    // let lines = final_completion_from_prefix.lines().collect::<Vec<&str>>();
+    // // if we have a single line then we can quickly check if terminating with end of line if we detect it
+    // if lines.len() == 1 && end_of_line_detection.is_some() {
+    //     if lines[0]
+    //         .trim_end()
+    //         .ends_with(end_of_line_detection.as_ref().unwrap())
+    //     {
+    //         return true;
+    //     }
+    // }
     // first we check if the lines are, and check for opening and closing brackets
     // the patterns we will look for are: {}, [], (), <>
     let opening_brackets = vec!["{"];
@@ -371,14 +399,22 @@ mod tests {
 
     #[test]
     fn test_check_terminating_condition_for_if() {
-        let context = Arc::new(FillInMiddleStreamContext::new("if ".to_owned()));
+        let context = Arc::new(FillInMiddleStreamContext::new(
+            "something.ts".to_owned(),
+            "if ".to_owned(),
+            Arc::new(Default::default()),
+        ));
         let inserted_text = "(blah: number) => {".to_owned();
         assert_eq!(check_terminating_condition(inserted_text, context), false);
     }
 
     #[test]
     fn test_check_terminating_condition_for_if_proper() {
-        let context = Arc::new(FillInMiddleStreamContext::new("if ".to_owned()));
+        let context = Arc::new(FillInMiddleStreamContext::new(
+            "something.ts".to_owned(),
+            "if ".to_owned(),
+            Arc::new(Default::default()),
+        ));
         let inserted_text = "if (blah: number) => {\nconsole.log('blah');}".to_owned();
         assert_eq!(check_terminating_condition(inserted_text, context), true);
     }

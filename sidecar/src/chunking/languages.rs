@@ -90,6 +90,10 @@ pub struct TSLanguageConfig {
     /// The comment prefix for the language, typescript is like // and rust
     /// is like //, python is like #
     pub comment_prefix: String,
+
+    /// This is used to keep track of the end of line situations in many lanaguages
+    /// if they exist
+    pub end_of_line: Option<String>,
 }
 
 impl TSLanguageConfig {

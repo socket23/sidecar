@@ -308,7 +308,8 @@ impl FillInMiddleCompletionAgent {
                                 .get(0)
                                 .map(|completion| completion.insert_text.to_owned());
                             if let Some(inserted_text) = inserted_text {
-                                if check_terminating_condition(inserted_text) {
+                                if check_terminating_condition(inserted_text, cursor_prefix.clone())
+                                {
                                     futures::future::ready(false)
                                 } else {
                                     futures::future::ready(true)
@@ -328,28 +329,57 @@ impl FillInMiddleCompletionAgent {
     }
 }
 
-fn check_terminating_condition(inserted_text: String) -> bool {
+fn check_terminating_condition(
+    inserted_text: String,
+    context: Arc<FillInMiddleStreamContext>,
+) -> bool {
+    let final_completion_from_prefix =
+        context.prefix_at_cursor_position.to_owned() + &inserted_text;
     // first we check if the lines are, and check for opening and closing brackets
     // the patterns we will look for are: {}, [], (), <>
-    let opening_brackets = vec!["{", "[", "(", "<"];
-    let closing_brackets = vec!["}", "]", ")", ">"];
+    let opening_brackets = vec!["{"];
+    let closing_brackets = vec!["}"];
+    // let opening_brackets = vec!["{", "[", "(", "<"];
+    // let closing_brackets = vec!["}", "]", ")", ">"];
     let mut bracket_count = 0;
     let mut opening_bracket_detected = false;
-    inserted_text.chars().into_iter().for_each(|character| {
-        let character_str = character.to_string();
-        if opening_brackets.contains(&character_str.as_str()) {
-            bracket_count = bracket_count + 1;
-            opening_bracket_detected = true;
-        }
-        if closing_brackets.contains(&&character_str.as_str()) {
-            bracket_count = bracket_count - 1;
-        }
-    });
+    final_completion_from_prefix
+        .chars()
+        .into_iter()
+        .for_each(|character| {
+            let character_str = character.to_string();
+            if opening_brackets.contains(&character_str.as_str()) {
+                bracket_count = bracket_count + 1;
+                opening_bracket_detected = true;
+            }
+            if closing_brackets.contains(&&character_str.as_str()) {
+                bracket_count = bracket_count - 1;
+            }
+        });
     if opening_bracket_detected && bracket_count == 0 {
-        dbg!("terminating_condition_true", &inserted_text);
         true
     } else {
-        dbg!("terminating_condition", &inserted_text);
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::{check_terminating_condition, FillInMiddleStreamContext};
+
+    #[test]
+    fn test_check_terminating_condition_for_if() {
+        let context = Arc::new(FillInMiddleStreamContext::new("if ".to_owned()));
+        let inserted_text = "(blah: number) => {".to_owned();
+        assert_eq!(check_terminating_condition(inserted_text, context), false);
+    }
+
+    #[test]
+    fn test_check_terminating_condition_for_if_proper() {
+        let context = Arc::new(FillInMiddleStreamContext::new("if ".to_owned()));
+        let inserted_text = "if (blah: number) => {\nconsole.log('blah');}".to_owned();
+        assert_eq!(check_terminating_condition(inserted_text, context), true);
     }
 }

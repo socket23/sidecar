@@ -223,8 +223,10 @@ impl FillInMiddleCompletionAgent {
         // pin_mut!(merged_stream);
 
         let llm_broker = self.llm_broker.clone();
+        let should_end_stream = Arc::new(std::sync::Mutex::new(false));
         Ok(Box::pin({
             let cursor_prefix = cursor_prefix.clone();
+            let should_end_stream = should_end_stream.clone();
             // ugly, ugly, ugly, but type-safe so yay :))
             let completion = LLMBroker::stream_string_completion_owned(
                 llm_broker,
@@ -265,10 +267,17 @@ impl FillInMiddleCompletionAgent {
                         arced_document_lines.clone(),
                         formatted_string.clone(),
                         cursor_prefix.clone(),
+                        should_end_stream.clone(),
                     )
                 })
                 .map(
-                    move |(item, document_lines, formatted_string, cursor_prefix)| match item {
+                    move |(
+                        item,
+                        document_lines,
+                        formatted_string,
+                        cursor_prefix,
+                        should_end_stream,
+                    )| match item {
                         either::Left(response) => Ok((
                             InlineCompletionResponse::new(
                                 vec![InlineCompletion::new(
@@ -283,6 +292,7 @@ impl FillInMiddleCompletionAgent {
                                 formatted_string.filled.to_owned(),
                             ),
                             cursor_prefix.clone(),
+                            should_end_stream.clone(),
                         )),
                         either::Right(Ok(response)) => {
                             Ok((
@@ -300,6 +310,7 @@ impl FillInMiddleCompletionAgent {
                                     formatted_string.filled.to_owned(),
                                 ),
                                 cursor_prefix,
+                                should_end_stream.clone(),
                             ))
                         }
                         either::Right(Err(e)) => {
@@ -310,9 +321,17 @@ impl FillInMiddleCompletionAgent {
                 )
                 .take_while(
                     |inline_completion_response| match inline_completion_response {
-                        Ok((inline_completion_response, cursor_prefix)) => {
+                        Ok((inline_completion_response, cursor_prefix, should_end_stream)) => {
                             // Now we can check if we should still be sending the item over, and we work independently over here on a state
                             // basis and not the stream basis
+                            {
+                                // we are going ot early bail here if we have reached the end of the stream
+                                if let Ok(value) = should_end_stream.lock() {
+                                    if *value {
+                                        return futures::future::ready(true);
+                                    }
+                                }
+                            }
                             let inserted_text = inline_completion_response
                                 .completions
                                 .get(0)
@@ -320,10 +339,13 @@ impl FillInMiddleCompletionAgent {
                             if let Some(inserted_text) = inserted_text {
                                 if check_terminating_condition(inserted_text, cursor_prefix.clone())
                                 {
-                                    futures::future::ready(false)
-                                } else {
-                                    futures::future::ready(true)
+                                    {
+                                        if let Ok(mut value) = should_end_stream.lock() {
+                                            *value = true;
+                                        }
+                                    }
                                 }
+                                futures::future::ready(true)
                             } else {
                                 futures::future::ready(true)
                             }
@@ -332,7 +354,9 @@ impl FillInMiddleCompletionAgent {
                     },
                 )
                 .map(|item| match item {
-                    Ok((inline_completion, _cursor_prefix)) => Ok(inline_completion),
+                    Ok((inline_completion, _cursor_prefix, _should_end_stream)) => {
+                        Ok(inline_completion)
+                    }
                     Err(e) => Err(e),
                 })
         }))

@@ -257,7 +257,7 @@ impl FillInMiddleCompletionAgent {
                     either::Right(Err(e)) => {
                         println!("{:?}", e);
                         Err(InLineCompletionError::InlineCompletionTerminated)
-                    }
+                    } // TODO(skcd): We need to terminate the stream here using take_while operator
                 })
         }))
     }

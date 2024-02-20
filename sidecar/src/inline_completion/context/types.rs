@@ -1,4 +1,7 @@
-use crate::chunking::text_document::{Position, Range};
+use crate::{
+    chunking::text_document::{Position, Range},
+    inline_completion::types::InLineCompletionError,
+};
 
 /// Different kinds of completions we can have
 
@@ -20,6 +23,17 @@ impl DocumentLines {
             line_start_position,
             line_end_position,
         }
+    }
+
+    pub fn prefix_at_line(&self, position: Position) -> Result<String, InLineCompletionError> {
+        let line_number = position.line();
+        if line_number >= self.lines.len() {
+            return Err(InLineCompletionError::PrefixNotFound);
+        }
+        let line = &self.lines[line_number];
+        // Now only get the prefix for this from the current line
+        let line_prefix = line.1[0..position.column() as usize].to_owned();
+        Ok(line_prefix)
     }
 
     pub fn from_file_content(content: &str) -> Self {

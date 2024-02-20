@@ -1,10 +1,9 @@
 use std::pin::Pin;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use axum::Json;
 use chrono::Local;
-use futures::{pin_mut, FutureExt, Stream};
 use futures::{stream, StreamExt};
+use futures::{FutureExt, Stream};
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionStringRequest, LLMType},
@@ -18,13 +17,10 @@ use llm_prompts::{
 use crate::inline_completion::context::clipboard_context::{
     ClipboardContext, ClipboardContextString,
 };
-use crate::inline_completion::context::types::CompletionContext;
 use crate::{
     chunking::editor_parsing::EditorParsing,
-    inline_completion::helpers::fix_vscode_position,
-    webserver::{
-        inline_completion::{InlineCompletion, InlineCompletionRequest, InlineCompletionResponse},
-        model_selection::LLMClientConfig,
+    webserver::inline_completion::{
+        InlineCompletion, InlineCompletionRequest, InlineCompletionResponse,
     },
 };
 
@@ -32,6 +28,19 @@ use super::{
     context::{current_file::CurrentFileContext, types::DocumentLines},
     helpers::insert_range,
 };
+
+#[derive(Debug, Clone)]
+pub struct FillInMiddleStreamContext {
+    prefix_at_cursor_position: String,
+}
+
+impl FillInMiddleStreamContext {
+    fn new(prefix_at_cursor_position: String) -> Self {
+        Self {
+            prefix_at_cursor_position,
+        }
+    }
+}
 
 pub struct FillInMiddleCompletionAgent {
     llm_broker: Arc<LLMBroker>,
@@ -75,6 +84,9 @@ pub enum InLineCompletionError {
 
     #[error("Tokenization error: {0}")]
     TokenizationError(LLMType),
+
+    #[error("Prefix not found for the cursor position")]
+    PrefixNotFound,
 }
 
 struct InLineCompletionData {
@@ -157,6 +169,11 @@ impl FillInMiddleCompletionAgent {
             }
         };
 
+        // Now we are going to grab the current line prefix
+        let cursor_prefix = Arc::new(FillInMiddleStreamContext::new(
+            document_lines.prefix_at_line(completion_request.position)?,
+        ));
+
         // Now we generate the prefix and the suffix here
         let completion_context = CurrentFileContext::new(
             completion_request.filepath,
@@ -197,6 +214,7 @@ impl FillInMiddleCompletionAgent {
 
         let llm_broker = self.llm_broker.clone();
         Ok(Box::pin({
+            let cursor_prefix = cursor_prefix.clone();
             // ugly, ugly, ugly, but type-safe so yay :))
             let completion = LLMBroker::stream_string_completion_owned(
                 llm_broker,
@@ -231,34 +249,107 @@ impl FillInMiddleCompletionAgent {
 
             let merged_stream = stream::select(completion_receiver_stream, completion);
             merged_stream
-                .map(move |item| (item, arced_document_lines.clone(), formatted_string.clone()))
-                .map(move |(item, document_lines, formatted_string)| match item {
-                    either::Left(response) => Ok(InlineCompletionResponse::new(
-                        vec![InlineCompletion::new(
-                            response.answer_up_until_now().to_owned(),
-                            insert_range(
-                                completion_request.position,
-                                &document_lines,
-                                response.answer_up_until_now(),
+                .map(move |item| {
+                    (
+                        item,
+                        arced_document_lines.clone(),
+                        formatted_string.clone(),
+                        cursor_prefix.clone(),
+                    )
+                })
+                .map(
+                    move |(item, document_lines, formatted_string, cursor_prefix)| match item {
+                        either::Left(response) => Ok((
+                            InlineCompletionResponse::new(
+                                vec![InlineCompletion::new(
+                                    response.answer_up_until_now().to_owned(),
+                                    insert_range(
+                                        completion_request.position,
+                                        &document_lines,
+                                        response.answer_up_until_now(),
+                                    ),
+                                    response.delta().map(|v| v.to_owned()),
+                                )],
+                                formatted_string.filled.to_owned(),
                             ),
-                            response.delta().map(|v| v.to_owned()),
-                        )],
-                        formatted_string.filled.to_owned(),
-                    )),
-                    either::Right(Ok(response)) => Ok(InlineCompletionResponse::new(
-                        // this gets sent at the very end
-                        vec![InlineCompletion::new(
-                            response.to_owned(),
-                            insert_range(completion_request.position, &document_lines, &response),
-                            None,
-                        )],
-                        formatted_string.filled.to_owned(),
-                    )),
-                    either::Right(Err(e)) => {
-                        println!("{:?}", e);
-                        Err(InLineCompletionError::InlineCompletionTerminated)
-                    } // TODO(skcd): We need to terminate the stream here using take_while operator
+                            cursor_prefix.clone(),
+                        )),
+                        either::Right(Ok(response)) => {
+                            Ok((
+                                InlineCompletionResponse::new(
+                                    // this gets sent at the very end
+                                    vec![InlineCompletion::new(
+                                        response.to_owned(),
+                                        insert_range(
+                                            completion_request.position,
+                                            &document_lines,
+                                            &response,
+                                        ),
+                                        None,
+                                    )],
+                                    formatted_string.filled.to_owned(),
+                                ),
+                                cursor_prefix,
+                            ))
+                        }
+                        either::Right(Err(e)) => {
+                            println!("{:?}", e);
+                            Err(InLineCompletionError::InlineCompletionTerminated)
+                        }
+                    },
+                )
+                .take_while(
+                    |inline_completion_response| match inline_completion_response {
+                        Ok((inline_completion_response, cursor_prefix)) => {
+                            // Now we can check if we should still be sending the item over, and we work independently over here on a state
+                            // basis and not the stream basis
+                            let inserted_text = inline_completion_response
+                                .completions
+                                .get(0)
+                                .map(|completion| completion.insert_text.to_owned());
+                            if let Some(inserted_text) = inserted_text {
+                                if check_terminating_condition(inserted_text) {
+                                    futures::future::ready(false)
+                                } else {
+                                    futures::future::ready(true)
+                                }
+                            } else {
+                                futures::future::ready(true)
+                            }
+                        }
+                        Err(_) => futures::future::ready(false),
+                    },
+                )
+                .map(|item| match item {
+                    Ok((inline_completion, _cursor_prefix)) => Ok(inline_completion),
+                    Err(e) => Err(e),
                 })
         }))
+    }
+}
+
+fn check_terminating_condition(inserted_text: String) -> bool {
+    // first we check if the lines are, and check for opening and closing brackets
+    // the patterns we will look for are: {}, [], (), <>
+    let opening_brackets = vec!["{", "[", "(", "<"];
+    let closing_brackets = vec!["}", "]", ")", ">"];
+    let mut bracket_count = 0;
+    let mut opening_bracket_detected = false;
+    inserted_text.chars().into_iter().for_each(|character| {
+        let character_str = character.to_string();
+        if opening_brackets.contains(&character_str.as_str()) {
+            bracket_count = bracket_count + 1;
+            opening_bracket_detected = true;
+        }
+        if closing_brackets.contains(&&character_str.as_str()) {
+            bracket_count = bracket_count - 1;
+        }
+    });
+    if opening_bracket_detected && bracket_count == 0 {
+        dbg!("terminating_condition_true", &inserted_text);
+        true
+    } else {
+        dbg!("terminating_condition", &inserted_text);
+        false
     }
 }

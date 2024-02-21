@@ -392,13 +392,17 @@ fn check_terminating_condition(
     // this will help us understand if we can give the user sustainable replies
     if let Some(language_config) = language_config {
         // we need to call the tree-sitter based termination here
-        check_terminating_condition_tree_sitter(
+        if check_terminating_condition_tree_sitter(
             &language_config,
             &context.document_prefix,
             &context.document_suffix,
             &inserted_text,
             inserted_range,
-        );
+        ) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     // first we check if the lines are, and check for opening and closing brackets
@@ -429,7 +433,7 @@ fn check_terminating_condition(
     }
 }
 
-fn walk_tree(cursor: &mut TreeCursor, inserted_range: &Range) -> bool {
+fn walk_tree_for_no_errors(cursor: &mut TreeCursor, inserted_range: &Range) -> bool {
     let mut answer = true;
     loop {
         let node = cursor.node();
@@ -446,7 +450,7 @@ fn walk_tree(cursor: &mut TreeCursor, inserted_range: &Range) -> bool {
         }
 
         if cursor.goto_first_child() {
-            answer = answer && walk_tree(cursor, inserted_range);
+            answer = answer && walk_tree_for_no_errors(cursor, inserted_range);
             cursor.goto_parent();
         }
 
@@ -470,7 +474,8 @@ fn check_terminating_condition_tree_sitter(
     let tree = parser.parse(final_document.as_bytes(), None);
     if let Some(tree) = tree {
         let mut cursor = tree.walk();
-        walk_tree(&mut cursor, inserted_range)
+        // for termination condition we require there to be no errors
+        walk_tree_for_no_errors(&mut cursor, inserted_range)
     } else {
         true
     }

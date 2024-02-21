@@ -5,3 +5,9 @@ export class A {
         return a * b;
     }
 }
+
+function add(a: number, b: number) {
+    if (a > 0) {
+        return a + b;
+    }
+}

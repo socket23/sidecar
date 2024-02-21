@@ -13,7 +13,10 @@ use llm_prompts::{
     answer_model::LLMAnswerModelBroker,
     fim::types::{FillInMiddleBroker, FillInMiddleRequest},
 };
+use tree_sitter::TreeCursor;
 
+use crate::chunking::languages::TSLanguageConfig;
+use crate::chunking::text_document::Range;
 use crate::inline_completion::context::clipboard_context::{
     ClipboardContext, ClipboardContextString,
 };
@@ -319,6 +322,7 @@ impl FillInMiddleCompletionAgent {
                         }
                     },
                 )
+                // this is used to decide the termination of the stream
                 .take_while(
                     |inline_completion_response| match inline_completion_response {
                         Ok((inline_completion_response, cursor_prefix, should_end_stream)) => {
@@ -367,26 +371,17 @@ fn check_terminating_condition(
     inserted_text: String,
     context: Arc<FillInMiddleStreamContext>,
 ) -> bool {
-    let file_path = context.file_path.clone();
     let final_completion_from_prefix =
         context.prefix_at_cursor_position.to_owned() + &inserted_text;
 
-    // TODO(skcd): I am not too sure about this yet....
-    // let end_of_line_detection = context
-    //     .editor_parsing
-    //     .for_file_path(&file_path)
-    //     .map(|language_config| language_config.end_of_line.clone())
-    //     .flatten();
-    // let lines = final_completion_from_prefix.lines().collect::<Vec<&str>>();
-    // // if we have a single line then we can quickly check if terminating with end of line if we detect it
-    // if lines.len() == 1 && end_of_line_detection.is_some() {
-    //     if lines[0]
-    //         .trim_end()
-    //         .ends_with(end_of_line_detection.as_ref().unwrap())
-    //     {
-    //         return true;
-    //     }
-    // }
+    let language_config = context.editor_parsing.for_file_path(&context.file_path);
+
+    // we can either do tree-sitter based termination or based on indentation as well
+    // this will help us understand if we can give the user sustainable replies
+    if let Some(language_config) = language_config {
+        // we need to call the tree-sitter based termination here
+    }
+
     // first we check if the lines are, and check for opening and closing brackets
     // the patterns we will look for are: {}, [], (), <>
     let opening_brackets = vec!["{"];
@@ -412,6 +407,53 @@ fn check_terminating_condition(
         true
     } else {
         false
+    }
+}
+
+fn walk_tree(cursor: &mut TreeCursor, inserted_range: &Range) -> bool {
+    let mut answer = true;
+    loop {
+        let node = cursor.node();
+
+        // First check if the node is in the range
+        let node_range = node.range();
+        if node_range.start_byte >= inserted_range.start_byte()
+            && node_range.end_byte <= inserted_range.end_byte()
+        {
+            if node.is_error() || node.is_missing() {
+                answer = false;
+                return answer;
+            }
+        }
+
+        if cursor.goto_first_child() {
+            answer = answer && walk_tree(cursor, inserted_range);
+            cursor.goto_parent();
+        }
+
+        if !cursor.goto_next_sibling() {
+            return answer;
+        }
+    }
+}
+
+fn check_terminating_condition_tree_sitter(
+    language_config: &TSLanguageConfig,
+    prefix: &str,
+    suffix: &str,
+    text_to_insert: &str,
+    inserted_range: &Range,
+) -> bool {
+    let final_document = prefix.to_owned() + text_to_insert + suffix;
+    let grammar = language_config.grammar;
+    let mut parser = tree_sitter::Parser::new();
+    let _ = parser.set_language(grammar());
+    let tree = parser.parse(final_document.as_bytes(), None);
+    if let Some(tree) = tree {
+        let mut cursor = tree.walk();
+        walk_tree(&mut cursor, inserted_range)
+    } else {
+        true
     }
 }
 

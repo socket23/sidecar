@@ -451,6 +451,9 @@ fn walk_tree_for_no_errors(cursor: &mut TreeCursor, inserted_range: &Range) -> b
 
         if cursor.goto_first_child() {
             answer = answer && walk_tree_for_no_errors(cursor, inserted_range);
+            if !answer {
+                return answer;
+            }
             cursor.goto_parent();
         }
 

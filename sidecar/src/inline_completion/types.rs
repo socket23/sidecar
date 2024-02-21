@@ -36,6 +36,8 @@ use super::{
 pub struct FillInMiddleStreamContext {
     file_path: String,
     prefix_at_cursor_position: String,
+    document_prefix: String,
+    document_suffix: String,
     editor_parsing: Arc<EditorParsing>,
 }
 
@@ -43,11 +45,15 @@ impl FillInMiddleStreamContext {
     fn new(
         file_path: String,
         prefix_at_cursor_position: String,
+        document_prefix: String,
+        document_suffix: String,
         editor_parsing: Arc<EditorParsing>,
     ) -> Self {
         Self {
             file_path,
             prefix_at_cursor_position,
+            document_prefix,
+            document_suffix,
             editor_parsing,
         }
     }
@@ -98,12 +104,9 @@ pub enum InLineCompletionError {
 
     #[error("Prefix not found for the cursor position")]
     PrefixNotFound,
-}
 
-struct InLineCompletionData {
-    prefix: String,
-    suffix: String,
-    line: String,
+    #[error("Suffix not found for cursor position")]
+    SuffixNotFound,
 }
 
 impl FillInMiddleCompletionAgent {
@@ -184,6 +187,8 @@ impl FillInMiddleCompletionAgent {
         let cursor_prefix = Arc::new(FillInMiddleStreamContext::new(
             completion_request.filepath.to_owned(),
             document_lines.prefix_at_line(completion_request.position)?,
+            document_lines.document_prefix(completion_request.position)?,
+            document_lines.document_suffix(completion_request.position)?,
             self.editor_parsing.clone(),
         ));
 
@@ -340,18 +345,24 @@ impl FillInMiddleCompletionAgent {
                                 .completions
                                 .get(0)
                                 .map(|completion| completion.insert_text.to_owned());
-                            if let Some(inserted_text) = inserted_text {
-                                if check_terminating_condition(inserted_text, cursor_prefix.clone())
-                                {
-                                    {
+                            let inserted_range = inline_completion_response
+                                .completions
+                                .get(0)
+                                .map(|completion| completion.insert_range.clone());
+                            match (inserted_text, inserted_range) {
+                                (Some(inserted_text), Some(inserted_range)) => {
+                                    if check_terminating_condition(
+                                        inserted_text,
+                                        &inserted_range,
+                                        cursor_prefix.clone(),
+                                    ) {
                                         if let Ok(mut value) = should_end_stream.lock() {
                                             *value = true;
                                         }
                                     }
+                                    futures::future::ready(true)
                                 }
-                                futures::future::ready(true)
-                            } else {
-                                futures::future::ready(true)
+                                _ => futures::future::ready(true),
                             }
                         }
                         Err(_) => futures::future::ready(false),
@@ -369,6 +380,7 @@ impl FillInMiddleCompletionAgent {
 
 fn check_terminating_condition(
     inserted_text: String,
+    inserted_range: &Range,
     context: Arc<FillInMiddleStreamContext>,
 ) -> bool {
     let final_completion_from_prefix =
@@ -380,6 +392,13 @@ fn check_terminating_condition(
     // this will help us understand if we can give the user sustainable replies
     if let Some(language_config) = language_config {
         // we need to call the tree-sitter based termination here
+        check_terminating_condition_tree_sitter(
+            &language_config,
+            &context.document_prefix,
+            &context.document_suffix,
+            &inserted_text,
+            inserted_range,
+        );
     }
 
     // first we check if the lines are, and check for opening and closing brackets
@@ -461,6 +480,8 @@ fn check_terminating_condition_tree_sitter(
 mod tests {
     use std::sync::Arc;
 
+    use crate::chunking::text_document::{Position, Range};
+
     use super::{check_terminating_condition, FillInMiddleStreamContext};
 
     #[test]
@@ -468,10 +489,16 @@ mod tests {
         let context = Arc::new(FillInMiddleStreamContext::new(
             "something.ts".to_owned(),
             "if ".to_owned(),
+            "something_else".to_owned(),
+            "something_else".to_owned(),
             Arc::new(Default::default()),
         ));
         let inserted_text = "(blah: number) => {".to_owned();
-        assert_eq!(check_terminating_condition(inserted_text, context), false);
+        let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
+        assert_eq!(
+            check_terminating_condition(inserted_text, &inserted_range, context),
+            false
+        );
     }
 
     #[test]
@@ -479,9 +506,15 @@ mod tests {
         let context = Arc::new(FillInMiddleStreamContext::new(
             "something.ts".to_owned(),
             "if ".to_owned(),
+            "something_else".to_owned(),
+            "something_else".to_owned(),
             Arc::new(Default::default()),
         ));
         let inserted_text = "if (blah: number) => {\nconsole.log('blah');}".to_owned();
-        assert_eq!(check_terminating_condition(inserted_text, context), true);
+        let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
+        assert_eq!(
+            check_terminating_condition(inserted_text, &inserted_range, context),
+            true
+        );
     }
 }

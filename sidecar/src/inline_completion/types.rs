@@ -337,7 +337,7 @@ impl FillInMiddleCompletionAgent {
                                 // we are going ot early bail here if we have reached the end of the stream
                                 if let Ok(value) = should_end_stream.lock() {
                                     if *value {
-                                        return futures::future::ready(true);
+                                        return futures::future::ready(false);
                                     }
                                 }
                             }
@@ -393,6 +393,12 @@ fn check_terminating_condition(
     // but here we need to take care of it
     // we can either do tree-sitter based termination or based on indentation as well
     // this will help us understand if we can give the user sustainable replies
+    // another condition we can add here is to only check this when we have a multiline completion
+    // this way we can avoid unnecessary computation
+    let inserted_text_lines_length = inserted_text.lines().into_iter().collect::<Vec<_>>().len();
+    if inserted_text_lines_length <= 1 {
+        return false;
+    }
     if let Some(language_config) = language_config {
         // we need to call the tree-sitter based termination here
         let terminating_condition = check_terminating_condition_tree_sitter(

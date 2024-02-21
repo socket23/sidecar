@@ -489,7 +489,8 @@ fn check_terminating_condition_tree_sitter(
     text_to_insert: &str,
     inserted_range: &Range,
 ) -> bool {
-    let final_document = prefix.to_owned() + text_to_insert + suffix;
+    let final_document =
+        prefix.to_owned() + &insert_string_and_check_suffix(text_to_insert, suffix);
     let grammar = language_config.grammar;
     let mut parser = tree_sitter::Parser::new();
     let _ = parser.set_language(grammar());
@@ -503,11 +504,88 @@ fn check_terminating_condition_tree_sitter(
     }
 }
 
+/// The condition here is that we might be matching some characters in the suffix
+/// which are on the same line as the inserted text
+/// imagine you are doing the following:
+/// console.log(<cursor_here>)
+/// and the completion here is a, b, c)
+/// vscode here will show the completion as valid and also match the closing bracket
+/// so when joining the string we have to take care of this case on our own
+fn insert_string_and_check_suffix(text_to_insert: &str, suffix: &str) -> String {
+    // if the suffix does not exist and it starts with a new line, then just go to the next line
+    if suffix.starts_with("\n") {
+        return text_to_insert.to_owned() + suffix;
+    }
+    let suffix_lines = suffix
+        .lines()
+        .into_iter()
+        .map(|line| line.to_owned())
+        .collect::<Vec<String>>();
+    let text_to_insert_lines = text_to_insert
+        .lines()
+        .into_iter()
+        .map(|line| line.to_owned())
+        .collect::<Vec<String>>();
+    if suffix_lines.is_empty() {
+        text_to_insert.to_owned()
+    } else if text_to_insert_lines.is_empty() {
+        suffix.to_owned()
+    } else {
+        let suffix_first_line = suffix_lines[0].clone();
+        let text_to_insert_first_line = text_to_insert_lines[0].clone();
+        // Now we need to match the characters from the suffix line which are also present in the text_to_insert line
+        // and then generate the final line over here
+        let mut text_to_insert_position = 0;
+        let mut suffix_first_line_index = 0;
+        while suffix_first_line_index < suffix_first_line.len() {
+            if text_to_insert_position >= text_to_insert_first_line.len() {
+                break;
+            }
+            if suffix_first_line.chars().nth(suffix_first_line_index)
+                == text_to_insert_first_line
+                    .chars()
+                    .nth(text_to_insert_position)
+            {
+                suffix_first_line_index = suffix_first_line_index + 1;
+                text_to_insert_position = text_to_insert_position + 1;
+            } else {
+                text_to_insert_position = text_to_insert_position + 1;
+            }
+        }
+        let remaining_suffix = if suffix_first_line_index < suffix_first_line.len() {
+            &suffix_first_line[suffix_first_line_index..]
+        } else {
+            ""
+        };
+        // create the new first line here
+        let text_to_insert_first_line = text_to_insert_first_line + remaining_suffix;
+        // now create the text to insert from the remaining lines
+        let text_to_insert = if text_to_insert_lines.len() > 1 {
+            text_to_insert_first_line + "\n" + &text_to_insert_lines[1..].join("\n")
+        } else {
+            text_to_insert_first_line
+        };
+        let final_text = if suffix_lines.len() > 1 {
+            text_to_insert + "\n" + &suffix_lines[1..].join("\n")
+        } else {
+            text_to_insert
+        };
+        // Now the total string will look like the following:
+        // text_to_insert_first_line + remaining_suffix from first line
+        // text_to_insert_rest_of_lines
+        // suffix_rest of the lines
+        final_text
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use crate::chunking::text_document::{Position, Range};
+    use crate::{
+        chunking::text_document::{Position, Range},
+        inline_completion::types::insert_string_and_check_suffix,
+    };
 
     use super::{check_terminating_condition, FillInMiddleStreamContext};
 
@@ -543,5 +621,21 @@ mod tests {
             check_terminating_condition(inserted_text, &inserted_range, context),
             true
         );
+    }
+
+    #[test]
+    fn test_check_insert_string_and_check_suffix() {
+        let text_to_insert = "(a, b, c)".to_owned();
+        let suffix = ")\nsomething_else".to_owned();
+        let final_text = insert_string_and_check_suffix(&text_to_insert, &suffix);
+        assert_eq![final_text, "(a, b, c)\nsomething_else"];
+    }
+
+    #[test]
+    fn test_check_insert_with_pending_brackets() {
+        let text_to_insert = "(a, b, c, d){\nconsole.log('blah');}".to_owned();
+        let suffix = ")".to_owned();
+        let final_text = insert_string_and_check_suffix(&text_to_insert, &suffix);
+        assert_eq![final_text, "(a, b, c, d){\nconsole.log('blah');}"];
     }
 }

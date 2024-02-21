@@ -388,17 +388,21 @@ fn check_terminating_condition(
 
     let language_config = context.editor_parsing.for_file_path(&context.file_path);
 
+    // TODO(skcd): One of the bugs here is that we could have a closing bracket or something
+    // in the suffix, on the editor side this is taken care of automagically,
+    // but here we need to take care of it
     // we can either do tree-sitter based termination or based on indentation as well
     // this will help us understand if we can give the user sustainable replies
     if let Some(language_config) = language_config {
         // we need to call the tree-sitter based termination here
-        if check_terminating_condition_tree_sitter(
+        let terminating_condition = check_terminating_condition_tree_sitter(
             &language_config,
             &context.document_prefix,
             &context.document_suffix,
             &inserted_text,
             inserted_range,
-        ) {
+        );
+        if terminating_condition {
             return true;
         } else {
             return false;
@@ -438,11 +442,26 @@ fn walk_tree_for_no_errors(cursor: &mut TreeCursor, inserted_range: &Range) -> b
     loop {
         let node = cursor.node();
 
-        // First check if the node is in the range
-        let node_range = node.range();
-        if node_range.start_byte >= inserted_range.start_byte()
-            && node_range.end_byte <= inserted_range.end_byte()
-        {
+        fn check_if_inside_range(start_byte: usize, end_byte: usize, inserted_byte: usize) -> bool {
+            start_byte <= inserted_byte && inserted_byte <= end_byte
+        }
+
+        fn check_if_intersects_range(
+            start_byte: usize,
+            end_byte: usize,
+            inserted_range: &Range,
+        ) -> bool {
+            check_if_inside_range(start_byte, end_byte, inserted_range.start_byte())
+                || check_if_inside_range(start_byte, end_byte, inserted_range.end_byte())
+        }
+
+        // First check if the node is in the range or
+        // the range of the node intersects with the inserted range
+        if check_if_intersects_range(
+            node.range().start_byte,
+            node.range().end_byte,
+            inserted_range,
+        ) {
             if node.is_error() || node.is_missing() {
                 answer = false;
                 return answer;

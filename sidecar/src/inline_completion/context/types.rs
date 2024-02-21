@@ -45,11 +45,12 @@ impl DocumentLines {
         // Now only get the prefix for this from the current line
         let line_prefix = line.1[0..position.column() as usize].to_owned();
         // Now get the prefix for the previous lines
-        let mut previous_lines_prefix = String::new();
+        let mut lines = vec![];
         for line in &self.lines[0..line_number] {
-            previous_lines_prefix.push_str(&(line.1.as_str().to_owned() + "\n"));
+            lines.push(line.1.to_owned());
         }
-        Ok(previous_lines_prefix + &line_prefix)
+        lines.push(line_prefix);
+        Ok(lines.join("\n"))
     }
 
     pub fn document_suffix(&self, position: Position) -> Result<String, InLineCompletionError> {
@@ -59,13 +60,17 @@ impl DocumentLines {
         }
         let line = &self.lines[line_number];
         // Now only get the suffix for this from the current line
-        let line_suffix = line.1[position.column() as usize..].to_owned();
+        let line_suffix = if line_number + 1 >= self.lines.len() {
+            "".to_owned()
+        } else {
+            line.1[position.column() as usize..].to_owned()
+        };
         // Now get the suffix for the next lines
-        let mut next_lines_suffix = String::new();
+        let mut lines = vec![line_suffix];
         for line in &self.lines[line_number + 1..] {
-            next_lines_suffix.push_str(&(line.1.as_str().to_owned() + "\n"));
+            lines.push(line.1.to_owned());
         }
-        Ok(next_lines_suffix + &line_suffix)
+        Ok(lines.join("\n"))
     }
 
     pub fn from_file_content(content: &str) -> Self {

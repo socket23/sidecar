@@ -1766,10 +1766,14 @@ async function getEdits(context: ICSChatAgentEditRequest, progress: (part: ICSCh
     fn walk(cursor: &mut TreeCursor, indent: usize) {
         loop {
             let node = cursor.node();
+            let start_byte = node.start_byte();
+            let end_byte = node.end_byte();
             println!(
-                "{}{:?}: error:{} missing:{}",
+                "{}{:?}({}:{}): error:{} missing:{}",
                 " ".repeat(indent),
                 node.kind(),
+                start_byte,
+                end_byte,
                 node.is_error(),
                 // TODO(skcd): Found it! We can use this to determine if there are
                 // any linter errors and then truncate using this, until we do not introduce
@@ -1791,7 +1795,10 @@ async function getEdits(context: ICSChatAgentEditRequest, progress: (part: ICSCh
     #[test]
     fn test_typescript_error_parsing() {
         let source_code = r#"
-        if (a >
+function add(a: number, b: number): number {
+    !!!!!!!
+    return a + b;
+}
 "#;
         let language = "typescript";
         let tree_sitter_parsing = TSLanguageParsing::init();
@@ -1804,6 +1811,143 @@ async function getEdits(context: ICSChatAgentEditRequest, progress: (part: ICSCh
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
         let mut visitors = tree.walk();
         walk(&mut visitors, 0);
+        assert!(false);
+    }
+
+    fn walk_tree_for_no_errors(
+        cursor: &mut TreeCursor,
+        inserted_range: &Range,
+        indent: usize,
+    ) -> bool {
+        let mut answer = true;
+        loop {
+            let node = cursor.node();
+            let start_byte = node.start_byte();
+            let end_byte = node.end_byte();
+
+            fn check_if_inside_range(
+                start_byte: usize,
+                end_byte: usize,
+                inserted_byte: usize,
+            ) -> bool {
+                start_byte <= inserted_byte && inserted_byte <= end_byte
+            }
+
+            fn check_if_intersects_range(
+                start_byte: usize,
+                end_byte: usize,
+                inserted_range: &Range,
+            ) -> bool {
+                check_if_inside_range(start_byte, end_byte, inserted_range.start_byte())
+                    || check_if_inside_range(start_byte, end_byte, inserted_range.end_byte())
+            }
+
+            println!(
+                "{}{:?}({}:{}): error:{} missing:{} does_intersect({}:{}): {}",
+                " ".repeat(indent),
+                node.kind(),
+                start_byte,
+                end_byte,
+                node.is_error(),
+                // TODO(skcd): Found it! We can use this to determine if there are
+                // any linter errors and then truncate using this, until we do not introduce
+                // any more errors
+                node.is_missing(),
+                inserted_range.start_byte(),
+                inserted_range.end_byte(),
+                check_if_intersects_range(start_byte, end_byte, inserted_range),
+            );
+
+            // First check if the node is in the range or
+            // the range of the node intersects with the inserted range
+            if check_if_intersects_range(
+                node.range().start_byte,
+                node.range().end_byte,
+                inserted_range,
+            ) {
+                if node.is_error() || node.is_missing() {
+                    answer = false;
+                    return answer;
+                }
+            }
+
+            if cursor.goto_first_child() {
+                answer = answer && walk_tree_for_no_errors(cursor, inserted_range, indent + 1);
+                if !answer {
+                    return answer;
+                }
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                return answer;
+            }
+        }
+    }
+
+    #[test]
+    fn test_rust_error_checking() {
+        let source_code = r#"use sidecar::{embedder::embedder::Embedder, embedder::embedder::LocalEmbedder};
+use std::env;
+
+#[tokio::main]
+async fn main() {
+    println!("Hello, world! skcd");
+    init_ort_dylib();
+
+    // Now we try to create the embedder and see if thats working
+    let current_path = env::current_dir().unwrap();
+    // Checking that the embedding logic is also working
+    let embedder = LocalEmbedder::new(&current_path.join("models/all-MiniLM-L6-v2/")).unwrap();
+    let result = embedder.embed("hello world!").unwrap();
+    dbg!(result.len());
+    dbg!(result);
+}
+
+fn add(left:)
+
+fn init_ort_dylib() {
+    #[cfg(not(windows))]
+    {
+        #[cfg(target_os = "linux")]
+        let lib_path = "libonnxruntime.so";
+        #[cfg(target_os = "macos")]
+        let lib_path =
+            "/Users/skcd/Downloads/onnxruntime-osx-arm64-1.16.0/lib/libonnxruntime.dylib";
+
+        // let ort_dylib_path = dylib_dir.as_ref().join(lib_name);
+
+        if env::var("ORT_DYLIB_PATH").is_err() {
+            env::set_var("ORT_DYLIB_PATH", lib_path);
+        }
+    }
+}"#;
+        let language = "rust";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("test to work");
+        let grammar = ts_language_config.grammar;
+        let mut parser = Parser::new();
+        parser.set_language(grammar()).unwrap();
+        // the range we are checking is this:
+        // let range = Range {
+        //     start_position: Position {
+        //         line: 17,
+        //         character: 7,
+        //         byte_offset: 568,
+        //     },
+        //     end_position: Position {
+        //         line: 17,
+        //         character: 13,
+        //         byte_offset: 574,
+        //     },
+        // };
+        let range = Range::new(Position::new(17, 7, 568), Position::new(17, 7, 574));
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let mut visitors = tree.walk();
+        // walk(&mut visitors, 0);
+        dbg!(walk_tree_for_no_errors(&mut visitors, &range, 0));
         assert!(false);
     }
 }

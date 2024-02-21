@@ -36,6 +36,38 @@ impl DocumentLines {
         Ok(line_prefix)
     }
 
+    pub fn document_prefix(&self, position: Position) -> Result<String, InLineCompletionError> {
+        let line_number = position.line();
+        if line_number >= self.lines.len() {
+            return Err(InLineCompletionError::PrefixNotFound);
+        }
+        let line = &self.lines[line_number];
+        // Now only get the prefix for this from the current line
+        let line_prefix = line.1[0..position.column() as usize].to_owned();
+        // Now get the prefix for the previous lines
+        let mut previous_lines_prefix = String::new();
+        for line in &self.lines[0..line_number] {
+            previous_lines_prefix.push_str(&(line.1.as_str().to_owned() + "\n"));
+        }
+        Ok(previous_lines_prefix + &line_prefix)
+    }
+
+    pub fn document_suffix(&self, position: Position) -> Result<String, InLineCompletionError> {
+        let line_number = position.line();
+        if line_number >= self.lines.len() {
+            return Err(InLineCompletionError::SuffixNotFound);
+        }
+        let line = &self.lines[line_number];
+        // Now only get the suffix for this from the current line
+        let line_suffix = line.1[position.column() as usize..].to_owned();
+        // Now get the suffix for the next lines
+        let mut next_lines_suffix = String::new();
+        for line in &self.lines[line_number + 1..] {
+            next_lines_suffix.push_str(&(line.1.as_str().to_owned() + "\n"));
+        }
+        Ok(next_lines_suffix + &line_suffix)
+    }
+
     pub fn from_file_content(content: &str) -> Self {
         let mut byte_offset = 0;
         let lines: Vec<_> = content

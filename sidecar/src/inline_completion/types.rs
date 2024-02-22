@@ -204,8 +204,8 @@ impl FillInMiddleCompletionAgent {
         // Grab the error and missing values from tree-sitter
         let errors = grab_errors_using_tree_sitter(
             self.editor_parsing.clone(),
-            &completion_request.filepath,
             &completion_request.text,
+            &completion_request.filepath,
         )
         .map(|(error, missing)| FillInMiddleError::new(error, missing));
 
@@ -621,15 +621,18 @@ fn check_terminating_condition_by_comparing_errors(
     if let Some(tree) = tree {
         let mut cursor = tree.walk();
         let (error, missing) = walk_tree_for_errors_and_missing(&mut cursor);
-        // Now we are going to check if any of the errors or missing have increased
-        // from the previous errors
-        if error > previous_errors.error_count || missing > previous_errors.missing_count {
+        // Now we are going to check if any of the errors or missing have stayed the same
+        // or increased after the insertion, this is important because
+        // the user might have typed in `fn add()`
+        // this can also introduce errors and when we get the first line we might not have
+        // reduced the errors at that point
+        if error >= previous_errors.error_count || missing >= previous_errors.missing_count {
             false
         } else {
             true
         }
     } else {
-        true
+        false
     }
 }
 

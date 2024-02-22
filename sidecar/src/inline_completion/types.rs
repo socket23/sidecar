@@ -33,12 +33,28 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
+pub struct FillInMiddleError {
+    error_count: usize,
+    missing_count: usize,
+}
+
+impl FillInMiddleError {
+    pub fn new(error_count: usize, missing_count: usize) -> Self {
+        Self {
+            error_count,
+            missing_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FillInMiddleStreamContext {
     file_path: String,
     prefix_at_cursor_position: String,
     document_prefix: String,
     document_suffix: String,
     editor_parsing: Arc<EditorParsing>,
+    errors: Option<FillInMiddleError>,
 }
 
 impl FillInMiddleStreamContext {
@@ -48,6 +64,7 @@ impl FillInMiddleStreamContext {
         document_prefix: String,
         document_suffix: String,
         editor_parsing: Arc<EditorParsing>,
+        errors: Option<FillInMiddleError>,
     ) -> Self {
         Self {
             file_path,
@@ -55,6 +72,7 @@ impl FillInMiddleStreamContext {
             document_prefix,
             document_suffix,
             editor_parsing,
+            errors,
         }
     }
 }
@@ -183,6 +201,14 @@ impl FillInMiddleCompletionAgent {
             }
         };
 
+        // Grab the error and missing values from tree-sitter
+        let errors = grab_errors_using_tree_sitter(
+            self.editor_parsing.clone(),
+            &completion_request.filepath,
+            &completion_request.text,
+        )
+        .map(|(error, missing)| FillInMiddleError::new(error, missing));
+
         // Now we are going to grab the current line prefix
         let cursor_prefix = Arc::new(FillInMiddleStreamContext::new(
             completion_request.filepath.to_owned(),
@@ -190,6 +216,7 @@ impl FillInMiddleCompletionAgent {
             document_lines.document_prefix(completion_request.position)?,
             document_lines.document_suffix(completion_request.position)?,
             self.editor_parsing.clone(),
+            errors,
         ));
 
         // Now we generate the prefix and the suffix here
@@ -400,6 +427,14 @@ fn check_terminating_condition(
         return false;
     }
     if let Some(language_config) = language_config {
+        let terminating_condition_errors = check_terminating_condition_by_comparing_errors(
+            &language_config,
+            &context.document_prefix,
+            &context.document_suffix,
+            &inserted_text,
+            inserted_range,
+            context.errors.clone(),
+        );
         // we need to call the tree-sitter based termination here
         let terminating_condition = check_terminating_condition_tree_sitter(
             &language_config,
@@ -408,7 +443,13 @@ fn check_terminating_condition(
             &inserted_text,
             inserted_range,
         );
-        if terminating_condition {
+        dbg!(
+            "terminating_condition",
+            terminating_condition,
+            terminating_condition_errors,
+            &final_completion_from_prefix
+        );
+        if terminating_condition_errors {
             return true;
         } else {
             return false;
@@ -441,6 +482,55 @@ fn check_terminating_condition(
     } else {
         false
     }
+}
+
+fn grab_errors_using_tree_sitter(
+    editor_parsing: Arc<EditorParsing>,
+    file_content: &str,
+    file_path: &str,
+) -> Option<(usize, usize)> {
+    let language_config = editor_parsing.for_file_path(file_path);
+    if let Some(language_config) = language_config {
+        let mut parser = tree_sitter::Parser::new();
+        let grammar = language_config.grammar;
+        let _ = parser.set_language(grammar());
+        let tree = parser.parse(file_content.as_bytes(), None);
+        if let Some(tree) = tree {
+            let mut cursor = tree.walk();
+            Some(walk_tree_for_errors_and_missing(&mut cursor))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn walk_tree_for_errors_and_missing(cursor: &mut TreeCursor) -> (usize, usize) {
+    let mut missing = 0;
+    let mut error = 0;
+    loop {
+        let node = cursor.node();
+
+        if node.is_missing() {
+            missing = missing + 1;
+        }
+        if node.is_error() {
+            error = error + 1;
+        }
+
+        if cursor.goto_first_child() {
+            let (error_child, missing_child) = walk_tree_for_errors_and_missing(cursor);
+            missing = missing + missing_child;
+            error = error + error_child;
+            cursor.goto_parent();
+        }
+
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    (error, missing)
 }
 
 fn walk_tree_for_no_errors(cursor: &mut TreeCursor, inserted_range: &Range) -> bool {
@@ -505,6 +595,39 @@ fn check_terminating_condition_tree_sitter(
         let mut cursor = tree.walk();
         // for termination condition we require there to be no errors
         walk_tree_for_no_errors(&mut cursor, inserted_range)
+    } else {
+        true
+    }
+}
+
+fn check_terminating_condition_by_comparing_errors(
+    language_config: &TSLanguageConfig,
+    prefix: &str,
+    suffix: &str,
+    text_to_insert: &str,
+    inserted_range: &Range,
+    previous_errors: Option<FillInMiddleError>,
+) -> bool {
+    if let None = previous_errors {
+        return false;
+    }
+    let previous_errors = previous_errors.expect("if let None to hold");
+    let final_document =
+        prefix.to_owned() + &insert_string_and_check_suffix(text_to_insert, suffix);
+    let grammar = language_config.grammar;
+    let mut parser = tree_sitter::Parser::new();
+    let _ = parser.set_language(grammar());
+    let tree = parser.parse(final_document.as_bytes(), None);
+    if let Some(tree) = tree {
+        let mut cursor = tree.walk();
+        let (error, missing) = walk_tree_for_errors_and_missing(&mut cursor);
+        // Now we are going to check if any of the errors or missing have increased
+        // from the previous errors
+        if error > previous_errors.error_count || missing > previous_errors.missing_count {
+            false
+        } else {
+            true
+        }
     } else {
         true
     }
@@ -603,6 +726,7 @@ mod tests {
             "something_else".to_owned(),
             "something_else".to_owned(),
             Arc::new(Default::default()),
+            None,
         ));
         let inserted_text = "(blah: number) => {".to_owned();
         let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
@@ -620,6 +744,7 @@ mod tests {
             "something_else".to_owned(),
             "something_else".to_owned(),
             Arc::new(Default::default()),
+            None,
         ));
         let inserted_text = "if (blah: number) => {\nconsole.log('blah');}".to_owned();
         let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));

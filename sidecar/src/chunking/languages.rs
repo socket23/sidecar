@@ -1833,6 +1833,9 @@ function add(a: number, b: number): number {
                 start_byte <= inserted_byte && inserted_byte <= end_byte
             }
 
+            // TODO(skcd): Check this condition here tomorrow so we can handle cases
+            // where the missing shows up at the end of the node, because that ends up
+            // happening quite often
             fn check_if_intersects_range(
                 start_byte: usize,
                 end_byte: usize,
@@ -1948,6 +1951,26 @@ fn init_ort_dylib() {
         let mut visitors = tree.walk();
         // walk(&mut visitors, 0);
         dbg!(walk_tree_for_no_errors(&mut visitors, &range, 0));
+        assert!(false);
+    }
+
+    #[test]
+    fn test_typescript_error_checking() {
+        let source_code = r#"class A {
+public somethingelse() {}
+public something() {
+}"#;
+        let language = "typescript";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("test to work");
+        let grammar = ts_language_config.grammar;
+        let mut parser = Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let mut visitors = tree.walk();
+        walk(&mut visitors, 0);
         assert!(false);
     }
 }

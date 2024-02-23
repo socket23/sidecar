@@ -176,7 +176,6 @@ impl FillInMiddleCompletionAgent {
         }
         let mut token_limit = token_limit.expect("if let None to hold");
 
-        dbg!("generating_context_start", Local::now());
         let document_lines = DocumentLines::from_file_content(&completion_request.text);
 
         let mut prefix = None;
@@ -247,7 +246,6 @@ impl FillInMiddleCompletionAgent {
             },
             &fast_model,
         )?;
-        dbg!("generating_context_end", Local::now());
 
         let arced_document_lines = Arc::new(document_lines);
 
@@ -442,12 +440,6 @@ fn check_terminating_condition(
             &context.document_suffix,
             &inserted_text,
             inserted_range,
-        );
-        dbg!(
-            "terminating_condition",
-            terminating_condition,
-            terminating_condition_errors,
-            &final_completion_from_prefix
         );
         if terminating_condition_errors {
             return true;

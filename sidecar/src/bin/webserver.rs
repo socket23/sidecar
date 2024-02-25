@@ -204,4 +204,8 @@ fn inline_completion() -> Router {
             "/cancel_inline_completion",
             post(sidecar::webserver::inline_completion::cancel_inline_completion),
         )
+        .route(
+            "/document_open",
+            post(sidecar::webserver::inline_completion::inline_document_open),
+        )
 }

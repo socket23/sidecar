@@ -24,6 +24,11 @@ impl FillInMiddleState {
         registration
     }
 
+    // check if the request is already running
+    pub fn contains(&self, request_id: &str) -> bool {
+        self.abort_handles.contains_key(request_id)
+    }
+
     // get the abort handle back here and handle the termination request
     // coming from the editor correctly, for now its just cancelling the stream
     fn get(&self, request_id: &str) -> Option<AbortHandle> {

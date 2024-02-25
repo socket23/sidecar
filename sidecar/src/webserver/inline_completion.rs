@@ -2,18 +2,13 @@ use axum::{
     response::{sse, IntoResponse, Sse},
     Extension, Json,
 };
-use chrono::prelude::*;
-use futures::{
-    stream::{AbortHandle, Abortable},
-    StreamExt,
-};
-use tracing::{error, info};
+use futures::{stream::Abortable, StreamExt};
+use tracing::info;
 
 use crate::{
     application::application::Application,
     chunking::text_document::{Position, Range},
-    in_line_agent::types::InLineAgent,
-    inline_completion::types::{FillInMiddleCompletionAgent, InLineCompletionError},
+    inline_completion::types::FillInMiddleCompletionAgent,
 };
 
 use super::{
@@ -137,4 +132,19 @@ pub async fn cancel_inline_completion(
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     fill_in_middle_state.cancel(&id);
     Ok(Json(CancelInlineCompletionResponse {}))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineDocumentOpenRequest {}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineDocumentOpenResponse {}
+
+impl ApiResponse for InLineDocumentOpenResponse {}
+
+pub async fn inline_document_open(
+    Extension(_app): Extension<Application>,
+    Json(InLineDocumentOpenRequest {}): Json<InLineDocumentOpenRequest>,
+) -> Result<impl IntoResponse> {
+    Ok(Json(InLineDocumentOpenResponse {}))
 }

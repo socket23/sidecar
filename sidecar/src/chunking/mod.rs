@@ -1,12 +1,8 @@
 pub mod editor_parsing;
 mod javascript;
 pub mod languages;
-pub mod navigation;
 mod python;
-pub mod refdef;
 mod rust;
-pub mod scope_graph;
 pub mod text_document;
-pub mod tree_sitter_file;
 pub mod types;
 mod typescript;

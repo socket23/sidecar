@@ -102,7 +102,6 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .nest("/in_editor", in_editor_router())
         .nest("/tree_sitter", tree_sitter_router())
         .nest("/file", file_operations_router())
-        .nest("/navigation", token_information_router())
         .nest("/inline_completion", inline_completion());
 
     api = api.route("/health", get(sidecar::webserver::health::health));
@@ -183,14 +182,6 @@ fn tree_sitter_router() -> Router {
 fn file_operations_router() -> Router {
     use axum::routing::*;
     Router::new().route("/edit_file", post(sidecar::webserver::file_edit::file_edit))
-}
-
-fn token_information_router() -> Router {
-    use axum::routing::*;
-    Router::new().route(
-        "/token_information",
-        post(sidecar::webserver::token_information::token_information),
-    )
 }
 
 fn inline_completion() -> Router {

@@ -18,9 +18,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::{
     application::background::SyncPipes,
-    chunking::{
-        scope_graph::SymbolLocations, text_document::Range, tree_sitter_file::TreeSitterFile,
-    },
+    chunking::text_document::Range,
     repo::{
         filesystem::{BranchFilter, FileWalker, GitWalker},
         iterator::RepoDirectoryEntry,
@@ -38,7 +36,7 @@ use crate::{
 
 use super::{
     caching::{CacheKeys, FileCache, FileCacheSnapshot},
-    indexer::{DocumentRead, Indexable},
+    indexer::Indexable,
     schema::File,
 };
 
@@ -323,23 +321,6 @@ impl RepositoryFile {
             .detect_lang(&relative_path_str)
             .unwrap_or("not_detected_language".to_owned());
 
-        let symbol_locations = {
-            // build a syntax aware representation of the file
-            let scope_graph = TreeSitterFile::try_build(
-                self.buffer.as_bytes(),
-                &language,
-                language_parsing.clone(),
-            )
-            .and_then(TreeSitterFile::scope_graph);
-
-            match scope_graph {
-                // we have a graph, use that
-                Ok(graph) => SymbolLocations::TreeSitter(graph),
-                // no graph, it's empty
-                Err(_) => SymbolLocations::Empty,
-            }
-        };
-
         let file_extension = self
             .pathbuf
             .extension()
@@ -382,7 +363,6 @@ impl RepositoryFile {
             schema.avg_line_length => lines_avg,
             schema.symbols => String::default(),
             schema.branches => "HEAD".to_owned(),
-            schema.symbol_locations => bincode::serialize(&symbol_locations).unwrap(),
         ))
     }
 }
@@ -438,7 +418,6 @@ pub struct ContentDocument {
     pub repo_name: String,
     pub repo_ref: String,
     pub line_end_indices: Vec<u32>,
-    pub symbol_locations: SymbolLocations,
     pub indexed: bool,
 }
 
@@ -468,16 +447,6 @@ fn read_text_field(doc: &tantivy::Document, field: Field) -> String {
 }
 
 impl ContentDocument {
-    pub fn hoverable_ranges(
-        &self,
-        language: &str,
-        language_parsing: Arc<TSLanguageParsing>,
-    ) -> Option<Vec<Range>> {
-        TreeSitterFile::try_build(self.content.as_bytes(), language, language_parsing)
-            .and_then(TreeSitterFile::hoverable_ranges)
-            .ok()
-    }
-
     pub fn read_document(schema: &File, doc: tantivy::Document) -> Self {
         let relative_path = read_text_field(&doc, schema.relative_path);
         let repo_ref = read_text_field(&doc, schema.repo_ref);
@@ -493,20 +462,11 @@ impl ContentDocument {
             .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect();
 
-        let symbol_locations = bincode::deserialize(
-            doc.get_first(schema.symbol_locations)
-                .unwrap()
-                .as_bytes()
-                .unwrap(),
-        )
-        .unwrap_or_default();
-
         ContentDocument {
             relative_path,
             repo_name,
             repo_ref,
             content,
-            symbol_locations,
             line_end_indices,
             indexed: true,
         }
@@ -537,26 +497,11 @@ impl ContentDocument {
             .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect();
 
-        let symbol_locations = {
-            // build a syntax aware representation of the file
-            let scope_graph =
-                TreeSitterFile::try_build(content, &language, language_parsing.clone())
-                    .and_then(TreeSitterFile::scope_graph);
-
-            match scope_graph {
-                // we have a graph, use that
-                Ok(graph) => SymbolLocations::TreeSitter(graph),
-                // no graph, it's empty
-                Err(_) => SymbolLocations::Empty,
-            }
-        };
-
         Self {
             relative_path: relative_path_str,
             repo_name: "unknown".to_owned(),
             repo_ref: repo_ref.to_string(),
             content: buffer,
-            symbol_locations,
             line_end_indices,
             indexed: false,
         }

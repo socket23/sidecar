@@ -9,7 +9,13 @@
 //! Steps being taken:
 //! - First we start with just the open tabs and also edit tracking here
 
+use std::collections::HashMap;
+
 use tokio::sync::Mutex;
+
+use crate::chunking::text_document::Range;
+
+use super::document::content::DocumentEditLines;
 
 const MAX_HISTORY_SIZE: usize = 50;
 const MAX_HISTORY_SIZE_FOR_CODE_SNIPPETS: usize = 20;
@@ -20,31 +26,58 @@ pub struct SymbolTrackerInline {
     // We are storing the fs path of the documents, these are stored in the reverse
     // order
     pub document_history: Mutex<Vec<String>>,
+    pub document_lines: Mutex<HashMap<String, DocumentEditLines>>,
 }
 
 impl SymbolTrackerInline {
     pub fn new() -> SymbolTrackerInline {
         SymbolTrackerInline {
             document_history: Mutex::new(Vec::new()),
+            document_lines: Mutex::new(HashMap::new()),
         }
     }
 
-    pub async fn add_document(&self, document_path: String) {
+    pub async fn track_file(&self, document_path: String) {
         // First we check if the document is already present in the history
-        let mut document_history = self.document_history.lock().await;
-        if !document_history.contains(&document_path) {
-            document_history.push(document_path);
-            if document_history.len() > MAX_HISTORY_SIZE {
-                document_history.remove(0);
+        {
+            let mut document_history = self.document_history.lock().await;
+            if !document_history.contains(&document_path) {
+                document_history.push(document_path.to_owned());
+                if document_history.len() > MAX_HISTORY_SIZE {
+                    document_history.remove(0);
+                }
+            } else {
+                let index = document_history
+                    .iter()
+                    .position(|x| x == &document_path)
+                    .unwrap();
+                document_history.remove(index);
+                document_history.push(document_path.to_owned());
             }
-        } else {
-            // We are going to move the document to the end of the history
-            let index = document_history
-                .iter()
-                .position(|x| x == &document_path)
-                .unwrap();
-            document_history.remove(index);
-            document_history.push(document_path);
+        }
+    }
+
+    pub async fn add_document(&self, document_path: String, content: String, language: String) {
+        // First we check if the document is already present in the history
+        self.track_file(document_path.to_owned()).await;
+        // Next we will create an entry in the document lines if it does not exist
+        {
+            let mut document_lines = self.document_lines.lock().await;
+            let document_lines_entry =
+                DocumentEditLines::new(document_path.to_owned(), content, language);
+            document_lines.insert(document_path.clone(), document_lines_entry);
+        }
+    }
+
+    pub async fn file_content_change(&self, document_path: String, edits: Vec<(Range, String)>) {
+        // always track the file which is being edited
+        self.track_file(document_path.to_owned()).await;
+        // Now we first need to get the lock over the document lines
+        // and then iterate over all the edits and apply them
+        let mut document_lines = self.document_lines.lock().await;
+        let document_lines_entry = document_lines.get_mut(&document_path).unwrap();
+        for (range, new_text) in edits {
+            document_lines_entry.content_change(range, new_text);
         }
     }
 

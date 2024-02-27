@@ -156,7 +156,9 @@ pub async fn inline_document_open(
 ) -> Result<impl IntoResponse> {
     dbg!("inline.document.open", &file_path);
     let symbol_tracker = app.symbol_tracker.clone();
-    symbol_tracker.add_document(file_path).await;
+    symbol_tracker
+        .add_document(file_path, file_content, language)
+        .await;
     Ok(Json(InLineDocumentOpenResponse {}))
 }
 
@@ -190,12 +192,26 @@ pub async fn inline_completion_file_content_change(
     Extension(_app): Extension<Application>,
     Json(InLineCompletionFileContentChange {
         file_path,
-        language,
+        language: _,
         events,
     }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
     dbg!("inline.completion.file.content.change", &file_path);
     let symbol_tracker = _app.symbol_tracker.clone();
-    symbol_tracker.add_document(file_path).await;
+    // track the file to the top
+    symbol_tracker.track_file(file_path.to_owned()).await;
+
+    // make the edits to the file
+    let events = events
+        .into_iter()
+        .map(|event| {
+            let range = Range::new(
+                Position::new(event.range.start_line, event.range.start_column, 0),
+                Position::new(event.range.end_line, event.range.end_column, 0),
+            );
+            (range, event.text)
+        })
+        .collect::<Vec<_>>();
+    symbol_tracker.file_content_change(file_path, events).await;
     Ok(Json(InLineCompletionFileContentChangeResponse {}))
 }

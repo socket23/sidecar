@@ -147,7 +147,7 @@ pub struct InLineDocumentOpenResponse {}
 impl ApiResponse for InLineDocumentOpenResponse {}
 
 pub async fn inline_document_open(
-    Extension(_app): Extension<Application>,
+    Extension(app): Extension<Application>,
     Json(InLineDocumentOpenRequest {
         file_path,
         file_content,
@@ -155,6 +155,8 @@ pub async fn inline_document_open(
     }): Json<InLineDocumentOpenRequest>,
 ) -> Result<impl IntoResponse> {
     dbg!("inline.document.open", &file_path);
+    let symbol_tracker = app.symbol_tracker.clone();
+    symbol_tracker.add_document(file_path).await;
     Ok(Json(InLineDocumentOpenResponse {}))
 }
 
@@ -193,5 +195,7 @@ pub async fn inline_completion_file_content_change(
     }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
     dbg!("inline.completion.file.content.change", &file_path);
+    let symbol_tracker = _app.symbol_tracker.clone();
+    symbol_tracker.add_document(file_path).await;
     Ok(Json(InLineCompletionFileContentChangeResponse {}))
 }

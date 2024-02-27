@@ -135,7 +135,11 @@ pub async fn cancel_inline_completion(
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct InLineDocumentOpenRequest {}
+pub struct InLineDocumentOpenRequest {
+    file_path: String,
+    file_content: String,
+    language: String,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineDocumentOpenResponse {}
@@ -144,7 +148,28 @@ impl ApiResponse for InLineDocumentOpenResponse {}
 
 pub async fn inline_document_open(
     Extension(_app): Extension<Application>,
-    Json(InLineDocumentOpenRequest {}): Json<InLineDocumentOpenRequest>,
+    Json(InLineDocumentOpenRequest {
+        file_path,
+        file_content,
+        language,
+    }): Json<InLineDocumentOpenRequest>,
 ) -> Result<impl IntoResponse> {
     Ok(Json(InLineDocumentOpenResponse {}))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineCompletionFileContentChange {
+    file_path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineCompletionFileContentChangeResponse {}
+
+impl ApiResponse for InLineCompletionFileContentChangeResponse {}
+
+pub async fn inline_completion_file_content_change(
+    Extension(_app): Extension<Application>,
+    Json(InLineCompletionFileContentChange { file_path }): Json<InLineCompletionFileContentChange>,
+) -> Result<impl IntoResponse> {
+    Ok(Json(InLineCompletionFileContentChangeResponse {}))
 }

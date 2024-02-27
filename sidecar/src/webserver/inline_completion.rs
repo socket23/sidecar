@@ -154,6 +154,7 @@ pub async fn inline_document_open(
         language,
     }): Json<InLineDocumentOpenRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!("inline.document.open", &file_path);
     Ok(Json(InLineDocumentOpenResponse {}))
 }
 
@@ -191,5 +192,6 @@ pub async fn inline_completion_file_content_change(
         events,
     }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
+    dbg!("inline.completion.file.content.change", &file_path);
     Ok(Json(InLineCompletionFileContentChangeResponse {}))
 }

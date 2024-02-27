@@ -1,7 +1,12 @@
 //! We keep track of the document lines properly, so we can get data about which lines have been
 //! edited and which are not changed, this way we can know which lines to keep track of
 
-use crate::chunking::text_document::{Position, Range};
+use std::sync::Arc;
+
+use crate::chunking::{
+    editor_parsing::EditorParsing,
+    text_document::{Position, Range},
+};
 
 /// Keeps track of the lines which have been added and edited into the code
 /// Note: This does not keep track of the lines which have been removed
@@ -34,10 +39,18 @@ pub struct DocumentEditLines {
     lines: Vec<DocumentLine>,
     file_path: String,
     language: String,
+    // What snippets are in the document
+    snippets: Vec<String>,
+    editor_parsing: Arc<EditorParsing>,
 }
 
 impl DocumentEditLines {
-    pub fn new(file_path: String, content: String, language: String) -> DocumentEditLines {
+    pub fn new(
+        file_path: String,
+        content: String,
+        language: String,
+        editor_parsing: Arc<EditorParsing>,
+    ) -> DocumentEditLines {
         if content == "" {
             DocumentEditLines {
                 lines: vec![DocumentLine {
@@ -46,6 +59,8 @@ impl DocumentEditLines {
                 }],
                 file_path,
                 language,
+                snippets: vec![],
+                editor_parsing,
             }
         } else {
             let lines = content
@@ -59,6 +74,8 @@ impl DocumentEditLines {
                 lines,
                 file_path,
                 language,
+                snippets: vec![],
+                editor_parsing,
             }
         }
     }
@@ -155,12 +172,18 @@ impl DocumentEditLines {
 
 #[cfg(test)]
 mod tests {
-    use crate::chunking::text_document::{Position, Range};
+    use std::sync::Arc;
+
+    use crate::chunking::{
+        editor_parsing::EditorParsing,
+        text_document::{Position, Range},
+    };
 
     use super::DocumentEditLines;
 
     #[test]
     fn test_remove_range_works_as_expected() {
+        let editor_parsing = Arc::new(EditorParsing::default());
         let mut document = DocumentEditLines::new(
             "".to_owned(),
             r#"FIRST LINE
@@ -171,6 +194,7 @@ FIFTH LINE 🫡
 SIXTH LINE 🫡🚀"#
                 .to_owned(),
             "".to_owned(),
+            editor_parsing,
         );
         let range = Range::new(Position::new(4, 0, 0), Position::new(5, 0, 0));
         document.remove_range(range);
@@ -187,8 +211,13 @@ SIXTH LINE 🫡🚀"#
 
     #[test]
     fn test_remove_range_empty_works() {
-        let mut document =
-            DocumentEditLines::new("".to_owned(), r#"SOMETHING"#.to_owned(), "".to_owned());
+        let editor_parsing = Arc::new(EditorParsing::default());
+        let mut document = DocumentEditLines::new(
+            "".to_owned(),
+            r#"SOMETHING"#.to_owned(),
+            "".to_owned(),
+            editor_parsing,
+        );
         let range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
         document.remove_range(range);
         let updated_content = document.get_content();
@@ -197,6 +226,7 @@ SIXTH LINE 🫡🚀"#
 
     #[test]
     fn test_insert_at_position_works_as_expected() {
+        let editor_parsing = Arc::new(EditorParsing::default());
         let mut document = DocumentEditLines::new(
             "".to_owned(),
             r#"FIRST LINE
@@ -207,6 +237,18 @@ FIFTH LINE 🫡
 SIXTH LINE 🫡🚀"#
                 .to_owned(),
             "".to_owned(),
+            editor_parsing,
+        );
+        let position = Position::new(3, 1, 0);
+        document.insert_at_position(position, "🚀🚀🚀".to_owned());
+        let updated_content = document.get_content();
+        assert_eq!(
+            updated_content,
+            r#"FIRST LINE
+SECOND LINE
+THIRD LINE
+🫡🚀🚀🚀
+🫡🫡🫡
         );
         let position = Position::new(3, 1, 0);
         document.insert_at_position(position, "🚀🚀🚀\n🪨🪨".to_owned());
@@ -225,7 +267,9 @@ SIXTH LINE 🫡🚀"#
 
     #[test]
     fn test_insert_on_empty_document_works() {
-        let mut document = DocumentEditLines::new("".to_owned(), "".to_owned(), "".to_owned());
+        let editor_parsing = Arc::new(EditorParsing::default());
+        let mut document =
+            DocumentEditLines::new("".to_owned(), "".to_owned(), "".to_owned(), editor_parsing);
         let position = Position::new(0, 0, 0);
         document.insert_at_position(position, "SOMETHING".to_owned());
         let updated_content = document.get_content();
@@ -234,6 +278,7 @@ SIXTH LINE 🫡🚀"#
 
     #[test]
     fn test_removing_all_content() {
+        let editor_parsing = Arc::new(EditorParsing::default());
         let mut document = DocumentEditLines::new(
             "".to_owned(),
             r#"FIRST LINE
@@ -244,6 +289,7 @@ FIFTH LINE 🫡
 SIXTH LINE 🫡🚀"#
                 .to_owned(),
             "".to_owned(),
+            editor_parsing,
         );
         let range = Range::new(Position::new(0, 0, 0), Position::new(5, 13, 0));
         document.remove_range(range);

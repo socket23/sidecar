@@ -82,7 +82,7 @@ impl Application {
         let answer_models = Arc::new(LLMAnswerModelBroker::new());
         let editor_parsing = Arc::new(EditorParsing::default());
         let fill_in_middle_state = Arc::new(FillInMiddleState::new());
-        let symbol_tracker = Arc::new(SymbolTrackerInline::new());
+        let symbol_tracker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),

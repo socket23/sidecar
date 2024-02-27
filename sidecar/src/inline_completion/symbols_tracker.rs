@@ -9,31 +9,35 @@
 //! Steps being taken:
 //! - First we start with just the open tabs and also edit tracking here
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::Mutex;
 
-use crate::chunking::text_document::Range;
+use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};
 
 use super::document::content::DocumentEditLines;
 
 const MAX_HISTORY_SIZE: usize = 50;
 const MAX_HISTORY_SIZE_FOR_CODE_SNIPPETS: usize = 20;
+// The maximum window size of the snippet we are working with
+const WINDOW_SIZE: usize = 60;
 
 /// This is the symbol tracker which will be used for inline completion
 /// We keep track of the document histories and the content of these documents
 pub struct SymbolTrackerInline {
     // We are storing the fs path of the documents, these are stored in the reverse
     // order
-    pub document_history: Mutex<Vec<String>>,
-    pub document_lines: Mutex<HashMap<String, DocumentEditLines>>,
+    document_history: Mutex<Vec<String>>,
+    document_lines: Mutex<HashMap<String, DocumentEditLines>>,
+    editor_parsing: Arc<EditorParsing>,
 }
 
 impl SymbolTrackerInline {
-    pub fn new() -> SymbolTrackerInline {
+    pub fn new(editor_parsing: Arc<EditorParsing>) -> SymbolTrackerInline {
         SymbolTrackerInline {
             document_history: Mutex::new(Vec::new()),
             document_lines: Mutex::new(HashMap::new()),
+            editor_parsing,
         }
     }
 
@@ -63,8 +67,12 @@ impl SymbolTrackerInline {
         // Next we will create an entry in the document lines if it does not exist
         {
             let mut document_lines = self.document_lines.lock().await;
-            let document_lines_entry =
-                DocumentEditLines::new(document_path.to_owned(), content, language);
+            let document_lines_entry = DocumentEditLines::new(
+                document_path.to_owned(),
+                content,
+                language,
+                self.editor_parsing.clone(),
+            );
             document_lines.insert(document_path.clone(), document_lines_entry);
         }
     }

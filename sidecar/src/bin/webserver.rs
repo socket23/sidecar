@@ -199,4 +199,8 @@ fn inline_completion() -> Router {
             "/document_open",
             post(sidecar::webserver::inline_completion::inline_document_open),
         )
+        .route(
+            "/document_content_changed",
+            post(sidecar::webserver::inline_completion::inline_completion_file_content_change),
+        )
 }

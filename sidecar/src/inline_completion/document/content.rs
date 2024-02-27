@@ -33,10 +33,11 @@ impl DocumentLine {
 pub struct DocumentEditLines {
     lines: Vec<DocumentLine>,
     file_path: String,
+    language: String,
 }
 
 impl DocumentEditLines {
-    pub fn new(file_path: String, content: String) -> DocumentEditLines {
+    pub fn new(file_path: String, content: String, language: String) -> DocumentEditLines {
         if content == "" {
             DocumentEditLines {
                 lines: vec![DocumentLine {
@@ -44,6 +45,7 @@ impl DocumentEditLines {
                     content: "".to_string(),
                 }],
                 file_path,
+                language,
             }
         } else {
             let lines = content
@@ -53,7 +55,11 @@ impl DocumentEditLines {
                     content: line_content.to_string(),
                 })
                 .collect::<Vec<_>>();
-            DocumentEditLines { lines, file_path }
+            DocumentEditLines {
+                lines,
+                file_path,
+                language,
+            }
         }
     }
 
@@ -65,7 +71,7 @@ impl DocumentEditLines {
             .join("\n")
     }
 
-    pub fn remove_range(&mut self, range: Range) {
+    fn remove_range(&mut self, range: Range) {
         let start_line = range.start_line();
         let start_column = range.start_column();
         let end_line = range.end_line();
@@ -109,7 +115,7 @@ impl DocumentEditLines {
         }
     }
 
-    pub fn insert_at_position(&mut self, position: Position, content: String) {
+    fn insert_at_position(&mut self, position: Position, content: String) {
         // when we want to insert at the position so first we try to start appending it at the line number from the current column
         // position and also add the suffix which we have, this way we get the new lines which need to be inserted
         let line_content = self.lines[position.line()].content.to_owned();
@@ -149,10 +155,7 @@ impl DocumentEditLines {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        chunking::text_document::{Position, Range},
-        inline_completion::document,
-    };
+    use crate::chunking::text_document::{Position, Range};
 
     use super::DocumentEditLines;
 
@@ -167,6 +170,7 @@ FOURTH LINE
 FIFTH LINE 🫡
 SIXTH LINE 🫡🚀"#
                 .to_owned(),
+            "".to_owned(),
         );
         let range = Range::new(Position::new(4, 0, 0), Position::new(5, 0, 0));
         document.remove_range(range);
@@ -183,7 +187,8 @@ SIXTH LINE 🫡🚀"#
 
     #[test]
     fn test_remove_range_empty_works() {
-        let mut document = DocumentEditLines::new("".to_owned(), r#"SOMETHING"#.to_owned());
+        let mut document =
+            DocumentEditLines::new("".to_owned(), r#"SOMETHING"#.to_owned(), "".to_owned());
         let range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
         document.remove_range(range);
         let updated_content = document.get_content();
@@ -201,6 +206,7 @@ THIRD LINE
 FIFTH LINE 🫡
 SIXTH LINE 🫡🚀"#
                 .to_owned(),
+            "".to_owned(),
         );
         let position = Position::new(3, 1, 0);
         document.insert_at_position(position, "🚀🚀🚀\n🪨🪨".to_owned());
@@ -219,7 +225,7 @@ SIXTH LINE 🫡🚀"#
 
     #[test]
     fn test_insert_on_empty_document_works() {
-        let mut document = DocumentEditLines::new("".to_owned(), "".to_owned());
+        let mut document = DocumentEditLines::new("".to_owned(), "".to_owned(), "".to_owned());
         let position = Position::new(0, 0, 0);
         document.insert_at_position(position, "SOMETHING".to_owned());
         let updated_content = document.get_content();
@@ -237,6 +243,7 @@ THIRD LINE
 FIFTH LINE 🫡
 SIXTH LINE 🫡🚀"#
                 .to_owned(),
+            "".to_owned(),
         );
         let range = Range::new(Position::new(0, 0, 0), Position::new(5, 13, 0));
         document.remove_range(range);

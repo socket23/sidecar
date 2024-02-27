@@ -158,8 +158,24 @@ pub async fn inline_document_open(
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TextDocumentContentRange {
+    pub start_line: usize,
+    pub end_line: usize,
+    pub start_column: usize,
+    pub end_column: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TextDocumentContentChangeEvent {
+    range: TextDocumentContentRange,
+    text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineCompletionFileContentChange {
     file_path: String,
+    language: String,
+    events: Vec<TextDocumentContentChangeEvent>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -169,7 +185,11 @@ impl ApiResponse for InLineCompletionFileContentChangeResponse {}
 
 pub async fn inline_completion_file_content_change(
     Extension(_app): Extension<Application>,
-    Json(InLineCompletionFileContentChange { file_path }): Json<InLineCompletionFileContentChange>,
+    Json(InLineCompletionFileContentChange {
+        file_path,
+        language,
+        events,
+    }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
     Ok(Json(InLineCompletionFileContentChangeResponse {}))
 }

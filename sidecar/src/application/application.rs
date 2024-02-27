@@ -17,7 +17,7 @@ use tracing::{debug, warn};
 use crate::{
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     db::sqlite::{self, SqlDb},
-    inline_completion::state::FillInMiddleState,
+    inline_completion::{state::FillInMiddleState, symbols_tracker::SymbolTrackerInline},
     reporting::posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
 };
@@ -56,6 +56,7 @@ pub struct Application {
     pub answer_models: Arc<LLMAnswerModelBroker>,
     pub editor_parsing: Arc<EditorParsing>,
     pub fill_in_middle_state: Arc<FillInMiddleState>,
+    pub symbol_tracker: Arc<SymbolTrackerInline>,
 }
 
 impl Application {
@@ -81,6 +82,7 @@ impl Application {
         let answer_models = Arc::new(LLMAnswerModelBroker::new());
         let editor_parsing = Arc::new(EditorParsing::default());
         let fill_in_middle_state = Arc::new(FillInMiddleState::new());
+        let symbol_tracker = Arc::new(SymbolTrackerInline::new());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -108,6 +110,7 @@ impl Application {
             answer_models,
             editor_parsing,
             fill_in_middle_state,
+            symbol_tracker,
         })
     }
 

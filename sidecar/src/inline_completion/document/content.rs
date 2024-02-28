@@ -3,12 +3,71 @@
 
 use std::{collections::HashSet, sync::Arc};
 
+use regex::Regex;
 use tree_sitter::Tree;
 
 use crate::chunking::{
     editor_parsing::EditorParsing,
     text_document::{Position, Range},
 };
+
+/// This contains the bag of words for the given snippets and it uses a custom
+/// tokenizer to extract the words from the code
+#[derive(Debug)]
+pub struct BagOfWords {
+    words: HashSet<String>,
+    snippet: String,
+}
+
+impl BagOfWords {
+    pub fn new(snippet: String) -> Self {
+        let bag_of_words = BagOfWords::tokenize_call(snippet.as_str());
+        BagOfWords {
+            words: bag_of_words,
+            snippet,
+        }
+    }
+
+    fn check_valid_token(token: &str) -> bool {
+        token.len() > 1
+    }
+
+    fn tokenize_call(code: &str) -> HashSet<String> {
+        let re = Regex::new(r"\b\w+\b").unwrap();
+        let mut valid_tokens: HashSet<String> = Default::default();
+
+        for m in re.find_iter(code) {
+            let text = m.as_str();
+
+            if text.contains('_') {
+                // snake_case
+                let parts: Vec<&str> = text.split('_').collect();
+                for part in parts {
+                    if BagOfWords::check_valid_token(part) {
+                        valid_tokens.insert(part.to_lowercase());
+                    }
+                }
+            } else if text.chars().any(|c| c.is_uppercase()) {
+                // PascalCase and camelCase
+                let camel_re = Regex::new(r"[A-Z][a-z]+|[a-z]+|[A-Z]+(?=[A-Z]|$)").unwrap();
+                let parts: Vec<&str> = camel_re.find_iter(text).map(|mat| mat.as_str()).collect();
+                for part in parts {
+                    if BagOfWords::check_valid_token(part) {
+                        valid_tokens.insert(part.to_lowercase());
+                    }
+                }
+            } else {
+                if BagOfWords::check_valid_token(text) {
+                    valid_tokens.insert(text.to_lowercase());
+                }
+            }
+        }
+
+        // Now we want to create the bigrams and the tigrams from these tokens
+        // and have them stored too, so we can process them
+        valid_tokens
+    }
+}
 
 /// Keeps track of the lines which have been added and edited into the code
 /// Note: This does not keep track of the lines which have been removed
@@ -49,7 +108,7 @@ pub struct DocumentEditLines {
     // we want to show the content for it no matter what
     // basically if its because of a symbol then we should only show the outline here
     // but if that's not the case, then its fine
-    window_snippets: Vec<String>,
+    window_snippets: Vec<BagOfWords>,
     editor_parsing: Arc<EditorParsing>,
     tree: Option<Tree>,
 }
@@ -186,7 +245,7 @@ impl DocumentEditLines {
         // Maximum snippet size here is 50 lines and we want to generate the snippets using the lines
         let mut final_snippets = vec![];
         if lines.len() <= 50 {
-            final_snippets.push(lines.join("\n"));
+            final_snippets.push(BagOfWords::new(lines.join("\n")));
         } else {
             for i in 0..(lines.len() - 50) {
                 let mut current_lines = vec![];
@@ -196,7 +255,7 @@ impl DocumentEditLines {
                     }
                     current_lines.push(lines[i + j].to_owned());
                 }
-                final_snippets.push(current_lines.join("\n"));
+                final_snippets.push(BagOfWords::new(current_lines.join("\n")));
             }
         }
         self.window_snippets = final_snippets;

@@ -40,6 +40,13 @@ pub struct DocumentEditLines {
     file_path: String,
     language: String,
     // What snippets are in the document
+    // Some things we should take care of:
+    // when providing context to the inline autocomplete we want to make sure that
+    // the private methods are not shown (cause they are not necessary)
+    // when showing snippets for jaccard similarity, things are difference
+    // we want to show the content for it no matter what
+    // basically if its because of a symbol then we should only show the outline here
+    // but if that's not the case, then its fine
     snippets: Vec<String>,
     editor_parsing: Arc<EditorParsing>,
 }
@@ -161,12 +168,22 @@ impl DocumentEditLines {
             .splice(position.line()..position.line(), new_lines);
     }
 
+    fn generate_snippets(&mut self) {
+        // For generating the snippets we have to use the following tricks which might be useful
+        // - we do not want to include imports (they are just noise)
+        // - we want to provide the implementations of the functions and classes, these are necessary
+        // - can a stupid sliding window here work as we want?
+    }
+
     // If the contents have changed, we need to mark the new lines which have changed
     pub fn content_change(&mut self, range: Range, new_content: String) {
         // First we remove the content at the range which is changing
         self.remove_range(range);
         // Then we insert the new content at the range
         self.insert_at_position(range.start_position(), new_content);
+        // We want to get the code snippets here and make sure that the edited code snippets
+        // are together when creating the window
+        self.generate_snippets();
     }
 }
 

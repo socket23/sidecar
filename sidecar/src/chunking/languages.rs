@@ -82,11 +82,6 @@ pub struct TSLanguageConfig {
     /// which a user can move their marker over and get back data
     pub hoverable_query: String,
 
-    /// What are the different scopes which are present in the language we can
-    /// infer that using the scope query to get the local definitions and the
-    /// scopes which should be hoisted upwards
-    pub scope_query: String,
-
     /// The comment prefix for the language, typescript is like // and rust
     /// is like //, python is like #
     pub comment_prefix: String,
@@ -94,6 +89,9 @@ pub struct TSLanguageConfig {
     /// This is used to keep track of the end of line situations in many lanaguages
     /// if they exist
     pub end_of_line: Option<String>,
+
+    /// Tree sitter node types used to detect imports which are present in the file
+    pub import_statement: Vec<String>,
 }
 
 impl TSLanguageConfig {

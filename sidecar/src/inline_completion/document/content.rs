@@ -1,7 +1,9 @@
 //! We keep track of the document lines properly, so we can get data about which lines have been
 //! edited and which are not changed, this way we can know which lines to keep track of
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
+
+use tree_sitter::Tree;
 
 use crate::chunking::{
     editor_parsing::EditorParsing,
@@ -47,8 +49,9 @@ pub struct DocumentEditLines {
     // we want to show the content for it no matter what
     // basically if its because of a symbol then we should only show the outline here
     // but if that's not the case, then its fine
-    snippets: Vec<String>,
+    window_snippets: Vec<String>,
     editor_parsing: Arc<EditorParsing>,
+    tree: Option<Tree>,
 }
 
 impl DocumentEditLines {
@@ -58,7 +61,7 @@ impl DocumentEditLines {
         language: String,
         editor_parsing: Arc<EditorParsing>,
     ) -> DocumentEditLines {
-        if content == "" {
+        let mut document_lines = if content == "" {
             DocumentEditLines {
                 lines: vec![DocumentLine {
                     line_status: DocumentLineStatus::Unedited,
@@ -66,8 +69,9 @@ impl DocumentEditLines {
                 }],
                 file_path,
                 language,
-                snippets: vec![],
+                window_snippets: vec![],
                 editor_parsing,
+                tree: None,
             }
         } else {
             let lines = content
@@ -81,9 +85,19 @@ impl DocumentEditLines {
                 lines,
                 file_path,
                 language,
-                snippets: vec![],
+                window_snippets: vec![],
                 editor_parsing,
+                tree: None,
             }
+        };
+        document_lines.set_tree();
+        document_lines
+    }
+
+    fn set_tree(&mut self) {
+        if let Some(language_config) = self.editor_parsing.for_file_path(&self.file_path) {
+            let tree = language_config.get_tree_sitter_tree(self.get_content().as_bytes());
+            self.tree = tree;
         }
     }
 
@@ -168,11 +182,80 @@ impl DocumentEditLines {
             .splice(position.line()..position.line(), new_lines);
     }
 
+    fn snippets_using_sliding_window(&mut self, lines: Vec<String>) {
+        // Maximum snippet size here is 50 lines and we want to generate the snippets using the lines
+        let mut final_snippets = vec![];
+        if lines.len() <= 50 {
+            final_snippets.push(lines.join("\n"));
+        } else {
+            for i in 0..(lines.len() - 50) {
+                let mut current_lines = vec![];
+                for j in 0..50 {
+                    if i + j >= lines.len() {
+                        break;
+                    }
+                    current_lines.push(lines[i + j].to_owned());
+                }
+                final_snippets.push(current_lines.join("\n"));
+            }
+        }
+        self.window_snippets = final_snippets;
+    }
+
     fn generate_snippets(&mut self) {
+        // generate the new tree sitter tree
+        self.set_tree();
+
+        let content = self.get_content();
+
+        let source_code = content.as_bytes();
         // For generating the snippets we have to use the following tricks which might be useful
         // - we do not want to include imports (they are just noise)
         // - we want to provide the implementations of the functions and classes, these are necessary
         // - can a stupid sliding window here work as we want?
+        let language_config = self.editor_parsing.for_file_path(&self.file_path);
+        let mut exlcuded_lines_import: HashSet<usize> = Default::default();
+        match (language_config, self.tree.as_ref()) {
+            (Some(language_config), Some(tree)) => {
+                let excluded_ranges = language_config.get_import_ranges(tree, source_code);
+                excluded_ranges.into_iter().for_each(|range| {
+                    let start_line = range.start_line();
+                    let end_line = range.end_line();
+                    // Now we grab all the lines between start and end line
+                    for i in start_line..end_line + 1 {
+                        exlcuded_lines_import.insert(i);
+                    }
+                });
+            }
+            _ => {}
+        }
+
+        // we check what different types of constructs we have in the tree, and then only exclude the
+        // import lines which are not convered by any of the other constructs
+        if let (Some(language_config), Some(tree)) = (language_config, self.tree.as_ref()) {
+            // remove the lines which are covered by the functions, since these are part of function bodies
+            language_config
+                .capture_function_data_with_tree(source_code, tree)
+                .into_iter()
+                .for_each(|function_data| {
+                    let range = function_data.range();
+                    for line in range.start_line()..range.end_line() + 1 {
+                        exlcuded_lines_import.remove(&line);
+                    }
+                });
+        }
+
+        // now we create the new file content after removing the import lines
+        let mut filtered_lines = vec![];
+        for (i, line) in self.lines.iter().enumerate() {
+            if !exlcuded_lines_import.contains(&i) {
+                filtered_lines.push(line.content.to_owned());
+            }
+        }
+
+        // after filtered content we have to grab the sliding window context, we generate the windows
+        // we have some interesting things we can do while generating the code context
+        self.snippets_using_sliding_window(filtered_lines);
     }
 
     // If the contents have changed, we need to mark the new lines which have changed

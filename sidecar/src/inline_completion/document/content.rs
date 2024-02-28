@@ -1,7 +1,10 @@
 //! We keep track of the document lines properly, so we can get data about which lines have been
 //! edited and which are not changed, this way we can know which lines to keep track of
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use regex::Regex;
 use tree_sitter::Tree;
@@ -11,20 +14,108 @@ use crate::chunking::{
     text_document::{Position, Range},
 };
 
+#[derive(Debug, Clone)]
+pub struct SnippetInformation {
+    snippet: String,
+    start_line: usize,
+    end_line: usize,
+}
+
+impl SnippetInformation {
+    pub fn new(snippet: String, start_line: usize, end_line: usize) -> Self {
+        SnippetInformation {
+            snippet,
+            start_line,
+            end_line,
+        }
+    }
+
+    pub fn snippet(self) -> String {
+        self.snippet
+    }
+
+    pub fn merge_snippets(self, after: Self) -> Self {
+        let start_line = self.start_line;
+        let end_line = after.end_line;
+        let current_snippet_lines = self
+            .snippet
+            .lines()
+            .enumerate()
+            .map(|(idx, line)| {
+                let line_number = idx + self.start_line;
+                (line_number, line.to_owned())
+            })
+            .collect::<Vec<_>>();
+        let other_snippet_lines = after
+            .snippet
+            .lines()
+            .enumerate()
+            .map(|(idx, line)| {
+                let line_number = idx + after.start_line;
+                (line_number, line.to_owned())
+            })
+            .collect::<Vec<_>>();
+        let mut line_map: HashMap<usize, String> = Default::default();
+        current_snippet_lines
+            .into_iter()
+            .for_each(|(line_number, content)| {
+                line_map.insert(line_number, content);
+            });
+        other_snippet_lines
+            .into_iter()
+            .for_each(|(line_number, content)| {
+                line_map.insert(line_number, content);
+            });
+        let mut new_content = vec![];
+        for index in start_line..end_line + 1 {
+            new_content.push(line_map.get(&index).unwrap().clone());
+        }
+        Self {
+            snippet: new_content.join("\n"),
+            start_line,
+            end_line,
+        }
+    }
+
+    /// We want to make sure that the snippets which should be together are merged
+    pub fn coelace_snippets(snippets: Vec<SnippetInformation>) -> Vec<SnippetInformation> {
+        let mut snippets = snippets;
+        snippets.sort_by(|a, b| a.start_line.cmp(&b.start_line));
+        if snippets.is_empty() {
+            vec![]
+        } else {
+            let mut merged_snippets = vec![];
+            let mut current_snippet = snippets[0].clone();
+            for i in 1..snippets.len() {
+                let next_snippet = snippets[i].clone();
+                if current_snippet.end_line >= next_snippet.start_line {
+                    // we can merge these 2 snippets together
+                    current_snippet = current_snippet.merge_snippets(next_snippet);
+                } else {
+                    merged_snippets.push(current_snippet);
+                    current_snippet = snippets[i].clone();
+                }
+            }
+            merged_snippets.push(current_snippet);
+            merged_snippets
+        }
+    }
+}
+
 /// This contains the bag of words for the given snippets and it uses a custom
 /// tokenizer to extract the words from the code
 #[derive(Debug)]
 pub struct BagOfWords {
     words: HashSet<String>,
-    snippet: String,
+    snippet: SnippetInformation,
 }
 
 impl BagOfWords {
-    pub fn new(snippet: String) -> Self {
+    pub fn new(snippet: String, start_line: usize, end_line: usize) -> Self {
         let bag_of_words = BagOfWords::tokenize_call(snippet.as_str());
         BagOfWords {
             words: bag_of_words,
-            snippet,
+            snippet: SnippetInformation::new(snippet.clone(), start_line, end_line),
         }
     }
 
@@ -44,7 +135,7 @@ impl BagOfWords {
                 let parts: Vec<&str> = text.split('_').collect();
                 for part in parts {
                     if BagOfWords::check_valid_token(part) {
-                        valid_tokens.insert(part.to_lowercase());
+                        valid_tokens.insert(part.to_owned());
                     }
                 }
             } else if text.chars().any(|c| c.is_uppercase()) {
@@ -53,12 +144,12 @@ impl BagOfWords {
                 let parts: Vec<&str> = camel_re.find_iter(text).map(|mat| mat.as_str()).collect();
                 for part in parts {
                     if BagOfWords::check_valid_token(part) {
-                        valid_tokens.insert(part.to_lowercase());
+                        valid_tokens.insert(part.to_owned());
                     }
                 }
             } else {
                 if BagOfWords::check_valid_token(text) {
-                    valid_tokens.insert(text.to_lowercase());
+                    valid_tokens.insert(text.to_owned());
                 }
             }
         }
@@ -66,6 +157,12 @@ impl BagOfWords {
         // Now we want to create the bigrams and the tigrams from these tokens
         // and have them stored too, so we can process them
         valid_tokens
+    }
+
+    fn jaccard_score(&self, other: &Self) -> f32 {
+        let intersection_size = self.words.intersection(&other.words).count();
+        let union_size = self.words.len() + other.words.len() - intersection_size;
+        intersection_size as f32 / union_size as f32
     }
 }
 
@@ -244,18 +341,26 @@ impl DocumentEditLines {
     fn snippets_using_sliding_window(&mut self, lines: Vec<String>) {
         // Maximum snippet size here is 50 lines and we want to generate the snippets using the lines
         let mut final_snippets = vec![];
+
+        // using +1 notation here so we do not run into subtraction errors when using usize
         if lines.len() <= 50 {
-            final_snippets.push(BagOfWords::new(lines.join("\n")));
+            final_snippets.push(BagOfWords::new(lines.join("\n"), 1, lines.len()));
         } else {
             for i in 0..(lines.len() - 50) {
                 let mut current_lines = vec![];
+                let mut last_index = 0;
                 for j in 0..50 {
                     if i + j >= lines.len() {
                         break;
                     }
+                    last_index = j;
                     current_lines.push(lines[i + j].to_owned());
                 }
-                final_snippets.push(BagOfWords::new(current_lines.join("\n")));
+                final_snippets.push(BagOfWords::new(
+                    current_lines.join("\n"),
+                    i + 1,
+                    i + 1 + last_index,
+                ));
             }
         }
         self.window_snippets = final_snippets;
@@ -326,6 +431,33 @@ impl DocumentEditLines {
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
         self.generate_snippets();
+    }
+
+    pub fn grab_similar_context(&self, context: &str) -> Vec<SnippetInformation> {
+        // go through all the snippets and see which ones are similar to the context
+        let bag_of_words = BagOfWords::new(context.to_owned(), 0, 0);
+        let mut scored_snippets = self
+            .window_snippets
+            .iter()
+            .filter_map(|snippet| {
+                let score = snippet.jaccard_score(&bag_of_words);
+                if score > 0.3 {
+                    Some((score, snippet))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        // f32 comparison should work
+        scored_snippets.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        // we take at the very most 10 snippets from a single file
+        // this prevents a single file from giving out too much data
+        scored_snippets.truncate(10);
+
+        scored_snippets
+            .into_iter()
+            .map(|snippet| snippet.1.snippet.clone())
+            .collect::<Vec<_>>()
     }
 }
 

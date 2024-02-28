@@ -7,7 +7,6 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use gix::object::tree::diff::change;
 use tree_sitter::{InputEdit, Point};
 
 use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};

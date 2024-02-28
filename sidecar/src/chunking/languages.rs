@@ -1,5 +1,7 @@
 use std::{collections::HashSet, path::Path};
 
+use tree_sitter::Tree;
+
 use crate::chunking::types::FunctionNodeInformation;
 
 use super::{
@@ -258,6 +260,37 @@ impl TSLanguageConfig {
         documentation_string_information
     }
 
+    pub fn get_tree_sitter_tree(&self, source_code: &[u8]) -> Option<Tree> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        parser.parse(source_code, None)
+    }
+
+    /// Grabs the import lines which are present in the source code
+    pub fn get_import_ranges(&self, tree: &Tree, source_code: &[u8]) -> HashSet<Range> {
+        let node = tree.root_node();
+        let grammar = self.grammar;
+        let import_queries = self.import_statement.to_vec();
+        let mut range_set = HashSet::new();
+        import_queries.into_iter().for_each(|import_query| {
+            let query = tree_sitter::Query::new(grammar(), &import_query)
+                .expect("import queries are well formed");
+
+            let mut cursor = tree_sitter::QueryCursor::new();
+            cursor
+                .captures(&query, node, source_code)
+                .into_iter()
+                .for_each(|capture| {
+                    capture.0.captures.into_iter().for_each(|capture| {
+                        let range = Range::for_tree_node(&capture.node);
+                        range_set.insert(range);
+                    });
+                })
+        });
+        range_set
+    }
+
     pub fn capture_type_data(&self, source_code: &[u8]) -> Vec<TypeInformation> {
         let type_queries = self.type_query.to_vec();
 
@@ -471,17 +504,18 @@ impl TSLanguageConfig {
         )
     }
 
-    pub fn capture_function_data(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
+    pub fn capture_function_data_with_tree(
+        &self,
+        source_code: &[u8],
+        tree: &Tree,
+    ) -> Vec<FunctionInformation> {
         let function_queries = self.function_query.to_vec();
         // We want to capture the function information here and then do a folding on top of
         // it, we just want to keep top level functions over here
         // Now we need to run the tree sitter query on this and get back the
         // answer
         let grammar = self.grammar;
-        let mut parser = tree_sitter::Parser::new();
-        parser.set_language(grammar()).unwrap();
-        let parsed_data = parser.parse(source_code, None).unwrap();
-        let node = parsed_data.root_node();
+        let node = tree.root_node();
         let mut function_nodes = vec![];
         let source_code_vec = source_code.to_vec();
         let mut range_set = HashSet::new();
@@ -596,13 +630,21 @@ impl TSLanguageConfig {
             index = end_index;
         }
 
-        let mut documentation_string_information: Vec<(Range, String)> =
+        let documentation_string_information: Vec<(Range, String)> =
             self.capture_documentation_queries(source_code);
         // Now we want to append the documentation string to the functions
         FunctionInformation::add_documentation_to_functions(
             FunctionInformation::fold_function_blocks(compressed_functions),
             documentation_string_information,
         )
+    }
+
+    pub fn capture_function_data(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let parsed_data = parser.parse(source_code, None).unwrap();
+        self.capture_function_data_with_tree(source_code, &parsed_data)
     }
 
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {

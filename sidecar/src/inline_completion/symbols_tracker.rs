@@ -15,12 +15,10 @@ use tokio::sync::Mutex;
 
 use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};
 
-use super::document::content::DocumentEditLines;
+use super::document::content::{DocumentEditLines, SnippetInformation};
 
 const MAX_HISTORY_SIZE: usize = 50;
 const MAX_HISTORY_SIZE_FOR_CODE_SNIPPETS: usize = 20;
-// The maximum window size of the snippet we are working with
-const WINDOW_SIZE: usize = 60;
 
 /// This is the symbol tracker which will be used for inline completion
 /// We keep track of the document histories and the content of these documents
@@ -59,6 +57,20 @@ impl SymbolTrackerInline {
                 document_history.push(document_path.to_owned());
             }
         }
+    }
+
+    pub async fn get_document_lines(
+        &self,
+        file_path: &str,
+        context_to_compare: &str,
+    ) -> Option<Vec<SnippetInformation>> {
+        {
+            let document_lines = self.document_lines.lock().await;
+            if let Some(document_lines_entry) = document_lines.get(file_path) {
+                return Some(document_lines_entry.grab_similar_context(context_to_compare));
+            }
+        }
+        None
     }
 
     pub async fn add_document(&self, document_path: String, content: String, language: String) {

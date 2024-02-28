@@ -1,7 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use chrono::Local;
 use futures::{stream, StreamExt};
 use futures::{FutureExt, Stream};
 use llm_client::{
@@ -27,10 +26,16 @@ use crate::{
     },
 };
 
+use super::context::codebase_context::{self, CodeBaseContext};
+use super::symbols_tracker::SymbolTrackerInline;
 use super::{
     context::{current_file::CurrentFileContext, types::DocumentLines},
     helpers::insert_range,
 };
+
+const CLIPBOARD_CONTEXT: usize = 50;
+const CODEBASE_CONTEXT: usize = 1500;
+const SAME_FILE_CONTEXT: usize = 450;
 
 #[derive(Debug, Clone)]
 pub struct FillInMiddleError {
@@ -83,6 +88,7 @@ pub struct FillInMiddleCompletionAgent {
     fill_in_middle_broker: Arc<FillInMiddleBroker>,
     editor_parsing: Arc<EditorParsing>,
     answer_mode: Arc<LLMAnswerModelBroker>,
+    symbol_tracker: Arc<SymbolTrackerInline>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -134,6 +140,7 @@ impl FillInMiddleCompletionAgent {
         answer_mode: Arc<LLMAnswerModelBroker>,
         fill_in_middle_broker: Arc<FillInMiddleBroker>,
         editor_parsing: Arc<EditorParsing>,
+        symbol_tracker: Arc<SymbolTrackerInline>,
     ) -> Self {
         Self {
             llm_broker,
@@ -141,10 +148,11 @@ impl FillInMiddleCompletionAgent {
             answer_mode,
             fill_in_middle_broker,
             editor_parsing,
+            symbol_tracker,
         }
     }
 
-    pub fn completion(
+    pub async fn completion(
         &self,
         completion_request: InlineCompletionRequest,
     ) -> Result<
@@ -187,7 +195,7 @@ impl FillInMiddleCompletionAgent {
                 self.editor_parsing.clone(),
                 completion_request.filepath.to_owned(),
             )
-            .get_clipboard_context(100)?;
+            .get_clipboard_context(CLIPBOARD_CONTEXT)?;
             match clipboard_context {
                 ClipboardContextString::TruncatedToLimit(
                     clipboard_context,
@@ -199,6 +207,31 @@ impl FillInMiddleCompletionAgent {
                 _ => {}
             }
         };
+
+        // Now we are going to get the codebase context
+        let codebase_context = CodeBaseContext::new(
+            self.llm_tokenizer.clone(),
+            fast_model.clone(),
+            completion_request.filepath.to_owned(),
+            completion_request.text.to_owned(),
+            completion_request.position.clone(),
+            self.symbol_tracker.clone(),
+            self.editor_parsing.clone(),
+        )
+        .generate_context(CODEBASE_CONTEXT)
+        .await?
+        .get_prefix_with_tokens();
+        match codebase_context {
+            Some((codebase_prefix, used_tokens)) => {
+                token_limit = token_limit - used_tokens;
+                if let Some(previous_prefix) = prefix {
+                    prefix = Some(format!("{}\n{}", previous_prefix, codebase_prefix));
+                } else {
+                    prefix = Some(codebase_prefix);
+                }
+            }
+            None => {}
+        }
 
         // Grab the error and missing values from tree-sitter
         let errors = grab_errors_using_tree_sitter(

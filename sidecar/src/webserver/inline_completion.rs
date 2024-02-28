@@ -80,6 +80,7 @@ pub async fn inline_completion(
     info!(event_name = "inline_completion", id = &id,);
     info!(mode_config = ?model_config);
     let fill_in_middle_state = app.fill_in_middle_state.clone();
+    let symbol_tracker = app.symbol_tracker.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
         app.llm_broker.clone(),
@@ -87,6 +88,7 @@ pub async fn inline_completion(
         app.answer_models.clone(),
         app.fill_in_middle_broker.clone(),
         app.editor_parsing.clone(),
+        symbol_tracker,
     );
     let completions = fill_in_middle_agent
         .completion(InlineCompletionRequest {
@@ -99,6 +101,7 @@ pub async fn inline_completion(
             id: id.to_owned(),
             cliboard_content,
         })
+        .await
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
     // this is how we can abort the running stream if the client disconnects
     let stream = Abortable::new(completions, abort_request);

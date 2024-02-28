@@ -9,7 +9,7 @@ use super::context::types::DocumentLines;
 /// is different from the byte offset in rust
 pub fn fix_vscode_range(range: Range, text_bytes: &[u8]) -> Range {
     // First we convert from the bytes to the string
-    let mut fixed_range = range.clone();
+    let fixed_range = range.clone();
 
     let start_position = fix_vscode_position(fixed_range.start_position(), text_bytes);
     let end_position = fix_vscode_position(fixed_range.end_position(), text_bytes);

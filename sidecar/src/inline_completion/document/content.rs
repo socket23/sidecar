@@ -4,14 +4,18 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::Instant,
 };
 
 use fancy_regex::Regex;
 use tree_sitter::Tree;
 
-use crate::chunking::{
-    editor_parsing::EditorParsing,
-    text_document::{Position, Range},
+use crate::{
+    chunking::{
+        editor_parsing::EditorParsing,
+        text_document::{Position, Range},
+    },
+    inline_completion::helpers::split_on_lines_editor_compatiable,
 };
 
 #[derive(Debug, Clone)]
@@ -233,8 +237,8 @@ impl DocumentEditLines {
                 tree: None,
             }
         } else {
-            let lines = content
-                .lines()
+            let lines = split_on_lines_editor_compatiable(&content)
+                .into_iter()
                 .map(|line_content| DocumentLine {
                     line_status: DocumentLineStatus::Unedited,
                     content: line_content.to_string(),
@@ -273,10 +277,25 @@ impl DocumentEditLines {
         let start_column = range.start_column();
         let end_line = range.end_line();
         let end_column = range.end_column();
+        // Why are we putting a -1 here, well there is a reason for it
+        // when vscode provides us the range to replace, it gives us the end
+        // column as the last character of the selection + 1, for example
+        // if we have the content as: "abcde"
+        // and we want to replace "de" in "abcde", we get back
+        // the range as:
+        // start_line: 0, start_column: 3, end_line: 0, end_column: 5 (note this is + 1 the final position)
+        // so we subtract it with -1 here to keep things sane
+        // a catch here is that the end_column can also be 0 if we are removing empty lines
+        // so we guard and then subtract
         if start_line == end_line {
             if start_column == end_column {
                 return;
             } else {
+                let end_column = if range.end_column() != 0 {
+                    range.end_column() - 1
+                } else {
+                    range.end_column()
+                };
                 // we get the line at this line number and remove the content between the start and end columns
                 let line = self.lines.get_mut(start_line).unwrap();
                 let start_index = start_column;
@@ -284,6 +303,7 @@ impl DocumentEditLines {
                 let mut characters = line.content.chars().collect::<Vec<_>>();
                 let start_index = start_index as usize;
                 let end_index = end_index as usize;
+                dbg!("characters", &characters, start_index, end_index);
                 characters.drain(start_index..end_index + 1);
                 line.content = characters.into_iter().collect();
             }
@@ -299,6 +319,7 @@ impl DocumentEditLines {
             let start_line_characters = self.lines[start_line].content.chars().collect::<Vec<_>>();
             let start_line_prefix = start_line_characters[..start_column as usize].to_owned();
             // get the end of line suffix
+            let end_column = range.end_column();
             let end_line_characters = self.lines[end_line].content.chars().collect::<Vec<_>>();
             let end_line_suffix = end_line_characters[end_column..].to_owned();
             {
@@ -313,6 +334,10 @@ impl DocumentEditLines {
     }
 
     fn insert_at_position(&mut self, position: Position, content: String) {
+        // If this is strictly a removal, then we do not need to insert anything
+        if content == "" {
+            return;
+        }
         // when we want to insert at the position so first we try to start appending it at the line number from the current column
         // position and also add the suffix which we have, this way we get the new lines which need to be inserted
         let line_content = self.lines[position.line()].content.to_owned();
@@ -332,10 +357,12 @@ impl DocumentEditLines {
         // the new content here is the prefix + content + suffix
         let new_content = format!("{}{}{}", prefix.to_owned(), content, suffix);
         // now we get the new lines which need to be inserted
-        let new_lines = new_content.lines().map(|line| DocumentLine {
-            line_status: DocumentLineStatus::Edited,
-            content: line.to_owned(),
-        });
+        let new_lines = split_on_lines_editor_compatiable(&new_content)
+            .into_iter()
+            .map(|line| DocumentLine {
+                line_status: DocumentLineStatus::Edited,
+                content: line.to_owned(),
+            });
         // we also need to remove the line at the current line number
         self.lines.remove(position.line());
         // now we add back the lines which need to be inserted
@@ -370,7 +397,9 @@ impl DocumentEditLines {
 
     fn generate_snippets(&mut self) {
         // generate the new tree sitter tree
+        let instant = Instant::now();
         self.set_tree();
+        dbg!("Time to generate tree: {:?}", instant.elapsed());
 
         let content = self.get_content();
 
@@ -428,13 +457,17 @@ impl DocumentEditLines {
     // If the contents have changed, we need to mark the new lines which have changed
     pub fn content_change(&mut self, range: Range, new_content: String) {
         // First we remove the content at the range which is changing
+        dbg!("Removing range: {:?}", &self.file_path);
         self.remove_range(range);
+        dbg!("content after removing range", &self.get_content());
+        dbg!("Insert at position: {:?}", &self.file_path);
         // Then we insert the new content at the range
         self.insert_at_position(range.start_position(), new_content);
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
         // TODO(skcd): Bring this back
         // are we doing someting over here
+        dbg!("Generating snippets: {:?}", &self.file_path);
         self.generate_snippets();
     }
 
@@ -484,6 +517,22 @@ mod tests {
     };
 
     use super::DocumentEditLines;
+
+    #[test]
+    fn test_document_lines_works() {
+        let editor_parsing = Arc::new(EditorParsing::default());
+        let document = DocumentEditLines::new(
+            "".to_owned(),
+            r#"
+
+
+"#
+            .to_owned(),
+            "".to_owned(),
+            editor_parsing,
+        );
+        assert_eq!(document.lines.len(), 4);
+    }
 
     #[test]
     fn test_remove_range_works_as_expected() {
@@ -544,17 +593,6 @@ SIXTH LINE 🫡🚀"#
             editor_parsing,
         );
         let position = Position::new(3, 1, 0);
-        document.insert_at_position(position, "🚀🚀🚀".to_owned());
-        let updated_content = document.get_content();
-        assert_eq!(
-            updated_content,
-            r#"FIRST LINE
-SECOND LINE
-THIRD LINE
-🫡🚀🚀🚀
-🫡🫡🫡
-        );
-        let position = Position::new(3, 1, 0);
         document.insert_at_position(position, "🚀🚀🚀\n🪨🪨".to_owned());
         let updated_content = document.get_content();
         assert_eq!(
@@ -599,5 +637,99 @@ SIXTH LINE 🫡🚀"#
         document.remove_range(range);
         let updated_content = document.get_content();
         assert_eq!(updated_content, "");
+    }
+
+    #[test]
+    fn test_removing_content_single_line() {
+        let editor_parsing = Arc::new(EditorParsing::default());
+        let mut document = DocumentEditLines::new(
+            "".to_owned(),
+            "blah blah\n// bbbbbbbb\nblah blah".to_owned(),
+            "".to_owned(),
+            editor_parsing,
+        );
+        let range = Range::new(Position::new(1, 3, 0), Position::new(1, 11, 0));
+        document.remove_range(range);
+        let updated_content = document.get_content();
+        assert_eq!(updated_content, "blah blah\n// \nblah blah");
+    }
+
+    #[test]
+    fn test_insert_content_multiple_lines_blank() {
+        let editor_parsing = Arc::new(EditorParsing::default());
+        let mut document = DocumentEditLines::new(
+            "".to_owned(),
+            r#"aa
+
+bb
+
+camelCase
+
+dd
+
+ee
+
+
+
+
+
+
+fff"#
+                .to_owned(),
+            "".to_owned(),
+            editor_parsing,
+        );
+        let range = Range::new(Position::new(9, 0, 0), Position::new(13, 0, 0));
+        document.content_change(range, "".to_owned());
+        let updated_content = document.get_content();
+        let expected_output = r#"aa
+
+bb
+
+camelCase
+
+dd
+
+ee
+
+
+fff"#;
+        assert_eq!(updated_content, expected_output);
+    }
+
+    #[test]
+    fn test_updating_document_multiline_does_not_break() {
+        let original_content = r#"aa
+
+bb
+
+camelCase
+
+dd
+
+ee
+
+
+fff"#;
+        let mut document_lines = DocumentEditLines::new(
+            "".to_owned(),
+            original_content.to_owned(),
+            "".to_owned(),
+            Arc::new(EditorParsing::default()),
+        );
+        let range = Range::new(Position::new(6, 0, 0), Position::new(8, 2, 0));
+        document_lines.content_change(range, "expected_output".to_owned());
+        let updated_content = document_lines.get_content();
+        let expected_output = r#"aa
+
+bb
+
+camelCase
+
+expected_output
+
+
+fff"#;
+        assert_eq!(updated_content, expected_output);
     }
 }

@@ -105,3 +105,23 @@ pub fn insert_range(
         Range::new(current_position.clone(), current_position)
     }
 }
+
+/// This is the editor compatiable version of split_on_lines
+/// it will split on \r\n and \n but with a catch
+/// on the editor if have the content as just "\n" its really 2 lines
+/// line 0: ""
+/// line 1: ""
+/// our normal lines() will just give us 1 line when we split it
+/// so we handle that case explicitly here
+pub fn split_on_lines_editor_compatiable(content: &str) -> Vec<String> {
+    let extra_line = content.ends_with("\n") || content.ends_with("\r\n");
+    let mut lines = content
+        .lines()
+        .into_iter()
+        .map(|content_line| content_line.to_owned())
+        .collect::<Vec<_>>();
+    if extra_line {
+        lines.push("".to_owned());
+    }
+    lines
+}

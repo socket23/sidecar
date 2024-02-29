@@ -608,14 +608,14 @@ impl DocumentEditLines {
         // this prevents a single file from giving out too much data
         scored_snippets.truncate(10);
 
-        scored_snippets
+        dbg!(scored_snippets
             .into_iter()
             .map(|snippet| SnippetInformationWithScope {
                 snippet_information: snippet.1.snippet.clone(),
                 score: snippet.0,
                 file_path: self.file_path.clone(),
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>())
     }
 }
 

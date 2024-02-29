@@ -80,7 +80,6 @@ impl CodeBaseContext {
         &self,
         token_limit: usize,
     ) -> Result<CodebaseContextString, InLineCompletionError> {
-        let mut used_tokens_for_prefix = token_limit;
         let language_config = self.editor_parsing.for_file_path(&self.file_path).ok_or(
             InLineCompletionError::LanguageNotSupported("not_supported".to_owned()),
         )?;
@@ -90,52 +89,16 @@ impl CodeBaseContext {
         // since these history files are sorted in the order of priority, we can
         // safely assume that the first one is the most recent one
 
-        let mut running_context: Vec<String> = vec![];
         let mut relevant_snippets: Vec<SnippetInformationWithScope> = vec![];
         // TODO(skcd): hate hate hate, but there's a mutex lock so this is fine ❤️‍🔥
         for history_file in history_files.into_iter() {
-            let mut snippet_information = self
+            let snippet_information = self
                 .symbol_tracker
                 .get_document_lines(&history_file, &current_window_context)
                 .await;
             if let Some(mut snippet_information) = snippet_information {
                 relevant_snippets.append(&mut snippet_information);
             }
-
-            // if let Some(snippet_information) = snippet_information {
-            //     let merged_snippets = SnippetInformation::coelace_snippets(snippet_information);
-            //     let code_context = merged_snippets
-            //         .into_iter()
-            //         .map(|snippet| {
-            //             snippet
-            //                 .snippet()
-            //                 .lines()
-            //                 .into_iter()
-            //                 .map(|line| format!("{} {}", language_config.comment_prefix, line))
-            //                 .collect::<Vec<_>>()
-            //                 .join("\n")
-            //         })
-            //         .collect::<Vec<_>>();
-            //     let file_path_header =
-            //         format!("{} Path: {}", language_config.comment_prefix, history_file);
-            //     let joined_code_context = code_context.join("\n\n");
-            //     let prefix_context = format!("{}\n{}", file_path_header, joined_code_context);
-            //     running_context.push(prefix_context);
-
-            //     let context_for_token_count = running_context.join("\n\n");
-            //     used_tokens_for_prefix = self.tokenizer.count_tokens(
-            //         &self.llm_type,
-            //         LLMTokenizerInput::Prompt(context_for_token_count.to_owned()),
-            //     )?;
-            //     if token_limit > used_tokens_for_prefix {
-            //         return Ok(CodebaseContextString::TruncatedToLimit(
-            //             context_for_token_count,
-            //             used_tokens_for_prefix as i64,
-            //         ));
-            //     }
-            // }
-
-            // Now we need to deduplicate and merge the snippets which are overlapping
         }
         relevant_snippets.sort_by(|a, b| {
             b.score()
@@ -157,7 +120,13 @@ impl CodeBaseContext {
             if current_count > 10 {
                 continue;
             }
-            let snippet_context = snippet.snippet_information().snippet();
+            let snippet_context = snippet
+                .snippet_information()
+                .snippet()
+                .split("\n")
+                .map(|snippet| format!("{} {}", language_config.comment_prefix, snippet))
+                .collect::<Vec<_>>()
+                .join("\n");
             let file_path_header =
                 format!("{} Path: {}", language_config.comment_prefix, file_path,);
             let joined_snippet_context = format!("{}\n{}", file_path_header, snippet_context);
@@ -167,7 +136,7 @@ impl CodeBaseContext {
                 &self.llm_type,
                 LLMTokenizerInput::Prompt(running_context.join("\n")),
             )?;
-            if token_limit > used_tokens_for_prefix {
+            if token_limit > token_limit {
                 return Ok(CodebaseContextString::TruncatedToLimit(
                     current_context,
                     tokens_used as i64,

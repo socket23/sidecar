@@ -279,6 +279,8 @@ impl FillInMiddleCompletionAgent {
             },
             &fast_model,
         )?;
+        println!("formatted_input: ");
+        println!("{}", formatted_string.filled.clone());
 
         let arced_document_lines = Arc::new(document_lines);
 

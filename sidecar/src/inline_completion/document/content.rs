@@ -328,7 +328,6 @@ impl DocumentEditLines {
                 let mut characters = line.content.chars().collect::<Vec<_>>();
                 let start_index = start_index as usize;
                 let end_index = end_index as usize;
-                dbg!("characters", &characters, start_index, end_index);
                 characters.drain(start_index..end_index + 1);
                 line.content = characters.into_iter().collect();
             }
@@ -604,11 +603,38 @@ impl DocumentEditLines {
             .collect::<Vec<_>>();
         // f32 comparison should work
         scored_snippets.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        // we remove the snippets which are overlapping and are already included at the top
+        let mut included_ranges: Vec<(usize, usize)> = vec![];
+        let mut final_snippets = scored_snippets
+            .into_iter()
+            .filter_map(|scored_snippet| {
+                let snippet_information = &scored_snippet.1.snippet;
+                let start_line = snippet_information.start_line;
+                let end_line = snippet_information.end_line;
+                // check if any of the included ranges already overlaps with the current snippet
+                let intersects_range = included_ranges.iter().any(|range| {
+                    if range.0 >= start_line && range.0 <= end_line {
+                        return true;
+                    }
+                    if range.1 >= start_line && range.1 <= end_line {
+                        return true;
+                    }
+                    return false;
+                });
+                if intersects_range {
+                    None
+                } else {
+                    // push the new range to the included ranges
+                    included_ranges.push((start_line, end_line));
+                    Some(scored_snippet)
+                }
+            })
+            .collect::<Vec<_>>();
         // we take at the very most 10 snippets from a single file
         // this prevents a single file from giving out too much data
-        scored_snippets.truncate(10);
+        final_snippets.truncate(10);
 
-        dbg!(scored_snippets
+        dbg!(final_snippets
             .into_iter()
             .map(|snippet| SnippetInformationWithScope {
                 snippet_information: snippet.1.snippet.clone(),

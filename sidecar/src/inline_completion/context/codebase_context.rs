@@ -8,8 +8,7 @@ use llm_client::{
 use crate::{
     chunking::{editor_parsing::EditorParsing, text_document::Position},
     inline_completion::{
-        document::content::{SnippetInformation, SnippetInformationWithScope},
-        symbols_tracker::SymbolTrackerInline,
+        document::content::SnippetInformationWithScope, symbols_tracker::SymbolTrackerInline,
         types::InLineCompletionError,
     },
 };

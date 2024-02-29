@@ -183,6 +183,7 @@ pub struct TextDocumentContentChangeEvent {
 pub struct InLineCompletionFileContentChange {
     file_path: String,
     language: String,
+    file_content: String,
     events: Vec<TextDocumentContentChangeEvent>,
 }
 
@@ -195,7 +196,8 @@ pub async fn inline_completion_file_content_change(
     Extension(_app): Extension<Application>,
     Json(InLineCompletionFileContentChange {
         file_path,
-        language: _,
+        language,
+        file_content,
         events,
     }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
@@ -215,6 +217,8 @@ pub async fn inline_completion_file_content_change(
             (range, event.text)
         })
         .collect::<Vec<_>>();
-    symbol_tracker.file_content_change(file_path, events).await;
+    symbol_tracker
+        .file_content_change(file_path, file_content, language, events)
+        .await;
     Ok(Json(InLineCompletionFileContentChangeResponse {}))
 }

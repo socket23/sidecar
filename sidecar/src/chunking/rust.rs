@@ -79,6 +79,6 @@ pub fn rust_language_config() -> TSLanguageConfig {
         .to_owned(),
         comment_prefix: "///".to_owned(),
         end_of_line: Some(";".to_owned()),
-        import_statement: vec!["use_declaration".to_owned()],
+        import_statement: vec!["[(use_declaration)] @import_type".to_owned()],
     }
 }

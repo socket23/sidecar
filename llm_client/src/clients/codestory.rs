@@ -73,7 +73,6 @@ impl CodeStoryRequestPrompt {
         request: LLMClientCompletionStringRequest,
     ) -> Result<Self, LLMClientError> {
         let model = TogetherAIClient::model_str(request.model());
-        println!("what is the model: {:?} {:?}", model, request.model());
         match model {
             Some(model) => Ok(Self {
                 prompt: request.prompt().to_owned(),

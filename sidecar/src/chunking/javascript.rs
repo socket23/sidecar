@@ -85,6 +85,6 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         .to_owned(),
         comment_prefix: "//".to_owned(),
         end_of_line: Some(";".to_owned()),
-        import_statement: vec!["import_statement".to_owned()],
+        import_statement: vec!["[(import_statement)] @import_type".to_owned()],
     }
 }

@@ -49,6 +49,27 @@ fn split_into_hashset(lines: Vec<String>) -> HashSet<String> {
 }
 
 #[derive(Debug, Clone)]
+pub struct SnippetInformationWithScope {
+    snippet_information: SnippetInformation,
+    score: f32,
+    file_path: String,
+}
+
+impl SnippetInformationWithScope {
+    pub fn score(&self) -> f32 {
+        self.score
+    }
+
+    pub fn snippet_information(&self) -> &SnippetInformation {
+        &self.snippet_information
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SnippetInformation {
     snippet_lines: Vec<String>,
     start_line: usize,
@@ -64,13 +85,20 @@ impl SnippetInformation {
         }
     }
 
-    pub fn snippet(self) -> String {
+    pub fn snippet(&self) -> String {
         self.snippet_lines.join("\n")
     }
 
     pub fn merge_snippets(self, after: Self) -> Self {
         let start_line = self.start_line;
         let end_line = after.end_line;
+        dbg!(
+            "merge_snippets",
+            self.start_line,
+            self.end_line,
+            after.start_line,
+            after.end_line
+        );
         let current_snippet_lines = self
             .snippet_lines
             .iter()
@@ -102,7 +130,12 @@ impl SnippetInformation {
             });
         let mut new_content = vec![];
         for index in start_line..end_line + 1 {
-            new_content.push(line_map.remove(&index).unwrap().clone());
+            new_content.push(
+                line_map
+                    .remove(&index)
+                    .expect("line number to be always present")
+                    .clone(),
+            );
         }
         Self {
             snippet_lines: new_content,
@@ -155,46 +188,6 @@ impl BagOfWords {
             words,
             snippet: SnippetInformation::new(snippet_lines, start_line, end_line),
         }
-    }
-
-    fn check_valid_token(token: &str) -> bool {
-        token.len() > 1
-    }
-
-    fn tokenize_call(code: &str) -> HashSet<String> {
-        let re = Regex::new(r"\b\w+\b").unwrap();
-        let mut valid_tokens: HashSet<String> = Default::default();
-
-        for m in re.find_iter(code) {
-            let text = m.as_str();
-
-            if text.contains('_') {
-                // snake_case
-                let parts: Vec<&str> = text.split('_').collect();
-                for part in parts {
-                    if BagOfWords::check_valid_token(part) {
-                        valid_tokens.insert(part.to_owned());
-                    }
-                }
-            } else if text.chars().any(|c| c.is_uppercase()) {
-                // PascalCase and camelCase
-                let camel_re = Regex::new(r"[^a-zA-Z0-9]").unwrap();
-                let parts: Vec<&str> = camel_re.find_iter(text).map(|mat| mat.as_str()).collect();
-                for part in parts {
-                    if BagOfWords::check_valid_token(part) {
-                        valid_tokens.insert(part.to_owned());
-                    }
-                }
-            } else {
-                if BagOfWords::check_valid_token(text) {
-                    valid_tokens.insert(text.to_owned());
-                }
-            }
-        }
-
-        // Now we want to create the bigrams and the tigrams from these tokens
-        // and have them stored too, so we can process them
-        valid_tokens
     }
 
     fn jaccard_score(&self, other: &Self) -> f32 {
@@ -460,14 +453,17 @@ impl DocumentEditLines {
             ));
         } else {
             for index in 1..(lines.len() - 50) {
+                // first line is: 0 - 49
+                // second line is: 1 - 50 (for this we need to remove 0th line and add the 50th line)
                 // we need to remove the entries of the previous line from the running hashmap
                 // and then we need to add the entries from the index + 50th line
                 let removing_line = index - 1;
-                let adding_line = index + 50;
+                let adding_line = index + (50 - 1);
                 let removing_line_bag = line_map.get(&removing_line);
                 let added_line_bag = line_map.get(&adding_line);
                 if let Some(removing_line_bag) = removing_line_bag {
                     removing_line_bag.iter().for_each(|word| {
+                        // how is this showing up??
                         let value = running_word_count.get(word).expect("to be present");
                         running_word_count.insert(word.to_owned(), value - 1);
                     });
@@ -491,7 +487,7 @@ impl DocumentEditLines {
                 final_snippets.push(BagOfWords::new(
                     current_lines,
                     index + 1,
-                    index + 1 + 50,
+                    index + 1 + 49, // index + 1 + (50 - 1) since we are adding 50 lines
                     running_word_count
                         .iter()
                         .filter_map(|(key, value)| {
@@ -585,7 +581,7 @@ impl DocumentEditLines {
         self.generate_snippets();
     }
 
-    pub fn grab_similar_context(&self, context: &str) -> Vec<SnippetInformation> {
+    pub fn grab_similar_context(&self, context: &str) -> Vec<SnippetInformationWithScope> {
         // go through all the snippets and see which ones are similar to the context
         let lines = context
             .lines()
@@ -614,7 +610,11 @@ impl DocumentEditLines {
 
         scored_snippets
             .into_iter()
-            .map(|snippet| snippet.1.snippet.clone())
+            .map(|snippet| SnippetInformationWithScope {
+                snippet_information: snippet.1.snippet.clone(),
+                score: snippet.0,
+                file_path: self.file_path.clone(),
+            })
             .collect::<Vec<_>>()
     }
 }

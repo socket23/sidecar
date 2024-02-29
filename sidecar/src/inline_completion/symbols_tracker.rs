@@ -15,9 +15,7 @@ use tokio::sync::Mutex;
 
 use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};
 
-use super::document::content::{
-    DocumentEditLines, SnippetInformation, SnippetInformationWithScope,
-};
+use super::document::content::{DocumentEditLines, SnippetInformationWithScope};
 
 const MAX_HISTORY_SIZE: usize = 50;
 const MAX_HISTORY_SIZE_FOR_CODE_SNIPPETS: usize = 20;

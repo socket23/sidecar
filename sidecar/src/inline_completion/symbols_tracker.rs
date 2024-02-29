@@ -39,6 +39,13 @@ impl SymbolTrackerInline {
         }
     }
 
+    pub async fn get_file_content(&self, file_path: &str) -> Option<String> {
+        let document_lines = self.document_lines.lock().await;
+        document_lines
+            .get(file_path)
+            .map(|document_lines| document_lines.get_content())
+    }
+
     pub async fn track_file(&self, document_path: String) {
         // First we check if the document is already present in the history
         {

@@ -253,7 +253,8 @@ impl DocumentEditLines {
                 tree: None,
             }
         };
-        document_lines.set_tree();
+        // This is a very expensive operation for now, we are going to optimize the shit out of this 🍶
+        document_lines.generate_snippets();
         document_lines
     }
 

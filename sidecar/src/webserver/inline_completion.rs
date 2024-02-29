@@ -193,7 +193,7 @@ pub struct InLineCompletionFileContentChangeResponse {}
 impl ApiResponse for InLineCompletionFileContentChangeResponse {}
 
 pub async fn inline_completion_file_content_change(
-    Extension(_app): Extension<Application>,
+    Extension(app): Extension<Application>,
     Json(InLineCompletionFileContentChange {
         file_path,
         language,
@@ -202,7 +202,7 @@ pub async fn inline_completion_file_content_change(
     }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
     dbg!("inline.completion.file.content.change", &file_path);
-    let symbol_tracker = _app.symbol_tracker.clone();
+    let symbol_tracker = app.symbol_tracker.clone();
     // track the file to the top
     symbol_tracker.track_file(file_path.to_owned()).await;
 
@@ -221,4 +221,27 @@ pub async fn inline_completion_file_content_change(
         .file_content_change(file_path, file_content, language, events)
         .await;
     Ok(Json(InLineCompletionFileContentChangeResponse {}))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InlineCompletionFileStateRequest {
+    file_path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InlineCompletionFileStateResponse {
+    file_content: Option<String>,
+}
+
+impl ApiResponse for InlineCompletionFileStateResponse {}
+
+pub async fn inline_completion_file_content(
+    Extension(app): Extension<Application>,
+    Json(InlineCompletionFileStateRequest { file_path }): Json<InlineCompletionFileStateRequest>,
+) -> Result<impl IntoResponse> {
+    let symbol_tracker = app.symbol_tracker.clone();
+    let content = symbol_tracker.get_file_content(&file_path).await;
+    Ok(Json(InlineCompletionFileStateResponse {
+        file_content: content,
+    }))
 }

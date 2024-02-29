@@ -70,7 +70,7 @@ impl CodeBaseContext {
         } else {
             0
         };
-        let end_line = current_line + 1;
+        let end_line = current_line;
         let context_lines = lines[start_line..end_line].join("\n");
         context_lines
     }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use llm_client::{
     clients::types::LLMType,
@@ -8,7 +8,8 @@ use llm_client::{
 use crate::{
     chunking::{editor_parsing::EditorParsing, text_document::Position},
     inline_completion::{
-        document::content::SnippetInformation, symbols_tracker::SymbolTrackerInline,
+        document::content::{SnippetInformation, SnippetInformationWithScope},
+        symbols_tracker::SymbolTrackerInline,
         types::InLineCompletionError,
     },
 };
@@ -90,48 +91,90 @@ impl CodeBaseContext {
         // safely assume that the first one is the most recent one
 
         let mut running_context: Vec<String> = vec![];
+        let mut relevant_snippets: Vec<SnippetInformationWithScope> = vec![];
         // TODO(skcd): hate hate hate, but there's a mutex lock so this is fine ❤️‍🔥
         for history_file in history_files.into_iter() {
-            let snippet_information = self
+            let mut snippet_information = self
                 .symbol_tracker
                 .get_document_lines(&history_file, &current_window_context)
                 .await;
-
-            if let Some(snippet_information) = snippet_information {
-                let merged_snippets = SnippetInformation::coelace_snippets(snippet_information);
-                let code_context = merged_snippets
-                    .into_iter()
-                    .map(|snippet| {
-                        snippet
-                            .snippet()
-                            .lines()
-                            .into_iter()
-                            .map(|line| format!("{} {}", language_config.comment_prefix, line))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    })
-                    .collect::<Vec<_>>();
-                let file_path_header =
-                    format!("{} Path: {}", language_config.comment_prefix, history_file);
-                let joined_code_context = code_context.join("\n\n");
-                let prefix_context = format!("{}\n{}", file_path_header, joined_code_context);
-                running_context.push(prefix_context);
-
-                let context_for_token_count = running_context.join("\n\n");
-                used_tokens_for_prefix = self.tokenizer.count_tokens(
-                    &self.llm_type,
-                    LLMTokenizerInput::Prompt(context_for_token_count.to_owned()),
-                )?;
-                if token_limit > used_tokens_for_prefix {
-                    return Ok(CodebaseContextString::TruncatedToLimit(
-                        context_for_token_count,
-                        used_tokens_for_prefix as i64,
-                    ));
-                }
+            if let Some(mut snippet_information) = snippet_information {
+                relevant_snippets.append(&mut snippet_information);
             }
+
+            // if let Some(snippet_information) = snippet_information {
+            //     let merged_snippets = SnippetInformation::coelace_snippets(snippet_information);
+            //     let code_context = merged_snippets
+            //         .into_iter()
+            //         .map(|snippet| {
+            //             snippet
+            //                 .snippet()
+            //                 .lines()
+            //                 .into_iter()
+            //                 .map(|line| format!("{} {}", language_config.comment_prefix, line))
+            //                 .collect::<Vec<_>>()
+            //                 .join("\n")
+            //         })
+            //         .collect::<Vec<_>>();
+            //     let file_path_header =
+            //         format!("{} Path: {}", language_config.comment_prefix, history_file);
+            //     let joined_code_context = code_context.join("\n\n");
+            //     let prefix_context = format!("{}\n{}", file_path_header, joined_code_context);
+            //     running_context.push(prefix_context);
+
+            //     let context_for_token_count = running_context.join("\n\n");
+            //     used_tokens_for_prefix = self.tokenizer.count_tokens(
+            //         &self.llm_type,
+            //         LLMTokenizerInput::Prompt(context_for_token_count.to_owned()),
+            //     )?;
+            //     if token_limit > used_tokens_for_prefix {
+            //         return Ok(CodebaseContextString::TruncatedToLimit(
+            //             context_for_token_count,
+            //             used_tokens_for_prefix as i64,
+            //         ));
+            //     }
+            // }
 
             // Now we need to deduplicate and merge the snippets which are overlapping
         }
+        relevant_snippets.sort_by(|a, b| {
+            b.score()
+                .partial_cmp(&a.score())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Now that we have the relevant snippets we can generate the context
+        let mut running_context: Vec<String> = vec![];
+        let mut inlcuded_snippet_from_files: HashMap<String, usize> = HashMap::new();
+        for snippet in relevant_snippets {
+            let file_path = snippet.file_path();
+            let current_count: usize =
+                *inlcuded_snippet_from_files.get(file_path).unwrap_or(&0) + 1;
+            inlcuded_snippet_from_files.insert(file_path.to_owned(), current_count);
+
+            // we have a strict limit of 10 snippets from each file, if we exceed that we break
+            // this prevents a big file from putting in too much context
+            if current_count > 10 {
+                continue;
+            }
+            let snippet_context = snippet.snippet_information().snippet();
+            let file_path_header =
+                format!("{} Path: {}", language_config.comment_prefix, file_path,);
+            let joined_snippet_context = format!("{}\n{}", file_path_header, snippet_context);
+            running_context.push(joined_snippet_context);
+            let current_context = running_context.join("\n");
+            let tokens_used = self.tokenizer.count_tokens(
+                &self.llm_type,
+                LLMTokenizerInput::Prompt(running_context.join("\n")),
+            )?;
+            if token_limit > used_tokens_for_prefix {
+                return Ok(CodebaseContextString::TruncatedToLimit(
+                    current_context,
+                    tokens_used as i64,
+                ));
+            }
+        }
+
         let prefix_context = running_context.join("\n\n");
         let used_tokens_for_prefix = self.tokenizer.count_tokens(
             &self.llm_type,

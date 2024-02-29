@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use regex::Regex;
+use fancy_regex::Regex;
 use tree_sitter::Tree;
 
 use crate::chunking::{
@@ -16,30 +16,30 @@ use crate::chunking::{
 
 #[derive(Debug, Clone)]
 pub struct SnippetInformation {
-    snippet: String,
+    snippet_lines: Vec<String>,
     start_line: usize,
     end_line: usize,
 }
 
 impl SnippetInformation {
-    pub fn new(snippet: String, start_line: usize, end_line: usize) -> Self {
+    pub fn new(snippet_lines: Vec<String>, start_line: usize, end_line: usize) -> Self {
         SnippetInformation {
-            snippet,
+            snippet_lines,
             start_line,
             end_line,
         }
     }
 
     pub fn snippet(self) -> String {
-        self.snippet
+        self.snippet_lines.join("\n")
     }
 
     pub fn merge_snippets(self, after: Self) -> Self {
         let start_line = self.start_line;
         let end_line = after.end_line;
         let current_snippet_lines = self
-            .snippet
-            .lines()
+            .snippet_lines
+            .iter()
             .enumerate()
             .map(|(idx, line)| {
                 let line_number = idx + self.start_line;
@@ -47,8 +47,8 @@ impl SnippetInformation {
             })
             .collect::<Vec<_>>();
         let other_snippet_lines = after
-            .snippet
-            .lines()
+            .snippet_lines
+            .iter()
             .enumerate()
             .map(|(idx, line)| {
                 let line_number = idx + after.start_line;
@@ -68,10 +68,10 @@ impl SnippetInformation {
             });
         let mut new_content = vec![];
         for index in start_line..end_line + 1 {
-            new_content.push(line_map.get(&index).unwrap().clone());
+            new_content.push(line_map.remove(&index).unwrap().clone());
         }
         Self {
-            snippet: new_content.join("\n"),
+            snippet_lines: new_content,
             start_line,
             end_line,
         }
@@ -111,11 +111,11 @@ pub struct BagOfWords {
 }
 
 impl BagOfWords {
-    pub fn new(snippet: String, start_line: usize, end_line: usize) -> Self {
-        let bag_of_words = BagOfWords::tokenize_call(snippet.as_str());
+    pub fn new(snippet_lines: Vec<String>, start_line: usize, end_line: usize) -> Self {
+        let bag_of_words = BagOfWords::tokenize_call(&snippet_lines.to_vec().join("\n"));
         BagOfWords {
             words: bag_of_words,
-            snippet: SnippetInformation::new(snippet.clone(), start_line, end_line),
+            snippet: SnippetInformation::new(snippet_lines, start_line, end_line),
         }
     }
 
@@ -128,7 +128,7 @@ impl BagOfWords {
         let mut valid_tokens: HashSet<String> = Default::default();
 
         for m in re.find_iter(code) {
-            let text = m.as_str();
+            let text = m.expect("to work").as_str();
 
             if text.contains('_') {
                 // snake_case
@@ -141,7 +141,10 @@ impl BagOfWords {
             } else if text.chars().any(|c| c.is_uppercase()) {
                 // PascalCase and camelCase
                 let camel_re = Regex::new(r"[A-Z][a-z]+|[a-z]+|[A-Z]+(?=[A-Z]|$)").unwrap();
-                let parts: Vec<&str> = camel_re.find_iter(text).map(|mat| mat.as_str()).collect();
+                let parts: Vec<&str> = camel_re
+                    .find_iter(text)
+                    .map(|mat| mat.expect("to work").as_str())
+                    .collect();
                 for part in parts {
                     if BagOfWords::check_valid_token(part) {
                         valid_tokens.insert(part.to_owned());
@@ -314,6 +317,8 @@ impl DocumentEditLines {
         // position and also add the suffix which we have, this way we get the new lines which need to be inserted
         let line_content = self.lines[position.line()].content.to_owned();
         let characters = line_content.chars().into_iter().collect::<Vec<_>>();
+        println!("characters: {:?}", characters);
+        println!("position: {:?}", &position);
         // get the prefix right before the column position
         let prefix = characters[..position.column() as usize]
             .to_owned()
@@ -344,7 +349,8 @@ impl DocumentEditLines {
 
         // using +1 notation here so we do not run into subtraction errors when using usize
         if lines.len() <= 50 {
-            final_snippets.push(BagOfWords::new(lines.join("\n"), 1, lines.len()));
+            let line_length = lines.len();
+            final_snippets.push(BagOfWords::new(lines, 1, line_length));
         } else {
             for i in 0..(lines.len() - 50) {
                 let mut current_lines = vec![];
@@ -356,11 +362,7 @@ impl DocumentEditLines {
                     last_index = j;
                     current_lines.push(lines[i + j].to_owned());
                 }
-                final_snippets.push(BagOfWords::new(
-                    current_lines.join("\n"),
-                    i + 1,
-                    i + 1 + last_index,
-                ));
+                final_snippets.push(BagOfWords::new(current_lines, i + 1, i + 1 + last_index));
             }
         }
         self.window_snippets = final_snippets;
@@ -419,7 +421,8 @@ impl DocumentEditLines {
 
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
-        self.snippets_using_sliding_window(filtered_lines);
+        // TODO(skcd): We need to
+        // self.snippets_using_sliding_window(filtered_lines);
     }
 
     // If the contents have changed, we need to mark the new lines which have changed
@@ -430,12 +433,22 @@ impl DocumentEditLines {
         self.insert_at_position(range.start_position(), new_content);
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
+        // TODO(skcd): Bring this back
+        // are we doing someting over here
         self.generate_snippets();
     }
 
     pub fn grab_similar_context(&self, context: &str) -> Vec<SnippetInformation> {
         // go through all the snippets and see which ones are similar to the context
-        let bag_of_words = BagOfWords::new(context.to_owned(), 0, 0);
+        let bag_of_words = BagOfWords::new(
+            context
+                .lines()
+                .into_iter()
+                .map(|line| line.to_string())
+                .collect(),
+            0,
+            0,
+        );
         let mut scored_snippets = self
             .window_snippets
             .iter()

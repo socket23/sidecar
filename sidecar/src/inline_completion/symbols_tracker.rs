@@ -89,15 +89,34 @@ impl SymbolTrackerInline {
         }
     }
 
-    pub async fn file_content_change(&self, document_path: String, edits: Vec<(Range, String)>) {
+    pub async fn file_content_change(
+        &self,
+        document_path: String,
+        file_content: String,
+        language: String,
+        edits: Vec<(Range, String)>,
+    ) {
         // always track the file which is being edited
         self.track_file(document_path.to_owned()).await;
         // Now we first need to get the lock over the document lines
         // and then iterate over all the edits and apply them
         let mut document_lines = self.document_lines.lock().await;
-        let document_lines_entry = document_lines.get_mut(&document_path).unwrap();
-        for (range, new_text) in edits {
-            document_lines_entry.content_change(range, new_text);
+
+        // If we do not have the document (which can happen if the sidecar restarts, just add it
+        // and do not do anything about the edits yet)
+        if document_lines.contains_key(&document_path) {
+            let document_lines_entry = DocumentEditLines::new(
+                document_path.to_owned(),
+                file_content,
+                language,
+                self.editor_parsing.clone(),
+            );
+            document_lines.insert(document_path.clone(), document_lines_entry);
+        } else {
+            let document_lines_entry = document_lines.get_mut(&document_path).unwrap();
+            for (range, new_text) in edits {
+                document_lines_entry.content_change(range, new_text);
+            }
         }
     }
 

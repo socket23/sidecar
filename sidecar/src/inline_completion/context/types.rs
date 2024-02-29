@@ -31,8 +31,14 @@ impl DocumentLines {
             return Err(InLineCompletionError::PrefixNotFound);
         }
         let line = &self.lines[line_number];
+        let characters = line
+            .1
+            .chars()
+            .into_iter()
+            .map(|char| char.to_string())
+            .collect::<Vec<_>>();
         // Now only get the prefix for this from the current line
-        let line_prefix = line.1[0..position.column() as usize].to_owned();
+        let line_prefix = characters[0..position.column() as usize].join("");
         Ok(line_prefix)
     }
 
@@ -42,8 +48,14 @@ impl DocumentLines {
             return Err(InLineCompletionError::PrefixNotFound);
         }
         let line = &self.lines[line_number];
+        let characters = line
+            .1
+            .chars()
+            .into_iter()
+            .map(|char| char.to_string())
+            .collect::<Vec<_>>();
         // Now only get the prefix for this from the current line
-        let line_prefix = line.1[0..position.column() as usize].to_owned();
+        let line_prefix = characters[0..position.column() as usize].join("");
         // Now get the prefix for the previous lines
         let mut lines = vec![];
         for line in &self.lines[0..line_number] {
@@ -63,7 +75,14 @@ impl DocumentLines {
         let line_suffix = if line_number + 1 >= self.lines.len() {
             "".to_owned()
         } else {
-            line.1[position.column() as usize..].to_owned()
+            let characters = line
+                .1
+                .chars()
+                .into_iter()
+                .map(|char| char.to_string())
+                .collect::<Vec<_>>();
+            // Now only get the suffix for this from the current line
+            characters[position.column() as usize..].join("")
         };
         // Now get the suffix for the next lines
         let mut lines = vec![line_suffix];

@@ -111,7 +111,7 @@ impl SymbolTrackerInline {
 
         // If we do not have the document (which can happen if the sidecar restarts, just add it
         // and do not do anything about the edits yet)
-        if document_lines.contains_key(&document_path) {
+        if !document_lines.contains_key(&document_path) {
             let document_lines_entry = DocumentEditLines::new(
                 document_path.to_owned(),
                 file_content,
@@ -120,9 +120,24 @@ impl SymbolTrackerInline {
             );
             document_lines.insert(document_path.clone(), document_lines_entry);
         } else {
-            let document_lines_entry = document_lines.get_mut(&document_path).unwrap();
-            for (range, new_text) in edits {
-                document_lines_entry.content_change(range, new_text);
+            let document_lines_entry = document_lines.get_mut(&document_path);
+            // This match should not be required but for some reason we are hitting
+            // the none case even in this branch after our checks
+            match document_lines_entry {
+                Some(document_lines_entry) => {
+                    for (range, new_text) in edits {
+                        document_lines_entry.content_change(range, new_text);
+                    }
+                }
+                None => {
+                    let document_lines_entry = DocumentEditLines::new(
+                        document_path.to_owned(),
+                        file_content,
+                        language,
+                        self.editor_parsing.clone(),
+                    );
+                    document_lines.insert(document_path.clone(), document_lines_entry);
+                }
             }
         }
     }

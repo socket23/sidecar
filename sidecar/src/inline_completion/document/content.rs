@@ -1,13 +1,14 @@
 //! We keep track of the document lines properly, so we can get data about which lines have been
 //! edited and which are not changed, this way we can know which lines to keep track of
 
+use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
     time::Instant,
 };
 
-use fancy_regex::Regex;
+use regex::Regex;
 use tree_sitter::Tree;
 
 use crate::{
@@ -17,6 +18,35 @@ use crate::{
     },
     inline_completion::helpers::split_on_lines_editor_compatiable,
 };
+
+lazy_static! {
+    static ref SPLITTING_WORDS: Regex = Regex::new(r"[^a-zA-Z0-9]+").unwrap();
+}
+
+fn split_into_words(e: &str) -> Vec<String> {
+    SPLITTING_WORDS
+        .split(e)
+        .filter_map(|word| {
+            let cleaned_word = word.trim();
+            if !cleaned_word.is_empty() {
+                Some(cleaned_word.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn split_into_hashset(lines: Vec<String>) -> HashSet<String> {
+    let mut final_content: HashSet<String> = Default::default();
+    lines.into_iter().for_each(|line| {
+        let words = split_into_words(&line);
+        words.into_iter().for_each(|word| {
+            final_content.insert(word);
+        })
+    });
+    final_content
+}
 
 #[derive(Debug, Clone)]
 pub struct SnippetInformation {
@@ -115,10 +145,14 @@ pub struct BagOfWords {
 }
 
 impl BagOfWords {
-    pub fn new(snippet_lines: Vec<String>, start_line: usize, end_line: usize) -> Self {
-        let bag_of_words = BagOfWords::tokenize_call(&snippet_lines.to_vec().join("\n"));
+    pub fn new(
+        snippet_lines: Vec<String>,
+        start_line: usize,
+        end_line: usize,
+        words: HashSet<String>,
+    ) -> Self {
         BagOfWords {
-            words: bag_of_words,
+            words,
             snippet: SnippetInformation::new(snippet_lines, start_line, end_line),
         }
     }
@@ -132,7 +166,7 @@ impl BagOfWords {
         let mut valid_tokens: HashSet<String> = Default::default();
 
         for m in re.find_iter(code) {
-            let text = m.expect("to work").as_str();
+            let text = m.as_str();
 
             if text.contains('_') {
                 // snake_case
@@ -144,11 +178,8 @@ impl BagOfWords {
                 }
             } else if text.chars().any(|c| c.is_uppercase()) {
                 // PascalCase and camelCase
-                let camel_re = Regex::new(r"[A-Z][a-z]+|[a-z]+|[A-Z]+(?=[A-Z]|$)").unwrap();
-                let parts: Vec<&str> = camel_re
-                    .find_iter(text)
-                    .map(|mat| mat.expect("to work").as_str())
-                    .collect();
+                let camel_re = Regex::new(r"[^a-zA-Z0-9]").unwrap();
+                let parts: Vec<&str> = camel_re.find_iter(text).map(|mat| mat.as_str()).collect();
                 for part in parts {
                     if BagOfWords::check_valid_token(part) {
                         valid_tokens.insert(part.to_owned());
@@ -372,25 +403,106 @@ impl DocumentEditLines {
     }
 
     fn snippets_using_sliding_window(&mut self, lines: Vec<String>) {
+        // useful links: https://github.com/thakkarparth007/copilot-explorer/blob/4a572ef4653811e789a05b370d3da49a784d6172/codeviz/data/module_codes_renamed/1016.js#L21-L25
+        // https://github.com/thakkarparth007/copilot-explorer/blob/4a572ef4653811e789a05b370d3da49a784d6172/codeviz/data/module_codes_renamed/1016.js#L61-L87
         // Maximum snippet size here is 50 lines and we want to generate the snippets using the lines
         let mut final_snippets = vec![];
+
+        // we are going to change the algorithm to be the following:
+        // - iterate over each line and split them using the regex which we have above
+        // - create a running hashmap of the words and their frequency occurance
+        // - for each window iterate over the entries in the hashmap and create the hashset of the words
+        // - profit?
+
+        let mut line_map: HashMap<usize, Vec<String>> = Default::default();
+        for (idx, line) in lines.iter().enumerate() {
+            line_map.insert(idx, split_into_words(line));
+        }
+
+        let mut running_word_count: HashMap<String, usize> = Default::default();
+
+        for index in 0..std::cmp::min(lines.len(), 50) {
+            let bag_of_words = line_map.get(&index);
+            if let Some(bag_of_words) = bag_of_words {
+                bag_of_words.iter().for_each(|word| {
+                    if !running_word_count.contains_key(word) {
+                        running_word_count.insert(word.to_owned(), 1);
+                    } else {
+                        running_word_count.insert(
+                            word.to_owned(),
+                            running_word_count
+                                .get(word)
+                                .expect("if !contains_key to work")
+                                + 1,
+                        );
+                    }
+                });
+            }
+        }
 
         // using +1 notation here so we do not run into subtraction errors when using usize
         if lines.len() <= 50 {
             let line_length = lines.len();
-            final_snippets.push(BagOfWords::new(lines, 1, line_length));
+            final_snippets.push(BagOfWords::new(
+                lines,
+                1,
+                line_length,
+                running_word_count
+                    .into_iter()
+                    .filter_map(|(key, value)| {
+                        if value > 0 {
+                            Some(key.to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            ));
         } else {
-            for i in 0..(lines.len() - 50) {
-                let mut current_lines = vec![];
-                let mut last_index = 0;
-                for j in 0..50 {
-                    if i + j >= lines.len() {
-                        break;
-                    }
-                    last_index = j;
-                    current_lines.push(lines[i + j].to_owned());
+            for index in 1..(lines.len() - 50) {
+                // we need to remove the entries of the previous line from the running hashmap
+                // and then we need to add the entries from the index + 50th line
+                let removing_line = index - 1;
+                let adding_line = index + 50;
+                let removing_line_bag = line_map.get(&removing_line);
+                let added_line_bag = line_map.get(&adding_line);
+                if let Some(removing_line_bag) = removing_line_bag {
+                    removing_line_bag.iter().for_each(|word| {
+                        let value = running_word_count.get(word).expect("to be present");
+                        running_word_count.insert(word.to_owned(), value - 1);
+                    });
                 }
-                final_snippets.push(BagOfWords::new(current_lines, i + 1, i + 1 + last_index));
+                if let Some(added_line_bag) = added_line_bag {
+                    added_line_bag.iter().for_each(|word| {
+                        if !running_word_count.contains_key(word) {
+                            running_word_count.insert(word.to_owned(), 1);
+                        } else {
+                            running_word_count.insert(
+                                word.to_owned(),
+                                running_word_count
+                                    .get(word)
+                                    .expect("if !contains_key to work")
+                                    + 1,
+                            );
+                        }
+                    });
+                }
+                let current_lines = lines[index..index + 50].to_vec();
+                final_snippets.push(BagOfWords::new(
+                    current_lines,
+                    index + 1,
+                    index + 1 + 50,
+                    running_word_count
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            if value > &0 {
+                                Some(key.to_owned())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ));
             }
         }
         self.window_snippets = final_snippets;
@@ -451,8 +563,9 @@ impl DocumentEditLines {
 
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
-        // TODO(skcd): We need to
-        // self.snippets_using_sliding_window(filtered_lines);
+        let instant = std::time::Instant::now();
+        self.snippets_using_sliding_window(filtered_lines);
+        dbg!("snippets sliding window: ", instant.elapsed());
     }
 
     // If the contents have changed, we need to mark the new lines which have changed
@@ -474,15 +587,13 @@ impl DocumentEditLines {
 
     pub fn grab_similar_context(&self, context: &str) -> Vec<SnippetInformation> {
         // go through all the snippets and see which ones are similar to the context
-        let bag_of_words = BagOfWords::new(
-            context
-                .lines()
-                .into_iter()
-                .map(|line| line.to_string())
-                .collect(),
-            0,
-            0,
-        );
+        let lines = context
+            .lines()
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>();
+        let bag_of_words_hashset = split_into_hashset(lines.to_vec());
+        let bag_of_words = BagOfWords::new(lines, 0, 0, bag_of_words_hashset);
         let mut scored_snippets = self
             .window_snippets
             .iter()

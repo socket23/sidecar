@@ -25,8 +25,6 @@ pub struct CodeBaseContext {
     editor_parsing: Arc<EditorParsing>,
 }
 
-// .lines()
-
 pub enum CodebaseContextString {
     TruncatedToLimit(String, i64),
     UnableToTruncate,

@@ -27,7 +27,7 @@ use crate::{
     },
 };
 
-use super::context::codebase_context::{self, CodeBaseContext};
+use super::context::codebase_context::CodeBaseContext;
 use super::symbols_tracker::SymbolTrackerInline;
 use super::{
     context::{current_file::CurrentFileContext, types::DocumentLines},
@@ -250,6 +250,11 @@ impl FillInMiddleCompletionAgent {
             }
             None => {}
         }
+
+        // TODO(skcd): Grab the context from related definitions and other sibling functions
+        // which might be useful for the completion.
+        // TODO(skcd): Can we also grab the context from other functions which might be useful for the completion.
+        // TODO(skcd): We also want to grab the recent edits which might be useful for the completion.
 
         // Grab the error and missing values from tree-sitter
         let errors = grab_errors_using_tree_sitter(
@@ -489,14 +494,6 @@ fn check_terminating_condition(
             &inserted_text,
             inserted_range,
             context.errors.clone(),
-        );
-        // we need to call the tree-sitter based termination here
-        let terminating_condition = check_terminating_condition_tree_sitter(
-            &language_config,
-            &context.document_prefix,
-            &context.document_suffix,
-            &inserted_text,
-            inserted_range,
         );
         if terminating_condition_errors {
             return true;

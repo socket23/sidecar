@@ -203,8 +203,6 @@ pub async fn inline_completion_file_content_change(
 ) -> Result<impl IntoResponse> {
     dbg!("inline.completion.file.content.change", &file_path);
     let symbol_tracker = app.symbol_tracker.clone();
-    // track the file to the top
-    symbol_tracker.track_file(file_path.to_owned()).await;
 
     // make the edits to the file
     let events = events

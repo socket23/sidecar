@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use futures::stream::AbortHandle;
 use futures::{stream, StreamExt};
 use futures::{FutureExt, Stream};
 use llm_client::{
@@ -131,6 +132,9 @@ pub enum InLineCompletionError {
 
     #[error("Suffix not found for cursor position")]
     SuffixNotFound,
+
+    #[error("Aborted the handle")]
+    AbortedHandle,
 }
 
 impl FillInMiddleCompletionAgent {
@@ -155,10 +159,14 @@ impl FillInMiddleCompletionAgent {
     pub async fn completion(
         &self,
         completion_request: InlineCompletionRequest,
+        abort_handle: AbortHandle,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<InlineCompletionResponse, InLineCompletionError>> + Send>>,
         InLineCompletionError,
     > {
+        let instant = std::time::Instant::now();
+        let request_id = completion_request.id.to_owned();
+        dbg!("inline.completion.start", &request_id);
         // Now that we have the position, we want to create the request for the fill
         // in the middle request.
         let model_config = &completion_request.model_config;
@@ -186,6 +194,10 @@ impl FillInMiddleCompletionAgent {
 
         let document_lines = DocumentLines::from_file_content(&completion_request.text);
 
+        if abort_handle.is_aborted() {
+            return Err(InLineCompletionError::AbortedHandle);
+        }
+
         let mut prefix = None;
         if let Some(completion_context) = completion_request.cliboard_content {
             let clipboard_context = ClipboardContext::new(
@@ -209,6 +221,7 @@ impl FillInMiddleCompletionAgent {
         };
 
         // Now we are going to get the codebase context
+        let codebase_context_instant = std::time::Instant::now();
         let codebase_context = CodeBaseContext::new(
             self.llm_tokenizer.clone(),
             fast_model.clone(),
@@ -217,10 +230,15 @@ impl FillInMiddleCompletionAgent {
             completion_request.position.clone(),
             self.symbol_tracker.clone(),
             self.editor_parsing.clone(),
+            request_id.to_owned(),
         )
-        .generate_context(CODEBASE_CONTEXT)
+        .generate_context(CODEBASE_CONTEXT, abort_handle.clone())
         .await?
         .get_prefix_with_tokens();
+        dbg!(
+            "inline.completion.start.codebase_context",
+            codebase_context_instant.elapsed()
+        );
         match codebase_context {
             Some((codebase_prefix, used_tokens)) => {
                 token_limit = token_limit - used_tokens;
@@ -324,6 +342,12 @@ impl FillInMiddleCompletionAgent {
             )
             .into_stream()
             .map(either::Right);
+
+            dbg!(
+                "inline.completion.streaming.starting",
+                request_id,
+                instant.elapsed()
+            );
 
             let merged_stream = stream::select(completion_receiver_stream, completion);
             merged_stream

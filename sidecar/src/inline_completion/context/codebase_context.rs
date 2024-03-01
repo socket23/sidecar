@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use futures::stream::AbortHandle;
 use llm_client::{
     clients::types::LLMType,
     tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerInput},
@@ -23,8 +24,12 @@ pub struct CodeBaseContext {
     cursor_position: Position,
     symbol_tracker: Arc<SymbolTrackerInline>,
     editor_parsing: Arc<EditorParsing>,
+    request_id: String,
 }
 
+/// The Codebase context helps truncate the context in the clipboard into the limit of the
+/// tokenizer.
+#[derive(Debug, Clone)]
 pub enum CodebaseContextString {
     TruncatedToLimit(String, i64),
     UnableToTruncate,
@@ -50,6 +55,7 @@ impl CodeBaseContext {
         cursor_position: Position,
         symbol_tracker: Arc<SymbolTrackerInline>,
         editor_parsing: Arc<EditorParsing>,
+        request_id: String,
     ) -> Self {
         Self {
             tokenizer,
@@ -59,6 +65,7 @@ impl CodeBaseContext {
             cursor_position,
             symbol_tracker,
             editor_parsing,
+            request_id,
         }
     }
 
@@ -78,7 +85,9 @@ impl CodeBaseContext {
     pub async fn generate_context(
         &self,
         token_limit: usize,
+        abort_handle: AbortHandle,
     ) -> Result<CodebaseContextString, InLineCompletionError> {
+        let instant = std::time::Instant::now();
         let language_config = self.editor_parsing.for_file_path(&self.file_path).ok_or(
             InLineCompletionError::LanguageNotSupported("not_supported".to_owned()),
         )?;
@@ -96,6 +105,9 @@ impl CodeBaseContext {
             } else {
                 None
             };
+            if abort_handle.is_aborted() {
+                return Err(InLineCompletionError::AbortedHandle);
+            }
             let snippet_information = self
                 .symbol_tracker
                 .get_document_lines(&history_file, &current_window_context, skip_line)
@@ -109,11 +121,17 @@ impl CodeBaseContext {
                 .partial_cmp(&a.score())
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+        dbg!(
+            "codebase_context.generate_context.document_lines",
+            &self.request_id,
+            instant.clone().elapsed()
+        );
 
         // Now that we have the relevant snippets we can generate the context
         let comment_prefix = &language_config.comment_prefix;
         let mut running_context: Vec<String> = vec![];
         let mut inlcuded_snippet_from_files: HashMap<String, usize> = HashMap::new();
+        let mut total_tokens_used_by_snippets = 0;
         for snippet in relevant_snippets {
             let file_path = snippet.file_path();
             let current_count: usize =
@@ -134,16 +152,30 @@ impl CodeBaseContext {
                 .join("\n");
             let file_path_header = format!("{} Path: {}", comment_prefix, file_path,);
             let joined_snippet_context = format!("{}\n{}", file_path_header, snippet_context);
+            let count_tokens_instant = std::time::Instant::now();
+            let current_snippet_tokens = self.tokenizer.count_tokens(
+                &self.llm_type,
+                LLMTokenizerInput::Prompt(joined_snippet_context.to_owned()),
+                // adding + 1 here for the \n at the end
+            )? + 1;
+            dbg!("tokens_counte.time_taken", count_tokens_instant.elapsed());
+            total_tokens_used_by_snippets = total_tokens_used_by_snippets + current_snippet_tokens;
             running_context.push(joined_snippet_context);
             let current_context = running_context.join("\n");
-            let tokens_used = self.tokenizer.count_tokens(
-                &self.llm_type,
-                LLMTokenizerInput::Prompt(running_context.join("\n")),
-            )?;
-            if token_limit > token_limit {
+
+            // This is a compute intensive operation, so we want to abort if we are aborted
+            if abort_handle.is_aborted() {
+                return Err(InLineCompletionError::AbortedHandle);
+            }
+            if total_tokens_used_by_snippets > token_limit {
+                dbg!(
+                    "codebase_context.generate_context",
+                    &self.request_id,
+                    instant.elapsed()
+                );
                 return Ok(CodebaseContextString::TruncatedToLimit(
                     current_context,
-                    tokens_used as i64,
+                    total_tokens_used_by_snippets as i64,
                 ));
             }
         }
@@ -153,6 +185,11 @@ impl CodeBaseContext {
             &self.llm_type,
             LLMTokenizerInput::Prompt(prefix_context.to_owned()),
         )?;
+        dbg!(
+            "codebase_context.generate_context",
+            &self.request_id,
+            instant.elapsed()
+        );
         Ok(CodebaseContextString::TruncatedToLimit(
             prefix_context,
             used_tokens_for_prefix as i64,

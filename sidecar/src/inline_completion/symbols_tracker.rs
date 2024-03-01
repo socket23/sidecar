@@ -339,6 +339,7 @@ impl SymbolTrackerInline {
         }
     }
 
+    //
     pub async fn get_document_lines(
         &self,
         file_path: &str,

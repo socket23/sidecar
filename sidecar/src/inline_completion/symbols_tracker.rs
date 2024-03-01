@@ -12,7 +12,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::Mutex;
-use whoami::lang;
 
 use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};
 
@@ -78,7 +77,6 @@ impl FileContentChangeRequest {
 
 enum SharedStateRequest {
     GetFileContent(String),
-    TrackFile(String),
     GetDocumentLines(GetDocumentLinesRequest),
     AddDocument(AddDocumentRequest),
     FileContentChange(FileContentChangeRequest),
@@ -131,10 +129,6 @@ impl SharedState {
                     )
                     .await;
                 SharedStateResponse::GetDocumentLinesResponse(response)
-            }
-            SharedStateRequest::TrackFile(track_file_request) => {
-                let _ = self.track_file(track_file_request).await;
-                SharedStateResponse::Ok
             }
             SharedStateRequest::GetFileContent(get_file_content_request) => {
                 let response = self.get_file_content(&get_file_content_request).await;
@@ -214,8 +208,6 @@ impl SharedState {
         language: String,
         edits: Vec<(Range, String)>,
     ) {
-        let time = chrono::Local::now();
-        dbg!("file_content_change", &time, &document_path, &edits);
         // always track the file which is being edited
         self.track_file(document_path.to_owned()).await;
         if edits.is_empty() {
@@ -347,13 +339,6 @@ impl SymbolTrackerInline {
         }
     }
 
-    async fn track_file(&self, document_path: String) {
-        let (sender, receiver) = tokio::sync::oneshot::channel();
-        let request = SharedStateRequest::TrackFile(document_path);
-        let _ = self.sender.send((request, sender));
-        let _ = receiver.await;
-    }
-
     pub async fn get_document_lines(
         &self,
         file_path: &str,
@@ -379,8 +364,8 @@ impl SymbolTrackerInline {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let request = SharedStateRequest::AddDocument(AddDocumentRequest::new(
             document_path,
-            content,
             language,
+            content,
         ));
         let _ = self.sender.send((request, sender));
         let _ = receiver.await;

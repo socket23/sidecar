@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};
 
-use super::document::content::{DocumentEditLines, SnippetInformationWithScope};
+use super::document::content::{DocumentEditLines, SnippetInformationWithScore};
 
 const MAX_HISTORY_SIZE: usize = 50;
 const MAX_HISTORY_SIZE_FOR_CODE_SNIPPETS: usize = 20;
@@ -70,11 +70,14 @@ impl SymbolTrackerInline {
         &self,
         file_path: &str,
         context_to_compare: &str,
-    ) -> Option<Vec<SnippetInformationWithScope>> {
+        skip_line: Option<usize>,
+    ) -> Option<Vec<SnippetInformationWithScore>> {
         {
             let document_lines = self.document_lines.lock().await;
             if let Some(document_lines_entry) = document_lines.get(file_path) {
-                return Some(document_lines_entry.grab_similar_context(context_to_compare));
+                return Some(
+                    document_lines_entry.grab_similar_context(context_to_compare, skip_line),
+                );
             }
         }
         None

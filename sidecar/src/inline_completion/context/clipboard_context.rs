@@ -16,6 +16,9 @@ pub struct ClipboardContext {
     file_path: String,
 }
 
+// what arew we dxoing oabasdfawer  abagwerwae r badfawer  abfawqerawer
+// are things working as wewe wagasdfbad sf awreabart szbaergawtr afbatwarawe
+
 pub enum ClipboardContextString {
     // this contains the nubmers of tokens which has been used
     TruncatedToLimit(String, i64),

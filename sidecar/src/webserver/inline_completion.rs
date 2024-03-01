@@ -91,16 +91,19 @@ pub async fn inline_completion(
         symbol_tracker,
     );
     let completions = fill_in_middle_agent
-        .completion(InlineCompletionRequest {
-            filepath,
-            language,
-            text,
-            position,
-            indentation,
-            model_config,
-            id: id.to_owned(),
-            cliboard_content,
-        })
+        .completion(
+            InlineCompletionRequest {
+                filepath,
+                language,
+                text,
+                position,
+                indentation,
+                model_config,
+                id: id.to_owned(),
+                cliboard_content,
+            },
+            abort_request.handle().clone(),
+        )
         .await
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;
     // this is how we can abort the running stream if the client disconnects
@@ -132,6 +135,7 @@ pub async fn cancel_inline_completion(
     Extension(app): Extension<Application>,
     Json(CancelInlineCompletionRequest { id }): Json<CancelInlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!("inline_completion.cancel", &id);
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     fill_in_middle_state.cancel(&id);
     Ok(Json(CancelInlineCompletionResponse {}))
@@ -157,7 +161,6 @@ pub async fn inline_document_open(
         language,
     }): Json<InLineDocumentOpenRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!("inline.document.open", &file_path);
     let symbol_tracker = app.symbol_tracker.clone();
     symbol_tracker
         .add_document(file_path, file_content, language)

@@ -16,9 +16,9 @@ pub struct ClipboardContext {
     file_path: String,
 }
 
-// what arew we dxoing oabasdfawer  abagwerwae r badfawer  abfawqerawer
-// are things working as wewe wagasdfbad sf awreabart szbaergawtr afbatwarawe
-
+/// The Clipboard context helps truncate the context in the clipboard into the limit of the
+/// tokenizer.
+#[derive(Debug, Clone)]
 pub enum ClipboardContextString {
     // this contains the nubmers of tokens which has been used
     TruncatedToLimit(String, i64),
@@ -54,7 +54,7 @@ impl ClipboardContext {
             InLineCompletionError::TokenizerNotFound(self.llm_type.to_owned()),
         )?;
         // always include the comment hearder here
-        let completion_string = format!(r#"{comment_style} Clipboard:\n"#);
+        let completion_string = format!("{comment_style} Clipboard:\n");
         let comment_tokens_used = tokenizer
             .encode(completion_string, false)
             .map_err(|_e| InLineCompletionError::TokenizationError(self.llm_type.to_owned()))?;

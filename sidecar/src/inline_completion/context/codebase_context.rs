@@ -8,7 +8,7 @@ use llm_client::{
 use crate::{
     chunking::{editor_parsing::EditorParsing, text_document::Position},
     inline_completion::{
-        document::content::SnippetInformationWithScope, symbols_tracker::SymbolTrackerInline,
+        document::content::SnippetInformationWithScore, symbols_tracker::SymbolTrackerInline,
         types::InLineCompletionError,
     },
 };
@@ -88,12 +88,17 @@ impl CodeBaseContext {
         // since these history files are sorted in the order of priority, we can
         // safely assume that the first one is the most recent one
 
-        let mut relevant_snippets: Vec<SnippetInformationWithScope> = vec![];
+        let mut relevant_snippets: Vec<SnippetInformationWithScore> = vec![];
         // TODO(skcd): hate hate hate, but there's a mutex lock so this is fine ❤️‍🔥
         for history_file in history_files.into_iter() {
+            let skip_line = if history_file == self.file_path {
+                Some(self.cursor_position.line())
+            } else {
+                None
+            };
             let snippet_information = self
                 .symbol_tracker
-                .get_document_lines(&history_file, &current_window_context)
+                .get_document_lines(&history_file, &current_window_context, skip_line)
                 .await;
             if let Some(mut snippet_information) = snippet_information {
                 relevant_snippets.append(&mut snippet_information);

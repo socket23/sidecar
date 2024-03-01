@@ -49,13 +49,13 @@ fn split_into_hashset(lines: Vec<String>) -> HashSet<String> {
 }
 
 #[derive(Debug, Clone)]
-pub struct SnippetInformationWithScope {
+pub struct SnippetInformationWithScore {
     snippet_information: SnippetInformation,
     score: f32,
     file_path: String,
 }
 
-impl SnippetInformationWithScope {
+impl SnippetInformationWithScore {
     pub fn score(&self) -> f32 {
         self.score
     }
@@ -580,7 +580,13 @@ impl DocumentEditLines {
         self.generate_snippets();
     }
 
-    pub fn grab_similar_context(&self, context: &str) -> Vec<SnippetInformationWithScope> {
+    pub fn grab_similar_context(
+        &self,
+        context: &str,
+        // This line we always and forever want to skip if present
+        // this right now is coming from the current file
+        skip_line: Option<usize>,
+    ) -> Vec<SnippetInformationWithScore> {
         // go through all the snippets and see which ones are similar to the context
         let lines = context
             .lines()
@@ -604,7 +610,11 @@ impl DocumentEditLines {
         // f32 comparison should work
         scored_snippets.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
         // we remove the snippets which are overlapping and are already included at the top
-        let mut included_ranges: Vec<(usize, usize)> = vec![];
+        let mut included_ranges: Vec<(usize, usize)> = if let Some(skip_line) = skip_line {
+            vec![(skip_line, skip_line)]
+        } else {
+            vec![]
+        };
         let mut final_snippets = scored_snippets
             .into_iter()
             .filter_map(|scored_snippet| {
@@ -636,7 +646,7 @@ impl DocumentEditLines {
 
         dbg!(final_snippets
             .into_iter()
-            .map(|snippet| SnippetInformationWithScope {
+            .map(|snippet| SnippetInformationWithScore {
                 snippet_information: snippet.1.snippet.clone(),
                 score: snippet.0,
                 file_path: self.file_path.clone(),

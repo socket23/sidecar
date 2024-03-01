@@ -506,8 +506,8 @@ impl DocumentEditLines {
     fn generate_snippets(&mut self) {
         // generate the new tree sitter tree
         let instant = Instant::now();
-        self.set_tree();
-        dbg!("Time to generate tree: {:?}", instant.elapsed());
+        // self.set_tree();
+        // dbg!("Time to generate tree: {:?}", instant.elapsed());
 
         let content = self.get_content();
 
@@ -580,12 +580,16 @@ impl DocumentEditLines {
     }
 
     pub fn grab_similar_context(
-        &self,
+        // the only reason for this to be mut is so we can generate the window snippets
+        &mut self,
         context: &str,
         // This line we always and forever want to skip if present
         // this right now is coming from the current file
         skip_line: Option<usize>,
     ) -> Vec<SnippetInformationWithScore> {
+        let instant = Instant::now();
+        self.generate_snippets();
+        dbg!("Time to generate snippets: ", instant.elapsed());
         // go through all the snippets and see which ones are similar to the context
         let lines = context
             .lines()

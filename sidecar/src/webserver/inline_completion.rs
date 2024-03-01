@@ -201,7 +201,6 @@ pub async fn inline_completion_file_content_change(
         events,
     }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
-    dbg!("inline.completion.file.content.change", &file_path);
     let symbol_tracker = app.symbol_tracker.clone();
 
     // make the edits to the file

@@ -366,8 +366,6 @@ impl DocumentEditLines {
         // position and also add the suffix which we have, this way we get the new lines which need to be inserted
         let line_content = self.lines[position.line()].content.to_owned();
         let characters = line_content.chars().into_iter().collect::<Vec<_>>();
-        println!("characters: {:?}", characters);
-        println!("position: {:?}", &position);
         // get the prefix right before the column position
         let prefix = characters[..position.column() as usize]
             .to_owned()
@@ -560,22 +558,26 @@ impl DocumentEditLines {
         // we have some interesting things we can do while generating the code context
         let instant = std::time::Instant::now();
         self.snippets_using_sliding_window(filtered_lines);
-        dbg!("snippets sliding window: ", instant.elapsed());
+        // dbg!("snippets sliding window: ", instant.elapsed());
     }
 
     // If the contents have changed, we need to mark the new lines which have changed
     pub fn content_change(&mut self, range: Range, new_content: String) {
         // First we remove the content at the range which is changing
-        dbg!("Removing range: {:?}", &self.file_path);
+        // dbg!("Removing range: {:?}", &self.file_path, &self.lines.len());
         self.remove_range(range);
-        dbg!("Insert at position: {:?}", &self.file_path);
+        // dbg!(
+        //     "Insert at position: {:?}",
+        //     &self.file_path,
+        //     &self.lines.len()
+        // );
         // Then we insert the new content at the range
         self.insert_at_position(range.start_position(), new_content);
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
         // TODO(skcd): Bring this back
         // are we doing someting over here
-        dbg!("Generating snippets: {:?}", &self.file_path);
+        // dbg!("Generating snippets: {:?}", &self.file_path);
         self.generate_snippets();
     }
 
@@ -587,9 +589,6 @@ impl DocumentEditLines {
         // this right now is coming from the current file
         skip_line: Option<usize>,
     ) -> Vec<SnippetInformationWithScore> {
-        let instant = Instant::now();
-        self.generate_snippets();
-        dbg!("Time to generate snippets: ", instant.elapsed());
         // go through all the snippets and see which ones are similar to the context
         let lines = context
             .lines()

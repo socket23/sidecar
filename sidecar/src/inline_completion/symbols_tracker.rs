@@ -106,8 +106,13 @@ impl SymbolTrackerInline {
         language: String,
         edits: Vec<(Range, String)>,
     ) {
+        let time = chrono::Local::now();
+        dbg!("file_content_change", &time, &document_path, &edits);
         // always track the file which is being edited
         self.track_file(document_path.to_owned()).await;
+        if edits.is_empty() {
+            return;
+        }
         // Now we first need to get the lock over the document lines
         // and then iterate over all the edits and apply them
         let mut document_lines = self.document_lines.lock().await;

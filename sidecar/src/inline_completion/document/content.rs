@@ -568,7 +568,6 @@ impl DocumentEditLines {
         // First we remove the content at the range which is changing
         dbg!("Removing range: {:?}", &self.file_path);
         self.remove_range(range);
-        dbg!("content after removing range", &self.get_content());
         dbg!("Insert at position: {:?}", &self.file_path);
         // Then we insert the new content at the range
         self.insert_at_position(range.start_position(), new_content);
@@ -600,7 +599,7 @@ impl DocumentEditLines {
             .iter()
             .filter_map(|snippet| {
                 let score = snippet.jaccard_score(&bag_of_words);
-                if score > 0.3 {
+                if score > 0.0 {
                     Some((score, snippet))
                 } else {
                     None
@@ -644,14 +643,14 @@ impl DocumentEditLines {
         // this prevents a single file from giving out too much data
         final_snippets.truncate(10);
 
-        dbg!(final_snippets
+        final_snippets
             .into_iter()
             .map(|snippet| SnippetInformationWithScore {
                 snippet_information: snippet.1.snippet.clone(),
                 score: snippet.0,
                 file_path: self.file_path.clone(),
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }
 

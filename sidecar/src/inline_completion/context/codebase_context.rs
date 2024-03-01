@@ -104,6 +104,7 @@ impl CodeBaseContext {
                 relevant_snippets.append(&mut snippet_information);
             }
         }
+        println!("relevant_snippets_len: {:?}", relevant_snippets.len());
         relevant_snippets.sort_by(|a, b| {
             b.score()
                 .partial_cmp(&a.score())

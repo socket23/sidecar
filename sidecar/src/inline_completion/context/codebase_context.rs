@@ -111,6 +111,7 @@ impl CodeBaseContext {
         });
 
         // Now that we have the relevant snippets we can generate the context
+        let comment_prefix = &language_config.comment_prefix;
         let mut running_context: Vec<String> = vec![];
         let mut inlcuded_snippet_from_files: HashMap<String, usize> = HashMap::new();
         for snippet in relevant_snippets {
@@ -128,11 +129,10 @@ impl CodeBaseContext {
                 .snippet_information()
                 .snippet()
                 .split("\n")
-                .map(|snippet| format!("{} {}", language_config.comment_prefix, snippet))
+                .map(|snippet| format!("{} {}", comment_prefix, snippet))
                 .collect::<Vec<_>>()
                 .join("\n");
-            let file_path_header =
-                format!("{} Path: {}", language_config.comment_prefix, file_path,);
+            let file_path_header = format!("{} Path: {}", comment_prefix, file_path,);
             let joined_snippet_context = format!("{}\n{}", file_path_header, snippet_context);
             running_context.push(joined_snippet_context);
             let current_context = running_context.join("\n");
@@ -148,7 +148,7 @@ impl CodeBaseContext {
             }
         }
 
-        let prefix_context = running_context.join("\n\n");
+        let prefix_context = running_context.join(&format!("\n{comment_prefix}\n"));
         let used_tokens_for_prefix = self.tokenizer.count_tokens(
             &self.llm_type,
             LLMTokenizerInput::Prompt(prefix_context.to_owned()),

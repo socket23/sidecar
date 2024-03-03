@@ -90,6 +90,7 @@ pub async fn inline_completion(
         app.editor_parsing.clone(),
         &filepath,
     );
+    dbg!("is_multiline", id = &id, is_multiline);
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
         app.llm_broker.clone(),
         app.llm_tokenizer.clone(),

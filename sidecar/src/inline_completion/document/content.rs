@@ -5,7 +5,6 @@ use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Instant,
 };
 
 use regex::Regex;
@@ -396,6 +395,8 @@ impl DocumentEditLines {
         // useful links: https://github.com/thakkarparth007/copilot-explorer/blob/4a572ef4653811e789a05b370d3da49a784d6172/codeviz/data/module_codes_renamed/1016.js#L21-L25
         // https://github.com/thakkarparth007/copilot-explorer/blob/4a572ef4653811e789a05b370d3da49a784d6172/codeviz/data/module_codes_renamed/1016.js#L61-L87
         // Maximum snippet size here is 50 lines and we want to generate the snippets using the lines
+        // we also want to keep a sliding window like context so we can skip over
+        // 10 lines in the window while still getting good perf out of this
         let mut final_snippets = vec![];
 
         // we are going to change the algorithm to be the following:
@@ -449,6 +450,7 @@ impl DocumentEditLines {
                     .collect(),
             ));
         } else {
+            let last_index = lines.len() - 50 - 1;
             for index in 1..(lines.len() - 50) {
                 // first line is: 0 - 49
                 // second line is: 1 - 50 (for this we need to remove 0th line and add the 50th line)
@@ -481,21 +483,24 @@ impl DocumentEditLines {
                     });
                 }
                 let current_lines = lines[index..index + 50].to_vec();
-                final_snippets.push(BagOfWords::new(
-                    current_lines,
-                    index + 1,
-                    index + 1 + 49, // index + 1 + (50 - 1) since we are adding 50 lines
-                    running_word_count
-                        .iter()
-                        .filter_map(|(key, value)| {
-                            if value > &0 {
-                                Some(key.to_owned())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect(),
-                ));
+                // always take the 1 in 4th in 500 lines
+                if index % 4 == 0 || index == last_index {
+                    final_snippets.push(BagOfWords::new(
+                        current_lines,
+                        index + 1,
+                        index + 1 + 49, // index + 1 + (50 - 1) since we are adding 50 lines
+                        running_word_count
+                            .iter()
+                            .filter_map(|(key, value)| {
+                                if value > &0 {
+                                    Some(key.to_owned())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                    ));
+                }
             }
         }
         self.window_snippets = final_snippets;

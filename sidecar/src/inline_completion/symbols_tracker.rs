@@ -75,12 +75,23 @@ impl FileContentChangeRequest {
     }
 }
 
+struct GetFileEditedLinesRequest {
+    file_path: String,
+}
+
+impl GetFileEditedLinesRequest {
+    pub fn new(file_path: String) -> Self {
+        Self { file_path }
+    }
+}
+
 enum SharedStateRequest {
     GetFileContent(String),
     GetDocumentLines(GetDocumentLinesRequest),
     AddDocument(AddDocumentRequest),
     FileContentChange(FileContentChangeRequest),
     GetDocumentHistory,
+    GetFileEditedLines(GetFileEditedLinesRequest),
 }
 
 enum SharedStateResponse {
@@ -88,6 +99,7 @@ enum SharedStateResponse {
     Ok,
     FileContentRespone(Option<String>),
     GetDocumentLinesResponse(Option<Vec<SnippetInformationWithScore>>),
+    FileEditedLinesResponse(Vec<usize>),
 }
 
 pub struct SharedState {
@@ -138,6 +150,10 @@ impl SharedState {
                 let response = self.get_document_history().await;
                 SharedStateResponse::DocumentHistoryResponse(response)
             }
+            SharedStateRequest::GetFileEditedLines(file_request) => {
+                let response = self.get_edited_lines(&file_request.file_path).await;
+                SharedStateResponse::FileEditedLinesResponse(response)
+            }
         }
     }
 
@@ -166,6 +182,16 @@ impl SharedState {
                 document_history.push(document_path.to_owned());
             }
         }
+    }
+
+    async fn get_edited_lines(&self, file_path: &str) -> Vec<usize> {
+        {
+            let mut document_lines = self.document_lines.lock().await;
+            if let Some(ref mut document_lines_entry) = document_lines.get_mut(file_path) {
+                return document_lines_entry.get_edited_lines();
+            }
+        }
+        Vec::new()
     }
 
     async fn get_document_lines(
@@ -336,6 +362,20 @@ impl SymbolTrackerInline {
             response
         } else {
             None
+        }
+    }
+
+    pub async fn get_file_edited_lines(&self, file_path: &str) -> Vec<usize> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request = SharedStateRequest::GetFileEditedLines(GetFileEditedLinesRequest::new(
+            file_path.to_owned(),
+        ));
+        let _ = self.sender.send((request, sender));
+        let reply = receiver.await;
+        if let Ok(SharedStateResponse::FileEditedLinesResponse(response)) = reply {
+            response
+        } else {
+            Vec::new()
         }
     }
 

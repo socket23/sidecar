@@ -245,3 +245,26 @@ pub async fn inline_completion_file_content(
         file_content: content,
     }))
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InlineCompletionEditedLinesRequest {
+    file_path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InlineCompletionEditedLinesResponse {
+    edited_lines: Vec<usize>,
+}
+
+impl ApiResponse for InlineCompletionEditedLinesResponse {}
+
+pub async fn inline_completion_edited_lines(
+    Extension(app): Extension<Application>,
+    Json(InlineCompletionEditedLinesRequest { file_path }): Json<
+        InlineCompletionEditedLinesRequest,
+    >,
+) -> Result<impl IntoResponse> {
+    let symbol_tracker = app.symbol_tracker.clone();
+    let edited_lines = symbol_tracker.get_file_edited_lines(&file_path).await;
+    Ok(Json(InlineCompletionEditedLinesResponse { edited_lines }))
+}

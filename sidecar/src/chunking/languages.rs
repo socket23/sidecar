@@ -94,6 +94,9 @@ pub struct TSLanguageConfig {
 
     /// Tree sitter node types used to detect imports which are present in the file
     pub import_statement: Vec<String>,
+
+    /// Block start detection for the language
+    pub block_start: Option<String>,
 }
 
 impl TSLanguageConfig {

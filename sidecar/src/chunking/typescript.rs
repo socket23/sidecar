@@ -103,5 +103,6 @@ pub fn typescript_language_config() -> TSLanguageConfig {
         comment_prefix: "//".to_owned(),
         end_of_line: Some(";".to_owned()),
         import_statement: vec!["[(import_statement)] @import_type".to_owned()],
+        block_start: Some("{".to_owned()),
     }
 }

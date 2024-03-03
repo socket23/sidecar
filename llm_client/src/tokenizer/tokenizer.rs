@@ -41,6 +41,9 @@ pub enum LLMTokenizerError {
 
     #[error("tokenizer error: {0}")]
     TokenizerErrorInternal(#[from] TokenizerError),
+
+    #[error("fast count not supported for messages")]
+    FastCountNotSupportedForMessages,
 }
 
 pub enum LLMTokenizerInput {
@@ -109,6 +112,25 @@ impl LLMTokenizer {
             LLMType::Gpt4Turbo => Some("gpt-4-1106-preview".to_owned()),
             LLMType::Gpt4_32k => Some("gpt-4-32k-0613".to_owned()),
             _ => None,
+        }
+    }
+
+    pub fn count_tokens_approx(
+        &self,
+        _: &LLMType,
+        input: LLMTokenizerInput,
+    ) -> Result<usize, LLMTokenizerError> {
+        match input {
+            LLMTokenizerInput::Prompt(prompt) => {
+                let words = prompt.split_whitespace().count();
+                let new_line_count = prompt.lines().count();
+                // the approx algorithm is (words + new_line_count) * 4/3
+                // each token is approx 3/4th of a word
+                Ok(((words + new_line_count) * 4) / 3)
+            }
+            LLMTokenizerInput::Messages(_) => {
+                Err(LLMTokenizerError::FastCountNotSupportedForMessages)
+            }
         }
     }
 

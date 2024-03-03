@@ -503,7 +503,6 @@ impl DocumentEditLines {
 
     fn generate_snippets(&mut self) {
         // generate the new tree sitter tree
-        let instant = Instant::now();
         // self.set_tree();
         // dbg!("Time to generate tree: {:?}", instant.elapsed());
 
@@ -556,9 +555,7 @@ impl DocumentEditLines {
 
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
-        let instant = std::time::Instant::now();
         self.snippets_using_sliding_window(filtered_lines);
-        // dbg!("snippets sliding window: ", instant.elapsed());
     }
 
     // If the contents have changed, we need to mark the new lines which have changed

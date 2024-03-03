@@ -8,7 +8,9 @@ use tracing::info;
 use crate::{
     application::application::Application,
     chunking::text_document::{Position, Range},
-    inline_completion::types::FillInMiddleCompletionAgent,
+    inline_completion::{
+        multiline::detect_multiline::is_multiline_completion, types::FillInMiddleCompletionAgent,
+    },
 };
 
 use super::{
@@ -82,6 +84,12 @@ pub async fn inline_completion(
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let symbol_tracker = app.symbol_tracker.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
+    let is_multiline = is_multiline_completion(
+        position,
+        text.to_owned(),
+        app.editor_parsing.clone(),
+        &filepath,
+    );
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
         app.llm_broker.clone(),
         app.llm_tokenizer.clone(),
@@ -89,6 +97,7 @@ pub async fn inline_completion(
         app.fill_in_middle_broker.clone(),
         app.editor_parsing.clone(),
         symbol_tracker,
+        is_multiline,
     );
     let completions = fill_in_middle_agent
         .completion(

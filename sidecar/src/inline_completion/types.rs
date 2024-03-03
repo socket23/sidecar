@@ -90,6 +90,7 @@ pub struct FillInMiddleCompletionAgent {
     editor_parsing: Arc<EditorParsing>,
     answer_mode: Arc<LLMAnswerModelBroker>,
     symbol_tracker: Arc<SymbolTrackerInline>,
+    is_multiline: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -145,6 +146,7 @@ impl FillInMiddleCompletionAgent {
         fill_in_middle_broker: Arc<FillInMiddleBroker>,
         editor_parsing: Arc<EditorParsing>,
         symbol_tracker: Arc<SymbolTrackerInline>,
+        is_multiline: bool,
     ) -> Self {
         Self {
             llm_broker,
@@ -153,6 +155,7 @@ impl FillInMiddleCompletionAgent {
             fill_in_middle_broker,
             editor_parsing,
             symbol_tracker,
+            is_multiline,
         }
     }
 
@@ -316,6 +319,18 @@ impl FillInMiddleCompletionAgent {
         Ok(Box::pin({
             let cursor_prefix = cursor_prefix.clone();
             let should_end_stream = should_end_stream.clone();
+            let mut stop_words = vec![
+                "\n\n".to_owned(),
+                "```".to_owned(),
+                "<EOT>".to_owned(),
+                "</s>".to_owned(),
+                "<｜end▁of▁sentence｜>".to_owned(),
+                "<｜begin▁of▁sentence｜>".to_owned(),
+                "<step>".to_owned(),
+            ];
+            if self.is_multiline {
+                stop_words.push("\n".to_owned());
+            }
             // ugly, ugly, ugly, but type-safe so yay :))
             let completion = LLMBroker::stream_string_completion_owned(
                 llm_broker,
@@ -328,15 +343,7 @@ impl FillInMiddleCompletionAgent {
                 )
                 // we are dumping the same eot for different models here, which
                 // is fine but we can change this later
-                .set_stop_words(vec![
-                    "\n\n".to_owned(),
-                    "```".to_owned(),
-                    "<EOT>".to_owned(),
-                    "</s>".to_owned(),
-                    "<｜end▁of▁sentence｜>".to_owned(),
-                    "<｜begin▁of▁sentence｜>".to_owned(),
-                    "<step>".to_owned(),
-                ])
+                .set_stop_words(stop_words)
                 // we only allow for 256 tokens so we can quickly get back the response
                 // and terminate if we are going through a bad request
                 .set_max_tokens(256),

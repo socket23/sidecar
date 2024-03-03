@@ -583,6 +583,14 @@ impl DocumentEditLines {
         self.generate_snippets();
     }
 
+    pub fn get_edited_lines(&self) -> Vec<usize> {
+        self.lines
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, line)| if line.is_edited() { Some(idx) } else { None })
+            .collect()
+    }
+
     pub fn grab_similar_context(
         // the only reason for this to be mut is so we can generate the window snippets
         &mut self,

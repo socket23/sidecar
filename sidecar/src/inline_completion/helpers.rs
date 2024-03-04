@@ -1,3 +1,4 @@
+use llm_client::{clients::types::LLMType, provider::LLMProviderAPIKeys};
 use regex::Regex;
 
 use crate::chunking::text_document::{Position, Range};
@@ -124,4 +125,17 @@ pub fn split_on_lines_editor_compatiable(content: &str) -> Vec<String> {
         lines.push("".to_owned());
     }
     lines
+}
+
+/// This fixes the model when we are using the sidecar provider
+/// we need to change the model to the one that the sidecar provider
+pub fn fix_model_for_sidecar_provider(
+    provider: &LLMProviderAPIKeys,
+    fast_model: LLMType,
+) -> LLMType {
+    if matches!(provider, LLMProviderAPIKeys::CodeStory) {
+        LLMType::CodeLlama13BInstruct
+    } else {
+        fast_model
+    }
 }

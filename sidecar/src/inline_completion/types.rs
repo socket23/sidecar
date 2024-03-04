@@ -20,6 +20,7 @@ use crate::chunking::text_document::Range;
 use crate::inline_completion::context::clipboard_context::{
     ClipboardContext, ClipboardContextString,
 };
+use crate::inline_completion::helpers::fix_model_for_sidecar_provider;
 use crate::{
     chunking::editor_parsing::EditorParsing,
     webserver::inline_completion::{
@@ -173,7 +174,14 @@ impl FillInMiddleCompletionAgent {
         // Now that we have the position, we want to create the request for the fill
         // in the middle request.
         let model_config = &completion_request.model_config;
-        let fast_model = model_config.fast_model.clone();
+        // If we are using the codestory provider, use the only model compatible with the codestory
+        // provider.
+        let fast_model = match model_config.provider_for_fast_model() {
+            Some(provider) => {
+                fix_model_for_sidecar_provider(provider, model_config.fast_model.clone())
+            }
+            None => model_config.fast_model.clone(),
+        };
         let temperature = model_config
             .fast_model_temperature()
             .ok_or(InLineCompletionError::LLMNotSupported(fast_model.clone()))?;

@@ -97,6 +97,10 @@ pub struct TSLanguageConfig {
 
     /// Block start detection for the language
     pub block_start: Option<String>,
+
+    /// Queries which help us figure out the vairable identifiers so we can use go-to-definition
+    /// on top of them
+    pub vairable_indentifier_queries: Vec<String>,
 }
 
 impl TSLanguageConfig {

@@ -210,7 +210,7 @@ impl FillInMiddleCompletionAgent {
         }
 
         let mut prefix = None;
-        if let Some(completion_context) = completion_request.cliboard_content {
+        if let Some(completion_context) = completion_request.clipboard_content {
             let clipboard_context = ClipboardContext::new(
                 completion_context,
                 self.llm_tokenizer.clone(),

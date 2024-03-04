@@ -13,7 +13,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::Mutex;
 
-use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};
+use crate::chunking::{
+    editor_parsing::EditorParsing,
+    text_document::{Position, Range},
+};
 
 use super::document::content::{DocumentEditLines, SnippetInformationWithScore};
 
@@ -85,6 +88,11 @@ impl GetFileEditedLinesRequest {
     }
 }
 
+struct GetIdentifierNodesRequest {
+    file_path: String,
+    cursor_position: Position,
+}
+
 enum SharedStateRequest {
     GetFileContent(String),
     GetDocumentLines(GetDocumentLinesRequest),
@@ -92,6 +100,7 @@ enum SharedStateRequest {
     FileContentChange(FileContentChangeRequest),
     GetDocumentHistory,
     GetFileEditedLines(GetFileEditedLinesRequest),
+    GetIdentifierNodes(GetIdentifierNodesRequest),
 }
 
 enum SharedStateResponse {
@@ -100,6 +109,7 @@ enum SharedStateResponse {
     FileContentRespone(Option<String>),
     GetDocumentLinesResponse(Option<Vec<SnippetInformationWithScore>>),
     FileEditedLinesResponse(Vec<usize>),
+    GetIdentifierNodesResponse(HashMap<String, Range>),
 }
 
 pub struct SharedState {
@@ -154,6 +164,12 @@ impl SharedState {
                 let response = self.get_edited_lines(&file_request.file_path).await;
                 SharedStateResponse::FileEditedLinesResponse(response)
             }
+            SharedStateRequest::GetIdentifierNodes(request) => {
+                let file_path = request.file_path;
+                let position = request.cursor_position;
+                let response = self.get_identifier_nodes(&file_path, position).await;
+                SharedStateResponse::GetIdentifierNodesResponse(response)
+            }
         }
     }
 
@@ -192,6 +208,20 @@ impl SharedState {
             }
         }
         Vec::new()
+    }
+
+    async fn get_identifier_nodes(
+        &self,
+        file_path: &str,
+        position: Position,
+    ) -> HashMap<String, Range> {
+        {
+            let mut document_lines = self.document_lines.lock().await;
+            if let Some(ref mut document_lines_entry) = document_lines.get_mut(file_path) {
+                return document_lines_entry.get_identifier_nodes(position);
+            }
+        }
+        Default::default()
     }
 
     async fn get_document_lines(
@@ -439,6 +469,25 @@ impl SymbolTrackerInline {
             response
         } else {
             vec![]
+        }
+    }
+
+    pub async fn get_identifier_nodes(
+        &self,
+        file_path: &str,
+        position: Position,
+    ) -> HashMap<String, Range> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request = SharedStateRequest::GetIdentifierNodes(GetIdentifierNodesRequest {
+            file_path: file_path.to_owned(),
+            cursor_position: position,
+        });
+        let _ = self.sender.send((request, sender));
+        let reply = receiver.await;
+        if let Ok(SharedStateResponse::GetIdentifierNodesResponse(response)) = reply {
+            response
+        } else {
+            HashMap::new()
         }
     }
 }

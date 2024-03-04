@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     response::{sse, IntoResponse, Sse},
     Extension, Json,
@@ -277,4 +279,46 @@ pub async fn inline_completion_edited_lines(
     let symbol_tracker = app.symbol_tracker.clone();
     let edited_lines = symbol_tracker.get_file_edited_lines(&file_path).await;
     Ok(Json(InlineCompletionEditedLinesResponse { edited_lines }))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineCompletionIdentifierNodesRequest {
+    file_path: String,
+    language: String,
+    file_content: String,
+    cursor_line: usize,
+    cursor_column: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineCompletionIdentifierNodesResponse {
+    identifier_nodes: HashMap<String, Range>,
+}
+
+impl ApiResponse for InLineCompletionIdentifierNodesResponse {}
+
+pub async fn get_identifier_nodes(
+    Extension(app): Extension<Application>,
+    Json(InLineCompletionIdentifierNodesRequest {
+        file_path,
+        language,
+        file_content,
+        cursor_line,
+        cursor_column,
+    }): Json<InLineCompletionIdentifierNodesRequest>,
+) -> Result<impl IntoResponse> {
+    dbg!("sidecar.get_identifier_nodes", &file_path, language);
+    let editor_parsing = app.editor_parsing.clone();
+    let inline_symbol_tracker = app.symbol_tracker.clone();
+
+    let cursor_position = Position::new(cursor_line, cursor_column, 0);
+
+    // For now we will use the language_config directly, later we should use
+    // the cached view which is present in the symbol tracker
+    let _ = inline_symbol_tracker
+        .get_identifier_nodes(&file_path, cursor_position)
+        .await;
+    Ok(Json(InLineCompletionIdentifierNodesResponse {
+        identifier_nodes: Default::default(),
+    }))
 }

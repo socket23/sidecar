@@ -1,4 +1,7 @@
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use tree_sitter::Tree;
 
@@ -116,6 +119,39 @@ impl TSLanguageConfig {
         tree_maybe
             .map(|tree| !tree.root_node().has_error())
             .unwrap_or_default()
+    }
+
+    pub fn generate_identifier_nodes(
+        &self,
+        source_code: &str,
+        position: Position,
+        old_tree: Option<&Tree>,
+    ) -> HashMap<String, Range> {
+        // First we want to get the function nodes which are present in the file
+        // Then we are going to check if our position belongs in the range of any
+        // function. If it does, we will invoke the query to get the identifier nodes
+        // within that function above that position
+        let function_ranges = match old_tree {
+            Some(tree) => self.capture_function_data_with_tree(source_code.as_bytes(), tree, true),
+            None => self.capture_function_data(source_code.as_bytes()),
+        };
+        let possible_function = function_ranges
+            .into_iter()
+            .filter(|function_information| {
+                function_information.range().contains_position(&position)
+            })
+            .next();
+
+        if let Some(possible_function) = possible_function {
+            // Now we need to find the identifier nodes in this part of the function and then grab them
+            // and return them, this function might need to be enclosed in either a class or can be independent
+            // so we will have to check for both
+            let function_body = possible_function.content(source_code);
+            dbg!("function_body", &function_body);
+            Default::default()
+        } else {
+            Default::default()
+        }
     }
 
     pub fn generate_file_symbols(&self, source_code: &[u8]) -> Vec<ClassWithFunctions> {
@@ -515,6 +551,7 @@ impl TSLanguageConfig {
         &self,
         source_code: &[u8],
         tree: &Tree,
+        only_outline: bool,
     ) -> Vec<FunctionInformation> {
         let function_queries = self.function_query.to_vec();
         // We want to capture the function information here and then do a folding on top of
@@ -524,7 +561,6 @@ impl TSLanguageConfig {
         let grammar = self.grammar;
         let node = tree.root_node();
         let mut function_nodes = vec![];
-        let source_code_vec = source_code.to_vec();
         let mut range_set = HashSet::new();
         function_queries.into_iter().for_each(|function_query| {
             let query = tree_sitter::Query::new(grammar(), &function_query)
@@ -581,6 +617,7 @@ impl TSLanguageConfig {
         // - parameters
         // - return
         let mut index = 0;
+        let source_code_vec = source_code.to_vec();
         let mut compressed_functions = vec![];
         while index < function_nodes.len() {
             let start_index = index;
@@ -596,32 +633,48 @@ impl TSLanguageConfig {
             {
                 match function_nodes[end_index].r#type() {
                     &FunctionNodeType::Identifier => {
-                        function_node_information.set_name(get_string_from_bytes(
-                            &source_code_vec,
-                            function_nodes[end_index].range().start_byte(),
-                            function_nodes[end_index].range().end_byte(),
-                        ));
+                        function_node_information.set_name(if !only_outline {
+                            get_string_from_bytes(
+                                &source_code_vec,
+                                function_nodes[end_index].range().start_byte(),
+                                function_nodes[end_index].range().end_byte(),
+                            )
+                        } else {
+                            "".to_owned()
+                        });
                     }
                     &FunctionNodeType::Body => {
-                        function_node_information.set_body(get_string_from_bytes(
-                            &source_code_vec,
-                            function_nodes[end_index].range().start_byte(),
-                            function_nodes[end_index].range().end_byte(),
-                        ));
+                        function_node_information.set_body(if !only_outline {
+                            get_string_from_bytes(
+                                &source_code_vec,
+                                function_nodes[end_index].range().start_byte(),
+                                function_nodes[end_index].range().end_byte(),
+                            )
+                        } else {
+                            "".to_owned()
+                        });
                     }
                     &FunctionNodeType::Parameters => {
-                        function_node_information.set_parameters(get_string_from_bytes(
-                            &source_code_vec,
-                            function_nodes[end_index].range().start_byte(),
-                            function_nodes[end_index].range().end_byte(),
-                        ));
+                        function_node_information.set_parameters(if !only_outline {
+                            get_string_from_bytes(
+                                &source_code_vec,
+                                function_nodes[end_index].range().start_byte(),
+                                function_nodes[end_index].range().end_byte(),
+                            )
+                        } else {
+                            "".to_owned()
+                        });
                     }
                     &FunctionNodeType::ReturnType => {
-                        function_node_information.set_return_type(get_string_from_bytes(
-                            &source_code_vec,
-                            function_nodes[end_index].range().start_byte(),
-                            function_nodes[end_index].range().end_byte(),
-                        ));
+                        function_node_information.set_return_type(if !only_outline {
+                            get_string_from_bytes(
+                                &source_code_vec,
+                                function_nodes[end_index].range().start_byte(),
+                                function_nodes[end_index].range().end_byte(),
+                            )
+                        } else {
+                            "".to_owned()
+                        });
                     }
                     _ => {}
                 }
@@ -651,7 +704,7 @@ impl TSLanguageConfig {
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(grammar()).unwrap();
         let parsed_data = parser.parse(source_code, None).unwrap();
-        self.capture_function_data_with_tree(source_code, &parsed_data)
+        self.capture_function_data_with_tree(source_code, &parsed_data, false)
     }
 
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {

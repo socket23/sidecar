@@ -207,4 +207,8 @@ fn inline_completion() -> Router {
             "/get_document_content",
             post(sidecar::webserver::inline_completion::inline_completion_file_content),
         )
+        .route(
+            "/get_identifier_nodes",
+            post(sidecar::webserver::inline_completion::get_identifier_nodes),
+        )
 }

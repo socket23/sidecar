@@ -300,10 +300,16 @@ impl DocumentEditLines {
             .join("\n")
     }
 
+    pub fn get_lines_in_range(&self, range: &Range) -> String {
+        let mut content = String::new();
+        for i in range.start_line()..range.end_line() {
+            content.push_str(&self.lines[i].content);
+            content.push('\n');
+        }
+        content
+    }
+
     pub fn get_identifier_nodes(&self, position: Position) -> HashMap<String, Range> {
-        let tree = &self.tree;
-        let source_code = &self.get_content();
-        let language_config = self.editor_parsing.for_file_path(&self.file_path);
         // grab the function definition here
         let contained_function = self
             .function_information
@@ -313,6 +319,9 @@ impl DocumentEditLines {
             })
             .next();
         dbg!(contained_function);
+        if let Some(contained_function) = contained_function {
+            dbg!(&self.get_lines_in_range(contained_function.range()));
+        }
         Default::default()
     }
 

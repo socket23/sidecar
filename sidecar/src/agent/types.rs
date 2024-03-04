@@ -551,7 +551,6 @@ impl ConversationMessage {
                     .transpose()
                     .unwrap_or_default()
                     .unwrap_or_default();
-                dbg!(&user_context);
                 ConversationMessage {
                     message_id: uuid::Uuid::from_str(&message_id)
                         .expect("parsing back should work"),
@@ -1084,11 +1083,9 @@ impl Agent {
                 // save it to the db
                 if let Some(last_conversation) = self.conversation_messages.last() {
                     // save the conversation to the DB
-                    let _ = dbg!(
-                        last_conversation
-                            .save_to_db(self.sql_db.clone(), self.reporef().clone())
-                            .await
-                    );
+                    let _ = last_conversation
+                        .save_to_db(self.sql_db.clone(), self.reporef().clone())
+                        .await;
                     // send it over the sender
                     let _ = self.sender.send(last_conversation.clone()).await;
                 }

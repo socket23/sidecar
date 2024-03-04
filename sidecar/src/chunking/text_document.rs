@@ -95,6 +95,14 @@ impl Position {
         self.character
     }
 
+    pub fn before_other(&self, other: &Position) -> bool {
+        self.line < other.line || (self.line == other.line && self.character < other.character)
+    }
+
+    pub fn after_other(&self, other: &Position) -> bool {
+        self.line > other.line || (self.line == other.line && self.character > other.character)
+    }
+
     pub fn set_byte_offset(&mut self, byte_offset: usize) {
         self.byte_offset = byte_offset;
     }
@@ -245,6 +253,10 @@ impl Range {
         } else {
             return expanded_range.clone();
         }
+    }
+
+    pub fn contains_position(&self, position: &Position) -> bool {
+        self.start_position().before_other(position) && self.end_position().after_other(position)
     }
 
     pub fn contains(&self, other: &Range) -> bool {

@@ -20,8 +20,15 @@ pub fn python_language_config() -> TSLanguageConfig {
                     name: (identifier) @identifier
                     parameters: (parameters) @parameters
                     return_type: (type) @return_type
-                        body: (block
-                            (expression_statement (string))? @docstring) @body)
+                    body: (block
+                        (expression_statement (string))? @docstring
+                        (expression_statement
+                          (assignment
+                            left: (identifier) @variable.name
+                            type: (type)? @variable.type
+                          )
+                        )*
+                      ) @function.body)
                 (assignment
                     left: (identifier) @identifier
                     type: (type) @parameters

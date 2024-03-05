@@ -34,29 +34,71 @@ pub fn typescript_language_config() -> TSLanguageConfig {
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
                 return_type: (type_annotation)? @return_type
-                body: (statement_block) @body)
+                body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier) @variable.name
+                        type: (type_annotation)? @variable.type
+                      )
+                    )*
+                  )? @body)
             (function_declaration
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
                 return_type: (type_annotation)? @return_type
-                body: (statement_block) @body)
+                body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier) @variable.name
+                        type: (type_annotation)? @variable.type
+                      )
+                    )*
+                  )? @body)
             (generator_function
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
                 return_type: (type_annotation)? @return_type
-                body: (statement_block) @body)
+                body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier) @variable.name
+                        type: (type_annotation)? @variable.type
+                      )
+                    )*
+                  )? @body)
             (generator_function_declaration
                 name: (identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
                 return_type: (type_annotation)? @return_type
-                body: (statement_block) @body)
+                body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier) @variable.name
+                        type: (type_annotation)? @variable.type
+                      )
+                    )*
+                  )? @body)
             (method_definition
                 name: (property_identifier)? @identifier
                 parameters: (formal_parameters)? @parameters
                 return_type: (type_annotation)? @return_type
-                body: (statement_block) @body)
+                body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier) @variable.name
+                        type: (type_annotation)? @variable.type
+                      )
+                    )*
+                  )? @body)
             (arrow_function
-                body: (statement_block) @body
+                body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier) @variable.name
+                        type: (type_annotation)? @variable.type
+                      )
+                    )*
+                  )? @body
                 parameters: (formal_parameters)? @parameters
                 return_type: (type_annotation)? @return_type)
             ] @function"

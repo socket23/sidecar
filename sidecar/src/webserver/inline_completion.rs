@@ -291,8 +291,14 @@ pub struct InLineCompletionIdentifierNodesRequest {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IdentifierNodeResponse {
+    pub name: String,
+    pub range: Range,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineCompletionIdentifierNodesResponse {
-    identifier_nodes: Vec<(String, Range)>,
+    identifier_nodes: Vec<IdentifierNodeResponse>,
 }
 
 impl ApiResponse for InLineCompletionIdentifierNodesResponse {}
@@ -308,7 +314,6 @@ pub async fn get_identifier_nodes(
     }): Json<InLineCompletionIdentifierNodesRequest>,
 ) -> Result<impl IntoResponse> {
     dbg!("sidecar.get_identifier_nodes", &file_path, language);
-    let editor_parsing = app.editor_parsing.clone();
     let inline_symbol_tracker = app.symbol_tracker.clone();
 
     let cursor_position = Position::new(cursor_line, cursor_column, 0);
@@ -319,6 +324,12 @@ pub async fn get_identifier_nodes(
         .get_identifier_nodes(&file_path, cursor_position)
         .await;
     Ok(Json(InLineCompletionIdentifierNodesResponse {
-        identifier_nodes,
+        identifier_nodes: identifier_nodes
+            .into_iter()
+            .map(|identifier_node| IdentifierNodeResponse {
+                name: identifier_node.0,
+                range: identifier_node.1,
+            })
+            .collect(),
     }))
 }

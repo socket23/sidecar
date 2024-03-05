@@ -109,7 +109,7 @@ enum SharedStateResponse {
     FileContentRespone(Option<String>),
     GetDocumentLinesResponse(Option<Vec<SnippetInformationWithScore>>),
     FileEditedLinesResponse(Vec<usize>),
-    GetIdentifierNodesResponse(HashMap<String, Range>),
+    GetIdentifierNodesResponse(Vec<(String, Range)>),
 }
 
 pub struct SharedState {
@@ -214,7 +214,7 @@ impl SharedState {
         &self,
         file_path: &str,
         position: Position,
-    ) -> HashMap<String, Range> {
+    ) -> Vec<(String, Range)> {
         {
             let mut document_lines = self.document_lines.lock().await;
             if let Some(ref mut document_lines_entry) = document_lines.get_mut(file_path) {
@@ -476,7 +476,7 @@ impl SymbolTrackerInline {
         &self,
         file_path: &str,
         position: Position,
-    ) -> HashMap<String, Range> {
+    ) -> Vec<(String, Range)> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let request = SharedStateRequest::GetIdentifierNodes(GetIdentifierNodesRequest {
             file_path: file_path.to_owned(),
@@ -487,7 +487,7 @@ impl SymbolTrackerInline {
         if let Ok(SharedStateResponse::GetIdentifierNodesResponse(response)) = reply {
             response
         } else {
-            HashMap::new()
+            Default::default()
         }
     }
 }

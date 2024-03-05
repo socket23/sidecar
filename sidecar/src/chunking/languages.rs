@@ -547,6 +547,48 @@ impl TSLanguageConfig {
         )
     }
 
+    pub fn capture_identifier_nodes(
+        &self,
+        source_code: &[u8],
+        tree: &Tree,
+    ) -> Vec<(String, Range)> {
+        let identifier_nodes_query = self.vairable_indentifier_queries.to_vec();
+        let grammar = self.grammar;
+        let node = tree.root_node();
+        let mut identifier_nodes = vec![];
+        let mut range_set: HashSet<Range> = HashSet::new();
+        let source_code_vec = source_code.to_vec();
+        identifier_nodes_query
+            .into_iter()
+            .for_each(|identifier_query| {
+                let query = tree_sitter::Query::new(grammar(), &identifier_query)
+                    .expect("identifier queries to be well formed");
+                let mut cursor = tree_sitter::QueryCursor::new();
+                cursor
+                    .captures(&query, node, source_code)
+                    .into_iter()
+                    .for_each(|capture| {
+                        capture.0.captures.into_iter().for_each(|capture| {
+                            let capture_name = query
+                                .capture_names()
+                                .to_vec()
+                                .remove(capture.index.try_into().unwrap());
+                            let capture_range = Range::for_tree_node(&capture.node);
+                            let node_name = get_string_from_bytes(
+                                &source_code_vec,
+                                capture_range.start_byte(),
+                                capture_range.end_byte(),
+                            );
+                            if !range_set.contains(&capture_range) {
+                                range_set.insert(capture_range.clone());
+                                identifier_nodes.push((node_name, capture_range));
+                            }
+                        })
+                    })
+            });
+        identifier_nodes
+    }
+
     pub fn capture_function_data_with_tree(
         &self,
         source_code: &[u8],
@@ -692,10 +734,15 @@ impl TSLanguageConfig {
 
         let documentation_string_information: Vec<(Range, String)> =
             self.capture_documentation_queries(source_code);
-        // Now we want to append the documentation string to the functions
-        FunctionInformation::add_documentation_to_functions(
-            FunctionInformation::fold_function_blocks(compressed_functions),
-            documentation_string_information,
+        let identifier_nodes = self.capture_identifier_nodes(source_code, tree);
+        // Add the identifier nodes as well
+        FunctionInformation::add_identifier_nodes(
+            // Now we want to append the documentation string to the functions
+            FunctionInformation::add_documentation_to_functions(
+                FunctionInformation::fold_function_blocks(compressed_functions),
+                documentation_string_information,
+            ),
+            identifier_nodes,
         )
     }
 

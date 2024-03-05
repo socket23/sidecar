@@ -104,6 +104,10 @@ pub struct TSLanguageConfig {
     /// Queries which help us figure out the vairable identifiers so we can use go-to-definition
     /// on top of them
     pub vairable_indentifier_queries: Vec<String>,
+
+    /// Generates the outline for the file which will be used to get the
+    /// outline of the file
+    pub outline_query: Option<String>,
 }
 
 impl TSLanguageConfig {
@@ -119,6 +123,30 @@ impl TSLanguageConfig {
         tree_maybe
             .map(|tree| !tree.root_node().has_error())
             .unwrap_or_default()
+    }
+
+    pub fn generate_ouline(&self, code: &str, tree: &Tree) {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let outline_query = self.outline_query.clone();
+        if let None = outline_query {
+            return;
+        }
+        let node = tree.root_node();
+        let outline_query = outline_query.expect("if let None to hold");
+        let query = tree_sitter::Query::new(grammar(), &outline_query).expect("to work");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let query_captures = cursor.captures(&query, node, code.as_bytes());
+        let collected_ranges: HashSet<Range> = Default::default();
+        query_captures.into_iter().for_each(|capture| {
+            capture.0.captures.into_iter().for_each(|capture| {
+                let capture_name = query
+                    .capture_names()
+                    .to_vec()
+                    .remove(capture.index.try_into().unwrap());
+            })
+        });
     }
 
     pub fn generate_identifier_nodes(

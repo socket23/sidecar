@@ -150,5 +150,6 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             "((lexical_declaration (variable_declarator (identifier) @identifier)))"
                 .to_owned(),
         ],
+        outline_query: None,
     }
 }

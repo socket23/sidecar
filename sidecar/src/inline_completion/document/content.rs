@@ -558,6 +558,8 @@ impl DocumentEditLines {
     fn generate_snippets(&mut self) {
         // generate the new tree sitter tree
         self.set_tree();
+        // we need to create ths symbol map here for the file so we can lookup the symbols
+        // and add the skeleton of it to the inline completion
 
         // update the function information we are getting from tree-sitter
         self.function_information = if let (Some(language_config), Some(tree)) = (
@@ -572,52 +574,6 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
-        // dbg!("Time to generate tree: {:?}", instant.elapsed());
-
-        // let source_code = content.as_bytes();
-        // // For generating the snippets we have to use the following tricks which might be useful
-        // // - we do not want to include imports (they are just noise)
-        // // - we want to provide the implementations of the functions and classes, these are necessary
-        // // - can a stupid sliding window here work as we want?
-        // let language_config = self.editor_parsing.for_file_path(&self.file_path);
-        // let mut exlcuded_lines_import: HashSet<usize> = Default::default();
-        // match (language_config, self.tree.as_ref()) {
-        //     (Some(language_config), Some(tree)) => {
-        //         let excluded_ranges = language_config.get_import_ranges(tree, source_code);
-        //         excluded_ranges.into_iter().for_each(|range| {
-        //             let start_line = range.start_line();
-        //             let end_line = range.end_line();
-        //             // Now we grab all the lines between start and end line
-        //             for i in start_line..end_line + 1 {
-        //                 exlcuded_lines_import.insert(i);
-        //             }
-        //         });
-        //     }
-        //     _ => {}
-        // }
-
-        // // we check what different types of constructs we have in the tree, and then only exclude the
-        // // import lines which are not convered by any of the other constructs
-        // if let (Some(language_config), Some(tree)) = (language_config, self.tree.as_ref()) {
-        //     // remove the lines which are covered by the functions, since these are part of function bodies
-        //     language_config
-        //         .capture_function_data_with_tree(source_code, tree)
-        //         .into_iter()
-        //         .for_each(|function_data| {
-        //             let range = function_data.range();
-        //             for line in range.start_line()..range.end_line() + 1 {
-        //                 exlcuded_lines_import.remove(&line);
-        //             }
-        //         });
-        // }
-
-        // // now we create the new file content after removing the import lines
-        // let mut filtered_lines = vec![];
-        // for (i, line) in self.lines.iter().enumerate() {
-        //     if !exlcuded_lines_import.contains(&i) {
-        //         filtered_lines.push(line.content.to_owned());
-        //     }
-        // }
 
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context

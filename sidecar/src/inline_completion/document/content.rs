@@ -328,6 +328,7 @@ impl DocumentEditLines {
             contained_function
                 .get_identifier_nodes()
                 .map(|function_identifier_nodes| {
+                    dbg!(&function_identifier_nodes);
                     identifier_nodes = function_identifier_nodes
                         .iter()
                         .filter_map(|identifier_node| {

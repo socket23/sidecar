@@ -132,5 +132,6 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         vairable_indentifier_queries: vec![
             "((lexical_declaration (variable_declarator (identifier) @identifier)))".to_owned(),
         ],
+        outline_query: None,
     }
 }

@@ -205,6 +205,9 @@ impl FillInMiddleCompletionAgent {
 
         let document_lines = DocumentLines::from_file_content(&completion_request.text);
 
+        // what are we doing here
+        // what about now, its much faster
+
         if abort_handle.is_aborted() {
             return Err(InLineCompletionError::AbortedHandle);
         }

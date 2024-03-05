@@ -54,5 +54,6 @@ pub fn python_language_config() -> TSLanguageConfig {
         import_statement: vec!["[(import_statement)] @import_type".to_owned()],
         block_start: Some(":".to_owned()),
         vairable_indentifier_queries: vec!["(assignment left: (identifier) @identifier)".to_owned()],
+        outline_query: None,
     }
 }

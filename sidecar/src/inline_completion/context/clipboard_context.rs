@@ -62,6 +62,7 @@ impl ClipboardContext {
             return Ok(ClipboardContextString::UnableToTruncate);
         }
         let mut answer = ClipboardContextString::UnableToTruncate;
+
         // Now we try to add some prefix to this from the clipboard context and see if can fit any
         let mut string_up_until_now = "".to_owned();
         for line in self.clipboard_context.lines() {

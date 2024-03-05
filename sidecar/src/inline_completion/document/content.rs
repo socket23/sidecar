@@ -303,7 +303,12 @@ impl DocumentEditLines {
     pub fn get_lines_in_range(&self, range: &Range) -> String {
         let mut content = String::new();
         for i in range.start_line()..range.end_line() {
-            content.push_str(&self.lines[i].content);
+            let line = &self.lines[i];
+            if line.is_edited() {
+                content.push_str(("+".to_owned() + &self.lines[i].content).as_str());
+            } else {
+                content.push_str(&self.lines[i].content);
+            }
             content.push('\n');
         }
         content

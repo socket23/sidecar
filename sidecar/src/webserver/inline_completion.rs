@@ -292,7 +292,7 @@ pub struct InLineCompletionIdentifierNodesRequest {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineCompletionIdentifierNodesResponse {
-    identifier_nodes: HashMap<String, Range>,
+    identifier_nodes: Vec<(String, Range)>,
 }
 
 impl ApiResponse for InLineCompletionIdentifierNodesResponse {}
@@ -315,10 +315,10 @@ pub async fn get_identifier_nodes(
 
     // For now we will use the language_config directly, later we should use
     // the cached view which is present in the symbol tracker
-    let _ = inline_symbol_tracker
+    let identifier_nodes = inline_symbol_tracker
         .get_identifier_nodes(&file_path, cursor_position)
         .await;
     Ok(Json(InLineCompletionIdentifierNodesResponse {
-        identifier_nodes: Default::default(),
+        identifier_nodes,
     }))
 }

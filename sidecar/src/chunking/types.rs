@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::text_document::Range;
 
 /// Some common types which can be reused across calls
@@ -9,6 +11,7 @@ pub struct FunctionNodeInformation {
     body: String,
     return_type: String,
     documentation: Option<String>,
+    variables: Vec<(String, Range)>,
 }
 
 impl FunctionNodeInformation {
@@ -26,6 +29,10 @@ impl FunctionNodeInformation {
 
     pub fn set_return_type(&mut self, return_type: String) {
         self.return_type = return_type;
+    }
+
+    pub fn set_variable_name(&mut self, variable_name: String, variable_range: Range) {
+        self.variables.push((variable_name, variable_range));
     }
 
     pub fn set_documentation(&mut self, documentation: String) {
@@ -108,6 +115,16 @@ impl FunctionInformation {
         if let Some(node_information) = &mut self.node_information {
             node_information.set_documentation(documentation);
         }
+    }
+
+    pub fn insert_identifier_node(&mut self, identiifer_name: String, identifier_range: Range) {
+        if let Some(node_information) = &mut self.node_information {
+            node_information.set_variable_name(identiifer_name, identifier_range);
+        }
+    }
+
+    pub fn get_identifier_nodes(&self) -> Option<&Vec<(String, Range)>> {
+        self.node_information.as_ref().map(|info| &info.variables)
     }
 
     pub fn range(&self) -> &Range {
@@ -242,6 +259,32 @@ impl FunctionInformation {
                     });
                 // Here we will look for the documentation entries which are just one line above the function range and add that to the function
                 // context and update the function block range
+                function_block
+            })
+            .collect()
+    }
+
+    pub fn add_identifier_nodes(
+        mut function_blocks: Vec<Self>,
+        identifier_nodes: Vec<(String, Range)>,
+    ) -> Vec<Self> {
+        // First we sort the function blocks based on the start index or the end index
+        function_blocks.sort_by(|a, b| {
+            a.range()
+                .start_byte()
+                .cmp(&b.range().start_byte())
+                .then_with(|| b.range().end_byte().cmp(&a.range().end_byte()))
+        });
+        function_blocks
+            .into_iter()
+            .map(|mut function_block| {
+                identifier_nodes.iter().for_each(|identifier_node| {
+                    let name = &identifier_node.0;
+                    let range = identifier_node.1;
+                    if function_block.range().contains(&range) {
+                        function_block.insert_identifier_node(name.to_owned(), range);
+                    }
+                });
                 function_block
             })
             .collect()

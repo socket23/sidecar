@@ -314,7 +314,7 @@ impl DocumentEditLines {
         content
     }
 
-    pub fn get_identifier_nodes(&self, position: Position) -> HashMap<String, Range> {
+    pub fn get_identifier_nodes(&self, position: Position) -> Vec<(String, Range)> {
         // grab the function definition here
         let contained_function = self
             .function_information
@@ -323,11 +323,25 @@ impl DocumentEditLines {
                 function_information.range().contains_position(&position)
             })
             .next();
-        dbg!(contained_function);
+        let mut identifier_nodes = vec![];
         if let Some(contained_function) = contained_function {
-            dbg!(&self.get_lines_in_range(contained_function.range()));
+            contained_function
+                .get_identifier_nodes()
+                .map(|function_identifier_nodes| {
+                    identifier_nodes = function_identifier_nodes
+                        .iter()
+                        .filter_map(|identifier_node| {
+                            if identifier_node.1.end_position().before_other(&position) {
+                                Some((identifier_node.0.to_owned(), identifier_node.1.clone()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                });
+            // dbg!(&self.get_lines_in_range(contained_function.range()));
         }
-        Default::default()
+        identifier_nodes
     }
 
     fn remove_range(&mut self, range: Range) {

@@ -86,10 +86,27 @@ pub struct OutlineNodeContent {
     pub content: String,
 }
 
+impl OutlineNodeContent {
+    pub fn new(name: String, range: Range, r#type: OutlineNodeType, content: String) -> Self {
+        Self {
+            range,
+            name,
+            r#type,
+            content,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct OutlineNode {
     content: OutlineNodeContent,
     children: Vec<OutlineNodeContent>,
+}
+
+impl OutlineNode {
+    pub fn new(content: OutlineNodeContent, children: Vec<OutlineNodeContent>) -> Self {
+        Self { content, children }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

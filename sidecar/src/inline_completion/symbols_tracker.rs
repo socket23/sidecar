@@ -321,29 +321,6 @@ impl SharedState {
     }
 }
 
-pub struct EditRequest {
-    document_path: String,
-    file_content: String,
-    language: String,
-    edits: Vec<(Range, String)>,
-}
-
-impl EditRequest {
-    pub fn new(
-        document_path: String,
-        file_content: String,
-        language: String,
-        edits: Vec<(Range, String)>,
-    ) -> Self {
-        Self {
-            document_path,
-            file_content,
-            language,
-            edits,
-        }
-    }
-}
-
 /// This is the symbol tracker which will be used for inline completion
 /// We keep track of the document histories and the content of these documents
 pub struct SymbolTrackerInline {

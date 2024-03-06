@@ -93,44 +93,33 @@ pub fn rust_language_config() -> TSLanguageConfig {
             "(let_declaration pattern: (identifier) @identifier)".to_owned()
         ],
         outline_query: Some(
-            r#"        outline_query: r#"
-        ; ADT definitions
-
+            r#"
         (struct_item
           name: (type_identifier) @definition.class.name
         ) @definition.class
         
         (enum_item
-            name: (type_identifier) definition.class.name) @definition.class
+            name: (type_identifier) @definition.class.name) @definition.class
         
         (union_item
-            name: (type_identifier) definition.class.name) @definition.class
-        
-        ; type aliases
-        
+            name: (type_identifier) @definition.class.name) @definition.class
+                
         (type_item
-            name: (type_identifier) definition.class.name) @definition.class
+            name: (type_identifier) @definition.class.name) @definition.class
         
         (impl_item
-            type: (type_identifier) definition.class.name) @definition.class
-        
-        ; method definitions
-        
+            type: (type_identifier) @definition.class.name) @definition.class
+                
         (declaration_list
             (function_item
                 name: (identifier) @function.name) @definition.method)
-        
-        ; function definitions
-        
+                
         (function_item
             name: (identifier) @function.name) @definition.function
         
-        ; trait definitions
         (trait_item
             name: (type_identifier) @definition.class.name) @definition.class
-        
-        ; macro definitions
-        
+                
         (macro_definition
             name: (identifier) @name) @definition.macro"#
                 .to_owned(),

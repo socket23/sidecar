@@ -174,6 +174,7 @@ pub async fn inline_document_open(
     }): Json<InLineDocumentOpenRequest>,
 ) -> Result<impl IntoResponse> {
     let symbol_tracker = app.symbol_tracker.clone();
+    dbg!("webserver.add_document");
     symbol_tracker
         .add_document(file_path, file_content, language)
         .await;

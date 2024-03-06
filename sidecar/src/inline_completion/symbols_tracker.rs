@@ -247,13 +247,15 @@ impl SharedState {
         // Next we will create an entry in the document lines if it does not exist
         {
             let mut document_lines = self.document_lines.lock().await;
-            let document_lines_entry = DocumentEditLines::new(
-                document_path.to_owned(),
-                content,
-                language,
-                self.editor_parsing.clone(),
-            );
-            document_lines.insert(document_path.clone(), document_lines_entry);
+            if document_lines.contains_key(&document_path) {
+                let document_lines_entry = DocumentEditLines::new(
+                    document_path.to_owned(),
+                    content,
+                    language,
+                    self.editor_parsing.clone(),
+                );
+                document_lines.insert(document_path.clone(), document_lines_entry);
+            }
         }
     }
 

@@ -14,7 +14,7 @@ use crate::{
     chunking::{
         editor_parsing::EditorParsing,
         text_document::{Position, Range},
-        types::FunctionInformation,
+        types::{FunctionInformation, OutlineNode},
     },
     inline_completion::helpers::split_on_lines_editor_compatiable,
 };
@@ -240,6 +240,7 @@ pub struct DocumentEditLines {
     editor_parsing: Arc<EditorParsing>,
     tree: Option<Tree>,
     function_information: Vec<FunctionInformation>,
+    outline_nodes: Vec<OutlineNode>,
 }
 
 impl DocumentEditLines {
@@ -261,6 +262,7 @@ impl DocumentEditLines {
                 editor_parsing,
                 tree: None,
                 function_information: vec![],
+                outline_nodes: vec![],
             }
         } else {
             let lines = split_on_lines_editor_compatiable(&content)
@@ -278,6 +280,7 @@ impl DocumentEditLines {
                 editor_parsing,
                 tree: None,
                 function_information: vec![],
+                outline_nodes: vec![],
             }
         };
         // This is a very expensive operation for now, we are going to optimize the shit out of this 🍶
@@ -556,21 +559,30 @@ impl DocumentEditLines {
     }
 
     fn generate_snippets(&mut self) {
+        dbg!("sidecar.generate_snippets.start");
+        let instant = std::time::Instant::now();
         // generate the new tree sitter tree
         self.set_tree();
         // we need to create ths symbol map here for the file so we can lookup the symbols
         // and add the skeleton of it to the inline completion
 
         // update the function information we are getting from tree-sitter
+        let content = self.get_content();
+        let content_bytes = content.as_bytes();
         self.function_information = if let (Some(language_config), Some(tree)) = (
             self.editor_parsing.for_file_path(&self.file_path),
             self.tree.as_ref(),
         ) {
-            language_config.capture_function_data_with_tree(
-                self.get_content().as_bytes(),
-                tree,
-                true,
-            )
+            language_config.capture_function_data_with_tree(content_bytes, tree, true)
+        } else {
+            vec![]
+        };
+
+        self.outline_nodes = if let (Some(language_config), Some(tree)) = (
+            self.editor_parsing.for_file_path(&self.file_path),
+            self.tree.as_ref(),
+        ) {
+            language_config.generate_outline(content_bytes, tree)
         } else {
             vec![]
         };
@@ -578,6 +590,11 @@ impl DocumentEditLines {
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
         self.snippets_using_sliding_window(vec![]);
+        dbg!(
+            "sidecar.generate_snippets",
+            &instant.elapsed(),
+            &self.outline_nodes.len()
+        );
     }
 
     // If the contents have changed, we need to mark the new lines which have changed
@@ -595,7 +612,7 @@ impl DocumentEditLines {
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
         // TODO(skcd): Bring this back
-        // are we doing someting over here
+        // are we doing something over here
         // dbg!("Generating snippets: {:?}", &self.file_path);
         self.generate_snippets();
     }

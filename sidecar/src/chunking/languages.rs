@@ -125,7 +125,7 @@ impl TSLanguageConfig {
             .unwrap_or_default()
     }
 
-    pub fn generate_outline(&self, source_code: &str, tree: &Tree) -> Vec<OutlineNode> {
+    pub fn generate_outline(&self, source_code: &[u8], tree: &Tree) -> Vec<OutlineNode> {
         let grammar = self.grammar;
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(grammar()).unwrap();
@@ -137,7 +137,7 @@ impl TSLanguageConfig {
         let outline_query = outline_query.expect("if let None to hold");
         let query = tree_sitter::Query::new(grammar(), &outline_query).expect("to work");
         let mut cursor = tree_sitter::QueryCursor::new();
-        let query_captures = cursor.captures(&query, node, source_code.as_bytes());
+        let query_captures = cursor.captures(&query, node, source_code);
         let mut outline_nodes: Vec<(OutlineNodeType, Range)> = vec![];
         let mut range_set: HashSet<Range> = HashSet::new();
         let mut compressed_outline: Vec<OutlineNode> = vec![];
@@ -159,7 +159,7 @@ impl TSLanguageConfig {
         });
 
         let mut start_index = 0;
-        let source_code_vec = source_code.as_bytes().to_vec();
+        let source_code_vec = source_code.to_vec();
         while start_index < outline_nodes.len() {
             // cheap clone so this is fine
             let (outline_node_type, outline_range) = outline_nodes[start_index].clone();
@@ -2335,7 +2335,7 @@ trait SomethingTrait {
         let mut parser = Parser::new();
         parser.set_language(grammar()).unwrap();
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
-        let outline = ts_language_config.generate_outline(source_code, &tree);
+        let outline = ts_language_config.generate_outline(source_code.as_bytes(), &tree);
         assert_eq!(outline.len(), 6);
     }
 }

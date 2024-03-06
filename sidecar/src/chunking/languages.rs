@@ -101,9 +101,9 @@ pub struct TSLanguageConfig {
     /// Block start detection for the language
     pub block_start: Option<String>,
 
-    /// Queries which help us figure out the vairable identifiers so we can use go-to-definition
+    /// Queries which help us figure out the variable identifiers so we can use go-to-definition
     /// on top of them
-    pub vairable_indentifier_queries: Vec<String>,
+    pub variable_identifier_queries: Vec<String>,
 
     /// Generates the outline for the file which will be used to get the
     /// outline of the file
@@ -726,7 +726,7 @@ impl TSLanguageConfig {
         source_code: &[u8],
         tree: &Tree,
     ) -> Vec<(String, Range)> {
-        let identifier_nodes_query = self.vairable_indentifier_queries.to_vec();
+        let identifier_nodes_query = self.variable_identifier_queries.to_vec();
         let grammar = self.grammar;
         let node = tree.root_node();
         let mut identifier_nodes = vec![];
@@ -2336,7 +2336,6 @@ trait SomethingTrait {
         parser.set_language(grammar()).unwrap();
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
         let outline = ts_language_config.generate_outline(source_code, &tree);
-        dbg!(&outline);
         assert_eq!(outline.len(), 6);
     }
 }

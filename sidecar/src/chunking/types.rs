@@ -64,6 +64,8 @@ pub enum OutlineNodeType {
     Function,
     // the name of the funciton
     FunctionName,
+    // the body of the function
+    FunctionBody,
 }
 
 impl OutlineNodeType {
@@ -73,6 +75,7 @@ impl OutlineNodeType {
             "definition.class.name" => Some(Self::ClassName),
             "definition.function" | "definition.method" => Some(Self::Function),
             "function.name" => Some(Self::FunctionName),
+            "function.body" => Some(Self::FunctionBody),
             _ => None,
         }
     }

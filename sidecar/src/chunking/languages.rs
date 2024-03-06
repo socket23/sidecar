@@ -131,7 +131,7 @@ impl TSLanguageConfig {
         parser.set_language(grammar()).unwrap();
         let outline_query = self.outline_query.clone();
         if let None = outline_query {
-            return;
+            return vec![];
         }
         let node = tree.root_node();
         let outline_query = outline_query.expect("if let None to hold");
@@ -151,16 +151,8 @@ impl TSLanguageConfig {
                 let outline_range = Range::for_tree_node(&capture.node);
                 if !range_set.contains(&outline_range) {
                     if let Some(outline_name) = outline_name {
-                        let parent_node = capture.node.parent();
-                        if let Some(parent_node) = parent_node {
-                            if self
-                                .namespace_types
-                                .contains(&parent_node.kind().to_owned())
-                            {
-                                outline_nodes.push((outline_name, outline_range));
-                            }
-                            range_set.insert(outline_range);
-                        }
+                        outline_nodes.push((outline_name, outline_range));
+                        range_set.insert(outline_range);
                     }
                 }
             });
@@ -239,7 +231,7 @@ impl TSLanguageConfig {
                 OutlineNodeType::Function => {
                     // If the outline is a function, then we just want to grab the
                     // next node which is a function name
-                    let end_index = start_index + 1;
+                    let mut end_index = start_index + 1;
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
                         if let OutlineNodeType::FunctionName = child_node_type {
@@ -261,6 +253,7 @@ impl TSLanguageConfig {
                                 ),
                                 vec![],
                             ));
+                            end_index = end_index + 1;
                         } else {
                             break;
                         }
@@ -2283,7 +2276,7 @@ public something() {
     #[test]
     fn test_outline_parsing() {
         let source_code = r#"
-impl Something {
+impl SomethingClassImplementation {
     pub fn something(&self, blah: string) {
     }
     
@@ -2293,18 +2286,22 @@ impl Something {
     }
 }
 
-struct Something {
+struct SomethingElseStruct {
     pub something: String,
     something_else: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-enum Something {
+enum SomethingEnum {
 }
 
-type A = string;
+fn something_else_function() {
 
-trait Something {
+}
+
+type SomethingType = string;
+
+trait SomethingTrait {
     fn something_else(&self);
 }"#;
         let language = "rust";
@@ -2317,7 +2314,6 @@ trait Something {
         parser.set_language(grammar()).unwrap();
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
         let outline = ts_language_config.generate_outline(source_code, &tree);
-        dbg!(&outline);
-        assert!(false);
+        assert_eq!(outline.len(), 6);
     }
 }

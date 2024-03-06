@@ -21,6 +21,36 @@ use super::{
 };
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifierPosition {
+    line: usize,
+    character: usize,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifierRange {
+    start: TypeIdentifierPosition,
+    end: TypeIdentifierPosition,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifiersNode {
+    identifier: String,
+    range: TypeIdentifierRange,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifierDefinitionPosition {
+    file_path: String,
+    range: TypeIdentifierRange,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifier {
+    node: TypeIdentifiersNode,
+    type_definitions: Vec<TypeIdentifierDefinitionPosition>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct InlineCompletionRequest {
     pub filepath: String,
     pub language: String,
@@ -30,6 +60,8 @@ pub struct InlineCompletionRequest {
     pub model_config: LLMClientConfig,
     pub id: String,
     pub clipboard_content: Option<String>,
+    // very badly named field
+    pub type_identifiers: Vec<TypeIdentifier>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -79,10 +111,12 @@ pub async fn inline_completion(
         model_config,
         id,
         clipboard_content,
+        type_identifiers,
     }): Json<InlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
     info!(event_name = "inline_completion", id = &id,);
     info!(mode_config = ?model_config);
+    dbg!("sidecar.inline_completion.webserver.start");
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let symbol_tracker = app.symbol_tracker.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
@@ -113,6 +147,7 @@ pub async fn inline_completion(
                 model_config,
                 id: id.to_owned(),
                 clipboard_content,
+                type_identifiers,
             },
             abort_request.handle().clone(),
         )

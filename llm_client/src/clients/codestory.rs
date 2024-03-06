@@ -142,6 +142,11 @@ impl CodeStoryClient {
         match model {
             LLMType::GPT3_5_16k => Ok("gpt-3.5-turbo-16k-0613".to_owned()),
             LLMType::Gpt4 => Ok("gpt-4-0613".to_owned()),
+            LLMType::CodeLlama13BInstruct => Ok("codellama/CodeLlama-13b-Instruct-hf".to_owned()),
+            LLMType::CodeLlama7BInstruct => Ok("codellama/CodeLlama-7b-Instruct-hf".to_owned()),
+            LLMType::DeepSeekCoder33BInstruct => {
+                Ok("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
+            }
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }
@@ -150,6 +155,9 @@ impl CodeStoryClient {
         match model {
             LLMType::GPT3_5_16k => Ok(self.gpt3_endpoint(&self.api_base)),
             LLMType::Gpt4 => Ok(self.gpt4_endpoint(&self.api_base)),
+            LLMType::CodeLlama13BInstruct
+            | LLMType::CodeLlama7BInstruct
+            | LLMType::DeepSeekCoder33BInstruct => Ok(self.together_api_endpoint(&self.api_base)),
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }

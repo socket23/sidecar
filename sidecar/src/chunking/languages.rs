@@ -14,7 +14,7 @@ use super::{
     text_document::{Position, Range},
     types::{
         ClassInformation, ClassNodeType, ClassWithFunctions, FunctionInformation, FunctionNodeType,
-        OutlineNode, OutlineNodeType, TypeInformation, TypeNodeType,
+        OutlineNode, OutlineNodeContent, OutlineNodeType, TypeInformation, TypeNodeType,
     },
     typescript::typescript_language_config,
 };
@@ -125,7 +125,7 @@ impl TSLanguageConfig {
             .unwrap_or_default()
     }
 
-    pub fn generate_ouline(&self, source_code: &str, tree: &Tree) {
+    pub fn generate_outline(&self, source_code: &str, tree: &Tree) -> Vec<OutlineNode> {
         let grammar = self.grammar;
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(grammar()).unwrap();
@@ -140,6 +140,7 @@ impl TSLanguageConfig {
         let query_captures = cursor.captures(&query, node, source_code.as_bytes());
         let mut outline_nodes: Vec<(OutlineNodeType, Range)> = vec![];
         let mut range_set: HashSet<Range> = HashSet::new();
+        let mut compressed_outline: Vec<OutlineNode> = vec![];
         query_captures.into_iter().for_each(|capture| {
             capture.0.captures.into_iter().for_each(|capture| {
                 let capture_name = query
@@ -167,7 +168,6 @@ impl TSLanguageConfig {
 
         let mut start_index = 0;
         let source_code_vec = source_code.as_bytes().to_vec();
-        let mut compressed_outline: Vec<OutlineNode> = vec![];
         while start_index < outline_nodes.len() {
             // cheap clone so this is fine
             let (outline_node_type, outline_range) = outline_nodes[start_index].clone();
@@ -175,12 +175,14 @@ impl TSLanguageConfig {
                 OutlineNodeType::Class => {
                     // If we are in a class, we might have functions or class names
                     // which we want to parse out
-                    let end_index = start_index + 1;
+                    let mut end_index = start_index + 1;
                     let mut class_name = None;
-                    let mut current_function_name: Option<String> = None;
+                    let mut function_range = None;
+                    let mut children = vec![];
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
                         if !outline_range.contains(&child_range) {
+                            start_index = end_index;
                             break;
                         }
                         match child_node_type {
@@ -191,28 +193,91 @@ impl TSLanguageConfig {
                                     child_range.end_byte(),
                                 ));
                             }
-                            OutlineNodeType::Function => {}
-                            OutlineNodeType::FunctionName => {}
-                            OutlineNodeType::Class => {}
+                            OutlineNodeType::Function => {
+                                function_range = Some(child_range);
+                            }
+                            OutlineNodeType::FunctionName => {
+                                if function_range.is_some() {
+                                    let current_function_name = get_string_from_bytes(
+                                        &source_code_vec,
+                                        child_range.start_byte(),
+                                        child_range.end_byte(),
+                                    );
+                                    children.push(OutlineNodeContent::new(
+                                        current_function_name,
+                                        function_range.expect("is_some to hold"),
+                                        OutlineNodeType::Function,
+                                        get_string_from_bytes(
+                                            &source_code_vec,
+                                            function_range.expect("to be present").start_byte(),
+                                            function_range.expect("to be present").end_byte(),
+                                        ),
+                                    ));
+                                    // reset the function range
+                                    function_range = None;
+                                }
+                            }
+                            OutlineNodeType::Class => {
+                                // can not have a class inside another class
+                            }
                         }
+                        end_index = end_index + 1;
                     }
-                }
-                OutlineNodeType::ClassName => {
-                    // If the outline is just a class, name we are totally fucked :)
+                    let class_outline = OutlineNodeContent::new(
+                        class_name.expect("class name to be present"),
+                        outline_range,
+                        OutlineNodeType::Class,
+                        get_string_from_bytes(
+                            &source_code_vec,
+                            outline_range.start_byte(),
+                            outline_range.end_byte(),
+                        ),
+                    );
+                    compressed_outline.push(OutlineNode::new(class_outline, children));
+                    start_index = end_index;
                 }
                 OutlineNodeType::Function => {
-                    // If the outline is a funciton, then we just want to grab the
+                    // If the outline is a function, then we just want to grab the
                     // next node which is a function name
                     let end_index = start_index + 1;
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
+                        if let OutlineNodeType::FunctionName = child_node_type {
+                            let function_name = get_string_from_bytes(
+                                &source_code_vec,
+                                child_range.start_byte(),
+                                child_range.end_byte(),
+                            );
+                            compressed_outline.push(OutlineNode::new(
+                                OutlineNodeContent::new(
+                                    function_name,
+                                    outline_range,
+                                    OutlineNodeType::Function,
+                                    get_string_from_bytes(
+                                        &source_code_vec,
+                                        outline_range.start_byte(),
+                                        outline_range.end_byte(),
+                                    ),
+                                ),
+                                vec![],
+                            ));
+                        } else {
+                            break;
+                        }
                     }
+                    start_index = end_index;
                 }
                 OutlineNodeType::FunctionName => {
+                    start_index = start_index + 1;
                     // If the outline is just a function name, then we are again fucked :)
+                }
+                OutlineNodeType::ClassName => {
+                    start_index = start_index + 1;
+                    // If the outline is just a class, name we are totally fucked :)
                 }
             }
         }
+        compressed_outline
     }
 
     pub fn generate_identifier_nodes(
@@ -2212,6 +2277,47 @@ public something() {
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
         let mut visitors = tree.walk();
         walk(&mut visitors, 0);
+        assert!(false);
+    }
+
+    #[test]
+    fn test_outline_parsing() {
+        let source_code = r#"
+impl Something {
+    pub fn something(&self, blah: string) {
+    }
+    
+    pub fn something(&self, blah: string) {
+        struct Something {
+        }
+    }
+}
+
+struct Something {
+    pub something: String,
+    something_else: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+enum Something {
+}
+
+type A = string;
+
+trait Something {
+    fn something_else(&self);
+}"#;
+        let language = "rust";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("test to work");
+        let grammar = ts_language_config.grammar;
+        let mut parser = Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let outline = ts_language_config.generate_outline(source_code, &tree);
+        dbg!(&outline);
         assert!(false);
     }
 }

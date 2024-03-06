@@ -94,34 +94,36 @@ pub fn rust_language_config() -> TSLanguageConfig {
         ],
         outline_query: Some(
             r#"
-        (struct_item
-          name: (type_identifier) @definition.class.name
-        ) @definition.class
-        
-        (enum_item
-            name: (type_identifier) @definition.class.name) @definition.class
-        
-        (union_item
-            name: (type_identifier) @definition.class.name) @definition.class
-                
-        (type_item
-            name: (type_identifier) @definition.class.name) @definition.class
-        
-        (impl_item
-            type: (type_identifier) @definition.class.name) @definition.class
-                
-        (declaration_list
-            (function_item
-                name: (identifier) @function.name) @definition.method)
-                
-        (function_item
-            name: (identifier) @function.name) @definition.function
-        
-        (trait_item
-            name: (type_identifier) @definition.class.name) @definition.class
-                
-        (macro_definition
-            name: (identifier) @name) @definition.macro"#
+            (struct_item
+                name: (type_identifier) @definition.class.name
+              ) @definition.class
+              
+              (enum_item
+                  name: (type_identifier) @definition.class.name) @definition.class
+              
+              (union_item
+                  name: (type_identifier) @definition.class.name) @definition.class
+                      
+              (type_item
+                  name: (type_identifier) @definition.class.name) @definition.class
+              
+              (impl_item
+                  type: (type_identifier) @definition.class.name) @definition.class
+                      
+              (declaration_list
+                  (function_item
+                      name: (identifier) @function.name
+                      body: (block) @function.body) @definition.method)
+                      
+              (function_item
+                  name: (identifier) @function.name
+                  body: (block) @function.body) @definition.function
+              
+              (trait_item
+                  name: (type_identifier) @definition.class.name) @definition.class
+                      
+              (macro_definition
+                  name: (identifier) @name) @definition.macro"#
                 .to_owned(),
         ),
     }

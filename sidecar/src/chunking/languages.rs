@@ -170,6 +170,7 @@ impl TSLanguageConfig {
                     let mut end_index = start_index + 1;
                     let mut class_name = None;
                     let mut function_range = None;
+                    let mut function_name = None;
                     let mut children = vec![];
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
@@ -195,19 +196,28 @@ impl TSLanguageConfig {
                                         child_range.start_byte(),
                                         child_range.end_byte(),
                                     );
+                                    function_name = Some(current_function_name);
+                                }
+                            }
+                            OutlineNodeType::FunctionBody => {
+                                if let (Some(function_range), Some(function_name)) =
+                                    (function_range, function_name)
+                                {
                                     children.push(OutlineNodeContent::new(
-                                        current_function_name,
-                                        function_range.expect("is_some to hold"),
+                                        function_name,
+                                        function_range,
                                         OutlineNodeType::Function,
                                         get_string_from_bytes(
                                             &source_code_vec,
-                                            function_range.expect("to be present").start_byte(),
-                                            function_range.expect("to be present").end_byte(),
+                                            function_range.start_byte(),
+                                            // -1 here is not perfect we should
+                                            // figure out this per language
+                                            child_range.start_byte() - 1,
                                         ),
                                     ));
-                                    // reset the function range
-                                    function_range = None;
                                 }
+                                function_range = None;
+                                function_name = None;
                             }
                             OutlineNodeType::Class => {
                                 // can not have a class inside another class
@@ -232,27 +242,35 @@ impl TSLanguageConfig {
                     // If the outline is a function, then we just want to grab the
                     // next node which is a function name
                     let mut end_index = start_index + 1;
+                    let mut function_name: Option<String> = None;
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
                         if let OutlineNodeType::FunctionName = child_node_type {
-                            let function_name = get_string_from_bytes(
+                            function_name = Some(get_string_from_bytes(
                                 &source_code_vec,
                                 child_range.start_byte(),
                                 child_range.end_byte(),
-                            );
-                            compressed_outline.push(OutlineNode::new(
-                                OutlineNodeContent::new(
-                                    function_name,
-                                    outline_range,
-                                    OutlineNodeType::Function,
-                                    get_string_from_bytes(
-                                        &source_code_vec,
-                                        outline_range.start_byte(),
-                                        outline_range.end_byte(),
-                                    ),
-                                ),
-                                vec![],
                             ));
+                            end_index = end_index + 1;
+                        } else if let OutlineNodeType::FunctionBody = child_node_type {
+                            if let Some(ref function_name) = function_name {
+                                compressed_outline.push(OutlineNode::new(
+                                    OutlineNodeContent::new(
+                                        function_name.to_owned(),
+                                        outline_range,
+                                        OutlineNodeType::Function,
+                                        get_string_from_bytes(
+                                            &source_code_vec,
+                                            outline_range.start_byte(),
+                                            // -1 here is not perfect, this might
+                                            // not work for python for example, we should
+                                            // figure out how to handle this properly
+                                            child_range.start_byte() - 1,
+                                        ),
+                                    ),
+                                    vec![],
+                                ));
+                            }
                             end_index = end_index + 1;
                         } else {
                             break;
@@ -267,6 +285,10 @@ impl TSLanguageConfig {
                 OutlineNodeType::ClassName => {
                     start_index = start_index + 1;
                     // If the outline is just a class, name we are totally fucked :)
+                }
+                OutlineNodeType::FunctionBody => {
+                    start_index = start_index + 1;
+                    // If the outline is just a function body, then we are totally fucked :)
                 }
             }
         }
@@ -2314,6 +2336,7 @@ trait SomethingTrait {
         parser.set_language(grammar()).unwrap();
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
         let outline = ts_language_config.generate_outline(source_code, &tree);
+        dbg!(&outline);
         assert_eq!(outline.len(), 6);
     }
 }

@@ -89,7 +89,7 @@ pub fn rust_language_config() -> TSLanguageConfig {
         end_of_line: Some(";".to_owned()),
         import_statement: vec!["[(use_declaration)] @import_type".to_owned()],
         block_start: Some("{".to_owned()),
-        vairable_indentifier_queries: vec![
+        variable_identifier_queries: vec![
             "(let_declaration pattern: (identifier) @identifier)".to_owned()
         ],
         outline_query: Some(

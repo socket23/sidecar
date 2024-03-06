@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
-use sqlx::types::chrono::Local;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::provider::LLMProviderAPIKeys;

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::text_document::Range;
 
 /// Some common types which can be reused across calls
@@ -54,6 +52,44 @@ impl FunctionNodeInformation {
     pub fn get_documentation(&self) -> Option<&str> {
         self.documentation.as_deref()
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
+pub enum OutlineNodeType {
+    // The identifier for the complete class body
+    Class,
+    // the name of the class
+    ClassName,
+    // the identifier for the complete function body
+    Function,
+    // the name of the funciton
+    FunctionName,
+}
+
+impl OutlineNodeType {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "definition.class" => Some(Self::Class),
+            "definition.class.name" => Some(Self::ClassName),
+            "definition.function" | "definition.method" => Some(Self::Function),
+            "function.name" => Some(Self::FunctionName),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OutlineNodeContent {
+    pub range: Range,
+    pub name: String,
+    pub r#type: OutlineNodeType,
+    pub content: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OutlineNode {
+    content: OutlineNodeContent,
+    children: Vec<OutlineNodeContent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

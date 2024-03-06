@@ -97,37 +97,37 @@ pub fn rust_language_config() -> TSLanguageConfig {
         ; ADT definitions
 
         (struct_item
-          name: (type_identifier) @name
+          name: (type_identifier) @definition.class.name
         ) @definition.class
         
         (enum_item
-            name: (type_identifier) @name) @definition.class
+            name: (type_identifier) definition.class.name) @definition.class
         
         (union_item
-            name: (type_identifier) @name) @definition.class
+            name: (type_identifier) definition.class.name) @definition.class
         
         ; type aliases
         
         (type_item
-            name: (type_identifier) @name) @definition.class
+            name: (type_identifier) definition.class.name) @definition.class
         
         (impl_item
-            type: (type_identifier) @name) @implementation.class
+            type: (type_identifier) definition.class.name) @definition.class
         
         ; method definitions
         
         (declaration_list
             (function_item
-                name: (identifier) @name) @definition.method)
+                name: (identifier) @function.name) @definition.method)
         
         ; function definitions
         
         (function_item
-            name: (identifier) @name) @definition.function
+            name: (identifier) @function.name) @definition.function
         
         ; trait definitions
         (trait_item
-            name: (type_identifier) @name) @definition.interface
+            name: (type_identifier) @definition.class.name) @definition.class
         
         ; macro definitions
         

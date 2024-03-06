@@ -317,8 +317,27 @@ impl DocumentEditLines {
         content
     }
 
+    fn indentation_at_position(&self, position: &Position) -> usize {
+        let mut indentation = 0;
+        let line_number = position.line();
+        let line_content = &self.lines[line_number].content;
+        // indentation is consistent so we do not have to worry about counting
+        // the spaces which tabs will take
+        for c in line_content.chars() {
+            if c == ' ' {
+                indentation += 1;
+            } else if c == '\t' {
+                indentation += 1;
+            } else {
+                break;
+            }
+        }
+        indentation
+    }
+
     pub fn get_identifier_nodes(&self, position: Position) -> Vec<(String, Range)> {
         // grab the function definition here
+        let current_indentation_position = self.indentation_at_position(&position);
         let contained_function = self
             .function_information
             .iter()
@@ -335,7 +354,13 @@ impl DocumentEditLines {
                     identifier_nodes = function_identifier_nodes
                         .iter()
                         .filter_map(|identifier_node| {
-                            if identifier_node.1.end_position().before_other(&position) {
+                            let identifier_node_position = identifier_node.1.start_position();
+                            // remove the nodes which are indented more than the current position
+                            // this will help reduce the number of identifier nodes we get back
+                            if identifier_node.1.end_position().before_other(&position)
+                                && self.indentation_at_position(&identifier_node_position)
+                                    <= current_indentation_position
+                            {
                                 Some((identifier_node.0.to_owned(), identifier_node.1.clone()))
                             } else {
                                 None

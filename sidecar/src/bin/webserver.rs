@@ -212,3 +212,5 @@ fn inline_completion() -> Router {
             post(sidecar::webserver::inline_completion::get_identifier_nodes),
         )
 }
+
+// TODO(skcd): Figure out why we are passing the context in the suffix and not the prefix

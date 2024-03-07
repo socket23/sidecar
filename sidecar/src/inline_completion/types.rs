@@ -75,28 +75,48 @@ impl TypeIdentifierDefinitionPosition {
         &self.file_path
     }
 
+    fn check_inside_or_outside(&self, range: &Range) -> bool {
+        // check if the range for this goto-definition is contained within
+        // the outline
+        let start_position = range.start_position();
+        let end_position = range.end_position();
+        let range_start = &self.range.start;
+        let range_end = &self.range.end;
+        if (start_position.line() <= range_start.line
+            || (start_position.line() == range_start.line
+                && start_position.column() <= range_start.character))
+            && (end_position.line() >= range_end.line
+                || (end_position.line() == range_end.line
+                    && end_position.column() >= range_end.character))
+        {
+            true
+        } else {
+            if (range_start.line <= start_position.line()
+                || (range_start.line == start_position.line()
+                    && range_start.character <= start_position.column()))
+                && (range_end.line >= end_position.line()
+                    || (range_end.line == end_position.line()
+                        && range_end.character >= end_position.column()))
+            {
+                true
+            } else {
+                false
+            }
+        }
+    }
+
     pub fn get_outline(
         &self,
         outline_nodes: &[OutlineNode],
         language_config: &TSLanguageConfig,
     ) -> Option<String> {
+        dbg!(&outline_nodes, &self.range);
         let filtered_outline_nodes = outline_nodes
             .iter()
             .filter(|outline_node| {
-                let start_position = outline_node.range().start_position();
-                let end_position = outline_node.range().end_position();
-                let range_start = &self.range.start;
-                let range_end = &self.range.end;
-
                 // check if the range for this goto-definition is contained within
-                // the outline
-                if (start_position.line() <= range_start.line
-                    || (start_position.line() == range_start.line
-                        && start_position.column() <= range_start.character))
-                    && (end_position.line() >= range_end.line
-                        || (end_position.line() == range_end.line
-                            && end_position.column() >= range_end.character))
-                {
+                // the outline or completely outside the outline
+                if self.check_inside_or_outside(outline_node.range()) {
                     true
                 } else {
                     false
@@ -387,8 +407,32 @@ impl FillInMiddleCompletionAgent {
             None => {}
         }
 
-        // TODO(skcd): Grab the context from related definitions and other sibling functions
-        // which might be useful for the completion.
+        let instant = std::time::Instant::now();
+        dbg!(
+            "inline.definition_context.type_definitons",
+            &completion_request.type_identifiers.len()
+        );
+        let definitions_context = self
+            .symbol_tracker
+            .get_definition_configs(
+                &completion_request.filepath,
+                completion_request.type_identifiers,
+                self.editor_parsing.clone(),
+            )
+            .await;
+        dbg!("inline.definitions_context", &definitions_context.len());
+        if !definitions_context.is_empty() {
+            if let Some(previous_prefix) = prefix {
+                prefix = Some(format!(
+                    "{}\n{}",
+                    previous_prefix,
+                    definitions_context.join("\n")
+                ));
+            } else {
+                prefix = Some(definitions_context.join("\n"))
+            }
+        }
+        dbg!("definitions_context.time_taken", instant.elapsed());
         // TODO(skcd): Can we also grab the context from other functions which might be useful for the completion.
         // TODO(skcd): We also want to grab the recent edits which might be useful for the completion.
 

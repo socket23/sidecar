@@ -196,6 +196,7 @@ impl SharedState {
         let file_path = request.file_path;
         let language_config = request.editor_parsing.for_file_path(&file_path);
         if let None = language_config {
+            dbg!("definitions_outline.returning_here");
             return vec![];
         }
         let language_config = language_config.expect("if let None to hold");
@@ -218,11 +219,10 @@ impl SharedState {
             .collect::<HashSet<_>>()
             .into_iter()
             .collect::<Vec<String>>();
-        let language_config = self.editor_parsing.for_file_path(&file_path);
-        if language_config.is_none() {
-            return vec![];
-        }
-        let language_config = language_config.expect("is_none to work");
+        dbg!(
+            "definitions_outline.file_path",
+            &definition_file_paths.len()
+        );
         // putting in a block so we drop the lock quickly
         let file_to_outline: HashMap<String, Vec<OutlineNode>>;
         {
@@ -232,6 +232,11 @@ impl SharedState {
                 .into_iter()
                 .filter_map(|definition_file_path| {
                     let document_lines = document_lines.get(&definition_file_path);
+                    dbg!(
+                        "definitions_outline.file_content",
+                        &definition_file_path,
+                        document_lines.is_some()
+                    );
                     if let Some(document_lines) = document_lines {
                         let outline_nodes = document_lines.outline_nodes();
                         Some((definition_file_path, outline_nodes))
@@ -257,9 +262,12 @@ impl SharedState {
                     .filter(|definition| file_to_outline.contains_key(definition.file_path()))
                     .collect::<Vec<_>>();
 
-                // TODO(skcd): Pick this up tomorrow, we are going to get the
-                // definitions from the outline node here and then send it to
-                // the LLM
+                dbg!(
+                    "shared_state.defintions_interested",
+                    definitions_interested.len(),
+                    &type_definition.node().identifier(),
+                );
+
                 let identifier = type_definition.node().identifier();
                 let definitions = definitions_interested
                     .iter()
@@ -267,19 +275,32 @@ impl SharedState {
                         if let Some(outline_nodes) =
                             file_to_outline.get(definition_interested.file_path())
                         {
-                            definition_interested
-                                .get_outline(outline_nodes.as_slice(), language_config)
+                            dbg!(
+                                "shared_state.outline.defintions_interested",
+                                &definition_interested.file_path(),
+                                &identifier,
+                            );
+                            dbg!(definition_interested
+                                .get_outline(outline_nodes.as_slice(), language_config))
                         } else {
+                            dbg!(
+                                "shared_state.no_outline.definitions_interested",
+                                &definition_interested.file_path()
+                            );
                             None
                         }
                     })
                     .collect::<Vec<_>>();
                 if definitions.is_empty() {
+                    dbg!(
+                        "shared_state.defintions_interested.definitions.empty",
+                        &type_definition.node().identifier()
+                    );
                     None
                 } else {
                     let definitions_str = definitions.join("\n");
                     Some(format!(
-                        r#"{comment_prefix} Type for {identifier}\n
+                        r#"{comment_prefix} Type for {identifier}
 {definitions_str}"#
                     ))
                 }
@@ -358,12 +379,13 @@ impl SharedState {
     }
 
     async fn add_document(&self, document_path: String, content: String, language: String) {
+        dbg!("shared_state.add_document", &document_path);
         // First we check if the document is already present in the history
         self.track_file(document_path.to_owned()).await;
         // Next we will create an entry in the document lines if it does not exist
         {
             let mut document_lines = self.document_lines.lock().await;
-            if document_lines.contains_key(&document_path) {
+            if !document_lines.contains_key(&document_path) {
                 let document_lines_entry = DocumentEditLines::new(
                     document_path.to_owned(),
                     content,
@@ -371,7 +393,9 @@ impl SharedState {
                     self.editor_parsing.clone(),
                 );
                 document_lines.insert(document_path.clone(), document_lines_entry);
+                dbg!("symbol_tracker.add_document", &document_path);
             }
+            assert!(document_lines.contains_key(&document_path));
         }
     }
 
@@ -528,6 +552,7 @@ impl SymbolTrackerInline {
 
     pub async fn add_document(&self, document_path: String, content: String, language: String) {
         let (sender, receiver) = tokio::sync::oneshot::channel();
+        dbg!("symbol_tracker_inline.add_document", &document_path);
         let request = SharedStateRequest::AddDocument(AddDocumentRequest::new(
             document_path,
             language,

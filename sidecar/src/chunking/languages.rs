@@ -112,6 +112,9 @@ pub struct TSLanguageConfig {
     /// The file paths which need to be excluded when providing the
     /// type definitions
     pub excluded_file_paths: Vec<String>,
+
+    /// The language string which can be used as an identifier for this language
+    pub language_str: String,
 }
 
 impl TSLanguageConfig {
@@ -245,7 +248,11 @@ impl TSLanguageConfig {
                             outline_range.end_byte(),
                         ),
                     );
-                    compressed_outline.push(OutlineNode::new(class_outline, children));
+                    compressed_outline.push(OutlineNode::new(
+                        class_outline,
+                        children,
+                        self.language_str.to_owned(),
+                    ));
                     start_index = end_index;
                 }
                 OutlineNodeType::Function => {
@@ -279,6 +286,7 @@ impl TSLanguageConfig {
                                         ),
                                     ),
                                     vec![],
+                                    self.language_str.to_owned(),
                                 ));
                             }
                             end_index = end_index + 1;

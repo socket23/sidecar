@@ -103,6 +103,7 @@ struct GetIdentifierNodesRequest {
 struct GetDefinitionOutlineRequest {
     file_path: String,
     type_definitions: Vec<TypeIdentifier>,
+    editor_parsing: Arc<EditorParsing>,
 }
 
 enum SharedStateRequest {
@@ -123,7 +124,7 @@ enum SharedStateResponse {
     GetDocumentLinesResponse(Option<Vec<SnippetInformationWithScore>>),
     FileEditedLinesResponse(Vec<usize>),
     GetIdentifierNodesResponse(Vec<(String, Range)>),
-    GetDefinitionOutlineResponse,
+    GetDefinitionOutlineResponse(Vec<String>),
 }
 
 pub struct SharedState {
@@ -186,13 +187,19 @@ impl SharedState {
             }
             SharedStateRequest::GetDefinitionOutline(request) => {
                 let response = self.get_definition_outline(request).await;
-                SharedStateResponse::GetDefinitionOutlineResponse
+                SharedStateResponse::GetDefinitionOutlineResponse(response)
             }
         }
     }
 
-    async fn get_definition_outline(&self, request: GetDefinitionOutlineRequest) {
+    async fn get_definition_outline(&self, request: GetDefinitionOutlineRequest) -> Vec<String> {
         let file_path = request.file_path;
+        let language_config = request.editor_parsing.for_file_path(&file_path);
+        if let None = language_config {
+            return vec![];
+        }
+        let language_config = language_config.expect("if let None to hold");
+        let comment_prefix = language_config.comment_prefix.to_owned();
         // TODO(skcd): Filter out the files which belong to the native
         // dependencies of the language (the LLM already knows about them)
         let definition_file_paths = request
@@ -213,7 +220,7 @@ impl SharedState {
             .collect::<Vec<String>>();
         let language_config = self.editor_parsing.for_file_path(&file_path);
         if language_config.is_none() {
-            return;
+            return vec![];
         }
         let language_config = language_config.expect("is_none to work");
         // putting in a block so we drop the lock quickly
@@ -237,23 +244,49 @@ impl SharedState {
 
         // Now we can grab the outline as required, we need to check this by
         // the range provided and then grabbing the context from the outline
-        let _ = request
+        let definitions_string = request
             .type_definitions
             .into_iter()
-            .map(|type_definition| {
+            .filter_map(|type_definition| {
                 // Here we have to not include files which are part of the common
                 // lib which the LLM will know about
                 let definitions_interested = type_definition
                     .type_definitions()
                     .iter()
                     .filter(|definition| language_config.is_file_relevant(definition.file_path()))
+                    .filter(|definition| file_to_outline.contains_key(definition.file_path()))
                     .collect::<Vec<_>>();
+
                 // TODO(skcd): Pick this up tomorrow, we are going to get the
                 // definitions from the outline node here and then send it to
                 // the LLM
-                ()
+                let identifier = type_definition.node().identifier();
+                let definitions = definitions_interested
+                    .iter()
+                    .filter_map(|definition_interested| {
+                        if let Some(outline_nodes) =
+                            file_to_outline.get(definition_interested.file_path())
+                        {
+                            definition_interested
+                                .get_outline(outline_nodes.as_slice(), language_config)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if definitions.is_empty() {
+                    None
+                } else {
+                    let definitions_str = definitions.join("\n");
+                    Some(format!(
+                        r#"{comment_prefix} Type for {identifier}\n
+{definitions_str}"#
+                    ))
+                }
             })
             .collect::<Vec<_>>();
+
+        definitions_string
     }
 
     async fn get_file_content(&self, file_path: &str) -> Option<String> {
@@ -557,14 +590,20 @@ impl SymbolTrackerInline {
         &self,
         file_path: &str,
         type_definitions: Vec<TypeIdentifier>,
-    ) -> Vec<()> {
+        editor_parsing: Arc<EditorParsing>,
+    ) -> Vec<String> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let request = SharedStateRequest::GetDefinitionOutline(GetDefinitionOutlineRequest {
             file_path: file_path.to_owned(),
             type_definitions,
+            editor_parsing,
         });
         let _ = self.sender.send((request, sender));
-        let _ = receiver.await;
-        vec![]
+        let response = receiver.await;
+        if let Ok(SharedStateResponse::GetDefinitionOutlineResponse(response)) = response {
+            response
+        } else {
+            Default::default()
+        }
     }
 }

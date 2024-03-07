@@ -134,5 +134,6 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         ],
         outline_query: None,
         excluded_file_paths: vec![],
+        language_str: "javascript".to_owned(),
     }
 }

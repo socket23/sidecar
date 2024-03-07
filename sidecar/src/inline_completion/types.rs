@@ -110,7 +110,6 @@ impl TypeIdentifierDefinitionPosition {
         outline_nodes: &[OutlineNode],
         language_config: &TSLanguageConfig,
     ) -> Option<String> {
-        dbg!(&outline_nodes, &self.range);
         let filtered_outline_nodes = outline_nodes
             .iter()
             .filter(|outline_node| {

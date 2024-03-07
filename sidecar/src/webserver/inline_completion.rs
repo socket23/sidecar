@@ -11,7 +11,8 @@ use crate::{
     application::application::Application,
     chunking::text_document::{Position, Range},
     inline_completion::{
-        multiline::detect_multiline::is_multiline_completion, types::FillInMiddleCompletionAgent,
+        multiline::detect_multiline::is_multiline_completion,
+        types::{FillInMiddleCompletionAgent, TypeIdentifier},
     },
 };
 
@@ -19,36 +20,6 @@ use super::{
     model_selection::LLMClientConfig,
     types::{ApiResponse, Result},
 };
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct TypeIdentifierPosition {
-    line: usize,
-    character: usize,
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct TypeIdentifierRange {
-    start: TypeIdentifierPosition,
-    end: TypeIdentifierPosition,
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct TypeIdentifiersNode {
-    identifier: String,
-    range: TypeIdentifierRange,
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct TypeIdentifierDefinitionPosition {
-    file_path: String,
-    range: TypeIdentifierRange,
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct TypeIdentifier {
-    node: TypeIdentifiersNode,
-    type_definitions: Vec<TypeIdentifierDefinitionPosition>,
-}
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct InlineCompletionRequest {

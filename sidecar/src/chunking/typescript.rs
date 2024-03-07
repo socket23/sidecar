@@ -151,5 +151,6 @@ pub fn typescript_language_config() -> TSLanguageConfig {
                 .to_owned(),
         ],
         outline_query: None,
+        excluded_file_paths: vec![],
     }
 }

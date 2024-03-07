@@ -39,6 +39,52 @@ const CLIPBOARD_CONTEXT: usize = 50;
 const CODEBASE_CONTEXT: usize = 1500;
 const SAME_FILE_CONTEXT: usize = 450;
 
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifierPosition {
+    line: usize,
+    character: usize,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifierRange {
+    start: TypeIdentifierPosition,
+    end: TypeIdentifierPosition,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifiersNode {
+    identifier: String,
+    range: TypeIdentifierRange,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifierDefinitionPosition {
+    file_path: String,
+    range: TypeIdentifierRange,
+}
+
+impl TypeIdentifierDefinitionPosition {
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TypeIdentifier {
+    node: TypeIdentifiersNode,
+    type_definitions: Vec<TypeIdentifierDefinitionPosition>,
+}
+
+impl TypeIdentifier {
+    pub fn node(&self) -> &TypeIdentifiersNode {
+        &self.node
+    }
+
+    pub fn type_definitions(&self) -> &[TypeIdentifierDefinitionPosition] {
+        self.type_definitions.as_slice()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FillInMiddleError {
     error_count: usize,

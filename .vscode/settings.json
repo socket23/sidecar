@@ -55,6 +55,7 @@
     "reranking",
     "revwalk",
     "RLIMIT",
+    "rustup",
     "setrlimit",
     "skcd",
     "smallvec",

@@ -9,16 +9,23 @@
 //! Steps being taken:
 //! - First we start with just the open tabs and also edit tracking here
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use tokio::sync::Mutex;
 
 use crate::chunking::{
     editor_parsing::EditorParsing,
     text_document::{Position, Range},
+    types::OutlineNode,
 };
 
-use super::document::content::{DocumentEditLines, SnippetInformationWithScore};
+use super::{
+    document::content::{DocumentEditLines, SnippetInformationWithScore},
+    types::TypeIdentifier,
+};
 
 const MAX_HISTORY_SIZE: usize = 50;
 const MAX_HISTORY_SIZE_FOR_CODE_SNIPPETS: usize = 20;
@@ -93,6 +100,11 @@ struct GetIdentifierNodesRequest {
     cursor_position: Position,
 }
 
+struct GetDefinitionOutlineRequest {
+    file_path: String,
+    type_definitions: Vec<TypeIdentifier>,
+}
+
 enum SharedStateRequest {
     GetFileContent(String),
     GetDocumentLines(GetDocumentLinesRequest),
@@ -101,15 +113,17 @@ enum SharedStateRequest {
     GetDocumentHistory,
     GetFileEditedLines(GetFileEditedLinesRequest),
     GetIdentifierNodes(GetIdentifierNodesRequest),
+    GetDefinitionOutline(GetDefinitionOutlineRequest),
 }
 
 enum SharedStateResponse {
     DocumentHistoryResponse(Vec<String>),
     Ok,
-    FileContentRespone(Option<String>),
+    FileContentResponse(Option<String>),
     GetDocumentLinesResponse(Option<Vec<SnippetInformationWithScore>>),
     FileEditedLinesResponse(Vec<usize>),
     GetIdentifierNodesResponse(Vec<(String, Range)>),
+    GetDefinitionOutlineResponse,
 }
 
 pub struct SharedState {
@@ -154,7 +168,7 @@ impl SharedState {
             }
             SharedStateRequest::GetFileContent(get_file_content_request) => {
                 let response = self.get_file_content(&get_file_content_request).await;
-                SharedStateResponse::FileContentRespone(response)
+                SharedStateResponse::FileContentResponse(response)
             }
             SharedStateRequest::GetDocumentHistory => {
                 let response = self.get_document_history().await;
@@ -170,7 +184,76 @@ impl SharedState {
                 let response = self.get_identifier_nodes(&file_path, position).await;
                 SharedStateResponse::GetIdentifierNodesResponse(response)
             }
+            SharedStateRequest::GetDefinitionOutline(request) => {
+                let response = self.get_definition_outline(request).await;
+                SharedStateResponse::GetDefinitionOutlineResponse
+            }
         }
+    }
+
+    async fn get_definition_outline(&self, request: GetDefinitionOutlineRequest) {
+        let file_path = request.file_path;
+        // TODO(skcd): Filter out the files which belong to the native
+        // dependencies of the language (the LLM already knows about them)
+        let definition_file_paths = request
+            .type_definitions
+            .iter()
+            .map(|type_definition| {
+                let definitions = type_definition.type_definitions();
+                definitions
+                    .iter()
+                    .map(|definition| definition.file_path().to_owned())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<String>>();
+        let language_config = self.editor_parsing.for_file_path(&file_path);
+        if language_config.is_none() {
+            return;
+        }
+        let language_config = language_config.expect("is_none to work");
+        // putting in a block so we drop the lock quickly
+        let file_to_outline: HashMap<String, Vec<OutlineNode>>;
+        {
+            let document_lines = self.document_lines.lock().await;
+            // Now here we are going to check for each of the file
+            file_to_outline = definition_file_paths
+                .into_iter()
+                .filter_map(|definition_file_path| {
+                    let document_lines = document_lines.get(&definition_file_path);
+                    if let Some(document_lines) = document_lines {
+                        let outline_nodes = document_lines.outline_nodes();
+                        Some((definition_file_path, outline_nodes))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<HashMap<_, _>>();
+        }
+
+        // Now we can grab the outline as required, we need to check this by
+        // the range provided and then grabbing the context from the outline
+        let _ = request
+            .type_definitions
+            .into_iter()
+            .map(|type_definition| {
+                // Here we have to not include files which are part of the common
+                // lib which the LLM will know about
+                let definitions_interested = type_definition
+                    .type_definitions()
+                    .iter()
+                    .filter(|definition| language_config.is_file_relevant(definition.file_path()))
+                    .collect::<Vec<_>>();
+                // TODO(skcd): Pick this up tomorrow, we are going to get the
+                // definitions from the outline node here and then send it to
+                // the LLM
+                ()
+            })
+            .collect::<Vec<_>>();
     }
 
     async fn get_file_content(&self, file_path: &str) -> Option<String> {
@@ -367,7 +450,7 @@ impl SymbolTrackerInline {
         let request = SharedStateRequest::GetFileContent(file_path.to_owned());
         let _ = self.sender.send((request, sender));
         let reply = receiver.await;
-        if let Ok(SharedStateResponse::FileContentRespone(response)) = reply {
+        if let Ok(SharedStateResponse::FileContentResponse(response)) = reply {
             response
         } else {
             None
@@ -468,5 +551,20 @@ impl SymbolTrackerInline {
         } else {
             Default::default()
         }
+    }
+
+    pub async fn get_definition_configs(
+        &self,
+        file_path: &str,
+        type_definitions: Vec<TypeIdentifier>,
+    ) -> Vec<()> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request = SharedStateRequest::GetDefinitionOutline(GetDefinitionOutlineRequest {
+            file_path: file_path.to_owned(),
+            type_definitions,
+        });
+        let _ = self.sender.send((request, sender));
+        let _ = receiver.await;
+        vec![]
     }
 }

@@ -108,6 +108,10 @@ pub struct TSLanguageConfig {
     /// Generates the outline for the file which will be used to get the
     /// outline of the file
     pub outline_query: Option<String>,
+
+    /// The file paths which need to be excluded when providing the
+    /// type definitions
+    pub excluded_file_paths: Vec<String>,
 }
 
 impl TSLanguageConfig {
@@ -123,6 +127,12 @@ impl TSLanguageConfig {
         tree_maybe
             .map(|tree| !tree.root_node().has_error())
             .unwrap_or_default()
+    }
+
+    pub fn is_file_relevant(&self, file_path: &str) -> bool {
+        self.excluded_file_paths
+            .iter()
+            .any(|file_path_part| file_path.contains(file_path_part))
     }
 
     pub fn generate_outline(&self, source_code: &[u8], tree: &Tree) -> Vec<OutlineNode> {

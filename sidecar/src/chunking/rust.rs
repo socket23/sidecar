@@ -127,5 +127,6 @@ pub fn rust_language_config() -> TSLanguageConfig {
                 .to_owned(),
         ),
         excluded_file_paths: vec![".rustup".to_owned()],
+        language_str: "rust".to_owned(),
     }
 }

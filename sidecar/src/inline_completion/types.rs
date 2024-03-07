@@ -17,6 +17,7 @@ use tree_sitter::TreeCursor;
 
 use crate::chunking::languages::TSLanguageConfig;
 use crate::chunking::text_document::Range;
+use crate::chunking::types::OutlineNode;
 use crate::inline_completion::context::clipboard_context::{
     ClipboardContext, ClipboardContextString,
 };
@@ -57,6 +58,12 @@ pub struct TypeIdentifiersNode {
     range: TypeIdentifierRange,
 }
 
+impl TypeIdentifiersNode {
+    pub fn identifier(&self) -> &str {
+        &self.identifier
+    }
+}
+
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TypeIdentifierDefinitionPosition {
     file_path: String,
@@ -66,6 +73,75 @@ pub struct TypeIdentifierDefinitionPosition {
 impl TypeIdentifierDefinitionPosition {
     pub fn file_path(&self) -> &str {
         &self.file_path
+    }
+
+    pub fn get_outline(
+        &self,
+        outline_nodes: &[OutlineNode],
+        language_config: &TSLanguageConfig,
+    ) -> Option<String> {
+        let filtered_outline_nodes = outline_nodes
+            .iter()
+            .filter(|outline_node| {
+                let start_position = outline_node.range().start_position();
+                let end_position = outline_node.range().end_position();
+                let range_start = &self.range.start;
+                let range_end = &self.range.end;
+
+                // check if the range for this goto-definition is contained within
+                // the outline
+                if (start_position.line() <= range_start.line
+                    || (start_position.line() == range_start.line
+                        && start_position.column() <= range_start.character))
+                    && (end_position.line() >= range_end.line
+                        || (end_position.line() == range_end.line
+                            && end_position.column() >= range_end.character))
+                {
+                    true
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // we are not done yet, we have to also include the nodes which might be
+        // part of the implementation of a given struct, so we go for another pass
+        // and look at class like objects and grab their implementation context as well
+        // ideally we should be getting just a single filtered outline nodes
+        let final_outline_nodes = outline_nodes
+            .iter()
+            .filter(|outline_node| outline_node.is_class())
+            .filter_map(|outline_node| {
+                let node_name = outline_node.name();
+                let name_matches = filtered_outline_nodes
+                    .iter()
+                    .any(|filtered_outline_node| filtered_outline_node.name() == node_name);
+                if name_matches {
+                    Some(outline_node)
+                } else {
+                    None
+                }
+            })
+            .filter_map(|outline_node| outline_node.get_outline())
+            .collect::<Vec<_>>();
+        if final_outline_nodes.is_empty() {
+            None
+        } else {
+            let comment_prefix = &language_config.comment_prefix;
+            let file_path = self.file_path();
+            let outline_content = final_outline_nodes
+                .join("\n")
+                .lines()
+                .map(|line| format!("{comment_prefix} {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            // we have to add the filepath at the start and include the outline
+            // which we have generated
+            Some(format!(
+                r#"{comment_prefix} File Path: {file_path}
+{outline_content}"#
+            ))
+        }
     }
 }
 

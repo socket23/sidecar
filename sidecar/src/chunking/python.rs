@@ -56,5 +56,6 @@ pub fn python_language_config() -> TSLanguageConfig {
         variable_identifier_queries: vec!["(assignment left: (identifier) @identifier)".to_owned()],
         outline_query: None,
         excluded_file_paths: vec![],
+        language_str: "python".to_owned(),
     }
 }

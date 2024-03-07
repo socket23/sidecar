@@ -83,10 +83,10 @@ impl OutlineNodeType {
 
 #[derive(Debug, Clone)]
 pub struct OutlineNodeContent {
-    pub range: Range,
-    pub name: String,
-    pub r#type: OutlineNodeType,
-    pub content: String,
+    range: Range,
+    name: String,
+    r#type: OutlineNodeType,
+    content: String,
 }
 
 impl OutlineNodeContent {
@@ -98,17 +98,76 @@ impl OutlineNodeContent {
             content,
         }
     }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct OutlineNode {
     content: OutlineNodeContent,
     children: Vec<OutlineNodeContent>,
+    language: String,
 }
 
 impl OutlineNode {
-    pub fn new(content: OutlineNodeContent, children: Vec<OutlineNodeContent>) -> Self {
-        Self { content, children }
+    pub fn new(
+        content: OutlineNodeContent,
+        children: Vec<OutlineNodeContent>,
+        language: String,
+    ) -> Self {
+        Self {
+            content,
+            children,
+            language,
+        }
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.content.range
+    }
+
+    pub fn name(&self) -> &str {
+        &self.content.name
+    }
+
+    pub fn is_class(&self) -> bool {
+        matches!(self.content.r#type, OutlineNodeType::Class)
+    }
+
+    pub fn get_outline(&self) -> Option<String> {
+        // we want to generate the outline for the node here, we have to do some
+        // language specific gating here but thats fine
+        match &self.content.r#type {
+            OutlineNodeType::Class => {
+                if self.children.is_empty() {
+                    Some(self.content.content.to_owned())
+                } else {
+                    // for rust we have a special case here as we might have functions
+                    // inside which we want to show but its part of the implementation
+                    if &self.language == "rust" {
+                        // this is 100% a implementation unless over here, so lets use
+                        // it as such
+                        let implementation_name = self.content.name.to_owned();
+                        let children_content = self
+                            .children
+                            .iter()
+                            .map(|children| children.content.to_owned())
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        Some(format!(
+                            "impl {implementation_name} {{\n{children_content}\n}}"
+                        ))
+                    } else {
+                        // TODO(skcd): We will figure out support for other languages
+                        None
+                    }
+                }
+            }
+            OutlineNodeType::Function => None,
+            _ => None,
+        }
     }
 }
 

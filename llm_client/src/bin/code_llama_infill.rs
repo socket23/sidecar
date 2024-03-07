@@ -1,10 +1,9 @@
 use llm_client::{
     clients::{
-        openai_compatible::OpenAICompatibleClient,
         togetherai::TogetherAIClient,
         types::{LLMClient, LLMClientCompletionStringRequest, LLMType},
     },
-    provider::{LLMProviderAPIKeys, OpenAIComptaibleConfig, TogetherAIProvider},
+    provider::{LLMProviderAPIKeys, TogetherAIProvider},
 };
 
 #[tokio::main]

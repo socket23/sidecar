@@ -133,7 +133,8 @@ impl TSLanguageConfig {
     }
 
     pub fn is_file_relevant(&self, file_path: &str) -> bool {
-        self.excluded_file_paths
+        !self
+            .excluded_file_paths
             .iter()
             .any(|file_path_part| file_path.contains(file_path_part))
     }

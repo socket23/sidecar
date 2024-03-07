@@ -126,5 +126,6 @@ pub fn rust_language_config() -> TSLanguageConfig {
                   name: (identifier) @name) @definition.macro"#
                 .to_owned(),
         ),
+        excluded_file_paths: vec![".rustup".to_owned()],
     }
 }

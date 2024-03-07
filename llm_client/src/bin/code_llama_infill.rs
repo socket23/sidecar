@@ -69,7 +69,7 @@ async fn main() {
 //             symbol_tracker,
 //             editor_parsing,
 //         }
-
+//
 // Path: /Users/skcd/scratch/sidecar/sidecar/src/inline_completion/context/codebase_context.rs
 //
 // /// Creates the codebase context which we want to use
@@ -121,7 +121,7 @@ async fn main() {
 //             editor_parsing,
 //         }
 //     }
-
+//
 // Path: /Users/skcd/scratch/sidecar/sidecar/src/inline_completion/context/codebase_context.rs
 // /// Creates the codebase context which we want to use
 // /// for generating inline-completions
@@ -173,7 +173,7 @@ async fn main() {
 //         }
 //     }
 //
-
+//
 // Path: /Users/skcd/scratch/sidecar/sidecar/src/inline_completion/context/codebase_context.rs
 // /// for generating inline-completions
 // pub struct CodeBaseContext {

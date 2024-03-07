@@ -133,5 +133,6 @@ pub fn javascript_language_config() -> TSLanguageConfig {
             "((lexical_declaration (variable_declarator (identifier) @identifier)))".to_owned(),
         ],
         outline_query: None,
+        excluded_file_paths: vec![],
     }
 }

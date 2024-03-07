@@ -288,6 +288,10 @@ impl DocumentEditLines {
         document_lines
     }
 
+    pub fn outline_nodes(&self) -> Vec<OutlineNode> {
+        self.outline_nodes.to_vec()
+    }
+
     fn set_tree(&mut self) {
         if let Some(language_config) = self.editor_parsing.for_file_path(&self.file_path) {
             let tree = language_config.get_tree_sitter_tree(self.get_content().as_bytes());

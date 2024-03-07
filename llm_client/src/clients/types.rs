@@ -23,6 +23,8 @@ pub enum LLMType {
     CodeLLama70BInstruct,
     CodeLlama13BInstruct,
     CodeLlama7BInstruct,
+    ClaudeOpus,
+    ClaudeSonnet,
     Custom(String),
 }
 
@@ -69,6 +71,8 @@ impl<'de> Deserialize<'de> for LLMType {
                     "CodeLlama13BInstruct" => Ok(LLMType::CodeLlama13BInstruct),
                     "CodeLlama7BInstruct" => Ok(LLMType::CodeLlama7BInstruct),
                     "DeepSeekCoder33BInstruct" => Ok(LLMType::DeepSeekCoder33BInstruct),
+                    "ClaudeOpus" => Ok(LLMType::ClaudeOpus),
+                    "ClaudeSonnet" => Ok(LLMType::ClaudeSonnet),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -106,6 +110,8 @@ impl fmt::Display for LLMType {
             LLMType::CodeLlama13BInstruct => write!(f, "CodeLlama13BInstruct"),
             LLMType::CodeLlama7BInstruct => write!(f, "CodeLlama7BInstruct"),
             LLMType::DeepSeekCoder33BInstruct => write!(f, "DeepSeekCoder33BInstruct"),
+            LLMType::ClaudeOpus => write!(f, "ClaudeOpus"),
+            LLMType::ClaudeSonnet => write!(f, "ClaudeSonnet"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

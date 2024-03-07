@@ -9,6 +9,7 @@ use sqlx::SqlitePool;
 
 use crate::{
     clients::{
+        anthropic::AnthropicClient,
         codestory::CodeStoryClient,
         lmstudio::LMStudioClient,
         ollama::OllamaClient,
@@ -55,7 +56,8 @@ impl LLMBroker {
                 Box::new(CodeStoryClient::new(
                     "https://codestory-provider-dot-anton-390822.ue.r.appspot.com",
                 )),
-            ))
+            )
+            .add_provider(LLMProvider::Anthropic, Box::new(AnthropicClient::new())))
     }
 
     pub fn add_provider(
@@ -108,6 +110,7 @@ impl LLMBroker {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
+            LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -179,6 +182,7 @@ impl LLMBroker {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
+            LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

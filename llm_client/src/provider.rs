@@ -28,6 +28,7 @@ pub enum LLMProvider {
     CodeStory(CodeStoryLLMTypes),
     Azure(AzureOpenAIDeploymentId),
     OpenAICompatible,
+    Anthropic,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -39,6 +40,7 @@ pub enum LLMProviderAPIKeys {
     LMStudio(LMStudioConfig),
     OpenAICompatible(OpenAIComptaibleConfig),
     CodeStory,
+    Anthropic(AnthropicAPIKey),
 }
 
 impl LLMProviderAPIKeys {
@@ -61,6 +63,7 @@ impl LLMProviderAPIKeys {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
+            LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
         }
     }
 
@@ -124,6 +127,13 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
+            LLMProvider::Anthropic => {
+                if let LLMProviderAPIKeys::Anthropic(api_key) = self {
+                    Some(LLMProviderAPIKeys::Anthropic(api_key.clone()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -139,6 +149,17 @@ pub struct TogetherAIProvider {
 }
 
 impl TogetherAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct AnthropicAPIKey {
+    pub api_key: String,
+}
+
+impl AnthropicAPIKey {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
     }

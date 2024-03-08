@@ -86,7 +86,7 @@ pub async fn tree_sitter_node_check(
         Some(tree_sitter) => {
             let grammar = tree_sitter.grammar;
             let mut parser = tree_sitter::Parser::new();
-            parser.set_language(grammar());
+            let _ = parser.set_language(grammar());
             let node = parser.parse(&source, None);
             match node {
                 Some(node) => node.root_node().has_error(),

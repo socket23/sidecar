@@ -8,14 +8,102 @@ use super::{
     },
 };
 
-pub struct AnthropiLineEditPrompt {
+pub struct AnthropicLineEditPrompt {
     openai_line_edit: OpenAILineEditPrompt,
 }
 
-impl AnthropiLineEditPrompt {
+impl AnthropicLineEditPrompt {
     pub fn new() -> Self {
         Self {
             openai_line_edit: OpenAILineEditPrompt::new(),
+        }
+    }
+
+    fn system_message_inline_edit(&self, language: &str) -> String {
+        format!(
+            r#"You are an AI programming assistant.
+When asked for your name, you must respond with "Aide".
+Follow the user's requirements carefully & to the letter.
+- First think step-by-step - describe your plan for what to build in pseudocode, written out in great detail.
+- Then output the code in a single code block.
+- Minimize any other prose.
+- Each code block starts with ``` and // FILEPATH.
+- If you suggest to run a terminal command, use a code block that starts with ```bash.
+- You always answer with {language} code.
+- Modify the code or create new code.
+- Unless directed otherwise, the user is expecting for you to edit their selected code.
+- Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by the user"#
+        )
+    }
+
+    fn system_message_fix(&self, language: &str) -> String {
+        format!(
+            r#"You are an AI programming assistant.
+When asked for your name, you must respond with "Aide".
+Follow the user's requirements carefully & to the letter.
+- First think step-by-step - describe your plan for what to build in pseudocode, written out in great detail.
+- Then output the code in a single code block.
+- Each code block starts with ``` and // FILEPATH.
+- If you suggest to run a terminal command, use a code block that starts with ```bash.
+- You always answer with {language} code.
+- Modify the code or create new code.
+- Unless directed otherwise, the user is expecting for you to edit their selected code."#
+        )
+    }
+
+    fn documentation_system_prompt(&self, language: &str, is_identifier_node: bool) -> String {
+        if is_identifier_node {
+            let system_prompt = format!(
+                r#"You are an AI programming assistant.
+When asked for your name, you must respond with "Aide".
+Follow the user's requirements carefully & to the letter.
+- Each code block must ALWAYS STARTS and include ```{language} and // FILEPATH
+- You always answer with {language} code.
+- When the user asks you to document something, you must answer in the form of a {language} code block.
+- Your documentation should not include just the name of the function, think about what the function is really doing.
+- When generating the documentation, be sure to understand what the function is doing and include that as part of the documentation and then generate the documentation.
+- DO NOT modify the code which you will be generating"#
+            );
+            system_prompt.to_owned()
+        } else {
+            let system_prompt = format!(
+                r#"You are an AI programming assistant.
+When asked for your name, you must respond with "Aide".
+Follow the user's requirements carefully & to the letter.
+- Each code block must ALWAYS STARTS and include ```{language} and // FILEPATH
+- You always answer with {language} code.
+- When the user asks you to document something, you must answer in the form of a {language} code block.
+- Your documentation should not include just the code selection, think about what the selection is really doing.
+- When generating the documentation, be sure to understand what the selection is doing and include that as part of the documentation and then generate the documentation.
+- DO NOT modify the code which you will be generating"#
+            );
+            system_prompt.to_owned()
+        }
+    }
+
+    fn above_selection(&self, above_context: Option<&String>) -> Option<String> {
+        if let Some(above_context) = above_context {
+            Some(format!(
+                r#"I have the following code above:
+<code_above>
+{above_context}
+</code_above>"#
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn below_selection(&self, below_context: Option<&String>) -> Option<String> {
+        if let Some(below_context) = below_context {
+            Some(format!(
+                r#"I have the following code below:
+<code_below>
+{below_context}
+</code_below>"#
+            ))
+        } else {
+            None
         }
     }
 
@@ -60,9 +148,39 @@ impl AnthropiLineEditPrompt {
     }
 }
 
-impl InLineEditPrompt for AnthropiLineEditPrompt {
+impl InLineEditPrompt for AnthropicLineEditPrompt {
     fn inline_edit(&self, request: InLineEditRequest) -> InLinePromptResponse {
-        let inline_prompt_response = self.openai_line_edit.inline_edit(request);
+        // Here we create the messages for the openai, since we have flexibility
+        // and the llms are in general smart we can just send the chat messages
+        // instead of the completion(which has been deprecated)
+        let above = request.above();
+        let below = request.below();
+        let in_range = request.in_range();
+        let language = request.language();
+
+        let mut messages = vec![];
+        messages.push(LLMClientMessage::system(
+            self.system_message_inline_edit(language),
+        ));
+        if let Some(above) = self.above_selection(above) {
+            messages.push(LLMClientMessage::user(above));
+        }
+        if let Some(below) = self.below_selection(below) {
+            messages.push(LLMClientMessage::user(below));
+        }
+        if let Some(in_range) = in_range {
+            messages.push(LLMClientMessage::user(format!(
+                r#"<code_to_modify>
+{in_range}
+</code_to_modify>"#
+            )));
+        }
+        let user_query = request.user_query().to_owned();
+        messages.push(LLMClientMessage::user(format!(
+            r#"Only edit code in the <code_to_modify> section, my instructions are
+{user_query}"#
+        )));
+        let inline_prompt_response = InLinePromptResponse::Chat(messages);
         self.fix_inline_prompt_response(inline_prompt_response)
     }
 
@@ -72,7 +190,36 @@ impl InLineEditPrompt for AnthropiLineEditPrompt {
     }
 
     fn inline_doc(&self, request: InLineDocRequest) -> InLinePromptResponse {
-        let inline_prompse_response = self.openai_line_edit.inline_doc(request);
-        self.fix_inline_prompt_response(inline_prompse_response)
+        let inline_prompt_response = self.openai_line_edit.inline_doc(request);
+        self.fix_inline_prompt_response(inline_prompt_response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use llm_client::clients::types::LLMClientMessage;
+
+    use crate::in_line_edit::types::InLinePromptResponse;
+
+    use super::AnthropicLineEditPrompt;
+
+    #[test]
+    fn test_merging_of_messages_works() {
+        let messages = vec![
+            LLMClientMessage::system("s1".to_owned()),
+            LLMClientMessage::user("u1".to_owned()),
+            LLMClientMessage::user("u2".to_owned()),
+            LLMClientMessage::user("u3".to_owned()),
+        ];
+        let prompt = AnthropicLineEditPrompt::new();
+        let fixed_messages =
+            prompt.fix_inline_prompt_response(InLinePromptResponse::Chat(messages));
+        assert!(matches!(fixed_messages, InLinePromptResponse::Chat(_)));
+        let messages = fixed_messages.messages();
+        assert!(messages.is_some());
+        let messages = messages.unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].content(), "s1");
+        assert_eq!(messages[1].content(), "u1\nu2\nu3");
     }
 }

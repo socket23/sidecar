@@ -93,6 +93,10 @@ impl LLMType {
     pub fn is_custom(&self) -> bool {
         matches!(self, LLMType::Custom(_))
     }
+
+    pub fn is_anthropic(&self) -> bool {
+        matches!(self, LLMType::ClaudeOpus | LLMType::ClaudeSonnet)
+    }
 }
 
 impl fmt::Display for LLMType {

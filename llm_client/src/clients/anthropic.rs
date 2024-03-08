@@ -157,6 +157,7 @@ impl AnthropicRequest {
 pub struct AnthropicClient {
     client: reqwest::Client,
     base_url: String,
+    chat_endpoint: String,
 }
 
 impl AnthropicClient {
@@ -164,11 +165,20 @@ impl AnthropicClient {
         Self {
             client: reqwest::Client::new(),
             base_url: "https://api.anthropic.com".to_owned(),
+            chat_endpoint: "/v1/messages".to_owned(),
+        }
+    }
+
+    pub fn new_with_custom_urls(base_url: String, chat_endpoint: String) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            base_url,
+            chat_endpoint,
         }
     }
 
     pub fn chat_endpoint(&self) -> String {
-        format!("{}/v1/messages", &self.base_url)
+        format!("{}{}", &self.base_url, &self.chat_endpoint)
     }
 
     fn generate_api_bearer_key(
@@ -201,7 +211,7 @@ impl LLMClient for AnthropicClient {
         api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
     ) -> Result<String, LLMClientError> {
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
         self.stream_completion(api_key, request, sender).await
     }
 
@@ -216,7 +226,7 @@ impl LLMClient for AnthropicClient {
         let anthropic_request =
             AnthropicRequest::from_client_completion_request(request, model_str.to_owned());
 
-        let mut response_stream = self
+        let response_stream = self
             .client
             .post(endpoint)
             .header(
@@ -227,12 +237,12 @@ impl LLMClient for AnthropicClient {
             .header("content-type".to_owned(), "application/json".to_owned())
             .json(&anthropic_request)
             .send()
-            .await?
-            .bytes_stream()
-            .eventsource();
+            .await?;
+
+        let mut event_source = response_stream.bytes_stream().eventsource();
 
         let mut buffered_string = "".to_owned();
-        while let Some(Ok(event)) = response_stream.next().await {
+        while let Some(Ok(event)) = event_source.next().await {
             let event = serde_json::from_str::<AnthropicEvent>(&event.data);
             match event {
                 Ok(AnthropicEvent::ContentBlockStart { content_block, .. }) => {

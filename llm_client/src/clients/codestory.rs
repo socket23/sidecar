@@ -4,7 +4,7 @@ use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::provider::{LLMProvider, LLMProviderAPIKeys};
+use crate::provider::{CodeStoryLLMTypes, LLMProvider, LLMProviderAPIKeys};
 
 use super::{
     togetherai::TogetherAIClient,
@@ -45,6 +45,9 @@ struct CodeStoryRequestOptions {
 struct CodeStoryRequest {
     messages: Vec<CodeStoryMessage>,
     options: CodeStoryRequestOptions,
+    model: String,
+    system: Option<String>,
+    max_tokens: Option<usize>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -87,33 +90,54 @@ impl CodeStoryRequestPrompt {
 }
 
 impl CodeStoryRequest {
-    fn from_chat_request(request: LLMClientCompletionRequest) -> Self {
+    fn from_chat_request(request: LLMClientCompletionRequest, model: String) -> Self {
+        let llm_type = request.model().clone();
         Self {
             messages: request
                 .messages()
                 .into_iter()
-                .map(|message| match message.role() {
-                    LLMClientRole::System => CodeStoryMessage {
-                        role: "system".to_owned(),
-                        content: message.content().to_owned(),
-                    },
-                    LLMClientRole::User => CodeStoryMessage {
+                .filter_map(|message| match message.role() {
+                    LLMClientRole::System => {
+                        if llm_type.is_anthropic() {
+                            None
+                        } else {
+                            Some(CodeStoryMessage {
+                                role: "system".to_owned(),
+                                content: message.content().to_owned(),
+                            })
+                        }
+                    }
+                    LLMClientRole::User => Some(CodeStoryMessage {
                         role: "user".to_owned(),
                         content: message.content().to_owned(),
-                    },
-                    LLMClientRole::Function => CodeStoryMessage {
-                        role: "function".to_owned(),
-                        content: message.content().to_owned(),
-                    },
-                    LLMClientRole::Assistant => CodeStoryMessage {
+                    }),
+                    LLMClientRole::Function => {
+                        if llm_type.is_anthropic() {
+                            None
+                        } else {
+                            Some(CodeStoryMessage {
+                                role: "function".to_owned(),
+                                content: message.content().to_owned(),
+                            })
+                        }
+                    }
+                    LLMClientRole::Assistant => Some(CodeStoryMessage {
                         role: "assistant".to_owned(),
                         content: message.content().to_owned(),
-                    },
+                    }),
                 })
                 .collect(),
             options: CodeStoryRequestOptions {
                 temperature: request.temperature(),
             },
+            system: request
+                .messages()
+                .iter()
+                .filter(|message| message.role().is_system())
+                .next()
+                .map(|message| message.content().to_owned()),
+            model,
+            max_tokens: request.get_max_tokens(),
         }
     }
 }
@@ -138,6 +162,10 @@ impl CodeStoryClient {
         format!("{api_base}/together-api")
     }
 
+    pub fn anthropic_endpoint(&self, api_base: &str) -> String {
+        format!("{api_base}/claude-api")
+    }
+
     pub fn model_name(&self, model: &LLMType) -> Result<String, LLMClientError> {
         match model {
             LLMType::GPT3_5_16k => Ok("gpt-3.5-turbo-16k-0613".to_owned()),
@@ -147,6 +175,8 @@ impl CodeStoryClient {
             LLMType::DeepSeekCoder33BInstruct => {
                 Ok("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
             }
+            LLMType::ClaudeOpus => Ok("claude-3-opus-20240229".to_owned()),
+            LLMType::ClaudeSonnet => Ok("claude-3-sonnet-20240229".to_owned()),
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }
@@ -158,6 +188,9 @@ impl CodeStoryClient {
             LLMType::CodeLlama13BInstruct
             | LLMType::CodeLlama7BInstruct
             | LLMType::DeepSeekCoder33BInstruct => Ok(self.together_api_endpoint(&self.api_base)),
+            LLMType::ClaudeOpus | LLMType::ClaudeSonnet => {
+                Ok(self.anthropic_endpoint(&self.api_base))
+            }
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }
@@ -175,7 +208,7 @@ impl CodeStoryClient {
 #[async_trait]
 impl LLMClient for CodeStoryClient {
     fn client(&self) -> &LLMProvider {
-        &LLMProvider::LMStudio
+        &LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
     }
 
     async fn completion(
@@ -196,7 +229,7 @@ impl LLMClient for CodeStoryClient {
         let model = self.model_name(request.model())?;
         let endpoint = self.model_endpoint(request.model())?;
 
-        let request = CodeStoryRequest::from_chat_request(request);
+        let request = CodeStoryRequest::from_chat_request(request, model.to_owned());
         let mut response_stream = self
             .client
             .post(endpoint)

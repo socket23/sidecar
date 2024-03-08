@@ -236,7 +236,7 @@ impl LLMClient for AnthropicClient {
             .post(endpoint)
             .header(
                 "x-api-key".to_owned(),
-                dbg!(self.generate_api_bearer_key(api_key))?,
+                self.generate_api_bearer_key(api_key)?,
             )
             .header("anthropic-version".to_owned(), "2023-06-01".to_owned())
             .header("content-type".to_owned(), "application/json".to_owned())

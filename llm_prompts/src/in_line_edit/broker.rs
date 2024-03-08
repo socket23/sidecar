@@ -3,13 +3,15 @@ use std::collections::HashMap;
 use llm_client::clients::types::LLMType;
 
 use super::{
+    anthropic::AnthropiLineEditPrompt,
+    codellama::CodeLlamaLineEditPrompt,
+    deepseekcoder::DeepSeekCoderLinEditPrompt,
     mistral::MistralLineEditPrompt,
     openai::OpenAILineEditPrompt,
-    codellama::CodeLlamaLineEditPrompt,
     types::{
         InLineDocRequest, InLineEditPrompt, InLineEditPromptError, InLineEditRequest,
         InLineFixRequest, InLinePromptResponse,
-    }, deepseekcoder::DeepSeekCoderLinEditPrompt,
+    },
 };
 
 pub struct InLineEditPromptBroker {
@@ -30,12 +32,35 @@ impl InLineEditPromptBroker {
                 Box::new(MistralLineEditPrompt::new()),
             )
             .insert_prompt_generator(LLMType::Mixtral, Box::new(MistralLineEditPrompt::new()))
-            .insert_prompt_generator(LLMType::CodeLlama7BInstruct, Box::new(CodeLlamaLineEditPrompt::new()))
-            .insert_prompt_generator(LLMType::CodeLlama13BInstruct, Box::new(CodeLlamaLineEditPrompt::new()))
-            .insert_prompt_generator(LLMType::CodeLLama70BInstruct, Box::new(CodeLlamaLineEditPrompt::new()))
-            .insert_prompt_generator(LLMType::DeepSeekCoder6BInstruct, Box::new(DeepSeekCoderLinEditPrompt::new()))
-            .insert_prompt_generator(LLMType::DeepSeekCoder1_3BInstruct, Box::new(DeepSeekCoderLinEditPrompt::new()))
-            .insert_prompt_generator(LLMType::DeepSeekCoder33BInstruct, Box::new(DeepSeekCoderLinEditPrompt::new()))
+            .insert_prompt_generator(
+                LLMType::CodeLlama7BInstruct,
+                Box::new(CodeLlamaLineEditPrompt::new()),
+            )
+            .insert_prompt_generator(
+                LLMType::CodeLlama13BInstruct,
+                Box::new(CodeLlamaLineEditPrompt::new()),
+            )
+            .insert_prompt_generator(
+                LLMType::CodeLLama70BInstruct,
+                Box::new(CodeLlamaLineEditPrompt::new()),
+            )
+            .insert_prompt_generator(
+                LLMType::DeepSeekCoder6BInstruct,
+                Box::new(DeepSeekCoderLinEditPrompt::new()),
+            )
+            .insert_prompt_generator(
+                LLMType::DeepSeekCoder1_3BInstruct,
+                Box::new(DeepSeekCoderLinEditPrompt::new()),
+            )
+            .insert_prompt_generator(
+                LLMType::DeepSeekCoder33BInstruct,
+                Box::new(DeepSeekCoderLinEditPrompt::new()),
+            )
+            .insert_prompt_generator(LLMType::ClaudeOpus, Box::new(AnthropiLineEditPrompt::new()))
+            .insert_prompt_generator(
+                LLMType::ClaudeSonnet,
+                Box::new(AnthropiLineEditPrompt::new()),
+            )
     }
 
     pub fn insert_prompt_generator(

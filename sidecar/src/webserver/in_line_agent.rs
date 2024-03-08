@@ -185,6 +185,7 @@ pub async fn reply_to_user(
 
     let editor_parsing: EditorParsing = Default::default();
     let llm_broker = app.llm_broker.clone();
+    let chat_broker = app.chat_broker.clone();
     let inline_edit_prompt = app.inline_prompt_edit.clone();
     // Now we want to handle this and send the data to a prompt which will generate
     // the proper things
@@ -215,6 +216,7 @@ pub async fn reply_to_user(
         },
         vec![inline_agent_message],
         sender,
+        chat_broker,
     );
     let result = generate_in_line_agent_stream(
         inline_agent,

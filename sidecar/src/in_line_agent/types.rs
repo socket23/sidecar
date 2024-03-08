@@ -9,6 +9,7 @@ use llm_client::clients::types::LLMClientCompletionResponse;
 use llm_client::clients::types::LLMClientCompletionStringRequest;
 use llm_client::clients::types::LLMClientMessage;
 use llm_client::clients::types::LLMType;
+use llm_prompts::chat::broker::LLMChatModelBroker;
 use llm_prompts::in_line_edit::broker::InLineEditPromptBroker;
 use llm_prompts::in_line_edit::types::InLineDocNode;
 use llm_prompts::in_line_edit::types::InLineDocRequest;
@@ -264,6 +265,7 @@ pub struct InLineAgent {
     inline_agent_messages: Vec<InLineAgentMessage>,
     llm_broker: Arc<LLMBroker>,
     llm_prompt_formatter: Arc<InLineEditPromptBroker>,
+    chat_broker: Arc<LLMChatModelBroker>,
     sql_db: SqlDb,
     editor_parsing: EditorParsing,
     // TODO(skcd): Break this out and don't use cross crate dependency like this
@@ -282,6 +284,7 @@ impl InLineAgent {
         editor_request: ProcessInEditorRequest,
         messages: Vec<InLineAgentMessage>,
         sender: Sender<InLineAgentMessage>,
+        chat_broker: Arc<LLMChatModelBroker>,
     ) -> Self {
         Self {
             application,
@@ -294,6 +297,7 @@ impl InLineAgent {
             sender,
             editor_request,
             editor_parsing,
+            chat_broker,
         }
     }
 
@@ -532,6 +536,11 @@ impl InLineAgent {
                     fast_model
                 ))?;
             let fast_model = self_.editor_request.fast_model();
+            let answer_model = self.chat_broker.get_answer_model(&fast_model)?;
+            let answer_tokens: usize = answer_model
+                .answer_tokens
+                .try_into()
+                .expect("i64 positive to usize should work");
             stream::iter(messages_list)
                 .map(|messages| (messages, answer_sender.clone(), fast_model.clone()))
                 .for_each(
@@ -556,7 +565,8 @@ impl InLineAgent {
                                     let request = LLMClientCompletionRequest::from_messages(
                                         chat,
                                         fast_model.clone(),
-                                    ).set_temperature(0.2);
+                                    ).set_temperature(0.2)
+                                    .set_max_tokens(answer_tokens);
                                     llm_broker
                                         .stream_answer(
                                             provider.clone(),
@@ -573,7 +583,7 @@ impl InLineAgent {
                                         prompt,
                                         0.2,
                                         None,
-                                    );
+                                    ).set_max_tokens(answer_tokens);
                                     llm_broker
                                         .stream_answer(
                                             provider.clone(),
@@ -676,6 +686,12 @@ impl InLineAgent {
             related_prompts,
         );
         let fast_model = self.editor_request.fast_model();
+        let answer_model = self.chat_broker.get_answer_model(&fast_model)?;
+        let answer_tokens: usize = answer_model
+            .answer_tokens
+            .try_into()
+            .expect("i64 positive to usize should work");
+
         // Now we try to get the request we have to send from the inline edit broker
         let prompt = self
             .llm_prompt_formatter
@@ -704,7 +720,8 @@ impl InLineAgent {
             match prompt {
                 InLinePromptResponse::Chat(chat) => {
                     let request =
-                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone());
+                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone())
+                            .set_max_tokens(answer_tokens);
                     llm_broker
                         .stream_answer(
                             provider.clone(),
@@ -723,7 +740,8 @@ impl InLineAgent {
                         prompt,
                         0.0,
                         None,
-                    );
+                    )
+                    .set_max_tokens(answer_tokens);
                     llm_broker
                         .stream_answer(
                             provider.clone(),
@@ -901,12 +919,19 @@ impl InLineAgent {
                     "No provider config found for fast model: {:?}",
                     fast_model
                 ))?;
+        let answer_model = self.chat_broker.get_answer_model(&fast_model)?;
+        let answer_tokens: usize = answer_model
+            .answer_tokens
+            .try_into()
+            .expect("i64 positive to usize should work");
+
         let answer_stream = {
             match prompt {
                 InLinePromptResponse::Chat(chat) => {
                     let request =
                         LLMClientCompletionRequest::from_messages(chat, fast_model.clone())
-                            .set_temperature(0.2);
+                            .set_temperature(0.2)
+                            .set_max_tokens(answer_tokens);
                     llm_broker
                         .stream_answer(
                             provider.clone(),
@@ -925,7 +950,8 @@ impl InLineAgent {
                         prompt,
                         0.2,
                         None,
-                    );
+                    )
+                    .set_max_tokens(answer_tokens);
                     llm_broker
                         .stream_answer(
                             provider.clone(),

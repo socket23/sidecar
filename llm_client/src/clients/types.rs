@@ -121,7 +121,7 @@ impl fmt::Display for LLMType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum LLMClientRole {
     System,
     User,
@@ -208,6 +208,23 @@ impl LLMClientMessage {
             message,
             function_call: None,
             function_return: None,
+        }
+    }
+
+    pub fn concat(self, other: Self) -> Self {
+        // We are going to concatenate the 2 llm client messages togehter, at this moment
+        // we are just gonig to join the message with a \n
+        Self {
+            role: self.role,
+            message: self.message + "\n" + &other.message,
+            function_call: match self.function_call {
+                Some(function_call) => Some(function_call),
+                None => other.function_call,
+            },
+            function_return: match other.function_return {
+                Some(function_return) => Some(function_return),
+                None => self.function_return,
+            },
         }
     }
 

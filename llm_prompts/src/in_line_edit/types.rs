@@ -201,6 +201,14 @@ impl InLinePromptResponse {
             None
         }
     }
+
+    pub fn messages(self) -> Option<Vec<LLMClientMessage>> {
+        if let InLinePromptResponse::Chat(messages) = self {
+            Some(messages)
+        } else {
+            None
+        }
+    }
 }
 
 /// Should we send context here as the above, below and in line context, or do we

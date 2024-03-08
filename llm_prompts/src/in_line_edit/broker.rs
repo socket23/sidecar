@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use llm_client::clients::types::LLMType;
 
 use super::{
-    anthropic::AnthropiLineEditPrompt,
+    anthropic::AnthropicLineEditPrompt,
     codellama::CodeLlamaLineEditPrompt,
     deepseekcoder::DeepSeekCoderLinEditPrompt,
     mistral::MistralLineEditPrompt,
@@ -56,10 +56,13 @@ impl InLineEditPromptBroker {
                 LLMType::DeepSeekCoder33BInstruct,
                 Box::new(DeepSeekCoderLinEditPrompt::new()),
             )
-            .insert_prompt_generator(LLMType::ClaudeOpus, Box::new(AnthropiLineEditPrompt::new()))
+            .insert_prompt_generator(
+                LLMType::ClaudeOpus,
+                Box::new(AnthropicLineEditPrompt::new()),
+            )
             .insert_prompt_generator(
                 LLMType::ClaudeSonnet,
-                Box::new(AnthropiLineEditPrompt::new()),
+                Box::new(AnthropicLineEditPrompt::new()),
             )
     }
 

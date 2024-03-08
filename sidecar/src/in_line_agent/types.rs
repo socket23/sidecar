@@ -1002,12 +1002,6 @@ impl InLineAgent {
         document_symbols
             .into_iter()
             .map(|document_symbol| {
-                // Here we want to generate the context for the prompt
-                let code_selection_prompt = LLMClientMessage::user(self.document_symbol_prompt(
-                    &document_symbol,
-                    language,
-                    file_path,
-                ));
                 let inline_doc_request = InLineDocRequest::new(
                     self.document_symbol_prompt(&document_symbol, language, file_path),
                     self.inline_doc_node(&document_symbol),
@@ -1091,39 +1085,6 @@ impl InLineAgent {
         } else {
             vec![]
         }
-    }
-
-    fn fix_generation_prompt(&self, selection: &SelectionContext) -> Vec<String> {
-        let mut prompts = vec![];
-        if selection.above.has_context() {
-            let mut above_prompts = vec![];
-            above_prompts.push("I have the following code above the selection:".to_owned());
-            above_prompts.extend(selection.above.generate_prompt(true));
-            prompts.push(above_prompts.join("\n"));
-        }
-        if selection.below.has_context() {
-            let mut below_prompts = vec![];
-            below_prompts.push("I have the following code below the selection:".to_owned());
-            below_prompts.extend(selection.below.generate_prompt(true));
-            prompts.push(below_prompts.join("\n"));
-        }
-        if selection.range.has_context() {
-            let mut range_prompts = vec![];
-            range_prompts.push("I have the following code in the selection:".to_owned());
-            range_prompts.extend(selection.range.generate_prompt(true));
-            prompts.push(range_prompts.join("\n"));
-        } else {
-            prompts.push("There is no code in the selection.".to_owned());
-        }
-        let in_range_start_marker = selection.range.start_marker();
-        let in_range_end_marker = selection.range.end_marker();
-        prompts.push(
-            format!(
-                "Only change the code inside of the selection, delimited by markers: {in_range_start_marker} and {in_range_end_marker}"
-            )
-            .to_owned(),
-        );
-        prompts
     }
 
     fn inline_fix_request(

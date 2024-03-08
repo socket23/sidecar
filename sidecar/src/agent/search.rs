@@ -771,6 +771,12 @@ impl Agent {
                 .collect::<Result<Vec<_>, _>>()?,
             0.1,
             None,
+        )
+        .set_max_tokens(
+            answer_model
+                .answer_tokens
+                .try_into()
+                .expect("i64 is positive"),
         );
         let (answer_sender, answer_receiver) = tokio::sync::mpsc::unbounded_channel();
         let answer_receiver = UnboundedReceiverStream::new(answer_receiver).map(either::Left);

@@ -221,17 +221,22 @@ impl LLMClient for AnthropicClient {
         request: LLMClientCompletionRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
+        dbg!("anthropic.stream_completion");
         let endpoint = self.chat_endpoint();
+        dbg!("anthropic.stream_completion.endpoint", &endpoint);
         let model_str = self.get_model_string(request.model())?;
+        dbg!("anthropic.model_str", &model_str);
         let anthropic_request =
             AnthropicRequest::from_client_completion_request(request, model_str.to_owned());
+
+        dbg!("anthropic.request", &anthropic_request);
 
         let response_stream = self
             .client
             .post(endpoint)
             .header(
                 "x-api-key".to_owned(),
-                self.generate_api_bearer_key(api_key)?,
+                dbg!(self.generate_api_bearer_key(api_key))?,
             )
             .header("anthropic-version".to_owned(), "2023-06-01".to_owned())
             .header("content-type".to_owned(), "application/json".to_owned())
@@ -240,6 +245,9 @@ impl LLMClient for AnthropicClient {
             .await?;
 
         let mut event_source = response_stream.bytes_stream().eventsource();
+
+        // let event_next = event_source.next().await;
+        // dbg!(&event_next);
 
         let mut buffered_string = "".to_owned();
         while let Some(Ok(event)) = event_source.next().await {
@@ -261,7 +269,8 @@ impl LLMClient for AnthropicClient {
                         model_str.to_owned(),
                     ));
                 }
-                Err(_) => {
+                Err(e) => {
+                    dbg!(e);
                     break;
                 }
                 _ => {
@@ -269,6 +278,8 @@ impl LLMClient for AnthropicClient {
                 }
             }
         }
+
+        dbg!("we are returning here quickly");
 
         Ok(buffered_string)
     }

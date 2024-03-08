@@ -152,7 +152,8 @@ pub const DEEPSEEK_CODER_33B: AnswerModel = AnswerModel {
 
 pub const CLAUDE_OPUS: AnswerModel = AnswerModel {
     llm_type: LLMType::ClaudeOpus,
-    answer_tokens: 50 * 1000,
+    // https://arc.net/l/quote/wjrntwlo
+    answer_tokens: 4096,
     prompt_tokens_limit: 150 * 1000,
     history_tokens_limit: 50 * 1000,
     total_tokens: 200 * 1000,
@@ -161,7 +162,8 @@ pub const CLAUDE_OPUS: AnswerModel = AnswerModel {
 
 pub const CLAUDE_SONNET: AnswerModel = AnswerModel {
     llm_type: LLMType::ClaudeSonnet,
-    answer_tokens: 50 * 1000,
+    // https://arc.net/l/quote/wjrntwlo
+    answer_tokens: 4096,
     prompt_tokens_limit: 150 * 1000,
     history_tokens_limit: 50 * 1000,
     total_tokens: 200 * 1000,

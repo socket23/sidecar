@@ -12,6 +12,7 @@ use tokenizers::Tokenizer;
 use crate::{
     clients::types::{LLMClientMessage, LLMClientRole, LLMType},
     format::{
+        claude::ClaudeFormatting,
         deepseekcoder::DeepSeekCoderFormatting,
         llama70b::CodeLLama70BInstructFormatting,
         mistral::MistralInstructFormatting,
@@ -57,7 +58,7 @@ impl LLMTokenizer {
             tokenizers: HashMap::new(),
             formatters: HashMap::new(),
         };
-        let updated_tokenizer = tokenizer
+        let mut updated_tokenizer = tokenizer
             .add_llm_type(
                 LLMType::Mixtral,
                 Box::new(MixtralInstructFormatting::new()?),
@@ -89,7 +90,9 @@ impl LLMTokenizer {
             .add_llm_type(
                 LLMType::DeepSeekCoder33BInstruct,
                 Box::new(DeepSeekCoderFormatting::new()),
-            );
+            )
+            .add_llm_type(LLMType::ClaudeOpus, Box::new(ClaudeFormatting::new()))
+            .add_llm_type(LLMType::ClaudeSonnet, Box::new(ClaudeFormatting::new()));
         Ok(updated_tokenizer)
     }
 
@@ -291,6 +294,10 @@ impl LLMTokenizer {
             }
             LLMType::DeepSeekCoder33BInstruct => {
                 let config = include_str!("configs/deepseekcoder.json");
+                Some(Tokenizer::from_str(config)?)
+            }
+            LLMType::ClaudeOpus | LLMType::ClaudeSonnet => {
+                let config = include_str!("configs/claude.json");
                 Some(Tokenizer::from_str(config)?)
             }
             _ => None,

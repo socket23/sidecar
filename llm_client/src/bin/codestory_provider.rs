@@ -15,7 +15,7 @@ async fn main() {
     let codestory_client = CodeStoryClient::new("http://localhost:8080");
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let request = LLMClientCompletionRequest::new(
-        LLMType::ClaudeOpus,
+        LLMType::Gpt4,
         vec![
             LLMClientMessage::system("you are a python expert".to_owned()),
             LLMClientMessage::user("Can you write 1 to 300 in a new line for me".to_owned()),

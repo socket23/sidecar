@@ -45,9 +45,11 @@ impl RepoRef {
     pub fn new(backend: Backend, name: &(impl AsRef<str> + ?Sized)) -> Result<Self, RepoError> {
         let path = Path::new(name.as_ref());
 
-        if !path.is_absolute() {
-            return Err(RepoError::NonAbsoluteLocal);
-        }
+        // disabling this for now, it should start working later on
+        // but on windows this check might not be valid
+        // if !path.is_absolute() {
+        //     return Err(RepoError::NonAbsoluteLocal);
+        // }
 
         for component in path.components() {
             use std::path::Component::*;
@@ -121,7 +123,7 @@ impl FromStr for RepoRef {
     type Err = RepoError;
 
     fn from_str(refstr: &str) -> Result<Self, Self::Err> {
-        match refstr.trim_start_matches('/').split_once('/') {
+        match dbg!(refstr.trim_start_matches('/').split_once('/')) {
             // // github.com/...
             // Some(("github.com", name)) => RepoRef::new(Backend::Github, name),
             // local/...
@@ -258,4 +260,17 @@ fn get_unix_time(time: SystemTime) -> u64 {
     time.duration_since(SystemTime::UNIX_EPOCH)
         .expect("system time error")
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::RepoRef;
+
+    #[test]
+    fn test_repo_ref_parsing_windows() {
+        let repo_ref = RepoRef::from_str("local/c:\\Users\\someone\\pifuhd");
+        assert!(repo_ref.is_ok());
+    }
 }

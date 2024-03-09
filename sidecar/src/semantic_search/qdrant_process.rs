@@ -5,6 +5,7 @@ use std::env;
 use std::fs::write;
 use std::path::Path;
 use std::{fs::create_dir_all, process::Child};
+use sysinfo::System;
 
 use anyhow::Result;
 use tracing::info;
@@ -31,6 +32,7 @@ impl QdrantServerProcess {
     pub async fn initialize(configuration: &Configuration) -> Result<Self> {
         let qdrant_location = configuration.qdrant_storage();
         let qd_config_dir = qdrant_location.join("config");
+        QdrantServerProcess::kill_running_process();
         // Create the directory if it does not exist
         create_dir_all(&qd_config_dir).unwrap();
 
@@ -58,6 +60,24 @@ impl QdrantServerProcess {
         info!("qdrant process started");
 
         Ok(Self { child })
+    }
+
+    fn kill_running_process() {
+        let os = env::consts::OS;
+        if os == "windows" {
+            let mut system = System::new();
+            system.refresh_processes();
+            let process_name = "qdrant.exe";
+
+            let processes = system.processes_by_name(process_name);
+
+            // force kill the qdrant process
+            processes.into_iter().for_each(|process| {
+                dbg!("killing process", process.name());
+                process.kill_with(sysinfo::Signal::Kill);
+                dbg!("killed with SIGKILL", process.name());
+            })
+        }
     }
 }
 

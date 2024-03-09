@@ -129,6 +129,7 @@ pub fn generate_sidecar_diff(
         &DiffOptions::default(),
         &[],
     );
+    dbg!(&diff_result);
     crate::display::side_by_side::print(
         diff_result.hunks.as_slice(),
         &display_options,
@@ -763,7 +764,6 @@ fn diff_directories<'a>(
 }
 
 fn print_diff_result(display_options: &DisplayOptions, summary: &DiffResult) {
-    dbg!(&summary.hunks);
     match (&summary.lhs_src, &summary.rhs_src) {
         (FileContent::Text(lhs_src), FileContent::Text(rhs_src)) => {
             let hunks = &summary.hunks;

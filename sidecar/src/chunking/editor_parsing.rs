@@ -6,6 +6,7 @@ use tracing::debug;
 use crate::repo::types::RepoRef;
 
 use super::{
+    go::go_language_config,
     javascript::javascript_language_config,
     languages::TSLanguageConfig,
     python::python_language_config,
@@ -31,6 +32,7 @@ impl Default for EditorParsing {
                 javascript_language_config(),
                 typescript_language_config(),
                 python_language_config(),
+                go_language_config(),
             ],
         }
     }

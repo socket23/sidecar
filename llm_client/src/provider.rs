@@ -38,7 +38,7 @@ pub enum LLMProviderAPIKeys {
     Ollama(OllamaProvider),
     OpenAIAzureConfig(AzureConfig),
     LMStudio(LMStudioConfig),
-    OpenAICompatible(OpenAIComptaibleConfig),
+    OpenAICompatible(OpenAICompatibleConfig),
     CodeStory,
     Anthropic(AnthropicAPIKey),
 }
@@ -166,7 +166,7 @@ impl AnthropicAPIKey {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct OpenAIComptaibleConfig {
+pub struct OpenAICompatibleConfig {
     pub api_key: String,
     pub api_base: String,
 }

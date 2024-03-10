@@ -10,6 +10,7 @@ pub struct FunctionNodeInformation {
     return_type: String,
     documentation: Option<String>,
     variables: Vec<(String, Range)>,
+    class_name: Option<String>,
 }
 
 impl FunctionNodeInformation {
@@ -33,8 +34,16 @@ impl FunctionNodeInformation {
         self.variables.push((variable_name, variable_range));
     }
 
+    pub fn set_class_name(&mut self, class_name: String) {
+        self.class_name = Some(class_name);
+    }
+
     pub fn set_documentation(&mut self, documentation: String) {
         self.documentation = Some(documentation);
+    }
+
+    pub fn get_class_name(&self) -> Option<&str> {
+        self.class_name.as_deref()
     }
 
     pub fn get_name(&self) -> &str {
@@ -183,6 +192,8 @@ pub enum FunctionNodeType {
     Parameters,
     // The return type of the function
     ReturnType,
+    // Class name
+    ClassName,
 }
 
 impl FunctionNodeType {
@@ -193,6 +204,7 @@ impl FunctionNodeType {
             "function" => Some(Self::Function),
             "parameters" => Some(Self::Parameters),
             "return_type" => Some(Self::ReturnType),
+            "class.function.name" => Some(Self::ClassName),
             _ => None,
         }
     }
@@ -216,6 +228,13 @@ impl FunctionInformation {
 
     pub fn name(&self) -> Option<&str> {
         self.node_information.as_ref().map(|info| info.get_name())
+    }
+
+    pub fn class_name(&self) -> Option<&str> {
+        self.node_information
+            .as_ref()
+            .map(|info| info.get_class_name())
+            .flatten()
     }
 
     pub fn get_node_information(&self) -> Option<&FunctionNodeInformation> {

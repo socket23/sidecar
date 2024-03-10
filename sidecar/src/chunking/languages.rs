@@ -361,9 +361,13 @@ impl TSLanguageConfig {
             let mut functions = Vec::new();
 
             for (i, function) in function_ranges.iter().enumerate() {
-                if function.range().start_byte() >= class.range().start_byte()
+                if (function.range().start_byte() >= class.range().start_byte()
                     && function.range().end_byte() <= class.range().end_byte()
-                    && function.get_node_information().is_some()
+                    && function.get_node_information().is_some())
+                    || function
+                        .class_name()
+                        .map(|func_class_name| func_class_name == class.get_name())
+                        .unwrap_or(false)
                 {
                     functions.push(function.clone());
                     added_functions[i] = true; // Mark function as added
@@ -910,6 +914,13 @@ impl TSLanguageConfig {
                         } else {
                             "".to_owned()
                         });
+                    }
+                    &FunctionNodeType::ClassName => {
+                        function_node_information.set_class_name(get_string_from_bytes(
+                            &source_code_vec,
+                            function_nodes[end_index].range().start_byte(),
+                            function_nodes[end_index].range().end_byte(),
+                        ))
                     }
                     _ => {}
                 }

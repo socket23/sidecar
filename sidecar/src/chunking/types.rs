@@ -75,6 +75,8 @@ pub enum OutlineNodeType {
     FunctionName,
     // the body of the function
     FunctionBody,
+    // function class name
+    FunctionClassName,
 }
 
 impl OutlineNodeType {
@@ -85,6 +87,7 @@ impl OutlineNodeType {
             "definition.function" | "definition.method" => Some(Self::Function),
             "function.name" => Some(Self::FunctionName),
             "function.body" => Some(Self::FunctionBody),
+            "class.function.name" => Some(Self::FunctionClassName),
             _ => None,
         }
     }
@@ -131,6 +134,14 @@ impl OutlineNode {
             children,
             language,
         }
+    }
+
+    pub fn children_len(&self) -> usize {
+        self.children.len()
+    }
+
+    pub fn add_children(&mut self, mut children: Vec<OutlineNodeContent>) {
+        self.children.append(&mut children);
     }
 
     pub fn range(&self) -> &Range {

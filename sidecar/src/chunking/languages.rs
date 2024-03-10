@@ -8,6 +8,7 @@ use tree_sitter::Tree;
 use crate::chunking::types::FunctionNodeInformation;
 
 use super::{
+    go::go_language_config,
     javascript::javascript_language_config,
     python::python_language_config,
     rust::rust_language_config,
@@ -174,6 +175,8 @@ impl TSLanguageConfig {
 
         let mut start_index = 0;
         let source_code_vec = source_code.to_vec();
+        let mut independent_functions_for_class: HashMap<String, Vec<OutlineNodeContent>> =
+            Default::default();
         while start_index < outline_nodes.len() {
             // cheap clone so this is fine
             let (outline_node_type, outline_range) = outline_nodes[start_index].clone();
@@ -185,6 +188,7 @@ impl TSLanguageConfig {
                     let mut class_name = None;
                     let mut function_range = None;
                     let mut function_name = None;
+                    let mut function_class_name = None;
                     let mut children = vec![];
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
@@ -213,23 +217,52 @@ impl TSLanguageConfig {
                                     function_name = Some(current_function_name);
                                 }
                             }
+                            OutlineNodeType::FunctionClassName => {
+                                if let Some(_) = function_range {
+                                    let current_function_class_name = get_string_from_bytes(
+                                        &source_code_vec,
+                                        child_range.start_byte(),
+                                        child_range.end_byte(),
+                                    );
+                                    function_class_name = Some(current_function_class_name);
+                                }
+                            }
                             OutlineNodeType::FunctionBody => {
                                 if let (Some(function_range), Some(function_name)) =
                                     (function_range, function_name)
                                 {
-                                    children.push(OutlineNodeContent::new(
-                                        function_name,
-                                        function_range,
-                                        OutlineNodeType::Function,
-                                        get_string_from_bytes(
-                                            &source_code_vec,
-                                            function_range.start_byte(),
-                                            // -1 here is not perfect we should
-                                            // figure out this per language
-                                            child_range.start_byte() - 1,
-                                        ),
-                                    ));
+                                    if let Some(function_class_name) = function_class_name {
+                                        let mut class_functions = independent_functions_for_class
+                                            .entry(function_class_name)
+                                            .or_insert_with(|| vec![]);
+                                        class_functions.push(OutlineNodeContent::new(
+                                            function_name,
+                                            function_range,
+                                            OutlineNodeType::Function,
+                                            get_string_from_bytes(
+                                                &source_code_vec,
+                                                function_range.start_byte(),
+                                                // -1 here is not perfect we should
+                                                // figure out this per language
+                                                child_range.start_byte() - 1,
+                                            ),
+                                        ));
+                                    } else {
+                                        children.push(OutlineNodeContent::new(
+                                            function_name,
+                                            function_range,
+                                            OutlineNodeType::Function,
+                                            get_string_from_bytes(
+                                                &source_code_vec,
+                                                function_range.start_byte(),
+                                                // -1 here is not perfect we should
+                                                // figure out this per language
+                                                child_range.start_byte() - 1,
+                                            ),
+                                        ));
+                                    }
                                 }
+                                function_class_name = None;
                                 function_range = None;
                                 function_name = None;
                             }
@@ -261,6 +294,7 @@ impl TSLanguageConfig {
                     // next node which is a function name
                     let mut end_index = start_index + 1;
                     let mut function_name: Option<String> = None;
+                    let mut function_class_name: Option<String> = None;
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
                         if let OutlineNodeType::FunctionName = child_node_type {
@@ -270,10 +304,20 @@ impl TSLanguageConfig {
                                 child_range.end_byte(),
                             ));
                             end_index = end_index + 1;
+                        } else if let OutlineNodeType::FunctionClassName = child_node_type {
+                            function_class_name = Some(get_string_from_bytes(
+                                &source_code_vec,
+                                child_range.start_byte(),
+                                child_range.end_byte(),
+                            ));
+                            end_index = end_index + 1;
                         } else if let OutlineNodeType::FunctionBody = child_node_type {
                             if let Some(ref function_name) = function_name {
-                                compressed_outline.push(OutlineNode::new(
-                                    OutlineNodeContent::new(
+                                if let Some(ref function_class_name) = function_class_name {
+                                    let class_functions = independent_functions_for_class
+                                        .entry(function_class_name.to_owned())
+                                        .or_insert_with(|| vec![]);
+                                    class_functions.push(OutlineNodeContent::new(
                                         function_name.to_owned(),
                                         outline_range,
                                         OutlineNodeType::Function,
@@ -285,10 +329,26 @@ impl TSLanguageConfig {
                                             // figure out how to handle this properly
                                             child_range.start_byte() - 1,
                                         ),
-                                    ),
-                                    vec![],
-                                    self.language_str.to_owned(),
-                                ));
+                                    ));
+                                } else {
+                                    compressed_outline.push(OutlineNode::new(
+                                        OutlineNodeContent::new(
+                                            function_name.to_owned(),
+                                            outline_range,
+                                            OutlineNodeType::Function,
+                                            get_string_from_bytes(
+                                                &source_code_vec,
+                                                outline_range.start_byte(),
+                                                // -1 here is not perfect, this might
+                                                // not work for python for example, we should
+                                                // figure out how to handle this properly
+                                                child_range.start_byte() - 1,
+                                            ),
+                                        ),
+                                        vec![],
+                                        self.language_str.to_owned(),
+                                    ));
+                                }
                             }
                             end_index = end_index + 1;
                         } else {
@@ -309,9 +369,30 @@ impl TSLanguageConfig {
                     start_index = start_index + 1;
                     // If the outline is just a function body, then we are totally fucked :)
                 }
+                OutlineNodeType::FunctionClassName => {
+                    start_index = start_index + 1;
+                    // If the outline is just a function class name, then we are totally fucked :)
+                }
             }
         }
+
+        // Now at the very end we check for our map which contains functions which might be
+        // part of the class because they say so and we want to inlcude them as children
         compressed_outline
+            .into_iter()
+            .map(|mut outline_node| {
+                if !outline_node.is_class() {
+                    outline_node
+                } else {
+                    let relevant_children =
+                        independent_functions_for_class.remove(outline_node.name());
+                    if let Some(relevant_children) = relevant_children {
+                        outline_node.add_children(relevant_children);
+                    }
+                    outline_node
+                }
+            })
+            .collect()
     }
 
     pub fn generate_identifier_nodes(
@@ -1020,6 +1101,7 @@ impl TSLanguageParsing {
                 typescript_language_config(),
                 rust_language_config(),
                 python_language_config(),
+                go_language_config(),
             ],
         }
     }
@@ -2762,5 +2844,37 @@ trait SomethingTrait {
         let file_symbols = ts_language_config.generate_file_symbols(source_code.as_bytes());
         dbg!(&file_symbols);
         assert!(false);
+    }
+
+    #[test]
+    fn test_parsing_go_code_for_outline() {
+        let source_code = r#"
+        type Person struct {
+            Name string
+            Age  int
+        }
+        
+        func createPerson(name string, age int) Person {
+            return Person{Name: name, Age: age}
+        }
+
+        func (c *Person) AreaSomething() float64 {
+            return math.Pi * c.Radius * c.Radius
+        }
+        "#;
+        let language = "go";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("to be present");
+        let mut parser = Parser::new();
+        let grammar = ts_language_config.grammar;
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let outlines = ts_language_config.generate_outline(source_code.as_bytes(), &tree);
+        // we have 1 function in the type
+
+        assert_eq!(outlines[0].children_len(), 1);
+        assert_eq!(outlines.len(), 2);
     }
 }

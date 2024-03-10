@@ -17,8 +17,7 @@ pub fn go_language_config() -> TSLanguageConfig {
         .into_iter()
         .map(|s| s.to_owned())
         .collect()],
-        documentation_query: vec!["((comment) @comment
-            (#match? @comment \"^//\")) @docComment"
+        documentation_query: vec!["((comment) @comment) @docComment"
             .to_owned()],
         function_query: vec!["[(function_declaration
             name: (identifier) @identifier
@@ -35,7 +34,7 @@ pub fn go_language_config() -> TSLanguageConfig {
             receiver: (parameter_list
               (parameter_declaration
                 name: (identifier) @receiver_name
-                type: (type_identifier) @receiver_type
+                type: (type_identifier) @class.function.name
               )
             )
             name: (field_identifier) @method_name
@@ -50,7 +49,7 @@ pub fn go_language_config() -> TSLanguageConfig {
             receiver: (parameter_list
               (parameter_declaration
                 name: (identifier) @receiver_name
-                type: ((pointer_type (type_identifier) @type_identifier))
+                type: ((pointer_type (type_identifier) @class.function.name))
               )
             )
             name: (field_identifier) @method_name

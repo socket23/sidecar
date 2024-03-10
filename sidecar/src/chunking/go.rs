@@ -1,7 +1,7 @@
 use crate::chunking::languages::TSLanguageConfig;
 pub fn go_language_config() -> TSLanguageConfig {
     TSLanguageConfig {
-        language_ids: &["Go"],
+        language_ids: &["Go", "go"],
         file_extensions: &["go"],
         grammar: tree_sitter_go::language,
         namespaces: vec![vec![
@@ -39,7 +39,7 @@ pub fn go_language_config() -> TSLanguageConfig {
                 type: (type_identifier) @class.function.name
               )
             )
-            name: (field_identifier) @method_name
+            name: (field_identifier) @identifier
             parameters: (parameter_list)? @parameters
             result: (
                 (pointer_type
@@ -55,7 +55,7 @@ pub fn go_language_config() -> TSLanguageConfig {
                 type: ((pointer_type (type_identifier) @class.function.name))
               )
             )
-            name: (field_identifier) @method_name
+            name: (field_identifier) @identifier
             parameters: (parameter_list)? @parameters
             result: (
                 (pointer_type
@@ -114,12 +114,30 @@ pub fn go_language_config() -> TSLanguageConfig {
                     name: (type_identifier) @definition.class.name
                 )
             ) @definition.class
-            
             (method_declaration
+              receiver: (parameter_list
+                (parameter_declaration
+                  name: (identifier) @receiver_name
+                  type: ((pointer_type (type_identifier) @class.function.name))
+                )
+              )
                 name: (field_identifier) @function.name
                 body: (block) @function.body
             ) @definition.method
-            
+            (method_declaration
+              name: (field_identifier) @function.name
+              body: (block) @function.body
+            ) @definition.method
+            (method_declaration
+              receiver: (parameter_list
+                (parameter_declaration
+                  name: (identifier) @receiver_name
+                  type: ((pointer_type (type_identifier) @class.function.name))
+                )
+              )
+              name: (field_identifier) @function.name
+              body: (block) @function.body
+            ) @definition.method
             (function_declaration
                 name: (identifier) @function.name
                 body: (block) @function.body

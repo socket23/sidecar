@@ -72,9 +72,9 @@ impl OllamaClientRequest {
                 .collect::<Vec<_>>()
                 .join("\n"),
             model: request.model().to_ollama_model()?,
-            options: OllamaClientOptions { 
-                temperature: request.temperature(), 
-                num_predict: request.get_max_tokens() 
+            options: OllamaClientOptions {
+                temperature: request.temperature(),
+                num_predict: request.get_max_tokens(),
             },
             stream: true,
             raw: true,
@@ -88,9 +88,9 @@ impl OllamaClientRequest {
         Ok(Self {
             prompt: request.prompt().to_owned(),
             model: request.model().to_ollama_model()?,
-            options: OllamaClientOptions { 
-                temperature: request.temperature(), 
-                num_predict: request.get_max_tokens() 
+            options: OllamaClientOptions {
+                temperature: request.temperature(),
+                num_predict: request.get_max_tokens(),
             },
             stream: true,
             raw: true,

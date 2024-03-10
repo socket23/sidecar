@@ -1,7 +1,7 @@
 use llm_client::clients::codestory::CodeStoryClient;
 use llm_client::clients::openai_compatible::OpenAICompatibleClient;
 use llm_client::clients::types::LLMClient;
-use llm_client::provider::OpenAIComptaibleConfig;
+use llm_client::provider::OpenAICompatibleConfig;
 use llm_client::{
     clients::{ollama::OllamaClient, types::LLMClientCompletionStringRequest},
     provider::{LLMProviderAPIKeys, OllamaProvider},
@@ -9,7 +9,7 @@ use llm_client::{
 
 #[tokio::main]
 async fn main() {
-    let api_key = LLMProviderAPIKeys::OpenAICompatible(OpenAIComptaibleConfig {
+    let api_key = LLMProviderAPIKeys::OpenAICompatible(OpenAICompatibleConfig {
         api_key: "some_key".to_owned(),
         api_base: "https://g6k8w0va7tp4p6-42424.proxy.runpod.net/v1".to_owned(),
     });

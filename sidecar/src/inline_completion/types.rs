@@ -762,73 +762,6 @@ fn walk_tree_for_errors_and_missing(cursor: &mut TreeCursor) -> (usize, usize) {
     (error, missing)
 }
 
-fn walk_tree_for_no_errors(cursor: &mut TreeCursor, inserted_range: &Range) -> bool {
-    let mut answer = true;
-    loop {
-        let node = cursor.node();
-
-        fn check_if_inside_range(start_byte: usize, end_byte: usize, inserted_byte: usize) -> bool {
-            start_byte <= inserted_byte && inserted_byte <= end_byte
-        }
-
-        fn check_if_intersects_range(
-            start_byte: usize,
-            end_byte: usize,
-            inserted_range: &Range,
-        ) -> bool {
-            check_if_inside_range(start_byte, end_byte, inserted_range.start_byte())
-                || check_if_inside_range(start_byte, end_byte, inserted_range.end_byte())
-        }
-
-        // First check if the node is in the range or
-        // the range of the node intersects with the inserted range
-        if check_if_intersects_range(
-            node.range().start_byte,
-            node.range().end_byte,
-            inserted_range,
-        ) {
-            if node.is_error() || node.is_missing() {
-                answer = false;
-                return answer;
-            }
-        }
-
-        if cursor.goto_first_child() {
-            answer = answer && walk_tree_for_no_errors(cursor, inserted_range);
-            if !answer {
-                return answer;
-            }
-            cursor.goto_parent();
-        }
-
-        if !cursor.goto_next_sibling() {
-            return answer;
-        }
-    }
-}
-
-fn check_terminating_condition_tree_sitter(
-    language_config: &TSLanguageConfig,
-    prefix: &str,
-    suffix: &str,
-    text_to_insert: &str,
-    inserted_range: &Range,
-) -> bool {
-    let final_document =
-        prefix.to_owned() + &insert_string_and_check_suffix(text_to_insert, suffix);
-    let grammar = language_config.grammar;
-    let mut parser = tree_sitter::Parser::new();
-    let _ = parser.set_language(grammar());
-    let tree = parser.parse(final_document.as_bytes(), None);
-    if let Some(tree) = tree {
-        let mut cursor = tree.walk();
-        // for termination condition we require there to be no errors
-        walk_tree_for_no_errors(&mut cursor, inserted_range)
-    } else {
-        true
-    }
-}
-
 fn check_terminating_condition_by_comparing_errors(
     language_config: &TSLanguageConfig,
     prefix: &str,
@@ -1001,4 +934,7 @@ mod tests {
         let final_text = insert_string_and_check_suffix(&text_to_insert, &suffix);
         assert_eq![final_text, "(a, b, c, d){\nconsole.log('blah');}"];
     }
+
+    #[test]
+    fn test_terminating_condition() {}
 }

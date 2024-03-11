@@ -25,6 +25,43 @@ impl DocumentLines {
         }
     }
 
+    /// Returns the content of the next non-empty line after the given position.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The starting position to search from.
+    ///
+    /// # Returns
+    ///
+    /// * `Some(String)` - The content of the next non-empty line.
+    /// * `None` - If there are no more non-empty lines after the given position.
+    pub fn next_non_empty_line(&self, position: Position) -> Option<String> {
+        // Calculate the line number of the next line
+        let next_line_number = position.line() + 1;
+
+        // If the next line number is out of bounds, return None
+        if next_line_number >= self.lines.len() {
+            return None;
+        }
+
+        // Iterate through the lines starting from the next line
+        for idx in next_line_number..self.lines.len() {
+            // Get a reference to the current line
+            let line = &self.lines[idx];
+
+            // Get the content of the current line
+            let content = &line.1;
+
+            // If the trimmed content is not empty, return it
+            if !content.trim().is_empty() {
+                return Some(content.to_owned());
+            }
+        }
+
+        // If no non-empty line was found, return None
+        None
+    }
+
     pub fn prefix_at_line(&self, position: Position) -> Result<String, InLineCompletionError> {
         let line_number = position.line();
         if line_number >= self.lines.len() {

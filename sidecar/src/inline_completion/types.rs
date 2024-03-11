@@ -201,6 +201,7 @@ pub struct FillInMiddleStreamContext {
     prefix_at_cursor_position: String,
     document_prefix: String,
     document_suffix: String,
+    next_non_empty_line: Option<String>,
     editor_parsing: Arc<EditorParsing>,
     errors: Option<FillInMiddleError>,
 }
@@ -213,6 +214,7 @@ impl FillInMiddleStreamContext {
         document_suffix: String,
         editor_parsing: Arc<EditorParsing>,
         errors: Option<FillInMiddleError>,
+        next_non_empty_line: Option<String>,
     ) -> Self {
         Self {
             file_path,
@@ -221,6 +223,7 @@ impl FillInMiddleStreamContext {
             document_suffix,
             editor_parsing,
             errors,
+            next_non_empty_line,
         }
     }
 }
@@ -451,6 +454,7 @@ impl FillInMiddleCompletionAgent {
             document_lines.document_suffix(completion_request.position)?,
             self.editor_parsing.clone(),
             errors,
+            document_lines.next_non_empty_line(completion_request.position),
         ));
 
         // Now we generate the prefix and the suffix here
@@ -559,6 +563,7 @@ impl FillInMiddleCompletionAgent {
                         either::Left(response) => Ok((
                             InlineCompletionResponse::new(
                                 vec![InlineCompletion::new(
+                                    // TODO(skcd): Remove this later on, we are testing it out over here
                                     response.answer_up_until_now().to_owned(),
                                     insert_range(
                                         completion_request.position,
@@ -892,6 +897,7 @@ mod tests {
             "something_else".to_owned(),
             Arc::new(Default::default()),
             None,
+            None,
         ));
         let inserted_text = "(blah: number) => {".to_owned();
         let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
@@ -909,6 +915,7 @@ mod tests {
             "something_else".to_owned(),
             "something_else".to_owned(),
             Arc::new(Default::default()),
+            None,
             None,
         ));
         let inserted_text = "if (blah: number) => {\nconsole.log('blah');}".to_owned();
@@ -936,5 +943,13 @@ mod tests {
     }
 
     #[test]
-    fn test_terminating_condition() {}
+    fn test_terminating_condition() {
+        let prefix = "if ".to_owned();
+        let text_to_insert = r#"(something) { do_something(); } else {do_nothing();}"#.to_owned();
+        // so the way to gate this is to first check
+        // - we need to convert the stream into a line by line stream (for processing)
+        // - and then we check if we are going out of the parent node we are currently in
+        // - also check if the next line is similar to the line already present, if thats
+        // the case then we should not be streaming anymore
+    }
 }

@@ -660,6 +660,32 @@ impl FillInMiddleCompletionAgent {
     }
 }
 
+// TODO(skcd): Figure this out properly
+fn only_reverse_brackets(line: &str) -> bool {
+    let brackets = vec![")", "]", "}", "`", "\"\"\""];
+    for char in line.trim_start().chars() {
+        let bracket_matching = brackets
+            .iter()
+            .any(|bracket| bracket.to_owned() == char.to_string());
+    }
+    false
+}
+
+// TODO(skcd): We have to fix this properly, we can use the same condition as
+// what cody/continue is doing for now
+fn immediate_terminating_condition(
+    inserted_text: String,
+    inserted_text_delta: Option<String>,
+    inserted_range: &Range,
+    context: Arc<FillInMiddleStreamContext>,
+) -> bool {
+    let next_line = context.next_non_empty_line.as_ref();
+    // We first check for brackets
+    // TODO(skcd): We need to check here if the inserted text delta matches
+    // the next line(then we should stop)
+    false
+}
+
 fn check_terminating_condition(
     inserted_text: String,
     inserted_text_delta: Option<String>,

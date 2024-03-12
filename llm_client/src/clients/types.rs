@@ -422,6 +422,10 @@ impl LLMClientCompletionResponse {
         }
     }
 
+    pub fn get_answer_up_until_now(self) -> String {
+        self.answer_up_until_now
+    }
+
     pub fn answer_up_until_now(&self) -> &str {
         &self.answer_up_until_now
     }

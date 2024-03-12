@@ -2961,6 +2961,7 @@ dependencies = [
  "anyhow",
  "async-openai",
  "async-trait",
+ "either",
  "eventsource-stream",
  "futures",
  "reqwest",
@@ -2971,6 +2972,7 @@ dependencies = [
  "tiktoken-rs",
  "tokenizers",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]

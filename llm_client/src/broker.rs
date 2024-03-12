@@ -2,9 +2,12 @@
 //! without us having to worry about the specifics, just pass in the message and the
 //! provider we take care of the rest
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
-use futures::future::Either;
+use futures::{future::Either, stream, FutureExt, StreamExt};
 use sqlx::SqlitePool;
 
 use crate::{
@@ -153,6 +156,8 @@ impl LLMBroker {
         }
     }
 
+    // TODO(skcd): Debug this part of the code later on, cause we have
+    // some bugs around here about the new line we are sending over
     pub async fn stream_string_completion_owned(
         value: Arc<Self>,
         api_key: LLMProviderAPIKeys,
@@ -160,9 +165,69 @@ impl LLMBroker {
         metadata: HashMap<String, String>,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> LLMBrokerResponse {
-        value
-            .stream_string_completion(api_key, request, metadata, sender)
-            .await
+        let (sender_channel, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let receiver_stream =
+            tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(either::Right);
+        let result = value
+            .stream_string_completion(api_key, request, metadata, sender_channel)
+            .into_stream()
+            .map(either::Left);
+        let mut final_result = None;
+        struct RunningAnswer {
+            answer_up_until_now: String,
+            running_line: String,
+        }
+        let running_line = Arc::new(Mutex::new(RunningAnswer {
+            answer_up_until_now: "".to_owned(),
+            running_line: "".to_owned(),
+        }));
+        stream::select(receiver_stream, result)
+            .map(|element| (element, running_line.clone()))
+            .for_each(|(element, running_line)| {
+                match element {
+                    either::Right(item) => {
+                        let delta = item.delta().map(|delta| delta.to_owned());
+                        let answer_until_now = item.get_answer_up_until_now();
+                        if let Ok(mut current_running_line) = running_line.lock() {
+                            if let Some(delta) = delta {
+                                current_running_line.running_line.push_str(&delta);
+                            }
+                            while let Some(new_line_index) =
+                                current_running_line.running_line.find('\n')
+                            {
+                                let line =
+                                    current_running_line.running_line[..new_line_index].to_owned();
+                                let _ = sender.send(LLMClientCompletionResponse::new(
+                                    current_running_line.answer_up_until_now.clone() + &line,
+                                    Some(line.to_owned() + "\n"),
+                                    "parsing_model".to_owned(),
+                                ));
+                                // add the new line and the \n
+                                current_running_line.answer_up_until_now.push_str(&line);
+                                current_running_line.answer_up_until_now.push_str("\n");
+
+                                // drain the running line
+                                current_running_line.running_line.drain(..=new_line_index);
+                            }
+                            current_running_line.answer_up_until_now = answer_until_now;
+                        }
+                    }
+                    either::Left(item) => {
+                        final_result = Some(item);
+                    }
+                };
+                futures::future::ready(())
+            })
+            .await;
+
+        if let Ok(current_running_line) = running_line.lock() {
+            let _ = sender.send(LLMClientCompletionResponse::new(
+                current_running_line.answer_up_until_now.to_owned(),
+                Some(current_running_line.running_line.to_owned()),
+                "parsing_model".to_owned(),
+            ));
+        }
+        final_result.ok_or(LLMClientError::FailedToGetResponse)?
     }
 
     pub async fn stream_string_completion<'a>(

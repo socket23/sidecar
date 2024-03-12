@@ -13,6 +13,8 @@ async fn main() {
     let result = embedder.embed("hello world!").unwrap();
     dbg!(result.len());
     dbg!(result);
+    dbg!(result.len());
+    dbg!(result);
 }
 
 fn init_ort_dylib() {

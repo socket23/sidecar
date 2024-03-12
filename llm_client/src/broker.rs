@@ -188,6 +188,11 @@ impl LLMBroker {
                     either::Right(item) => {
                         let delta = item.delta().map(|delta| delta.to_owned());
                         let answer_until_now = item.get_answer_up_until_now();
+                        dbg!(
+                            "sidecar.stream_string_completion_owned",
+                            &delta,
+                            &answer_until_now,
+                        );
                         if let Ok(mut current_running_line) = running_line.lock() {
                             if let Some(delta) = delta {
                                 current_running_line.running_line.push_str(&delta);
@@ -197,8 +202,17 @@ impl LLMBroker {
                             {
                                 let line =
                                     current_running_line.running_line[..new_line_index].to_owned();
+                                let mut current_answer = current_running_line
+                                    .answer_up_until_now
+                                    .clone()
+                                    .lines()
+                                    .into_iter()
+                                    .map(|line| line.to_owned())
+                                    .chain(vec![line.to_owned()])
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
                                 let _ = sender.send(LLMClientCompletionResponse::new(
-                                    current_running_line.answer_up_until_now.clone() + &line,
+                                    current_answer + "\n",
                                     Some(line.to_owned() + "\n"),
                                     "parsing_model".to_owned(),
                                 ));
@@ -209,7 +223,7 @@ impl LLMBroker {
                                 // drain the running line
                                 current_running_line.running_line.drain(..=new_line_index);
                             }
-                            current_running_line.answer_up_until_now = answer_until_now;
+                            // current_running_line.answer_up_until_now = answer_until_now;
                         }
                     }
                     either::Left(item) => {

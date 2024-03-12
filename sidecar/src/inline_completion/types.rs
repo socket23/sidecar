@@ -1,5 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures::stream::AbortHandle;
 use futures::{stream, StreamExt};
@@ -13,7 +14,7 @@ use llm_prompts::{
     answer_model::LLMAnswerModelBroker,
     fim::types::{FillInMiddleBroker, FillInMiddleRequest},
 };
-use str_distance::{str_distance, DistanceMetric};
+use str_distance::str_distance;
 use tree_sitter::TreeCursor;
 
 use crate::chunking::languages::TSLanguageConfig;
@@ -309,6 +310,7 @@ impl FillInMiddleCompletionAgent {
         &self,
         completion_request: InlineCompletionRequest,
         abort_handle: AbortHandle,
+        request_start: Instant,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<InlineCompletionResponse, InLineCompletionError>> + Send>>,
         InLineCompletionError,
@@ -540,7 +542,8 @@ impl FillInMiddleCompletionAgent {
             dbg!(
                 "inline.completion.streaming.starting",
                 request_id,
-                instant.elapsed()
+                instant.elapsed(),
+                request_start.elapsed(),
             );
 
             let merged_stream = stream::select(completion_receiver_stream, completion);
@@ -702,6 +705,7 @@ fn immediate_terminating_condition(
             // comparision between the distance
             && (((distance / next_line.trim().len()) as f32) < 0.1)
         {
+            dbg!("sidecar.inline_autocomplete.stop.next_line_similarity");
             return true;
         }
     }
@@ -723,6 +727,7 @@ fn immediate_terminating_condition(
             .into_iter()
             .all(|char| closing_brackets.contains(&char.to_string()));
         if is_next_line_closing && is_inserted_text_closing {
+            dbg!("sidecar.inline_autocomplete.stop.next_line_closing_brackets");
             return true;
         }
     }
@@ -751,6 +756,7 @@ fn immediate_terminating_condition(
         let inserted_text_indentation = indentation_at_position(&inserted_text_delta);
         let prefix_indentation = indentation_at_position(&context.prefix_at_cursor_position);
         if inserted_text_indentation < prefix_indentation {
+            dbg!("sidecar.inline_autocomplete.stop.inserted_text_indentation_less_than_prefix_indentation");
             return true;
         }
     }

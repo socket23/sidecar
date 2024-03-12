@@ -16,10 +16,13 @@ use std::{
 
 use tokio::sync::Mutex;
 
-use crate::chunking::{
-    editor_parsing::EditorParsing,
-    text_document::{Position, Range},
-    types::OutlineNode,
+use crate::{
+    chunking::{
+        editor_parsing::EditorParsing,
+        text_document::{Position, Range},
+        types::OutlineNode,
+    },
+    inline_completion::helpers::should_track_file,
 };
 
 use super::{
@@ -379,6 +382,9 @@ impl SharedState {
     }
 
     async fn add_document(&self, document_path: String, content: String, language: String) {
+        if !should_track_file(&document_path) {
+            return;
+        }
         dbg!("shared_state.add_document", &document_path);
         // First we check if the document is already present in the history
         self.track_file(document_path.to_owned()).await;

@@ -490,6 +490,7 @@ impl FillInMiddleCompletionAgent {
 
         // Now we send a request over to our provider and get a response for this
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        // convert this to a stream where we are yielding new lines
         let completion_receiver_stream =
             tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(either::Left);
         // pin_mut!(merged_stream);
@@ -564,7 +565,7 @@ impl FillInMiddleCompletionAgent {
                             InlineCompletionResponse::new(
                                 vec![InlineCompletion::new(
                                     // TODO(skcd): Remove this later on, we are testing it out over here
-                                    response.answer_up_until_now().to_owned(),
+                                    { response.answer_up_until_now().to_owned() },
                                     insert_range(
                                         completion_request.position,
                                         &document_lines,
@@ -616,6 +617,11 @@ impl FillInMiddleCompletionAgent {
                                     }
                                 }
                             }
+                            let inserted_text_delta = inline_completion_response
+                                .completions
+                                .get(0)
+                                .map(|completion| completion.delta.clone())
+                                .flatten();
                             let inserted_text = inline_completion_response
                                 .completions
                                 .get(0)
@@ -628,6 +634,7 @@ impl FillInMiddleCompletionAgent {
                                 (Some(inserted_text), Some(inserted_range)) => {
                                     if check_terminating_condition(
                                         inserted_text,
+                                        inserted_text_delta,
                                         &inserted_range,
                                         cursor_prefix.clone(),
                                     ) {
@@ -655,6 +662,7 @@ impl FillInMiddleCompletionAgent {
 
 fn check_terminating_condition(
     inserted_text: String,
+    inserted_text_delta: Option<String>,
     inserted_range: &Range,
     context: Arc<FillInMiddleStreamContext>,
 ) -> bool {
@@ -902,7 +910,7 @@ mod tests {
         let inserted_text = "(blah: number) => {".to_owned();
         let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
         assert_eq!(
-            check_terminating_condition(inserted_text, &inserted_range, context),
+            check_terminating_condition(inserted_text, None, &inserted_range, context),
             false
         );
     }
@@ -921,7 +929,7 @@ mod tests {
         let inserted_text = "if (blah: number) => {\nconsole.log('blah');}".to_owned();
         let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
         assert_eq!(
-            check_terminating_condition(inserted_text, &inserted_range, context),
+            check_terminating_condition(inserted_text, None, &inserted_range, context),
             true
         );
     }

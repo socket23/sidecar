@@ -565,7 +565,7 @@ impl FillInMiddleCompletionAgent {
                             InlineCompletionResponse::new(
                                 vec![InlineCompletion::new(
                                     // TODO(skcd): Remove this later on, we are testing it out over here
-                                    { response.answer_up_until_now().to_owned() },
+                                    response.answer_up_until_now().to_owned(),
                                     insert_range(
                                         completion_request.position,
                                         &document_lines,

@@ -11,9 +11,6 @@ async fn main() {
     // Checking that the embedding logic is also working
     let embedder = LocalEmbedder::new(&current_path.join("models/all-MiniLM-L6-v2/")).unwrap();
     let result = embedder.embed("hello world!").unwrap();
-    dbg!(result.len());
-    dbg!(result);
-    dbg!(result.len());
     dbg!(result);
 }
 

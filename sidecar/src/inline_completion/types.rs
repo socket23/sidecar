@@ -13,6 +13,7 @@ use llm_prompts::{
     answer_model::LLMAnswerModelBroker,
     fim::types::{FillInMiddleBroker, FillInMiddleRequest},
 };
+use str_distance::{str_distance, DistanceMetric};
 use tree_sitter::TreeCursor;
 
 use crate::chunking::languages::TSLanguageConfig;
@@ -632,7 +633,8 @@ impl FillInMiddleCompletionAgent {
                                 .map(|completion| completion.insert_range.clone());
                             match (inserted_text, inserted_range) {
                                 (Some(inserted_text), Some(inserted_range)) => {
-                                    if check_terminating_condition(
+                                    // we go for immediate termination now
+                                    if immediate_terminating_condition(
                                         inserted_text,
                                         inserted_text_delta,
                                         &inserted_range,
@@ -641,8 +643,10 @@ impl FillInMiddleCompletionAgent {
                                         if let Ok(mut value) = should_end_stream.lock() {
                                             *value = true;
                                         }
+                                        futures::future::ready(false)
+                                    } else {
+                                        futures::future::ready(true)
                                     }
-                                    futures::future::ready(true)
                                 }
                                 _ => futures::future::ready(true),
                             }
@@ -660,15 +664,20 @@ impl FillInMiddleCompletionAgent {
     }
 }
 
-// TODO(skcd): Figure this out properly
-fn only_reverse_brackets(line: &str) -> bool {
-    let brackets = vec![")", "]", "}", "`", "\"\"\""];
-    for char in line.trim_start().chars() {
-        let bracket_matching = brackets
-            .iter()
-            .any(|bracket| bracket.to_owned() == char.to_string());
+fn indentation_at_position(line_content: &str) -> usize {
+    let mut indentation = 0;
+    // indentation is consistent so we do not have to worry about counting
+    // the spaces which tabs will take
+    for c in line_content.chars() {
+        if c == ' ' {
+            indentation += 1;
+        } else if c == '\t' {
+            indentation += 1;
+        } else {
+            break;
+        }
     }
-    false
+    indentation
 }
 
 // TODO(skcd): We have to fix this properly, we can use the same condition as
@@ -680,9 +689,72 @@ fn immediate_terminating_condition(
     context: Arc<FillInMiddleStreamContext>,
 ) -> bool {
     let next_line = context.next_non_empty_line.as_ref();
-    // We first check for brackets
-    // TODO(skcd): We need to check here if the inserted text delta matches
-    // the next line(then we should stop)
+    // First we check if the next line is similar to the line we are going to insert
+    // if that's the case, then we CAN STOP
+    if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
+        let distance: usize = *str_distance(
+            next_line,
+            inserted_text.trim(),
+            str_distance::Levenshtein::default(),
+        );
+        if inserted_text.len() > 4
+            && next_line.len() > 4
+            // comparision between the distance
+            && (((distance / next_line.trim().len()) as f32) < 0.1)
+        {
+            return true;
+        }
+    }
+
+    // Next we check if this is a closing bracket condition
+    let closing_brackets = vec![")", "]", "}", "`", "\"\"\"", ";"]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect::<Vec<String>>();
+
+    // We check if the next line is completely closing bracket types
+    if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
+        let is_next_line_closing = next_line
+            .chars()
+            .into_iter()
+            .all(|char| closing_brackets.contains(&char.to_string()));
+        let is_inserted_text_closing = inserted_text
+            .chars()
+            .into_iter()
+            .all(|char| closing_brackets.contains(&char.to_string()));
+        if is_next_line_closing && is_inserted_text_closing {
+            return true;
+        }
+    }
+
+    // check if the next line is a prefix of the inserted line, this can happen
+    // when we are inserting )}; kind of values and the editor already has )}
+    if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
+        if inserted_text.starts_with(next_line) {
+            return true;
+        }
+    }
+
+    // Check if the indentation of the inserted text is greater than the line we are on
+    // if that's the case, then we should not be inserting it and stop, we are going out
+    // of bounds
+    // The reason here is that we need the whole line and not just the prefix of the
+    // inserted text, since it can be partial, so we grab that as well and figure out
+    // the line
+    // check if this is the same line as the cursor position, then its okay to always include this
+    // and skip the indentaiton check
+    if let Some(inserted_text_delta) = inserted_text_delta.as_ref() {
+        // early failsafe when the inserted text is a prefix for the inserted text delta
+        if inserted_text.starts_with(inserted_text_delta) {
+            return false;
+        }
+        let inserted_text_indentation = indentation_at_position(&inserted_text_delta);
+        let prefix_indentation = indentation_at_position(&context.prefix_at_cursor_position);
+        if inserted_text_indentation < prefix_indentation {
+            return true;
+        }
+    }
+
     false
 }
 

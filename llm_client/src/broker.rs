@@ -188,11 +188,6 @@ impl LLMBroker {
                     either::Right(item) => {
                         let delta = item.delta().map(|delta| delta.to_owned());
                         let answer_until_now = item.get_answer_up_until_now();
-                        dbg!(
-                            "sidecar.stream_string_completion_owned",
-                            &delta,
-                            &answer_until_now,
-                        );
                         if let Ok(mut current_running_line) = running_line.lock() {
                             if let Some(delta) = delta {
                                 current_running_line.running_line.push_str(&delta);

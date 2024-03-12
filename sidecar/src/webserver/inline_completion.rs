@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use axum::{
     response::{sse, IntoResponse, Sse},
@@ -88,6 +88,7 @@ pub async fn inline_completion(
     info!(event_name = "inline_completion", id = &id,);
     info!(mode_config = ?model_config);
     dbg!("sidecar.inline_completion.webserver.start");
+    let request_start = Instant::now();
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let symbol_tracker = app.symbol_tracker.clone();
     let abort_request = fill_in_middle_state.insert(id.clone());
@@ -121,6 +122,7 @@ pub async fn inline_completion(
                 type_identifiers,
             },
             abort_request.handle().clone(),
+            request_start,
         )
         .await
         .map_err(|_e| anyhow::anyhow!("error when generating inline completion"))?;

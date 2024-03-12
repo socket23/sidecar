@@ -139,3 +139,13 @@ pub fn fix_model_for_sidecar_provider(
         fast_model
     }
 }
+
+pub fn should_track_file(document_path: &str) -> bool {
+    if document_path.contains(".rustup") {
+        return false;
+    }
+    if document_path.contains(".cargo") {
+        return false;
+    }
+    true
+}

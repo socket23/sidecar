@@ -332,6 +332,7 @@ pub async fn get_identifier_nodes(
     let identifier_nodes = inline_symbol_tracker
         .get_identifier_nodes(&file_path, cursor_position)
         .await;
+    dbg!("sidecar.identifier_nodes", identifier_nodes.len());
     Ok(Json(InLineCompletionIdentifierNodesResponse {
         identifier_nodes: identifier_nodes
             .into_iter()

@@ -77,7 +77,10 @@ impl ClipboardContext {
             } else {
                 string_up_until_now = string_up_until_now + &format!("\n{comment_style} {line}");
             }
-            let completion_string = format!(r#"{comment_style} Clipboard:\n{string_up_until_now}"#);
+            let completion_string = format!(
+                r#"{comment_style} Clipboard:
+{string_up_until_now}"#
+            );
             let tokens_used = tokenizer
                 // we pay the const twice here, once for copying the completion_string here and
                 // another time for sending it over

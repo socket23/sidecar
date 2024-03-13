@@ -637,18 +637,29 @@ impl FillInMiddleCompletionAgent {
                             match (inserted_text, inserted_range) {
                                 (Some(inserted_text), Some(inserted_range)) => {
                                     // we go for immediate termination now
-                                    if immediate_terminating_condition(
+                                    let terminating_condition = immediate_terminating_condition(
                                         inserted_text,
                                         inserted_text_delta,
                                         &inserted_range,
                                         cursor_prefix.clone(),
-                                    ) {
-                                        if let Ok(mut value) = should_end_stream.lock() {
-                                            *value = true;
+                                    );
+                                    dbg!("sidecar.terminating_condition", &terminating_condition);
+                                    match terminating_condition {
+                                        TerminationCondition::Immediate => {
+                                            if let Ok(mut value) = should_end_stream.lock() {
+                                                *value = true;
+                                            }
+                                            // terminate NOW
+                                            futures::future::ready(false)
                                         }
-                                        futures::future::ready(false)
-                                    } else {
-                                        futures::future::ready(true)
+                                        TerminationCondition::Next => {
+                                            if let Ok(mut value) = should_end_stream.lock() {
+                                                *value = true;
+                                            }
+                                            // terminate on next
+                                            futures::future::ready(true)
+                                        }
+                                        TerminationCondition::Not => futures::future::ready(true),
                                     }
                                 }
                                 _ => futures::future::ready(true),
@@ -683,6 +694,16 @@ fn indentation_at_position(line_content: &str) -> usize {
     indentation
 }
 
+#[derive(Debug)]
+enum TerminationCondition {
+    /// terminate the stream immediately and do not send the current line
+    Immediate,
+    /// send the current line and stop the stream after
+    Next,
+    /// we do not have to terminate
+    Not,
+}
+
 // TODO(skcd): We have to fix this properly, we can use the same condition as
 // what cody/continue is doing for now
 fn immediate_terminating_condition(
@@ -690,7 +711,7 @@ fn immediate_terminating_condition(
     inserted_text_delta: Option<String>,
     inserted_range: &Range,
     context: Arc<FillInMiddleStreamContext>,
-) -> bool {
+) -> TerminationCondition {
     let next_line = context.next_non_empty_line.as_ref();
     // First we check if the next line is similar to the line we are going to insert
     // if that's the case, then we CAN STOP
@@ -706,7 +727,7 @@ fn immediate_terminating_condition(
             && (((distance / next_line.trim().len()) as f32) < 0.1)
         {
             dbg!("sidecar.inline_autocomplete.stop.next_line_similarity");
-            return true;
+            return TerminationCondition::Immediate;
         }
     }
 
@@ -728,7 +749,7 @@ fn immediate_terminating_condition(
             .all(|char| closing_brackets.contains(&char.to_string()));
         if is_next_line_closing && is_inserted_text_closing {
             dbg!("sidecar.inline_autocomplete.stop.next_line_closing_brackets");
-            return true;
+            return TerminationCondition::Immediate;
         }
     }
 
@@ -736,7 +757,7 @@ fn immediate_terminating_condition(
     // when we are inserting )}; kind of values and the editor already has )}
     if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
         if inserted_text.starts_with(next_line) {
-            return true;
+            return TerminationCondition::Immediate;
         }
     }
 
@@ -751,17 +772,34 @@ fn immediate_terminating_condition(
     if let Some(inserted_text_delta) = inserted_text_delta.as_ref() {
         // early failsafe when the inserted text is a prefix for the inserted text delta
         if inserted_text.starts_with(inserted_text_delta) {
-            return false;
+            return TerminationCondition::Not;
         }
         let inserted_text_indentation = indentation_at_position(&inserted_text_delta);
         let prefix_indentation = indentation_at_position(&context.prefix_at_cursor_position);
         if inserted_text_indentation < prefix_indentation {
             dbg!("sidecar.inline_autocomplete.stop.inserted_text_indentation_less_than_prefix_indentation");
-            return true;
+            return TerminationCondition::Immediate;
         }
     }
 
-    false
+    // Now we are going to check if the inserted text is just ending brackets and nothing
+    // else, if that's the case we probably want to stop at this point and stop generation
+    // this will help us avoid the case where we are inserting a line after the closing
+    // brackets
+    if let Some(inserted_text_delta) = inserted_text_delta.as_ref() {
+        let is_inserted_text_closing = inserted_text_delta
+            // trim here to remove the whitespace
+            .trim()
+            .chars()
+            .into_iter()
+            .all(|char| closing_brackets.contains(&char.to_string()));
+        if is_inserted_text_closing {
+            dbg!("sidecar.inline_autocomplete.stop.inserted_text_delta_closing_brackets");
+            return TerminationCondition::Next;
+        }
+    }
+
+    TerminationCondition::Not
 }
 
 fn check_terminating_condition(

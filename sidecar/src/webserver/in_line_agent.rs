@@ -133,6 +133,27 @@ impl ProcessInEditorRequest {
         self.model_config.fast_model.clone()
     }
 
+    pub fn slow_model(&self) -> LLMType {
+        self.model_config.slow_model.clone()
+    }
+
+    /// Grabs the provider required for the fast model
+    pub fn provider_for_slow_model(&self) -> Option<&LLMProviderAPIKeys> {
+        // we first need to get the model configuration for the slow model
+        // which will give us the model and the context around it
+        let model = self.model_config.models.get(&self.model_config.slow_model);
+        if let None = model {
+            return None;
+        }
+        let model = model.expect("is_none above to hold");
+        let provider = &model.provider;
+        // get the related provider if its present
+        self.model_config
+            .providers
+            .iter()
+            .find(|p| p.key(provider).is_some())
+    }
+
     /// Grabs the provider required for the fast model
     pub fn provider_for_fast_model(&self) -> Option<&LLMProviderAPIKeys> {
         // we first need to get the model configuration for the slow model
@@ -154,6 +175,13 @@ impl ProcessInEditorRequest {
         self.model_config
             .models
             .get(&self.model_config.fast_model)
+            .map(|model_config| &model_config.provider)
+    }
+
+    pub fn provider_config_for_slow_model(&self) -> Option<&LLMProvider> {
+        self.model_config
+            .models
+            .get(&self.model_config.slow_model)
             .map(|model_config| &model_config.provider)
     }
 
@@ -218,6 +246,7 @@ pub async fn reply_to_user(
         sender,
         chat_broker,
     );
+    dbg!("sidecar.webserver.in_line_agent_stream.start");
     let result = generate_in_line_agent_stream(
         inline_agent,
         // Since we are always starting with deciding the action, lets send that

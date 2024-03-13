@@ -25,72 +25,56 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         (#match? @comment \"^\\\\/\\\\*\\\\*\")) @docComment"
             .to_owned()],
         function_query: vec!["[
-				(function
-					name: (identifier)? @identifier
-                    parameters: (formal_parameters)? @parameters
-					body: (statement_block
-                    (lexical_declaration
-                      (variable_declarator
-                        name: (identifier) @variable.name
-                        type: (type_annotation)? @variable.type
-                      )
-                    )*
-                  )? @body)
-				(function_declaration
-					name: (identifier)? @identifier
-                    parameters: (formal_parameters)? @parameters
-					body: (statement_block
-                    (lexical_declaration
-                      (variable_declarator
-                        name: (identifier) @variable.name
-                        type: (type_annotation)? @variable.type
-                      )
-                    )*
-                  )? @body)
-				(generator_function
-					name: (identifier)? @identifier
-                    parameters: (formal_parameters)? @parameters
-					body: (statement_block
-                    (lexical_declaration
-                      (variable_declarator
-                        name: (identifier) @variable.name
-                        type: (type_annotation)? @variable.type
-                      )
-                    )*
-                  )? @body)
-				(generator_function_declaration
-					name: (identifier)? @identifier
-                    parameters: (formal_parameters)? @parameters
-					body: (statement_block
-                    (lexical_declaration
-                      (variable_declarator
-                        name: (identifier) @variable.name
-                        type: (type_annotation)? @variable.type
-                      )
-                    )*
-                  )? @body)
-				(method_definition
-					name: (property_identifier)? @identifier
-                    parameters: (formal_parameters)? @parameters
-					body: (statement_block
-                    (lexical_declaration
-                      (variable_declarator
-                        name: (identifier) @variable.name
-                        type: (type_annotation)? @variable.type
-                      )
-                    )*
-                  )? @body)
-				(arrow_function
-                    parameters: (formal_parameters)? @parameters
-					body: (statement_block
-                    (lexical_declaration
-                      (variable_declarator
-                        name: (identifier) @variable.name
-                        type: (type_annotation)? @variable.type
-                      )
-                    )*
-                  )? @body)
-			] @function"
+          (function_declaration
+            name: (identifier)? @identifier
+                      parameters: (formal_parameters)? @parameters
+            body: (statement_block
+                      (lexical_declaration
+                        (variable_declarator
+                          name: (identifier) @variable.name
+                        )
+                      )*
+                    )? @body)
+          (generator_function
+            name: (identifier)? @identifier
+                      parameters: (formal_parameters)? @parameters
+            body: (statement_block
+                      (lexical_declaration
+                        (variable_declarator
+                          name: (identifier) @variable.name
+                        )
+                      )*
+                    )? @body)
+          (generator_function_declaration
+            name: (identifier)? @identifier
+                      parameters: (formal_parameters)? @parameters
+            body: (statement_block
+                      (lexical_declaration
+                        (variable_declarator
+                          name: (identifier) @variable.name
+                        )
+                      )*
+                    )? @body)
+          (method_definition
+            name: (property_identifier)? @identifier
+                      parameters: (formal_parameters)? @parameters
+            body: (statement_block
+                      (lexical_declaration
+                        (variable_declarator
+                          name: (identifier) @variable.name
+                        )
+                      )*
+                    )? @body)
+          (arrow_function
+                      parameters: (formal_parameters)? @parameters
+            body: (statement_block
+                      (lexical_declaration
+                        (variable_declarator
+                          name: (identifier) @variable.name
+                        )
+                      )*
+                    )? @body)
+        ] @function"
             .to_owned()],
         construct_types: vec![
             "program",
@@ -132,7 +116,51 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         variable_identifier_queries: vec![
             "((lexical_declaration (variable_declarator (identifier) @identifier)))".to_owned(),
         ],
-        outline_query: None,
+        outline_query: Some(
+            r#"
+        (class_declaration
+          name: (identifier) @definition.class.name
+      ) @definition.class
+  
+      (function_declaration
+          name: (identifier) @function.name
+          parameters: (formal_parameters) @function.parameters
+          body: (statement_block) @function.body
+      ) @definition.function
+  
+      (generator_function_declaration
+          name: (identifier) @function.name
+          parameters: (formal_parameters) @function.parameters
+          body: (statement_block) @function.body
+      ) @definition.function
+  
+      (method_definition
+          name: (property_identifier) @function.name
+          parameters: (formal_parameters) @function.parameters
+          body: (statement_block) @function.body
+      ) @definition.method
+  
+      (arrow_function
+          parameters: (formal_parameters) @function.parameters
+          body: (statement_block) @function.body
+      ) @definition.function
+  
+      (export_statement
+          (function_declaration
+              name: (identifier) @function.name
+              parameters: (formal_parameters) @function.parameters
+              body: (statement_block) @function.body
+          )
+      ) @definition.function
+  
+      (export_statement
+          (class_declaration
+              name: (identifier) @definition.class.name
+          )
+      ) @definition.class
+        "#
+            .to_owned(),
+        ),
         excluded_file_paths: vec![],
         language_str: "javascript".to_owned(),
     }

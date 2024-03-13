@@ -39,7 +39,7 @@ use super::{
 };
 
 const CLIPBOARD_CONTEXT: usize = 50;
-const CODEBASE_CONTEXT: usize = 1500;
+const CODEBASE_CONTEXT: usize = 1000;
 const SAME_FILE_CONTEXT: usize = 450;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]

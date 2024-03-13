@@ -320,17 +320,18 @@ impl InLineAgent {
         action: InLineAgentAction,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
     ) -> anyhow::Result<Option<InLineAgentAction>> {
+        let llm = self.editor_request.slow_model();
         match action {
             InLineAgentAction::DecideAction { query } => {
                 // If we are using OSS models we take a different route (especially
                 // for smaller models since they can't follow the commands properly)
                 info!(
                     event_name = "inline_edit_agent",
-                    is_openai = self.editor_request.fast_model().is_openai(),
-                    is_custom = self.editor_request.fast_model().is_custom(),
-                    fast_model = ?self.editor_request.fast_model(),
+                    is_openai = llm.is_openai(),
+                    is_custom = llm.is_custom(),
+                    slow_model = ?llm,
                 );
-                if !self.editor_request.fast_model().is_openai() {
+                if !llm.is_openai() {
                     let last_exchange = self.get_last_agent_message();
                     // We add that we took a action to decide what we should do next
                     last_exchange.add_agent_action(InLineAgentAction::DecideAction {
@@ -355,7 +356,7 @@ impl InLineAgent {
                     event_name = "inline_agent_decide_action_gpt",
                     query = ?query,
                 );
-                let next_action = self.decide_action(&query).await?;
+                let next_action = self.decide_action(&query, &llm).await?;
 
                 info!(event_name = "inline_agent_last_message_gpt",);
                 // Send it to the answer sender so we can show it on the frontend
@@ -379,7 +380,7 @@ impl InLineAgent {
                     self.sender.send(last_exchange.clone()).await?;
                 }
                 // and then we start generating the documentation
-                self.generate_documentation(answer_sender).await?;
+                self.generate_documentation(answer_sender, &llm).await?;
                 return Ok(None);
             }
             // For both the edit and the code we use the same functionality right
@@ -397,7 +398,7 @@ impl InLineAgent {
                     self.sender.send(last_exchange.clone()).await?;
                 }
                 // and then we start generating the edit and send it over
-                self.process_edit(answer_sender).await?;
+                self.process_edit(answer_sender, &llm).await?;
                 return Ok(None);
             }
             InLineAgentAction::Fix => {
@@ -412,7 +413,7 @@ impl InLineAgent {
                     self.sender.send(last_exchange.clone()).await?;
                 }
                 // and then we start generating the fix and send it over
-                self.process_fix(answer_sender).await?;
+                self.process_fix(answer_sender, &llm).await?;
                 return Ok(None);
             }
             _ => {
@@ -422,8 +423,13 @@ impl InLineAgent {
         }
     }
 
-    async fn decide_action(&mut self, query: &str) -> anyhow::Result<InLineAgentAction> {
-        let model = self.editor_request.fast_model();
+    async fn decide_action(
+        &mut self,
+        query: &str,
+        model: &LLMType,
+    ) -> anyhow::Result<InLineAgentAction> {
+        // Here we decide what we should do next based on the query
+        dbg!("sidecar.inline_completion.decide_action");
         let system_prompt = prompts::decide_function_to_use(query);
         let request = LLMClientCompletionRequest::from_messages(
             vec![LLMClientMessage::system(system_prompt)],
@@ -438,7 +444,7 @@ impl InLineAgent {
             ))?;
         let provider_config =
             self.editor_request
-                .provider_config_for_fast_model()
+                .provider_config_for_slow_model()
                 .ok_or(anyhow::anyhow!(
                     "No provider config found for fast model: {:?}",
                     model
@@ -467,6 +473,7 @@ impl InLineAgent {
     async fn generate_documentation(
         &mut self,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
+        model: &LLMType,
     ) -> anyhow::Result<()> {
         // Now we get to the documentation generation loop, here we want to
         // first figure out what the context of the document is which we want
@@ -508,7 +515,7 @@ impl InLineAgent {
                 state: MessageState::Errored,
                 document_symbol: None,
                 context_selection: None,
-                model: self.editor_request.fast_model(),
+                model: model.clone(),
             })?;
         } else {
             last_exchange.message_state = MessageState::StreamingAnswer;
@@ -518,36 +525,36 @@ impl InLineAgent {
                 &fs_file_path,
                 &request,
             );
-            let fast_model = self.editor_request.fast_model();
+            let slow_model = self.editor_request.slow_model();
             let self_ = &*self;
             let provider =
                 self_
                     .editor_request
-                    .provider_for_fast_model()
+                    .provider_for_slow_model()
                     .ok_or(anyhow::anyhow!(
                         "No provider found for fast model: {:?}",
-                        fast_model
+                        model
                     ))?;
-            let provider_config_fast = self_
+            let provider_config_slow = self_
                 .editor_request
-                .provider_config_for_fast_model()
+                .provider_config_for_slow_model()
                 .ok_or(anyhow::anyhow!(
                     "No provider config found for fast model: {:?}",
-                    fast_model
+                    model
                 ))?;
-            let fast_model = self_.editor_request.fast_model();
-            let answer_model = self.chat_broker.get_answer_model(&fast_model)?;
+            let answer_model = self.chat_broker.get_answer_model(&slow_model)?;
             let answer_tokens: usize = answer_model
                 .answer_tokens
                 .try_into()
                 .expect("i64 positive to usize should work");
+            dbg!("sidecar.inline_completion.generate_documentation");
             stream::iter(messages_list)
-                .map(|messages| (messages, answer_sender.clone(), fast_model.clone()))
+                .map(|messages| (messages, answer_sender.clone(), slow_model.clone()))
                 .for_each(
-                    |((doc_generation_request, document_symbol), answer_sender, fast_model)| async move {
+                    |((doc_generation_request, document_symbol), answer_sender, slow_model)| async move {
                         let prompt = self_
                             .llm_prompt_formatter
-                            .get_doc_prompt(&fast_model, doc_generation_request);
+                            .get_doc_prompt(&slow_model, doc_generation_request);
                         if let Err(_) = prompt {
                             return;
                         }
@@ -564,13 +571,13 @@ impl InLineAgent {
                                 InLinePromptResponse::Chat(chat) => {
                                     let request = LLMClientCompletionRequest::from_messages(
                                         chat,
-                                        fast_model.clone(),
+                                        slow_model.clone(),
                                     ).set_temperature(0.2)
                                     .set_max_tokens(answer_tokens);
                                     llm_broker
                                         .stream_answer(
                                             provider.clone(),
-                                            provider_config_fast.clone(),
+                                            provider_config_slow.clone(),
                                             futures::future::Either::Left(request),
                                             vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
@@ -579,7 +586,7 @@ impl InLineAgent {
                                 }
                                 InLinePromptResponse::Completion(prompt) => {
                                     let request = LLMClientCompletionStringRequest::new(
-                                        fast_model.clone(),
+                                        slow_model.clone(),
                                         prompt,
                                         0.2,
                                         None,
@@ -587,7 +594,7 @@ impl InLineAgent {
                                     llm_broker
                                         .stream_answer(
                                             provider.clone(),
-                                            provider_config_fast.clone(),
+                                            provider_config_slow.clone(),
                                             futures::future::Either::Right(request),
                                             vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
@@ -616,7 +623,7 @@ impl InLineAgent {
                                         state: Default::default(),
                                         document_symbol: Some(document_symbol.clone()),
                                         context_selection: Some(context_selection.clone()),
-                                        model: self_.editor_request.fast_model(),
+                                        model: self_.editor_request.slow_model(),
                                     });
                                 }
                                 Either::Right(_) => {}
@@ -640,6 +647,7 @@ impl InLineAgent {
     async fn process_fix(
         &mut self,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
+        model: &LLMType,
     ) -> anyhow::Result<()> {
         let fixing_range_maybe = self.application.language_parsing.get_fix_range(
             self.editor_request.source_code(),
@@ -685,8 +693,7 @@ impl InLineAgent {
             &selection_context,
             related_prompts,
         );
-        let fast_model = self.editor_request.fast_model();
-        let answer_model = self.chat_broker.get_answer_model(&fast_model)?;
+        let answer_model = self.chat_broker.get_answer_model(&model)?;
         let answer_tokens: usize = answer_model
             .answer_tokens
             .try_into()
@@ -695,7 +702,7 @@ impl InLineAgent {
         // Now we try to get the request we have to send from the inline edit broker
         let prompt = self
             .llm_prompt_formatter
-            .get_fix_prompt(&fast_model, fix_request)?;
+            .get_fix_prompt(&model, fix_request)?;
 
         // send the request to the llm client
         let (sender, receiver) =
@@ -707,21 +714,20 @@ impl InLineAgent {
             .provider_for_fast_model()
             .ok_or(anyhow::anyhow!(
                 "No provider found for fast model: {:?}",
-                fast_model
+                model
             ))?;
         let provider_config =
             self.editor_request
-                .provider_config_for_fast_model()
+                .provider_config_for_slow_model()
                 .ok_or(anyhow::anyhow!(
                     "No provider config found for fast model: {:?}",
-                    fast_model
+                    model
                 ))?;
         let answer_stream = {
             match prompt {
                 InLinePromptResponse::Chat(chat) => {
-                    let request =
-                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone())
-                            .set_max_tokens(answer_tokens);
+                    let request = LLMClientCompletionRequest::from_messages(chat, model.clone())
+                        .set_max_tokens(answer_tokens);
                     llm_broker
                         .stream_answer(
                             provider.clone(),
@@ -735,13 +741,9 @@ impl InLineAgent {
                         .into_stream()
                 }
                 InLinePromptResponse::Completion(prompt) => {
-                    let request = LLMClientCompletionStringRequest::new(
-                        fast_model.clone(),
-                        prompt,
-                        0.0,
-                        None,
-                    )
-                    .set_max_tokens(answer_tokens);
+                    let request =
+                        LLMClientCompletionStringRequest::new(model.clone(), prompt, 0.0, None)
+                            .set_max_tokens(answer_tokens);
                     llm_broker
                         .stream_answer(
                             provider.clone(),
@@ -787,7 +789,9 @@ impl InLineAgent {
     async fn process_edit(
         &mut self,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
+        model: &LLMType,
     ) -> anyhow::Result<()> {
+        dbg!("sidecar.inline_completion.process_edit");
         // Here we will try to process the edits
         // This is the current request selection range
         let selection_range = Range::new(
@@ -801,6 +805,7 @@ impl InLineAgent {
             &self.editor_request.source_code_bytes(),
             &self.editor_request.language(),
         );
+        dbg!("sidecar.function_nodes.len", &function_nodes.len());
         // Now we need to get the nodes which are just function blocks
         let mut function_blocks: Vec<_> = function_nodes
             .iter()
@@ -883,7 +888,7 @@ impl InLineAgent {
         };
 
         // which model are we going to use
-        let fast_model = self.editor_request.fast_model();
+        let slow_model = self.editor_request.slow_model();
 
         // inline edit prompt
         let inline_edit_request = self.inline_edit_request(
@@ -894,7 +899,7 @@ impl InLineAgent {
         // Now we try to get the request we have to send from the inline edit broker
         let prompt = self
             .llm_prompt_formatter
-            .get_prompt(&fast_model, inline_edit_request)?;
+            .get_prompt(&slow_model, inline_edit_request)?;
 
         // Now that we have the user-messages we can send it over the wire
         let last_exchange = self.get_last_agent_message();
@@ -907,19 +912,19 @@ impl InLineAgent {
         let llm_broker = self.get_llm_broker().clone();
         let provider = self
             .editor_request
-            .provider_for_fast_model()
+            .provider_for_slow_model()
             .ok_or(anyhow::anyhow!(
                 "No provider found for fast model: {:?}",
-                fast_model
+                slow_model
             ))?;
         let provider_config =
             self.editor_request
-                .provider_config_for_fast_model()
+                .provider_config_for_slow_model()
                 .ok_or(anyhow::anyhow!(
                     "No provider config found for fast model: {:?}",
-                    fast_model
+                    slow_model
                 ))?;
-        let answer_model = self.chat_broker.get_answer_model(&fast_model)?;
+        let answer_model = self.chat_broker.get_answer_model(&slow_model)?;
         let answer_tokens: usize = answer_model
             .answer_tokens
             .try_into()
@@ -929,7 +934,7 @@ impl InLineAgent {
             match prompt {
                 InLinePromptResponse::Chat(chat) => {
                     let request =
-                        LLMClientCompletionRequest::from_messages(chat, fast_model.clone())
+                        LLMClientCompletionRequest::from_messages(chat, slow_model.clone())
                             .set_temperature(0.2)
                             .set_max_tokens(answer_tokens);
                     llm_broker
@@ -946,7 +951,7 @@ impl InLineAgent {
                 }
                 InLinePromptResponse::Completion(prompt) => {
                     let request = LLMClientCompletionStringRequest::new(
-                        fast_model.clone(),
+                        slow_model.clone(),
                         prompt,
                         0.2,
                         None,

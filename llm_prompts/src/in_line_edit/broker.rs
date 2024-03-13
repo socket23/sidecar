@@ -64,6 +64,10 @@ impl InLineEditPromptBroker {
                 LLMType::ClaudeSonnet,
                 Box::new(AnthropicLineEditPrompt::new()),
             )
+            .insert_prompt_generator(
+                LLMType::ClaudeHaiku,
+                Box::new(AnthropicLineEditPrompt::new()),
+            )
     }
 
     pub fn insert_prompt_generator(

@@ -150,7 +150,62 @@ pub fn typescript_language_config() -> TSLanguageConfig {
             "((lexical_declaration (variable_declarator (identifier) @identifier)))"
                 .to_owned(),
         ],
-        outline_query: None,
+        outline_query: Some(r#"
+        (class_declaration
+          name: (type_identifier) @definition.class.name
+      ) @definition.class
+      
+      (abstract_class_declaration
+        name: (type_identifier)? @definition.class.name
+      ) @definition.class
+      
+      (enum_declaration
+        name: (identifier)? @definition.class.name
+      ) @definition.class
+  
+      (interface_declaration
+          name: (type_identifier) @definition.class.name
+      ) @definition.class
+  
+      (type_alias_declaration
+          name: (type_identifier) @definition.class.name
+      ) @definition.class
+  
+      (method_definition
+          name: (property_identifier) @function.name
+          body: (statement_block) @function.body
+      ) @definition.method
+  
+      (function_declaration
+          name: (identifier) @function.name
+          body: (statement_block) @function.body
+      ) @definition.function
+  
+      (export_statement
+          (function_declaration
+              name: (identifier) @function.name
+              body: (statement_block) @function.body
+          )
+      ) @definition.function
+  
+      (export_statement
+          (class_declaration
+              name: (type_identifier) @definition.class.name
+          )
+      ) @definition.class
+  
+      (export_statement
+          (interface_declaration
+              name: (type_identifier) @definition.class.name
+          )
+      ) @definition.class
+  
+      (export_statement
+          (type_alias_declaration
+              name: (type_identifier) @definition.class.name
+          )
+      ) @definition.class
+        "#.to_owned()),
         excluded_file_paths: vec![],
         language_str: "typescript".to_owned(),
     }

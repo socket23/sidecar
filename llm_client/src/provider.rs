@@ -29,6 +29,7 @@ pub enum LLMProvider {
     Azure(AzureOpenAIDeploymentId),
     OpenAICompatible,
     Anthropic,
+    FireworksAI,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -41,6 +42,7 @@ pub enum LLMProviderAPIKeys {
     OpenAICompatible(OpenAICompatibleConfig),
     CodeStory,
     Anthropic(AnthropicAPIKey),
+    FireworksAI(FireworksAPIKey),
 }
 
 impl LLMProviderAPIKeys {
@@ -64,6 +66,7 @@ impl LLMProviderAPIKeys {
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
+            LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
         }
     }
 
@@ -134,6 +137,13 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
+            LLMProvider::FireworksAI => {
+                if let LLMProviderAPIKeys::FireworksAI(api_key) = self {
+                    Some(LLMProviderAPIKeys::FireworksAI(api_key.clone()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -149,6 +159,17 @@ pub struct TogetherAIProvider {
 }
 
 impl TogetherAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FireworksAPIKey {
+    pub api_key: String,
+}
+
+impl FireworksAPIKey {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
     }

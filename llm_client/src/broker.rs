@@ -14,6 +14,7 @@ use crate::{
     clients::{
         anthropic::AnthropicClient,
         codestory::CodeStoryClient,
+        fireworks::FireworksAIClient,
         lmstudio::LMStudioClient,
         ollama::OllamaClient,
         openai::OpenAIClient,
@@ -60,6 +61,7 @@ impl LLMBroker {
                     "https://codestory-provider-dot-anton-390822.ue.r.appspot.com",
                 )),
             )
+            .add_provider(LLMProvider::FireworksAI, Box::new(FireworksAIClient::new()))
             .add_provider(LLMProvider::Anthropic, Box::new(AnthropicClient::new())))
     }
 
@@ -114,6 +116,7 @@ impl LLMBroker {
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
+            LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -257,6 +260,7 @@ impl LLMBroker {
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
+            LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

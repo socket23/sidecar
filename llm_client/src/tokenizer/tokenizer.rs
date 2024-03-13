@@ -92,7 +92,8 @@ impl LLMTokenizer {
                 Box::new(DeepSeekCoderFormatting::new()),
             )
             .add_llm_type(LLMType::ClaudeOpus, Box::new(ClaudeFormatting::new()))
-            .add_llm_type(LLMType::ClaudeSonnet, Box::new(ClaudeFormatting::new()));
+            .add_llm_type(LLMType::ClaudeSonnet, Box::new(ClaudeFormatting::new()))
+            .add_llm_type(LLMType::ClaudeHaiku, Box::new(ClaudeFormatting::new()));
         Ok(updated_tokenizer)
     }
 

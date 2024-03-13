@@ -170,6 +170,16 @@ pub const CLAUDE_SONNET: AnswerModel = AnswerModel {
     inline_completion_tokens: None,
 };
 
+pub const CLAUDE_HAIKU: AnswerModel = AnswerModel {
+    llm_type: LLMType::ClaudeHaiku,
+    // https://arc.net/l/quote/wjrntwlo
+    answer_tokens: 4096,
+    prompt_tokens_limit: 150 * 1000,
+    history_tokens_limit: 50 * 1000,
+    total_tokens: 200 * 1000,
+    inline_completion_tokens: None,
+};
+
 pub struct LLMAnswerModelBroker {
     pub models: HashMap<LLMType, AnswerModel>,
 }
@@ -194,6 +204,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(DEEPSEEK_CODER_33B)
             .add_answer_model(CLAUDE_OPUS)
             .add_answer_model(CLAUDE_SONNET)
+            .add_answer_model(CLAUDE_HAIKU)
     }
 
     fn add_answer_model(mut self, model: AnswerModel) -> Self {

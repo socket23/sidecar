@@ -1,9 +1,10 @@
 use llm_client::{
     clients::{
+        fireworks::FireworksAIClient,
         togetherai::TogetherAIClient,
         types::{LLMClient, LLMClientCompletionStringRequest, LLMType},
     },
-    provider::{LLMProviderAPIKeys, TogetherAIProvider},
+    provider::{FireworksAPIKey, LLMProviderAPIKeys, TogetherAIProvider},
 };
 
 #[tokio::main]
@@ -11,12 +12,16 @@ async fn main() {
     let api_key = LLMProviderAPIKeys::TogetherAI(TogetherAIProvider {
         api_key: "cc10d6774e67efef2004b85efdb81a3c9ba0b7682cc33d59c30834183502208d".to_owned(),
     });
+    let api_key = LLMProviderAPIKeys::FireworksAI(FireworksAPIKey {
+        api_key: "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+    });
     // let api_key = LLMProviderAPIKeys::OpenAICompatible(OpenAIComptaibleConfig {
     //     api_key: "some_key".to_owned(),
     //     api_base: "https://y2ukqtf6jeai9x-42424.proxy.runpod.net/v1".to_owned(),
     // });
     // let client = OpenAICompatibleClient::new();
-    let client = TogetherAIClient::new();
+    // let client = TogetherAIClient::new();
+    let client = FireworksAIClient::new();
     let prompt = r#"<PRE> // Path: /Users/skcd/scratch/sidecar/sidecar/src/inline_completion/context/codebase_context.rs
 //
 //

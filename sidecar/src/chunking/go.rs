@@ -30,7 +30,7 @@ pub fn go_language_config() -> TSLanguageConfig {
             )?
             body: (block) @body
           ) 
-          (method_declaration 
+          (method_declaration
             name: (field_identifier) @identifier
             parameters: (parameter_list
                 (parameter_declaration

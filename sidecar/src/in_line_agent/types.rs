@@ -1211,8 +1211,8 @@ impl InLineAgent {
         } else {
             let fs_file_path = self.editor_request.fs_file_path();
             selection_prompt.push(format!("```{language}"));
-            selection_prompt.push(format!("// FILEPATH: {fs_file_path}"));
             selection_prompt.push("// BEGIN".to_owned());
+            selection_prompt.push(format!("// FILEPATH: {fs_file_path}"));
             selection_prompt.push("// END".to_owned());
             selection_prompt.push("```".to_owned());
         }

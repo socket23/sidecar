@@ -205,6 +205,8 @@ pub enum FunctionNodeType {
     ReturnType,
     // Class name
     ClassName,
+    // Add parameter identifier nodes
+    ParameterIdentifier,
 }
 
 impl FunctionNodeType {
@@ -216,6 +218,7 @@ impl FunctionNodeType {
             "parameters" => Some(Self::Parameters),
             "return_type" => Some(Self::ReturnType),
             "class.function.name" => Some(Self::ClassName),
+            "parameter.identifier" => Some(Self::ParameterIdentifier),
             _ => None,
         }
     }

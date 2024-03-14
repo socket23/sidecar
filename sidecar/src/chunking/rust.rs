@@ -43,7 +43,7 @@ pub fn rust_language_config() -> TSLanguageConfig {
             name: (identifier)? @identifier
             parameters: (parameters
               (parameter
-                pattern: (identifier) @parameter.name
+                pattern: (identifier) @parameter.identifier
                 type: (type_identifier) @parameter.type
               )
             )? @parameters

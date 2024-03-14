@@ -134,31 +134,41 @@ pub fn javascript_language_config() -> TSLanguageConfig {
   
       (function_declaration
           name: (identifier) @function.name
-          parameters: (formal_parameters) @function.parameters
+          parameters: (formal_parameters
+            (identifier) @parameter.identifier
+          )? @function.parameters
           body: (statement_block) @function.body
       ) @definition.function
   
       (generator_function_declaration
           name: (identifier) @function.name
-          parameters: (formal_parameters) @function.parameters
+          parameters: (formal_parameters
+            (identifier) @parameter.identifier
+          )? @function.parameters
           body: (statement_block) @function.body
       ) @definition.function
   
       (method_definition
           name: (property_identifier) @function.name
-          parameters: (formal_parameters) @function.parameters
+          parameters: (formal_parameters
+            (identifier) @parameter.identifier
+          )? @function.parameters
           body: (statement_block) @function.body
       ) @definition.method
   
       (arrow_function
-          parameters: (formal_parameters) @function.parameters
-          body: (statement_block) @function.body
+        parameters: (formal_parameters
+            (identifier) @parameter.identifier
+          )? @function.parameters
+        body: (statement_block) @function.body
       ) @definition.function
   
       (export_statement
           (function_declaration
               name: (identifier) @function.name
-              parameters: (formal_parameters) @function.parameters
+              parameters: (formal_parameters
+                (identifier) @parameter.identifier
+              )? @function.parameters
               body: (statement_block) @function.body
           )
       ) @definition.function

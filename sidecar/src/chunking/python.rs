@@ -70,7 +70,13 @@ pub fn python_language_config() -> TSLanguageConfig {
     
         (function_definition
             name: (identifier) @function.name
-            parameters: (parameters) @function.parameters
+            parameters: (parameters
+                (typed_parameter
+                      (identifier) @parameters.identifier
+                      type: (type) @parameter.type
+                 )
+                 (identifier) @parameters.identifier
+            ) @function.parameters
             return_type: (type)? @function.return_type
             body: (block) @function.body
         ) @definition.function

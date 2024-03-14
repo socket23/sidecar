@@ -123,6 +123,12 @@ pub fn rust_language_config() -> TSLanguageConfig {
                       
               (function_item
                   name: (identifier) @function.name
+                  parameters: (parameters
+                    (parameter
+                      pattern: (identifier) @parameter.identifier
+                      type: (type_identifier) @parameter.type
+                    )
+                  )? @parameters
                   body: (block) @function.body) @definition.function
               
               (trait_item

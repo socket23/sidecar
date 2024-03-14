@@ -123,7 +123,7 @@ impl FromStr for RepoRef {
     type Err = RepoError;
 
     fn from_str(refstr: &str) -> Result<Self, Self::Err> {
-        match dbg!(refstr.trim_start_matches('/').split_once('/')) {
+        match refstr.trim_start_matches('/').split_once('/') {
             // // github.com/...
             // Some(("github.com", name)) => RepoRef::new(Backend::Github, name),
             // local/...

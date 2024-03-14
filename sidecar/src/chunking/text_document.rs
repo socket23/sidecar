@@ -180,6 +180,14 @@ impl Range {
         self.end_position.character
     }
 
+    pub fn get_start_position(&self) -> &Position {
+        &self.start_position
+    }
+
+    pub fn get_end_position(&self) -> &Position {
+        &self.end_position
+    }
+
     pub fn set_end_position(&mut self, position: Position) {
         self.end_position = position;
     }

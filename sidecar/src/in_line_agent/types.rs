@@ -836,10 +836,14 @@ impl InLineAgent {
         // Here we are sorting it in increasing order of start byte
         function_bodies.sort_by(|a, b| a.range().start_byte().cmp(&b.range().start_byte()));
 
-        let expanded_selection = FunctionInformation::get_expanded_selection_range(
-            function_blocks.as_slice(),
-            &selection_range,
-        );
+        let expanded_selection = if self.editor_request.exact_selection() {
+            selection_range.clone()
+        } else {
+            FunctionInformation::get_expanded_selection_range(
+                function_blocks.as_slice(),
+                &selection_range,
+            )
+        };
 
         let edit_expansion = EditExpandedSelectionRange::new(
             Range::guard_large_expansion(selection_range.clone(), expanded_selection.clone(), 30),

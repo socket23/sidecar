@@ -1,5 +1,6 @@
 pub mod editor_parsing;
 mod go;
+mod helpers;
 mod javascript;
 pub mod languages;
 mod python;

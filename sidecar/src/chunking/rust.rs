@@ -39,19 +39,24 @@ pub fn rust_language_config() -> TSLanguageConfig {
                 .to_owned(),
         ],
         function_query: vec!["[(function_item
-        	name: (identifier)? @identifier
-            parameters: (parameters)? @parameters
-            return_type: (generic_type)? @return_type
+            name: (identifier)? @identifier
+            parameters: (parameters
+              (parameter
+                pattern: (identifier) @parameter.name
+                type: (type_identifier) @parameter.type
+              )
+            )? @parameters
+            return_type: (type_identifier)? @return_type
             body: (block (let_declaration
-                pattern: (identifier) @variable.name
-              )*
-              (expression_statement
-                (assignment_expression
-                  left: (identifier) @variable.name
-                  right: (_)
-                )
-              )*) @body)
-        ] @function"
+              pattern: (identifier) @variable.name
+            )*
+            (expression_statement
+              (assignment_expression
+                left: (identifier) @variable.name
+                right: (_)
+              )
+            )*) @body)
+          ] @function"
             .to_owned()],
         construct_types: vec![
             "source_file",   // Represents the entire Rust source file.

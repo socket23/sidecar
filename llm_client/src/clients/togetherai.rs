@@ -186,12 +186,13 @@ impl LLMClient for TogetherAIClient {
         request: LLMClientCompletionStringRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
+        let original_model_name = request.model().to_string();
         let model = TogetherAIClient::model_str(request.model());
         if model.is_none() {
             return Err(LLMClientError::FailedToGetResponse);
         }
-        let model = model.expect("is_none check above to work");
         let together_ai_request = TogetherAIRequestString::from_string_request(request);
+        dbg!("sidecar.togetherai.request", &together_ai_request);
         let mut response_stream = self
             .client
             .post(self.inference_endpoint())
@@ -211,10 +212,11 @@ impl LLMClient for TogetherAIClient {
                     }
                     let value = serde_json::from_str::<TogetherAIRequestCompletion>(&event.data)?;
                     buffered_string = buffered_string + &value.choices[0].text;
+                    dbg!("sidecar.togetherai", &buffered_string);
                     sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
                         Some(value.choices[0].text.to_owned()),
-                        model.to_owned(),
+                        original_model_name.to_owned(),
                     ))?;
                 }
                 Err(e) => {
@@ -232,11 +234,11 @@ impl LLMClient for TogetherAIClient {
         request: LLMClientCompletionRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
+        let original_model_name = request.model().to_string();
         let model = TogetherAIClient::model_str(request.model());
         if model.is_none() {
             return Err(LLMClientError::FailedToGetResponse);
         }
-        let model = model.expect("is_none check above to work");
         let together_ai_request = TogetherAIRequestMessages::from_request(request);
         let mut response_stream = self
             .client
@@ -262,7 +264,7 @@ impl LLMClient for TogetherAIClient {
                         sender.send(LLMClientCompletionResponse::new(
                             buffered_string.to_owned(),
                             Some(value.choices[0].delta.content.to_owned()),
-                            model.to_owned(),
+                            original_model_name.to_owned(),
                         ))?;
                     }
                 }

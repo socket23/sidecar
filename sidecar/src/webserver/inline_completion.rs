@@ -308,6 +308,7 @@ pub struct IdentifierNodeResponse {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineCompletionIdentifierNodesResponse {
     identifier_nodes: Vec<IdentifierNodeResponse>,
+    function_parameters: Vec<IdentifierNodeResponse>,
 }
 
 impl ApiResponse for InLineCompletionIdentifierNodesResponse {}
@@ -338,7 +339,16 @@ pub async fn get_identifier_nodes(
     );
     Ok(Json(InLineCompletionIdentifierNodesResponse {
         identifier_nodes: identifier_nodes
+            .clone()
             .identifier_nodes()
+            .into_iter()
+            .map(|identifier_node| IdentifierNodeResponse {
+                name: identifier_node.0,
+                range: identifier_node.1,
+            })
+            .collect(),
+        function_parameters: identifier_nodes
+            .function_type_parameters()
             .into_iter()
             .map(|identifier_node| IdentifierNodeResponse {
                 name: identifier_node.0,

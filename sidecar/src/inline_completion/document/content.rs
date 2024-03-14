@@ -47,6 +47,10 @@ impl IdentifierNodeInformation {
     pub fn identifier_nodes(self) -> Vec<(String, Range)> {
         self.identifier_nodes
     }
+
+    pub fn function_type_parameters(self) -> Vec<(String, Range)> {
+        self.function_type_parameters
+    }
 }
 
 fn split_into_words(e: &str) -> Vec<String> {

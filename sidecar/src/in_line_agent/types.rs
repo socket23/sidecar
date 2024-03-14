@@ -776,7 +776,7 @@ impl InLineAgent {
                         state: Default::default(),
                         document_symbol: Some(document_symbol.clone()),
                         context_selection: Some(context_selection.clone()),
-                        model: self.editor_request.fast_model(),
+                        model: self.editor_request.slow_model(),
                     });
                 }
                 Either::Right(_) => {}
@@ -991,7 +991,7 @@ impl InLineAgent {
                         state: Default::default(),
                         document_symbol: Some(document_symbol.clone()),
                         context_selection: Some(selection_context.clone()),
-                        model: self.editor_request.fast_model(),
+                        model: self.editor_request.slow_model(),
                     });
                 }
                 Either::Right(_) => {}

@@ -169,7 +169,8 @@ impl LLMClient for FireworksAIClient {
         request: LLMClientCompletionStringRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
-        let model = FireworksAIClient::model_str(request.model())
+        let original_model_str = request.model().to_string();
+        let _ = FireworksAIClient::model_str(request.model())
             .ok_or(LLMClientError::UnSupportedModel)?;
         let bearer_token = self.generate_fireworks_ai_bearer_token(api_key)?;
         let request = FireworksAIRequestString::from_string_message(request);
@@ -184,7 +185,7 @@ impl LLMClient for FireworksAIClient {
             .eventsource();
 
         let mut buffered_string = "".to_owned();
-        while let Some(event) = dbg!(response_stream.next().await) {
+        while let Some(event) = response_stream.next().await {
             match event {
                 Ok(event) => {
                     if &event.data == "[DONE]" {
@@ -195,7 +196,7 @@ impl LLMClient for FireworksAIClient {
                     sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
                         Some(value.choices[0].text.to_owned()),
-                        model.to_owned(),
+                        original_model_str.to_owned(),
                     ))?;
                 }
                 Err(e) => {
@@ -213,7 +214,8 @@ impl LLMClient for FireworksAIClient {
         request: LLMClientCompletionRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
-        let model = FireworksAIClient::model_str(request.model())
+        let original_model_str = request.model().to_string();
+        let _ = FireworksAIClient::model_str(request.model())
             .ok_or(LLMClientError::UnSupportedModel)?;
         let bearer_token = self.generate_fireworks_ai_bearer_token(api_key)?;
         let request = FireworksAIRequestChat::from_message(request);
@@ -239,7 +241,7 @@ impl LLMClient for FireworksAIClient {
                     sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
                         Some(value.choices[0].delta.content.to_owned()),
-                        model.to_owned(),
+                        original_model_str.to_owned(),
                     ))?;
                 }
                 Err(e) => {

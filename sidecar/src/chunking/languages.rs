@@ -270,6 +270,9 @@ impl TSLanguageConfig {
                             OutlineNodeType::Class => {
                                 // can not have a class inside another class
                             }
+                            OutlineNodeType::FunctionParameterIdentifier => {
+                                // we need to track this as well
+                            }
                         }
                         end_index = end_index + 1;
                     }
@@ -373,6 +376,10 @@ impl TSLanguageConfig {
                 OutlineNodeType::FunctionClassName => {
                     start_index = start_index + 1;
                     // If the outline is just a function class name, then we are totally fucked :)
+                }
+                OutlineNodeType::FunctionParameterIdentifier => {
+                    start_index = start_index + 1;
+                    // we want to track this going on
                 }
             }
         }

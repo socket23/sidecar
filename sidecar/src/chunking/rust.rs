@@ -38,6 +38,7 @@ pub fn rust_language_config() -> TSLanguageConfig {
                 (#match? @comment \"^//!\")) @moduleDocComment"
                 .to_owned(),
         ],
+        // we need to ignore the self types here in rust, cause they will also show up here
         function_query: vec!["[(function_item
             name: (identifier)? @identifier
             parameters: (parameters

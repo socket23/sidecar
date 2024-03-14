@@ -30,21 +30,12 @@ pub fn typescript_language_config() -> TSLanguageConfig {
         (#match? @comment \"^\\\\/\\\\*\\\\*\")) @docComment"
             .to_owned(), "(comment) @comment".to_owned()],
         function_query: vec!["[
-            (function
-                name: (identifier)? @identifier
-                parameters: (formal_parameters)? @parameters
-                return_type: (type_annotation)? @return_type
-                body: (statement_block
-                    (lexical_declaration
-                      (variable_declarator
-                        name: (identifier) @variable.name
-                        type: (type_annotation)? @variable.type
-                      )
-                    )*
-                  )? @body)
             (function_declaration
                 name: (identifier)? @identifier
-                parameters: (formal_parameters)? @parameters
+                parameters: (formal_parameters
+                    (required_parameter
+                        pattern: (identifier) @parameter.identifier) 
+                )? @parameters
                 return_type: (type_annotation)? @return_type
                 body: (statement_block
                     (lexical_declaration
@@ -56,7 +47,10 @@ pub fn typescript_language_config() -> TSLanguageConfig {
                   )? @body)
             (generator_function
                 name: (identifier)? @identifier
-                parameters: (formal_parameters)? @parameters
+                parameters: (formal_parameters
+                    (required_parameter
+                        pattern: (identifier) @parameter.identifier) 
+                )? @parameters
                 return_type: (type_annotation)? @return_type
                 body: (statement_block
                     (lexical_declaration
@@ -68,7 +62,10 @@ pub fn typescript_language_config() -> TSLanguageConfig {
                   )? @body)
             (generator_function_declaration
                 name: (identifier)? @identifier
-                parameters: (formal_parameters)? @parameters
+                parameters: (formal_parameters
+                    (required_parameter
+                        pattern: (identifier) @parameter.identifier) 
+                )? @parameters
                 return_type: (type_annotation)? @return_type
                 body: (statement_block
                     (lexical_declaration
@@ -80,7 +77,10 @@ pub fn typescript_language_config() -> TSLanguageConfig {
                   )? @body)
             (method_definition
                 name: (property_identifier)? @identifier
-                parameters: (formal_parameters)? @parameters
+                parameters: (formal_parameters
+                    (required_parameter
+                        pattern: (identifier) @parameter.identifier) 
+                )? @parameters
                 return_type: (type_annotation)? @return_type
                 body: (statement_block
                     (lexical_declaration
@@ -99,7 +99,10 @@ pub fn typescript_language_config() -> TSLanguageConfig {
                       )
                     )*
                   )? @body
-                parameters: (formal_parameters)? @parameters
+                  parameters: (formal_parameters
+                    (required_parameter
+                        pattern: (identifier) @parameter.identifier) 
+                )? @parameters
                 return_type: (type_annotation)? @return_type)
             ] @function"
             .to_owned()],

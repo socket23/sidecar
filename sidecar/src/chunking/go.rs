@@ -20,7 +20,11 @@ pub fn go_language_config() -> TSLanguageConfig {
         documentation_query: vec!["((comment) @comment) @docComment".to_owned()],
         function_query: vec!["[(function_declaration
             name: (identifier) @identifier
-            parameters: (parameter_list)? @parameters
+            parameters: (parameter_list
+                (parameter_declaration
+                  (identifier) @parameter.identifier
+                )? @parameters
+              )
             result: (
               (type_identifier) @return_type
             )?
@@ -28,7 +32,11 @@ pub fn go_language_config() -> TSLanguageConfig {
           ) 
           (method_declaration 
             name: (field_identifier) @identifier
-            parameters: (parameter_list) @parameters
+            parameters: (parameter_list
+                (parameter_declaration
+                  (identifier) @parameter.identifier
+                )? @parameters
+              )
             result: (type_identifier) @result_type
             body: (block) @body
           )
@@ -40,7 +48,11 @@ pub fn go_language_config() -> TSLanguageConfig {
               )
             )
             name: (field_identifier) @identifier
-            parameters: (parameter_list)? @parameters
+            parameters: (parameter_list
+                (parameter_declaration
+                  (identifier) @parameter.identifier
+                )? @parameters
+              )
             result: (
                 (pointer_type
                   (type_identifier) @return_type
@@ -56,7 +68,11 @@ pub fn go_language_config() -> TSLanguageConfig {
               )
             )
             name: (field_identifier) @identifier
-            parameters: (parameter_list)? @parameters
+            parameters: (parameter_list
+                (parameter_declaration
+                  (identifier) @parameter.identifier
+                )? @parameters
+              )
             result: (
                 (pointer_type
                   (type_identifier) @return_type

@@ -305,11 +305,11 @@ impl ContextParserInLineEdit {
             let mut lines: Vec<String> = vec![];
             let language = &self.language;
             lines.push(format!("```{language}"));
-            let fs_file_path = &self.fs_file_path;
-            lines.push(format!("// FILEPATH: ${fs_file_path}"));
             if should_use_markers {
                 lines.push(self.start_marker.clone());
             }
+            let fs_file_path = &self.fs_file_path;
+            lines.push(format!("// FILEPATH: {fs_file_path}"));
             lines.extend(self.lines.to_vec().into_iter());
             if should_use_markers {
                 lines.push(self.end_marker.clone());

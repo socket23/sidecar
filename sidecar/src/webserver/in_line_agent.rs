@@ -36,6 +36,7 @@ use axum::response::IntoResponse;
 pub struct SnippetInformation {
     pub start_position: Position,
     pub end_position: Position,
+    pub should_use_exact_matching: bool,
 }
 
 impl SnippetInformation {
@@ -49,6 +50,10 @@ impl SnippetInformation {
 
     pub fn set_end_byte_offset(&mut self, byte_offset: usize) {
         self.end_position.set_byte_offset(byte_offset);
+    }
+
+    pub fn exact_selection(&self) -> bool {
+        self.should_use_exact_matching
     }
 }
 
@@ -135,6 +140,10 @@ impl ProcessInEditorRequest {
 
     pub fn slow_model(&self) -> LLMType {
         self.model_config.slow_model.clone()
+    }
+
+    pub fn exact_selection(&self) -> bool {
+        self.snippet_information.exact_selection()
     }
 
     /// Grabs the provider required for the fast model

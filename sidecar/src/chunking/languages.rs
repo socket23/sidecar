@@ -9,6 +9,7 @@ use crate::chunking::types::FunctionNodeInformation;
 
 use super::{
     go::go_language_config,
+    helpers::fix_snippet_information,
     javascript::javascript_language_config,
     python::python_language_config,
     rust::rust_language_config,

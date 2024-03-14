@@ -1011,6 +1011,15 @@ impl TSLanguageConfig {
                             function_nodes[end_index].range().end_byte(),
                         ))
                     }
+                    &FunctionNodeType::ParameterIdentifier => function_node_information
+                        .add_parameter_identifier(
+                            get_string_from_bytes(
+                                &source_code_vec,
+                                function_nodes[end_index].range().start_byte(),
+                                function_nodes[end_index].range().end_byte(),
+                            ),
+                            function_nodes[end_index].range().clone(),
+                        ),
                     _ => {}
                 }
                 end_index += 1;

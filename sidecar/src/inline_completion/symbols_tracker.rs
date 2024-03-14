@@ -26,7 +26,9 @@ use crate::{
 };
 
 use super::{
-    document::content::{DocumentEditLines, SnippetInformationWithScore},
+    document::content::{
+        DocumentEditLines, IdentifierNodeInformation, SnippetInformationWithScore,
+    },
     types::TypeIdentifier,
 };
 
@@ -126,7 +128,7 @@ enum SharedStateResponse {
     FileContentResponse(Option<String>),
     GetDocumentLinesResponse(Option<Vec<SnippetInformationWithScore>>),
     FileEditedLinesResponse(Vec<usize>),
-    GetIdentifierNodesResponse(Vec<(String, Range)>),
+    GetIdentifierNodesResponse(IdentifierNodeInformation),
     GetDefinitionOutlineResponse(Vec<String>),
 }
 
@@ -354,7 +356,7 @@ impl SharedState {
         &self,
         file_path: &str,
         position: Position,
-    ) -> Vec<(String, Range)> {
+    ) -> IdentifierNodeInformation {
         {
             let mut document_lines = self.document_lines.lock().await;
             if let Some(ref mut document_lines_entry) = document_lines.get_mut(file_path) {
@@ -602,7 +604,7 @@ impl SymbolTrackerInline {
         &self,
         file_path: &str,
         position: Position,
-    ) -> Vec<(String, Range)> {
+    ) -> IdentifierNodeInformation {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let request = SharedStateRequest::GetIdentifierNodes(GetIdentifierNodesRequest {
             file_path: file_path.to_owned(),

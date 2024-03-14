@@ -11,6 +11,7 @@ pub struct FunctionNodeInformation {
     documentation: Option<String>,
     variables: Vec<(String, Range)>,
     class_name: Option<String>,
+    parameter_identifiers: Vec<(String, Range)>,
 }
 
 impl FunctionNodeInformation {
@@ -36,6 +37,11 @@ impl FunctionNodeInformation {
 
     pub fn set_class_name(&mut self, class_name: String) {
         self.class_name = Some(class_name);
+    }
+
+    pub fn add_parameter_identifier(&mut self, parameter_identifier: String, range: Range) {
+        self.parameter_identifiers
+            .push((parameter_identifier, range));
     }
 
     pub fn set_documentation(&mut self, documentation: String) {
@@ -276,6 +282,12 @@ impl FunctionInformation {
 
     pub fn get_identifier_nodes(&self) -> Option<&Vec<(String, Range)>> {
         self.node_information.as_ref().map(|info| &info.variables)
+    }
+
+    pub fn get_function_parameters(&self) -> Option<&Vec<(String, Range)>> {
+        self.node_information
+            .as_ref()
+            .map(|info| &info.parameter_identifiers)
     }
 
     pub fn range(&self) -> &Range {

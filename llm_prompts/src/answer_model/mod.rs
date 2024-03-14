@@ -3,7 +3,22 @@
 
 use std::collections::HashMap;
 
+use lazy_static::lazy_static;
 use llm_client::clients::types::LLMType;
+
+lazy_static! {
+    static ref CODE_LLAMA_STOP_WORDS: Vec<String> = vec![
+        "<PRE>".to_owned(),
+        "<SUF>".to_owned(),
+        "<MID>".to_owned(),
+        "<EOT>".to_owned(),
+    ];
+    static ref DEEPSEEK_STOP_WORDS: Vec<String> = vec![
+        "<｜end▁of▁sentence｜>".to_owned(),
+        "<｜begin▁of▁sentence｜>".to_owned(),
+        "<｜fim▁end｜>".to_owned(),
+    ];
+}
 
 #[derive(Debug)]
 pub struct AnswerModel {
@@ -22,6 +37,20 @@ pub struct AnswerModel {
 
     /// Inline completion tokens, how many are we willing to generate
     pub inline_completion_tokens: Option<i64>,
+}
+
+impl AnswerModel {
+    pub fn get_stop_words_inline_completion(&self) -> Option<Vec<String>> {
+        match self.llm_type {
+            LLMType::CodeLLama70BInstruct => Some(CODE_LLAMA_STOP_WORDS.to_vec()),
+            LLMType::CodeLlama13BInstruct => Some(CODE_LLAMA_STOP_WORDS.to_vec()),
+            LLMType::CodeLlama7BInstruct => Some(CODE_LLAMA_STOP_WORDS.to_vec()),
+            LLMType::DeepSeekCoder1_3BInstruct => Some(DEEPSEEK_STOP_WORDS.to_vec()),
+            LLMType::DeepSeekCoder6BInstruct => Some(DEEPSEEK_STOP_WORDS.to_vec()),
+            LLMType::DeepSeekCoder33BInstruct => Some(DEEPSEEK_STOP_WORDS.to_vec()),
+            _ => None,
+        }
+    }
 }
 
 // GPT-3.5-16k Turbo has 16,385 tokens

@@ -13,3 +13,4 @@ serde_json = "1.0.107"
 serde = { version = "1.0.188", features = ["derive"] }
 sqlx = { version = "0.7.2", features = ["sqlite", "migrate", "runtime-tokio-rustls", "chrono", "uuid"]}
 tokio = { version = "1.32.0", features = ["full"] }
+lazy_static = "1.4.0"

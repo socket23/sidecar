@@ -23,6 +23,32 @@ lazy_static! {
     static ref SPLITTING_WORDS: Regex = Regex::new(r"[^a-zA-Z0-9]+").unwrap();
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct IdentifierNodeInformation {
+    identifier_nodes: Vec<(String, Range)>,
+    function_type_parameters: Vec<(String, Range)>,
+}
+
+impl IdentifierNodeInformation {
+    pub fn new(
+        identifier_nodes: Vec<(String, Range)>,
+        function_type_parameters: Vec<(String, Range)>,
+    ) -> Self {
+        Self {
+            identifier_nodes,
+            function_type_parameters,
+        }
+    }
+
+    pub fn identifier_nodes_len(&self) -> usize {
+        self.identifier_nodes.len()
+    }
+
+    pub fn identifier_nodes(self) -> Vec<(String, Range)> {
+        self.identifier_nodes
+    }
+}
+
 fn split_into_words(e: &str) -> Vec<String> {
     SPLITTING_WORDS
         .split(e)
@@ -339,7 +365,7 @@ impl DocumentEditLines {
         indentation
     }
 
-    pub fn get_identifier_nodes(&self, position: Position) -> Vec<(String, Range)> {
+    pub fn get_identifier_nodes(&self, position: Position) -> IdentifierNodeInformation {
         // grab the function definition here
         let current_indentation_position = self.indentation_at_position(&position);
         let contained_function = self
@@ -350,6 +376,7 @@ impl DocumentEditLines {
             })
             .next();
         let mut identifier_nodes = vec![];
+        let mut function_parameters_nodes = vec![];
         if let Some(contained_function) = contained_function {
             contained_function
                 .get_identifier_nodes()
@@ -373,7 +400,15 @@ impl DocumentEditLines {
                 });
             // dbg!(&self.get_lines_in_range(contained_function.range()));
         }
-        identifier_nodes
+        if let Some(contained_function) = contained_function {
+            function_parameters_nodes = contained_function
+                .get_function_parameters()
+                .into_iter()
+                .map(|function_parameter| function_parameter.clone())
+                .flatten()
+                .collect::<Vec<_>>();
+        }
+        IdentifierNodeInformation::new(identifier_nodes, function_parameters_nodes)
     }
 
     fn remove_range(&mut self, range: Range) {

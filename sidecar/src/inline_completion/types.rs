@@ -170,6 +170,7 @@ impl TypeIdentifierDefinitionPosition {
 pub struct TypeIdentifier {
     node: TypeIdentifiersNode,
     type_definitions: Vec<TypeIdentifierDefinitionPosition>,
+    node_type: String,
 }
 
 impl TypeIdentifier {
@@ -179,6 +180,10 @@ impl TypeIdentifier {
 
     pub fn type_definitions(&self) -> &[TypeIdentifierDefinitionPosition] {
         self.type_definitions.as_slice()
+    }
+
+    pub fn node_type(&self) -> &str {
+        self.node_type.as_str()
     }
 }
 

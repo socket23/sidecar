@@ -342,18 +342,14 @@ impl FillInMiddleCompletionAgent {
         if let None = model_config {
             return Err(InLineCompletionError::LLMNotSupported(fast_model));
         }
-        let token_limit = model_config
-            .expect("if let None to hold")
-            .inline_completion_tokens;
+        let model_config = model_config.expect("if let None holds");
+        let token_limit = model_config.inline_completion_tokens;
         if let None = token_limit {
             return Err(InLineCompletionError::LLMNotSupported(fast_model));
         }
         let mut token_limit = token_limit.expect("if let None to hold");
 
         let document_lines = DocumentLines::from_file_content(&completion_request.text);
-
-        // what are we doing here
-        // what about now, its much faster
 
         if abort_handle.is_aborted() {
             return Err(InLineCompletionError::AbortedHandle);
@@ -504,19 +500,13 @@ impl FillInMiddleCompletionAgent {
         // pin_mut!(merged_stream);
 
         let llm_broker = self.llm_broker.clone();
+        let mut stop_words = model_config
+            .get_stop_words_inline_completion()
+            .unwrap_or_default();
         let should_end_stream = Arc::new(std::sync::Mutex::new(false));
         Ok(Box::pin({
             let cursor_prefix = cursor_prefix.clone();
             let should_end_stream = should_end_stream.clone();
-            let mut stop_words = vec![
-                "\n\n".to_owned(),
-                "```".to_owned(),
-                "<EOT>".to_owned(),
-                "</s>".to_owned(),
-                "<｜end▁of▁sentence｜>".to_owned(),
-                "<｜begin▁of▁sentence｜>".to_owned(),
-                "<step>".to_owned(),
-            ];
             if self.is_multiline {
                 stop_words.push("\n".to_owned());
             }

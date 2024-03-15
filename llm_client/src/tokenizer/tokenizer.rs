@@ -297,7 +297,7 @@ impl LLMTokenizer {
                 let config = include_str!("configs/deepseekcoder.json");
                 Some(Tokenizer::from_str(config)?)
             }
-            LLMType::ClaudeOpus | LLMType::ClaudeSonnet => {
+            LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku => {
                 let config = include_str!("configs/claude.json");
                 Some(Tokenizer::from_str(config)?)
             }

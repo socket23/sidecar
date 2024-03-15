@@ -177,6 +177,7 @@ impl CodeStoryClient {
             }
             LLMType::ClaudeOpus => Ok("claude-3-opus-20240229".to_owned()),
             LLMType::ClaudeSonnet => Ok("claude-3-sonnet-20240229".to_owned()),
+            LLMType::ClaudeHaiku => Ok("claude-3-haiku-20240307".to_owned()),
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }

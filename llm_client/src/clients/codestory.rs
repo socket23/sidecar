@@ -189,7 +189,7 @@ impl CodeStoryClient {
             LLMType::CodeLlama13BInstruct
             | LLMType::CodeLlama7BInstruct
             | LLMType::DeepSeekCoder33BInstruct => Ok(self.together_api_endpoint(&self.api_base)),
-            LLMType::ClaudeOpus | LLMType::ClaudeSonnet => {
+            LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku => {
                 Ok(self.anthropic_endpoint(&self.api_base))
             }
             _ => Err(LLMClientError::UnSupportedModel),

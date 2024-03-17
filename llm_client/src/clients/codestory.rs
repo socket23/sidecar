@@ -175,7 +175,6 @@ impl CodeStoryClient {
             LLMType::DeepSeekCoder33BInstruct => {
                 Ok("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
             }
-            LLMType::ClaudeOpus => Ok("claude-3-opus-20240229".to_owned()),
             LLMType::ClaudeSonnet => Ok("claude-3-sonnet-20240229".to_owned()),
             LLMType::ClaudeHaiku => Ok("claude-3-haiku-20240307".to_owned()),
             _ => Err(LLMClientError::UnSupportedModel),
@@ -189,7 +188,7 @@ impl CodeStoryClient {
             LLMType::CodeLlama13BInstruct
             | LLMType::CodeLlama7BInstruct
             | LLMType::DeepSeekCoder33BInstruct => Ok(self.together_api_endpoint(&self.api_base)),
-            LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku => {
+            LLMType::ClaudeSonnet | LLMType::ClaudeHaiku => {
                 Ok(self.anthropic_endpoint(&self.api_base))
             }
             _ => Err(LLMClientError::UnSupportedModel),

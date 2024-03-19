@@ -129,7 +129,6 @@ pub fn generate_sidecar_diff(
         &DiffOptions::default(),
         &[],
     );
-    dbg!(&diff_result);
     crate::display::side_by_side::print(
         diff_result.hunks.as_slice(),
         &display_options,

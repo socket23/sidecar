@@ -147,6 +147,7 @@ pub async fn file_edit(
         model_config,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!("file_editing");
     info!(event_name = "file_edit", file_path = file_path.as_str(),);
     // Here we have to first check if the new content is tree-sitter valid, if
     // thats the case only then can we apply it to the file
@@ -212,6 +213,7 @@ pub async fn file_edit(
             app.language_parsing.clone(),
         )
         .await;
+        println!("nearest range of symbols: {:?}", &nearest_range_for_symbols);
         dbg!("nearest_range_of_symbols", &nearest_range_for_symbols);
 
         // Now we apply the edits and send it over to the user

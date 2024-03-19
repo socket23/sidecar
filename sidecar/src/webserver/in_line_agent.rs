@@ -100,7 +100,6 @@ pub struct ProcessInEditorRequest {
     pub text_document_web: TextDocumentWeb,
     pub thread_id: uuid::Uuid,
     pub diagnostics_information: Option<DiagnosticInformationFromEditor>,
-    pub openai_key: Option<String>,
     pub model_config: LLMClientConfig,
 }
 
@@ -210,7 +209,6 @@ pub async fn reply_to_user(
         thread_id,
         text_document_web,
         diagnostics_information,
-        openai_key,
         model_config,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
@@ -248,7 +246,6 @@ pub async fn reply_to_user(
             text_document_web,
             thread_id,
             diagnostics_information,
-            openai_key,
             model_config,
         },
         vec![inline_agent_message],

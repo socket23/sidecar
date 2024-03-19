@@ -58,7 +58,7 @@ impl LLMTokenizer {
             tokenizers: HashMap::new(),
             formatters: HashMap::new(),
         };
-        let mut updated_tokenizer = tokenizer
+        let updated_tokenizer = tokenizer
             .add_llm_type(
                 LLMType::Mixtral,
                 Box::new(MixtralInstructFormatting::new()?),

@@ -418,7 +418,6 @@ pub struct FollowupChatRequest {
     pub user_context: UserContext,
     pub project_labels: Vec<String>,
     pub active_window_data: Option<ActiveWindowData>,
-    pub openai_key: Option<String>,
     pub model_config: LLMClientConfig,
 }
 
@@ -499,7 +498,6 @@ pub async fn followup_chat(
         user_context,
         project_labels,
         active_window_data,
-        openai_key,
         model_config,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
@@ -562,41 +560,22 @@ pub async fn followup_chat(
         paths: (0..file_path_len).collect(),
     };
 
-    let agent = if let Some(openai_user_key) = openai_key {
-        Agent::prepare_for_followup(
-            app,
-            repo_ref,
-            session_id,
-            llm_broker,
-            sql_db,
-            previous_messages,
-            sender,
-            user_context,
-            project_labels,
-            Default::default(),
-            model_config,
-            llm_tokenizer,
-            chat_broker,
-            reranker,
-        )
-    } else {
-        Agent::prepare_for_followup(
-            app,
-            repo_ref,
-            session_id,
-            llm_broker,
-            sql_db,
-            previous_messages,
-            sender,
-            user_context,
-            project_labels,
-            Default::default(),
-            model_config,
-            llm_tokenizer,
-            chat_broker,
-            reranker,
-        )
-    };
+    let agent = Agent::prepare_for_followup(
+        app,
+        repo_ref,
+        session_id,
+        llm_broker,
+        sql_db,
+        previous_messages,
+        sender,
+        user_context,
+        project_labels,
+        Default::default(),
+        model_config,
+        llm_tokenizer,
+        chat_broker,
+        reranker,
+    );
 
     generate_agent_stream(agent, action, receiver).await
 }

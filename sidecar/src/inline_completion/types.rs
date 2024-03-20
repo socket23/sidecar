@@ -320,7 +320,6 @@ impl FillInMiddleCompletionAgent {
         Pin<Box<dyn Stream<Item = Result<InlineCompletionResponse, InLineCompletionError>> + Send>>,
         InLineCompletionError,
     > {
-        let instant = std::time::Instant::now();
         let request_id = completion_request.id.to_owned();
         dbg!("inline.completion.start", &request_id);
         // Now that we have the position, we want to create the request for the fill

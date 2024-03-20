@@ -170,7 +170,14 @@ impl TypeIdentifierDefinitionPosition {
 pub struct TypeIdentifier {
     node: TypeIdentifiersNode,
     type_definitions: Vec<TypeIdentifierDefinitionPosition>,
-    node_type: String,
+    node_type: NodeType,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeType {
+    Identifier,
+    FunctionParameter,
 }
 
 impl TypeIdentifier {
@@ -180,10 +187,6 @@ impl TypeIdentifier {
 
     pub fn type_definitions(&self) -> &[TypeIdentifierDefinitionPosition] {
         self.type_definitions.as_slice()
-    }
-
-    pub fn node_type(&self) -> &str {
-        self.node_type.as_str()
     }
 }
 

@@ -158,7 +158,7 @@ impl CodeBaseContext {
                 LLMTokenizerInput::Prompt(joined_snippet_context.to_owned()),
                 // adding + 1 here for the \n at the end
             )? + 1;
-            dbg!("tokens_counte.time_taken", count_tokens_instant.elapsed());
+            dbg!("tokens_count.time_taken", count_tokens_instant.elapsed());
             total_tokens_used_by_snippets = total_tokens_used_by_snippets + current_snippet_tokens;
             running_context.push(joined_snippet_context);
             let current_context = running_context.join("\n");

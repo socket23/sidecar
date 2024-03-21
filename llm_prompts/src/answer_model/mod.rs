@@ -206,7 +206,7 @@ pub const CLAUDE_HAIKU: AnswerModel = AnswerModel {
     prompt_tokens_limit: 150 * 1000,
     history_tokens_limit: 50 * 1000,
     total_tokens: 200 * 1000,
-    inline_completion_tokens: None,
+    inline_completion_tokens: Some(2056),
 };
 
 pub struct LLMAnswerModelBroker {

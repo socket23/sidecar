@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+either = "1.9.0"
 llm_client = { path = "../llm_client" }
 thiserror = "1.0.56"
 futures = "0.3.28"

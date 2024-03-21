@@ -717,21 +717,21 @@ fn immediate_terminating_condition(
     let next_line = context.next_non_empty_line.as_ref();
     // First we check if the next line is similar to the line we are going to insert
     // if that's the case, then we CAN STOP
-    if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
-        let distance: usize = *str_distance(
-            next_line,
-            inserted_text.trim(),
-            str_distance::Levenshtein::default(),
-        );
-        if inserted_text.len() > 4
-            && next_line.len() > 4
-            // comparision between the distance
-            && (((distance / next_line.trim().len()) as f32) < 0.1)
-        {
-            dbg!("sidecar.inline_autocomplete.stop.next_line_similarity");
-            return TerminationCondition::Immediate;
-        }
-    }
+    // if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
+    //     let distance: usize = *str_distance(
+    //         next_line,
+    //         inserted_text.trim(),
+    //         str_distance::Levenshtein::default(),
+    //     );
+    //     if inserted_text.len() > 4
+    //         && next_line.len() > 4
+    //         // comparision between the distance
+    //         && (((distance / next_line.trim().len()) as f32) < 0.1)
+    //     {
+    //         dbg!("sidecar.inline_autocomplete.stop.next_line_similarity");
+    //         return TerminationCondition::Immediate;
+    //     }
+    // }
 
     // Next we check if this is a closing bracket condition
     let closing_brackets = vec![")", "]", "}", "`", "\"\"\"", ";"]
@@ -759,6 +759,7 @@ fn immediate_terminating_condition(
     // when we are inserting )}; kind of values and the editor already has )}
     if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
         if inserted_text.starts_with(next_line) {
+            dbg!("sidecar.inline_autocomplete.stop.next_line_prefix_of_inserted_text");
             return TerminationCondition::Immediate;
         }
     }

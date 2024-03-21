@@ -26,6 +26,7 @@ pub enum LLMType {
     ClaudeOpus,
     ClaudeSonnet,
     ClaudeHaiku,
+    PPLXSonnetSmall,
     Custom(String),
 }
 
@@ -75,6 +76,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "ClaudeOpus" => Ok(LLMType::ClaudeOpus),
                     "ClaudeSonnet" => Ok(LLMType::ClaudeSonnet),
                     "ClaudeHaiku" => Ok(LLMType::ClaudeHaiku),
+                    "PPLXSonnetSmall" => Ok(LLMType::PPLXSonnetSmall),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -122,6 +124,7 @@ impl fmt::Display for LLMType {
             LLMType::ClaudeOpus => write!(f, "ClaudeOpus"),
             LLMType::ClaudeSonnet => write!(f, "ClaudeSonnet"),
             LLMType::ClaudeHaiku => write!(f, "ClaudeHaiku"),
+            LLMType::PPLXSonnetSmall => write!(f, "PPLXSonnetSmall"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

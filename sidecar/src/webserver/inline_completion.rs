@@ -57,15 +57,11 @@ impl InlineCompletion {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InlineCompletionResponse {
     pub completions: Vec<InlineCompletion>,
-    pub prompt: String,
 }
 
 impl InlineCompletionResponse {
-    pub fn new(completions: Vec<InlineCompletion>, prompt: String) -> Self {
-        Self {
-            completions,
-            prompt,
-        }
+    pub fn new(completions: Vec<InlineCompletion>) -> Self {
+        Self { completions }
     }
 }
 

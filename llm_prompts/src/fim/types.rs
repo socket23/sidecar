@@ -1,6 +1,9 @@
+use either::Either;
 use std::collections::HashMap;
 
-use llm_client::clients::types::LLMType;
+use llm_client::clients::types::{
+    LLMClientCompletionRequest, LLMClientCompletionStringRequest, LLMType,
+};
 
 use super::{codellama::CodeLlamaFillInMiddleFormatter, deepseek::DeepSeekFillInMiddleFormatter};
 
@@ -13,11 +16,22 @@ pub enum FillInMiddleError {
 pub struct FillInMiddleRequest {
     prefix: String,
     suffix: String,
+    llm_type: LLMType,
+    stop_words: Vec<String>,
 }
 
 impl FillInMiddleRequest {
-    pub fn new(prefix: String, suffix: String) -> Self {
-        Self { prefix, suffix }
+    pub fn new(prefix: String, suffix: String, llm_type: LLMType, stop_words: Vec<String>) -> Self {
+        Self {
+            prefix,
+            suffix,
+            llm_type,
+            stop_words,
+        }
+    }
+
+    pub fn llm(&self) -> &LLMType {
+        &self.llm_type
     }
 
     pub fn prefix(&self) -> &str {
@@ -27,21 +41,17 @@ impl FillInMiddleRequest {
     pub fn suffix(&self) -> &str {
         &self.suffix
     }
-}
 
-#[derive(Clone)]
-pub struct FillInMiddleResponse {
-    pub filled: String,
-}
-
-impl FillInMiddleResponse {
-    pub fn new(filled: String) -> Self {
-        Self { filled }
+    pub fn stop_words(self) -> Vec<String> {
+        self.stop_words
     }
 }
 
 pub trait FillInMiddleFormatter {
-    fn fill_in_middle(&self, request: FillInMiddleRequest) -> FillInMiddleResponse;
+    fn fill_in_middle(
+        &self,
+        request: FillInMiddleRequest,
+    ) -> Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest>;
 }
 
 pub struct FillInMiddleBroker {
@@ -89,7 +99,10 @@ impl FillInMiddleBroker {
         &self,
         request: FillInMiddleRequest,
         model: &LLMType,
-    ) -> Result<FillInMiddleResponse, FillInMiddleError> {
+    ) -> Result<
+        Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest>,
+        FillInMiddleError,
+    > {
         let formatter = self
             .providers
             .get(model)

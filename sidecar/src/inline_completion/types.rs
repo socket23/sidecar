@@ -521,18 +521,20 @@ impl FillInMiddleCompletionAgent {
             let completion = LLMBroker::stream_string_completion_owned(
                 llm_broker,
                 fast_model_api_key,
-                LLMClientCompletionStringRequest::new(
-                    fast_model.clone(),
-                    formatted_string.filled.to_owned(),
-                    temperature,
-                    None,
-                )
-                // we are dumping the same eot for different models here, which
-                // is fine but we can change this later
-                .set_stop_words(stop_words)
-                // we only allow for 256 tokens so we can quickly get back the response
-                // and terminate if we are going through a bad request
-                .set_max_tokens(256),
+                either::Right(
+                    LLMClientCompletionStringRequest::new(
+                        fast_model.clone(),
+                        formatted_string.filled.to_owned(),
+                        temperature,
+                        None,
+                    )
+                    // we are dumping the same eot for different models here, which
+                    // is fine but we can change this later
+                    .set_stop_words(stop_words)
+                    // we only allow for 256 tokens so we can quickly get back the response
+                    // and terminate if we are going through a bad request
+                    .set_max_tokens(256),
+                ),
                 vec![("event_type".to_owned(), "fill_in_middle".to_owned())]
                     .into_iter()
                     .collect(),

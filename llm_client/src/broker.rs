@@ -95,6 +95,22 @@ impl LLMBroker {
         }
     }
 
+    fn get_provider(&self, api_key: &LLMProviderAPIKeys) -> LLMProvider {
+        match api_key {
+            LLMProviderAPIKeys::Ollama(_) => LLMProvider::Ollama,
+            LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
+            LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
+            LLMProviderAPIKeys::CodeStory => {
+                LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
+            }
+            LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
+            LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
+            LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
+        }
+    }
+
     pub async fn stream_completion(
         &self,
         api_key: LLMProviderAPIKeys,
@@ -165,15 +181,16 @@ impl LLMBroker {
     pub async fn stream_string_completion_owned(
         value: Arc<Self>,
         api_key: LLMProviderAPIKeys,
-        request: LLMClientCompletionStringRequest,
+        request: Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest>,
         metadata: HashMap<String, String>,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> LLMBrokerResponse {
         let (sender_channel, receiver) = tokio::sync::mpsc::unbounded_channel();
         let receiver_stream =
             tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(either::Right);
+        let provider = value.get_provider(&api_key);
         let result = value
-            .stream_string_completion(api_key, request, metadata, sender_channel)
+            .stream_answer(api_key, provider, request, metadata, sender_channel)
             .into_stream()
             .map(either::Left);
         let mut final_result = None;

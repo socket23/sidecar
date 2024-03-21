@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use futures::future::Either;
+use either::Either;
 use llm_client::{
     clients::types::{
         LLMClientCompletionRequest, LLMClientCompletionStringRequest, LLMClientError, LLMType,

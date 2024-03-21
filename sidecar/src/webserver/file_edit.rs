@@ -1189,7 +1189,7 @@ Remember to APPLY THE EDITS from the ## Export to codebase section and make sure
                                 let llm_answer = llm_broker.stream_answer(
                                     provider_api_key.clone(),
                                     provider_config.clone(),
-                                    futures::future::Either::Right(LLMClientCompletionStringRequest::new(
+                                    either::Right(LLMClientCompletionStringRequest::new(
                                         fast_model.clone(),
                                         prompt,
                                         0.7,
@@ -1224,7 +1224,7 @@ Remember to APPLY THE EDITS from the ## Export to codebase section and make sure
                             let llm_answer = llm_broker.stream_answer(
                                 provider_api_key.clone(),
                                 provider_config.clone(),
-                                futures::future::Either::Left(LLMClientCompletionRequest::new(
+                                either::Left(LLMClientCompletionRequest::new(
                                     fast_model.clone(),
                                     messages
                                         .into_iter()

@@ -2979,6 +2979,7 @@ dependencies = [
 name = "llm_prompts"
 version = "0.1.0"
 dependencies = [
+ "either",
  "futures",
  "lazy_static",
  "llm_client",

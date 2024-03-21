@@ -578,7 +578,7 @@ impl InLineAgent {
                                         .stream_answer(
                                             provider.clone(),
                                             provider_config_slow.clone(),
-                                            futures::future::Either::Left(request),
+                                            either::Left(request),
                                             vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
                                         )
@@ -595,7 +595,7 @@ impl InLineAgent {
                                         .stream_answer(
                                             provider.clone(),
                                             provider_config_slow.clone(),
-                                            futures::future::Either::Right(request),
+                                            either::Right(request),
                                             vec![("event_type".to_owned(), "documentation".to_owned())].into_iter().collect(),
                                             sender,
                                         )
@@ -732,7 +732,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             provider_config.clone(),
-                            futures::future::Either::Left(request),
+                            either::Left(request),
                             vec![("event_type".to_owned(), "fix".to_owned())]
                                 .into_iter()
                                 .collect(),
@@ -748,7 +748,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             provider_config.clone(),
-                            futures::future::Either::Right(request),
+                            either::Right(request),
                             vec![("event_type".to_owned(), "fix".to_owned())]
                                 .into_iter()
                                 .collect(),
@@ -945,7 +945,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             provider_config.clone(),
-                            futures::future::Either::Left(request),
+                            either::Left(request),
                             vec![("event_type".to_owned(), "edit".to_owned())]
                                 .into_iter()
                                 .collect(),
@@ -965,7 +965,7 @@ impl InLineAgent {
                         .stream_answer(
                             provider.clone(),
                             provider_config.clone(),
-                            futures::future::Either::Right(request),
+                            either::Right(request),
                             vec![("event_type".to_owned(), "edit".to_owned())]
                                 .into_iter()
                                 .collect(),

@@ -7,7 +7,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::{future::Either, stream, FutureExt, StreamExt};
+use either::Either;
+use futures::{stream, FutureExt, StreamExt};
 use sqlx::SqlitePool;
 
 use crate::{

@@ -45,6 +45,7 @@
     "petgraph",
     "pointwise",
     "Posthog",
+    "PPLX",
     "qdrant",
     "regexes",
     "reindex",
@@ -68,6 +69,6 @@
     "vllm",
     "webserver",
     "yolo"
-  ],
+],
   "rust-analyzer.linkedProjects": ["./Cargo.toml"]
 }

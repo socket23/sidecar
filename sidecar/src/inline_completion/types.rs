@@ -474,7 +474,11 @@ impl FillInMiddleCompletionAgent {
         )
         .generate_context(&document_lines)?;
 
-        let formatted_string = self.fill_in_middle_broker.format_context(
+        let stop_words = model_config
+            .get_stop_words_inline_completion()
+            .unwrap_or_default();
+
+        let llm_request = self.fill_in_middle_broker.format_context(
             match prefix {
                 Some(prefix) => FillInMiddleRequest::new(
                     format!(
@@ -483,19 +487,18 @@ impl FillInMiddleCompletionAgent {
                         completion_context.prefix.content().to_owned()
                     ),
                     completion_context.suffix.content().to_owned(),
+                    fast_model.clone(),
+                    stop_words,
                 ),
                 None => FillInMiddleRequest::new(
                     completion_context.prefix.content().to_owned(),
                     completion_context.suffix.content().to_owned(),
+                    fast_model.clone(),
+                    stop_words,
                 ),
             },
             &fast_model,
         )?;
-
-        dbg!(
-            "sidecar.inline_completion.word_count",
-            &formatted_string.filled.chars().collect::<Vec<_>>().len()
-        );
 
         let arced_document_lines = Arc::new(document_lines);
 
@@ -507,34 +510,15 @@ impl FillInMiddleCompletionAgent {
         // pin_mut!(merged_stream);
 
         let llm_broker = self.llm_broker.clone();
-        let mut stop_words = model_config
-            .get_stop_words_inline_completion()
-            .unwrap_or_default();
         let should_end_stream = Arc::new(std::sync::Mutex::new(false));
         Ok(Box::pin({
             let cursor_prefix = cursor_prefix.clone();
             let should_end_stream = should_end_stream.clone();
-            if self.is_multiline {
-                stop_words.push("\n".to_owned());
-            }
             // ugly, ugly, ugly, but type-safe so yay :))
             let completion = LLMBroker::stream_string_completion_owned(
                 llm_broker,
                 fast_model_api_key,
-                either::Right(
-                    LLMClientCompletionStringRequest::new(
-                        fast_model.clone(),
-                        formatted_string.filled.to_owned(),
-                        temperature,
-                        None,
-                    )
-                    // we are dumping the same eot for different models here, which
-                    // is fine but we can change this later
-                    .set_stop_words(stop_words)
-                    // we only allow for 256 tokens so we can quickly get back the response
-                    // and terminate if we are going through a bad request
-                    .set_max_tokens(256),
-                ),
+                llm_request,
                 vec![("event_type".to_owned(), "fill_in_middle".to_owned())]
                     .into_iter()
                     .collect(),
@@ -556,33 +540,23 @@ impl FillInMiddleCompletionAgent {
                     (
                         item,
                         arced_document_lines.clone(),
-                        formatted_string.clone(),
                         cursor_prefix.clone(),
                         should_end_stream.clone(),
                     )
                 })
                 .map(
-                    move |(
-                        item,
-                        document_lines,
-                        formatted_string,
-                        cursor_prefix,
-                        should_end_stream,
-                    )| match item {
+                    move |(item, document_lines, cursor_prefix, should_end_stream)| match item {
                         either::Left(response) => Ok((
-                            InlineCompletionResponse::new(
-                                vec![InlineCompletion::new(
-                                    // TODO(skcd): Remove this later on, we are testing it out over here
-                                    response.answer_up_until_now().to_owned(),
-                                    insert_range(
-                                        completion_request.position,
-                                        &document_lines,
-                                        response.answer_up_until_now(),
-                                    ),
-                                    response.delta().map(|v| v.to_owned()),
-                                )],
-                                formatted_string.filled.to_owned(),
-                            ),
+                            InlineCompletionResponse::new(vec![InlineCompletion::new(
+                                // TODO(skcd): Remove this later on, we are testing it out over here
+                                response.answer_up_until_now().to_owned(),
+                                insert_range(
+                                    completion_request.position,
+                                    &document_lines,
+                                    response.answer_up_until_now(),
+                                ),
+                                response.delta().map(|v| v.to_owned()),
+                            )]),
                             cursor_prefix.clone(),
                             should_end_stream.clone(),
                         )),
@@ -599,7 +573,6 @@ impl FillInMiddleCompletionAgent {
                                         ),
                                         None,
                                     )],
-                                    formatted_string.filled.to_owned(),
                                 ),
                                 cursor_prefix,
                                 should_end_stream.clone(),
@@ -807,72 +780,6 @@ fn immediate_terminating_condition(
     TerminationCondition::Not
 }
 
-fn check_terminating_condition(
-    inserted_text: String,
-    inserted_text_delta: Option<String>,
-    inserted_range: &Range,
-    context: Arc<FillInMiddleStreamContext>,
-) -> bool {
-    let final_completion_from_prefix =
-        context.prefix_at_cursor_position.to_owned() + &inserted_text;
-
-    let language_config = context.editor_parsing.for_file_path(&context.file_path);
-
-    // TODO(skcd): One of the bugs here is that we could have a closing bracket or something
-    // in the suffix, on the editor side this is taken care of automagically,
-    // but here we need to take care of it
-    // we can either do tree-sitter based termination or based on indentation as well
-    // this will help us understand if we can give the user sustainable replies
-    // another condition we can add here is to only check this when we have a multiline completion
-    // this way we can avoid unnecessary computation
-    let inserted_text_lines_length = inserted_text.lines().into_iter().collect::<Vec<_>>().len();
-    if inserted_text_lines_length <= 1 {
-        return false;
-    }
-    if let Some(language_config) = language_config {
-        let terminating_condition_errors = check_terminating_condition_by_comparing_errors(
-            &language_config,
-            &context.document_prefix,
-            &context.document_suffix,
-            &inserted_text,
-            inserted_range,
-            context.errors.clone(),
-        );
-        if terminating_condition_errors {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    // first we check if the lines are, and check for opening and closing brackets
-    // the patterns we will look for are: {}, [], (), <>
-    let opening_brackets = vec!["{"];
-    let closing_brackets = vec!["}"];
-    // let opening_brackets = vec!["{", "[", "(", "<"];
-    // let closing_brackets = vec!["}", "]", ")", ">"];
-    let mut bracket_count = 0;
-    let mut opening_bracket_detected = false;
-    final_completion_from_prefix
-        .chars()
-        .into_iter()
-        .for_each(|character| {
-            let character_str = character.to_string();
-            if opening_brackets.contains(&character_str.as_str()) {
-                bracket_count = bracket_count + 1;
-                opening_bracket_detected = true;
-            }
-            if closing_brackets.contains(&&character_str.as_str()) {
-                bracket_count = bracket_count - 1;
-            }
-        });
-    if opening_bracket_detected && bracket_count == 0 {
-        true
-    } else {
-        false
-    }
-}
-
 fn grab_errors_using_tree_sitter(
     editor_parsing: Arc<EditorParsing>,
     file_content: &str,
@@ -1034,52 +941,8 @@ fn insert_string_and_check_suffix(text_to_insert: &str, suffix: &str) -> String 
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
-    use crate::{
-        chunking::text_document::{Position, Range},
-        inline_completion::types::insert_string_and_check_suffix,
-    };
-
-    use super::{check_terminating_condition, FillInMiddleStreamContext};
-
-    #[test]
-    fn test_check_terminating_condition_for_if() {
-        let context = Arc::new(FillInMiddleStreamContext::new(
-            "something.ts".to_owned(),
-            "if ".to_owned(),
-            "something_else".to_owned(),
-            "something_else".to_owned(),
-            Arc::new(Default::default()),
-            None,
-            None,
-        ));
-        let inserted_text = "(blah: number) => {".to_owned();
-        let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
-        assert_eq!(
-            check_terminating_condition(inserted_text, None, &inserted_range, context),
-            false
-        );
-    }
-
-    #[test]
-    fn test_check_terminating_condition_for_if_proper() {
-        let context = Arc::new(FillInMiddleStreamContext::new(
-            "something.ts".to_owned(),
-            "if ".to_owned(),
-            "something_else".to_owned(),
-            "something_else".to_owned(),
-            Arc::new(Default::default()),
-            None,
-            None,
-        ));
-        let inserted_text = "if (blah: number) => {\nconsole.log('blah');}".to_owned();
-        let inserted_range = Range::new(Position::new(0, 0, 0), Position::new(0, 4, 7));
-        assert_eq!(
-            check_terminating_condition(inserted_text, None, &inserted_range, context),
-            true
-        );
-    }
+    use crate::inline_completion::types::insert_string_and_check_suffix;
 
     #[test]
     fn test_check_insert_string_and_check_suffix() {
@@ -1095,16 +958,5 @@ mod tests {
         let suffix = ")".to_owned();
         let final_text = insert_string_and_check_suffix(&text_to_insert, &suffix);
         assert_eq![final_text, "(a, b, c, d){\nconsole.log('blah');}"];
-    }
-
-    #[test]
-    fn test_terminating_condition() {
-        let prefix = "if ".to_owned();
-        let text_to_insert = r#"(something) { do_something(); } else {do_nothing();}"#.to_owned();
-        // so the way to gate this is to first check
-        // - we need to convert the stream into a line by line stream (for processing)
-        // - and then we check if we are going out of the parent node we are currently in
-        // - also check if the next line is similar to the line already present, if thats
-        // the case then we should not be streaming anymore
     }
 }

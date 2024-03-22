@@ -69,7 +69,7 @@ pub const GPT_4: AnswerModel = AnswerModel {
     answer_tokens: 1024,
     // The prompt tokens limit for gpt4 are a bit higher so we can get more context
     // when required
-    prompt_tokens_limit: 4500,
+    prompt_tokens_limit: 4500 + 610,
     history_tokens_limit: 2048,
     total_tokens: 8192,
     inline_completion_tokens: None,

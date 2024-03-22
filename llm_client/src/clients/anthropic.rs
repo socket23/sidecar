@@ -222,15 +222,10 @@ impl LLMClient for AnthropicClient {
         request: LLMClientCompletionRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
-        dbg!("anthropic.stream_completion");
         let endpoint = self.chat_endpoint();
-        dbg!("anthropic.stream_completion.endpoint", &endpoint);
         let model_str = self.get_model_string(request.model())?;
-        dbg!("anthropic.model_str", &model_str);
         let anthropic_request =
             AnthropicRequest::from_client_completion_request(request, model_str.to_owned());
-
-        dbg!("anthropic.request", &anthropic_request);
 
         let response_stream = self
             .client

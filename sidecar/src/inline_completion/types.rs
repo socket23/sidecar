@@ -40,6 +40,7 @@ use super::{
 
 const CLIPBOARD_CONTEXT: usize = 50;
 const CODEBASE_CONTEXT: usize = 1000;
+const ANTHROPIC_CODEBASE_CONTEXT: usize = 10_000;
 const SAME_FILE_CONTEXT: usize = 450;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -396,7 +397,14 @@ impl FillInMiddleCompletionAgent {
             self.editor_parsing.clone(),
             request_id.to_owned(),
         )
-        .generate_context(CODEBASE_CONTEXT, abort_handle.clone())
+        .generate_context(
+            if fast_model.is_anthropic() {
+                ANTHROPIC_CODEBASE_CONTEXT
+            } else {
+                CODEBASE_CONTEXT
+            },
+            abort_handle.clone(),
+        )
         .await?
         .get_prefix_with_tokens();
         dbg!(

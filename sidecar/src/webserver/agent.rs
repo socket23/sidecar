@@ -262,6 +262,7 @@ pub async fn explain(
         llm_tokenizer,
         chat_broker,
         reranker,
+        system_instruction: None,
     };
 
     generate_agent_stream(agent, action, receiver).await
@@ -419,6 +420,7 @@ pub struct FollowupChatRequest {
     pub project_labels: Vec<String>,
     pub active_window_data: Option<ActiveWindowData>,
     pub model_config: LLMClientConfig,
+    pub system_instruction: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -499,6 +501,7 @@ pub async fn followup_chat(
         project_labels,
         active_window_data,
         model_config,
+        system_instruction,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -575,6 +578,7 @@ pub async fn followup_chat(
         llm_tokenizer,
         chat_broker,
         reranker,
+        system_instruction,
     );
 
     generate_agent_stream(agent, action, receiver).await

@@ -120,6 +120,7 @@ impl Agent {
             llm_tokenizer,
             chat_broker,
             reranker,
+            system_instruction: None,
         };
         agent
     }
@@ -139,6 +140,7 @@ impl Agent {
         llm_tokenizer: Arc<LLMTokenizer>,
         chat_broker: Arc<LLMChatModelBroker>,
         reranker: Arc<ReRankBroker>,
+        system_instruction: Option<String>,
     ) -> Self {
         let agent = Agent {
             application,
@@ -155,6 +157,7 @@ impl Agent {
             llm_tokenizer,
             chat_broker,
             reranker,
+            system_instruction,
         };
         agent
     }
@@ -196,6 +199,7 @@ impl Agent {
             llm_tokenizer,
             chat_broker,
             reranker,
+            system_instruction: None,
         };
         agent
     }
@@ -722,6 +726,7 @@ impl Agent {
                     self.conversation_messages_len() > 1,
                     self.user_context.is_some(),
                     &self.project_labels,
+                    self.system_instruction.as_ref().map(|s| s.as_str()),
                 );
                 answer_prompt
             }

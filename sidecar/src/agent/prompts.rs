@@ -409,10 +409,19 @@ pub fn followup_chat_prompt(
     is_followup: bool,
     user_context: bool,
     project_labels: &[String],
+    system_instruction: Option<&str>,
 ) -> String {
     use std::collections::HashSet;
     let mut user_selected_instructions = "";
     let mut project_labels_context = "".to_owned();
+    let user_system_instruction = if let Some(system_instruction) = system_instruction {
+        format!(
+            r#"The user has provided additional instructions for you to follow at all times:
+{system_instruction}"#
+        )
+    } else {
+        "".to_owned()
+    };
     if !project_labels.is_empty() {
         let unique_project_labels = project_labels
             .iter()
@@ -436,6 +445,7 @@ pub fn followup_chat_prompt(
     let not_followup_generate_question = format!(
         r#"{context}####
 Your job is to answer the user query.
+{user_system_instruction}
 
 When referring to code, you must provide an example in a code block.
 
@@ -477,6 +487,7 @@ Respect these rules at all times:
         r#"{context}####
 
 Your job is to answer the user query which is a followup to the conversation we have had.
+{user_system_instruction}
 
 Provide only as much information and code as is necessary to answer the query, but be concise. Keep number of quoted lines to a minimum when possible.
 When referring to code, you must provide an example in a code block.
@@ -801,14 +812,14 @@ First give your reasoning and then given your selected option in in the format:
     ]
 }
 
-
 pub fn system_prompt_for_git_patch(
     message: &str,
     language: &str,
     symbol_name: &str,
     symbol_type: &str,
 ) -> String {
-    let system_prompt = format!(r#"You are an expert at applying the git patch to the given code snippet for {symbol_name} {symbol_type}.
+    let system_prompt = format!(
+        r#"You are an expert at applying the git patch to the given code snippet for {symbol_name} {symbol_type}.
 
 Your job is to generate the updated {symbol_name} {symbol_type} after applying the git patch.
 
@@ -827,7 +838,8 @@ You have to look at the reason and follow these rules:
 - You always answer with {language} code.
 - Modify the code or create new code.
 - Unless directed otherwise, the user is expecting for you to edit their selected code.
-- Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by the user"#);
+- Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by the user"#
+    );
     system_prompt.to_owned()
 }
 
@@ -839,18 +851,28 @@ pub fn user_message_for_git_patch(
     file_path: &str,
     symbol_content: &str,
 ) -> Vec<String> {
-    let git_diff_patch = format!(r#"git patch for {symbol_name} {symbol_type}:
+    let git_diff_patch = format!(
+        r#"git patch for {symbol_name} {symbol_type}:
 ```{language}
 {git_diff}
-```"#);
-    let original_symbol = format!(r#"{symbol_name} {symbol_type}
+```"#
+    );
+    let original_symbol = format!(
+        r#"{symbol_name} {symbol_type}
 ```{language}
 // FILEPATH: {file_path}
 // BEGIN: be15d9bcejpp
 {symbol_content}
 // END: be15d9bcejpp
-```"#);
-    let additional_prompt = format!(r#"Do not forget to include the // BEGIN and // END markers in your generated code.
-ONLY WRITE the code for the "{symbol_name} {symbol_type}"."#);
-    vec![git_diff_patch.to_owned(), original_symbol.to_owned(), additional_prompt.to_owned()]
+```"#
+    );
+    let additional_prompt = format!(
+        r#"Do not forget to include the // BEGIN and // END markers in your generated code.
+ONLY WRITE the code for the "{symbol_name} {symbol_type}"."#
+    );
+    vec![
+        git_diff_patch.to_owned(),
+        original_symbol.to_owned(),
+        additional_prompt.to_owned(),
+    ]
 }

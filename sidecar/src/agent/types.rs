@@ -743,6 +743,7 @@ pub struct Agent {
     pub llm_tokenizer: Arc<LLMTokenizer>,
     pub chat_broker: Arc<LLMChatModelBroker>,
     pub reranker: Arc<ReRankBroker>,
+    pub system_instruction: Option<String>,
 }
 
 pub enum AgentAnswerStreamEvent {

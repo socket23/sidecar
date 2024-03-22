@@ -5,7 +5,10 @@ use llm_client::clients::types::{
     LLMClientCompletionRequest, LLMClientCompletionStringRequest, LLMType,
 };
 
-use super::{codellama::CodeLlamaFillInMiddleFormatter, deepseek::DeepSeekFillInMiddleFormatter};
+use super::{
+    claude::ClaudeFillInMiddleFormatter, codellama::CodeLlamaFillInMiddleFormatter,
+    deepseek::DeepSeekFillInMiddleFormatter,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum FillInMiddleError {
@@ -18,15 +21,23 @@ pub struct FillInMiddleRequest {
     suffix: String,
     llm_type: LLMType,
     stop_words: Vec<String>,
+    completion_tokens: Option<i64>,
 }
 
 impl FillInMiddleRequest {
-    pub fn new(prefix: String, suffix: String, llm_type: LLMType, stop_words: Vec<String>) -> Self {
+    pub fn new(
+        prefix: String,
+        suffix: String,
+        llm_type: LLMType,
+        stop_words: Vec<String>,
+        completion_tokens: Option<i64>,
+    ) -> Self {
         Self {
             prefix,
             suffix,
             llm_type,
             stop_words,
+            completion_tokens,
         }
     }
 
@@ -44,6 +55,10 @@ impl FillInMiddleRequest {
 
     pub fn stop_words(self) -> Vec<String> {
         self.stop_words
+    }
+
+    pub fn completion_tokens(&self) -> Option<usize> {
+        self.completion_tokens.map(|tokens| tokens as usize)
     }
 }
 
@@ -83,6 +98,10 @@ impl FillInMiddleBroker {
             .add_llm(
                 LLMType::DeepSeekCoder33BInstruct,
                 Box::new(DeepSeekFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::ClaudeHaiku,
+                Box::new(ClaudeFillInMiddleFormatter::new()),
             )
     }
 

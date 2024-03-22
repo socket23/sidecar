@@ -22,6 +22,7 @@ impl FillInMiddleFormatter for CodeLlamaFillInMiddleFormatter {
         let prefix = request.prefix();
         let suffix = request.suffix();
         let response = format!("<PRE> {prefix} <SUF>{suffix} <MID>");
+        // log the response here
         let string_request =
             LLMClientCompletionStringRequest::new(request.llm().clone(), response, 0.0, None)
                 .set_stop_words(request.stop_words())

@@ -14,7 +14,7 @@ async fn main() {
     let anthropic_client = AnthropicClient::new();
     let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(anthropic_api_key));
     let request = LLMClientCompletionRequest::new(
-        LLMType::ClaudeOpus,
+        LLMType::ClaudeHaiku,
         vec![
             LLMClientMessage::new(
                 LLMClientRole::System,
@@ -27,7 +27,7 @@ async fn main() {
         0.1,
         None,
     )
-    .set_max_tokens(50000);
+    .set_max_tokens(4096);
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = anthropic_client
         .stream_completion(api_key, request, sender)

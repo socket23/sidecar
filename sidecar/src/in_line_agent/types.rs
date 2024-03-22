@@ -320,6 +320,7 @@ impl InLineAgent {
         action: InLineAgentAction,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
     ) -> anyhow::Result<Option<InLineAgentAction>> {
+        dbg!(&action);
         let llm = self.editor_request.slow_model();
         match action {
             InLineAgentAction::DecideAction { query } => {
@@ -711,7 +712,7 @@ impl InLineAgent {
         let llm_broker = self.get_llm_broker().clone();
         let provider = self
             .editor_request
-            .provider_for_fast_model()
+            .provider_for_slow_model()
             .ok_or(anyhow::anyhow!(
                 "No provider found for fast model: {:?}",
                 model

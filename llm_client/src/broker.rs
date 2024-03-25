@@ -184,6 +184,7 @@ impl LLMBroker {
         request: Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest>,
         metadata: HashMap<String, String>,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+        skip_start_line: Option<String>,
     ) -> LLMBrokerResponse {
         let (sender_channel, receiver) = tokio::sync::mpsc::unbounded_channel();
         let receiver_stream =
@@ -197,10 +198,12 @@ impl LLMBroker {
         struct RunningAnswer {
             answer_up_until_now: String,
             running_line: String,
+            first_line_check: bool,
         }
         let running_line = Arc::new(Mutex::new(RunningAnswer {
             answer_up_until_now: "".to_owned(),
             running_line: "".to_owned(),
+            first_line_check: false,
         }));
         stream::select(receiver_stream, result)
             .map(|element| (element, running_line.clone()))
@@ -218,23 +221,29 @@ impl LLMBroker {
                             {
                                 let line =
                                     current_running_line.running_line[..new_line_index].to_owned();
-                                let mut current_answer = current_running_line
-                                    .answer_up_until_now
-                                    .clone()
-                                    .lines()
-                                    .into_iter()
-                                    .map(|line| line.to_owned())
-                                    .chain(vec![line.to_owned()])
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
-                                let _ = sender.send(LLMClientCompletionResponse::new(
-                                    current_answer + "\n",
-                                    Some(line.to_owned() + "\n"),
-                                    "parsing_model".to_owned(),
-                                ));
-                                // add the new line and the \n
-                                current_running_line.answer_up_until_now.push_str(&line);
-                                current_running_line.answer_up_until_now.push_str("\n");
+                                if !current_running_line.first_line_check
+                                    && Some(line.to_owned()) == skip_start_line
+                                {
+                                    // if this is the case then we need to skip this line
+                                } else {
+                                    let current_answer = current_running_line
+                                        .answer_up_until_now
+                                        .clone()
+                                        .lines()
+                                        .into_iter()
+                                        .map(|line| line.to_owned())
+                                        .chain(vec![line.to_owned()])
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+                                    let _ = sender.send(LLMClientCompletionResponse::new(
+                                        current_answer + "\n",
+                                        Some(line.to_owned() + "\n"),
+                                        "parsing_model".to_owned(),
+                                    ));
+                                    // add the new line and the \n
+                                    current_running_line.answer_up_until_now.push_str(&line);
+                                    current_running_line.answer_up_until_now.push_str("\n");
+                                }
 
                                 // drain the running line
                                 current_running_line.running_line.drain(..=new_line_index);

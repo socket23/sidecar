@@ -224,9 +224,22 @@ impl LLMClient for AnthropicClient {
     ) -> Result<String, LLMClientError> {
         let endpoint = self.chat_endpoint();
         let model_str = self.get_model_string(request.model())?;
+        let message_tokens = request
+            .messages()
+            .iter()
+            .map(|message| message.content().len())
+            .collect::<Vec<_>>();
+        let mut message_tokens_count = 0;
+        message_tokens.into_iter().for_each(|tokens| {
+            message_tokens_count += tokens;
+        });
         let anthropic_request =
             AnthropicRequest::from_client_completion_request(request, model_str.to_owned());
 
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
         let response_stream = self
             .client
             .post(endpoint)
@@ -260,6 +273,18 @@ impl LLMClient for AnthropicClient {
                 }
                 Ok(AnthropicEvent::ContentBlockDelta { delta, .. }) => {
                     buffered_string = buffered_string + &delta.text;
+                    let time_now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis();
+                    let time_diff = time_now - current_time;
+                    dbg!(
+                        "buffered_string",
+                        message_tokens_count,
+                        &buffered_string,
+                        &buffered_string.len(),
+                        time_diff
+                    );
                     let _ = sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
                         Some(delta.text),

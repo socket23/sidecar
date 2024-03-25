@@ -753,6 +753,7 @@ impl DocumentEditLines {
                 }
             })
             .collect::<Vec<_>>();
+        // log the final snippets length
         // we take at the very most 10 snippets from a single file
         // this prevents a single file from giving out too much data
         final_snippets.truncate(10);

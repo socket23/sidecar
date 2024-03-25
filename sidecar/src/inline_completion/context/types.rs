@@ -213,10 +213,22 @@ pub enum CompletionContext {
 pub struct CurrentFilePrefixSuffix {
     pub prefix: CodeSelection,
     pub suffix: CodeSelection,
+    pub prefix_without_current_line: String,
+    pub current_line_content: String,
 }
 
 impl CurrentFilePrefixSuffix {
-    pub fn new(prefix: CodeSelection, suffix: CodeSelection) -> Self {
-        Self { prefix, suffix }
+    pub fn new(
+        prefix: CodeSelection,
+        suffix: CodeSelection,
+        prefix_without_current_line: String,
+        current_line_content: String,
+    ) -> Self {
+        Self {
+            prefix,
+            suffix,
+            prefix_without_current_line,
+            current_line_content,
+        }
     }
 }

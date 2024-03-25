@@ -22,6 +22,7 @@ pub struct FillInMiddleRequest {
     llm_type: LLMType,
     stop_words: Vec<String>,
     completion_tokens: Option<i64>,
+    current_line_content: String,
 }
 
 impl FillInMiddleRequest {
@@ -31,6 +32,7 @@ impl FillInMiddleRequest {
         llm_type: LLMType,
         stop_words: Vec<String>,
         completion_tokens: Option<i64>,
+        current_line_content: String,
     ) -> Self {
         Self {
             prefix,
@@ -38,6 +40,7 @@ impl FillInMiddleRequest {
             llm_type,
             stop_words,
             completion_tokens,
+            current_line_content,
         }
     }
 
@@ -55,6 +58,10 @@ impl FillInMiddleRequest {
 
     pub fn stop_words(self) -> Vec<String> {
         self.stop_words
+    }
+
+    pub fn current_line_content(&self) -> &str {
+        &self.current_line_content
     }
 
     pub fn completion_tokens(&self) -> Option<usize> {

@@ -40,7 +40,7 @@ use super::{
 
 const CLIPBOARD_CONTEXT: usize = 50;
 const CODEBASE_CONTEXT: usize = 1000;
-const ANTHROPIC_CODEBASE_CONTEXT: usize = 10_000;
+const ANTHROPIC_CODEBASE_CONTEXT: usize = 20_000;
 const SAME_FILE_CONTEXT: usize = 450;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -492,19 +492,29 @@ impl FillInMiddleCompletionAgent {
                     format!(
                         "{}\n{}",
                         prefix,
-                        completion_context.prefix.content().to_owned()
+                        if fast_model.is_anthropic() {
+                            completion_context.prefix_without_current_line.to_owned()
+                        } else {
+                            completion_context.prefix.content().to_owned()
+                        }
                     ),
                     completion_context.suffix.content().to_owned(),
                     fast_model.clone(),
                     stop_words,
                     model_config.inline_completion_tokens,
+                    completion_context.current_line_content.to_owned(),
                 ),
                 None => FillInMiddleRequest::new(
-                    completion_context.prefix.content().to_owned(),
+                    if fast_model.is_anthropic() {
+                        completion_context.prefix_without_current_line.to_owned()
+                    } else {
+                        completion_context.prefix.content().to_owned()
+                    },
                     completion_context.suffix.content().to_owned(),
                     fast_model.clone(),
                     stop_words,
                     model_config.inline_completion_tokens,
+                    completion_context.current_line_content.to_owned(),
                 ),
             },
             &fast_model,
@@ -533,6 +543,11 @@ impl FillInMiddleCompletionAgent {
                     .into_iter()
                     .collect(),
                 sender,
+                if fast_model.is_anthropic() {
+                    Some("<code_inserted>".to_owned())
+                } else {
+                    None
+                },
             )
             .into_stream()
             .map(either::Right);

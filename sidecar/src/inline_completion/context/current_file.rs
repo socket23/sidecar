@@ -138,6 +138,7 @@ impl CurrentFileContext {
         }
 
         prefix.reverse();
+        let prefix_without_current_line = prefix.to_vec();
         // push the current line content to the prefix
         prefix.push(prefix_line_part.to_owned());
         // now check if we have a possible file path,
@@ -194,6 +195,11 @@ impl CurrentFileContext {
         // Now that we have the prefix and the suffix we should join them together
         // and get the values for the prompt, we should also store some metadata here
         // about the segments of code we are sending (can be useful for debugging + enriching)
-        Ok(CurrentFilePrefixSuffix::new(prefix, suffix))
+        Ok(CurrentFilePrefixSuffix::new(
+            prefix,
+            suffix,
+            prefix_without_current_line.join("\n"),
+            prefix_line_part.to_owned(),
+        ))
     }
 }

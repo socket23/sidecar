@@ -23,7 +23,7 @@ use crate::chunking::types::OutlineNode;
 use crate::inline_completion::context::clipboard_context::{
     ClipboardContext, ClipboardContextString,
 };
-use crate::inline_completion::helpers::fix_model_for_sidecar_provider;
+use crate::inline_completion::helpers::{fix_model_for_sidecar_provider, get_indentation_string};
 use crate::{
     chunking::editor_parsing::EditorParsing,
     webserver::inline_completion::{
@@ -337,9 +337,6 @@ impl FillInMiddleCompletionAgent {
             }
             None => model_config.fast_model.clone(),
         };
-        let temperature = model_config
-            .fast_model_temperature()
-            .ok_or(InLineCompletionError::LLMNotSupported(fast_model.clone()))?;
         let fast_model_api_key = model_config
             .provider_for_fast_model()
             .ok_or(InLineCompletionError::MissingProviderKeys(
@@ -486,6 +483,21 @@ impl FillInMiddleCompletionAgent {
             .get_stop_words_inline_completion()
             .unwrap_or_default();
 
+        // We are keeping the current line to use it for later
+        let current_line = completion_context.current_line_content.to_owned();
+        // with anthropic models we have an issue with the way completions
+        // are generated. If it has only whitespace then the model also
+        // generates the whitespace and indents things properly
+        // if there is content before on the line, then the indentation is broken
+        // completely, which sucks
+        // so what we want to do is the following:
+        // - remove the indentation of the current line since it will always
+        // be from the cursor position
+        // - and add indentation to the followup lines since those require it
+        // as its lost otherwise
+        let is_current_line_whitespace = current_line.trim().is_empty();
+        let current_line_indentation = get_indentation_string(&current_line);
+
         let llm_request = self.fill_in_middle_broker.format_context(
             match prefix {
                 Some(prefix) => FillInMiddleRequest::new(
@@ -503,6 +515,8 @@ impl FillInMiddleCompletionAgent {
                     stop_words,
                     model_config.inline_completion_tokens,
                     completion_context.current_line_content.to_owned(),
+                    is_current_line_whitespace,
+                    current_line_indentation.to_owned(),
                 ),
                 None => FillInMiddleRequest::new(
                     if fast_model.is_anthropic() {
@@ -515,6 +529,8 @@ impl FillInMiddleCompletionAgent {
                     stop_words,
                     model_config.inline_completion_tokens,
                     completion_context.current_line_content.to_owned(),
+                    is_current_line_whitespace,
+                    current_line_indentation.to_owned(),
                 ),
             },
             &fast_model,
@@ -548,6 +564,9 @@ impl FillInMiddleCompletionAgent {
                 } else {
                     None
                 },
+                is_current_line_whitespace,
+                current_line_indentation,
+                fast_model.clone(),
             )
             .into_stream()
             .map(either::Right);

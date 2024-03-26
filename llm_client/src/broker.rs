@@ -23,7 +23,7 @@ use crate::{
         togetherai::TogetherAIClient,
         types::{
             LLMClient, LLMClientCompletionRequest, LLMClientCompletionResponse,
-            LLMClientCompletionStringRequest, LLMClientError,
+            LLMClientCompletionStringRequest, LLMClientError, LLMType,
         },
     },
     config::LLMBrokerConfiguration,
@@ -185,6 +185,10 @@ impl LLMBroker {
         metadata: HashMap<String, String>,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
         skip_start_line: Option<String>,
+        // all of this needs to be a editing option for the stream instead
+        is_trigger_line_whitespace: bool,
+        trigger_line_indentation: String,
+        model: LLMType,
     ) -> LLMBrokerResponse {
         let (sender_channel, receiver) = tokio::sync::mpsc::unbounded_channel();
         let receiver_stream =
@@ -199,19 +203,21 @@ impl LLMBroker {
             answer_up_until_now: String,
             running_line: String,
             first_line_check: bool,
+            first_streamable_line_check: bool,
         }
         let running_line = Arc::new(Mutex::new(RunningAnswer {
             answer_up_until_now: "".to_owned(),
             running_line: "".to_owned(),
             first_line_check: false,
+            first_streamable_line_check: false,
         }));
+        let should_apply_special_edits = model.is_anthropic();
         stream::select(receiver_stream, result)
             .map(|element| (element, running_line.clone()))
             .for_each(|(element, running_line)| {
                 match element {
                     either::Right(item) => {
                         let delta = item.delta().map(|delta| delta.to_owned());
-                        let answer_until_now = item.get_answer_up_until_now();
                         if let Ok(mut current_running_line) = running_line.lock() {
                             if let Some(delta) = delta {
                                 current_running_line.running_line.push_str(&delta);
@@ -219,13 +225,32 @@ impl LLMBroker {
                             while let Some(new_line_index) =
                                 current_running_line.running_line.find('\n')
                             {
-                                let line =
+                                let mut line =
                                     current_running_line.running_line[..new_line_index].to_owned();
                                 if !current_running_line.first_line_check
                                     && Some(line.to_owned()) == skip_start_line
                                 {
+                                    current_running_line.first_line_check = true;
                                     // if this is the case then we need to skip this line
                                 } else {
+                                    // we need to indent and fix the output here
+                                    // vodoo magic here to fix the indent for the lines
+                                    // coming from anthropic
+                                    if should_apply_special_edits {
+                                        // first we check for the first line which we get
+                                        if !current_running_line.first_streamable_line_check {
+                                            if is_trigger_line_whitespace {
+                                                // then we need to strip the whitespace from the line
+                                                // since our cursor will always be at the right position
+                                                line = line.trim_start().to_owned();
+                                            }
+                                        } else {
+                                            if !is_trigger_line_whitespace {
+                                                line = trigger_line_indentation.to_owned() + &line;
+                                            }
+                                        }
+                                        // we need to check and fix the line here
+                                    }
                                     let current_answer = current_running_line
                                         .answer_up_until_now
                                         .clone()
@@ -243,6 +268,9 @@ impl LLMBroker {
                                     // add the new line and the \n
                                     current_running_line.answer_up_until_now.push_str(&line);
                                     current_running_line.answer_up_until_now.push_str("\n");
+                                    // we have our first streamable line, so set it to
+                                    // true
+                                    current_running_line.first_streamable_line_check = true;
                                 }
 
                                 // drain the running line

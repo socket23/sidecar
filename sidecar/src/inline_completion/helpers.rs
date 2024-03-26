@@ -149,3 +149,22 @@ pub fn should_track_file(document_path: &str) -> bool {
     }
     true
 }
+
+// check if a string is all whitespaces
+pub fn is_whitespace(s: &str) -> bool {
+    s.trim().is_empty()
+}
+
+pub fn get_indentation_string(s: &str) -> String {
+    let mut indentation = "".to_owned();
+    for c in s.chars() {
+        if c == ' ' {
+            indentation += " ";
+        } else if c == '\t' {
+            indentation += "\t";
+        } else {
+            break;
+        }
+    }
+    indentation
+}

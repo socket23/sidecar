@@ -76,6 +76,7 @@ impl FillInMiddleFormatter for ClaudeFillInMiddleFormatter {
         request: FillInMiddleRequest,
     ) -> Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest> {
         let system_prompt = r#"You are an intelligent code autocomplete model trained to generate code completions from the cursor position. Given a code snippet with a cursor position marked by <code_inserted></code_inserted>, your task is to generate the code that should appear at the <code_inserted></code_inserted> to complete the code logically.
+
 To generate the code completion, follow these guidelines:
 1. Analyze the code before and after the cursor position to understand the context and intent of the code.
 2. If provided, utilize the relevant code snippets from other locations in the codebase to inform your completion. 
@@ -85,7 +86,8 @@ To generate the code completion, follow these guidelines:
 6. The code you generate will be inserted at the <code_inserted></code_inserted> location, so be mindful to write code that logically follows from the <code_inserted></code_inserted> location.
 7. You have to start your reply with <code_inserted> as show in the interactions with the user.
 8. You should stop generating code and end with </code_inserted> when you have logically completed the code block you are supposed to autocomplete.
-9. Make sure to follow the indentation of the code when generating it and also use tabs when tabs are used and spaces when spaces are used.
+9. Use the same indentation for the generated code as the position of the <code_inserted></code_inserted> location. Use spaces if spaces are used; use tabs if tabs are used.
+        
 Remember, your goal is to provide the most appropriate and efficient code completion based on the given context and the location of the cursor. Use your programming knowledge and the provided examples to generate high-quality code completions that meet the requirements of the task."#;
         let prefix = request.prefix();
         let suffix = request.suffix();
@@ -101,13 +103,20 @@ Remember, your goal is to provide the most appropriate and efficient code comple
 <suffix>
 {suffix}
 </suffix>
-</prompt>"#
+</prompt>
+
+As a reminder the section in <prompt> where you have to make changes is over here
+<reminder>
+<insertion_point>
+{insertion_prefix}<code_inserted></code_inesrted>
+</insertion_point>
+</reminder>"#
         );
         dbg!("sidecar.claude.prompt", &prefix, &suffix, &fim_request);
-        let example_messages = self.few_shot_messages();
+        // let example_messages = self.few_shot_messages();
         let final_messages = vec![LLMClientMessage::system(system_prompt.to_owned())]
             .into_iter()
-            .chain(example_messages)
+            // .chain(example_messages)
             .chain(vec![
                 LLMClientMessage::user(fim_request),
                 // LLMClientMessage::assistant("<reply>\n".to_owned()),

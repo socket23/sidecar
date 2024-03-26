@@ -163,5 +163,4 @@ Destination: user
     let response = togetherai
         .stream_prompt_completion(api_key, request, sender)
         .await;
-    dbg!(&response);
 }

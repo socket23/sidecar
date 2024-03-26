@@ -227,6 +227,4 @@ async fn main() {
     "#;
     let output = difftastic::generate_sidecar_diff(original_content, llm_content, ".ts");
     assert_eq!(output.1.len(), output.0.len());
-    dbg!(output.0);
-    dbg!(output.1);
 }

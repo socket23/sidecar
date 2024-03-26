@@ -83,7 +83,6 @@ pub async fn inline_completion(
 ) -> Result<impl IntoResponse> {
     info!(event_name = "inline_completion", id = &id,);
     info!(mode_config = ?model_config);
-    dbg!("sidecar.inline_completion.webserver.start");
     let request_start = Instant::now();
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     let symbol_tracker = app.symbol_tracker.clone();
@@ -94,7 +93,6 @@ pub async fn inline_completion(
         app.editor_parsing.clone(),
         &filepath,
     );
-    dbg!("is_multiline", &id, is_multiline);
     let fill_in_middle_agent = FillInMiddleCompletionAgent::new(
         app.llm_broker.clone(),
         app.llm_tokenizer.clone(),
@@ -151,7 +149,6 @@ pub async fn cancel_inline_completion(
     Extension(app): Extension<Application>,
     Json(CancelInlineCompletionRequest { id }): Json<CancelInlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!("inline_completion.cancel", &id);
     let fill_in_middle_state = app.fill_in_middle_state.clone();
     fill_in_middle_state.cancel(&id);
     Ok(Json(CancelInlineCompletionResponse {}))
@@ -178,7 +175,6 @@ pub async fn inline_document_open(
     }): Json<InLineDocumentOpenRequest>,
 ) -> Result<impl IntoResponse> {
     let symbol_tracker = app.symbol_tracker.clone();
-    dbg!("webserver.add_document", &file_path);
     symbol_tracker
         .add_document(file_path, file_content, language)
         .await;
@@ -319,7 +315,6 @@ pub async fn get_identifier_nodes(
         cursor_column,
     }): Json<InLineCompletionIdentifierNodesRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!("sidecar.get_identifier_nodes", &file_path, language);
     let inline_symbol_tracker = app.symbol_tracker.clone();
 
     let cursor_position = Position::new(cursor_line, cursor_column, 0);
@@ -329,10 +324,6 @@ pub async fn get_identifier_nodes(
     let identifier_nodes = inline_symbol_tracker
         .get_identifier_nodes(&file_path, cursor_position)
         .await;
-    dbg!(
-        "sidecar.identifier_nodes",
-        identifier_nodes.identifier_nodes_len()
-    );
     Ok(Json(InLineCompletionIdentifierNodesResponse {
         identifier_nodes: identifier_nodes
             .clone()

@@ -2401,7 +2401,7 @@ fn init_ort_dylib() {
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
         let mut visitors = tree.walk();
         // walk(&mut visitors, 0);
-        dbg!(walk_tree_for_no_errors(&mut visitors, &range, 0));
+        walk_tree_for_no_errors(&mut visitors, &range, 0);
         assert!(false);
     }
 

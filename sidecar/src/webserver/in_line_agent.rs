@@ -252,7 +252,6 @@ pub async fn reply_to_user(
         sender,
         chat_broker,
     );
-    dbg!("sidecar.webserver.in_line_agent_stream.start");
     let result = generate_in_line_agent_stream(
         inline_agent,
         // Since we are always starting with deciding the action, lets send that

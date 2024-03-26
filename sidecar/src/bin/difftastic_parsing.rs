@@ -152,7 +152,6 @@ async fn process_file_lines_to_gpt(file_lines: Vec<String>, user_query: &str) ->
     // and then use that to build up the file thats how we can solve this
     let mut initial_index = 0;
     let total_lines = file_lines.len();
-    dbg!(&file_lines);
     let mut total_file_lines: Vec<String> = vec![];
     while initial_index < total_lines {
         let line = file_lines[initial_index].to_owned();

@@ -161,6 +161,7 @@ pub struct ConversationMessage {
     definitions_interested_in: Vec<String>,
     /// Whats the context for the answer if any, this gets set at the same time
     /// when we finished generating the answer
+    #[serde(skip)]
     generated_answer_context: Option<String>,
     /// The symbols which were provided by the user
     user_variables: Vec<VariableInformation>,
@@ -590,6 +591,7 @@ pub struct CodeSpan {
     pub alias: usize,
     pub start_line: u64,
     pub end_line: u64,
+    #[serde(skip)]
     pub data: String,
     pub score: Option<f32>,
 }
@@ -669,6 +671,7 @@ pub enum AgentStep {
     },
     Code {
         query: String,
+        #[serde(skip)]
         response: String,
         code_snippets: Vec<CodeSpan>,
     },

@@ -11,8 +11,7 @@ pub fn tracing_subscribe(config: &Configuration) -> bool {
         .with_filter(
             EnvFilter::from_default_env()
                 .add_directive("hyper=off".parse().unwrap())
-                .add_directive("tantivy=off".parse().unwrap())
-                .add_directive("error".parse().unwrap()),
+                .add_directive("tantivy=off".parse().unwrap()), // .add_directive("error".parse().unwrap()),
         );
     let file_appender = tracing_appender::rolling::daily(config.log_dir(), "codestory.log");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);

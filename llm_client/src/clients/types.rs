@@ -104,6 +104,15 @@ impl LLMType {
             LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku
         )
     }
+
+    pub fn is_deepseek(&self) -> bool {
+        matches!(
+            self,
+            LLMType::DeepSeekCoder1_3BInstruct
+                | LLMType::DeepSeekCoder6BInstruct
+                | LLMType::DeepSeekCoder33BInstruct
+        )
+    }
 }
 
 impl fmt::Display for LLMType {

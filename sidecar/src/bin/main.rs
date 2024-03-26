@@ -12,7 +12,6 @@ async fn main() {
     let embedder = LocalEmbedder::new(&current_path.join("models/all-MiniLM-L6-v2/")).unwrap();
     let result = embedder.embed("hello world!").unwrap();
     let something = Some("something".to_owned());
-    dbg!(result);
 }
 
 fn init_ort_dylib() {

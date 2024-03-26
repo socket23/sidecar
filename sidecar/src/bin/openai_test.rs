@@ -40,7 +40,6 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
     let start_time = std::time::Instant::now();
     let capture_status = posthog_client.capture(event).await;
     let time_taken = start_time.elapsed().as_millis();
-    dbg!(time_taken, "capture_time");
 
     let client = Client::with_config(azure_config);
 
@@ -61,13 +60,11 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
         .messages(vec![system_message])
         .build()
         .unwrap();
-    dbg!(&chat_request_args);
     let mut event = PosthogEvent::new("rust_something");
     let start_time = std::time::Instant::now();
     let _ = event.insert_prop("request", chat_request_args.clone());
     let capture_status = posthog_client.capture(event).await;
     let time_taken = start_time.elapsed().as_millis();
-    dbg!(time_taken, "capture_time");
     let stream_messages = client.chat().create_stream(chat_request_args).await?;
 
     let _ = stream_messages

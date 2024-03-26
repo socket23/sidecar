@@ -626,8 +626,6 @@ impl DocumentEditLines {
     }
 
     fn generate_snippets(&mut self) {
-        dbg!("sidecar.generate_snippets.start");
-        let instant = std::time::Instant::now();
         // generate the new tree sitter tree
         self.set_tree();
         // we need to create ths symbol map here for the file so we can lookup the symbols
@@ -657,11 +655,6 @@ impl DocumentEditLines {
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
         self.snippets_using_sliding_window(vec![]);
-        dbg!(
-            "sidecar.generate_snippets",
-            &instant.elapsed(),
-            &self.outline_nodes.len()
-        );
     }
 
     // If the contents have changed, we need to mark the new lines which have changed

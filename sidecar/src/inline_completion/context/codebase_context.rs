@@ -121,11 +121,6 @@ impl CodeBaseContext {
                 .partial_cmp(&a.score())
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-        dbg!(
-            "codebase_context.generate_context.document_lines",
-            &self.request_id,
-            instant.clone().elapsed()
-        );
 
         // Now that we have the relevant snippets we can generate the context
         let comment_prefix = &language_config.comment_prefix;
@@ -158,7 +153,6 @@ impl CodeBaseContext {
                 LLMTokenizerInput::Prompt(joined_snippet_context.to_owned()),
                 // adding + 1 here for the \n at the end
             )? + 1;
-            dbg!("tokens_count.time_taken", count_tokens_instant.elapsed());
             total_tokens_used_by_snippets = total_tokens_used_by_snippets + current_snippet_tokens;
             running_context.push(joined_snippet_context);
             let current_context = running_context.join("\n");
@@ -168,11 +162,6 @@ impl CodeBaseContext {
                 return Err(InLineCompletionError::AbortedHandle);
             }
             if total_tokens_used_by_snippets > token_limit {
-                dbg!(
-                    "codebase_context.generate_context",
-                    &self.request_id,
-                    instant.elapsed()
-                );
                 return Ok(CodebaseContextString::TruncatedToLimit(
                     current_context,
                     total_tokens_used_by_snippets as i64,
@@ -185,11 +174,6 @@ impl CodeBaseContext {
             &self.llm_type,
             LLMTokenizerInput::Prompt(prefix_context.to_owned()),
         )?;
-        dbg!(
-            "codebase_context.generate_context",
-            &self.request_id,
-            instant.elapsed()
-        );
         Ok(CodebaseContextString::TruncatedToLimit(
             prefix_context,
             used_tokens_for_prefix as i64,

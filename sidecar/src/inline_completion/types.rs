@@ -325,7 +325,6 @@ impl FillInMiddleCompletionAgent {
         InLineCompletionError,
     > {
         let request_id = completion_request.id.to_owned();
-        dbg!("inline.completion.start", &request_id);
         // Now that we have the position, we want to create the request for the fill
         // in the middle request.
         let model_config = &completion_request.model_config;
@@ -404,10 +403,6 @@ impl FillInMiddleCompletionAgent {
         )
         .await?
         .get_prefix_with_tokens();
-        dbg!(
-            "inline.completion.start.codebase_context",
-            codebase_context_instant.elapsed()
-        );
         match codebase_context {
             Some((codebase_prefix, used_tokens)) => {
                 token_limit = token_limit - used_tokens;
@@ -421,10 +416,6 @@ impl FillInMiddleCompletionAgent {
         }
 
         let instant = std::time::Instant::now();
-        dbg!(
-            "inline.definition_context.type_definitons",
-            &completion_request.type_identifiers.len()
-        );
         let definitions_context = self
             .symbol_tracker
             .get_definition_configs(
@@ -433,7 +424,6 @@ impl FillInMiddleCompletionAgent {
                 self.editor_parsing.clone(),
             )
             .await;
-        dbg!("inline.definitions_context", &definitions_context.len());
         if !definitions_context.is_empty() {
             if let Some(previous_prefix) = prefix {
                 prefix = Some(format!(
@@ -445,7 +435,6 @@ impl FillInMiddleCompletionAgent {
                 prefix = Some(definitions_context.join("\n"))
             }
         }
-        dbg!("definitions_context.time_taken", instant.elapsed());
         // TODO(skcd): Can we also grab the context from other functions which might be useful for the completion.
         // TODO(skcd): We also want to grab the recent edits which might be useful for the completion.
 
@@ -571,13 +560,6 @@ impl FillInMiddleCompletionAgent {
             .into_stream()
             .map(either::Right);
 
-            dbg!(
-                "inline.completion.streaming.starting",
-                request_id,
-                instant.elapsed(),
-                request_start.elapsed(),
-            );
-
             let merged_stream = stream::select(completion_receiver_stream, completion);
             merged_stream
                 .map(move |item| {
@@ -664,7 +646,6 @@ impl FillInMiddleCompletionAgent {
                                         &inserted_range,
                                         cursor_prefix.clone(),
                                     );
-                                    dbg!("sidecar.terminating_condition", &terminating_condition);
                                     match terminating_condition {
                                         TerminationCondition::Immediate => {
                                             if let Ok(mut value) = should_end_stream.lock() {
@@ -769,7 +750,6 @@ fn immediate_terminating_condition(
             .into_iter()
             .all(|char| closing_brackets.contains(&char.to_string()));
         if is_next_line_closing && is_inserted_text_closing {
-            dbg!("sidecar.inline_autocomplete.stop.next_line_closing_brackets");
             return TerminationCondition::Immediate;
         }
     }
@@ -778,7 +758,6 @@ fn immediate_terminating_condition(
     // when we are inserting )}; kind of values and the editor already has )}
     if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
         if inserted_text.starts_with(next_line) {
-            dbg!("sidecar.inline_autocomplete.stop.next_line_prefix_of_inserted_text");
             return TerminationCondition::Immediate;
         }
     }
@@ -799,7 +778,6 @@ fn immediate_terminating_condition(
         let inserted_text_indentation = indentation_at_position(&inserted_text_delta);
         let prefix_indentation = indentation_at_position(&context.prefix_at_cursor_position);
         if inserted_text_indentation < prefix_indentation {
-            dbg!("sidecar.inline_autocomplete.stop.inserted_text_indentation_less_than_prefix_indentation");
             return TerminationCondition::Immediate;
         }
     }
@@ -816,7 +794,6 @@ fn immediate_terminating_condition(
             .into_iter()
             .all(|char| closing_brackets.contains(&char.to_string()));
         if is_inserted_text_closing {
-            dbg!("sidecar.inline_autocomplete.stop.inserted_text_delta_closing_brackets");
             return TerminationCondition::Next;
         }
     }

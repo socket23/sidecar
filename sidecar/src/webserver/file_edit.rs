@@ -147,7 +147,6 @@ pub async fn file_edit(
         model_config,
     }): Json<EditFileRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!("file_editing");
     info!(event_name = "file_edit", file_path = file_path.as_str(),);
     // Here we have to first check if the new content is tree-sitter valid, if
     // thats the case only then can we apply it to the file
@@ -162,10 +161,9 @@ pub async fn file_edit(
         app.language_parsing.clone(),
     )
     .await;
-    file_diff_content.clone().and_then(|file_diff_content| {
-        dbg!(file_diff_content.join("\n"));
-        Some("".to_owned())
-    });
+    file_diff_content
+        .clone()
+        .and_then(|file_diff_content| Some("".to_owned()));
 
     if let None = file_diff_content {
         let cloned_session_id = session_id.clone();
@@ -214,7 +212,6 @@ pub async fn file_edit(
         )
         .await;
         println!("nearest range of symbols: {:?}", &nearest_range_for_symbols);
-        dbg!("nearest_range_of_symbols", &nearest_range_for_symbols);
 
         // Now we apply the edits and send it over to the user
         // After generating the git diff we want to send back the responses to the
@@ -328,8 +325,6 @@ async fn find_nearest_position_for_code_edit(
     }
     let class_with_funcs_llm = language_parser.generate_file_symbols(new_content.as_bytes());
     let class_with_funcs = language_parser.generate_file_symbols(file_content.as_bytes());
-    dbg!(&class_with_funcs);
-    dbg!(&class_with_funcs_llm);
     let types_llm = language_parser.capture_type_data(new_content.as_bytes());
     let types_file = language_parser.capture_type_data(file_content.as_bytes());
     // First we want to try and match all the classes as much as possible
@@ -575,7 +570,6 @@ pub async fn generate_file_diff(
     if language_parser.is_none() {
         return None;
     }
-    dbg!("the file path", &file_path);
     // we can get the extension from the file path
     let file_extension = PathBuf::from(file_path)
         .extension()

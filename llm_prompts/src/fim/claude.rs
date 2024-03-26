@@ -112,7 +112,6 @@ As a reminder the section in <prompt> where you have to make changes is over her
 </insertion_point>
 </reminder>"#
         );
-        dbg!("sidecar.claude.prompt", &prefix, &suffix, &fim_request);
         // let example_messages = self.few_shot_messages();
         let final_messages = vec![LLMClientMessage::system(system_prompt.to_owned())]
             .into_iter()

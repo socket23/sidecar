@@ -23,6 +23,8 @@ pub struct FillInMiddleRequest {
     stop_words: Vec<String>,
     completion_tokens: Option<i64>,
     current_line_content: String,
+    is_current_line_whitespace: bool,
+    current_line_indentation: String,
 }
 
 impl FillInMiddleRequest {
@@ -33,6 +35,8 @@ impl FillInMiddleRequest {
         stop_words: Vec<String>,
         completion_tokens: Option<i64>,
         current_line_content: String,
+        is_current_line_whitespace: bool,
+        current_line_indentation: String,
     ) -> Self {
         Self {
             prefix,
@@ -41,7 +45,17 @@ impl FillInMiddleRequest {
             stop_words,
             completion_tokens,
             current_line_content,
+            is_current_line_whitespace,
+            current_line_indentation,
         }
+    }
+
+    pub fn is_trigger_line_whitespace(&self) -> bool {
+        self.is_current_line_whitespace
+    }
+
+    pub fn trigger_line_whitespace(&self) -> &str {
+        &self.current_line_indentation
     }
 
     pub fn llm(&self) -> &LLMType {

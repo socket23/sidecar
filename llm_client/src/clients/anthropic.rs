@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::debug;
 
 use crate::provider::{LLMProvider, LLMProviderAPIKeys};
 
@@ -278,12 +279,11 @@ impl LLMClient for AnthropicClient {
                         .unwrap()
                         .as_millis();
                     let time_diff = time_now - current_time;
-                    dbg!(
-                        "buffered_string",
-                        message_tokens_count,
-                        &buffered_string,
-                        &buffered_string.len(),
-                        time_diff
+                    debug!(
+                        event_name = "anthropic.buffered_string",
+                        message_tokens_count = message_tokens_count,
+                        generated_tokens_count = &buffered_string.len(),
+                        time_taken = time_diff,
                     );
                     let _ = sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
@@ -296,12 +296,10 @@ impl LLMClient for AnthropicClient {
                     break;
                 }
                 _ => {
-                    dbg!(&event);
+                    // dbg!(&event);
                 }
             }
         }
-
-        dbg!("we are returning here quickly");
 
         Ok(buffered_string)
     }

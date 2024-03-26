@@ -2973,6 +2973,9 @@ dependencies = [
  "tokenizers",
  "tokio",
  "tokio-stream",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
 ]
 
 [[package]]

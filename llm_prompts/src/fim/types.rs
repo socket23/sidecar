@@ -124,6 +124,14 @@ impl FillInMiddleBroker {
                 LLMType::ClaudeHaiku,
                 Box::new(ClaudeFillInMiddleFormatter::new()),
             )
+            .add_llm(
+                LLMType::ClaudeOpus,
+                Box::new(ClaudeFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::ClaudeSonnet,
+                Box::new(ClaudeFillInMiddleFormatter::new()),
+            )
     }
 
     fn add_llm(

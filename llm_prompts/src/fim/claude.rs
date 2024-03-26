@@ -84,7 +84,7 @@ To generate the code completion, follow these guidelines:
 4. Avoid introducing extra whitespace unless necessary for the code completion.
 5. Output only the completed code, without any additional explanations or comments.
 6. The code you generate will be inserted at the <code_inserted></code_inserted> location, so be mindful to write code that logically follows from the <code_inserted></code_inserted> location.
-7. You have to start your reply with <code_inserted> as show in the interactions with the user.
+7. You have to always start your reply with <code_inserted> as show in the interactions with the user.
 8. You should stop generating code and end with </code_inserted> when you have logically completed the code block you are supposed to autocomplete.
 9. Use the same indentation for the generated code as the position of the <code_inserted></code_inserted> location. Use spaces if spaces are used; use tabs if tabs are used.
         
@@ -112,13 +112,21 @@ As a reminder the section in <prompt> where you have to make changes is over her
 </insertion_point>
 </reminder>"#
         );
+        dbg!("claude.fim_request", &fim_request);
+        let assistant_partial_answer = LLMClientMessage::assistant(
+            format!(
+                r#"<code_inserted>
+{insertion_prefix}"#
+            )
+            .to_owned(),
+        );
         // let example_messages = self.few_shot_messages();
         let final_messages = vec![LLMClientMessage::system(system_prompt.to_owned())]
             .into_iter()
             // .chain(example_messages)
             .chain(vec![
                 LLMClientMessage::user(fim_request),
-                // LLMClientMessage::assistant("<reply>\n".to_owned()),
+                assistant_partial_answer, // LLMClientMessage::assistant("<reply>\n".to_owned()),
             ])
             .collect::<Vec<_>>();
         let mut llm_request =

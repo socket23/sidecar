@@ -211,7 +211,7 @@ impl LLMBroker {
             first_line_check: false,
             first_streamable_line_check: false,
         }));
-        let should_apply_special_edits = model.is_anthropic();
+        let should_apply_special_edits = false;
         stream::select(receiver_stream, result)
             .map(|element| (element, running_line.clone()))
             .for_each(|(element, running_line)| {
@@ -272,6 +272,9 @@ impl LLMBroker {
                                     // true
                                     current_running_line.first_streamable_line_check = true;
                                 }
+
+                                // set the first line as done
+                                current_running_line.first_line_check = true;
 
                                 // drain the running line
                                 current_running_line.running_line.drain(..=new_line_index);

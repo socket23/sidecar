@@ -92,6 +92,16 @@ Remember, your goal is to provide the most appropriate and efficient code comple
         let prefix = request.prefix();
         let suffix = request.suffix();
         let insertion_prefix = request.current_line_content();
+        let prefix_lines = prefix
+            .lines()
+            .rev()
+            .take(4)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        let suffix_lines = suffix.lines().take(4).collect::<Vec<_>>().join("\n");
         let fim_request = format!(
             r#"<prompt>
 <prefix>
@@ -107,9 +117,11 @@ Remember, your goal is to provide the most appropriate and efficient code comple
 
 As a reminder the section in <prompt> where you have to make changes is over here
 <reminder>
+{prefix_lines}
 <insertion_point>
 {insertion_prefix}<code_inserted></code_inesrted>
 </insertion_point>
+{suffix_lines}
 </reminder>"#
         );
         dbg!("claude.fim_request", &fim_request);

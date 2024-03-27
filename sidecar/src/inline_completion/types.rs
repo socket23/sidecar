@@ -726,11 +726,37 @@ fn immediate_terminating_condition(
     context: Arc<FillInMiddleStreamContext>,
     fast_model: LLMType,
 ) -> TerminationCondition {
+    // for anthropic models, since they are smart and do not ramble we can terminate
+    // immediately
     let next_line = context.next_non_empty_line.as_ref();
     if fast_model.is_anthropic() {
-        if inserted_text == "</code_inserted>" {
+        if inserted_text_delta == Some("</code_inserted>".to_owned()) {
             return TerminationCondition::Immediate;
         }
+    }
+
+    // Check if the indentation of the inserted text is greater than the line we are on
+    // if that's the case, then we should not be inserting it and stop, we are going out
+    // of bounds
+    // The reason here is that we need the whole line and not just the prefix of the
+    // inserted text, since it can be partial, so we grab that as well and figure out
+    // the line
+    // check if this is the same line as the cursor position, then its okay to always include this
+    // and skip the indentaiton check
+    if let Some(inserted_text_delta) = inserted_text_delta.as_ref() {
+        // early failsafe when the inserted text is a prefix for the inserted text delta
+        if inserted_text.starts_with(inserted_text_delta) {
+            return TerminationCondition::Not;
+        }
+        let inserted_text_indentation = indentation_at_position(&inserted_text_delta);
+        let prefix_indentation = indentation_at_position(&context.prefix_at_cursor_position);
+        if inserted_text_indentation < prefix_indentation {
+            return TerminationCondition::Immediate;
+        }
+    }
+
+    if fast_model.is_anthropic() {
+        return TerminationCondition::Not;
     }
     // First we check if the next line is similar to the line we are going to insert
     // if that's the case, then we CAN STOP
@@ -785,26 +811,6 @@ fn immediate_terminating_condition(
     // when we are inserting )}; kind of values and the editor already has )}
     if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
         if inserted_text.starts_with(next_line) {
-            return TerminationCondition::Immediate;
-        }
-    }
-
-    // Check if the indentation of the inserted text is greater than the line we are on
-    // if that's the case, then we should not be inserting it and stop, we are going out
-    // of bounds
-    // The reason here is that we need the whole line and not just the prefix of the
-    // inserted text, since it can be partial, so we grab that as well and figure out
-    // the line
-    // check if this is the same line as the cursor position, then its okay to always include this
-    // and skip the indentaiton check
-    if let Some(inserted_text_delta) = inserted_text_delta.as_ref() {
-        // early failsafe when the inserted text is a prefix for the inserted text delta
-        if inserted_text.starts_with(inserted_text_delta) {
-            return TerminationCondition::Not;
-        }
-        let inserted_text_indentation = indentation_at_position(&inserted_text_delta);
-        let prefix_indentation = indentation_at_position(&context.prefix_at_cursor_position);
-        if inserted_text_indentation < prefix_indentation {
             return TerminationCondition::Immediate;
         }
     }

@@ -291,11 +291,23 @@ impl LLMBroker {
                                         .chain(vec![line.to_owned()])
                                         .collect::<Vec<_>>()
                                         .join("\n");
-                                    let _ = sender.send(LLMClientCompletionResponse::new(
-                                        current_answer + "\n",
-                                        Some(line.to_owned() + "\n"),
-                                        "parsing_model".to_owned(),
-                                    ));
+                                    if should_apply_special_edits {
+                                        // do not send if the delta is the marker for
+                                        // the closing tag
+                                        if line.trim() != "</code_inserted>" {
+                                            let _ = sender.send(LLMClientCompletionResponse::new(
+                                                current_answer + "\n",
+                                                Some(line.to_owned() + "\n"),
+                                                "parsing_model".to_owned(),
+                                            ));
+                                        }
+                                    } else {
+                                        let _ = sender.send(LLMClientCompletionResponse::new(
+                                            current_answer + "\n",
+                                            Some(line.to_owned() + "\n"),
+                                            "parsing_model".to_owned(),
+                                        ));
+                                    }
                                     // add the new line and the \n
                                     current_running_line.answer_up_until_now.push_str(&line);
                                     current_running_line.answer_up_until_now.push_str("\n");

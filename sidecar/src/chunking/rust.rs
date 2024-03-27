@@ -96,8 +96,8 @@ pub fn rust_language_config() -> TSLanguageConfig {
         import_statement: vec!["[(use_declaration)] @import_type".to_owned()],
         block_start: Some("{".to_owned()),
         variable_identifier_queries: vec!["(let_declaration pattern: (identifier) @identifier)
-            (call_expression function: (field_expression field: (field_identifier) @last_member))
-            (call_expression function: (identifier) @last_member)"
+            (call_expression function: (field_expression field: (field_identifier) @identifier))
+            (call_expression function: (identifier) @identifier)"
             .to_owned()],
         outline_query: Some(
             r#"

@@ -226,6 +226,13 @@ impl LLMBroker {
             .for_each(|(element, running_line)| {
                 match element {
                     either::Right(item) => {
+                        if should_apply_special_edits {
+                            // if the answer ends with \n</code_inserted> then its generated
+                            // by claude and we should stop streaming back
+                            if item.answer_up_until_now().ends_with("\n</code_inserted>") {
+                                return futures::future::ready(());
+                            }
+                        }
                         let delta = item.delta().map(|delta| delta.to_owned());
                         if let Ok(mut current_running_line) = running_line.lock() {
                             if let Some(delta) = delta {

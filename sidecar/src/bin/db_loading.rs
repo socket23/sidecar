@@ -5,17 +5,15 @@ use std::sync::Arc;
 
 use clap::Parser;
 use sidecar::{
-    application::{application::Application, config::configuration::Configuration},
-    bg_poll::background_polling::poll_repo_updates,
+    application::config::configuration::Configuration,
     db::sqlite::{self, SqlDb},
-    semantic_search::qdrant_process::{wait_for_qdrant, QdrantServerProcess},
 };
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let configuration = Arc::new(Configuration::parse());
     let sql_db = Arc::new(sqlite::init(configuration).await?);
-    read_all_entries(sql_db).await?;
+    let result = read_all_entries(sql_db).await;
     Ok(())
 }
 

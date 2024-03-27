@@ -124,7 +124,6 @@ As a reminder the section in <prompt> where you have to make changes is over her
 {suffix_lines}
 </reminder>"#
         );
-        dbg!("claude.fim_request", &fim_request);
         let assistant_partial_answer = LLMClientMessage::assistant(
             format!(
                 r#"<code_inserted>

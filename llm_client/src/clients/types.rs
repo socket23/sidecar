@@ -113,6 +113,15 @@ impl LLMType {
                 | LLMType::DeepSeekCoder33BInstruct
         )
     }
+
+    pub fn is_togetherai_model(&self) -> bool {
+        matches!(
+            self,
+            LLMType::CodeLlama13BInstruct
+                | LLMType::CodeLlama7BInstruct
+                | LLMType::DeepSeekCoder33BInstruct
+        )
+    }
 }
 
 impl fmt::Display for LLMType {

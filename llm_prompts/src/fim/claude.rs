@@ -75,7 +75,7 @@ impl FillInMiddleFormatter for ClaudeFillInMiddleFormatter {
         &self,
         request: FillInMiddleRequest,
     ) -> Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest> {
-        let system_prompt = r#"You are an intelligent code autocomplete model trained to generate code completions from the cursor position. Given a code snippet with a cursor position marked by <code_inserted></code_inserted>, your task is to generate the code that should appear at the <code_inserted></code_inserted> to complete the code logically.
+        let system_prompt = r#"You are an intelligent code autocomplete model trained to generate code completions from the cursor position. Given a code snippet with a cursor position marked by <<CURSOR>>, your task is to generate the code that should appear at the <<CURSOR>> to complete the code logically.
 
 To generate the code completion, follow these guidelines:
 1. Analyze the code before and after the cursor position to understand the context and intent of the code.
@@ -83,10 +83,10 @@ To generate the code completion, follow these guidelines:
 3. Generate code that logically continues from the cursor position, maintaining the existing code structure and style.
 4. Avoid introducing extra whitespace unless necessary for the code completion.
 5. Output only the completed code, without any additional explanations or comments.
-6. The code you generate will be inserted at the <code_inserted></code_inserted> location, so be mindful to write code that logically follows from the <code_inserted></code_inserted> location.
+6. The code you generate will be inserted at the <<CURSOR>> location, so be mindful to write code that logically follows from the <<CURSOR>> location.
 7. You have to always start your reply with <code_inserted> as show in the interactions with the user.
 8. You should stop generating code and end with </code_inserted> when you have logically completed the code block you are supposed to autocomplete.
-9. Use the same indentation for the generated code as the position of the <code_inserted></code_inserted> location. Use spaces if spaces are used; use tabs if tabs are used.
+9. Use the same indentation for the generated code as the position of the <<CURSOR>> location. Use spaces if spaces are used; use tabs if tabs are used.
         
 Remember, your goal is to provide the most appropriate and efficient code completion based on the given context and the location of the cursor. Use your programming knowledge and the provided examples to generate high-quality code completions that meet the requirements of the task."#;
         let prefix = request.prefix();
@@ -108,7 +108,7 @@ Remember, your goal is to provide the most appropriate and efficient code comple
 {prefix}
 </prefix>
 <insertion_point>
-{insertion_prefix}<code_inserted></code_inserted>
+{insertion_prefix}<<CURSOR>>
 </insertion_point>
 <suffix>
 {suffix}
@@ -119,7 +119,7 @@ As a reminder the section in <prompt> where you have to make changes is over her
 <reminder>
 {prefix_lines}
 <insertion_point>
-{insertion_prefix}<code_inserted></code_inesrted>
+{insertion_prefix}<<CURSOR>>
 </insertion_point>
 {suffix_lines}
 </reminder>"#
@@ -128,19 +128,20 @@ As a reminder the section in <prompt> where you have to make changes is over her
         let assistant_partial_answer = LLMClientMessage::assistant(
             format!(
                 r#"<code_inserted>
+{prefix_lines}
 {insertion_prefix}"#
             )
             .to_owned(),
         );
-        // let example_messages = self.few_shot_messages();
-        let final_messages = vec![LLMClientMessage::system(system_prompt.to_owned())]
-            .into_iter()
-            // .chain(example_messages)
-            .chain(vec![
-                LLMClientMessage::user(fim_request),
-                // assistant_partial_answer, // LLMClientMessage::assistant("<reply>\n".to_owned()),
-            ])
-            .collect::<Vec<_>>();
+        let mut final_messages = vec![
+            LLMClientMessage::system(system_prompt.to_owned()),
+            LLMClientMessage::user(fim_request),
+        ];
+        // if the insertion prefix is not all whitespace then we can add words to
+        // the llm mouth
+        if !insertion_prefix.trim().is_empty() {
+            final_messages.push(assistant_partial_answer);
+        }
         let mut llm_request =
             LLMClientCompletionRequest::new(request.llm().clone(), final_messages, 0.1, None);
         if let Some(max_tokens) = request.completion_tokens() {

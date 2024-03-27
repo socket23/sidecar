@@ -105,15 +105,6 @@ impl LLMType {
         )
     }
 
-    pub fn is_deepseek(&self) -> bool {
-        matches!(
-            self,
-            LLMType::DeepSeekCoder1_3BInstruct
-                | LLMType::DeepSeekCoder6BInstruct
-                | LLMType::DeepSeekCoder33BInstruct
-        )
-    }
-
     pub fn is_togetherai_model(&self) -> bool {
         matches!(
             self,

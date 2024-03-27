@@ -548,7 +548,11 @@ impl FillInMiddleCompletionAgent {
                     .into_iter()
                     .collect(),
                 sender,
-                None,
+                if fast_model.is_anthropic() {
+                    Some("<code_inserted>".to_owned())
+                } else {
+                    None
+                },
                 is_current_line_whitespace,
                 current_line_indentation,
                 fast_model.clone(),

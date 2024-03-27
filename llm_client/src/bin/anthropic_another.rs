@@ -118,47 +118,50 @@ impl<'de> Deserialize<'de> for LLMType {
     }
 }
 
-impl LLMType {
-    pub fn is_openai(&self) -> bool {
-        matches!(
-            self,
-            LLMType::Gpt4 | LLMType::GPT3_5_16k | LLMType::Gpt4_32k | LLMType::Gpt4Turbo
-        )
-    }
+mod llm_type {
+    impl LLMType {
+            pub fn is_openai(&self) -> bool {
+                matches!(
+                    self,
+                    LLMType::Gpt4 | LLMType::GPT3_5_16k | LLMType::Gpt4_32k | LLMType::Gpt4Turbo
+                )
+            }
 
-    pub fn is_custom(&self) -> bool {
-        matches!(self, LLMType::Custom(_))
-    }
+            pub fn is_custom(&self) -> bool {
+                matches!(self, LLMType::Custom(_))
+            }
 
+            // checks if this is a codellama model
 </prefix>
 <insertion_point>
-    // check if the model is codellama<<CURSOR>>
+            <<CURSOR>>
 </insertion_point>
 <suffix>
 
-    pub fn is_anthropic(&self) -> bool {
-        matches!(
-            self,
-            LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku
-        )
-    }
+            pub fn is_anthropic(&self) -> bool {
+                matches!(
+                    self,
+                    LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku
+                )
+            }
 
-    pub fn is_deepseek(&self) -> bool {
-        matches!(
-            self,
-            LLMType::DeepSeekCoder1_3BInstruct
-                | LLMType::DeepSeekCoder6BInstruct
-                | LLMType::DeepSeekCoder33BInstruct
-        )
-    }
+            pub fn is_deepseek(&self) -> bool {
+                matches!(
+                    self,
+                    LLMType::DeepSeekCoder1_3BInstruct
+                        | LLMType::DeepSeekCoder6BInstruct
+                        | LLMType::DeepSeekCoder33BInstruct
+                )
+            }
 
-    pub fn is_togetherai_model(&self) -> bool {
-        matches!(
-            self,
-            LLMType::CodeLlama13BInstruct
-                | LLMType::CodeLlama7BInstruct
-                | LLMType::DeepSeekCoder33BInstruct
-        )
+            pub fn is_togetherai_model(&self) -> bool {
+                matches!(
+                    self,
+                    LLMType::CodeLlama13BInstruct
+                        | LLMType::CodeLlama7BInstruct
+                        | LLMType::DeepSeekCoder33BInstruct
+                )
+            }
     }
 }
 
@@ -248,23 +251,25 @@ pub struct LLMClientMessageFunctionReturn {
     content: String,
 }
 
+impl LLMClientMessageFunctionReturn {
 </suffix>
 </prompt>
 
 As a reminder the section in <prompt> where you have to make changes is over here
 <reminder>
 
-    pub fn is_custom(&self) -> bool {
-        matches!(self, LLMType::Custom(_))
-    }
+        pub fn is_custom(&self) -> bool {
+            matches!(self, LLMType::Custom(_))
+        }
 
+        // checks if this is a codellama model
 <insertion_point>
-    // check if the model is codellama<<CURSOR>>
+        <<CURSOR>>
 </insertion_point>
 
-    pub fn is_anthropic(&self) -> bool {
-        matches!(
-            self,
+        pub fn is_anthropic(&self) -> bool {
+            matches!(
+                self,
 </reminder>"#
         .to_owned();
     let request = LLMClientCompletionRequest::new(
@@ -272,14 +277,6 @@ As a reminder the section in <prompt> where you have to make changes is over her
         vec![
             LLMClientMessage::new(LLMClientRole::System, system_prompt.to_owned()),
             LLMClientMessage::new(LLMClientRole::User, fim_request.to_owned()),
-            LLMClientMessage::new(
-                LLMClientRole::Assistant,
-                r#"<code_inserted>
-    }
-
-    // check if the model is codellama"#
-                    .to_owned(),
-            ),
         ],
         0.1,
         None,

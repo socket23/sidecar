@@ -568,52 +568,62 @@ impl FillInMiddleCompletionAgent {
                         arced_document_lines.clone(),
                         cursor_prefix.clone(),
                         should_end_stream.clone(),
+                        fast_model.clone(),
                     )
                 })
                 .map(
-                    move |(item, document_lines, cursor_prefix, should_end_stream)| match item {
-                        either::Left(response) => Ok((
-                            InlineCompletionResponse::new(vec![InlineCompletion::new(
-                                // TODO(skcd): Remove this later on, we are testing it out over here
-                                response.answer_up_until_now().to_owned(),
-                                insert_range(
-                                    completion_request.position,
-                                    &document_lines,
-                                    response.answer_up_until_now(),
-                                ),
-                                response.delta().map(|v| v.to_owned()),
-                            )]),
-                            cursor_prefix.clone(),
-                            should_end_stream.clone(),
-                        )),
-                        either::Right(Ok(response)) => {
-                            Ok((
-                                InlineCompletionResponse::new(
-                                    // this gets sent at the very end
-                                    vec![InlineCompletion::new(
-                                        response.to_owned(),
-                                        insert_range(
-                                            completion_request.position,
-                                            &document_lines,
-                                            &response,
-                                        ),
-                                        None,
-                                    )],
-                                ),
-                                cursor_prefix,
+                    move |(item, document_lines, cursor_prefix, should_end_stream, fast_model)| {
+                        match item {
+                            either::Left(response) => Ok((
+                                InlineCompletionResponse::new(vec![InlineCompletion::new(
+                                    // TODO(skcd): Remove this later on, we are testing it out over here
+                                    response.answer_up_until_now().to_owned(),
+                                    insert_range(
+                                        completion_request.position,
+                                        &document_lines,
+                                        response.answer_up_until_now(),
+                                    ),
+                                    response.delta().map(|v| v.to_owned()),
+                                )]),
+                                cursor_prefix.clone(),
                                 should_end_stream.clone(),
-                            ))
-                        }
-                        either::Right(Err(e)) => {
-                            println!("{:?}", e);
-                            Err(InLineCompletionError::InlineCompletionTerminated)
+                                fast_model,
+                            )),
+                            either::Right(Ok(response)) => {
+                                Ok((
+                                    InlineCompletionResponse::new(
+                                        // this gets sent at the very end
+                                        vec![InlineCompletion::new(
+                                            response.to_owned(),
+                                            insert_range(
+                                                completion_request.position,
+                                                &document_lines,
+                                                &response,
+                                            ),
+                                            None,
+                                        )],
+                                    ),
+                                    cursor_prefix,
+                                    should_end_stream.clone(),
+                                    fast_model,
+                                ))
+                            }
+                            either::Right(Err(e)) => {
+                                println!("{:?}", e);
+                                Err(InLineCompletionError::InlineCompletionTerminated)
+                            }
                         }
                     },
                 )
                 // this is used to decide the termination of the stream
                 .take_while(
                     |inline_completion_response| match inline_completion_response {
-                        Ok((inline_completion_response, cursor_prefix, should_end_stream)) => {
+                        Ok((
+                            inline_completion_response,
+                            cursor_prefix,
+                            should_end_stream,
+                            fast_model,
+                        )) => {
                             // Now we can check if we should still be sending the item over, and we work independently over here on a state
                             // basis and not the stream basis
                             {
@@ -641,10 +651,11 @@ impl FillInMiddleCompletionAgent {
                                 (Some(inserted_text), Some(inserted_range)) => {
                                     // we go for immediate termination now
                                     let terminating_condition = immediate_terminating_condition(
-                                        inserted_text,
-                                        inserted_text_delta,
+                                        inserted_text.clone(),
+                                        inserted_text_delta.clone(),
                                         &inserted_range,
                                         cursor_prefix.clone(),
+                                        fast_model.clone(),
                                     );
                                     match terminating_condition {
                                         TerminationCondition::Immediate => {
@@ -671,7 +682,7 @@ impl FillInMiddleCompletionAgent {
                     },
                 )
                 .map(|item| match item {
-                    Ok((inline_completion, _cursor_prefix, _should_end_stream)) => {
+                    Ok((inline_completion, _cursor_prefix, _should_end_stream, _llm_type)) => {
                         Ok(inline_completion)
                     }
                     Err(e) => Err(e),
@@ -713,8 +724,14 @@ fn immediate_terminating_condition(
     inserted_text_delta: Option<String>,
     inserted_range: &Range,
     context: Arc<FillInMiddleStreamContext>,
+    fast_model: LLMType,
 ) -> TerminationCondition {
     let next_line = context.next_non_empty_line.as_ref();
+    if fast_model.is_anthropic() {
+        if inserted_text == "</code_inserted>" {
+            return TerminationCondition::Immediate;
+        }
+    }
     // First we check if the next line is similar to the line we are going to insert
     // if that's the case, then we CAN STOP
     // if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
@@ -738,18 +755,28 @@ fn immediate_terminating_condition(
         .into_iter()
         .map(|s| s.to_owned())
         .collect::<Vec<String>>();
+    let opening_brackets = vec!["(", "[", "{"]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect::<Vec<String>>();
 
     // We check if the next line is completely closing bracket types
     if let (Some(next_line), Some(inserted_text)) = (next_line, inserted_text_delta.as_ref()) {
-        let is_next_line_closing = next_line
+        let next_line_closing_count = next_line
             .chars()
             .into_iter()
-            .all(|char| closing_brackets.contains(&char.to_string()));
+            .filter(|char| closing_brackets.contains(&char.to_string()))
+            .count() as i64;
+        let next_line_opening_count = next_line
+            .chars()
+            .into_iter()
+            .filter(|char| opening_brackets.contains(&char.to_string()))
+            .count() as i64;
         let is_inserted_text_closing = inserted_text
             .chars()
             .into_iter()
             .all(|char| closing_brackets.contains(&char.to_string()));
-        if is_next_line_closing && is_inserted_text_closing {
+        if next_line_closing_count > next_line_opening_count && is_inserted_text_closing {
             return TerminationCondition::Immediate;
         }
     }

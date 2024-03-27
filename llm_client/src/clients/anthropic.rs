@@ -237,7 +237,6 @@ impl LLMClient for AnthropicClient {
         let anthropic_request =
             AnthropicRequest::from_client_completion_request(request, model_str.to_owned());
 
-        dbg!("Anthropic request: {:?}", &anthropic_request);
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -292,7 +291,6 @@ impl LLMClient for AnthropicClient {
                         generated_tokens_count = &buffered_string.len(),
                         time_taken = time_diff,
                     );
-                    println!("{:?}", &buffered_string);
                     let _ = sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
                         Some(delta.text),

@@ -204,13 +204,22 @@ impl LLMBroker {
             running_line: String,
             first_line_check: bool,
             first_streamable_line_check: bool,
+            first_line_indent: Option<String>,
         }
         let running_line = Arc::new(Mutex::new(RunningAnswer {
             answer_up_until_now: "".to_owned(),
             running_line: "".to_owned(),
             first_line_check: false,
             first_streamable_line_check: false,
+            first_line_indent: None,
         }));
+        // claude is throwing a wrench into this code
+        // observations I have seen are:
+        // - for output which starts with only whitespace we are going too far
+        // and generating code which also has whitespace at the start but our cursor
+        //  is at the correct location so we have to trim the whitespace
+        // - for output which does not start with whitespace we are fillin in words
+        // to the llms mouth so the output we get is mostly correct and we can just insert it
         let should_apply_special_edits = model.is_anthropic();
         stream::select(receiver_stream, result)
             .map(|element| (element, running_line.clone()))
@@ -227,11 +236,15 @@ impl LLMBroker {
                             {
                                 let mut line =
                                     current_running_line.running_line[..new_line_index].to_owned();
-                                if !current_running_line.first_line_check
+
+                                // we need to check for the first line here if we are starting with
+                                // whitespace and are using anthropic
+                                if should_apply_special_edits
+                                    && is_trigger_line_whitespace
+                                    && !current_running_line.first_line_check
                                     && Some(line.to_owned()) == skip_start_line
                                 {
                                     current_running_line.first_line_check = true;
-                                    // if this is the case then we need to skip this line
                                 } else {
                                     // we need to indent and fix the output here
                                     // vodoo magic here to fix the indent for the lines
@@ -240,13 +253,31 @@ impl LLMBroker {
                                         // first we check for the first line which we get
                                         if !current_running_line.first_streamable_line_check {
                                             if is_trigger_line_whitespace {
-                                                // then we need to strip the whitespace from the line
-                                                // since our cursor will always be at the right position
+                                                let whitespace_difference = get_indent_diff(
+                                                    &line,
+                                                    &trigger_line_indentation,
+                                                );
+                                                dbg!(
+                                                    "get_indent_diff",
+                                                    &whitespace_difference,
+                                                    &line,
+                                                    &trigger_line_indentation
+                                                );
+                                                current_running_line.first_line_indent =
+                                                    Some(whitespace_difference.to_owned());
+                                                // if we are streaming based on completions we are getting
+                                                // from whitespace trigger, we need to see what indent
+                                                // the llm generates at and then fix it up manually after that
+                                                // it will always be an extra ident if anything
                                                 line = line.trim_start().to_owned();
                                             }
                                         } else {
-                                            if !is_trigger_line_whitespace {
-                                                line = trigger_line_indentation.to_owned() + &line;
+                                            if is_trigger_line_whitespace {
+                                                if let Some(whitespace_extra) =
+                                                    &current_running_line.first_line_indent
+                                                {
+                                                    line = whitespace_extra.to_owned() + &line;
+                                                }
                                             }
                                         }
                                         // we need to check and fix the line here
@@ -359,5 +390,41 @@ impl LLMBroker {
         } else {
             Err(LLMClientError::UnSupportedModel)
         }
+    }
+}
+
+fn get_indent_diff(s: &str, whitespace: &str) -> String {
+    dbg!("Calculating indent difference");
+    let mut indent_count = 0;
+    for c in s.chars() {
+        if c.is_whitespace() || c == '\t' {
+            indent_count += 1;
+        } else {
+            break;
+        }
+    }
+
+    let whitespace_count = whitespace
+        .chars()
+        .filter(|&c| c.is_whitespace() || c == '\t')
+        .count();
+    let whitepsace_indent_difference = if indent_count >= whitespace_count {
+        indent_count - whitespace_count
+    } else {
+        whitespace_count - indent_count
+    };
+
+    if whitespace.chars().next() == Some('\t') {
+        let mut whitespace_string = "".to_owned();
+        for _ in 0..whitepsace_indent_difference {
+            whitespace_string = whitespace_string + "\t";
+        }
+        whitespace_string
+    } else {
+        let mut whitespace_string = "".to_owned();
+        for _ in 0..whitepsace_indent_difference {
+            whitespace_string = whitespace_string + " ";
+        }
+        whitespace_string
     }
 }

@@ -590,6 +590,11 @@ impl FillInMiddleCompletionAgent {
                                 fast_model,
                             )),
                             either::Right(Ok(response)) => {
+                                // for anthropic models we do not want to look
+                                // at the final answer and process it, unlike
+                                // other providers we get a weird </code_inserted>
+                                // at the very end, the real bug has to do  with the
+                                // checks we have for termination which we should fix first.
                                 Ok((
                                     InlineCompletionResponse::new(
                                         // this gets sent at the very end
@@ -657,6 +662,12 @@ impl FillInMiddleCompletionAgent {
                                         cursor_prefix.clone(),
                                         fast_model.clone(),
                                     );
+                                    // dbg!(
+                                    //     "sidecar.termination_condition",
+                                    //     &inserted_text,
+                                    //     &inserted_text_delta,
+                                    //     &terminating_condition,
+                                    // );
                                     match terminating_condition {
                                         TerminationCondition::Immediate => {
                                             if let Ok(mut value) = should_end_stream.lock() {
@@ -752,6 +763,13 @@ fn immediate_terminating_condition(
         let prefix_indentation = indentation_at_position(&context.prefix_at_cursor_position);
         if inserted_text_indentation < prefix_indentation {
             return TerminationCondition::Immediate;
+        }
+        // if the indents are equal we should probably stop at the next line
+        // this is not perfect cause I can think of if else kind of blocks where
+        // this will break
+        // but this will protect against a lot of cases which we are seeing in prod
+        if inserted_text_indentation == prefix_indentation {
+            return TerminationCondition::Next;
         }
     }
 

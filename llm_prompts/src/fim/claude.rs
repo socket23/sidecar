@@ -138,7 +138,7 @@ As a reminder the section in <prompt> where you have to make changes is over her
             // .chain(example_messages)
             .chain(vec![
                 LLMClientMessage::user(fim_request),
-                assistant_partial_answer, // LLMClientMessage::assistant("<reply>\n".to_owned()),
+                // assistant_partial_answer, // LLMClientMessage::assistant("<reply>\n".to_owned()),
             ])
             .collect::<Vec<_>>();
         let mut llm_request =

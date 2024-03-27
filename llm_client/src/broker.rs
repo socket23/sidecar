@@ -211,7 +211,7 @@ impl LLMBroker {
             first_line_check: false,
             first_streamable_line_check: false,
         }));
-        let should_apply_special_edits = false;
+        let should_apply_special_edits = model.is_anthropic();
         stream::select(receiver_stream, result)
             .map(|element| (element, running_line.clone()))
             .for_each(|(element, running_line)| {

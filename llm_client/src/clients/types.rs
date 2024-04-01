@@ -229,6 +229,10 @@ impl LLMClientMessage {
         }
     }
 
+    pub fn concat_message(&mut self, message: &str) {
+        self.message = self.message.to_owned() + "\n" + message;
+    }
+
     pub fn concat(self, other: Self) -> Self {
         // We are going to concatenate the 2 llm client messages togehter, at this moment
         // we are just gonig to join the message with a \n
@@ -278,6 +282,12 @@ impl LLMClientMessage {
 
     pub fn content(&self) -> &str {
         &self.message
+    }
+
+    pub fn set_empty_content(&mut self) {
+        self.message =
+            "empty message found here, possibly an error but keep following the conversation"
+                .to_owned();
     }
 
     pub fn function(message: String) -> Self {
@@ -384,6 +394,49 @@ impl LLMClientCompletionRequest {
             stop_words: None,
             max_tokens: None,
         }
+    }
+
+    pub fn fix_message_structure(mut self: Self) -> Self {
+        // fix here can mean many things, but here we are going to focus on
+        // anthropic since there we need alternating human and assistant message
+        // if we have repeating human or assistant messages, then we can just compress
+        // them to a single message
+        if self.model().is_anthropic() {
+            let messages = self.messages;
+            let mut final_messages = vec![];
+            let mut running_message: Option<LLMClientMessage> = None;
+            let mut index = 0;
+            dbg!("sidecar.fixies_roles");
+            while index < messages.len() {
+                let current_message = &messages[index];
+                index = index + 1;
+
+                if let Some(ref mut running_message_ref) = running_message {
+                    if running_message_ref.role() == current_message.role() {
+                        running_message_ref.concat_message(current_message.content());
+                    } else {
+                        if running_message_ref.content().is_empty() {
+                            // figure out how to get rid of empty content messages here
+                            running_message_ref.set_empty_content();
+                        }
+                        final_messages.push(running_message_ref.clone());
+                        // and also set the running message as the current
+                        // message
+                        running_message = Some(current_message.clone());
+                    }
+                } else {
+                    running_message = Some(current_message.clone());
+                }
+            }
+            if let Some(mut message) = running_message {
+                if message.message.is_empty() {
+                    message.set_empty_content();
+                }
+                final_messages.push(message);
+            }
+            self.messages = final_messages;
+        }
+        self
     }
 
     pub fn from_messages(messages: Vec<LLMClientMessage>, model: LLMType) -> Self {

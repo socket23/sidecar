@@ -140,6 +140,25 @@ impl llm::Message {
             content,
         }
     }
+
+    pub fn role(&self) -> llm::Role {
+        match self {
+            &llm::Message::FunctionCall {
+                ref role,
+                function_call: _,
+                content: _,
+            } => role.clone(),
+            &llm::Message::FunctionReturn {
+                ref role,
+                name: _,
+                content: _,
+            } => role.clone(),
+            &llm::Message::PlainText {
+                ref role,
+                content: _,
+            } => role.clone(),
+        }
+    }
 }
 
 impl From<&llm::Role> for async_openai::types::Role {

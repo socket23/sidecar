@@ -1079,6 +1079,7 @@ impl Agent {
             AgentAction::Answer { paths } => {
                 // here we can finally answer after we do some merging on the spans
                 // and also look at the history to provide more context
+                dbg!("sidecar.followup.generating_answer");
                 let answer = self.answer(paths.as_slice(), answer_sender).await?;
                 info!(%self.session_id, "conversation finished");
                 info!(%self.session_id, answer, "answer");

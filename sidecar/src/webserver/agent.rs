@@ -358,6 +358,7 @@ pub struct FileContentValue {
 pub struct UserContext {
     pub variables: Vec<VariableInformation>,
     pub file_content_map: Vec<FileContentValue>,
+    pub terminal_selection: Option<String>,
 }
 
 impl UserContext {
@@ -385,6 +386,7 @@ impl UserContext {
             Some(previous_user_context) => {
                 let previous_file_content = &previous_user_context.file_content_map;
                 let previous_user_variables = &previous_user_context.variables;
+                let previous_terminal_selection = &previous_user_context.terminal_selection;
                 // We want to merge the variables together, but keep the unique
                 // ones only
                 // TODO(skcd): We should be filtering on variables here, but for
@@ -404,6 +406,11 @@ impl UserContext {
                         self.file_content_map.push(file_content.clone());
                     }
                 });
+                // yolo merge the terminal outputs we are getting, here we disregard
+                // the previous terminal message and only keep the current one
+                if self.terminal_selection.is_none() {
+                    self.terminal_selection = previous_terminal_selection.clone();
+                }
                 self
             }
             None => self,

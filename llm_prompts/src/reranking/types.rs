@@ -25,6 +25,19 @@ impl CodeSpan {
         )
     }
 
+    pub fn from_terminal_selection(terminal_selection: String) -> Self {
+        Self {
+            file_path: "TERMINAL OUTPUT".to_owned(),
+            start_line: 0,
+            end_line: terminal_selection
+                .lines()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .len() as u64,
+            data: terminal_selection.to_owned(),
+        }
+    }
+
     pub fn merge_consecutive_spans(code_spans: Vec<Self>) -> Vec<Self> {
         const CHUNK_MERGE_DISTANCE: usize = 0;
         let mut file_to_code_snippets: HashMap<String, Vec<CodeSpan>> = Default::default();

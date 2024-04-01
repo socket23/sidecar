@@ -700,6 +700,7 @@ impl Agent {
                 .answer_context_using_user_data(message, sender.clone())
                 .await;
         }
+        dbg!("sidecar.generating_context.followup_question");
         let context = self.answer_context(path_aliases).await?;
         let system_prompt = match self.get_last_conversation_message_agent_state() {
             &AgentState::Explain => prompts::explain_article_prompt(
@@ -754,10 +755,16 @@ impl Agent {
             let headroom = answer_model.answer_tokens + system_headroom;
             trim_utter_history(h, headroom, answer_model, self.llm_tokenizer.clone())?
         };
+        dbg!("sidecar.generating_anwer.history_complete");
         let messages = Some(system_message)
             .into_iter()
             .chain(history.into_iter())
             .collect::<Vec<_>>();
+        let messages_roles = messages
+            .iter()
+            .map(|message| message.role())
+            .collect::<Vec<_>>();
+        dbg!("sidecar.generating_answer.messages", &messages_roles);
 
         let provider_keys = self
             .provider_for_slow_llm()
@@ -782,7 +789,16 @@ impl Agent {
                 .answer_tokens
                 .try_into()
                 .expect("i64 is positive"),
-        );
+        )
+        // fixing the message structure here is necessary for anthropic where we are
+        // forced to have alternating human and assistant messages.
+        .fix_message_structure();
+        let fixed_roles = request
+            .messages()
+            .iter()
+            .map(|message| message.role().clone())
+            .collect::<Vec<_>>();
+        dbg!("sidecar.generating_ansewr.fixed_roles", &fixed_roles);
         let (answer_sender, answer_receiver) = tokio::sync::mpsc::unbounded_channel();
         let answer_receiver = UnboundedReceiverStream::new(answer_receiver).map(either::Left);
         let llm_broker = self.llm_broker.clone();

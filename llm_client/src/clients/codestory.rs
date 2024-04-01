@@ -245,6 +245,8 @@ impl LLMClient for CodeStoryClient {
             .bytes_stream()
             .eventsource();
 
+        dbg!("codestory.provider.streaming");
+
         let mut buffered_stream = "".to_owned();
         while let Some(event) = response_stream.next().await {
             match event {
@@ -280,6 +282,8 @@ impl LLMClient for CodeStoryClient {
                 }
             }
         }
+
+        dbg!("codestory.provider.finished_streaming");
         Ok(buffered_stream)
     }
 

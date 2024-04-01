@@ -57,6 +57,8 @@ impl Agent {
         // This is the max amount of tokens we can fit from the context provided
         prompt_token_limit = prompt_token_limit + history_token_limit - history_tokens_in_use;
 
+        // TODO(skcd): Pick up from here, we have to pass the context of the terminal output
+        // to the chat somehow, figure out how to change the prompts and add things here
         let user_context = self
             .user_context
             .as_ref()
@@ -70,7 +72,7 @@ impl Agent {
         // TODO(skcd): Finish up this part by making sure that the chunking happens
         // both for the user selected code and the open files
         // so we get the code spans for which we want to get the context about
-        let code_spans = if user_context.is_empty() {
+        let mut code_spans = if user_context.is_empty() {
             // We have no user context provided, so we should just use the open
             // file as the selection context
             match open_file_data {
@@ -104,11 +106,11 @@ impl Agent {
                                 active_window
                                     .start_line
                                     .try_into()
-                                    .expect("converstion to work"),
+                                    .expect("conversation to work"),
                                 active_window
                                     .end_line
                                     .try_into()
-                                    .expect("converstion to work"),
+                                    .expect("conversation to work"),
                                 active_window.visible_range_content.to_owned(),
                             )]
                         } else {
@@ -193,6 +195,18 @@ impl Agent {
             // Now we can merge the code spans again
             LLMCodeSpan::merge_consecutive_spans(user_selected_code_spans)
         };
+
+        // add the terminal selection if it exists here
+        if let Some(terminal_selection) = self
+            .user_context
+            .as_ref()
+            .map(|user_selection| user_selection.terminal_selection.as_ref())
+            .flatten()
+        {
+            code_spans.push(LLMCodeSpan::from_terminal_selection(
+                terminal_selection.to_owned(),
+            ));
+        }
 
         // Now we update the code spans which we have selected
         let _ = self.save_code_snippets_response(

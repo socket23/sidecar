@@ -10,7 +10,10 @@ use llm_client::{
 use llm_prompts::{
     answer_model::AnswerModel,
     chat::broker::LLMChatModelBroker,
-    reranking::{broker::ReRankBroker, types::ReRankStrategy},
+    reranking::{
+        broker::ReRankBroker,
+        types::{ReRankStrategy, TERMINAL_OUTPUT},
+    },
 };
 use rake::Rake;
 use tiktoken_rs::ChatCompletionRequestMessage;
@@ -942,6 +945,17 @@ impl Agent {
             .flatten();
         if let Some(content) = content {
             return Ok(Some(content));
+        }
+
+        if path == TERMINAL_OUTPUT {
+            // we need to grab the terminal output here from the user context
+            if let Some(terminal_output) = self
+                .user_context
+                .as_ref()
+                .and_then(|user_context| user_context.terminal_selection.clone())
+            {
+                return Ok(Some(terminal_output));
+            }
         }
 
         // Now we try to check if the active window data has the file content

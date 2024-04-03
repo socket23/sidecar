@@ -16,6 +16,8 @@ pub struct CodeSpan {
     data: String,
 }
 
+pub const TERMINAL_OUTPUT: &'static str = "TERMINAL OUTPUT";
+
 impl CodeSpan {
     pub fn to_prompt(&self) -> String {
         format!(
@@ -27,7 +29,7 @@ impl CodeSpan {
 
     pub fn from_terminal_selection(terminal_selection: String) -> Self {
         Self {
-            file_path: "TERMINAL OUTPUT".to_owned(),
+            file_path: TERMINAL_OUTPUT.to_owned(),
             start_line: 0,
             end_line: terminal_selection
                 .lines()

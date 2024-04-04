@@ -20,7 +20,7 @@ use crate::{
 };
 
 lazy_static! {
-    static ref SPLITTING_WORDS: Regex = Regex::new(r"[^a-zA-Z0-9]+").unwrap();
+    static ref SPLITTING_WORDS: Regex = Regex::new(r"[\s.,/#!$%^&*;:{}=\-_`~()\[\]><]").unwrap();
 }
 
 #[derive(Debug, Default, Clone)]
@@ -654,7 +654,12 @@ impl DocumentEditLines {
 
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
-        self.snippets_using_sliding_window(vec![]);
+        self.snippets_using_sliding_window(
+            content
+                .lines()
+                .map(|line| line.to_owned())
+                .collect::<Vec<_>>(),
+        );
     }
 
     // If the contents have changed, we need to mark the new lines which have changed

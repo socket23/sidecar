@@ -40,7 +40,7 @@ use super::{
 
 const CLIPBOARD_CONTEXT: usize = 50;
 const CODEBASE_CONTEXT: usize = 1000;
-const ANTHROPIC_CODEBASE_CONTEXT: usize = 20_000;
+const ANTHROPIC_CODEBASE_CONTEXT: usize = 10_000;
 const SAME_FILE_CONTEXT: usize = 450;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -382,7 +382,6 @@ impl FillInMiddleCompletionAgent {
         };
 
         // Now we are going to get the codebase context
-        let codebase_context_instant = std::time::Instant::now();
         let codebase_context = CodeBaseContext::new(
             self.llm_tokenizer.clone(),
             fast_model.clone(),

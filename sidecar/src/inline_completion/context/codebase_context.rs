@@ -98,6 +98,15 @@ impl CodeBaseContext {
         // safely assume that the first one is the most recent one
 
         let mut relevant_snippets: Vec<SnippetInformationWithScore> = vec![];
+        // println!(
+        //     "history files: {:?}",
+        //     history_files
+        //         .iter()
+        //         .map(|history_file| history_file.to_owned())
+        //         .collect::<Vec<_>>()
+        // );
+        // println!("current file: {}", &self.file_path);
+        // println!("current window context: {}", &current_window_context);
         // TODO(skcd): hate hate hate, but there's a mutex lock so this is fine ❤️‍🔥
         for history_file in history_files.into_iter() {
             let skip_line = if history_file == self.file_path {
@@ -121,6 +130,27 @@ impl CodeBaseContext {
                 .partial_cmp(&a.score())
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+
+        //         println!("======================================");
+        //         println!("{}", &relevant_snippets.len());
+        //         relevant_snippets
+        //             .iter()
+        //             .enumerate()
+        //             .for_each(|(idx, snippet)| {
+        //                 let file_path = snippet.file_path();
+        //                 let content = snippet.snippet_information().snippet();
+        //                 let printable_snippet = format!(
+        //                     r#"<code_snippet>
+        // <id>{idx}</id>
+        // <file_path>{file_path}</file_path>
+        // <content>
+        // {content}
+        // </content>
+        // </code_snippet>"#
+        //                 );
+        //                 println!("{}", printable_snippet);
+        //             });
+        //         println!("======================================");
 
         // Now that we have the relevant snippets we can generate the context
         let comment_prefix = &language_config.comment_prefix;

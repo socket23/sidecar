@@ -177,6 +177,7 @@ pub async fn inline_document_open(
         language,
     }): Json<InLineDocumentOpenRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!("sidecar.inline_document_open", &file_path);
     let symbol_tracker = app.symbol_tracker.clone();
     symbol_tracker
         .add_document(file_path, file_content, language)

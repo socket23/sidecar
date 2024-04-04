@@ -472,6 +472,9 @@ impl SymbolTrackerInline {
                 let _ = sender.send(response);
             }
         });
+
+        // we also want to reindex and re-order the snippets continuously over here
+        // the question is what kind of files are necessary here to make it work
         SymbolTrackerInline { sender }
     }
 

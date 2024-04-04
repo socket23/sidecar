@@ -33,6 +33,7 @@ pub struct InlineCompletionRequest {
     pub clipboard_content: Option<String>,
     // very badly named field
     pub type_identifiers: Vec<TypeIdentifier>,
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -79,6 +80,7 @@ pub async fn inline_completion(
         id,
         clipboard_content,
         type_identifiers,
+        user_id,
     }): Json<InlineCompletionRequest>,
 ) -> Result<impl IntoResponse> {
     info!(event_name = "inline_completion", id = &id,);

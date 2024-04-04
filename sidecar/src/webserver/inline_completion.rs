@@ -116,6 +116,7 @@ pub async fn inline_completion(
                 id: id.to_owned(),
                 clipboard_content,
                 type_identifiers,
+                user_id,
             },
             abort_request.handle().clone(),
             request_start,

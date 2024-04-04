@@ -443,7 +443,6 @@ impl SharedState {
 pub struct SymbolTrackerInline {
     // We are storing the fs path of the documents, these are stored in the reverse
     // order
-    symbol_tracker_state: Arc<SharedState>,
     sender: tokio::sync::mpsc::UnboundedSender<(
         SharedStateRequest,
         tokio::sync::oneshot::Sender<SharedStateResponse>,
@@ -473,10 +472,7 @@ impl SymbolTrackerInline {
                 let _ = sender.send(response);
             }
         });
-        SymbolTrackerInline {
-            symbol_tracker_state: shared_state.clone(),
-            sender,
-        }
+        SymbolTrackerInline { sender }
     }
 
     pub async fn get_file_content(&self, file_path: &str) -> Option<String> {
@@ -505,7 +501,6 @@ impl SymbolTrackerInline {
         }
     }
 
-    //
     pub async fn get_document_lines(
         &self,
         file_path: &str,

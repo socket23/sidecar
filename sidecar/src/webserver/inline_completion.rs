@@ -307,6 +307,12 @@ pub struct InLineCompletionIdentifierNodesResponse {
     function_parameters: Vec<IdentifierNodeResponse>,
 }
 
+impl InLineCompletionIdentifierNodesResponse {
+    pub fn identifier_nodes_len(&self) -> usize {
+        self.identifier_nodes.len()
+    }
+}
+
 impl ApiResponse for InLineCompletionIdentifierNodesResponse {}
 
 pub async fn get_identifier_nodes(

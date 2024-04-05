@@ -69,6 +69,6 @@
     "vllm",
     "webserver",
     "yolo"
-],
-  "rust-analyzer.linkedProjects": ["./Cargo.toml"]
+  ],
+  "rust-analyzer.linkedProjects": ["./Cargo.toml", "./sidecar/Cargo.toml"]
 }

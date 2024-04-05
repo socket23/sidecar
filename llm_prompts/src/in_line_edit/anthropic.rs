@@ -1,4 +1,4 @@
-use llm_client::clients::types::LLMClientMessage;
+use llm_client::clients::types::{LLMClient, LLMClientMessage};
 
 use super::{
     openai::OpenAILineEditPrompt,
@@ -31,7 +31,8 @@ Follow the user's requirements carefully & to the letter.
 - You always answer with {language} code.
 - Modify the code or create new code.
 - Unless directed otherwise, the user is expecting for you to edit their selected code.
-- Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by the user and start your answer with ```{language} codeblock"#
+- Make sure to ALWAYS INCLUDE the BEGIN and END markers in your generated code with // BEGIN and then // END which is present in the code selection given by the user and start your answer with ```{language} codeblock
+- The user will also provide extra context for you to use in <extra_data>{{extra_data}}</extra_data>, use them as instructed by the user"#
         )
     }
 
@@ -106,6 +107,29 @@ Follow the user's requirements carefully & to the letter.
         }
     }
 
+    fn extra_data(&self, extra_data: &[String]) -> Option<String> {
+        if extra_data.is_empty() {
+            None
+        } else {
+            let data = extra_data
+                .into_iter()
+                .map(|data| {
+                    format!(
+                        r#"<data>
+{data}
+</data>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            Some(format!(
+                r#"<extra_data>
+{data}
+</extra_data>"#
+            ))
+        }
+    }
+
     fn fix_inline_prompt_response(&self, response: InLinePromptResponse) -> InLinePromptResponse {
         match response {
             InLinePromptResponse::Completion(completion) => {
@@ -156,11 +180,15 @@ impl InLineEditPrompt for AnthropicLineEditPrompt {
         let below = request.below();
         let in_range = request.in_range();
         let language = request.language();
+        let extra_data = request.extra_data();
 
         let mut messages = vec![];
         messages.push(LLMClientMessage::system(
             self.system_message_inline_edit(language),
         ));
+        if let Some(extra_data) = self.extra_data(extra_data) {
+            messages.push(LLMClientMessage::user(extra_data));
+        }
         if let Some(above) = self.above_selection(above) {
             messages.push(LLMClientMessage::user(above));
         }

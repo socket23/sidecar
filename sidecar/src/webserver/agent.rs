@@ -362,6 +362,58 @@ pub struct UserContext {
 }
 
 impl UserContext {
+    pub fn to_extra_data(&self) -> Vec<String> {
+        // we want to format all the data here as a string and then return it
+        // it needs to have some extra information for sure, but we can make
+        // this work
+        let extra_data = self
+            .variables
+            .iter()
+            .map(|variable| {
+                let variable_type = variable.variable_type.clone();
+                match variable_type {
+                    VariableType::CodeSymbol => {
+                        let name = variable.name.to_owned();
+                        let content = &variable.content;
+                        let file_path = &variable.fs_file_path;
+                        let language = &variable.language;
+                        format!(
+                            r#"Code Content for {name} at {file_path}
+```{language}
+{content}
+```"#
+                        )
+                    }
+                    VariableType::File => {
+                        let content = &variable.content;
+                        let file_path = &variable.fs_file_path;
+                        let language = &variable.language;
+                        format!(
+                            r#"File content for {file_path}
+```{language}
+{content}
+```"#
+                        )
+                    }
+                    VariableType::Selection => {
+                        let name = variable.name.to_owned();
+                        let content = &variable.content;
+                        let language = &variable.language;
+                        format!(
+                            r#"Code Content for {name}
+```{language}
+{content}
+```"#
+                        )
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        extra_data
+    }
+}
+
+impl UserContext {
     pub fn is_empty(&self) -> bool {
         self.variables.is_empty() && self.file_content_map.is_empty()
     }

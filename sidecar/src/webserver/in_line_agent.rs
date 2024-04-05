@@ -11,8 +11,8 @@ use serde_json::json;
 use tracing::info;
 
 use super::{
-    in_line_agent_stream::generate_in_line_agent_stream, model_selection::LLMClientConfig,
-    types::Result,
+    agent::UserContext, in_line_agent_stream::generate_in_line_agent_stream,
+    model_selection::LLMClientConfig, types::Result,
 };
 use crate::{
     application::application::Application,
@@ -96,6 +96,7 @@ pub struct ProcessInEditorRequest {
     pub query: String,
     pub language: String,
     pub repo_ref: RepoRef,
+    pub user_context: UserContext,
     pub snippet_information: SnippetInformation,
     pub text_document_web: TextDocumentWeb,
     pub thread_id: uuid::Uuid,
@@ -206,6 +207,7 @@ pub async fn reply_to_user(
         language,
         repo_ref,
         mut snippet_information,
+        user_context,
         thread_id,
         text_document_web,
         diagnostics_information,
@@ -247,6 +249,7 @@ pub async fn reply_to_user(
             thread_id,
             diagnostics_information,
             model_config,
+            user_context,
         },
         vec![inline_agent_message],
         sender,

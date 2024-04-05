@@ -28,6 +28,7 @@ use crate::chunking::types::FunctionNodeType;
 use crate::in_line_agent::context_parsing::generate_context_for_range;
 use crate::in_line_agent::context_parsing::ContextParserInLineEdit;
 use crate::in_line_agent::context_parsing::EditExpandedSelectionRange;
+use crate::webserver::agent::UserContext;
 use crate::{
     application::application::Application,
     chunking::{editor_parsing::EditorParsing, text_document::DocumentSymbol},
@@ -320,7 +321,6 @@ impl InLineAgent {
         action: InLineAgentAction,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
     ) -> anyhow::Result<Option<InLineAgentAction>> {
-        dbg!(&action);
         let llm = self.editor_request.slow_model();
         match action {
             InLineAgentAction::DecideAction { query } => {
@@ -900,6 +900,7 @@ impl InLineAgent {
             self.editor_request.language(),
             response,
             &self.editor_request.query,
+            &self.editor_request.user_context,
         );
         // Now we try to get the request we have to send from the inline edit broker
         let prompt = self
@@ -1135,6 +1136,7 @@ impl InLineAgent {
         language: &str,
         selection_with_outline: SelectionWithOutlines,
         user_query: &str,
+        user_context: &UserContext,
     ) -> InLineEditRequest {
         let mut above_context = None;
         let mut below_context = None;
@@ -1224,7 +1226,7 @@ impl InLineAgent {
             in_range_context,
             user_query.to_owned(),
             selection_with_outline.fs_file_path(),
-            vec![],
+            user_context.to_extra_data(),
             language.to_owned(),
         )
     }

@@ -40,7 +40,7 @@ use super::{
 
 const CLIPBOARD_CONTEXT: usize = 50;
 const CODEBASE_CONTEXT: usize = 1000;
-const ANTHROPIC_CODEBASE_CONTEXT: usize = 10_000;
+const ANTHROPIC_CODEBASE_CONTEXT: usize = 5_000;
 const SAME_FILE_CONTEXT: usize = 450;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -414,7 +414,6 @@ impl FillInMiddleCompletionAgent {
             None => {}
         }
 
-        let instant = std::time::Instant::now();
         let definitions_context = self
             .symbol_tracker
             .get_definition_configs(

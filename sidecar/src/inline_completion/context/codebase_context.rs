@@ -177,7 +177,6 @@ impl CodeBaseContext {
                 .join("\n");
             let file_path_header = format!("{} Path: {}", comment_prefix, file_path,);
             let joined_snippet_context = format!("{}\n{}", file_path_header, snippet_context);
-            let count_tokens_instant = std::time::Instant::now();
             let current_snippet_tokens = self.tokenizer.count_tokens_approx(
                 &self.llm_type,
                 LLMTokenizerInput::Prompt(joined_snippet_context.to_owned()),

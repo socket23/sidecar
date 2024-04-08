@@ -211,6 +211,10 @@ fn inline_completion() -> Router {
             "/get_identifier_nodes",
             post(sidecar::webserver::inline_completion::get_identifier_nodes),
         )
+        .route(
+            "/get_symbol_history",
+            post(sidecar::webserver::inline_completion::symbol_history),
+        )
 }
 
 // TODO(skcd): Figure out why we are passing the context in the suffix and not the prefix

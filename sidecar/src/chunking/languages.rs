@@ -141,7 +141,12 @@ impl TSLanguageConfig {
             .any(|file_path_part| file_path.contains(file_path_part))
     }
 
-    pub fn generate_outline(&self, source_code: &[u8], tree: &Tree) -> Vec<OutlineNode> {
+    pub fn generate_outline(
+        &self,
+        source_code: &[u8],
+        tree: &Tree,
+        fs_file_path: String,
+    ) -> Vec<OutlineNode> {
         let grammar = self.grammar;
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(grammar()).unwrap();
@@ -247,6 +252,7 @@ impl TSLanguageConfig {
                                                 // figure out this per language
                                                 child_range.start_byte() - 1,
                                             ),
+                                            fs_file_path.to_owned(),
                                         ));
                                     } else {
                                         children.push(OutlineNodeContent::new(
@@ -260,6 +266,7 @@ impl TSLanguageConfig {
                                                 // figure out this per language
                                                 child_range.start_byte() - 1,
                                             ),
+                                            fs_file_path.to_owned(),
                                         ));
                                     }
                                 }
@@ -285,6 +292,7 @@ impl TSLanguageConfig {
                             outline_range.start_byte(),
                             outline_range.end_byte(),
                         ),
+                        fs_file_path.to_owned(),
                     );
                     compressed_outline.push(OutlineNode::new(
                         class_outline,
@@ -333,6 +341,7 @@ impl TSLanguageConfig {
                                             // figure out how to handle this properly
                                             child_range.start_byte() - 1,
                                         ),
+                                        fs_file_path.to_owned(),
                                     ));
                                 } else {
                                     compressed_outline.push(OutlineNode::new(
@@ -348,6 +357,7 @@ impl TSLanguageConfig {
                                                 // figure out how to handle this properly
                                                 child_range.start_byte() - 1,
                                             ),
+                                            fs_file_path.to_owned(),
                                         ),
                                         vec![],
                                         self.language_str.to_owned(),
@@ -2465,7 +2475,11 @@ trait SomethingTrait {
         let mut parser = Parser::new();
         parser.set_language(grammar()).unwrap();
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
-        let outline = ts_language_config.generate_outline(source_code.as_bytes(), &tree);
+        let outline = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something".to_owned(),
+        );
         assert_eq!(outline.len(), 6);
     }
 
@@ -2888,7 +2902,11 @@ trait SomethingTrait {
         let grammar = ts_language_config.grammar;
         parser.set_language(grammar()).unwrap();
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
-        let outlines = ts_language_config.generate_outline(source_code.as_bytes(), &tree);
+        let outlines = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something".to_owned(),
+        );
         // we have 1 function in the type
 
         assert_eq!(outlines[0].children_len(), 1);

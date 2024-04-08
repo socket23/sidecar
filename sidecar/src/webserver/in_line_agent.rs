@@ -214,6 +214,7 @@ pub async fn reply_to_user(
         model_config,
     }): Json<ProcessInEditorRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!("reply_to_user");
     info!(event_name = "in_editor_request", model_config = ?model_config);
     let mut event = PosthogEvent::new("model_config");
     let _ = event.insert_prop("user_id", app.user_id.clone());

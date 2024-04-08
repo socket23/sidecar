@@ -120,6 +120,7 @@ enum SharedStateRequest {
     GetFileEditedLines(GetFileEditedLinesRequest),
     GetIdentifierNodes(GetIdentifierNodesRequest),
     GetDefinitionOutline(GetDefinitionOutlineRequest),
+    GetSymbolHistory,
 }
 
 enum SharedStateResponse {
@@ -130,12 +131,47 @@ enum SharedStateResponse {
     FileEditedLinesResponse(Vec<usize>),
     GetIdentifierNodesResponse(IdentifierNodeInformation),
     GetDefinitionOutlineResponse(Vec<String>),
+    GetSymbolHistoryResponse(Vec<SymbolInformation>),
+}
+
+/// We are keeping track of the symbol node where the user is editing, this can
+/// imply that the user is deleting recent code or even just navigating, we are just
+/// marking it and keep track of those things
+/// The higher level idea is that it will be helpful to hae this list in some form
+/// or fashion.
+#[derive(Debug, Clone)]
+pub struct SymbolInformation {
+    symbol_node: OutlineNode,
+    // we want to keep an increasing order of timestamp and evict things frmo the queue
+    // as they become unnecessary, not sure whats the right thing to do here
+    timestamp: usize,
+}
+
+impl SymbolInformation {
+    pub fn new(symbol_node: OutlineNode, timestamp: usize) -> Self {
+        Self {
+            symbol_node,
+            timestamp,
+        }
+    }
+
+    pub fn symbol_node(&self) -> &OutlineNode {
+        &self.symbol_node
+    }
+
+    pub fn timestamp(&self) -> usize {
+        self.timestamp
+    }
 }
 
 pub struct SharedState {
     document_lines: Mutex<HashMap<String, DocumentEditLines>>,
     document_history: Mutex<Vec<String>>,
     editor_parsing: Arc<EditorParsing>,
+    // really here this should not be a vector but it needs to be a graph where
+    // the user is jumping around, somehow we wll figure out what to do about that?
+    // let's keep it linear for now
+    symbol_history: Arc<Mutex<Vec<SymbolInformation>>>,
 }
 
 impl SharedState {
@@ -193,6 +229,10 @@ impl SharedState {
             SharedStateRequest::GetDefinitionOutline(request) => {
                 let response = self.get_definition_outline(request).await;
                 SharedStateResponse::GetDefinitionOutlineResponse(response)
+            }
+            SharedStateRequest::GetSymbolHistory => {
+                let symbols = self.symbol_history.lock().await;
+                SharedStateResponse::GetSymbolHistoryResponse(symbols.to_vec())
             }
         }
     }
@@ -376,6 +416,51 @@ impl SharedState {
         }
     }
 
+    async fn update_symbol_history(&self, changed_symbols: Vec<OutlineNode>) {
+        // we will update the changed symbols queue
+        // we also want to get the range of the lines which have been updated in the symbol, probably not their content
+        // right now cause thats not useful enough right??
+        {
+            let current_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let mut symbol_history = self.symbol_history.lock().await;
+            let symbol_information_list = changed_symbols
+                .into_iter()
+                .map(|outline_node| {
+                    let symbol_information =
+                        SymbolInformation::new(outline_node, current_time as usize);
+                    symbol_information
+                })
+                .collect::<Vec<_>>();
+            // TODO(skcd): While appending here we want to make sure that we are able
+            // to keep track of the list of symbols properly and not keep adding
+            // repeated symbols to the list
+            for symbol_information in symbol_information_list.into_iter() {
+                match symbol_history.last() {
+                    Some(last_symbol) => {
+                        if last_symbol.symbol_node().name()
+                            == symbol_information.symbol_node().name()
+                        {
+                            continue;
+                        } else {
+                            // if the last symbol which we saw was different
+                            // from the one which is being edited then we should insert it
+                            symbol_history.push(symbol_information);
+                        }
+                    }
+                    None => {
+                        symbol_history.push(symbol_information);
+                    }
+                }
+            }
+        }
+    }
+
+    // TOOD(skcd): We are going to return the symbols which are changed after
+    // we apply the edits, this will help us maintain the history map we are interested
+    // in.
     async fn file_content_change(
         &self,
         document_path: String,
@@ -383,46 +468,61 @@ impl SharedState {
         language: String,
         edits: Vec<(Range, String)>,
     ) {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
         // always track the file which is being edited
         self.track_file(document_path.to_owned()).await;
         if edits.is_empty() {
             return;
         }
-        // Now we first need to get the lock over the document lines
-        // and then iterate over all the edits and apply them
-        let mut document_lines = self.document_lines.lock().await;
 
-        // If we do not have the document (which can happen if the sidecar restarts, just add it
-        // and do not do anything about the edits yet)
-        if !document_lines.contains_key(&document_path) {
-            let document_lines_entry = DocumentEditLines::new(
-                document_path.to_owned(),
-                file_content,
-                language,
-                self.editor_parsing.clone(),
-            );
-            document_lines.insert(document_path.clone(), document_lines_entry);
-        } else {
-            let document_lines_entry = document_lines.get_mut(&document_path);
-            // This match should not be required but for some reason we are hitting
-            // the none case even in this branch after our checks
-            match document_lines_entry {
-                Some(document_lines_entry) => {
-                    for (range, new_text) in edits {
-                        document_lines_entry.content_change(range, new_text);
+        let mut changed_outline_nodes = vec![];
+        // we call the lock on document lines in a scope
+        {
+            // Now we first need to get the lock over the document lines
+            // and then iterate over all the edits and apply them
+            let mut document_lines = self.document_lines.lock().await;
+
+            // If we do not have the document (which can happen if the sidecar restarts, just add it
+            // and do not do anything about the edits yet)
+            if !document_lines.contains_key(&document_path) {
+                let document_lines_entry = DocumentEditLines::new(
+                    document_path.to_owned(),
+                    file_content,
+                    language,
+                    self.editor_parsing.clone(),
+                );
+                document_lines.insert(document_path.clone(), document_lines_entry);
+            } else {
+                let document_lines_entry = document_lines.get_mut(&document_path);
+                // This match should not be required but for some reason we are hitting
+                // the none case even in this branch after our checks
+                match document_lines_entry {
+                    Some(document_lines_entry) => {
+                        for (range, new_text) in edits {
+                            // we give all of these the same timestamp
+                            let mut nodes_edit_current_edit =
+                                document_lines_entry.content_change(range, new_text, current_time);
+                            changed_outline_nodes.append(&mut nodes_edit_current_edit);
+
+                            // we want to add this to the queue we are keeping of symbols
+                        }
                     }
-                }
-                None => {
-                    let document_lines_entry = DocumentEditLines::new(
-                        document_path.to_owned(),
-                        file_content,
-                        language,
-                        self.editor_parsing.clone(),
-                    );
-                    document_lines.insert(document_path.clone(), document_lines_entry);
+                    None => {
+                        let document_lines_entry = DocumentEditLines::new(
+                            document_path.to_owned(),
+                            file_content,
+                            language,
+                            self.editor_parsing.clone(),
+                        );
+                        document_lines.insert(document_path.clone(), document_lines_entry);
+                    }
                 }
             }
         }
+        self.update_symbol_history(changed_outline_nodes).await;
     }
 
     async fn get_document_history(&self) -> Vec<String> {
@@ -455,6 +555,7 @@ impl SymbolTrackerInline {
             document_lines: Mutex::new(HashMap::new()),
             document_history: Mutex::new(Vec::new()),
             editor_parsing: editor_parsing.clone(),
+            symbol_history: Arc::new(Mutex::new(Vec::new())),
         });
         let shared_state_cloned = shared_state.clone();
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
@@ -600,6 +701,18 @@ impl SymbolTrackerInline {
         let _ = self.sender.send((request, sender));
         let response = receiver.await;
         if let Ok(SharedStateResponse::GetDefinitionOutlineResponse(response)) = response {
+            response
+        } else {
+            Default::default()
+        }
+    }
+
+    pub async fn get_symbol_history(&self) -> Vec<SymbolInformation> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request = SharedStateRequest::GetSymbolHistory;
+        let _ = self.sender.send((request, sender));
+        let response = receiver.await;
+        if let Ok(SharedStateResponse::GetSymbolHistoryResponse(response)) = response {
             response
         } else {
             Default::default()

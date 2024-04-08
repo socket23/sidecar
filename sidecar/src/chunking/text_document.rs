@@ -271,6 +271,16 @@ impl Range {
         self.start_byte() <= other.start_byte() && self.end_byte() >= other.end_byte()
     }
 
+    // Here we are checking with line and column number values
+    pub fn contains_check_line_column(&self, other: &Range) -> bool {
+        let start_position_check = self.start_line() < other.start_line()
+            || (self.start_line() == other.start_line()
+                && self.start_column() <= other.start_column());
+        let end_position_check = self.end_line() > other.end_line()
+            || (self.end_line() == other.end_line() && self.end_column() >= other.end_column());
+        start_position_check && end_position_check
+    }
+
     /// From byte range helps us get the position while also fixing the
     /// line and the column values which is the position for the byte
     pub fn from_byte_range(range: std::ops::Range<usize>, line_end_indices: &[u32]) -> Range {

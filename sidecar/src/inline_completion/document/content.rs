@@ -231,7 +231,8 @@ impl BagOfWords {
 /// Note: This does not keep track of the lines which have been removed
 #[derive(Clone, Debug)]
 pub enum DocumentLineStatus {
-    Edited,
+    // also contains the timestamp when the line was last edited
+    Edited(i64),
     Unedited,
 }
 
@@ -246,7 +247,7 @@ impl DocumentLine {
     }
 
     pub fn is_edited(&self) -> bool {
-        matches!(self.line_status, DocumentLineStatus::Edited)
+        matches!(self.line_status, DocumentLineStatus::Edited(_))
     }
 
     pub fn is_unedited(&self) -> bool {
@@ -314,7 +315,7 @@ impl DocumentEditLines {
             }
         };
         // This is a very expensive operation for now, we are going to optimize the shit out of this 🍶
-        document_lines.generate_snippets();
+        let _ = document_lines.generate_snippets(None);
         document_lines
     }
 
@@ -475,7 +476,7 @@ impl DocumentEditLines {
         }
     }
 
-    fn insert_at_position(&mut self, position: Position, content: String) {
+    fn insert_at_position(&mut self, position: Position, content: String, timestamp: i64) {
         // If this is strictly a removal, then we do not need to insert anything
         if content == "" {
             return;
@@ -500,7 +501,7 @@ impl DocumentEditLines {
         let new_lines = split_on_lines_editor_compatiable(&new_content)
             .into_iter()
             .map(|line| DocumentLine {
-                line_status: DocumentLineStatus::Edited,
+                line_status: DocumentLineStatus::Edited(timestamp),
                 content: line.to_owned(),
             });
         // we also need to remove the line at the current line number
@@ -625,7 +626,9 @@ impl DocumentEditLines {
         self.window_snippets = final_snippets;
     }
 
-    fn generate_snippets(&mut self) {
+    /// Returns the nodes which have been changed as a side-effect of calling this function
+    /// can be used for understanding how the file is changing
+    fn generate_snippets(&mut self, changed_range: Option<Range>) -> Vec<OutlineNode> {
         // generate the new tree sitter tree
         self.set_tree();
         // we need to create ths symbol map here for the file so we can lookup the symbols
@@ -647,7 +650,22 @@ impl DocumentEditLines {
             self.editor_parsing.for_file_path(&self.file_path),
             self.tree.as_ref(),
         ) {
-            language_config.generate_outline(content_bytes, tree)
+            language_config.generate_outline(content_bytes, tree, self.file_path.to_owned())
+        } else {
+            vec![]
+        };
+
+        // check for nodes which have been changed and belong to the range that
+        // was inserted, we need to check here in a heriarchial way putting important
+        // to the functions which are present in the class as well
+        let changed_outline_nodes = if let Some(range_with_changes) = changed_range {
+            self.outline_nodes
+                .iter()
+                .filter_map(|outline_node| {
+                    // dbg!("outline_node", &outline_node.range(), &range_with_changes);
+                    outline_node.check_smallest_member_in_range(&range_with_changes)
+                })
+                .collect::<Vec<_>>()
         } else {
             vec![]
         };
@@ -660,10 +678,18 @@ impl DocumentEditLines {
                 .map(|line| line.to_owned())
                 .collect::<Vec<_>>(),
         );
+
+        changed_outline_nodes
     }
 
-    // If the contents have changed, we need to mark the new lines which have changed
-    pub fn content_change(&mut self, range: Range, new_content: String) {
+    /// If the contents have changed, we need to mark the new lines which have changed
+    /// Additionally returns the nodes which have been chagned because of this edit
+    pub fn content_change(
+        &mut self,
+        range: Range,
+        new_content: String,
+        timestamp: i64,
+    ) -> Vec<OutlineNode> {
         // First we remove the content at the range which is changing
         // dbg!("Removing range: {:?}", &self.file_path, &self.lines.len());
         self.remove_range(range);
@@ -673,13 +699,13 @@ impl DocumentEditLines {
         //     &self.lines.len()
         // );
         // Then we insert the new content at the range
-        self.insert_at_position(range.start_position(), new_content);
+        self.insert_at_position(range.start_position(), new_content, timestamp);
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
         // TODO(skcd): Bring this back
         // are we doing something over here
         // dbg!("Generating snippets: {:?}", &self.file_path);
-        self.generate_snippets();
+        self.generate_snippets(Some(range))
     }
 
     pub fn get_edited_lines(&self) -> Vec<usize> {
@@ -853,7 +879,7 @@ SIXTH LINE 🫡🚀"#
             editor_parsing,
         );
         let position = Position::new(3, 1, 0);
-        document.insert_at_position(position, "🚀🚀🚀\n🪨🪨".to_owned());
+        document.insert_at_position(position, "🚀🚀🚀\n🪨🪨".to_owned(), 0);
         let updated_content = document.get_content();
         assert_eq!(
             updated_content,
@@ -873,7 +899,7 @@ SIXTH LINE 🫡🚀"#
         let mut document =
             DocumentEditLines::new("".to_owned(), "".to_owned(), "".to_owned(), editor_parsing);
         let position = Position::new(0, 0, 0);
-        document.insert_at_position(position, "SOMETHING".to_owned());
+        document.insert_at_position(position, "SOMETHING".to_owned(), 0);
         let updated_content = document.get_content();
         assert_eq!(updated_content, "SOMETHING");
     }
@@ -940,7 +966,7 @@ fff"#
             editor_parsing,
         );
         let range = Range::new(Position::new(9, 0, 0), Position::new(13, 0, 0));
-        document.content_change(range, "".to_owned());
+        document.content_change(range, "".to_owned(), 0);
         let updated_content = document.get_content();
         let expected_output = r#"aa
 
@@ -978,7 +1004,7 @@ fff"#;
             Arc::new(EditorParsing::default()),
         );
         let range = Range::new(Position::new(6, 0, 0), Position::new(8, 2, 0));
-        document_lines.content_change(range, "expected_output".to_owned());
+        document_lines.content_change(range, "expected_output".to_owned(), 0);
         let updated_content = document_lines.get_content();
         let expected_output = r#"aa
 

@@ -107,16 +107,25 @@ pub struct OutlineNodeContent {
     range: Range,
     name: String,
     r#type: OutlineNodeType,
+    // The content here gives the outline of the node which we are interested in
     content: String,
+    fs_file_path: String,
 }
 
 impl OutlineNodeContent {
-    pub fn new(name: String, range: Range, r#type: OutlineNodeType, content: String) -> Self {
+    pub fn new(
+        name: String,
+        range: Range,
+        r#type: OutlineNodeType,
+        content: String,
+        fs_file_path: String,
+    ) -> Self {
         Self {
             range,
             name,
             r#type,
             content,
+            fs_file_path,
         }
     }
 
@@ -145,6 +154,14 @@ impl OutlineNode {
         }
     }
 
+    pub fn new_from_child(outline_node_content: OutlineNodeContent, language: String) -> Self {
+        Self {
+            content: outline_node_content,
+            children: vec![],
+            language,
+        }
+    }
+
     pub fn children_len(&self) -> usize {
         self.children.len()
     }
@@ -163,6 +180,10 @@ impl OutlineNode {
 
     pub fn is_class(&self) -> bool {
         matches!(self.content.r#type, OutlineNodeType::Class)
+    }
+
+    pub fn is_funciton(&self) -> bool {
+        matches!(self.content.r#type, OutlineNodeType::Function)
     }
 
     pub fn get_outline(&self) -> Option<String> {
@@ -195,6 +216,52 @@ impl OutlineNode {
                 }
             }
             OutlineNodeType::Function => None,
+            _ => None,
+        }
+    }
+
+    pub fn check_smallest_member_in_range(&self, range: &Range) -> Option<OutlineNode> {
+        match &self.content.r#type {
+            OutlineNodeType::Class => {
+                if self.content.range().contains_check_line_column(&range) {
+                    // cool we have some hits probably now, so there can be 2 cases
+                    // here, one of them is that the hit is in the struct defintion
+                    // and the other is that its in the implementations, in some language
+                    // they are the one and same but we can still try our best right now
+                    let possible_hit = self
+                        .children
+                        .iter()
+                        .filter(|children| children.range().contains_check_line_column(&range))
+                        .next();
+                    match possible_hit {
+                        Some(hit) => {
+                            // return the function which we are getting a hit with
+                            Some(OutlineNode::new(
+                                hit.clone(),
+                                vec![],
+                                self.language.to_owned(),
+                            ))
+                        }
+                        None => {
+                            // return the whole class itself
+                            Some(OutlineNode::new(
+                                self.content.clone(),
+                                vec![],
+                                self.language.to_owned(),
+                            ))
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            OutlineNodeType::Function => {
+                if self.content.range().contains_check_line_column(&range) {
+                    Some(self.clone())
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }

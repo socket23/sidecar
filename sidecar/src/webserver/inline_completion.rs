@@ -222,6 +222,7 @@ pub async fn inline_completion_file_content_change(
     }): Json<InLineCompletionFileContentChange>,
 ) -> Result<impl IntoResponse> {
     let symbol_tracker = app.symbol_tracker.clone();
+    dbg!("sidecar.inline_completion_file_content_change");
 
     // make the edits to the file
     let events = events
@@ -352,5 +353,34 @@ pub async fn get_identifier_nodes(
                 range: identifier_node.1,
             })
             .collect(),
+    }))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineCompletionSymbolHistoryRequest {}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InLineCompletionSymbolHistoryResponse {
+    symbols: Vec<String>,
+    timestamps: Vec<usize>,
+}
+
+impl ApiResponse for InLineCompletionSymbolHistoryResponse {}
+
+pub async fn symbol_history(
+    Extension(app): Extension<Application>,
+    Json(InLineCompletionSymbolHistoryRequest {}): Json<InLineCompletionSymbolHistoryRequest>,
+) -> Result<impl IntoResponse> {
+    let inline_symbol_tracker = app.symbol_tracker.clone();
+    let symbols = inline_symbol_tracker.get_symbol_history().await;
+    let mut symbol_names = vec![];
+    let mut timestamps = vec![];
+    symbols.into_iter().for_each(|symbol_information| {
+        symbol_names.push(symbol_information.symbol_node().name().to_owned());
+        timestamps.push(symbol_information.timestamp());
+    });
+    Ok(Json(InLineCompletionSymbolHistoryResponse {
+        symbols: symbol_names,
+        timestamps,
     }))
 }

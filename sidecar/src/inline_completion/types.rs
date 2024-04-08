@@ -414,6 +414,9 @@ impl FillInMiddleCompletionAgent {
             None => {}
         }
 
+        // TODO(skcd): We should replace this with making the call from the sidecar
+        // to the editor directly instead of proxying it like this and getting the data
+        // back on the request
         let definitions_context = self
             .symbol_tracker
             .get_definition_configs(

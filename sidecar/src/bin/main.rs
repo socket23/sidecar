@@ -4,7 +4,7 @@ use std::env;
 #[tokio::main]
 async fn main() {
     println!("Hello, world! skcd");
-
+    // what about now??
     // Now we try to create the embedder and see if thats working
     let current_path = env::current_dir().unwrap();
     // Checking that the embedding logic is also working

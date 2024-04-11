@@ -323,6 +323,14 @@ impl DocumentEditLines {
         self.outline_nodes.to_vec()
     }
 
+    pub fn get_line_content(&self, line_number: usize) -> Option<String> {
+        if line_number < self.lines.len() {
+            Some(self.lines[line_number].content.to_owned())
+        } else {
+            None
+        }
+    }
+
     fn set_tree(&mut self) {
         if let Some(language_config) = self.editor_parsing.for_file_path(&self.file_path) {
             let tree = language_config.get_tree_sitter_tree(self.get_content().as_bytes());
@@ -350,6 +358,20 @@ impl DocumentEditLines {
             content.push('\n');
         }
         content
+    }
+
+    pub fn get_edited_lines_in_range(&self, range: &Range) -> Vec<usize> {
+        (range.start_line()..range.end_line())
+            .into_iter()
+            .filter_map(|line_number| {
+                let line = &self.lines[line_number];
+                if line.is_edited() {
+                    Some(line_number)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn indentation_at_position(&self, position: &Position) -> usize {
@@ -472,7 +494,6 @@ impl DocumentEditLines {
             }
             // remove the lines in between the start line and the end line
             self.lines.drain(start_line + 1..end_line + 1);
-            // remove the lines in between the start line and the end line
         }
     }
 
@@ -497,13 +518,24 @@ impl DocumentEditLines {
             .collect::<String>();
         // the new content here is the prefix + content + suffix
         let new_content = format!("{}{}{}", prefix.to_owned(), content, suffix);
+
         // now we get the new lines which need to be inserted
-        let new_lines = split_on_lines_editor_compatiable(&new_content)
+        // TODO(skcd): We should check here if the contents of the lines are same
+        // if thats the case then we should not mark the current line as edited at all
+        let mut new_lines = split_on_lines_editor_compatiable(&new_content)
             .into_iter()
             .map(|line| DocumentLine {
                 line_status: DocumentLineStatus::Edited(timestamp),
                 content: line.to_owned(),
-            });
+            })
+            .collect::<Vec<_>>();
+        // we are also checking if the first line is the same as before, in which case
+        // its not been edited
+        new_lines.first_mut().map(|first_changed_line| {
+            if first_changed_line.content == line_content {
+                first_changed_line.line_status = DocumentLineStatus::Unedited;
+            }
+        });
         // we also need to remove the line at the current line number
         self.lines.remove(position.line());
         // now we add back the lines which need to be inserted
@@ -690,6 +722,7 @@ impl DocumentEditLines {
         new_content: String,
         timestamp: i64,
     ) -> Vec<OutlineNode> {
+        dbg!("content.change", &range, &new_content);
         // First we remove the content at the range which is changing
         // dbg!("Removing range: {:?}", &self.file_path, &self.lines.len());
         self.remove_range(range);

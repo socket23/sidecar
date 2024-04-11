@@ -361,8 +361,8 @@ pub struct InLineCompletionSymbolHistoryRequest {}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineCompletionSymbolHistoryResponse {
-    symbols: Vec<String>,
-    timestamps: Vec<usize>,
+    symbols: HashMap<String, Vec<usize>>,
+    timestamps: Vec<i64>,
 }
 
 impl ApiResponse for InLineCompletionSymbolHistoryResponse {}
@@ -376,11 +376,14 @@ pub async fn symbol_history(
     let mut symbol_names = vec![];
     let mut timestamps = vec![];
     symbols.into_iter().for_each(|symbol_information| {
-        symbol_names.push(symbol_information.symbol_node().name().to_owned());
+        symbol_names.push((
+            symbol_information.symbol_node().name().to_owned(),
+            symbol_information.get_edited_lines(),
+        ));
         timestamps.push(symbol_information.timestamp());
     });
     Ok(Json(InLineCompletionSymbolHistoryResponse {
-        symbols: symbol_names,
+        symbols: symbol_names.into_iter().collect(),
         timestamps,
     }))
 }

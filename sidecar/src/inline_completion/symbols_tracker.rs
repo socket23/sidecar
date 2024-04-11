@@ -144,22 +144,33 @@ pub struct SymbolInformation {
     symbol_node: OutlineNode,
     // we want to keep an increasing order of timestamp and evict things frmo the queue
     // as they become unnecessary, not sure whats the right thing to do here
-    timestamp: usize,
+    timestamp: i64,
+    // the lines which have been edited in this symbols
+    edited_lines: Vec<usize>,
 }
 
 impl SymbolInformation {
-    pub fn new(symbol_node: OutlineNode, timestamp: usize) -> Self {
+    pub fn new(symbol_node: OutlineNode, timestamp: i64, edited_lines: Vec<usize>) -> Self {
         Self {
             symbol_node,
             timestamp,
+            edited_lines,
         }
+    }
+
+    pub fn get_edited_lines(&self) -> Vec<usize> {
+        self.edited_lines.to_vec()
+    }
+
+    pub fn set_edited_lines(&mut self, edited_lines: Vec<usize>) {
+        self.edited_lines = edited_lines;
     }
 
     pub fn symbol_node(&self) -> &OutlineNode {
         &self.symbol_node
     }
 
-    pub fn timestamp(&self) -> usize {
+    pub fn timestamp(&self) -> i64 {
         self.timestamp
     }
 }
@@ -416,33 +427,27 @@ impl SharedState {
         }
     }
 
-    async fn update_symbol_history(&self, changed_symbols: Vec<OutlineNode>) {
+    async fn update_symbol_history(&self, changed_symbols: Vec<SymbolInformation>) {
         // we will update the changed symbols queue
         // we also want to get the range of the lines which have been updated in the symbol, probably not their content
         // right now cause thats not useful enough right??
         {
-            let current_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
             let mut symbol_history = self.symbol_history.lock().await;
-            let symbol_information_list = changed_symbols
-                .into_iter()
-                .map(|outline_node| {
-                    let symbol_information =
-                        SymbolInformation::new(outline_node, current_time as usize);
-                    symbol_information
-                })
-                .collect::<Vec<_>>();
             // TODO(skcd): While appending here we want to make sure that we are able
             // to keep track of the list of symbols properly and not keep adding
             // repeated symbols to the list
-            for symbol_information in symbol_information_list.into_iter() {
-                match symbol_history.last() {
+            for symbol_information in changed_symbols.into_iter() {
+                match symbol_history.last_mut() {
                     Some(last_symbol) => {
+                        //TODO(skcd): we need to check here if these 2 are possibly the same symbol nodes
+                        // as the user might be typing them out in which case its pretty bad
+                        // just a prefix check here might work?
                         if last_symbol.symbol_node().name()
                             == symbol_information.symbol_node().name()
                         {
+                            last_symbol.set_edited_lines(symbol_information.get_edited_lines());
+                            // we need to update the edited lines here on the last or replace it
+                            // with what we have
                             continue;
                         } else {
                             // if the last symbol which we saw was different
@@ -478,7 +483,7 @@ impl SharedState {
             return;
         }
 
-        let mut changed_outline_nodes = vec![];
+        let mut changed_symbol_nodes = vec![];
         // we call the lock on document lines in a scope
         {
             // Now we first need to get the lock over the document lines
@@ -503,11 +508,24 @@ impl SharedState {
                     Some(document_lines_entry) => {
                         for (range, new_text) in edits {
                             // we give all of these the same timestamp
-                            let mut nodes_edit_current_edit =
+                            let nodes_edit_current_edit =
                                 document_lines_entry.content_change(range, new_text, current_time);
-                            changed_outline_nodes.append(&mut nodes_edit_current_edit);
-
-                            // we want to add this to the queue we are keeping of symbols
+                            changed_symbol_nodes.append(
+                                &mut nodes_edit_current_edit
+                                    .into_iter()
+                                    .map(|edited_nodes| {
+                                        let node_range = edited_nodes.range();
+                                        let edited_lines = document_lines_entry
+                                            .get_edited_lines_in_range(node_range);
+                                        SymbolInformation::new(
+                                            edited_nodes,
+                                            current_time,
+                                            edited_lines,
+                                        )
+                                    })
+                                    .collect::<Vec<_>>(),
+                            );
+                            // grab the range of the edits which are happening using the document lines
                         }
                     }
                     None => {
@@ -522,7 +540,7 @@ impl SharedState {
                 }
             }
         }
-        self.update_symbol_history(changed_outline_nodes).await;
+        self.update_symbol_history(changed_symbol_nodes).await;
     }
 
     async fn get_document_history(&self) -> Vec<String> {

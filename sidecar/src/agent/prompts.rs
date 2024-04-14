@@ -440,7 +440,8 @@ pub fn followup_chat_prompt(
     }
     if user_context {
         user_selected_instructions = r#"- You are given the code which the user has selected explicitly in the USER SELECTED CODE section
-- Pay special attention to the USER SELECTED CODE as these code snippets are specially selected by the user in their query"#;
+- Pay special attention to the USER SELECTED CODE as these code snippets are specially selected by the user in their query
+- If the user mentions #openFiles, note that the user is referring to the contents of the code they have selected explicitly. In such cases, assume the user has mentioned each of those files in the query and use the contents of those files to answer the query."#;
     }
     let not_followup_generate_question = format!(
         r#"{context}####

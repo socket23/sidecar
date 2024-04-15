@@ -7,14 +7,11 @@ use futures::{stream, StreamExt};
 use futures::{FutureExt, Stream};
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionStringRequest, LLMType},
+    clients::types::LLMType,
     tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerError},
 };
-use llm_prompts::{
-    answer_model::LLMAnswerModelBroker,
-    fim::types::{FillInMiddleBroker, FillInMiddleRequest},
-};
-use str_distance::str_distance;
+use llm_prompts::fim::types::FillInMiddleRequest;
+use llm_prompts::{answer_model::LLMAnswerModelBroker, fim::types::FillInMiddleBroker};
 use tree_sitter::TreeCursor;
 
 use crate::chunking::languages::TSLanguageConfig;
@@ -39,9 +36,9 @@ use super::{
 };
 
 const CLIPBOARD_CONTEXT: usize = 50;
-const CODEBASE_CONTEXT: usize = 1000;
+const CODEBASE_CONTEXT: usize = 3000;
 const ANTHROPIC_CODEBASE_CONTEXT: usize = 5_000;
-const SAME_FILE_CONTEXT: usize = 450;
+const SAME_FILE_CONTEXT: usize = 350;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TypeIdentifierPosition {
@@ -176,9 +173,11 @@ pub struct TypeIdentifier {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// These types are mapped out in typescript, so we get it from there
 pub enum NodeType {
     Identifier,
     FunctionParameter,
+    ImportNode,
 }
 
 impl TypeIdentifier {

@@ -121,7 +121,10 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         .to_owned(),
         comment_prefix: "//".to_owned(),
         end_of_line: Some(";".to_owned()),
-        import_statement: vec!["[(import_statement)] @import_type".to_owned()],
+        // TODO(skcd): Finish this up properly
+        import_identifier_queries: r#"
+        "#
+        .to_owned(),
         block_start: Some("{".to_owned()),
         variable_identifier_queries: vec![
             "((lexical_declaration (variable_declarator (identifier) @identifier)))".to_owned(),

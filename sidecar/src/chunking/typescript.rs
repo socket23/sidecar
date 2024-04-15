@@ -147,7 +147,27 @@ pub fn typescript_language_config() -> TSLanguageConfig {
         "#.to_owned(),
         comment_prefix: "//".to_owned(),
         end_of_line: Some(";".to_owned()),
-        import_statement: vec!["[(import_statement)] @import_type".to_owned()],
+        // TODO(skcd): Add missing cases here as required
+        import_identifier_queries: r#"
+(
+    import_statement
+        (import_clause
+            (named_imports
+                (import_specifier
+                    name: (identifier) @import_identifier
+                )
+            )
+        )
+)
+(
+    import_statement
+        (import_clause
+            (namespace_import
+                (identifier) @import_identifer
+            )
+        )
+)
+        "#.to_owned(),
         block_start: Some("{".to_owned()),
         variable_identifier_queries: vec![
             "((lexical_declaration (variable_declarator (identifier) @identifier)))"

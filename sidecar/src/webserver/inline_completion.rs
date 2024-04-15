@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
 use axum::{
     response::{sse, IntoResponse, Sse},
@@ -306,6 +306,7 @@ pub struct IdentifierNodeResponse {
 pub struct InLineCompletionIdentifierNodesResponse {
     identifier_nodes: Vec<IdentifierNodeResponse>,
     function_parameters: Vec<IdentifierNodeResponse>,
+    import_nodes: Vec<IdentifierNodeResponse>,
 }
 
 impl InLineCompletionIdentifierNodesResponse {
@@ -346,11 +347,20 @@ pub async fn get_identifier_nodes(
             })
             .collect(),
         function_parameters: identifier_nodes
+            .clone()
             .function_type_parameters()
             .into_iter()
             .map(|identifier_node| IdentifierNodeResponse {
                 name: identifier_node.0,
                 range: identifier_node.1,
+            })
+            .collect(),
+        import_nodes: identifier_nodes
+            .import_nodes()
+            .into_iter()
+            .map(|import_identifier_node| IdentifierNodeResponse {
+                name: import_identifier_node.0,
+                range: import_identifier_node.1,
             })
             .collect(),
     }))
@@ -361,7 +371,7 @@ pub struct InLineCompletionSymbolHistoryRequest {}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineCompletionSymbolHistoryResponse {
-    symbols: HashMap<String, Vec<usize>>,
+    symbols: Vec<(String, Vec<usize>)>,
     timestamps: Vec<i64>,
 }
 

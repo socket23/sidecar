@@ -27,16 +27,19 @@ lazy_static! {
 pub struct IdentifierNodeInformation {
     identifier_nodes: Vec<(String, Range)>,
     function_type_parameters: Vec<(String, Range)>,
+    import_nodes: Vec<(String, Range)>,
 }
 
 impl IdentifierNodeInformation {
     pub fn new(
         identifier_nodes: Vec<(String, Range)>,
         function_type_parameters: Vec<(String, Range)>,
+        import_nodes: Vec<(String, Range)>,
     ) -> Self {
         Self {
             identifier_nodes,
             function_type_parameters,
+            import_nodes,
         }
     }
 
@@ -51,6 +54,43 @@ impl IdentifierNodeInformation {
     pub fn function_type_parameters(self) -> Vec<(String, Range)> {
         self.function_type_parameters
     }
+
+    pub fn import_nodes(self) -> Vec<(String, Range)> {
+        self.import_nodes
+    }
+}
+
+// we want to split the camel case string into parts
+fn split_camel_case(text: &str) -> Vec<String> {
+    // an easy way to detect if the text is indeed camel case is to check
+    // if it only contains alphabets and then we can easily split on the capital
+    // ones
+    if text.chars().any(|char| !char.is_ascii_alphabetic()) {
+        vec![text.to_owned()]
+    } else {
+        // all fo them are alphabetic, so we can figure out the splitting
+        // magic now
+        let mut current_word = "".to_owned();
+        let mut words = vec![];
+        for character in text.chars() {
+            if character.is_uppercase() {
+                // flush the previous running word and start a new word now
+                words.push(current_word.to_owned());
+                current_word = String::from(character);
+            } else {
+                current_word = current_word + &String::from(character);
+            }
+        }
+        if !current_word.is_empty() {
+            words.push(current_word);
+        }
+        // filter out the words which might be empty
+        words
+            .into_iter()
+            .filter(|word| !word.is_empty())
+            .map(|word| word.to_lowercase())
+            .collect::<Vec<_>>()
+    }
 }
 
 fn split_into_words(e: &str) -> Vec<String> {
@@ -58,12 +98,18 @@ fn split_into_words(e: &str) -> Vec<String> {
         .split(e)
         .filter_map(|word| {
             let cleaned_word = word.trim();
+            // we want to also detect the camel case words here and then tokenize
+            // them further and make them all small cases
             if !cleaned_word.is_empty() {
-                Some(cleaned_word.to_string())
+                let split_words = split_camel_case(cleaned_word);
+                Some(split_words)
             } else {
                 None
             }
         })
+        // we need to flatten here since we are returning a vector when we split
+        // on the camel case words as well
+        .flatten()
         .collect()
 }
 
@@ -236,6 +282,7 @@ pub enum DocumentLineStatus {
     Unedited,
 }
 
+#[derive(Debug)]
 pub struct DocumentLine {
     line_status: DocumentLineStatus,
     content: String,
@@ -272,6 +319,7 @@ pub struct DocumentEditLines {
     tree: Option<Tree>,
     function_information: Vec<FunctionInformation>,
     outline_nodes: Vec<OutlineNode>,
+    import_identifier_nodes: Vec<(String, Range)>,
 }
 
 impl DocumentEditLines {
@@ -294,6 +342,7 @@ impl DocumentEditLines {
                 tree: None,
                 function_information: vec![],
                 outline_nodes: vec![],
+                import_identifier_nodes: vec![],
             }
         } else {
             let lines = split_on_lines_editor_compatiable(&content)
@@ -312,6 +361,7 @@ impl DocumentEditLines {
                 tree: None,
                 function_information: vec![],
                 outline_nodes: vec![],
+                import_identifier_nodes: vec![],
             }
         };
         // This is a very expensive operation for now, we are going to optimize the shit out of this 🍶
@@ -425,7 +475,6 @@ impl DocumentEditLines {
                         })
                         .collect();
                 });
-            // dbg!(&self.get_lines_in_range(contained_function.range()));
         }
         if let Some(contained_function) = contained_function {
             function_parameters_nodes = contained_function
@@ -435,7 +484,8 @@ impl DocumentEditLines {
                 .flatten()
                 .collect::<Vec<_>>();
         }
-        IdentifierNodeInformation::new(identifier_nodes, function_parameters_nodes)
+        // TODO(skcd): Add the import nodes here
+        IdentifierNodeInformation::new(identifier_nodes, function_parameters_nodes, vec![])
     }
 
     fn remove_range(&mut self, range: Range) {
@@ -492,6 +542,12 @@ impl DocumentEditLines {
                 start_doc_line.content = start_line_prefix.into_iter().collect::<String>()
                     + &end_line_suffix.into_iter().collect::<String>();
             }
+            // which lines are we draining in between?
+            dbg!(
+                "sidecar.drain_lines.remove_range",
+                &start_line + 1,
+                &end_line + 1
+            );
             // remove the lines in between the start line and the end line
             self.lines.drain(start_line + 1..end_line + 1);
         }
@@ -536,6 +592,7 @@ impl DocumentEditLines {
                 first_changed_line.line_status = DocumentLineStatus::Unedited;
             }
         });
+        dbg!("sidecar.insert_at_position", &new_lines);
         // we also need to remove the line at the current line number
         self.lines.remove(position.line());
         // now we add back the lines which need to be inserted
@@ -661,8 +718,14 @@ impl DocumentEditLines {
     /// Returns the nodes which have been changed as a side-effect of calling this function
     /// can be used for understanding how the file is changing
     fn generate_snippets(&mut self, changed_range: Option<Range>) -> Vec<OutlineNode> {
-        // generate the new tree sitter tree
+        // We should debounce the requests here to rate-limit on the CPU
+        // these operations are all CPU intensive and generally if the same file
+        // is being edited, we kind of want to make sure that the last edit makes it
+        // way here always, the rest can be fine even if they are not immediately acted
+        // upon
+        let instant = std::time::Instant::now();
         self.set_tree();
+        dbg!("document_lines.set_tree", &instant.elapsed());
         // we need to create ths symbol map here for the file so we can lookup the symbols
         // and add the skeleton of it to the inline completion
 
@@ -677,6 +740,7 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
+        dbg!("document_lines.function_information", &instant.elapsed());
 
         self.outline_nodes = if let (Some(language_config), Some(tree)) = (
             self.editor_parsing.for_file_path(&self.file_path),
@@ -686,6 +750,17 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
+        dbg!("document_lines.generate_outline", &instant.elapsed());
+
+        self.import_identifier_nodes = if let (Some(language_config), Some(tree)) = (
+            self.editor_parsing.for_file_path(&self.file_path),
+            self.tree.as_ref(),
+        ) {
+            language_config.generate_import_identifier_nodes(content_bytes, tree)
+        } else {
+            vec![]
+        };
+        dbg!("document_lines.import_identifier_nodes", &instant.elapsed());
 
         // check for nodes which have been changed and belong to the range that
         // was inserted, we need to check here in a heriarchial way putting important
@@ -701,6 +776,8 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
+        // what are we doing over here and why is it slow???
+        dbg!("document_lines.changed_outline_nodes", &instant.elapsed());
 
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
@@ -709,6 +786,10 @@ impl DocumentEditLines {
                 .lines()
                 .map(|line| line.to_owned())
                 .collect::<Vec<_>>(),
+        );
+        dbg!(
+            "document_lines.snippets_using_sliding_window",
+            &instant.elapsed()
         );
 
         changed_outline_nodes
@@ -722,23 +803,19 @@ impl DocumentEditLines {
         new_content: String,
         timestamp: i64,
     ) -> Vec<OutlineNode> {
+        let instant = std::time::Instant::now();
         dbg!("content.change", &range, &new_content);
-        // First we remove the content at the range which is changing
-        // dbg!("Removing range: {:?}", &self.file_path, &self.lines.len());
         self.remove_range(range);
-        // dbg!(
-        //     "Insert at position: {:?}",
-        //     &self.file_path,
-        //     &self.lines.len()
-        // );
+        dbg!("content.removed", &instant.elapsed());
         // Then we insert the new content at the range
         self.insert_at_position(range.start_position(), new_content, timestamp);
+        dbg!("content.insert_at_position", &instant.elapsed());
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
-        // TODO(skcd): Bring this back
-        // are we doing something over here
-        // dbg!("Generating snippets: {:?}", &self.file_path);
-        self.generate_snippets(Some(range))
+        let outline_nodes = self.generate_snippets(Some(range));
+        // is it still slow
+        dbg!("content.generate_snippets", &instant.elapsed());
+        outline_nodes
     }
 
     pub fn get_edited_lines(&self) -> Vec<usize> {
@@ -830,12 +907,15 @@ impl DocumentEditLines {
 mod tests {
     use std::sync::Arc;
 
-    use crate::chunking::{
-        editor_parsing::EditorParsing,
-        text_document::{Position, Range},
+    use crate::{
+        chunking::{
+            editor_parsing::EditorParsing,
+            text_document::{Position, Range},
+        },
+        inline_completion::document::content::split_camel_case,
     };
 
-    use super::DocumentEditLines;
+    use super::{split_into_words, DocumentEditLines};
 
     #[test]
     fn test_document_lines_works() {
@@ -1050,5 +1130,51 @@ expected_output
 
 fff"#;
         assert_eq!(updated_content, expected_output);
+    }
+
+    #[test]
+    fn test_updating_document_multiline_add_remove_leaves_nothing() {
+        let original_content = r#"fn something() {
+        // bb
+        // cc
+}"#;
+        let mut document_lines = DocumentEditLines::new(
+            "/tmp/something.rs".to_owned(),
+            original_content.to_owned(),
+            "rust".to_owned(),
+            Arc::new(EditorParsing::default()),
+        );
+        let range = Range::new(Position::new(1, 0, 0), Position::new(2, 0, 0));
+        let changed_nodes = document_lines.content_change(range, "".to_owned(), 0);
+        assert_eq!(changed_nodes[0].name(), "something".to_owned());
+        let updated_content = document_lines.get_content();
+        let expected_output = r#"fn something() {
+        // cc
+}"#;
+        assert_eq!(updated_content, expected_output);
+        // now what if we add it back??
+        let range = Range::new(Position::new(1, 0, 0), Position::new(1, 0, 0));
+        let changed_nodes = document_lines.content_change(range, "        // bb\n".to_owned(), 0);
+        let updated_content = document_lines.get_content();
+        let expected_output = r#"fn something() {
+        // bb
+        // cc
+}"#;
+        assert_eq!(changed_nodes[0].name(), "something".to_owned());
+        assert_eq!(updated_content, expected_output);
+    }
+
+    #[test]
+    fn test_splitting_camel_case() {
+        assert_eq!(split_camel_case("something_else")[0], "something_else");
+
+        let small_start_alternate_camel_case = "smallStartAlternateCamelCase";
+        let answer = split_camel_case(small_start_alternate_camel_case);
+        assert_eq!(answer.len(), 5);
+        assert_eq!(answer[0], "small");
+        assert_eq!(answer[1], "start");
+        assert_eq!(answer[2], "alternate");
+        assert_eq!(answer[3], "camel");
+        assert_eq!(answer[4], "case");
     }
 }

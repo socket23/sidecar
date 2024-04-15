@@ -515,8 +515,10 @@ impl SharedState {
                                     .into_iter()
                                     .map(|edited_nodes| {
                                         let node_range = edited_nodes.range();
+                                        dbg!("file_content_change.node", &node_range);
                                         let edited_lines = document_lines_entry
                                             .get_edited_lines_in_range(node_range);
+                                        dbg!("file_content_change.edited_lines", &edited_lines);
                                         SymbolInformation::new(
                                             edited_nodes,
                                             current_time,

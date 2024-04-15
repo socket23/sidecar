@@ -9,7 +9,6 @@ use crate::chunking::types::FunctionNodeInformation;
 
 use super::{
     go::go_language_config,
-    helpers::fix_snippet_information,
     javascript::javascript_language_config,
     python::python_language_config,
     rust::rust_language_config,
@@ -98,7 +97,7 @@ pub struct TSLanguageConfig {
     pub end_of_line: Option<String>,
 
     /// Tree sitter node types used to detect imports which are present in the file
-    pub import_statement: Vec<String>,
+    pub import_identifier_queries: String,
 
     /// Block start detection for the language
     pub block_start: Option<String>,
@@ -413,6 +412,40 @@ impl TSLanguageConfig {
             .collect()
     }
 
+    pub fn generate_import_identifier_nodes(
+        &self,
+        source_code: &[u8],
+        tree: &Tree,
+    ) -> Vec<(String, Range)> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let import_identifier_query = self.import_identifier_queries.to_owned();
+        let node = tree.root_node();
+        let query = tree_sitter::Query::new(grammar(), &import_identifier_query).expect("to work");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let query_captures = cursor.captures(&query, node, source_code);
+        let mut import_identifier_nodes: Vec<(String, Range)> = vec![];
+        let mut range_set: HashSet<Range> = Default::default();
+        let source_code_vec = source_code.to_vec();
+        query_captures.into_iter().for_each(|capture| {
+            capture.0.captures.into_iter().for_each(|capture| {
+                let capture_name = query
+                    .capture_names()
+                    .to_vec()
+                    .remove(capture.index.try_into().unwrap());
+                let range = Range::for_tree_node(&capture.node);
+                let node_name =
+                    get_string_from_bytes(&source_code_vec, range.start_byte(), range.end_byte());
+                if !range_set.contains(&range) {
+                    range_set.insert(range);
+                    import_identifier_nodes.push((node_name, range));
+                }
+            })
+        });
+        import_identifier_nodes
+    }
+
     pub fn generate_identifier_nodes(
         &self,
         source_code: &str,
@@ -604,30 +637,6 @@ impl TSLanguageConfig {
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(grammar()).unwrap();
         parser.parse(source_code, None)
-    }
-
-    /// Grabs the import lines which are present in the source code
-    pub fn get_import_ranges(&self, tree: &Tree, source_code: &[u8]) -> HashSet<Range> {
-        let node = tree.root_node();
-        let grammar = self.grammar;
-        let import_queries = self.import_statement.to_vec();
-        let mut range_set = HashSet::new();
-        import_queries.into_iter().for_each(|import_query| {
-            let query = tree_sitter::Query::new(grammar(), &import_query)
-                .expect("import queries are well formed");
-
-            let mut cursor = tree_sitter::QueryCursor::new();
-            cursor
-                .captures(&query, node, source_code)
-                .into_iter()
-                .for_each(|capture| {
-                    capture.0.captures.into_iter().for_each(|capture| {
-                        let range = Range::for_tree_node(&capture.node);
-                        range_set.insert(range);
-                    });
-                })
-        });
-        range_set
     }
 
     pub fn capture_type_data(&self, source_code: &[u8]) -> Vec<TypeInformation> {
@@ -1833,18 +1842,13 @@ pub fn chunk_tree(
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashSet;
-
     use tree_sitter::Parser;
     use tree_sitter::TreeCursor;
 
     use crate::chunking::text_document::Position;
     use crate::chunking::text_document::Range;
-    use crate::chunking::types::FunctionInformation;
-    use crate::chunking::types::FunctionNodeType;
 
     use super::naive_chunker;
-    use super::TSLanguageConfig;
     use super::TSLanguageParsing;
 
     fn get_naive_chunking_test_string<'a>() -> &'a str {

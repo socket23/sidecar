@@ -59,7 +59,7 @@ pub fn python_language_config() -> TSLanguageConfig {
         .to_owned(),
         comment_prefix: "#".to_owned(),
         end_of_line: None,
-        import_statement: vec!["[(import_statement)] @import_type".to_owned()],
+        import_identifier_queries: "[(import_statement)] @import_type".to_owned(),
         block_start: Some(":".to_owned()),
         variable_identifier_queries: vec!["(assignment left: (identifier) @identifier)".to_owned()],
         outline_query: Some(

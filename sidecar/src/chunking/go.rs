@@ -118,7 +118,8 @@ pub fn go_language_config() -> TSLanguageConfig {
         .to_owned(),
         comment_prefix: "//".to_owned(),
         end_of_line: None,
-        import_statement: vec!["[(import_declaration)] @import_type".to_owned()],
+        // TODO(skcd): Finish this up properly
+        import_identifier_queries: "".to_owned(),
         block_start: Some("{".to_owned()),
         variable_identifier_queries: vec![
             "(short_var_declaration left: (expression_list (identifier) @identifier))".to_owned(),

@@ -1160,7 +1160,7 @@ impl TSLanguageParsing {
         if file_extension.is_none() && file_language_id.is_none() {
             // We use naive chunker here which just splits on the number
             // of lines
-            return naive_chunker(buffer, 30, 15);
+            return naive_chunker(buffer, 50, 30);
         }
         let mut language_config_maybe = None;
         if let Some(language_id) = file_language_id {
@@ -1180,7 +1180,7 @@ impl TSLanguageParsing {
             parser.set_language(language()).unwrap();
             let tree = parser.parse(buffer.as_bytes(), None).unwrap();
             // we allow for 1500 characters and 100 character coalesce
-            let chunks = chunk_tree(&tree, language_config, 1500, 100, &buffer);
+            let chunks = chunk_tree(&tree, language_config, 2500, 100, &buffer);
             chunks
         } else {
             // use naive chunker here which just splits the file into parts

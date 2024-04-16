@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
 use axum::{
     response::{sse, IntoResponse, Sse},
@@ -372,6 +372,7 @@ pub struct InLineCompletionSymbolHistoryRequest {}
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InLineCompletionSymbolHistoryResponse {
     symbols: Vec<(String, Vec<usize>)>,
+    symbol_content: HashMap<String, String>,
     timestamps: Vec<i64>,
 }
 
@@ -385,15 +386,27 @@ pub async fn symbol_history(
     let symbols = inline_symbol_tracker.get_symbol_history().await;
     let mut symbol_names = vec![];
     let mut timestamps = vec![];
+    let mut symbol_content = HashMap::new();
     symbols.into_iter().for_each(|symbol_information| {
         symbol_names.push((
             symbol_information.symbol_node().name().to_owned(),
             symbol_information.get_edited_lines(),
         ));
+        symbol_content.insert(
+            symbol_information.symbol_node().name().to_owned(),
+            symbol_information
+                .symbol_node()
+                .content()
+                .content()
+                .to_owned(),
+        );
         timestamps.push(symbol_information.timestamp());
     });
+    // we want to convert the symbol names here to a list of changes and send
+    // it over the claude or something
     Ok(Json(InLineCompletionSymbolHistoryResponse {
         symbols: symbol_names.into_iter().collect(),
+        symbol_content: HashMap::new(),
         timestamps,
     }))
 }

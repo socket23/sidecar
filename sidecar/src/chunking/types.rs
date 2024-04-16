@@ -132,6 +132,10 @@ impl OutlineNodeContent {
     pub fn range(&self) -> &Range {
         &self.range
     }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -160,6 +164,10 @@ impl OutlineNode {
             children: vec![],
             language,
         }
+    }
+
+    pub fn content(&self) -> &OutlineNodeContent {
+        &self.content
     }
 
     pub fn children_len(&self) -> usize {

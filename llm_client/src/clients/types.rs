@@ -478,6 +478,7 @@ impl LLMClientCompletionRequest {
     }
 }
 
+#[derive(Debug)]
 pub struct LLMClientCompletionResponse {
     answer_up_until_now: String,
     delta: Option<String>,

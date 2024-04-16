@@ -4,8 +4,8 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::Result;
 use anyhow::Context;
+use anyhow::Result;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::header::HeaderMap;
@@ -37,15 +37,15 @@ pub trait Extractor {
 
     fn title<'a>(&self, doc: &'a Document) -> Option<String> {
         if let Some(title) = doc.find(Name("title")).next() {
-            return Some(title.text())
+            return Some(title.text());
         }
 
         if let Some(title) = self.meta_content(doc, Attr("property", "og:title")) {
-            return Some(title)
+            return Some(title);
         }
 
         if let Some(title) = self.meta_content(doc, Attr("name", "og:title")) {
-            return Some(title)
+            return Some(title);
         }
 
         if let Some(title) = doc
@@ -53,7 +53,7 @@ pub trait Extractor {
             .filter_map(|node| node.as_text().map(str::trim))
             .next()
         {
-            return Some(title.to_owned())
+            return Some(title.to_owned());
         }
         None
     }
@@ -116,9 +116,10 @@ pub trait Extractor {
     }
 
     fn icon<'a>(&self, doc: &'a Document) -> String {
-        doc.find(Name("head").descendant(
-            Name("link").and(Attr("rel", "icon").or(Attr("rel", "shortcut icon"))),
-        ))
+        doc.find(
+            Name("head")
+                .descendant(Name("link").and(Attr("rel", "icon").or(Attr("rel", "shortcut icon")))),
+        )
         .find_map(|node| node.attr("href").map(str::trim).filter(|s| !s.is_empty()))
         .unwrap_or("/favicon.ico")
         .to_owned()
@@ -130,7 +131,7 @@ pub trait Extractor {
             lang,
             DefaultDocumentCleaner {
                 url: self.url().clone(),
-            }
+            },
         )
     }
 
@@ -149,7 +150,7 @@ pub trait Extractor {
             doc.find(Name("body").descendant(ArticleTextNodeExtractor::article_body_predicate()));
         if let Some(node) = iter.next() {
             if iter.next().is_none() {
-                return Some(ArticleTextNode::new(node))
+                return Some(ArticleTextNode::new(node));
             }
         }
         ArticleTextNodeExtractor::calculate_best_node(doc, lang)
@@ -197,17 +198,16 @@ pub trait Extractor {
             .filter_map(|node| node.attr("href"))
             .next()
         {
-            return Url::parse(link).ok()
+            return Url::parse(link).ok();
         }
 
         if let Some(meta) = self.meta_content(doc, Attr("property", "og:url")) {
-            return Url::parse(&meta).ok()
+            return Url::parse(&meta).ok();
         }
 
         None
     }
 }
-
 
 // Different websites have different ways of storing the article content.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -394,7 +394,7 @@ impl ArticleBuilder {
     fn new<T: IntoUrl>(url: T) -> Result<Self> {
         let url = url.into_url()?;
 
-        Ok(ArticleBuilder { 
+        Ok(ArticleBuilder {
             url: Some(url),
             timeout: None,
             language: None,
@@ -420,8 +420,11 @@ impl ArticleBuilder {
                 self.browser_user_agent
                     .map(|x| x.parse())
                     .unwrap_or_else(|| {
-                        format!("codestory/{} codestory-sidecar-doc-scraper", env!("CARGO_PKG_VERSION"))
-                            .parse()
+                        format!(
+                            "codestory/{} codestory-sidecar-doc-scraper",
+                            env!("CARGO_PKG_VERSION")
+                        )
+                        .parse()
                     })
                     .context("Failed to parse user agent header.")?,
             );
@@ -436,9 +439,7 @@ impl ArticleBuilder {
         let response = client.get(url).send().await?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow! (
-                "request failed"
-            ));
+            return Err(anyhow::anyhow!("request failed"));
         }
 
         let url = response.url().to_owned();
@@ -596,7 +597,7 @@ pub trait DocumentCleaner {
             }
             text_added
         }
-        
+
         let mut text = String::new();
         let classes = Vec::new();
         recur_text(node, &mut text, self, classes);
@@ -754,7 +755,7 @@ impl ArticleTextNodeExtractor {
                     .and_then(|text| lang.stopword_count(text))
                 {
                     if stats > 2 {
-                        return Some((node, stats))
+                        return Some((node, stats));
                     }
                 }
                 None
@@ -793,7 +794,9 @@ impl ArticleTextNodeExtractor {
             let upscore = stats + boost_score as usize;
 
             if let Some(parent) = node.parent() {
-                let (score, cnt) = nodes_score.entry(parent.index()).or_insert((0usize, 0usize));
+                let (score, cnt) = nodes_score
+                    .entry(parent.index())
+                    .or_insert((0usize, 0usize));
                 *score += upscore;
                 *cnt += 1;
 
@@ -889,7 +892,6 @@ fn is_punctuation(c: char) -> bool {
     PUNCTUATION.contains(c)
 }
 
-
 struct TextNodeFind<'a> {
     document: &'a Document,
     next: usize,
@@ -923,7 +925,7 @@ impl<'a> Iterator for TextNodeFind<'a> {
                 self.next += node.descendants().count();
             }
             if Self::is_text_node(&node) {
-                return Some(node)
+                return Some(node);
             }
         }
         None

@@ -10,6 +10,7 @@ pub mod indexes;
 pub mod inline_completion;
 pub mod repo;
 pub mod reporting;
+pub mod reranking;
 pub mod scraper;
 pub mod semantic_search;
 pub mod state;

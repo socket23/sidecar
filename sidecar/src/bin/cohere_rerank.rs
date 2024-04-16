@@ -384,7 +384,7 @@ The comments provide a brief explanation of what each case is checking based on 
 
     let client = reqwest::Client::new();
     let cohere_api_key = "LBkihqRdm7cGwYHznAXP3CsNDzZeqshpxsI6OS6p".to_owned();
-    let endpoint = "https://api.cohere.ai/v1/rerank".to_owned();
+    let endpoint = "http://localhost:8080/rerank".to_owned();
     let cohere_data = CohereReRank {
         model: "rerank-english-v3.0".to_owned(),
         query: user_instruction,

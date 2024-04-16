@@ -150,6 +150,10 @@ impl CodeStoryClient {
         }
     }
 
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
     pub fn gpt3_endpoint(&self, api_base: &str) -> String {
         format!("{api_base}/chat-3")
     }
@@ -168,6 +172,11 @@ impl CodeStoryClient {
 
     pub fn anthropic_endpoint(&self, api_base: &str) -> String {
         format!("{api_base}/claude-api")
+    }
+
+    pub fn rerank_endpoint(&self) -> String {
+        let api_base = &self.api_base;
+        format!("{api_base}/rerank")
     }
 
     pub fn model_name(&self, model: &LLMType) -> Result<String, LLMClientError> {
@@ -197,6 +206,8 @@ impl CodeStoryClient {
             LLMType::ClaudeSonnet | LLMType::ClaudeHaiku => {
                 Ok(self.anthropic_endpoint(&self.api_base))
             }
+            // we do not allow this to be overriden yet
+            LLMType::CohereRerankV3 => Ok(self.rerank_endpoint()),
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }

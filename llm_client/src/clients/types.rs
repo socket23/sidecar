@@ -27,6 +27,7 @@ pub enum LLMType {
     ClaudeSonnet,
     ClaudeHaiku,
     PPLXSonnetSmall,
+    CohereRerankV3,
     Custom(String),
 }
 
@@ -77,6 +78,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "ClaudeSonnet" => Ok(LLMType::ClaudeSonnet),
                     "ClaudeHaiku" => Ok(LLMType::ClaudeHaiku),
                     "PPLXSonnetSmall" => Ok(LLMType::PPLXSonnetSmall),
+                    "CohereRerankV3" => Ok(LLMType::CohereRerankV3),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -134,6 +136,7 @@ impl fmt::Display for LLMType {
             LLMType::ClaudeSonnet => write!(f, "ClaudeSonnet"),
             LLMType::ClaudeHaiku => write!(f, "ClaudeHaiku"),
             LLMType::PPLXSonnetSmall => write!(f, "PPLXSonnetSmall"),
+            LLMType::CohereRerankV3 => write!(f, "CohereRerankV3"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

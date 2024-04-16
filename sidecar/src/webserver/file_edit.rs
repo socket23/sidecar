@@ -153,6 +153,8 @@ pub async fn file_edit(
     // First we check if the output generated is valid by itself, if it is then
     // we can think about applying the changes to the file
     let llm_broker = app.llm_broker.clone();
+    // the new models as of date 2024 are pretty good, so we can just ask them to make edits
+    // to the file which are open if its one of anthropic or openai ones
     let file_diff_content = generate_file_diff(
         &file_content,
         &file_path,
@@ -161,9 +163,6 @@ pub async fn file_edit(
         app.language_parsing.clone(),
     )
     .await;
-    file_diff_content
-        .clone()
-        .and_then(|file_diff_content| Some("".to_owned()));
 
     if let None = file_diff_content {
         let cloned_session_id = session_id.clone();
@@ -224,22 +223,61 @@ pub async fn file_edit(
             .map(|s| s.to_owned())
             .collect();
 
-        let result = llm_writing_code(
-            file_lines,
-            file_content,
-            new_content,
-            user_query,
-            language,
-            session_id,
-            llm_broker,
-            app.language_parsing.clone(),
-            file_path,
-            nearest_range_for_symbols,
-            code_block_index,
-            model_config,
-        )
-        .await;
-        result
+        let slow_model = model_config.slow_model.clone();
+        if is_new_edit_model(&slow_model) {
+            let result = send_edit_events(
+                file_lines,
+                file_content,
+                new_content,
+                user_query,
+                language,
+                session_id,
+                llm_broker,
+                app.language_parsing.clone(),
+                file_path,
+                nearest_range_for_symbols,
+                code_block_index,
+                model_config,
+            )
+            .await;
+            result
+        } else {
+            let result = llm_writing_code(
+                file_lines,
+                file_content,
+                new_content,
+                user_query,
+                language,
+                session_id,
+                llm_broker,
+                app.language_parsing.clone(),
+                file_path,
+                nearest_range_for_symbols,
+                code_block_index,
+                model_config,
+            )
+            .await;
+            result
+        }
+    }
+}
+
+// if model is anthropic or openai, then we can ask it to just write
+// the output
+fn is_new_edit_model(model: &LLMType) -> bool {
+    if model.is_anthropic() && model.is_openai() {
+        true
+    } else {
+        false
+    }
+}
+
+fn get_edit_model(model: &LLMType) -> LLMType {
+    if model.is_anthropic() {
+        // if this an anthropic model we can just use the haiku model
+        LLMType::ClaudeHaiku
+    } else {
+        model.clone()
     }
 }
 
@@ -1016,6 +1054,25 @@ pub enum LineContentType {
     DiffSeparator,
 }
 
+async fn send_edit_events(
+    file_lines: Vec<String>,
+    file_content: String,
+    llm_content: String,
+    user_query: String,
+    language: String,
+    session_id: String,
+    llm_broker: Arc<LLMBroker>,
+    language_parsing: Arc<TSLanguageParsing>,
+    file_path: String,
+    nearest_range_symbols: Vec<(Option<Range>, CodeSymbolInformation)>,
+    code_block_index: usize,
+    model_config: LLMClientConfig,
+) -> Result<
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
+    unimplemented!()
+}
+
 async fn llm_writing_code(
     file_lines: Vec<String>,
     file_content: String,
@@ -1194,7 +1251,7 @@ Remember to APPLY THE EDITS from the ## Export to codebase section and make sure
                                 ).into_stream();
                                 llm_answer
                             } else {
-                                unimplemented!("no other custom type suppported yet");
+                                unimplemented!("no other custom type supported yet");
                             }
                         },
                         _ => {

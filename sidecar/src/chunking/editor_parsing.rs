@@ -94,46 +94,6 @@ impl EditorParsing {
         }
     }
 
-    /**
-     * This function aims to process nodes from a tree sitter parsed structure
-     * based on their intersection with a given range and identify nodes that
-     * represent declarations or definitions specific to a programming language.
-     *
-     * @param {Object} t - The tree sitter node.
-     * @param {Object} e - The range (or point structure) with which intersections are checked.
-     * @param {string} r - The programming language (e.g., "typescript", "golang").
-     *
-     * @return {Object|undefined} - Returns the most relevant node or undefined.
-     */
-    // function KX(t, e, r) {
-    // // Initial setup with the root node and an empty list for potential matches
-    // let n = [t.rootNode], i = [];
-
-    // while (true) {
-    //     // For each node in 'n', calculate its intersection size with 'e'
-    //     let o = n.map(s => [s, rs.intersectionSize(s, e)])
-    //              .filter(([s, a]) => a > 0)
-    //              .sort(([s, a], [l, c]) => c - a);  // sort in decreasing order of intersection size
-
-    //     // If there are no intersections, either return undefined or the most relevant node from 'i'
-    //     if (o.length === 0) return i.length === 0 ? void 0 : tX(i, ([s, a], [l, c]) => a - c)[0];
-
-    //     // For the nodes in 'o', calculate a relevance score and filter the ones that are declarations or definitions for language 'r'
-    //     let s = o.map(([a, l]) => {
-    //         let c = rs.len(a),  // Length of the node
-    //             u = Math.abs(rs.len(e) - l),  // Difference between length of 'e' and its intersection size
-    //             p = (l - u) / c;  // Relevance score
-    //         return [a, p];
-    //     });
-
-    //     // Filter nodes based on the ZL function and push to 'i'
-    //     i.push(...s.filter(([a, l]) => ZL(a, r)));
-
-    //     // Prepare for the next iteration by setting 'n' to the children of the nodes in 'o'
-    //     n = [];
-    //     n.push(...s.flatMap(([a, l]) => a.children));
-    // }
-    // }
     fn get_identifier_node_fully_contained<'a>(
         &'a self,
         tree_sitter_node: tree_sitter::Node<'a>,

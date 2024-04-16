@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
 
     // We initialize the logging here
     let application = Application::initialize(configuration).await?;
+    println!("initialized application");
     debug!("initialized application");
 
     // Main logic

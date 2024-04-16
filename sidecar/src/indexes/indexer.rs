@@ -692,7 +692,7 @@ impl Indexes {
             // we don't support old schemas, and tantivy will hard
             // error if we try to open a db with a different schema.
             // std::fs::remove_dir_all(config.index_path("repo"))?;
-            std::fs::remove_dir_all(config.index_path("content"))?;
+            let _ = std::fs::remove_dir_all(config.index_path("content"));
 
             let mut refs = vec![];
             // knocking out our current file caches will force re-indexing qdrant

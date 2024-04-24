@@ -5,6 +5,7 @@ pub mod anthropic;
 pub mod anyscaleai;
 pub mod codestory;
 pub mod fireworks;
+pub mod gemini_pro;
 pub mod lmstudio;
 pub mod ollama;
 pub mod openai;

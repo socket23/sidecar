@@ -146,6 +146,7 @@ impl TogetherAIClient {
             LLMType::CodeLLama70BInstruct => Some("codellama/CodeLlama-70b-Instruct-hf".to_owned()),
             LLMType::CodeLlama13BInstruct => Some("codellama/CodeLlama-13b-Instruct-hf".to_owned()),
             LLMType::CodeLlama7BInstruct => Some("codellama/CodeLlama-7b-Instruct-hf".to_owned()),
+            LLMType::Llama3_8bInstruct => Some("meta-llama/Meta-Llama-3-8B-Instruct".to_owned()),
             LLMType::DeepSeekCoder33BInstruct => {
                 Some("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
             }

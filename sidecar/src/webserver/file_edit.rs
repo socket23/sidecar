@@ -9,9 +9,11 @@ use either::Either;
 use futures::FutureExt;
 use futures::{stream, StreamExt};
 use llm_client::broker::LLMBroker;
+use llm_client::clients::codestory::CodeStoryClient;
 use llm_client::clients::types::{
     LLMClientCompletionRequest, LLMClientCompletionStringRequest, LLMType,
 };
+use llm_prompts::reranking::types::{CodeSpan, CodeSpanDigest};
 use regex::Regex;
 use tracing::info;
 
@@ -24,6 +26,7 @@ use crate::chunking::types::{
 };
 use crate::in_line_agent::context_parsing::{generate_selection_context, ContextWindowTracker};
 use crate::in_line_agent::types::ContextSelection;
+use crate::reranking::snippet_reranking::rerank_snippets;
 
 use super::model_selection::LLMClientConfig;
 use super::types::{ApiResponse, Result};
@@ -1070,7 +1073,83 @@ async fn send_edit_events(
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
-    unimplemented!()
+    let codestory_client =
+        CodeStoryClient::new("https://codestory-provider-dot-anton-390822.ue.r.appspot.com");
+    // To implement this using the new flow we do the following:
+    // - If the file is less than 500 lines, then we can start editing the whole file
+    // - If the file is more than 500 lines, then we use the reranking to select the most relevant parts of the file
+    // - We then use the llm to generate the code in that section of the code snippet
+    let mut start_line = None;
+    let mut end_line = None;
+    if file_lines.len() >= 500 {
+        let ts_language_parsing = language_parsing.clone();
+        let snippets = ts_language_parsing
+            .chunk_file(&file_path, &file_content, None, None)
+            .into_iter()
+            .enumerate()
+            .filter_map(|(idx, span)| {
+                let start = span.start;
+                let end = span.end;
+                match span.data {
+                    Some(data) => Some({
+                        let data = format!(
+                            r#"Line range from: {start}-{end}
+{data}"#
+                        )
+                        .to_owned();
+                        let code_span_digest = CodeSpanDigest::new(
+                            CodeSpan::new(file_path.to_owned(), start as u64, end as u64, data),
+                            &file_path,
+                            idx,
+                        );
+                        code_span_digest
+                    }),
+                    None => None,
+                }
+            })
+            .collect::<Vec<CodeSpanDigest>>();
+        let reranked_snippet = rerank_snippets(&codestory_client, snippets, &user_query).await;
+
+        // Now that we have the ranked snippets we try to see what the suitable range
+        // for making edits is
+        // Merge the reranked snippets based on their start and end lines
+        let mut current_snippet: Option<CodeSpanDigest> = None;
+
+        for snippet in reranked_snippet {
+            if let Some(ref mut cs) = current_snippet {
+                // if the current snippet and cs both intersect or follow each other
+                // then we should merge them
+                if cs.code_span().intersects(snippet.code_span()) {
+                    // then we update the start and end lines
+                    start_line = Some(
+                        cs.code_span()
+                            .start_line()
+                            .min(snippet.code_span().start_line()),
+                    );
+                    end_line = Some(
+                        cs.code_span()
+                            .end_line()
+                            .max(snippet.code_span().end_line()),
+                    );
+                }
+            } else {
+                start_line = Some(snippet.code_span().start_line());
+                end_line = Some(snippet.code_span().end_line());
+                current_snippet = Some(snippet);
+            }
+        }
+    } else {
+        start_line = Some(0);
+        end_line = Some((file_lines.len() - 1) as u64);
+    }
+
+    // we now have the range where we have to make the edit, the next step is to have the llm generate the updates
+    // and send it over the wire
+    // we also need the LLM prompt here to make the edit
+    // yield EditFileResponse::start_text_edit(selection_context, code_block_index);
+    // yield EditFileResponse::stream_edit ....
+    // yeild EditFileResponse::end_text_edit ....
+    unimplemented!();
 }
 
 async fn llm_writing_code(

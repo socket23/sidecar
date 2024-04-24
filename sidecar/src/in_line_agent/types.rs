@@ -896,12 +896,14 @@ impl InLineAgent {
         let slow_model = self.editor_request.slow_model();
 
         // inline edit prompt
-        let inline_edit_request = self.inline_edit_request(
-            self.editor_request.language(),
-            response,
-            &self.editor_request.query,
-            &self.editor_request.user_context,
-        );
+        let inline_edit_request = self
+            .inline_edit_request(
+                self.editor_request.language(),
+                response,
+                &self.editor_request.query,
+                &self.editor_request.user_context,
+            )
+            .await;
         // Now we try to get the request we have to send from the inline edit broker
         let prompt = self
             .llm_prompt_formatter
@@ -1131,7 +1133,7 @@ impl InLineAgent {
     }
 
     /// Generate the inline edit request
-    fn inline_edit_request(
+    async fn inline_edit_request(
         &self,
         language: &str,
         selection_with_outline: SelectionWithOutlines,
@@ -1226,7 +1228,7 @@ impl InLineAgent {
             in_range_context,
             user_query.to_owned(),
             selection_with_outline.fs_file_path(),
-            user_context.to_extra_data(),
+            user_context.to_extra_data().await,
             language.to_owned(),
         )
     }

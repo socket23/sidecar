@@ -2,6 +2,7 @@ use super::agent_stream::generate_agent_stream;
 use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
+use llm_prompts::reranking::types::TERMINAL_OUTPUT;
 use std::collections::HashSet;
 
 use axum::response::IntoResponse;
@@ -359,10 +360,13 @@ pub struct UserContext {
     pub variables: Vec<VariableInformation>,
     pub file_content_map: Vec<FileContentValue>,
     pub terminal_selection: Option<String>,
+    // These paths will be absolute and need to be used to get the
+    // context of the folders here, we will output it properly
+    folder_paths: Vec<String>,
 }
 
 impl UserContext {
-    pub fn to_extra_data(&self) -> Vec<String> {
+    pub async fn to_extra_data(&self) -> Vec<String> {
         // we want to format all the data here as a string and then return it
         // it needs to have some extra information for sure, but we can make
         // this work
@@ -409,6 +413,8 @@ impl UserContext {
                 }
             })
             .collect::<Vec<_>>();
+        // we also need to read all the files here from the folder and send
+        // it over
         extra_data
     }
 }
@@ -416,6 +422,10 @@ impl UserContext {
 impl UserContext {
     pub fn is_empty(&self) -> bool {
         self.variables.is_empty() && self.file_content_map.is_empty()
+    }
+
+    pub fn folder_selection(&self) -> Vec<String> {
+        self.folder_paths.to_owned()
     }
 }
 
@@ -609,6 +619,16 @@ pub async fn followup_chat(
         .for_each(|file_content_value| {
             conversation_message.add_path(file_content_value.file_path.to_owned());
         });
+
+    // If there is terminal selection we also want to set the path for that
+    if user_context.terminal_selection.is_some() {
+        conversation_message.add_path(TERMINAL_OUTPUT.to_owned());
+    }
+
+    // also add the paths for the folders
+    user_context.folder_paths.iter().for_each(|folder_path| {
+        conversation_message.add_path(folder_path.to_owned());
+    });
 
     // We also want to add the file path for the active window if it's not already there
     let file_path_len = conversation_message.get_paths().len();

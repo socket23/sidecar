@@ -1,5 +1,7 @@
 //! We are going to implement how tht agent is going to use user context
 
+use futures::stream;
+use futures::StreamExt;
 use llm_client::clients::types::LLMType;
 use llm_client::tokenizer::tokenizer::LLMTokenizerInput;
 use llm_prompts::reranking::types::CodeSpan as LLMCodeSpan;
@@ -165,34 +167,6 @@ impl Agent {
                     sender,
                 )
                 .await?;
-            // // count the tokens from this codespan
-            // let tokens_used = self.llm_tokenizer.count_tokens(
-            //     slow_model,
-            //     LLMTokenizerInput::Prompt(
-            //         user_selected_code_spans
-            //             .iter()
-            //             .map(|code_span| code_span.to_prompt())
-            //             .collect::<Vec<_>>()
-            //             .join("\n"),
-            //     ),
-            // )? as i64;
-            // let remaining_tokens = prompt_token_limit - tokens_used;
-            // let mut file_code_spans = vec![];
-            // if remaining_tokens > 0 {
-            //     file_code_spans = self
-            //         .truncate_files(
-            //             remaining_tokens,
-            //             reranking_model,
-            //             &query,
-            //             user_selected_files,
-            //         )
-            //         .await?;
-            // }
-            // let final_code_spans = user_selected_code_spans
-            //     .into_iter()
-            //     .chain(file_code_spans.into_iter())
-            //     .collect::<Vec<_>>();
-            // Now we can merge the code spans again
             LLMCodeSpan::merge_consecutive_spans(user_selected_code_spans)
         };
 
@@ -207,6 +181,26 @@ impl Agent {
                 terminal_selection.to_owned(),
             ));
         }
+
+        // we want to include the files here as well somehow
+        // TODO(skcd): figure out how to get the files over here
+        if let Some(folder_selection) = self
+            .user_context
+            .as_ref()
+            .map(|user_context| user_context.folder_selection())
+        {
+            // we get the values from the file selection in parallel
+            // and then filter out the errors
+            let folder_code_spans = stream::iter(folder_selection)
+                .map(|folder_selection| LLMCodeSpan::from_folder_selection(folder_selection))
+                .buffer_unordered(1)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .filter_map(|value| value.ok())
+                .collect::<Vec<_>>();
+            code_spans.extend(folder_code_spans)
+        };
 
         // Now we update the code spans which we have selected
         let _ = self.save_code_snippets_response(

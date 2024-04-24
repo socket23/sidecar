@@ -41,6 +41,10 @@ impl InLineEditPromptBroker {
                 Box::new(CodeLlamaLineEditPrompt::new()),
             )
             .insert_prompt_generator(
+                LLMType::Llama3_8bInstruct,
+                Box::new(CodeLlamaLineEditPrompt::new()),
+            )
+            .insert_prompt_generator(
                 LLMType::CodeLLama70BInstruct,
                 Box::new(CodeLlamaLineEditPrompt::new()),
             )

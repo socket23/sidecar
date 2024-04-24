@@ -958,6 +958,17 @@ impl Agent {
             }
         }
 
+        // this might also be a folder path, in which case we have to look at the
+        // folder part of the user context and grab it from there
+        let content = self
+            .code_spans()
+            .iter()
+            .find(|code_span| code_span.file_path == path)
+            .map(|code_span| code_span.data.to_owned());
+        if let Some(content) = content {
+            return Ok(Some(content));
+        }
+
         // Now we try to check if the active window data has the file content
         let content = self
             .get_last_conversation_message_immutable()

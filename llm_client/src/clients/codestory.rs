@@ -245,6 +245,7 @@ impl LLMClient for CodeStoryClient {
     ) -> Result<String, LLMClientError> {
         let model = self.model_name(request.model())?;
         let endpoint = self.model_endpoint(request.model())?;
+        dbg!("stream_completion", &request);
 
         let request = CodeStoryRequest::from_chat_request(request, model.to_owned());
         let mut response_stream = self

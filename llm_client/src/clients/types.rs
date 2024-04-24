@@ -23,6 +23,7 @@ pub enum LLMType {
     CodeLLama70BInstruct,
     CodeLlama13BInstruct,
     CodeLlama7BInstruct,
+    Llama3_8bInstruct,
     ClaudeOpus,
     ClaudeSonnet,
     ClaudeHaiku,
@@ -79,6 +80,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "ClaudeHaiku" => Ok(LLMType::ClaudeHaiku),
                     "PPLXSonnetSmall" => Ok(LLMType::PPLXSonnetSmall),
                     "CohereRerankV3" => Ok(LLMType::CohereRerankV3),
+                    "Llama3_8bInstruct" => Ok(LLMType::Llama3_8bInstruct),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -137,6 +139,7 @@ impl fmt::Display for LLMType {
             LLMType::ClaudeHaiku => write!(f, "ClaudeHaiku"),
             LLMType::PPLXSonnetSmall => write!(f, "PPLXSonnetSmall"),
             LLMType::CohereRerankV3 => write!(f, "CohereRerankV3"),
+            LLMType::Llama3_8bInstruct => write!(f, "Llama3_8bInstruct"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

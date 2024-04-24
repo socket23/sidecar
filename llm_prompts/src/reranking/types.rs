@@ -1,3 +1,4 @@
+use async_recursion::async_recursion;
 use std::collections::HashMap;
 
 use either::Either;
@@ -7,6 +8,8 @@ use llm_client::{
     },
     tokenizer::tokenizer::LLMTokenizerError,
 };
+
+use crate::reranking::helpers::{guess_content, ProbableFileKind};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CodeSpan {
@@ -27,6 +30,11 @@ impl CodeSpan {
         )
     }
 
+    pub fn intersects(&self, other: &Self) -> bool {
+        (self.start_line <= other.end_line && self.end_line >= other.start_line)
+            || (other.start_line <= self.start_line && other.end_line >= self.end_line)
+    }
+
     pub fn from_terminal_selection(terminal_selection: String) -> Self {
         Self {
             file_path: TERMINAL_OUTPUT.to_owned(),
@@ -38,6 +46,94 @@ impl CodeSpan {
                 .len() as u64,
             data: terminal_selection.to_owned(),
         }
+    }
+
+    pub async fn from_folder_selection(folder_path: String) -> Result<Self, ReRankCodeSpanError> {
+        let data = Self::read_folder_selection(&folder_path).await?;
+        Ok(Self {
+            file_path: folder_path.to_owned(),
+            start_line: 0,
+            end_line: data.lines().into_iter().collect::<Vec<_>>().len() as u64,
+            data,
+        })
+    }
+
+    #[async_recursion]
+    pub async fn read_folder_selection(folder_path: &str) -> Result<String, ReRankCodeSpanError> {
+        let mut output = String::new();
+        output.push_str(&format!(
+            "<folder>\n<name>\n{}\n</name>\n<file_content>\n",
+            folder_path
+        ));
+
+        let mut entries = tokio::fs::read_dir(folder_path)
+            .await
+            .map_err(|_| ReRankCodeSpanError::UnableToReadFromFile(folder_path.to_owned()))?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|_| ReRankCodeSpanError::UnableToReadFromFile(folder_path.to_owned()))?
+        {
+            let path = entry.path();
+
+            if path.is_file() {
+                let file_path = path.to_str().unwrap().to_owned();
+                if path
+                    .extension()
+                    .map(|extension| extension == "json")
+                    .unwrap_or_default()
+                {
+                    let content = tokio::fs::read_to_string(&path)
+                        .await
+                        .map_err(|_| ReRankCodeSpanError::UnableToReadFromFile(file_path.clone()));
+                    if let Ok(content) = content {
+                        if content.lines().collect::<Vec<_>>().len() >= 50 {
+                            // just grab the first 50 lines and push it to the contet
+                            output.push_str(&format!(
+                                "<file_content>\n<file_path>\n{}\n</file_path>\n<content>\n{}\nTruncated...\n</content>\n</file_content>\n",
+                                file_path, content.lines().take(50).collect::<Vec<_>>().join("\n")
+                            ));
+                        } else {
+                            output.push_str(&format!(
+                                "<file_content>\n<file_path>\n{}\n</file_path>\n<content>\n{}</content>\n</file_content>\n",
+                                file_path, content
+                            ));
+                        }
+                    }
+                    // if we are in the json flow, then we have already consumed
+                    // this file and should break
+                    continue;
+                }
+                let content = tokio::fs::read_to_string(&path)
+                    .await
+                    .map_err(|_| ReRankCodeSpanError::UnableToReadFromFile(file_path.clone()));
+                if let Ok(content) = content {
+                    let content_type = guess_content(content.as_bytes());
+                    match content_type {
+                        ProbableFileKind::Text(content) => {
+                            output.push_str(&format!(
+                                "<file_content>\n<file_path>\n{}\n</file_path>\n<content>\n{}</content>\n</file_content>\n",
+                                file_path, content
+                            ));
+                        }
+                        ProbableFileKind::Binary => {
+                            output.push_str(&format!(
+                                "<file_content>\n<file_path>\n{}\n</file_path>\n<content>\nBinary Blob</content>\n</file_content>\n",
+                                file_path
+                            ));
+                        }
+                    }
+                }
+            } else if path.is_dir() {
+                let sub_folder_output =
+                    Self::read_folder_selection(path.to_str().expect("path reading to not fail"))
+                        .await?;
+                output.push_str(&sub_folder_output);
+            }
+        }
+
+        output.push_str("</file_content>\n</folder>\n");
+        Ok(output)
     }
 
     pub fn merge_consecutive_spans(code_spans: Vec<Self>) -> Vec<Self> {
@@ -116,6 +212,10 @@ impl CodeSpanDigest {
             code_span,
             hash: format!("{}::{}", base_name, index),
         }
+    }
+
+    pub fn code_span(&self) -> &CodeSpan {
+        &self.code_span
     }
 
     pub fn hash(&self) -> &str {
@@ -333,6 +433,9 @@ pub enum ReRankCodeSpanError {
 
     #[error("LLMClientError: {0}")]
     LLMClientError(#[from] LLMClientError),
+
+    #[error("File reading error at path: {0}")]
+    UnableToReadFromFile(String),
 }
 
 /// The rerank code span will take in a list of code spans and generate a prompt

@@ -30,6 +30,7 @@ pub enum LLMProvider {
     OpenAICompatible,
     Anthropic,
     FireworksAI,
+    GeminiPro,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -43,6 +44,7 @@ pub enum LLMProviderAPIKeys {
     CodeStory,
     Anthropic(AnthropicAPIKey),
     FireworksAI(FireworksAPIKey),
+    GeminiPro(GeminiProAPIKey),
 }
 
 impl LLMProviderAPIKeys {
@@ -67,6 +69,7 @@ impl LLMProviderAPIKeys {
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
+            LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
         }
     }
 
@@ -144,6 +147,13 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
+            LLMProvider::GeminiPro => {
+                if let LLMProviderAPIKeys::GeminiPro(api_key) = self {
+                    Some(LLMProviderAPIKeys::GeminiPro(api_key.clone()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -161,6 +171,18 @@ pub struct TogetherAIProvider {
 impl TogetherAIProvider {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct GeminiProAPIKey {
+    pub api_key: String,
+    pub api_base: String,
+}
+
+impl GeminiProAPIKey {
+    pub fn new(api_key: String, api_base: String) -> Self {
+        Self { api_key, api_base }
     }
 }
 

@@ -16,6 +16,7 @@ use crate::{
         anthropic::AnthropicClient,
         codestory::CodeStoryClient,
         fireworks::FireworksAIClient,
+        gemini_pro::GeminiProClient,
         lmstudio::LMStudioClient,
         ollama::OllamaClient,
         openai::OpenAIClient,
@@ -63,7 +64,8 @@ impl LLMBroker {
                 )),
             )
             .add_provider(LLMProvider::FireworksAI, Box::new(FireworksAIClient::new()))
-            .add_provider(LLMProvider::Anthropic, Box::new(AnthropicClient::new())))
+            .add_provider(LLMProvider::Anthropic, Box::new(AnthropicClient::new()))
+            .add_provider(LLMProvider::GeminiPro, Box::new(GeminiProClient::new())))
     }
 
     pub fn add_provider(
@@ -108,6 +110,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
+            LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
         }
     }
 
@@ -134,6 +137,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
+            LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -369,6 +373,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
+            LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

@@ -209,6 +209,15 @@ pub const CLAUDE_HAIKU: AnswerModel = AnswerModel {
     inline_completion_tokens: Some(2056),
 };
 
+pub const GEMINI_PRO: AnswerModel = AnswerModel {
+    llm_type: LLMType::GeminiPro,
+    answer_tokens: 8192,
+    prompt_tokens_limit: 950 * 1000,
+    history_tokens_limit: 50 * 1000,
+    total_tokens: 1 * 1000 * 1000,
+    inline_completion_tokens: None,
+};
+
 pub struct LLMAnswerModelBroker {
     pub models: HashMap<LLMType, AnswerModel>,
 }
@@ -234,6 +243,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(CLAUDE_OPUS)
             .add_answer_model(CLAUDE_SONNET)
             .add_answer_model(CLAUDE_HAIKU)
+            .add_answer_model(GEMINI_PRO)
     }
 
     fn add_answer_model(mut self, model: AnswerModel) -> Self {

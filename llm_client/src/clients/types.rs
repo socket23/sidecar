@@ -29,6 +29,7 @@ pub enum LLMType {
     ClaudeHaiku,
     PPLXSonnetSmall,
     CohereRerankV3,
+    GeminiPro,
     Custom(String),
 }
 
@@ -80,6 +81,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "ClaudeHaiku" => Ok(LLMType::ClaudeHaiku),
                     "PPLXSonnetSmall" => Ok(LLMType::PPLXSonnetSmall),
                     "CohereRerankV3" => Ok(LLMType::CohereRerankV3),
+                    "GeminiPro" => Ok(LLMType::GeminiPro),
                     "Llama3_8bInstruct" => Ok(LLMType::Llama3_8bInstruct),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
@@ -107,6 +109,10 @@ impl LLMType {
             self,
             LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku
         )
+    }
+
+    pub fn is_gemini_pro(&self) -> bool {
+        self == &LLMType::GeminiPro
     }
 
     pub fn is_togetherai_model(&self) -> bool {
@@ -140,6 +146,7 @@ impl fmt::Display for LLMType {
             LLMType::PPLXSonnetSmall => write!(f, "PPLXSonnetSmall"),
             LLMType::CohereRerankV3 => write!(f, "CohereRerankV3"),
             LLMType::Llama3_8bInstruct => write!(f, "Llama3_8bInstruct"),
+            LLMType::GeminiPro => write!(f, "GeminiPro"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }
@@ -557,6 +564,9 @@ pub enum LLMClientError {
 
     #[error("Function calling role but not function call present")]
     FunctionCallNotPresent,
+
+    #[error("Gemini pro does not support prompt completion")]
+    GeminiProDoesNotSupportPromptCompletion,
 }
 
 #[async_trait]

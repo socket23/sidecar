@@ -474,27 +474,6 @@ impl Agent {
         self.save_code_snippets_response(query, code_snippets)
     }
 
-    // async fn hyde(&self, query: &str) -> Result<Vec<String>> {
-    //     let prompt = vec![Message::system(&prompts::hypothetical_document_prompt(
-    //         query,
-    //     ))];
-
-    //     let response = self
-    //         .get_llm_client()
-    //         .response(llm::OpenAIModel::GPT3_5_16k, prompt, None, 0.0, None)
-    //         .await?;
-
-    //     debug!("hyde response");
-
-    //     let documents = prompts::try_parse_hypothetical_documents(&response);
-
-    //     for doc in documents.iter() {
-    //         info!(?doc, "hyde generated snippet");
-    //     }
-
-    //     Ok(documents)
-    // }
-
     pub async fn process_files(&mut self, _query: &str, _path_aliases: &[usize]) -> Result<String> {
         Ok("".to_owned())
         // const MAX_CHUNK_LINE_LENGTH: usize = 20;
@@ -933,7 +912,6 @@ impl Agent {
         }
 
         let code_spans = self.dedup_code_spans(aliases.as_slice()).await?;
-        dbg!("code_spans", &code_spans);
 
         // Sometimes, there are just too many code chunks in the context, and deduplication still
         // doesn't trim enough chunks. So, we enforce a hard limit here that stops adding tokens
@@ -1088,9 +1066,6 @@ impl Agent {
             })
             .collect::<HashMap<_, _>>()
             .await;
-
-        dbg!("lines_by_file", &lines_by_file);
-        dbg!("spans_by_path", &spans_by_path);
 
         debug!(
             event_name = "selected_spans",

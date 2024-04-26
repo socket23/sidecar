@@ -11,8 +11,8 @@ use crate::agent::types::{Agent, AgentAction, ConversationMessage};
 
 use super::types::Result;
 
-// We give a timeout of 1 minute between responses
-const TIMEOUT_SECS: u64 = 60;
+// We give a timeout of 4 minute between responses
+const TIMEOUT_SECS: u64 = 60 * 10;
 
 /// We can use this to invoke the agent and get the stream of responses back
 

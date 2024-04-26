@@ -81,7 +81,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "ClaudeHaiku" => Ok(LLMType::ClaudeHaiku),
                     "PPLXSonnetSmall" => Ok(LLMType::PPLXSonnetSmall),
                     "CohereRerankV3" => Ok(LLMType::CohereRerankV3),
-                    "GeminiPro" => Ok(LLMType::GeminiPro),
+                    "GeminiPro1.5" => Ok(LLMType::GeminiPro),
                     "Llama3_8bInstruct" => Ok(LLMType::Llama3_8bInstruct),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
@@ -146,7 +146,7 @@ impl fmt::Display for LLMType {
             LLMType::PPLXSonnetSmall => write!(f, "PPLXSonnetSmall"),
             LLMType::CohereRerankV3 => write!(f, "CohereRerankV3"),
             LLMType::Llama3_8bInstruct => write!(f, "Llama3_8bInstruct"),
-            LLMType::GeminiPro => write!(f, "GeminiPro"),
+            LLMType::GeminiPro => write!(f, "GeminiPro1.5"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

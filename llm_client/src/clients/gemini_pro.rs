@@ -175,7 +175,6 @@ impl LLMClient for GeminiProClient {
             generation_config,
             safety_settings: vec![],
         };
-        dbg!(serde_json::to_string(&request).expect("to not fail"));
         let api_key = self.get_api_key(&provider_api_key);
         let api_base = self.get_api_base(&provider_api_key);
         if api_key.is_none() || api_base.is_none() {
@@ -194,6 +193,8 @@ impl LLMClient for GeminiProClient {
                 .send()
                 .await
         )?;
+
+        dbg!(&response.status());
 
         if !response.status().is_success() {
             return Err(LLMClientError::FailedToGetResponse);

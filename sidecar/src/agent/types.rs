@@ -478,7 +478,7 @@ impl ConversationMessage {
         let steps_taken = serde_json::to_string(&self.steps_taken)?;
         let agent_state = serde_json::to_string(&self.agent_state)?;
         let file_paths = serde_json::to_string(&self.file_paths)?;
-        let code_spans = serde_json::to_string(&self.code_spans)?;
+        let code_spans = serde_json::to_string::<Vec<CodeSpan>>(&vec![])?;
         let open_files = serde_json::to_string(&self.open_files)?;
         let conversation_state = serde_json::to_string(&self.conversation_state)?;
         let repo_ref_str = repo_ref.to_string();

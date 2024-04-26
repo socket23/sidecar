@@ -93,7 +93,8 @@ impl LLMTokenizer {
             )
             .add_llm_type(LLMType::ClaudeOpus, Box::new(ClaudeFormatting::new()))
             .add_llm_type(LLMType::ClaudeSonnet, Box::new(ClaudeFormatting::new()))
-            .add_llm_type(LLMType::ClaudeHaiku, Box::new(ClaudeFormatting::new()));
+            .add_llm_type(LLMType::ClaudeHaiku, Box::new(ClaudeFormatting::new()))
+            .add_llm_type(LLMType::GeminiPro, Box::new(ClaudeFormatting::new()));
         Ok(updated_tokenizer)
     }
 
@@ -299,6 +300,10 @@ impl LLMTokenizer {
             }
             LLMType::ClaudeOpus | LLMType::ClaudeSonnet | LLMType::ClaudeHaiku => {
                 let config = include_str!("configs/claude.json");
+                Some(Tokenizer::from_str(config)?)
+            }
+            LLMType::GeminiPro => {
+                let config = include_str!("configs/deepseekcoder.json");
                 Some(Tokenizer::from_str(config)?)
             }
             _ => None,

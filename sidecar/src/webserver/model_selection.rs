@@ -128,6 +128,16 @@ mod tests {
     }
 
     #[test]
+    fn test_gemini_type() {
+        let data = r#"
+        {"slow_model":"DeepSeekCoder33BInstruct","fast_model":"DeepSeekCoder33BInstruct","models":{"Gpt4":{"context_length":8192,"temperature":0.2,"provider":{"CodeStory":{"llm_type":null}}},"GPT3_5_16k":{"context_length":16385,"temperature":0.2,"provider":{"CodeStory":{"llm_type":null}}},"CodeLlama7BInstruct":{"context_length":16384,"temperature":0.2,"provider":{"CodeStory":{"llm_type":null}}},"DeepSeekCoder33BInstruct":{"context_length":16384,"temperature":0.2,"provider":{"CodeStory":{"llm_type":null}}},"DeepSeekCoder1.3BInstruct":{"context_length":16384,"temperature":0.2,"provider":"Ollama"},"DeepSeekCoder6BInstruct":{"context_length":16384,"temperature":0.2,"provider":"Ollama"},"ClaudeSonnet":{"context_length":200000,"temperature":0.2,"provider":{"CodeStory":{"llm_type":null}}},"ClaudeHaiku":{"context_length":200000,"temperature":0.2,"provider":{"CodeStory":{"llm_type":null}}},"GeminiPro1.5":{"context_length":1000000,"temperature":0.2,"provider":null}},"providers":["CodeStory",{"Ollama":{}},{"GeminiPro":{"api_key":"ya29.a0Ad52N3-fixk_UEEgKks633q1SaF6YmrY5vt9VroX40j7nqfU5Ny4S_aLH-AzNDXPfAGxOQXGMSD_LTlQYgSYQYEtKlIWIulI1HD9o9wNSkbGP_EawaEhf4UNZe8hwKDQfv9h2727V3on25fLjS_YsRfJTR3Iz9F-ZOQv6tBAfwaCgYKAZMSARESFQHGX2MiNXTyT7SzpY5qnOijIPOc4A0177","api_base":"anton-390822"}}]}
+        "#.to_owned();
+        let data = serde_json::from_str::<LLMClientConfig>(&data);
+        println!("{:?}", data);
+        assert!(data.is_ok());
+    }
+
+    #[test]
     fn test_custom_llm_type_json() {
         let llm_config = LLMClientConfig {
             slow_model: llm_client::clients::types::LLMType::Custom("slow_model".to_owned()),

@@ -777,7 +777,7 @@ impl Agent {
             .iter()
             .map(|message| message.role().clone())
             .collect::<Vec<_>>();
-        dbg!("sidecar.generating_ansewr.fixed_roles", &fixed_roles);
+        // dbg!("sidecar.generating_ansewr.fixed_roles", &fixed_roles);
         let (answer_sender, answer_receiver) = tokio::sync::mpsc::unbounded_channel();
         let answer_receiver = UnboundedReceiverStream::new(answer_receiver).map(either::Left);
         let llm_broker = self.llm_broker.clone();

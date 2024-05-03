@@ -6,4 +6,4 @@
 //! - Has a memory for context
 //! - Can effect the environment and lead to other sub-actions which need to happen
 mod graph;
-mod types;
+pub mod types;

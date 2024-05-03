@@ -6,3 +6,6 @@
 //! Once they have finished their job (first mechas notify about the job being
 //! done and then finish it ALWAYS)
 //! Mechas also have their own memory as well
+
+pub mod journal;
+pub mod types;

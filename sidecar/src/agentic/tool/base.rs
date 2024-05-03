@@ -1,10 +1,10 @@
 //! Contains the basic tool and how to extract data from it
 
-use std::collections::HashMap;
-
 use axum::async_trait;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+use super::{errors::ToolError, input::ToolInput, output::ToolOutput};
+
+#[derive(Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ToolType {
     AskDocumentation,
     AskUser,
@@ -17,17 +17,7 @@ pub enum ToolType {
     Terminal,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct ToolInput {
-    tool_type: ToolType,
-    metadata: HashMap<i64, String>,
-}
-
-pub enum ToolOutput {}
-
-pub struct ToolContext {}
-
 #[async_trait]
 pub trait Tool {
-    async fn invoke(input: ToolInput, context: ToolContext) -> ToolOutput;
+    async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError>;
 }

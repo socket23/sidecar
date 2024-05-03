@@ -23,4 +23,20 @@ mod action;
 mod environment;
 mod mecha;
 mod memory;
+mod runner;
 mod tool;
+
+// There are tons of actions happening in the editor, some made by human, some made by AI
+// There is the environment which is changing as well, and things are happening to it
+// Then there are the agents which can take action(s) as and when required to accomplish a task, the goal of this agent is to always be on task
+// We also have a memory of what the agent knows about, so it can gather more context or keep things in mind
+// Then we have tools which can be used by either the agent or the human to do things
+// If I wanted to have a run loop how would that look like?
+
+// To me it feels like this:
+// - environment is the core center piece here
+// - we have agents and humans who can use tools to interact with the environment
+// - each agent and human can interact with each other (should this also be a tool?)
+// - agent and human have a working memory as well
+// - End of day is the work togehter on the task and get it done
+// - we might need to also lock in resources so human and AI do not override each others work

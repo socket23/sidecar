@@ -276,10 +276,14 @@ impl MechaBasic {
         &self,
         symbol_name: &str,
         definition: GoToDefinitionResponse,
-    ) -> Result<(String, Range), ToolError> {
+    ) -> Result<Snippet, ToolError> {
         // here we first try to open the file
         // and then read the symbols from it nad then parse
         // it out properly
+        // since its very much possible that we get multiple definitions over here
+        // we have to figure out how to pick the best one over here
+        // TODO(skcd): This will break if we are unable to get definitions properly
+        let definition = definition.definitions().remove(0);
         let _ = self.file_open(definition.file_path().to_owned()).await?;
         // grab the symbols from the file
         // but we can also try getting it from the symbol broker
@@ -299,7 +303,9 @@ impl MechaBasic {
             symbols
                 .iter()
                 .find(|symbol| symbol.name() == symbol_name)
-                .map(|symbol| (symbol.content().to_owned(), symbol.range().clone()))
+                .map(|symbol| {
+                    Snippet::new(symbol.range().clone(), definition.file_path().to_owned())
+                })
                 .ok_or(ToolError::SymbolNotFound(symbol_name.to_owned()))
         } else {
             Err(ToolError::SymbolNotFound(symbol_name.to_owned()))
@@ -439,17 +445,14 @@ impl MechaBasic {
                         let definition = self
                             .go_to_definition(&code_snippet.file_path, file_position)
                             .await?;
-                        let definition_file_path = definition.file_path().to_owned();
-                        let outline_node = self
+                        // let definition_file_path = definition.file_path().to_owned();
+                        let snippet_node = self
                             .grab_symbol_content_from_definition(
                                 &code_snippet.symbol_name,
                                 definition,
                             )
                             .await?;
-                        code_snippet.set_snippet(Snippet::new(
-                            outline_node.1.clone(),
-                            definition_file_path,
-                        ));
+                        code_snippet.set_snippet(snippet_node);
                     }
                 } else {
                     // if we have multiple outline nodes, then we need to select

@@ -23,11 +23,22 @@ impl GoToDefinitionRequest {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GoToDefinitionResponse {
+    definitions: Vec<DefinitionPathAndRange>,
+}
+
+impl GoToDefinitionResponse {
+    pub fn definitions(self) -> Vec<DefinitionPathAndRange> {
+        self.definitions
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DefinitionPathAndRange {
     fs_file_path: String,
     range: Range,
 }
 
-impl GoToDefinitionResponse {
+impl DefinitionPathAndRange {
     pub fn file_path(&self) -> &str {
         &self.fs_file_path
     }

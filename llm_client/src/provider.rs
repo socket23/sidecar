@@ -33,6 +33,16 @@ pub enum LLMProvider {
     GeminiPro,
 }
 
+impl LLMProvider {
+    pub fn is_codestory(&self) -> bool {
+        matches!(self, LLMProvider::CodeStory(_))
+    }
+
+    pub fn is_anthropic_api_key(&self) -> bool {
+        matches!(self, LLMProvider::Anthropic)
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum LLMProviderAPIKeys {
     OpenAI(OpenAIProvider),

@@ -28,7 +28,7 @@ use crate::chunking::types::FunctionNodeType;
 use crate::in_line_agent::context_parsing::generate_context_for_range;
 use crate::in_line_agent::context_parsing::ContextParserInLineEdit;
 use crate::in_line_agent::context_parsing::EditExpandedSelectionRange;
-use crate::webserver::agent::UserContext;
+use crate::user_context::types::UserContext;
 use crate::{
     application::application::Application,
     chunking::{editor_parsing::EditorParsing, text_document::DocumentSymbol},
@@ -1228,7 +1228,8 @@ impl InLineAgent {
             in_range_context,
             user_query.to_owned(),
             selection_with_outline.fs_file_path(),
-            user_context.to_extra_data().await,
+            // TODO(skcd): Check the implementation of this later on
+            vec![user_context.clone().to_xml().await.expect("to work")],
             language.to_owned(),
         )
     }

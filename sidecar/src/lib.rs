@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agentic;
 pub mod application;
 pub mod bg_poll;
 pub mod chunking;
@@ -14,4 +15,5 @@ pub mod reranking;
 pub mod scraper;
 pub mod semantic_search;
 pub mod state;
+pub mod user_context;
 pub mod webserver;

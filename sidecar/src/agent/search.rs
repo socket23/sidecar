@@ -1,7 +1,6 @@
 use crate::{
     agent::{
-        llm_funcs::{self},
-        prompts,
+        llm_funcs, prompts,
         types::{CodeSpan, VariableInformation},
     },
     application::application::Application,
@@ -9,7 +8,8 @@ use crate::{
     db::sqlite::SqlDb,
     git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
-    webserver::{agent::UserContext, model_selection::LLMClientConfig},
+    user_context::types::UserContext,
+    webserver::model_selection::LLMClientConfig,
 };
 
 /// Here we allow the agent to perform search and answer workflow related questions
@@ -777,7 +777,7 @@ impl Agent {
             .iter()
             .map(|message| message.role().clone())
             .collect::<Vec<_>>();
-        dbg!("sidecar.generating_ansewr.fixed_roles", &fixed_roles);
+        // dbg!("sidecar.generating_ansewr.fixed_roles", &fixed_roles);
         let (answer_sender, answer_receiver) = tokio::sync::mpsc::unbounded_channel();
         let answer_receiver = UnboundedReceiverStream::new(answer_receiver).map(either::Left);
         let llm_broker = self.llm_broker.clone();

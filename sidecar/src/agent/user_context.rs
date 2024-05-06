@@ -10,9 +10,9 @@ use tracing::info;
 
 use crate::agent::llm_funcs;
 use crate::agent::types::CodeSpan;
+use crate::user_context::types::FileContentValue;
+use crate::user_context::types::VariableInformation;
 use crate::webserver::agent::ActiveWindowData;
-use crate::webserver::agent::FileContentValue;
-use crate::webserver::agent::VariableInformation;
 
 use super::types::Agent;
 use super::types::AgentAnswerStreamEvent;
@@ -187,12 +187,14 @@ impl Agent {
         if let Some(folder_selection) = self
             .user_context
             .as_ref()
-            .map(|user_context| user_context.folder_selection())
+            .map(|user_context| user_context.folder_paths())
         {
             // we get the values from the file selection in parallel
             // and then filter out the errors
             let folder_code_spans = stream::iter(folder_selection)
-                .map(|folder_selection| LLMCodeSpan::from_folder_selection(folder_selection))
+                .map(|folder_selection| {
+                    LLMCodeSpan::from_folder_selection(folder_selection.to_owned())
+                })
                 .buffer_unordered(1)
                 .collect::<Vec<_>>()
                 .await
@@ -334,7 +336,7 @@ impl Agent {
         let code_spans = user_selected_variables
             .into_iter()
             .map(|variable| {
-                let start_line = variable.start_position.line;
+                let start_line = variable.start_position.line();
                 language_parsing
                     .chunk_file(
                         &variable.fs_file_path,
@@ -445,8 +447,8 @@ fn merge_active_window_with_user_variables(
         .into_iter()
         .filter(|user_variable| {
             if user_variable.variable_type.selection()
-                && user_variable.start_position.line >= active_window.start_line
-                && user_variable.end_position.line <= active_window.end_line
+                && user_variable.start_position.line() >= active_window.start_line
+                && user_variable.end_position.line() <= active_window.end_line
                 && active_window.file_path == user_variable.fs_file_path
             {
                 false

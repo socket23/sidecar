@@ -75,7 +75,7 @@ pub async fn generate_agent_stream(
             // return them here so as to not loose things in case the timeout got triggered
             // this is basically draining the stream properly
             while let Some(Some(conversation_message)) = conversation_message_stream.next().now_or_never() {
-                yield conversation_message;
+                yield conversation_message.clone();
             }
 
             // yield the answer from the answer stream so we can send incremental updates here
@@ -104,7 +104,7 @@ pub async fn generate_agent_stream(
             .expect("failed to serialize initialization object"))
     });
 
-    // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
     let answer_stream = conversation_message_stream.map(
         |conversation_message: anyhow::Result<ConversationMessage>| {
             if let Err(e) = &conversation_message {

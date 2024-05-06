@@ -19,6 +19,12 @@ pub struct CodeStoryLLMTypes {
     pub llm_type: Option<LLMType>,
 }
 
+impl CodeStoryLLMTypes {
+    pub fn new() -> Self {
+        Self { llm_type: None }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
 pub enum LLMProvider {
     OpenAI,

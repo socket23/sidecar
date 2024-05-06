@@ -19,12 +19,12 @@
 //!
 //! Nomenclature (cause we keep things professional here, but everyone loves anime and I hate paying tech-debt)
 //! agent == mecha
-mod action;
-mod environment;
-mod mecha;
-mod memory;
-mod runner;
-mod tool;
+pub mod action;
+pub mod environment;
+pub mod mecha;
+pub mod memory;
+pub mod runner;
+pub mod tool;
 
 // There are tons of actions happening in the editor, some made by human, some made by AI
 // There is the environment which is changing as well, and things are happening to it

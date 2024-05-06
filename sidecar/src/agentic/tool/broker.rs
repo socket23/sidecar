@@ -14,8 +14,9 @@ use super::{
     },
     code_symbol::important::CodeSymbolImportantBroker,
     errors::ToolError,
+    grep::file::FindInFile,
     input::ToolInput,
-    lsp::diagnostics::LSPDiagnostics,
+    lsp::{diagnostics::LSPDiagnostics, gotodefintion::LSPGoToDefinition, open_file::LSPOpenFile},
     output::ToolOutput,
     rerank::base::ReRankBroker,
 };
@@ -64,6 +65,12 @@ impl ToolBroker {
             ToolType::FindCodeSymbolsCodeBaseWide,
             Box::new(CodeSymbolImportantBroker::new(llm_client)),
         );
+        tools.insert(
+            ToolType::GoToDefinitions,
+            Box::new(LSPGoToDefinition::new()),
+        );
+        tools.insert(ToolType::OpenFile, Box::new(LSPOpenFile::new()));
+        tools.insert(ToolType::GrepInFile, Box::new(FindInFile::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

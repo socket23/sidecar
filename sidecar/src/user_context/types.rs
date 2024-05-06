@@ -135,6 +135,20 @@ pub struct UserContext {
 }
 
 impl UserContext {
+    pub fn new(
+        variables: Vec<VariableInformation>,
+        file_content_map: Vec<FileContentValue>,
+        terminal_selection: Option<String>,
+        folder_paths: Vec<String>,
+    ) -> Self {
+        Self {
+            variables,
+            file_content_map,
+            terminal_selection,
+            folder_paths,
+        }
+    }
+
     pub fn folder_paths(&self) -> Vec<String> {
         self.folder_paths.to_vec()
     }

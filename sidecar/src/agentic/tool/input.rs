@@ -3,7 +3,11 @@ use super::{
     code_edit::{find::FindCodeSelectionInput, types::CodeEdit},
     code_symbol::important::{CodeSymbolImportantRequest, CodeSymbolImportantWideSearch},
     errors::ToolError,
-    lsp::diagnostics::LSPDiagnosticsInput,
+    grep::file::FindInFileRequest,
+    lsp::{
+        diagnostics::LSPDiagnosticsInput, gotodefintion::GoToDefinitionRequest,
+        open_file::OpenFileRequest,
+    },
     rerank::base::ReRankEntriesForBroker,
 };
 
@@ -14,6 +18,9 @@ pub enum ToolInput {
     ReRank(ReRankEntriesForBroker),
     RequestImportantSymbols(CodeSymbolImportantRequest),
     RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch),
+    GoToDefinition(GoToDefinitionRequest),
+    OpenFile(OpenFileRequest),
+    GrepSingleFile(FindInFileRequest),
 }
 
 impl ToolInput {
@@ -25,6 +32,33 @@ impl ToolInput {
             ToolInput::ReRank(_) => ToolType::ReRank,
             ToolInput::RequestImportantSymbols(_) => ToolType::RequestImportantSymbols,
             ToolInput::RequestImportantSybmolsCodeWide(_) => ToolType::FindCodeSymbolsCodeBaseWide,
+            ToolInput::GoToDefinition(_) => ToolType::GoToDefinitions,
+            ToolInput::OpenFile(_) => ToolType::OpenFile,
+            ToolInput::GrepSingleFile(_) => ToolType::GrepInFile,
+        }
+    }
+
+    pub fn grep_single_file(self) -> Result<FindInFileRequest, ToolError> {
+        if let ToolInput::GrepSingleFile(grep_single_file) = self {
+            Ok(grep_single_file)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn is_file_open(self) -> Result<OpenFileRequest, ToolError> {
+        if let ToolInput::OpenFile(open_file) = self {
+            Ok(open_file)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn is_go_to_definition(self) -> Result<GoToDefinitionRequest, ToolError> {
+        if let ToolInput::GoToDefinition(definition_request) = self {
+            Ok(definition_request)
+        } else {
+            Err(ToolError::WrongToolInput)
         }
     }
 

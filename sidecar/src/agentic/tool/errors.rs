@@ -34,4 +34,7 @@ pub enum ToolError {
 
     #[error("Code Symbol Error: {0}")]
     CodeSymbolError(CodeSymbolError),
+
+    #[error("Symbol not found: {0}")]
+    SymbolNotFound(String),
 }

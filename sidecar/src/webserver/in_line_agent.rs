@@ -11,8 +11,8 @@ use serde_json::json;
 use tracing::info;
 
 use super::{
-    agent::UserContext, in_line_agent_stream::generate_in_line_agent_stream,
-    model_selection::LLMClientConfig, types::Result,
+    in_line_agent_stream::generate_in_line_agent_stream, model_selection::LLMClientConfig,
+    types::Result,
 };
 use crate::{
     application::application::Application,
@@ -26,6 +26,7 @@ use crate::{
     },
     repo::types::RepoRef,
     reporting::posthog::client::PosthogEvent,
+    user_context::types::UserContext,
 };
 use axum::response::IntoResponse;
 

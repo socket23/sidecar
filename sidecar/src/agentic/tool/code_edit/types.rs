@@ -32,15 +32,12 @@ pub struct CodeEdit {
 
 pub struct CodeEditingTool {
     llm_client: Arc<LLMBroker>,
-    broker: CodeEditBroker,
+    broker: Arc<CodeEditBroker>,
 }
 
 impl CodeEditingTool {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
-        Self {
-            llm_client,
-            broker: CodeEditBroker::new(),
-        }
+    pub fn new(llm_client: Arc<LLMBroker>, broker: Arc<CodeEditBroker>) -> Self {
+        Self { llm_client, broker }
     }
 }
 
@@ -86,10 +83,7 @@ impl CodeEdit {
 impl Tool for CodeEditingTool {
     // TODO(skcd): Figure out how we want to do streaming here in the future
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
-        if !input.is_code_edit() {
-            return Err(ToolError::WrongToolInput);
-        }
-        let code_edit_context = input.grab_context::<CodeEdit>()?;
+        let code_edit_context = input.is_code_edit()?;
         let llm_message = self.broker.format_prompt(&code_edit_context)?;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         self.llm_client

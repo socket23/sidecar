@@ -1,7 +1,6 @@
 use crate::{
     agent::{
-        llm_funcs::{self},
-        prompts,
+        llm_funcs, prompts,
         types::{CodeSpan, VariableInformation},
     },
     application::application::Application,
@@ -9,7 +8,8 @@ use crate::{
     db::sqlite::SqlDb,
     git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
-    webserver::{agent::UserContext, model_selection::LLMClientConfig},
+    user_context::types::UserContext,
+    webserver::model_selection::LLMClientConfig,
 };
 
 /// Here we allow the agent to perform search and answer workflow related questions

@@ -87,6 +87,9 @@ dashmap = "5.5.3"
 lazy_static = "1.4.0"
 sysinfo = "0.30.7"
 tree-sitter-go = "0.20.0"
+serde-xml-rs = "0.6.0"
+async-recursion = "1.1.1"
+tree_magic_mini = "3.0.2"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = [ "resource" ] }

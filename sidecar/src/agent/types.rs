@@ -27,10 +27,8 @@ use crate::{
     db::sqlite::SqlDb,
     indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
-    webserver::{
-        agent::{ActiveWindowData, UserContext},
-        model_selection::LLMClientConfig,
-    },
+    user_context::types::UserContext,
+    webserver::{agent::ActiveWindowData, model_selection::LLMClientConfig},
 };
 
 use super::{

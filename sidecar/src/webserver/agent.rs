@@ -2,6 +2,7 @@ use super::agent_stream::generate_agent_stream;
 use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
+use futures::{stream, StreamExt};
 use llm_prompts::reranking::types::TERMINAL_OUTPUT;
 use std::collections::HashSet;
 
@@ -18,6 +19,9 @@ use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
+use crate::user_context::types::{
+    FileContentValue, UserContext, VariableInformation, VariableType,
+};
 
 use super::types::ApiResponse;
 use super::types::Result;
@@ -269,19 +273,6 @@ pub async fn explain(
     generate_agent_stream(agent, action, receiver).await
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
-pub enum VariableType {
-    File,
-    CodeSymbol,
-    Selection,
-}
-
-impl VariableType {
-    pub fn selection(&self) -> bool {
-        self == &VariableType::Selection
-    }
-}
-
 impl Into<crate::agent::types::VariableType> for VariableType {
     fn into(self) -> crate::agent::types::VariableType {
         match self {
@@ -292,29 +283,17 @@ impl Into<crate::agent::types::VariableType> for VariableType {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct VariableInformation {
-    pub start_position: Position,
-    pub end_position: Position,
-    pub fs_file_path: String,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub variable_type: VariableType,
-    pub content: String,
-    pub language: String,
-}
-
 impl VariableInformation {
     pub fn to_agent_type(self) -> AgentVariableInformation {
         AgentVariableInformation {
             start_position: DocumentPosition::new(
-                self.start_position.line,
-                self.start_position.character,
+                self.start_position.line(),
+                self.start_position.column(),
                 0,
             ),
             end_position: DocumentPosition::new(
-                self.end_position.line,
-                self.end_position.character,
+                self.end_position.line(),
+                self.end_position.column(),
                 0,
             ),
             fs_file_path: self.fs_file_path,
@@ -327,105 +306,22 @@ impl VariableInformation {
 
     pub fn from_user_active_window(active_window: &ActiveWindowData) -> Self {
         Self {
-            start_position: Position {
-                line: active_window.start_line.try_into().unwrap(),
-                character: 0,
-            },
-            end_position: Position {
-                line: active_window.end_line.try_into().unwrap(),
-                character: 1000,
-            },
+            start_position: DocumentPosition::new(
+                active_window.start_line.try_into().unwrap(),
+                0,
+                0,
+            ),
+            end_position: DocumentPosition::new(
+                active_window.end_line.try_into().unwrap(),
+                1000,
+                0,
+            ),
             fs_file_path: active_window.file_path.to_owned(),
             name: "active_window".to_owned(),
             variable_type: VariableType::Selection,
             content: active_window.visible_range_content.to_owned(),
             language: active_window.language.to_owned(),
         }
-    }
-
-    pub fn is_selection(&self) -> bool {
-        self.variable_type == VariableType::Selection
-    }
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct FileContentValue {
-    pub file_path: String,
-    pub file_content: String,
-    pub language: String,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-pub struct UserContext {
-    pub variables: Vec<VariableInformation>,
-    pub file_content_map: Vec<FileContentValue>,
-    pub terminal_selection: Option<String>,
-    // These paths will be absolute and need to be used to get the
-    // context of the folders here, we will output it properly
-    folder_paths: Vec<String>,
-}
-
-impl UserContext {
-    pub async fn to_extra_data(&self) -> Vec<String> {
-        // we want to format all the data here as a string and then return it
-        // it needs to have some extra information for sure, but we can make
-        // this work
-        let extra_data = self
-            .variables
-            .iter()
-            .map(|variable| {
-                let variable_type = variable.variable_type.clone();
-                match variable_type {
-                    VariableType::CodeSymbol => {
-                        let name = variable.name.to_owned();
-                        let content = &variable.content;
-                        let file_path = &variable.fs_file_path;
-                        let language = &variable.language;
-                        format!(
-                            r#"Code Content for {name} at {file_path}
-```{language}
-{content}
-```"#
-                        )
-                    }
-                    VariableType::File => {
-                        let content = &variable.content;
-                        let file_path = &variable.fs_file_path;
-                        let language = &variable.language;
-                        format!(
-                            r#"File content for {file_path}
-```{language}
-{content}
-```"#
-                        )
-                    }
-                    VariableType::Selection => {
-                        let name = variable.name.to_owned();
-                        let content = &variable.content;
-                        let language = &variable.language;
-                        format!(
-                            r#"Code Content for {name}
-```{language}
-{content}
-```"#
-                        )
-                    }
-                }
-            })
-            .collect::<Vec<_>>();
-        // we also need to read all the files here from the folder and send
-        // it over
-        extra_data
-    }
-}
-
-impl UserContext {
-    pub fn is_empty(&self) -> bool {
-        self.variables.is_empty() && self.file_content_map.is_empty()
-    }
-
-    pub fn folder_selection(&self) -> Vec<String> {
-        self.folder_paths.to_owned()
     }
 }
 
@@ -626,7 +522,7 @@ pub async fn followup_chat(
     }
 
     // also add the paths for the folders
-    user_context.folder_paths.iter().for_each(|folder_path| {
+    user_context.folder_paths().iter().for_each(|folder_path| {
         conversation_message.add_path(folder_path.to_owned());
     });
 

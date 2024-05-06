@@ -1,6 +1,8 @@
 use llm_client::clients::types::LLMClientError;
 use thiserror::Error;
 
+use super::{code_symbol::types::CodeSymbolError, rerank::base::ReRankError};
+
 #[derive(Debug, Error)]
 pub enum ToolError {
     #[error("Unable to grab the context")]
@@ -17,4 +19,19 @@ pub enum ToolError {
 
     #[error("Missing tool")]
     MissingTool,
+
+    #[error("Error converting serde json to string")]
+    SerdeConversionFailed,
+
+    #[error("Communication with editor failed")]
+    ErrorCommunicatingWithEditor,
+
+    #[error("Language not supported")]
+    NotSupportedLanguage,
+
+    #[error("ReRanking error: {0}")]
+    ReRankingError(ReRankError),
+
+    #[error("Code Symbol Error: {0}")]
+    CodeSymbolError(CodeSymbolError),
 }

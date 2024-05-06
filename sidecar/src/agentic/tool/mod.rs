@@ -17,6 +17,9 @@
 pub mod base;
 pub mod broker;
 pub mod code_edit;
+pub mod code_symbol;
 pub mod errors;
 pub mod input;
+pub mod lsp;
 pub mod output;
+pub mod rerank;

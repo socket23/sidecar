@@ -7,5 +7,7 @@
 //! done and then finish it ALWAYS)
 //! Mechas also have their own memory as well
 
+pub mod basic;
+pub mod events;
 pub mod journal;
 pub mod types;

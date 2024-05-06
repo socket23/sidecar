@@ -136,6 +136,14 @@ impl OutlineNodeContent {
     pub fn content(&self) -> &str {
         &self.content
     }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -168,6 +176,10 @@ impl OutlineNode {
 
     pub fn content(&self) -> &OutlineNodeContent {
         &self.content
+    }
+
+    pub fn children(&self) -> &[OutlineNodeContent] {
+        self.children.as_slice()
     }
 
     pub fn children_len(&self) -> usize {

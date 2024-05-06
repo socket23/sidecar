@@ -44,6 +44,7 @@ pub struct SymbolThinking {
 pub struct Symbol {
     name: String,
     thinking: String,
+    file_path: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -53,6 +54,7 @@ pub struct StepListItem {
     step: Vec<String>,
     #[serde(default)]
     new: bool,
+    file_path: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -83,13 +85,19 @@ impl Reply {
             .symbol_list
             .symbol_list
             .into_iter()
-            .map(|symbol_list| CodeSymbolWithThinking::new(symbol_list.name, symbol_list.thinking))
+            .map(|symbol_list| {
+                CodeSymbolWithThinking::new(
+                    symbol_list.name,
+                    symbol_list.thinking,
+                    symbol_list.file_path,
+                )
+            })
             .collect();
         let code_symbols_with_steps = self
             .step_by_step
             .steps
             .into_iter()
-            .map(|step| CodeSymbolWithSteps::new(step.name, step.step, step.new))
+            .map(|step| CodeSymbolWithSteps::new(step.name, step.step, step.new, step.file_path))
             .collect();
         CodeSymbolImportantResponse::new(code_symbols_with_thinking, code_symbols_with_steps)
     }
@@ -114,6 +122,9 @@ Let's focus on getting the "code symbols" which are necessary to satisfy the use
 
 As an example, given the following code selection:
 <code_selection>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 ```rust
 pub struct FillInMiddleBroker {{
     providers: HashMap<LLMType, Box<dyn FillInMiddleFormatter + Send + Sync>>,
@@ -173,6 +184,9 @@ Your reply should be, you should strictly follow this format:
 <name>
 LLMType
 </name>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 <thinking>
 We need to first check if grok is part of the LLMType enum, this will make sure that the code we produce is never wrong
 </thinking>
@@ -181,6 +195,9 @@ We need to first check if grok is part of the LLMType enum, this will make sure 
 <name>
 FillInMiddleFormatter
 </name>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 <thinking>
 Other LLM's are implementing FillInMiddleFormatter trait, grok will also require support for this, so we need to check how to implement FillInMiddleFormatter trait
 </thinking>
@@ -189,6 +206,9 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
 <name>
 new
 </name>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 <thinking>
 We have to change the new function and add the grok llm after implementing the formatter for grok llm.
 </thinking>
@@ -199,6 +219,9 @@ We have to change the new function and add the grok llm after implementing the f
 <name>
 LLMType
 </name>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 <step>
 We will need to first check the LLMType if it has support for grok or we need to edit it first
 </step>
@@ -207,6 +230,9 @@ We will need to first check the LLMType if it has support for grok or we need to
 <name>
 FillInMiddleFormatter
 </name>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 <step>
 Check the definition of `FillInMiddleFormatter` to see how to implement it
 </step>
@@ -215,6 +241,9 @@ Check the definition of `FillInMiddleFormatter` to see how to implement it
 <name>
 CodeLlamaFillInMiddleFormatter
 </name>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 <step>
 We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will also have to follow a similar pattern of making changes and adding it to the right places if there are more.
 </step>
@@ -223,6 +252,9 @@ We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will
 <name>
 GrokFillInMiddleFormatter
 </name>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
 <new>
 true
 </new>

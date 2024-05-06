@@ -21,6 +21,22 @@ pub struct MechaInputEvent {
 }
 
 impl MechaInputEvent {
+    pub fn new(
+        context: UserContext,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        user_query: String,
+    ) -> Self {
+        Self {
+            context,
+            llm,
+            provider,
+            api_keys,
+            user_query,
+        }
+    }
+
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball

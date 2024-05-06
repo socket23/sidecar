@@ -212,14 +212,28 @@ impl CodeSymbolImportantRequest {
 pub struct CodeSymbolWithThinking {
     code_symbol: String,
     thinking: String,
+    file_path: String,
 }
 
 impl CodeSymbolWithThinking {
-    pub fn new(code_symbol: String, thinking: String) -> Self {
+    pub fn new(code_symbol: String, thinking: String, file_path: String) -> Self {
         Self {
             code_symbol,
             thinking,
+            file_path,
         }
+    }
+
+    pub fn code_symbol(&self) -> &str {
+        &self.code_symbol
+    }
+
+    pub fn thinking(&self) -> &str {
+        &self.thinking
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
     }
 }
 
@@ -228,15 +242,33 @@ pub struct CodeSymbolWithSteps {
     code_symbol: String,
     steps: Vec<String>,
     is_new: bool,
+    file_path: String,
 }
 
 impl CodeSymbolWithSteps {
-    pub fn new(code_symbol: String, steps: Vec<String>, is_new: bool) -> Self {
+    pub fn new(code_symbol: String, steps: Vec<String>, is_new: bool, file_path: String) -> Self {
         Self {
             code_symbol,
             steps,
             is_new,
+            file_path,
         }
+    }
+
+    pub fn code_symbol(&self) -> &str {
+        &self.code_symbol
+    }
+
+    pub fn steps(&self) -> &[String] {
+        self.steps.as_slice()
+    }
+
+    pub fn is_new(&self) -> bool {
+        self.is_new
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
     }
 }
 
@@ -255,6 +287,14 @@ impl CodeSymbolImportantResponse {
             symbols,
             ordered_symbols,
         }
+    }
+
+    pub fn symbols(&self) -> &[CodeSymbolWithThinking] {
+        self.symbols.as_slice()
+    }
+
+    pub fn ordered_symbols(&self) -> &[CodeSymbolWithSteps] {
+        self.ordered_symbols.as_slice()
     }
 }
 

@@ -111,6 +111,10 @@ struct GetDefinitionOutlineRequest {
     editor_parsing: Arc<EditorParsing>,
 }
 
+struct GetDocumentOutlineRequest {
+    file_path: String,
+}
+
 enum SharedStateRequest {
     GetFileContent(String),
     GetDocumentLines(GetDocumentLinesRequest),
@@ -120,6 +124,7 @@ enum SharedStateRequest {
     GetFileEditedLines(GetFileEditedLinesRequest),
     GetIdentifierNodes(GetIdentifierNodesRequest),
     GetDefinitionOutline(GetDefinitionOutlineRequest),
+    GetDocumentOutline(GetDocumentOutlineRequest),
     GetSymbolHistory,
 }
 
@@ -132,6 +137,7 @@ enum SharedStateResponse {
     GetIdentifierNodesResponse(IdentifierNodeInformation),
     GetDefinitionOutlineResponse(Vec<String>),
     GetSymbolHistoryResponse(Vec<SymbolInformation>),
+    GetDocumentOutlineResponse(Option<Vec<OutlineNode>>),
 }
 
 /// We are keeping track of the symbol node where the user is editing, this can
@@ -244,6 +250,11 @@ impl SharedState {
             SharedStateRequest::GetSymbolHistory => {
                 let symbols = self.symbol_history.lock().await;
                 SharedStateResponse::GetSymbolHistoryResponse(symbols.to_vec())
+            }
+            SharedStateRequest::GetDocumentOutline(document_outline) => {
+                let file_path = document_outline.file_path;
+                let response = self.get_outline_nodes(&file_path).await;
+                SharedStateResponse::GetDocumentOutlineResponse(response)
             }
         }
     }
@@ -372,6 +383,15 @@ impl SharedState {
             }
         }
         Vec::new()
+    }
+
+    async fn get_outline_nodes(&self, file_path: &str) -> Option<Vec<OutlineNode>> {
+        let document_lines = self.document_lines.lock().await;
+        if let Some(ref document_lines_entry) = document_lines.get(file_path) {
+            Some(document_lines_entry.outline_nodes())
+        } else {
+            None
+        }
     }
 
     async fn get_identifier_nodes(
@@ -736,6 +756,20 @@ impl SymbolTrackerInline {
             response
         } else {
             Default::default()
+        }
+    }
+
+    pub async fn get_symbols_outline(&self, file_path: &str) -> Option<Vec<OutlineNode>> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request = SharedStateRequest::GetDocumentOutline(GetDocumentOutlineRequest {
+            file_path: file_path.to_owned(),
+        });
+        let _ = self.sender.send((request, sender));
+        let response = receiver.await;
+        if let Ok(SharedStateResponse::GetDocumentOutlineResponse(response)) = response {
+            response
+        } else {
+            None
         }
     }
 }

@@ -109,7 +109,10 @@ impl AnthropicRequest {
         model_str: String,
     ) -> Self {
         let temperature = completion_request.temperature();
-        let max_tokens = completion_request.get_max_tokens();
+        let max_tokens = match completion_request.get_max_tokens() {
+            Some(tokens) => Some(tokens),
+            None => Some(4096),
+        };
         let messages = completion_request.messages();
         // First we try to find the system message
         let system_message = messages
@@ -236,6 +239,8 @@ impl LLMClient for AnthropicClient {
         });
         let anthropic_request =
             AnthropicRequest::from_client_completion_request(request, model_str.to_owned());
+
+        println!("{:?}", &anthropic_request);
 
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

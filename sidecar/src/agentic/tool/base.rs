@@ -9,8 +9,9 @@ pub enum ToolType {
     // AskDocumentation,
     // AskUser,
     CodeEditing,
+    OpenFile,
     // Search,
-    // GoToDefinitions,
+    GoToDefinitions,
     // GoToReferences,
     // FileSystem,
     // FolderOutline,
@@ -21,6 +22,7 @@ pub enum ToolType {
     FindCodeSnippets,
     RequestImportantSymbols,
     FindCodeSymbolsCodeBaseWide,
+    GrepInFile,
 }
 
 #[async_trait]

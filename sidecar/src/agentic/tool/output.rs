@@ -6,6 +6,7 @@ use super::{
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
         gotodefintion::GoToDefinitionResponse,
+        gotoimplementations::GoToImplementationResponse,
         open_file::{OpenFileRequest, OpenFileResponse},
     },
     rerank::base::ReRankEntriesForBroker,
@@ -44,6 +45,7 @@ pub enum ToolOutput {
     GoToDefinition(GoToDefinitionResponse),
     FileOpen(OpenFileResponse),
     GrepSingleFile(FindInFileResponse),
+    GoToImplementation(GoToImplementationResponse),
 }
 
 impl ToolOutput {
@@ -73,6 +75,10 @@ impl ToolOutput {
 
     pub fn file_open(file_open: OpenFileResponse) -> Self {
         ToolOutput::FileOpen(file_open)
+    }
+
+    pub fn go_to_implementation(go_to_implementation: GoToImplementationResponse) -> Self {
+        ToolOutput::GoToImplementation(go_to_implementation)
     }
 
     pub fn get_file_open_response(self) -> Option<OpenFileResponse> {

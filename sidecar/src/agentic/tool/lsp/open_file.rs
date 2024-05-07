@@ -20,11 +20,26 @@ impl OpenFileRequest {
 pub struct OpenFileResponse {
     fs_file_path: String,
     file_contents: String,
+    exists: bool,
+    // TODO(skcd): This might break
+    language: String,
 }
 
 impl OpenFileResponse {
     pub fn contents(self) -> String {
         self.file_contents
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        self.fs_file_path.as_str()
+    }
+
+    pub fn exists(&self) -> bool {
+        self.exists
+    }
+
+    pub fn language(&self) -> &str {
+        &self.language
     }
 }
 

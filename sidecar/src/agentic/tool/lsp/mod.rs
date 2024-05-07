@@ -2,4 +2,5 @@
 //! This way we can talk to the LSP running in the editor from the sidecar
 pub mod diagnostics;
 pub mod gotodefintion;
+pub mod gotoimplementations;
 pub mod open_file;

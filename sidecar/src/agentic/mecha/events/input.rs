@@ -53,7 +53,7 @@ impl MechaInputEvent {
         let code_wide_search: CodeSymbolImportantWideSearch = CodeSymbolImportantWideSearch::new(
             self.context,
             self.user_query.to_owned(),
-            self.llm,
+            final_model,
             self.provider,
             self.api_keys,
         );

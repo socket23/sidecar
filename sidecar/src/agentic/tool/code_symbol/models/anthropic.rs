@@ -1,6 +1,10 @@
 use async_trait::async_trait;
+use serde::{
+    de::{SeqAccess, Visitor},
+    Deserialize, Deserializer, Serializer,
+};
 use serde_xml_rs::from_str;
-use std::sync::Arc;
+use std::{borrow::Cow, fmt, sync::Arc};
 
 use llm_client::{
     broker::LLMBroker,
@@ -77,6 +81,35 @@ pub struct Reply {
     symbol_list: SymbolList,
     // #[serde(rename = "step_by_step")]
     step_by_step: StepList,
+}
+
+impl Reply {
+    pub fn fix_escaped_string(self) -> Self {
+        let step_by_step = self
+            .step_by_step
+            .steps
+            .into_iter()
+            .map(|step| {
+                let steps = step
+                    .step
+                    .into_iter()
+                    .map(|step| AnthropicCodeSymbolImportant::escape_xml(step))
+                    .collect();
+                StepListItem {
+                    name: step.name,
+                    step: steps,
+                    new: step.new,
+                    file_path: step.file_path,
+                }
+            })
+            .collect::<Vec<_>>();
+        Self {
+            symbol_list: self.symbol_list,
+            step_by_step: StepList {
+                steps: step_by_step,
+            },
+        }
+    }
 }
 
 impl Reply {
@@ -684,10 +717,60 @@ We have to add the newly created endpoint in inline_completion to add support fo
             format!("")
         }
     }
-    fn parse_response(&self, response: &str) -> Result<Reply, CodeSymbolError> {
+
+    fn unescape_xml(s: String) -> String {
+        s.replace("\"", "&quot;")
+            .replace("'", "&apos;")
+            .replace(">", "&gt;")
+            .replace("<", "&lt;")
+            .replace("&", "&amp;")
+    }
+
+    fn escape_xml(s: String) -> String {
+        s.replace("&quot;", "\"")
+            .replace("&apos;", "'")
+            .replace("&gt;", ">")
+            .replace("&lt;", "<")
+            .replace("&amp;", "&")
+    }
+
+    // Welcome to the jungle and an important lesson on why xml sucks sometimes
+    // &, and < are invalid characters in xml, so we can't simply parse it using
+    // serde cause the xml parser will legit look at these symbols and fail
+    // hard, instead we have to escape these strings properly
+    // and not at everypace (see it gets weird)
+    // we only have to do this inside the <step>{content}</step> tags
+    // so lets get to it
+    // one good thing we know is that because we ask claude to follow this format
+    // it will always give a new line so we can just split into lines and then
+    // do the replacement
+    fn cleanup_string(response: &str) -> String {
+        let mut is_inside_step = false;
+        let mut new_lines = vec![];
+        for line in response.lines() {
+            if line == "<step>" {
+                is_inside_step = true;
+                new_lines.push("<step>".to_owned());
+                continue;
+            } else if line == "</step>" {
+                is_inside_step = false;
+                new_lines.push("</step>".to_owned());
+                continue;
+            }
+            if is_inside_step {
+                new_lines.push(Self::unescape_xml(line.to_owned()))
+            } else {
+                new_lines.push(line.to_owned());
+            }
+        }
+        new_lines.join("\n")
+    }
+
+    fn parse_response(response: &str) -> Result<Reply, CodeSymbolError> {
+        let parsed_response = Self::cleanup_string(response);
         // we want to grab the section between <reply> and </reply> tags
         // and then we want to parse the response which is in the following format
-        let lines = response
+        let lines = parsed_response
             .lines()
             .skip_while(|line| !line.contains("<reply>"))
             .skip(1)
@@ -699,7 +782,9 @@ We have to add the newly created endpoint in inline_completion to add support fo
 {lines}
 </reply>"#
         );
-        Ok(from_str::<Reply>(&reply).map_err(|e| CodeSymbolError::SerdeError(e))?)
+        Ok(from_str::<Reply>(&reply)
+            .map(|reply| reply.fix_escaped_string())
+            .map_err(|e| CodeSymbolError::SerdeError(e))?)
     }
 
     async fn user_message_for_codebase_wide_search(
@@ -749,8 +834,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             .await
             .map_err(|e| CodeSymbolError::LLMClientError(e))?;
 
-        self.parse_response(&response)
-            .map(|reply| reply.to_code_symbol_important_response())
+        Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
     }
 
     async fn context_wide_search(
@@ -784,7 +868,191 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 sender,
             )
             .await?;
-        self.parse_response(&response)
-            .map(|reply| reply.to_code_symbol_important_response())
+        Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use serde_xml_rs::from_str;
+
+    use super::{AnthropicCodeSymbolImportant, StepListItem};
+
+    #[test]
+    fn test_parsing_works_for_important_symbol() {
+        let reply = r#"<reply>
+<symbol_list>
+<symbol>
+<name>
+LLMProvider
+</name>
+<file_path>
+/Users/skcd/scratch/sidecar/llm_client/src/provider.rs
+</file_path>
+<thinking>
+We need to first add a new variant to the LLMProvider enum to represent the GROQ provider.
+</thinking>
+</symbol>
+<symbol>
+<name>
+LLMProviderAPIKeys
+</name>
+<file_path>
+/Users/skcd/scratch/sidecar/llm_client/src/provider.rs
+</file_path>
+<thinking>
+We also need to add a new variant to the LLMProviderAPIKeys enum to hold the API key for the GROQ provider.
+</thinking>
+</symbol>
+<symbol>
+<name>
+LLMBroker
+</name>
+<file_path>
+/Users/skcd/scratch/sidecar/llm_client/src/broker.rs
+</file_path>
+<thinking>
+We need to update the LLMBroker to add support for the new GROQ provider. This includes adding a new case in the get_provider function and adding a new provider to the providers HashMap.
+</thinking>
+</symbol>
+<symbol>
+<new>
+true
+</new>
+<name>
+GroqClient
+</name>
+<file_path>
+/Users/skcd/scratch/sidecar/llm_client/src/clients/groq.rs
+</file_path>
+<thinking>
+We need to create a new GroqClient struct that implements the LLMClient trait. This client will handle communication with the GROQ provider.
+</thinking>
+</symbol>
+</symbol_list>
+<step_by_step>
+<step_list>
+<name>
+LLMProvider
+</name>
+<file_path>
+/Users/skcd/scratch/sidecar/llm_client/src/provider.rs
+</file_path>
+<step>
+Add a new variant to the LLMProvider enum to represent the GROQ provider:
+
+```rust
+pub enum LLMProvider {
+    // ...
+    Groq,
+    // ...
+}
+```
+</step>
+</step_list>
+<step_list>
+<name>
+LLMProviderAPIKeys
+</name>
+<file_path>
+/Users/skcd/scratch/sidecar/llm_client/src/provider.rs
+</file_path>
+<step>
+Add a new variant to the LLMProviderAPIKeys enum to hold the API key for the GROQ provider:
+
+```rust
+pub enum LLMProviderAPIKeys {
+    // ...
+    Groq(GroqAPIKey),
+    // ...
+}
+```
+
+Create a new struct to hold the API key for the GROQ provider:
+
+```rust
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct GroqAPIKey {
+    pub api_key: String,
+    // Add any other necessary fields
+}
+```
+</step>
+</step_list>
+<step_list>
+<name>
+LLMBroker
+</name>
+<file_path>
+/Users/skcd/scratch/sidecar/llm_client/src/broker.rs
+</file_path>
+<step>
+Update the get_provider function in the LLMBroker to handle the new GROQ provider:
+
+```rust
+fn get_provider(&self, api_key: &LLMProviderAPIKeys) -> LLMProvider {
+    match api_key {
+        // ...
+        LLMProviderAPIKeys::Groq(_) => LLMProvider::Groq,
+        // ...
+    }
+}
+```
+
+Add a new case in the stream_completion and stream_string_completion functions to handle the GROQ provider:
+
+```rust
+pub async fn stream_completion(
+    &self,
+    api_key: LLMProviderAPIKeys,
+    request: LLMClientCompletionRequest,
+    provider: LLMProvider,
+    metadata: HashMap<String, String>,
+    sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+) -> LLMBrokerResponse {
+    // ...
+    let provider_type = match &api_key {
+        // ...
+        LLMProviderAPIKeys::Groq(_) => LLMProvider::Groq,
+        // ...
+    };
+    // ...
+}
+
+pub async fn stream_string_completion(
+    &self,
+    api_key: LLMProviderAPIKeys,
+    request: LLMClientCompletionStringRequest,
+    metadata: HashMap<String, String>,
+    sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
+) -> LLMBrokerResponse {
+    // ...
+    let provider_type = match &api_key {
+        // ...
+        LLMProviderAPIKeys::Groq(_) => LLMProvider::Groq,
+        // ...
+    };
+    // ...
+}
+```
+
+In the LLMBroker::new function, add the new GROQ provider to the providers HashMap:
+
+```rust
+pub async fn new(config: LLMBrokerConfiguration) -> Result<Self, LLMClientError> {
+    // ...
+    Ok(broker
+        // ...
+        .add_provider(LLMProvider::Groq, Box::new(GroqClient::new())))
+}
+```
+</step>
+</step_list>
+</step_by_step>
+</reply>"#;
+
+        let parsed_response = AnthropicCodeSymbolImportant::parse_response(reply);
+        assert!(parsed_response.is_ok());
     }
 }

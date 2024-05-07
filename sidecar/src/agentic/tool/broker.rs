@@ -16,7 +16,10 @@ use super::{
     errors::ToolError,
     grep::file::FindInFile,
     input::ToolInput,
-    lsp::{diagnostics::LSPDiagnostics, gotodefintion::LSPGoToDefinition, open_file::LSPOpenFile},
+    lsp::{
+        diagnostics::LSPDiagnostics, gotodefintion::LSPGoToDefinition,
+        gotoimplementations::LSPGoToImplementation, open_file::LSPOpenFile,
+    },
     output::ToolOutput,
     rerank::base::ReRankBroker,
 };
@@ -71,6 +74,10 @@ impl ToolBroker {
         );
         tools.insert(ToolType::OpenFile, Box::new(LSPOpenFile::new()));
         tools.insert(ToolType::GrepInFile, Box::new(FindInFile::new()));
+        tools.insert(
+            ToolType::GoToImplementations,
+            Box::new(LSPGoToImplementation::new()),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

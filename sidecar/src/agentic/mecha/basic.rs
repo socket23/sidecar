@@ -29,7 +29,8 @@ use crate::{
 
 use super::events::input::MechaInputEvent;
 
-struct Snippet {
+#[derive(Debug)]
+pub struct Snippet {
     range: Range,
     fs_file_path: String,
 }
@@ -43,22 +44,25 @@ impl Snippet {
     }
 }
 
-struct MechaCodeSymbolThinking {
+#[derive(Debug)]
+pub struct MechaCodeSymbolThinking {
     symbol_name: String,
     steps: Vec<String>,
     is_new: bool,
     file_path: String,
     snippet: Option<Snippet>,
+    implementations: Vec<Snippet>,
 }
 
 impl MechaCodeSymbolThinking {
     fn new(symbol_name: String, file_path: String) -> Self {
         Self {
             symbol_name,
-            steps: Vec::new(),
+            steps: vec![],
             is_new: true,
             file_path,
             snippet: None,
+            implementations: vec![],
         }
     }
 
@@ -146,7 +150,7 @@ impl SymbolLocking {
 }
 
 pub struct MechaBasic {
-    symbol_name: Option<MechaSymbol>,
+    symbol: Option<MechaCodeSymbolThinking>,
     history_symbols: Vec<String>,
     current_query: Option<String>,
     // Lets keep it this way so we can pass a trace of all we have done
@@ -169,7 +173,7 @@ impl MechaBasic {
         editor_url: String,
     ) -> Self {
         Self {
-            symbol_name: None,
+            symbol: None,
             history_symbols: Vec::new(),
             current_query: None,
             interactions: Vec::new(),
@@ -177,6 +181,30 @@ impl MechaBasic {
             tools,
             symbol_broker,
             editor_parsing,
+            symbol_locking,
+            editor_url,
+            children_mechas: Vec::new(),
+        }
+    }
+
+    pub fn with_symbol(
+        symbol: MechaCodeSymbolThinking,
+        symbol_broker: Arc<SymbolTrackerInline>,
+        tools: Arc<ToolBroker>,
+        current_query: Option<String>,
+        editor_parsing: Arc<EditorParsing>,
+        symbol_locking: SymbolLocking,
+        editor_url: String,
+    ) -> Self {
+        Self {
+            symbol: Some(symbol),
+            history_symbols: vec![],
+            current_query,
+            editor_parsing,
+            interactions: vec![],
+            state: MechaState::Exploring,
+            tools,
+            symbol_broker,
             symbol_locking,
             editor_url,
             children_mechas: Vec::new(),
@@ -355,7 +383,7 @@ impl MechaBasic {
     // because there can be repetitions and we can'nt be sure where they exist
     // one key hack here is that we can legit search for this symbol and get
     // to the definition of this very easily
-    async fn important_symbols(
+    pub async fn important_symbols(
         &mut self,
         important_symbols: CodeSymbolImportantResponse,
     ) -> Result<Vec<MechaCodeSymbolThinking>, ToolError> {
@@ -377,6 +405,7 @@ impl MechaBasic {
                         is_new: true,
                         file_path: ordered_symbol.file_path().to_owned(),
                         snippet: None,
+                        implementations: vec![],
                     },
                 );
             } else {
@@ -389,6 +418,7 @@ impl MechaBasic {
                         is_new: false,
                         file_path: ordered_symbol.file_path().to_owned(),
                         snippet: None,
+                        implementations: vec![],
                     },
                 );
             }
@@ -408,7 +438,17 @@ impl MechaBasic {
 
         for (_, mut code_snippet) in final_code_snippets.into_iter() {
             // we always open the document before asking for an outline
-            let _ = self.file_open(code_snippet.file_path.to_owned()).await;
+            let file_open_result = self.file_open(code_snippet.file_path.to_owned()).await?;
+            println!("{:?}", file_open_result);
+            let language = file_open_result.language().to_owned();
+            // we add the document for parsing over here
+            self.symbol_broker
+                .add_document(
+                    file_open_result.fs_file_path().to_owned(),
+                    file_open_result.contents(),
+                    language,
+                )
+                .await;
 
             // we grab the outlines over here
             let outline_nodes = self
@@ -474,7 +514,10 @@ impl MechaBasic {
                     // its a symbol but we have nothing about it, so we log
                     // this as error for now, but later we have to figure out
                     // what to do about it
-                    println!("this is pretty bad, read the comment above on what is happening");
+                    println!(
+                        "this is pretty bad, read the comment above on what is happening {:?}",
+                        &code_snippet.symbol_name
+                    );
                 }
             }
 
@@ -518,6 +561,7 @@ impl MechaBasic {
             ToolOutput::GoToDefinition(_) => {}
             ToolOutput::FileOpen(_) => {}
             ToolOutput::GrepSingleFile(_) => {}
+            ToolOutput::GoToImplementation(_) => {}
         };
         todo!();
     }

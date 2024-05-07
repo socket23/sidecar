@@ -6,7 +6,7 @@ use super::{
     grep::file::FindInFileRequest,
     lsp::{
         diagnostics::LSPDiagnosticsInput, gotodefintion::GoToDefinitionRequest,
-        open_file::OpenFileRequest,
+        gotoimplementations::GoToImplementationRequest, open_file::OpenFileRequest,
     },
     rerank::base::ReRankEntriesForBroker,
 };
@@ -21,6 +21,7 @@ pub enum ToolInput {
     GoToDefinition(GoToDefinitionRequest),
     OpenFile(OpenFileRequest),
     GrepSingleFile(FindInFileRequest),
+    SymbolImplementations(GoToImplementationRequest),
 }
 
 impl ToolInput {
@@ -35,6 +36,15 @@ impl ToolInput {
             ToolInput::GoToDefinition(_) => ToolType::GoToDefinitions,
             ToolInput::OpenFile(_) => ToolType::OpenFile,
             ToolInput::GrepSingleFile(_) => ToolType::GrepInFile,
+            ToolInput::SymbolImplementations(_) => ToolType::GoToImplementations,
+        }
+    }
+
+    pub fn symbol_implementations(self) -> Result<GoToImplementationRequest, ToolError> {
+        if let ToolInput::SymbolImplementations(symbol_implementations) = self {
+            Ok(symbol_implementations)
+        } else {
+            Err(ToolError::WrongToolInput)
         }
     }
 

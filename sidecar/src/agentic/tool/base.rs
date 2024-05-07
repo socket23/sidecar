@@ -23,6 +23,7 @@ pub enum ToolType {
     RequestImportantSymbols,
     FindCodeSymbolsCodeBaseWide,
     GrepInFile,
+    GoToImplementations,
 }
 
 #[async_trait]

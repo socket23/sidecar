@@ -157,6 +157,7 @@ pub struct MechaBasic {
     editor_parsing: Arc<EditorParsing>,
     symbol_locking: SymbolLocking,
     editor_url: String,
+    children_mechas: Vec<MechaBasic>,
 }
 
 impl MechaBasic {
@@ -178,6 +179,7 @@ impl MechaBasic {
             editor_parsing,
             symbol_locking,
             editor_url,
+            children_mechas: Vec::new(),
         }
     }
 
@@ -493,6 +495,9 @@ impl MechaBasic {
                         // mechas running in the background and then try to send events to them
                         // since they will be running and all and want to communicate properly
                         println!("{:?}", important_symbols);
+                        // how do we create a new mecha here?
+                        let important_symbols = self.important_symbols(important_symbols).await?;
+                        // we can create a new mecha here and start the process again
                     }
                     MechaState::Exploring => {
                         // we need to select the most important symbol here

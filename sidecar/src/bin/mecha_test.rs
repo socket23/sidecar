@@ -56,7 +56,7 @@ async fn main() {
         LLMType::ClaudeHaiku,
         LLMProvider::Anthropic,
         api_key,
-        "I want to add more logging to the codestory provider when it talks to llama 7b".to_owned(),
+        "I want to create a new groq provider".to_owned(),
     );
 
     let symbol_locking = SymbolLocking::new();

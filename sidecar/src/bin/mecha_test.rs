@@ -8,10 +8,7 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        mecha::{
-            basic::{MechaBasic, MechaEvent, SymbolLocking},
-            events::input::MechaInputEvent,
-        },
+        symbol::{events::input::SymbolInputEvent, manager::SymbolManager},
         tool::{
             broker::ToolBroker,
             code_edit::models::broker::CodeEditBroker,
@@ -59,7 +56,12 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
     ));
-    let mecha_input = MechaInputEvent::new(
+    let symbol_manager = SymbolManager::new(
+        tool_broker.clone(),
+        symbol_broker.clone(),
+        editor_url.to_owned(),
+    );
+    let symbol_input = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeHaiku,
         LLMProvider::Anthropic,
@@ -67,16 +69,8 @@ async fn main() {
         current_query.to_owned(),
     );
 
-    let symbol_locking = SymbolLocking::new();
-
-    // now create the mecha
-    let mut mecha = MechaBasic::new(
-        tool_broker.clone(),
-        symbol_broker.clone(),
-        editor_parsing.clone(),
-        symbol_locking.clone(),
-        editor_url.to_owned(),
-    );
+    // execute input on manager
+    let _ = symbol_manager.initial_request(symbol_input).await;
 
     // after the initial request this is the reply we get back, so lets try to make this work end to end for this case
 
@@ -96,27 +90,27 @@ async fn main() {
 
     // Lets execute the first event
     // let response = mecha.iterate(MechaEvent::InitialRequest(mecha_input)).await;
-    let important_symbols = mecha.important_symbols(request).await;
-    println!("{:?}", important_symbols);
+    // let important_symbols = mecha.important_symbols(request).await;
+    // println!("{:?}", important_symbols);
 
     // next we can start multiple mechas based on this context
-    let new_mechas: Vec<_> = important_symbols
-        .expect("to work")
-        .into_iter()
-        .map(|symbol| {
-            MechaBasic::with_symbol(
-                symbol,
-                symbol_broker.clone(),
-                tool_broker.clone(),
-                Some(current_query.to_owned()),
-                editor_parsing.clone(),
-                symbol_locking.clone(),
-                editor_url.to_owned(),
-            )
-        })
-        .collect();
+    // let new_mechas: Vec<_> = important_symbols
+    //     .expect("to work")
+    //     .into_iter()
+    //     .map(|symbol| {
+    //         MechaBasic::with_symbol(
+    //             symbol,
+    //             symbol_broker.clone(),
+    //             tool_broker.clone(),
+    //             Some(current_query.to_owned()),
+    //             editor_parsing.clone(),
+    //             symbol_locking.clone(),
+    //             editor_url.to_owned(),
+    //         )
+    //     })
+    //     .collect();
 
     // for simplicity we will focus on just the first one and see how to get that
     // working and reporting that back to the editor
-    println!("hello world");
+    // println!("hello world");
 }

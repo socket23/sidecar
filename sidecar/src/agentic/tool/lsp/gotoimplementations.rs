@@ -11,6 +11,16 @@ pub struct GoToImplementationRequest {
     editor_url: String,
 }
 
+impl GoToImplementationRequest {
+    pub fn new(fs_file_path: String, position: Position, editor_url: String) -> Self {
+        Self {
+            fs_file_path,
+            position,
+            editor_url,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ImplementationLocation {
     fs_file_path: String,

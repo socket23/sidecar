@@ -1,18 +1,18 @@
-//! This is the most basic of the mechas
-//! The way this will work is the following:
-//! Each mecha will focus on a single coe symbol at all times, and then auxiliary
-//! ones which we are depending on
-//! This way we can pass more information about the symbols which are required etc
-//! this will be useful for later
+//! We are going to focus on a single symbol and have attributes for it
+//! Some of the attributes here might be related to the symbol itself
+//! or the general question which is being asked to the symbol
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::{collections::HashMap, sync::Arc};
 
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures::channel::oneshot;
+use derivative::Derivative;
 use futures::lock::Mutex;
+use futures::{stream, StreamExt};
+use thiserror::Error;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::agentic::tool::base::Tool;
+use crate::agentic::tool::broker::ToolBroker;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantResponse;
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
@@ -23,28 +23,39 @@ use crate::agentic::tool::lsp::gotoimplementations::{
 };
 use crate::agentic::tool::lsp::open_file::{OpenFileRequest, OpenFileResponse};
 use crate::agentic::tool::output::ToolOutput;
-use crate::chunking::editor_parsing::EditorParsing;
-use crate::chunking::text_document::Position;
+use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
-use crate::{
-    agentic::tool::broker::ToolBroker, chunking::text_document::Range,
-    inline_completion::symbols_tracker::SymbolTrackerInline,
-};
+use crate::inline_completion::symbols_tracker::SymbolTrackerInline;
 
 use super::events::input::MechaInputEvent;
-use super::events::instruction::MechaInstructionEvent;
 
-#[derive(Debug)]
-pub struct Snippet {
-    range: Range,
-    fs_file_path: String,
+// we have a central symbol manager
+// where all the events from the symbols (whichever symbol they want to talk to go)
+// then a symbol receives the signal and then we act on it
+// we might want to talk to other symbols or ask them to change
+// to accomplish this the symbol we are talking to will respond back to us after
+// we have recieved a signal back from it that the question we asked it was answered
+// we talk to the central symbol manager and await on the reply from the symbol manager
+// that's how this whole system should work out
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct SymbolIdentifier {
+    symbol_name: String,
+    fs_file_path: Option<String>,
 }
 
-impl Snippet {
-    pub fn new(range: Range, fs_file_path: String) -> Self {
+impl SymbolIdentifier {
+    pub fn new_symbol(symbol_name: &str) -> Self {
         Self {
-            range,
-            fs_file_path,
+            symbol_name: symbol_name.to_owned(),
+            fs_file_path: None,
+        }
+    }
+
+    pub fn with_file_path(symbol_name: &str, fs_file_path: &str) -> Self {
+        Self {
+            symbol_name: symbol_name.to_owned(),
+            fs_file_path: Some(fs_file_path.to_owned()),
         }
     }
 }
@@ -71,229 +82,295 @@ impl MechaCodeSymbolThinking {
         }
     }
 
+    fn to_symbol_identifier(&self) -> SymbolIdentifier {
+        if self.is_new {
+            SymbolIdentifier::new_symbol(&self.symbol_name)
+        } else {
+            SymbolIdentifier::with_file_path(&self.symbol_name, &self.file_path)
+        }
+    }
+
     pub fn set_snippet(&mut self, snippet: Snippet) {
         self.snippet = Some(snippet);
     }
 }
 
-#[derive(Debug, Clone)]
-enum MechaState {
-    NoSymbol,
-    Exploring,
-    Editing,
-    Fixing,
-    Completed,
+#[derive(Debug, Error)]
+pub enum SymbolError {
+    #[error("Tool error: {0}")]
+    ToolError(ToolError),
+
+    #[error("Wrong tool output")]
+    WrongToolOutput,
 }
 
-// What is the symbol we are focussing on
-// this is important so we are able to work on a given symbol at a time, I do not
-// know a better way to manage dependencies (this is the best and the most robotoic way
-// of doing this)
-struct MechaSymbol {
-    symbol_name: String,
+pub enum SymbolEvent {
+    Create,
+    AskQuestion,
+    UserFeedback,
+    Delete,
+    Edit,
+}
+
+pub struct SymbolEventRequest {
+    symbol: String,
+    event: SymbolEvent,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Snippet {
     range: Range,
+    symbol_name: String,
     fs_file_path: String,
 }
 
-struct MechaMemory {
-    snippets: Vec<Snippet>,
-}
-
-struct MechaContext {
-    files: Vec<String>,
-}
-
-enum InputType {
-    Snippet,
-    Symbol,
-    File,
-    Folder,
-}
-
-// What are the events which invoke the meka, we first send an inital one from our
-// side and then render it on the UI somehow
-pub enum MechaEvent {
-    InitialRequest(MechaInputEvent),
-    Instruction(MechaInstructionEvent),
-}
-
-// Not entirely sure about how this will work, especially given that
-// we might have cases where the mecha is just dicovering nodes or something
-// something to figure out later on? for now we assume that there
-// is a single node always attached to the mecha
-// what happens when its a file and not a symbol
-// TODO(skcd): How do we keep track of files over here which we need to make changes
-// to, since that is also important
-#[derive(Clone)]
-pub struct SymbolLocking {
-    symbols: Arc<Mutex<HashMap<String, UnboundedSender<MechaEvent>>>>,
-}
-
-impl SymbolLocking {
-    pub fn new() -> Self {
+impl Snippet {
+    pub fn new(symbol_name: String, range: Range, fs_file_path: String) -> Self {
         Self {
-            symbols: Arc::new(Mutex::new(HashMap::new())),
+            symbol_name,
+            range,
+            fs_file_path,
+        }
+    }
+}
+
+pub struct SymbolEventResponse {}
+
+/// The symbol is going to spin in the background and keep working on things
+/// is this how we want it to work???
+/// ideally yes, cause its its own process which will work in the background
+#[derive(Derivative)]
+#[derivative(PartialEq, Eq, Debug)]
+pub struct Symbol {
+    symbol_identifier: SymbolIdentifier,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    hub_sender: UnboundedSender<(
+        SymbolEventRequest,
+        tokio::sync::oneshot::Sender<SymbolEventResponse>,
+    )>,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    tools: Arc<ToolBroker>,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    mecha_code_symbol: MechaCodeSymbolThinking,
+}
+
+impl Symbol {
+    pub fn new(
+        symbol_identifier: SymbolIdentifier,
+        mecha_code_symbol: MechaCodeSymbolThinking,
+        // this can be used to talk to other symbols and get them
+        // to act on certain things
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+        tools: Arc<ToolBroker>,
+    ) -> Self {
+        Self {
+            mecha_code_symbol,
+            symbol_identifier,
+            hub_sender,
+            tools,
         }
     }
 
-    // checks if the symbol already exists, if it does then we are good
-    pub async fn check_if_symbol_exists(&self, symbol: &str) -> bool {
-        let mut symbols = self.symbols.lock().await;
-        symbols.contains_key(symbol)
-    }
-
-    // this allows us to get back the symbol sender
-    pub async fn get_symbol_sender(&self, symbol: &str) -> Option<UnboundedSender<MechaEvent>> {
-        let symbols = self.symbols.lock().await;
-        symbols.get(symbol).cloned()
-    }
-
-    // this tells us that we have a new sender avaiable
-    pub async fn insert_symbol_sender(&self, symbol: &str, sender: UnboundedSender<MechaEvent>) {
-        let mut symbols = self.symbols.lock().await;
-        symbols.insert(symbol.to_string(), sender);
+    async fn run(
+        self,
+        mut receiver: UnboundedReceiver<(
+            SymbolEvent,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) {
+        // we can send the first request to the hub and then poll it from
+        // the receiver over here
+        // TODO(skcd): Pick it up from over here
+        while let Some(event) = receiver.recv().await {
+            // we are going to process the events one by one over here
+            // we should also have a shut-down event which the symbol sends to itself
+            // we can use the hub sender over here to make sure that forwarding the events
+            // work as usual, its a roundabout way of doing it, but should work
+            // TODO(skcd): Pick it up from here
+        }
     }
 }
 
-pub struct MechaBasic {
-    symbol: Option<MechaCodeSymbolThinking>,
-    history_symbols: Vec<String>,
-    current_query: Option<String>,
-    // Lets keep it this way so we can pass a trace of all we have done
-    interactions: Vec<String>,
-    state: MechaState,
+#[derive(Clone)]
+struct SymbolLocker {
+    symbols: Arc<
+        Mutex<
+            HashMap<
+                // TODO(skcd): what should be the key here for this to work properly
+                // cause we can have multiple symbols which share the same name
+                // this probably would not happen today but would be good to figure
+                // out at some point
+                SymbolIdentifier,
+                // this is the channel which we use to talk to this particular symbol
+                // and everything related to it
+                UnboundedSender<(
+                    SymbolEvent,
+                    tokio::sync::oneshot::Sender<SymbolEventResponse>,
+                )>,
+            >,
+        >,
+    >,
+    // this is the main communication channel which we can use to send requests
+    // to the right symbol
+    hub_sender: UnboundedSender<(
+        SymbolEventRequest,
+        tokio::sync::oneshot::Sender<SymbolEventResponse>,
+    )>,
+    tools: Arc<ToolBroker>,
+}
+
+impl SymbolLocker {
+    pub fn new(
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+        tools: Arc<ToolBroker>,
+    ) -> Self {
+        Self {
+            symbols: Arc::new(Mutex::new(HashMap::new())),
+            hub_sender,
+            tools,
+        }
+    }
+
+    async fn process_request(
+        &self,
+        request_event: (
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        ),
+    ) {
+        let request = request_event.0;
+        let sender = request_event.1;
+        // we will send the response in this sender
+    }
+
+    async fn create_symbol_agent(&self, request: MechaCodeSymbolThinking) {
+        // say we create the symbol agent, what happens next
+        // the agent can have its own events which it might need to do, including the
+        // followups or anything else
+        // the user might have some events to send
+        // other agents might also want to talk to it for some information
+        let symbol_identifier = request.to_symbol_identifier();
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<(
+            SymbolEvent,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>();
+        {
+            let mut symbols = self.symbols.lock().await;
+            symbols.insert(symbol_identifier.clone(), sender);
+        }
+
+        // now we create the symbol and let it rip
+        let symbol = Symbol::new(
+            symbol_identifier,
+            request,
+            self.hub_sender.clone(),
+            self.tools.clone(),
+        );
+
+        // now we let it rip, we give the symbol the receiver and ask it
+        // to go crazy with it
+        tokio::spawn(async move { symbol.run(receiver).await });
+        // fin
+    }
+}
+
+// This is the main communication manager between all the symbols
+// this of this as the central hub through which all the events go forward
+pub struct SymbolManager {
+    sender: UnboundedSender<(
+        SymbolEventRequest,
+        tokio::sync::oneshot::Sender<SymbolEventResponse>,
+    )>,
+    // this is the channel where the various symbols will use to talk to the manager
+    // which in turn will proxy it to the right symbol, what happens if there are failures
+    // each symbol has its own receiver which is being used
+    symbol_locker: SymbolLocker,
     tools: Arc<ToolBroker>,
     symbol_broker: Arc<SymbolTrackerInline>,
-    editor_parsing: Arc<EditorParsing>,
-    symbol_locking: SymbolLocking,
     editor_url: String,
-    children_mechas: Vec<MechaBasic>,
 }
 
-impl MechaBasic {
+impl SymbolManager {
     pub fn new(
         tools: Arc<ToolBroker>,
         symbol_broker: Arc<SymbolTrackerInline>,
-        editor_parsing: Arc<EditorParsing>,
-        symbol_locking: SymbolLocking,
         editor_url: String,
     ) -> Self {
+        let (sender, mut receier) = tokio::sync::mpsc::unbounded_channel::<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>();
+        let symbol_locker = SymbolLocker::new(sender.clone(), tools.clone());
+        let cloned_symbol_locker = symbol_locker.clone();
+        tokio::spawn(async move {
+            // TODO(skcd): Make this run in full parallelism in the future, for
+            // now this is fine
+            while let Some(event) = receier.recv().await {
+                let _ = cloned_symbol_locker.process_request(event).await;
+            }
+        });
         Self {
-            symbol: None,
-            history_symbols: Vec::new(),
-            current_query: None,
-            interactions: Vec::new(),
-            state: MechaState::NoSymbol,
+            sender,
+            symbol_locker,
             tools,
             symbol_broker,
-            editor_parsing,
-            symbol_locking,
             editor_url,
-            children_mechas: Vec::new(),
         }
     }
 
-    pub fn with_symbol(
-        symbol: MechaCodeSymbolThinking,
-        symbol_broker: Arc<SymbolTrackerInline>,
-        tools: Arc<ToolBroker>,
-        current_query: Option<String>,
-        editor_parsing: Arc<EditorParsing>,
-        symbol_locking: SymbolLocking,
-        editor_url: String,
-    ) -> Self {
-        Self {
-            symbol: Some(symbol),
-            history_symbols: vec![],
-            current_query,
-            editor_parsing,
-            interactions: vec![],
-            state: MechaState::Exploring,
-            tools,
-            symbol_broker,
-            symbol_locking,
-            editor_url,
-            children_mechas: Vec::new(),
-        }
-    }
-
-    // we need a function here which will just call tools and move between
-    // states and maybe even spawn new mechas at some point, the goal is that
-    // we only focus on a single symbol at a time
-    // how do we go about designing that, lets start with a loop and see how well
-    // we can do
-    async fn get_tool_input_from_event(&mut self, event: MechaEvent) -> Option<ToolInput> {
-        let state = self.state.clone();
-        match state {
-            MechaState::NoSymbol => {
-                match event {
-                    MechaEvent::InitialRequest(request) => request.tool_use_on_initial_invocation(),
-                    MechaEvent::Instruction(_) => {
-                        todo!("we do not have an implementation for this yet")
-                    }
-                }
-                // if we have no symbol then we should invoke the tool which
-                // gives us back some data about the symbols which we should select and
-                // focus on
-                // we just invoke the initial exploration message along with all the context
-                // we are passed with, this way we mutate our own state and invoke an action
+    // once we have the initial request, which we will go through the initial request
+    // mode once, we have the symbols from it we can use them to spin up sub-symbols as well
+    pub async fn initial_request(&self, input_event: MechaInputEvent) -> Result<(), SymbolError> {
+        let tool_input = input_event.tool_use_on_initial_invocation();
+        if let Some(tool_input) = tool_input {
+            if let ToolOutput::ImportantSymbols(important_symbols) = self
+                .tools
+                .invoke(tool_input)
+                .await
+                .map_err(|e| SymbolError::ToolError(e))?
+            {
+                let symbols = self
+                    .important_symbols(important_symbols)
+                    .await
+                    .map_err(|e| e.into())?;
+                // This is where we are creating all the symbols
+                let _ = stream::iter(symbols)
+                    .map(|symbol_request| async move {
+                        let _ = self.symbol_locker.create_symbol_agent(symbol_request);
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await;
             }
-            MechaState::Exploring => {
-                // we always have a symbol at this point, but there might be multiple
-                // places where the implementation is spread out, so we need to get
-                // all of the implementations as well along with the DEFINITION
-                // as well, so we need to figure out the best way to do this
-                // let snippet = &self.symbol.map(|symbol| symbol.snippet.as_ref()).flatten();
-                // match (snippet, event) {
-                //     (Some(snippet), MechaEvent::Instruction(instruction)) => {
-                //         // if this language allows for multiple implementations
-                //         // to be present which might be case, we figure out
-                //         // what to do about it
-                //         // TODO(skcd): Figure out a better way to do this
-                //         // let implementations = self.go_to_implementation(
-                //         //     snippet,
-                //         //     sel
-                //         // )
-                //     }
-                //     (None, MechaEvent::Instruction(_)) => {
-                //         todo!("This is also a bad place to end up in");
-                //     }
-                //     (_, MechaEvent::InitialRequest(_)) => {
-                //         todo!("we do have an implmentation for this");
-                //     }
-                // }
-                None
-            }
-            MechaState::Fixing => None,
-            MechaState::Editing => None,
-            MechaState::Completed => None,
+        } else {
+            // We are for some reason not even invoking the first passage which is
+            // weird, this is completely wrong and we should be replying back
+            println!("this is wrong, please look at the comment here");
         }
-        // Now that we have the next tool use
-        // we can invoke the tool using the tool broker
+        Ok(())
     }
 
     async fn invoke_tool_broker(&self, tool_input: ToolInput) -> Result<ToolOutput, ToolError> {
         self.tools.invoke(tool_input).await
     }
 
-    // Now we have tha basic iteration loop setup, we know this is bad but this
-    // is enough to get started
-    // once we have the tool output, we act on it over here and wait for our
-    // next iteration to start
-    async fn invoke_tool(&mut self, event: MechaEvent) -> Result<ToolOutput, ToolError> {
-        let tool = self.get_tool_input_from_event(event).await;
-        if let Some(tool) = tool {
-            self.invoke_tool_broker(tool).await
-        } else {
-            Err(ToolError::MissingTool)
-        }
-    }
-
     async fn go_to_implementation(
         &self,
         snippet: &Snippet,
         symbol_name: &str,
-    ) -> Result<GoToImplementationResponse, ToolError> {
+    ) -> Result<GoToImplementationResponse, SymbolError> {
         // LSP requies the EXACT symbol location on where to click go-to-implementation
         // since thats the case we can just open the file and then look for the
         // first occurance of the symbol and grab the location
@@ -311,10 +388,13 @@ impl MechaBasic {
                     ),
                 ))
                 .await
-                .map(|result| result.get_go_to_implementation())
-                .map(|result| result.ok_or(ToolError::WrongToolInput))?
+                .map_err(|e| SymbolError::ToolError(e))?
+                .get_go_to_implementation()
+                .ok_or(SymbolError::WrongToolOutput)
         } else {
-            Err(ToolError::SymbolNotFound(symbol_name.to_owned()))
+            Err(SymbolError::ToolError(ToolError::SymbolNotFound(
+                symbol_name.to_owned(),
+            )))
         }
     }
 
@@ -322,33 +402,35 @@ impl MechaBasic {
         &self,
         file_content: String,
         symbol: String,
-    ) -> Result<FindInFileResponse, ToolError> {
+    ) -> Result<FindInFileResponse, SymbolError> {
         self.tools
             .invoke(ToolInput::GrepSingleFile(FindInFileRequest::new(
                 file_content,
                 symbol,
             )))
             .await
-            .map(|result| result.grep_single_file())
-            .map(|result| result.ok_or(ToolError::WrongToolInput))?
+            .map_err(|e| SymbolError::ToolError(e))?
+            .grep_single_file()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
-    async fn file_open(&self, fs_file_path: String) -> Result<OpenFileResponse, ToolError> {
+    async fn file_open(&self, fs_file_path: String) -> Result<OpenFileResponse, SymbolError> {
         self.tools
             .invoke(ToolInput::OpenFile(OpenFileRequest::new(
                 fs_file_path,
                 self.editor_url.to_owned(),
             )))
             .await
-            .map(|result| result.get_file_open_response())
-            .map(|result| result.ok_or(ToolError::WrongToolInput))?
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_file_open_response()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     async fn go_to_definition(
         &self,
         fs_file_path: &str,
         position: Position,
-    ) -> Result<GoToDefinitionResponse, ToolError> {
+    ) -> Result<GoToDefinitionResponse, SymbolError> {
         self.tools
             .invoke(ToolInput::GoToDefinition(GoToDefinitionRequest::new(
                 fs_file_path.to_owned(),
@@ -356,8 +438,9 @@ impl MechaBasic {
                 position,
             )))
             .await
-            .map(|result| result.get_go_to_definition())
-            .map(|result| result.ok_or(ToolError::WrongToolInput))?
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_go_to_definition()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// Grabs the symbol content and the range in the file which it is present in
@@ -365,7 +448,7 @@ impl MechaBasic {
         &self,
         symbol_name: &str,
         definition: GoToDefinitionResponse,
-    ) -> Result<Snippet, ToolError> {
+    ) -> Result<Snippet, SymbolError> {
         // here we first try to open the file
         // and then read the symbols from it nad then parse
         // it out properly
@@ -393,11 +476,19 @@ impl MechaBasic {
                 .iter()
                 .find(|symbol| symbol.name() == symbol_name)
                 .map(|symbol| {
-                    Snippet::new(symbol.range().clone(), definition.file_path().to_owned())
+                    Snippet::new(
+                        symbol.name().to_owned(),
+                        symbol.range().clone(),
+                        definition.file_path().to_owned(),
+                    )
                 })
-                .ok_or(ToolError::SymbolNotFound(symbol_name.to_owned()))
+                .ok_or(SymbolError::ToolError(ToolError::SymbolNotFound(
+                    symbol_name.to_owned(),
+                )))
         } else {
-            Err(ToolError::SymbolNotFound(symbol_name.to_owned()))
+            Err(SymbolError::ToolError(ToolError::SymbolNotFound(
+                symbol_name.to_owned(),
+            )))
         }
     }
 
@@ -443,9 +534,9 @@ impl MechaBasic {
     // one key hack here is that we can legit search for this symbol and get
     // to the definition of this very easily
     pub async fn important_symbols(
-        &mut self,
+        &self,
         important_symbols: CodeSymbolImportantResponse,
-    ) -> Result<Vec<MechaCodeSymbolThinking>, ToolError> {
+    ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
         let symbols = important_symbols.symbols();
         let ordered_symbols = important_symbols.ordered_symbols();
         // there can be overlaps between these, but for now its fine
@@ -562,6 +653,7 @@ impl MechaBasic {
                     // the first
                     let outline_node = outline_nodes.remove(0);
                     code_snippet.set_snippet(Snippet::new(
+                        outline_node.name().to_owned(),
                         outline_node.range().clone(),
                         outline_node.fs_file_path().to_owned(),
                     ));
@@ -583,45 +675,5 @@ impl MechaBasic {
             mecha_symbols.push(code_snippet);
         }
         Ok(mecha_symbols)
-    }
-
-    pub async fn iterate(&mut self, event: MechaEvent) -> Result<Vec<MechaEvent>, ToolError> {
-        let output = self.invoke_tool(event).await?;
-        // Now we try to take the next action based on the output
-        let next_executions = match output {
-            ToolOutput::CodeEditTool(code_editing) => {}
-            ToolOutput::ImportantSymbols(important_symbols) => {
-                match self.state {
-                    MechaState::NoSymbol => {
-                        // if we have no symbols to keep track of, we can just start a few other
-                        // mechas running in the background and then try to send events to them
-                        // since they will be running and all and want to communicate properly
-                        println!("{:?}", important_symbols);
-                        // how do we create a new mecha here?
-                        let important_symbols = self.important_symbols(important_symbols).await?;
-                        // we can create a new mecha here and start the process again
-                    }
-                    MechaState::Exploring => {
-                        // we need to select the most important symbol here
-                        // and then we need to move to the exploring state
-                        // we also need to update our history symbols
-                        // we also need to update our current query
-                        // we also need to update our interactions
-                        // we also need to update our state
-                    }
-                    MechaState::Fixing => {}
-                    MechaState::Editing => {}
-                    MechaState::Completed => {}
-                }
-            }
-            ToolOutput::CodeToEdit(code_to_edit) => {}
-            ToolOutput::ReRankSnippets(rerank_snippets) => {}
-            ToolOutput::LSPDiagnostics(lsp_diagnostics) => {}
-            ToolOutput::GoToDefinition(_) => {}
-            ToolOutput::FileOpen(_) => {}
-            ToolOutput::GrepSingleFile(_) => {}
-            ToolOutput::GoToImplementation(_) => {}
-        };
-        todo!();
     }
 }

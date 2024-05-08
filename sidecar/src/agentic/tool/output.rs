@@ -101,4 +101,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_go_to_implementation(self) -> Option<GoToImplementationResponse> {
+        match self {
+            ToolOutput::GoToImplementation(result) => Some(result),
+            _ => None,
+        }
+    }
 }

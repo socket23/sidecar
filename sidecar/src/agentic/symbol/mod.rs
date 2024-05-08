@@ -7,4 +7,5 @@ pub mod events;
 pub mod identifier;
 pub mod locker;
 pub mod manager;
+pub mod tool_box;
 pub mod types;

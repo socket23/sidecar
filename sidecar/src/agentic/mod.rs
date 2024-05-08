@@ -20,7 +20,6 @@
 //! Nomenclature (cause we keep things professional here, but everyone loves anime and I hate paying tech-debt)
 //! agent == mecha
 pub mod action;
-pub mod mecha;
 pub mod memory;
 pub mod runner;
 pub mod symbol;

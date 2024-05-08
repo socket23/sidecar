@@ -23,6 +23,7 @@ pub mod action;
 pub mod mecha;
 pub mod memory;
 pub mod runner;
+pub mod symbol;
 pub mod tool;
 
 // There are tons of actions happening in the editor, some made by human, some made by AI

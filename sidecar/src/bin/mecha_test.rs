@@ -4,7 +4,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, CodeStoryLLMTypes, LLMProvider, LLMProviderAPIKeys},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 use sidecar::{
     agentic::{
@@ -21,6 +21,7 @@ use sidecar::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
     user_context::types::UserContext,
 };
+use tracing::info;
 
 fn default_index_dir() -> PathBuf {
     match directories::ProjectDirs::from("ai", "codestory", "sidecar") {
@@ -56,10 +57,12 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
     ));
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_url.to_owned(),
+        sender,
     );
     let symbol_input = SymbolInputEvent::new(
         user_context,
@@ -88,29 +91,10 @@ async fn main() {
         ]
     );
 
-    // Lets execute the first event
-    // let response = mecha.iterate(MechaEvent::InitialRequest(mecha_input)).await;
-    // let important_symbols = mecha.important_symbols(request).await;
-    // println!("{:?}", important_symbols);
-
-    // next we can start multiple mechas based on this context
-    // let new_mechas: Vec<_> = important_symbols
-    //     .expect("to work")
-    //     .into_iter()
-    //     .map(|symbol| {
-    //         MechaBasic::with_symbol(
-    //             symbol,
-    //             symbol_broker.clone(),
-    //             tool_broker.clone(),
-    //             Some(current_query.to_owned()),
-    //             editor_parsing.clone(),
-    //             symbol_locking.clone(),
-    //             editor_url.to_owned(),
-    //         )
-    //     })
-    //     .collect();
-
-    // for simplicity we will focus on just the first one and see how to get that
-    // working and reporting that back to the editor
-    // println!("hello world");
+    // show the stream over here for the response
+    while let Some(event) = receiver.recv().await {
+        // log the event over here
+        // we need a better way to do this over here
+        info!("event: {:?}", event);
+    }
 }

@@ -11,7 +11,7 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClient, LLMClientError, LLMType},
+    clients::types::{LLMClientError, LLMType},
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 use thiserror::Error;
@@ -23,7 +23,7 @@ use crate::{
 
 use super::listwise::anthropic::AnthropicReRank;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReRankCodeSnippet {
     fs_file_path: String,
     range: Range,
@@ -49,7 +49,7 @@ impl ReRankCodeSnippet {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReRankDocument {
     document_name: String,
     document_path: String,
@@ -70,7 +70,7 @@ impl ReRankDocument {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReRankWebExtract {
     url: String,
     content: String,
@@ -86,14 +86,14 @@ impl ReRankWebExtract {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ReRankEntry {
     CodeSnippet(ReRankCodeSnippet),
     Document(ReRankDocument),
     WebExtract(ReRankWebExtract),
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReRankEntries {
     id: i64,
     entry: ReRankEntry,
@@ -109,7 +109,7 @@ impl ReRankEntries {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReRankEntriesForBroker {
     entries: Vec<ReRankEntries>,
     metadata: ReRankRequestMetadata,
@@ -130,6 +130,20 @@ pub struct ReRankRequestMetadata {
 }
 
 impl ReRankRequestMetadata {
+    pub fn new(
+        model: LLMType,
+        query: String,
+        provider_keys: LLMProviderAPIKeys,
+        provider: LLMProvider,
+    ) -> Self {
+        Self {
+            model,
+            query,
+            provider_keys,
+            provider,
+        }
+    }
+
     pub fn query(&self) -> &str {
         &self.query
     }

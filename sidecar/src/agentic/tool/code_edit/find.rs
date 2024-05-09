@@ -50,7 +50,7 @@ impl FindCodeSectionsToEdit {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FindCodeSelectionInput {
     fs_file_path: String,
     file_content: String,

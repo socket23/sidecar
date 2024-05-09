@@ -17,7 +17,7 @@ pub struct LSPDiagnostics {
     client: reqwest::Client,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct LSPDiagnosticsInput {
     fs_file_path: String,
     range: Range,

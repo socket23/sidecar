@@ -19,6 +19,7 @@ pub mod broker;
 pub mod code_edit;
 pub mod code_symbol;
 pub mod errors;
+pub mod filtering;
 pub mod grep;
 pub mod input;
 pub mod lsp;

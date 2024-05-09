@@ -1,6 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use llm_client::clients::types::LLMType;
+use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
+use llm_prompts::reranking::types::ReRankCodeSpanResponse;
+use tokio::sync::mpsc::UnboundedSender;
+
 use crate::agentic::symbol::identifier::Snippet;
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantResponse;
@@ -11,6 +16,7 @@ use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
+use crate::agentic::tool::rerank::base::{ReRankEntriesForBroker, ReRankRequestMetadata};
 use crate::chunking::text_document::Position;
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
 use crate::{
@@ -20,12 +26,14 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::identifier::MechaCodeSymbolThinking;
+use super::ui_event::UIEvent;
 
 #[derive(Clone)]
 pub struct ToolBox {
     tools: Arc<ToolBroker>,
     symbol_broker: Arc<SymbolTrackerInline>,
     editor_url: String,
+    ui_events: UnboundedSender<UIEvent>,
 }
 
 impl ToolBox {
@@ -33,20 +41,24 @@ impl ToolBox {
         tools: Arc<ToolBroker>,
         symbol_broker: Arc<SymbolTrackerInline>,
         editor_url: String,
+        ui_events: UnboundedSender<UIEvent>,
     ) -> Self {
         Self {
             tools,
             symbol_broker,
             editor_url,
+            ui_events,
         }
     }
 
-    async fn file_open(&self, fs_file_path: String) -> Result<OpenFileResponse, SymbolError> {
+    pub async fn file_open(&self, fs_file_path: String) -> Result<OpenFileResponse, SymbolError> {
+        let request = ToolInput::OpenFile(OpenFileRequest::new(
+            fs_file_path,
+            self.editor_url.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
         self.tools
-            .invoke(ToolInput::OpenFile(OpenFileRequest::new(
-                fs_file_path,
-                self.editor_url.to_owned(),
-            )))
+            .invoke(request)
             .await
             .map_err(|e| SymbolError::ToolError(e))?
             .get_file_open_response()
@@ -58,11 +70,10 @@ impl ToolBox {
         file_content: String,
         symbol: String,
     ) -> Result<FindInFileResponse, SymbolError> {
+        let request = ToolInput::GrepSingleFile(FindInFileRequest::new(file_content, symbol));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
         self.tools
-            .invoke(ToolInput::GrepSingleFile(FindInFileRequest::new(
-                file_content,
-                symbol,
-            )))
+            .invoke(request)
             .await
             .map_err(|e| SymbolError::ToolError(e))?
             .grep_single_file()
@@ -74,12 +85,14 @@ impl ToolBox {
         fs_file_path: &str,
         position: Position,
     ) -> Result<GoToDefinitionResponse, SymbolError> {
+        let request = ToolInput::GoToDefinition(GoToDefinitionRequest::new(
+            fs_file_path.to_owned(),
+            self.editor_url.to_owned(),
+            position,
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
         self.tools
-            .invoke(ToolInput::GoToDefinition(GoToDefinitionRequest::new(
-                fs_file_path.to_owned(),
-                self.editor_url.to_owned(),
-                position,
-            )))
+            .invoke(request)
             .await
             .map_err(|e| SymbolError::ToolError(e))?
             .get_go_to_definition()
@@ -135,7 +148,7 @@ impl ToolBox {
             // for exploration
             if !new_symbols.contains(symbol.code_symbol()) {
                 symbols_to_visit.insert(symbol.code_symbol().to_owned());
-                if let Some(mut code_snippet) = final_code_snippets.get_mut(symbol.code_symbol()) {
+                if let Some(code_snippet) = final_code_snippets.get_mut(symbol.code_symbol()) {
                     code_snippet.add_step(symbol.thinking());
                 }
             }
@@ -217,6 +230,7 @@ impl ToolBox {
                         outline_node.name().to_owned(),
                         outline_node.range().clone(),
                         outline_node.fs_file_path().to_owned(),
+                        outline_node.content().to_owned(),
                     ));
                 }
             } else {
@@ -238,7 +252,7 @@ impl ToolBox {
         Ok(mecha_symbols)
     }
 
-    async fn go_to_implementation(
+    pub async fn go_to_implementation(
         &self,
         snippet: &Snippet,
         symbol_name: &str,
@@ -251,14 +265,14 @@ impl ToolBox {
             .find_in_file(file_content.contents(), symbol_name.to_owned())
             .await?;
         if let Some(position) = find_in_file.get_position() {
+            let request = ToolInput::SymbolImplementations(GoToImplementationRequest::new(
+                snippet.file_path().to_owned(),
+                position,
+                self.editor_url.to_owned(),
+            ));
+            self.ui_events.send(UIEvent::from(request.clone()));
             self.tools
-                .invoke(ToolInput::SymbolImplementations(
-                    GoToImplementationRequest::new(
-                        snippet.file_path().to_owned(),
-                        position,
-                        self.editor_url.to_owned(),
-                    ),
-                ))
+                .invoke(request)
                 .await
                 .map_err(|e| SymbolError::ToolError(e))?
                 .get_go_to_implementation()
@@ -307,6 +321,7 @@ impl ToolBox {
                         symbol.name().to_owned(),
                         symbol.range().clone(),
                         definition.file_path().to_owned(),
+                        symbol.content().to_owned(),
                     )
                 })
                 .ok_or(SymbolError::ToolError(ToolError::SymbolNotFound(

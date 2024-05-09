@@ -5,15 +5,24 @@
 //! keep track of and whenever a question is asked we forward it to all the implementations
 //! and select the ones which are necessary.
 
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use derivative::Derivative;
+use futures::{stream, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::agentic::tool::broker::ToolBroker;
+use crate::agentic::{symbol::identifier::Snippet, tool::lsp::open_file::OpenFileResponse};
 
-use super::identifier::{MechaCodeSymbolThinking, SymbolIdentifier};
+use super::{
+    errors::SymbolError,
+    identifier::{MechaCodeSymbolThinking, SymbolIdentifier},
+    tool_box::ToolBox,
+};
 
+#[derive(Debug, Clone)]
 pub enum SymbolEvent {
     Create,
     AskQuestion,
@@ -22,6 +31,7 @@ pub enum SymbolEvent {
     Edit,
 }
 
+#[derive(Debug, Clone)]
 pub struct SymbolEventRequest {
     symbol: String,
     event: SymbolEvent,
@@ -46,7 +56,7 @@ pub struct Symbol {
     #[derivative(PartialEq = "ignore")]
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
-    tools: Arc<ToolBroker>,
+    tools: Arc<ToolBox>,
     #[derivative(PartialEq = "ignore")]
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
@@ -63,7 +73,7 @@ impl Symbol {
             SymbolEventRequest,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
-        tools: Arc<ToolBroker>,
+        tools: Arc<ToolBox>,
     ) -> Self {
         Self {
             mecha_code_symbol,
@@ -73,15 +83,90 @@ impl Symbol {
         }
     }
 
+    fn add_implementation_snippet(&mut self, snippet: Snippet) {
+        self.mecha_code_symbol.add_implementation(snippet);
+    }
+
     /// Code selection logic for the symbols here
-    fn generate_initial_request(&self) -> MechaCodeSymbolThinking {
+    async fn generate_initial_request(&mut self) -> Result<MechaCodeSymbolThinking, SymbolError> {
         if let Some(snippet) = self.mecha_code_symbol.get_snippet() {
-            // We need to provide the agent with all the implementations and ask
-            // it what changes will be required at each of these places
-            // operation used: rerank + select the most relevant over here
-            // we have to figure out how to select the best ones over here
-            // maybe we do a rolling window and yes and no if we have to edit
-            // or we can do no changes and still execute the query
+            // We first rerank the snippets and then ask the llm for which snippets
+            // need to be edited
+            // this is not perfect as there is heirarchy in the symbols which we might have
+            // to model at some point (but not sure if we really need to do)
+            // assuming: LLMs do not need more granular output per class (if there are functions
+            // which need to change, we can catch them in the refine step)
+            // we break this apart in pieces so the llm can do better
+            // we iterate until the llm has listed out all the functions which
+            // need to be changed
+            // and we are anyways tracking the changes which are happening
+            // in the first level of iteration
+            // PS: we can ask for a refinement step after this which forces the
+            // llm to generate more output for a step using the context it has
+            let implementations = self
+                .tools
+                .go_to_implementation(snippet, self.symbol_identifier.symbol_name())
+                .await?;
+            let unique_files = implementations
+                .get_implementation_locations_vec()
+                .iter()
+                .map(|implementation| implementation.fs_file_path().to_owned())
+                .collect::<HashSet<String>>();
+            let cloned_tools = self.tools.clone();
+            // once we have the unique files we have to request to open these locations
+            let file_content_map = stream::iter(unique_files)
+                .map(|file_path| (file_path, cloned_tools.clone()))
+                .map(|(file_path, tool_box)| async move {
+                    let file_path = file_path.clone();
+                    let file_content = tool_box.file_open(file_path.clone()).await;
+                    (file_path, file_content)
+                })
+                // limit how many files we open in parallel
+                .buffer_unordered(4)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .collect::<HashMap<String, Result<OpenFileResponse, SymbolError>>>();
+            // Once we have the file content map, we can read the ranges which we are
+            // interested in and generate the implementation areas
+            // we have to figure out how to handle updates etc as well, but we will get
+            // to that later
+            let implementation_content = implementations
+                .get_implementation_locations_vec()
+                .iter()
+                .filter_map(|implementation| {
+                    let file_path = implementation.fs_file_path().to_owned();
+                    let range = implementation.range();
+                    // if file content is empty, then we do not add this to our
+                    // implementations
+                    let file_content = file_content_map.get(&file_path);
+                    if let Some(Ok(file_content)) = file_content {
+                        if let Some(content) = file_content.content_in_range(&range) {
+                            Some(Snippet::new(
+                                self.symbol_identifier.symbol_name().to_owned(),
+                                range.clone(),
+                                file_path,
+                                content,
+                            ))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            implementation_content
+                .into_iter()
+                .for_each(|implementation_snippet| {
+                    self.add_implementation_snippet(implementation_snippet);
+                });
+
+            // now that we have added the snippets, we can ask the llm to rerank
+            // the implementation snippets and figure out which to edit
+            // once we have which to edit, we can then go to the references and keep
+            // going from there whichever the LLM thinks is important for maintaining
+            // the overall structure of the query
         } else {
             // we have to figure out the location for this symbol and understand
             // where we want to put this symbol at

@@ -1,7 +1,10 @@
-use crate::agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput};
+use crate::{
+    agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput},
+    chunking::text_document::Range,
+};
 use async_trait::async_trait;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFileRequest {
     fs_file_path: String,
     editor_url: String,
@@ -40,6 +43,27 @@ impl OpenFileResponse {
 
     pub fn language(&self) -> &str {
         &self.language
+    }
+
+    pub fn content_in_range(&self, range: &Range) -> Option<String> {
+        if !self.exists {
+            None
+        } else {
+            // we are calling it content in range and thats what it is exactly
+            // if we do not have anything at the start of it, we leave it
+            // but I am not sure if this is the best thing to do and do not know
+            // of cases where we will be looking at exact text and not start_line..end_line
+            // TODO(skcd): Make this more accurate when lines match up
+            self.file_contents
+                .lines()
+                .enumerate()
+                .filter(|(i, _line)| i >= &range.start_line())
+                .take_while(|(i, _line)| i <= &range.end_line())
+                .map(|(_i, line)| line.to_string())
+                .collect::<Vec<String>>()
+                .join("\n")
+                .into()
+        }
     }
 }
 

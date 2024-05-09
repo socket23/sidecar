@@ -3,6 +3,7 @@ use super::{
     code_edit::{find::FindCodeSelectionInput, types::CodeEdit},
     code_symbol::important::{CodeSymbolImportantRequest, CodeSymbolImportantWideSearch},
     errors::ToolError,
+    filtering::broker::CodeToEditFilterRequest,
     grep::file::FindInFileRequest,
     lsp::{
         diagnostics::LSPDiagnosticsInput, gotodefintion::GoToDefinitionRequest,
@@ -11,6 +12,7 @@ use super::{
     rerank::base::ReRankEntriesForBroker,
 };
 
+#[derive(Debug, Clone)]
 pub enum ToolInput {
     CodeEditing(CodeEdit),
     LSPDiagnostics(LSPDiagnosticsInput),
@@ -22,6 +24,7 @@ pub enum ToolInput {
     OpenFile(OpenFileRequest),
     GrepSingleFile(FindInFileRequest),
     SymbolImplementations(GoToImplementationRequest),
+    FilterCodeSnippetsForEditing(CodeToEditFilterRequest),
 }
 
 impl ToolInput {
@@ -37,6 +40,7 @@ impl ToolInput {
             ToolInput::OpenFile(_) => ToolType::OpenFile,
             ToolInput::GrepSingleFile(_) => ToolType::GrepInFile,
             ToolInput::SymbolImplementations(_) => ToolType::GoToImplementations,
+            ToolInput::FilterCodeSnippetsForEditing(_) => ToolType::FilterCodeSnippetsForEditing,
         }
     }
 
@@ -132,6 +136,14 @@ impl ToolInput {
     ) -> Result<CodeSymbolImportantWideSearch, ToolError> {
         if let ToolInput::RequestImportantSybmolsCodeWide(request_code_symbol_important) = self {
             Ok(request_code_symbol_important)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn filter_code_snippets_for_editing(self) -> Result<CodeToEditFilterRequest, ToolError> {
+        if let ToolInput::FilterCodeSnippetsForEditing(filter_code_snippets_for_editing) = self {
+            Ok(filter_code_snippets_for_editing)
         } else {
             Err(ToolError::WrongToolInput)
         }

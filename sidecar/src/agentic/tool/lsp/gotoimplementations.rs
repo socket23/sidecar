@@ -27,9 +27,25 @@ pub struct ImplementationLocation {
     range: Range,
 }
 
+impl ImplementationLocation {
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GoToImplementationResponse {
     implementation_locations: Vec<ImplementationLocation>,
+}
+
+impl GoToImplementationResponse {
+    pub fn get_implementation_locations_vec(&self) -> &[ImplementationLocation] {
+        self.implementation_locations.as_slice()
+    }
 }
 
 pub struct LSPGoToImplementation {

@@ -14,6 +14,7 @@ use super::{
     },
     code_symbol::important::CodeSymbolImportantBroker,
     errors::ToolError,
+    filtering::broker::CodeToEditFormatterBroker,
     grep::file::FindInFile,
     input::ToolInput,
     lsp::{
@@ -66,7 +67,7 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::FindCodeSymbolsCodeBaseWide,
-            Box::new(CodeSymbolImportantBroker::new(llm_client)),
+            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
         );
         tools.insert(
             ToolType::GoToDefinitions,
@@ -77,6 +78,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::GoToImplementations,
             Box::new(LSPGoToImplementation::new()),
+        );
+        tools.insert(
+            ToolType::FilterCodeSnippetsForEditing,
+            Box::new(CodeToEditFormatterBroker::new(llm_client)),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

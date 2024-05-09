@@ -2,31 +2,21 @@
 //! as a connected graph in some ways in which these symbols are able to communicate
 //! with each other
 
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::tool::base::Tool;
-use crate::agentic::tool::code_symbol::important::CodeSymbolImportantResponse;
 use crate::agentic::tool::errors::ToolError;
-use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::input::ToolInput;
-use crate::agentic::tool::lsp::gotodefintion::{GoToDefinitionRequest, GoToDefinitionResponse};
-use crate::agentic::tool::lsp::gotoimplementations::{
-    GoToImplementationRequest, GoToImplementationResponse,
-};
-use crate::agentic::tool::lsp::open_file::{OpenFileRequest, OpenFileResponse};
-use crate::chunking::text_document::Position;
-use crate::chunking::types::{OutlineNode, OutlineNodeContent};
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
-use super::identifier::{MechaCodeSymbolThinking, Snippet};
 use super::tool_box::ToolBox;
+use super::ui_event::UIEvent;
 use super::{
     errors::SymbolError,
     events::input::SymbolInputEvent,
@@ -56,8 +46,9 @@ impl SymbolManager {
         tools: Arc<ToolBroker>,
         symbol_broker: Arc<SymbolTrackerInline>,
         editor_url: String,
+        ui_sender: UnboundedSender<UIEvent>,
     ) -> Self {
-        let (sender, mut receier) = tokio::sync::mpsc::unbounded_channel::<(
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
             SymbolEventRequest,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>();
@@ -65,13 +56,16 @@ impl SymbolManager {
             tools.clone(),
             symbol_broker.clone(),
             editor_url.to_owned(),
+            ui_sender.clone(),
         ));
-        let symbol_locker = SymbolLocker::new(sender.clone(), tools.clone());
+        let symbol_locker = SymbolLocker::new(sender.clone(), tool_box.clone());
         let cloned_symbol_locker = symbol_locker.clone();
+        let cloned_ui_sender = ui_sender.clone();
         tokio::spawn(async move {
             // TODO(skcd): Make this run in full parallelism in the future, for
             // now this is fine
-            while let Some(event) = receier.recv().await {
+            while let Some(event) = receiver.recv().await {
+                let _ = cloned_ui_sender.send(UIEvent::from(event.0.clone()));
                 let _ = cloned_symbol_locker.process_request(event).await;
             }
         });

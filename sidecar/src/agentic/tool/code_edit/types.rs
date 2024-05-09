@@ -16,7 +16,7 @@ use crate::agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, outp
 
 use super::models::broker::CodeEditBroker;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct CodeEdit {
     code_above: Option<String>,
     code_below: Option<String>,

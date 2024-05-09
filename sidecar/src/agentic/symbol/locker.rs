@@ -11,6 +11,7 @@ use crate::agentic::tool::broker::ToolBroker;
 
 use super::{
     identifier::{MechaCodeSymbolThinking, SymbolIdentifier},
+    tool_box::ToolBox,
     types::{Symbol, SymbolEvent, SymbolEventRequest, SymbolEventResponse},
 };
 
@@ -39,7 +40,7 @@ pub struct SymbolLocker {
         SymbolEventRequest,
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
     )>,
-    tools: Arc<ToolBroker>,
+    tools: Arc<ToolBox>,
 }
 
 impl SymbolLocker {
@@ -48,7 +49,7 @@ impl SymbolLocker {
             SymbolEventRequest,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
-        tools: Arc<ToolBroker>,
+        tools: Arc<ToolBox>,
     ) -> Self {
         Self {
             symbols: Arc::new(Mutex::new(HashMap::new())),

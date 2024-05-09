@@ -15,6 +15,7 @@ impl FindInFile {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct FindInFileRequest {
     file_contents: String,
     file_symbol: String,

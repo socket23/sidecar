@@ -1,10 +1,6 @@
 use async_trait::async_trait;
-use serde::{
-    de::{SeqAccess, Visitor},
-    Deserialize, Deserializer, Serializer,
-};
 use serde_xml_rs::from_str;
-use std::{borrow::Cow, fmt, sync::Arc};
+use std::sync::Arc;
 
 use llm_client::{
     broker::LLMBroker,

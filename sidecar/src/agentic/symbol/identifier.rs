@@ -4,24 +4,41 @@
 
 use crate::chunking::text_document::Range;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Snippet {
     range: Range,
     symbol_name: String,
     fs_file_path: String,
+    content: String,
+    language: Option<String>,
 }
 
 impl Snippet {
-    pub fn new(symbol_name: String, range: Range, fs_file_path: String) -> Self {
+    pub fn new(symbol_name: String, range: Range, fs_file_path: String, content: String) -> Self {
         Self {
             symbol_name,
             range,
             fs_file_path,
+            content,
+            language: None,
         }
+    }
+
+    // TODO(skcd): Fix the language over here and make it not None
+    pub fn language(&self) -> String {
+        self.language.clone().unwrap_or("".to_owned()).to_owned()
     }
 
     pub fn file_path(&self) -> &str {
         &self.fs_file_path
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
     }
 }
 
@@ -37,6 +54,10 @@ impl SymbolIdentifier {
             symbol_name: symbol_name.to_owned(),
             fs_file_path: None,
         }
+    }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
     }
 
     pub fn with_file_path(symbol_name: &str, fs_file_path: &str) -> Self {
@@ -106,5 +127,9 @@ impl MechaCodeSymbolThinking {
 
     pub fn fs_file_path(&self) -> &str {
         &self.file_path
+    }
+
+    pub fn add_implementation(&mut self, implementation: Snippet) {
+        self.implementations.push(implementation);
     }
 }

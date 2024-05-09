@@ -9,3 +9,4 @@ pub mod locker;
 pub mod manager;
 pub mod tool_box;
 pub mod types;
+pub mod ui_event;

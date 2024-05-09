@@ -2,6 +2,7 @@
 
 use super::{
     code_symbol::important::CodeSymbolImportantResponse,
+    filtering::broker::CodeToEditFilterResponse,
     grep::file::FindInFileResponse,
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
@@ -46,6 +47,7 @@ pub enum ToolOutput {
     FileOpen(OpenFileResponse),
     GrepSingleFile(FindInFileResponse),
     GoToImplementation(GoToImplementationResponse),
+    CodeToEditSnippets(CodeToEditFilterResponse),
 }
 
 impl ToolOutput {
@@ -105,6 +107,13 @@ impl ToolOutput {
     pub fn get_go_to_implementation(self) -> Option<GoToImplementationResponse> {
         match self {
             ToolOutput::GoToImplementation(result) => Some(result),
+            _ => None,
+        }
+    }
+
+    pub fn code_to_edit_filter(self) -> Option<CodeToEditFilterResponse> {
+        match self {
+            ToolOutput::CodeToEditSnippets(code_to_edit_filter) => Some(code_to_edit_filter),
             _ => None,
         }
     }

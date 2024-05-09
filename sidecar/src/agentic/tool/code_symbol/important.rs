@@ -74,7 +74,7 @@ impl Tool for CodeSymbolImportantBroker {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolImportantWideSearch {
     user_context: UserContext,
     user_query: String,
@@ -125,7 +125,7 @@ impl CodeSymbolImportantWideSearch {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolImportantRequest {
     // if we have any symbol identifier here which we are focussing on, we keep
     // track of that here, if there is no history then we do not care about it.

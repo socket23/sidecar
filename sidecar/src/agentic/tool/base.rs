@@ -24,6 +24,8 @@ pub enum ToolType {
     FindCodeSymbolsCodeBaseWide,
     GrepInFile,
     GoToImplementations,
+    // filtering queries go here
+    FilterCodeSnippetsForEditing,
 }
 
 #[async_trait]

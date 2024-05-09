@@ -1,7 +1,10 @@
 use llm_client::clients::types::LLMClientError;
 use thiserror::Error;
 
-use super::{code_symbol::types::CodeSymbolError, rerank::base::ReRankError};
+use super::{
+    code_symbol::types::CodeSymbolError, filtering::errors::CodeToEditFilteringError,
+    rerank::base::ReRankError,
+};
 
 #[derive(Debug, Error)]
 pub enum ToolError {
@@ -37,4 +40,7 @@ pub enum ToolError {
 
     #[error("Symbol not found: {0}")]
     SymbolNotFound(String),
+
+    #[error("Code to edit filtering error: {0}")]
+    CodeToEditFiltering(CodeToEditFilteringError),
 }

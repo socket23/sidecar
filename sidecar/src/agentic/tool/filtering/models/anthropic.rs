@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use std::sync::Arc;
+use serde_xml_rs::from_str;
+use std::{collections::HashMap, sync::Arc};
 
 use llm_client::{
     broker::LLMBroker,
@@ -9,10 +10,41 @@ use llm_client::{
 use crate::agentic::{
     symbol::identifier::Snippet,
     tool::filtering::{
-        broker::{CodeToEditFilterFormatter, CodeToEditFilterRequest},
+        broker::{
+            CodeToEditFilterFormatter, CodeToEditFilterRequest, CodeToEditFilterResponse,
+            SnippetWithReason,
+        },
         errors::CodeToEditFilteringError,
     },
 };
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_edit")]
+struct CodeToEditSnippet {
+    id: usize,
+    reason_to_edit: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_not_edit")]
+struct CodeToNotEditSnippet {
+    id: usize,
+    reason_to_not_edit: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_edit_list")]
+struct CodeToEditList {
+    #[serde(rename = "$value")]
+    snippets: Vec<CodeToEditSnippet>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_not_edit_list")]
+struct CodeToNotEditList {
+    #[serde(rename = "$value")]
+    snippets: Vec<CodeToEditSnippet>,
+}
 
 pub struct AnthropicCodeToEditFormatter {
     llm_broker: Arc<LLMBroker>,
@@ -28,7 +60,6 @@ impl AnthropicCodeToEditFormatter {
 <user_query>
 The checkout process is broken. After entering payment info, the order doesn't get created and the user sees an error page.
 </user_query>
-
 <rerank_list>
 <rerank_entry>
 <id>
@@ -86,7 +117,6 @@ res.status(500).json({{ message: 'Server error' }});
 ```
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 1
@@ -117,7 +147,6 @@ module.exports = mongoose.model('Cart', cartSchema);
 ```
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 2
@@ -149,7 +178,6 @@ res.status(500).json({{ message: 'Server error' }});
 }});
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 3
@@ -181,7 +209,6 @@ res.status(500).json({{ message: 'Server error' }});
 ```
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 4
@@ -210,7 +237,6 @@ isAdmin: {{
 module.exports = mongoose.model('User', userSchema);
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 5
@@ -248,7 +274,6 @@ app.listen(PORT, () => console.log(`Server started on port ${{PORT}}`));
 ```
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 6
@@ -275,7 +300,6 @@ res.status(500).json({{ message: 'Payment failed' }});
 ```
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 7
@@ -310,7 +334,6 @@ module.exports = mongoose.model('Product', productSchema);
 ```
 </content>
 </rerank_entry>
-
 <rerank_entry>
 <id>
 8
@@ -506,6 +529,36 @@ This example is for reference. You must strictly follow the format show in the e
 Please provide the order along with the reason in 2 lists, one for the symbols which we should edit and the other for symbols we do not have to edit for the code snippets based on the user's query."#).to_owned()
     }
 
+    fn unescape_xml(&self, s: String) -> String {
+        s.replace("\"", "&quot;")
+            .replace("'", "&apos;")
+            .replace(">", "&gt;")
+            .replace("<", "&lt;")
+            .replace("&", "&amp;")
+    }
+
+    fn parse_response_section(&self, response: &str) -> String {
+        let mut is_inside_reason = false;
+        let mut new_lines = vec![];
+        for line in response.lines() {
+            if line == "<reason_to_edit>" || line == "<reason_to_not_edit>" {
+                is_inside_reason = true;
+                new_lines.push(line.to_owned());
+                continue;
+            } else if line == "</reason_to_edit>" || line == "</reason_to_not_edit>" {
+                is_inside_reason = false;
+                new_lines.push(line.to_owned());
+                continue;
+            }
+            if is_inside_reason {
+                new_lines.push(self.unescape_xml(line.to_owned()));
+            } else {
+                new_lines.push(line.to_owned());
+            }
+        }
+        new_lines.join("\n")
+    }
+
     fn format_snippet(&self, idx: usize, snippet: &Snippet) -> String {
         let code_location = snippet.file_path();
         let range = snippet.range();
@@ -528,6 +581,84 @@ Code location: {code_location}:{start_line}-{end_line}
         )
         .to_owned()
     }
+
+    fn parse_response(
+        &self,
+        response: &str,
+        snippets: &[Snippet],
+    ) -> Result<CodeToEditFilterResponse, CodeToEditFilteringError> {
+        // first we want to find the code_to_edit and code_to_not_edit sections
+        let mut code_to_edit_list = response
+            .lines()
+            .into_iter()
+            .skip_while(|line| !line.contains("<code_to_edit_list>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</code_to_edit_list>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        let mut code_to_not_edit_list = response
+            .lines()
+            .into_iter()
+            .skip_while(|line| !line.contains("<code_to_not_edit_list>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</code_to_not_edit_list>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        code_to_edit_list = format!(
+            "<code_to_edit_list>
+{code_to_edit_list}
+</code_to_edit_list>"
+        );
+        code_to_not_edit_list = format!(
+            "<code_to_not_edit>
+{code_to_not_edit_list}
+</code_to_not_edit_list>"
+        );
+        code_to_edit_list = self.parse_response_section(&code_to_edit_list);
+        code_to_not_edit_list = self.parse_response_section(&code_to_not_edit_list);
+        let code_to_edit_list = from_str::<CodeToEditList>(&code_to_edit_list)
+            .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
+        let code_to_not_edit_list = from_str::<CodeToNotEditList>(&code_to_not_edit_list)
+            .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
+        let snippet_mapping = snippets
+            .into_iter()
+            .enumerate()
+            .collect::<HashMap<usize, &Snippet>>();
+        let code_to_edit_list = code_to_edit_list
+            .snippets
+            .into_iter()
+            .filter_map(|code_to_edit| {
+                let snippet = snippet_mapping.get(&code_to_edit.id);
+                if let Some(snippet) = snippet {
+                    Some(SnippetWithReason::new(
+                        snippet.clone().clone(),
+                        code_to_edit.reason_to_edit.to_owned(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let code_to_not_edit = code_to_not_edit_list
+            .snippets
+            .into_iter()
+            .filter_map(|code_to_not_edit| {
+                let snippet = snippet_mapping.get(&code_to_not_edit.id);
+                if let Some(snippet) = snippet {
+                    Some(SnippetWithReason::new(
+                        snippet.clone().clone(),
+                        code_to_not_edit.reason_to_edit.to_owned(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(CodeToEditFilterResponse::new(
+            code_to_edit_list,
+            code_to_not_edit,
+        ))
+    }
 }
 
 #[async_trait]
@@ -535,7 +666,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
     async fn filter_code_snippets(
         &self,
         request: CodeToEditFilterRequest,
-    ) -> Result<Vec<Snippet>, CodeToEditFilteringError> {
+    ) -> Result<CodeToEditFilterResponse, CodeToEditFilteringError> {
         // okay now we have the request, send it to the moon and figure out what to
         // do next with it
         let query = request.query();
@@ -583,6 +714,6 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
         // as its well formatted xml
         // and then we need to change the return types here from raw snippets
         // to snippets with reason to edit and not to edit
-        todo!("pick this up from here");
+        self.parse_response(&response, request.get_snippets())
     }
 }

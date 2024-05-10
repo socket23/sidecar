@@ -15,6 +15,7 @@ use crate::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
+use super::identifier::LLMProperties;
 use super::tool_box::ToolBox;
 use super::ui_event::UIEvent;
 use super::{
@@ -39,6 +40,7 @@ pub struct SymbolManager {
     symbol_broker: Arc<SymbolTrackerInline>,
     tool_box: Arc<ToolBox>,
     editor_url: String,
+    llm_properties: LLMProperties,
 }
 
 impl SymbolManager {
@@ -47,6 +49,7 @@ impl SymbolManager {
         symbol_broker: Arc<SymbolTrackerInline>,
         editor_url: String,
         ui_sender: UnboundedSender<UIEvent>,
+        llm_properties: LLMProperties,
     ) -> Self {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
             SymbolEventRequest,
@@ -58,7 +61,8 @@ impl SymbolManager {
             editor_url.to_owned(),
             ui_sender.clone(),
         ));
-        let symbol_locker = SymbolLocker::new(sender.clone(), tool_box.clone());
+        let symbol_locker =
+            SymbolLocker::new(sender.clone(), tool_box.clone(), llm_properties.clone());
         let cloned_symbol_locker = symbol_locker.clone();
         let cloned_ui_sender = ui_sender.clone();
         tokio::spawn(async move {
@@ -76,6 +80,7 @@ impl SymbolManager {
             symbol_broker,
             tool_box,
             editor_url,
+            llm_properties,
         }
     }
 

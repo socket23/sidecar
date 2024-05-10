@@ -3,21 +3,20 @@ use std::sync::Arc;
 
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
-use llm_prompts::reranking::types::ReRankCodeSpanResponse;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::identifier::Snippet;
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantResponse;
 use crate::agentic::tool::errors::ToolError;
+use crate::agentic::tool::filtering::broker::{CodeToEditFilterRequest, CodeToEditFilterResponse};
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::gotodefintion::{GoToDefinitionRequest, GoToDefinitionResponse};
 use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
-use crate::agentic::tool::rerank::base::{ReRankEntriesForBroker, ReRankRequestMetadata};
-use crate::chunking::text_document::Position;
+use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
 use crate::{
     agentic::tool::{broker::ToolBroker, input::ToolInput, lsp::open_file::OpenFileRequest},
@@ -49,6 +48,64 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    pub async fn get_outline_nodes(&self, fs_file_path: &str) -> Option<Vec<OutlineNodeContent>> {
+        self.symbol_broker
+            .get_symbols_outline(&fs_file_path)
+            .await
+            .map(|outline_nodes| {
+                // class and the functions are included here
+                outline_nodes
+                    .into_iter()
+                    .map(|outline_node| {
+                        // let children = outline_node.consume_all_outlines();
+                        // outline node here contains the classes and the functions
+                        // which we have to edit
+                        // so one way would be to ask the LLM to edit it
+                        // another is to figure out if we can show it all the functions
+                        // which are present inside the class and ask it to make changes
+                        let outline_content = outline_node.content().clone();
+                        let all_outlines = outline_node.consume_all_outlines();
+                        vec![outline_content]
+                            .into_iter()
+                            .chain(all_outlines)
+                            .collect::<Vec<OutlineNodeContent>>()
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>()
+            })
+    }
+
+    pub async fn symbol_in_range(
+        &self,
+        fs_file_path: &str,
+        range: &Range,
+    ) -> Option<Vec<OutlineNode>> {
+        self.symbol_broker
+            .get_symbols_in_range(fs_file_path, range)
+            .await
+    }
+
+    // TODO(skcd): Use this to ask the LLM for the code snippets which need editing
+    pub async fn filter_code_for_editing(
+        &self,
+        snippets: Vec<Snippet>,
+        query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+    ) -> Result<CodeToEditFilterResponse, SymbolError> {
+        let request = ToolInput::FilterCodeSnippetsForEditing(CodeToEditFilterRequest::new(
+            snippets, query, llm, provider, api_key,
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .code_to_edit_filter()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn file_open(&self, fs_file_path: String) -> Result<OpenFileResponse, SymbolError> {
@@ -231,6 +288,7 @@ impl ToolBox {
                         outline_node.range().clone(),
                         outline_node.fs_file_path().to_owned(),
                         outline_node.content().to_owned(),
+                        outline_node,
                     ));
                 }
             } else {
@@ -314,7 +372,7 @@ impl ToolBox {
             let symbols = self.grab_symbols_from_outline(symbols, symbol_name);
             // find the first symbol and grab back its content
             symbols
-                .iter()
+                .into_iter()
                 .find(|symbol| symbol.name() == symbol_name)
                 .map(|symbol| {
                     Snippet::new(
@@ -322,6 +380,7 @@ impl ToolBox {
                         symbol.range().clone(),
                         definition.file_path().to_owned(),
                         symbol.content().to_owned(),
+                        symbol,
                     )
                 })
                 .ok_or(SymbolError::ToolError(ToolError::SymbolNotFound(

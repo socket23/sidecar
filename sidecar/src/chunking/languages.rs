@@ -186,7 +186,7 @@ impl TSLanguageConfig {
             // cheap clone so this is fine
             let (outline_node_type, outline_range) = outline_nodes[start_index].clone();
             match outline_node_type {
-                OutlineNodeType::Class => {
+                OutlineNodeType::Class | OutlineNodeType::ClassDefinition => {
                     // If we are in a class, we might have functions or class names
                     // which we want to parse out
                     let mut end_index = start_index + 1;
@@ -279,13 +279,17 @@ impl TSLanguageConfig {
                             OutlineNodeType::FunctionParameterIdentifier => {
                                 // we need to track this as well
                             }
+                            OutlineNodeType::ClassDefinition => {
+                                // can not have another class definition inside
+                                // it
+                            }
                         }
                         end_index = end_index + 1;
                     }
                     let class_outline = OutlineNodeContent::new(
                         class_name.expect("class name to be present"),
                         outline_range,
-                        OutlineNodeType::Class,
+                        outline_node_type,
                         get_string_from_bytes(
                             &source_code_vec,
                             outline_range.start_byte(),

@@ -71,6 +71,9 @@ impl FunctionNodeInformation {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
 pub enum OutlineNodeType {
+    // the defintion of the class if the language supports it (like rust, golang) struct A {...}
+    // otherwise its inside the class struct (in languages like js, ts) class A {something: string; something_else: string}
+    ClassDefinition,
     // The identifier for the complete class body
     Class,
     // the name of the class
@@ -88,8 +91,27 @@ pub enum OutlineNodeType {
 }
 
 impl OutlineNodeType {
+    pub fn is_function(&self) -> bool {
+        matches!(self, OutlineNodeType::Function)
+            || matches!(self, OutlineNodeType::FunctionName)
+            || matches!(self, OutlineNodeType::FunctionBody)
+            || matches!(self, OutlineNodeType::FunctionClassName)
+            || matches!(self, OutlineNodeType::FunctionParameterIdentifier)
+    }
+
+    pub fn is_class_definition(&self) -> bool {
+        matches!(self, OutlineNodeType::ClassDefinition)
+    }
+
+    pub fn is_class_implementation(&self) -> bool {
+        matches!(self, OutlineNodeType::Class)
+    }
+}
+
+impl OutlineNodeType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
+            "definition.class.declaration" => Some(Self::ClassDefinition),
             "definition.class" => Some(Self::Class),
             "definition.class.name" => Some(Self::ClassName),
             "definition.function" | "definition.method" => Some(Self::Function),
@@ -102,7 +124,7 @@ impl OutlineNodeType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutlineNodeContent {
     range: Range,
     name: String,
@@ -144,6 +166,23 @@ impl OutlineNodeContent {
     pub fn fs_file_path(&self) -> &str {
         &self.fs_file_path
     }
+
+    pub fn outline_node_type(&self) -> &OutlineNodeType {
+        &self.r#type
+    }
+
+    pub fn is_class_definition(&self) -> bool {
+        self.outline_node_type().is_class_definition()
+    }
+
+    pub fn is_class_type(&self) -> bool {
+        self.outline_node_type().is_class_definition()
+            || self.outline_node_type().is_class_implementation()
+    }
+
+    pub fn is_function_type(&self) -> bool {
+        self.outline_node_type().is_function()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -166,6 +205,10 @@ impl OutlineNode {
         }
     }
 
+    pub fn outline_node_type(&self) -> &OutlineNodeType {
+        self.content.outline_node_type()
+    }
+
     pub fn new_from_child(outline_node_content: OutlineNodeContent, language: String) -> Self {
         Self {
             content: outline_node_content,
@@ -176,6 +219,13 @@ impl OutlineNode {
 
     pub fn content(&self) -> &OutlineNodeContent {
         &self.content
+    }
+
+    pub fn consume_all_outlines(self) -> Vec<OutlineNodeContent> {
+        vec![self.content]
+            .into_iter()
+            .chain(self.children)
+            .collect()
     }
 
     pub fn children(&self) -> &[OutlineNodeContent] {

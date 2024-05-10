@@ -148,4 +148,6 @@ impl ToolInput {
             Err(ToolError::WrongToolInput)
         }
     }
+
+    // pub fn filter_code_snippets_single_symbol(self) -> Result<
 }

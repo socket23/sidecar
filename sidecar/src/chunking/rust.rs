@@ -103,7 +103,7 @@ pub fn rust_language_config() -> TSLanguageConfig {
             r#"
             (struct_item
                 name: (type_identifier) @definition.class.name
-              ) @definition.class
+              ) @definition.class.declaration
               
               (enum_item
                   name: (type_identifier) @definition.class.name) @definition.class

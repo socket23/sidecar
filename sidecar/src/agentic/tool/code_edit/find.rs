@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClient, LLMType},
+    clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
@@ -15,7 +15,7 @@ use crate::{
         input::ToolInput,
         output::{CodeToEditToolOutput, ToolOutput},
     },
-    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
+    chunking::languages::TSLanguageParsing,
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 

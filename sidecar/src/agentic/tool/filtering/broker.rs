@@ -10,8 +10,8 @@ use llm_client::{
 use crate::agentic::{
     symbol::identifier::Snippet,
     tool::{
-        base::Tool, code_edit::models::anthropic::AnthropicCodeEditFromatter, errors::ToolError,
-        filtering::errors::CodeToEditFilteringError, input::ToolInput, output::ToolOutput,
+        base::Tool, errors::ToolError, filtering::errors::CodeToEditFilteringError,
+        input::ToolInput, output::ToolOutput,
     },
 };
 
@@ -124,6 +124,11 @@ pub trait CodeToEditFilterFormatter {
         &self,
         request: CodeToEditFilterRequest,
     ) -> Result<CodeToEditFilterResponse, CodeToEditFilteringError>;
+
+    // async fn filter_code_snippets_inside_symbol(
+    //     &self,
+    //     ranked_snippets_single_symbol: String,
+    // ) -> Result<CodeToEditFilterResponse, CodeToEditFilteringError>;
 }
 
 #[async_trait]

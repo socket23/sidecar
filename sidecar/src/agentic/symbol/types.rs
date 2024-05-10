@@ -12,13 +12,20 @@ use std::{
 
 use derivative::Derivative;
 use futures::{stream, StreamExt};
+use llm_client::{
+    clients::types::LLMType,
+    provider::{LLMProvider, LLMProviderAPIKeys},
+};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::agentic::{symbol::identifier::Snippet, tool::lsp::open_file::OpenFileResponse};
+use crate::{
+    agentic::{symbol::identifier::Snippet, tool::lsp::open_file::OpenFileResponse},
+    chunking::types::OutlineNodeContent,
+};
 
 use super::{
     errors::SymbolError,
-    identifier::{MechaCodeSymbolThinking, SymbolIdentifier},
+    identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
 };
 
@@ -61,6 +68,10 @@ pub struct Symbol {
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
     mecha_code_symbol: MechaCodeSymbolThinking,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    llm_properties: LLMProperties,
 }
 
 impl Symbol {
@@ -74,12 +85,14 @@ impl Symbol {
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         tools: Arc<ToolBox>,
+        llm_properties: LLMProperties,
     ) -> Self {
         Self {
             mecha_code_symbol,
             symbol_identifier,
             hub_sender,
             tools,
+            llm_properties,
         }
     }
 
@@ -87,9 +100,31 @@ impl Symbol {
         self.mecha_code_symbol.add_implementation(snippet);
     }
 
+    fn get_implementation_snippets(&self) -> &[Snippet] {
+        self.mecha_code_symbol.get_implementations()
+    }
+
+    fn generate_ordered_snippets_list(&self, snippets: Vec<Snippet>) -> Vec<Snippet> {
+        unimplemented!();
+        // each symbol is also serializable and we can just ask the symbol broker
+        // for the symbol at a position, since its also keeping track of the updates
+    }
+
+    // Loads the implementation after we do a go-to-implementations operation
+    // in the ordered list from files to the symbols in an ordered fashion
+    // this also allows for figuring out where to exactly make changes
+    // in a very AST like way (cause thats the one which makes most sense
+    // and is in-evitable)
+    async fn setup_implementations(&mut self, snippets: Vec<Snippet>) {}
+
     /// Code selection logic for the symbols here
     async fn generate_initial_request(&mut self) -> Result<MechaCodeSymbolThinking, SymbolError> {
-        if let Some(snippet) = self.mecha_code_symbol.get_snippet() {
+        let steps = self.mecha_code_symbol.steps().to_vec();
+        if let Some(snippet) = self
+            .mecha_code_symbol
+            .get_snippet()
+            .map(|snippet| snippet.clone())
+        {
             // We first rerank the snippets and then ask the llm for which snippets
             // need to be edited
             // this is not perfect as there is heirarchy in the symbols which we might have
@@ -105,7 +140,7 @@ impl Symbol {
             // llm to generate more output for a step using the context it has
             let implementations = self
                 .tools
-                .go_to_implementation(snippet, self.symbol_identifier.symbol_name())
+                .go_to_implementation(&snippet, self.symbol_identifier.symbol_name())
                 .await?;
             let unique_files = implementations
                 .get_implementation_locations_vec()
@@ -114,7 +149,7 @@ impl Symbol {
                 .collect::<HashSet<String>>();
             let cloned_tools = self.tools.clone();
             // once we have the unique files we have to request to open these locations
-            let file_content_map = stream::iter(unique_files)
+            let file_content_map = stream::iter(unique_files.clone())
                 .map(|file_path| (file_path, cloned_tools.clone()))
                 .map(|(file_path, tool_box)| async move {
                     let file_path = file_path.clone();
@@ -127,10 +162,26 @@ impl Symbol {
                 .await
                 .into_iter()
                 .collect::<HashMap<String, Result<OpenFileResponse, SymbolError>>>();
+            // grab the outline nodes as well
+            let outline_nodes = stream::iter(unique_files)
+                .map(|file_path| (file_path, cloned_tools.clone()))
+                .map(|(file_path, tool_box)| async move {
+                    (
+                        file_path.to_owned(),
+                        tool_box.get_outline_nodes(&file_path).await,
+                    )
+                })
+                .buffer_unordered(1)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .collect::<HashMap<String, Option<Vec<OutlineNodeContent>>>>();
             // Once we have the file content map, we can read the ranges which we are
             // interested in and generate the implementation areas
             // we have to figure out how to handle updates etc as well, but we will get
             // to that later
+            // TODO(skcd): This is probably wrong since we need to calculate the bounding box
+            // for the function
             let implementation_content = implementations
                 .get_implementation_locations_vec()
                 .iter()
@@ -140,33 +191,84 @@ impl Symbol {
                     // if file content is empty, then we do not add this to our
                     // implementations
                     let file_content = file_content_map.get(&file_path);
-                    if let Some(Ok(file_content)) = file_content {
-                        if let Some(content) = file_content.content_in_range(&range) {
-                            Some(Snippet::new(
+                    if let Some(Ok(ref file_content)) = file_content {
+                        let outline_nodes_for_range = outline_nodes
+                            .get(&file_path)
+                            .map(|outline_nodes| {
+                                if let Some(outline_nodes) = outline_nodes {
+                                    // grab the first outline node which we find which contains the range we are interested in
+                                    // this will always give us the biggest range
+                                    let first_outline_node = outline_nodes
+                                        .iter()
+                                        .filter(|outline_node| outline_node.range().contains(range))
+                                        .next();
+                                    first_outline_node.map(|outline_node| outline_node.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .flatten();
+                        match (
+                            file_content.content_in_range(&range),
+                            outline_nodes_for_range,
+                        ) {
+                            (Some(content), Some(outline_nodes)) => Some(Snippet::new(
                                 self.symbol_identifier.symbol_name().to_owned(),
                                 range.clone(),
                                 file_path,
                                 content,
-                            ))
-                        } else {
-                            None
+                                outline_nodes,
+                            )),
+                            _ => None,
                         }
                     } else {
                         None
                     }
                 })
                 .collect::<Vec<_>>();
-            implementation_content
-                .into_iter()
-                .for_each(|implementation_snippet| {
-                    self.add_implementation_snippet(implementation_snippet);
-                });
+            // we update the snippets we have stored here into the symbol itself
+            let implementation_cloned = implementation_content.to_vec();
+            {
+                implementation_content
+                    .into_iter()
+                    .for_each(|implementation_snippet| {
+                        self.add_implementation_snippet(implementation_snippet);
+                    });
+            }
 
+            // This is what we are trying to figure out
+            // the idea representation here will be in the form of
             // now that we have added the snippets, we can ask the llm to rerank
             // the implementation snippets and figure out which to edit
             // once we have which to edit, we can then go to the references and keep
             // going from there whichever the LLM thinks is important for maintaining
             // the overall structure of the query
+            // we also insert our own snipet into this
+            // re-ranking for a complete symbol looks very different
+            // we have to carefully craft the prompt in such a way that all the important
+            // details are laid out properly
+            // if its a class we call it a class, and if there are functions inside
+            // it we call them out in a section, check how symbols are implemented
+            // for a given LLM somewhere in the code
+            // we have the text for all the snippets which are part of the class
+            // there will be some here which will be the class definition and some
+            // which are not part of it
+            // so we use the ones which are part of the class defintion and name it
+            // specially, so we can use it
+            // struct A {....} is a special symbol
+            // impl A {....} is also special and we show the symbols inside it one by
+            // one for each function and in the order of they occur in the file
+            // once we have the response we can set the agent to task on each of these snippets
+
+            // TODO(skcd): We want to send this request for reranking
+            // and get back the snippet indexes
+            // and then we parse it back from here to get back to the symbol
+            // we are interested in
+            if let Some((ranked_xml_list, reverse_lookup)) = self.mecha_code_symbol.to_llm_request()
+            {
+                // now we send it over to the LLM and register as a rearank operation
+                // and then ask the llm to reply back to us
+            }
         } else {
             // we have to figure out the location for this symbol and understand
             // where we want to put this symbol at

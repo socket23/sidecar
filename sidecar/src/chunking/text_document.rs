@@ -208,6 +208,11 @@ impl Range {
         std::cmp::max(0, end as i64 - start as i64) as usize
     }
 
+    pub fn contains_line(&self, line: usize) -> bool {
+        // we want to be sandwiched between the range of lines here
+        self.start_position().line <= line && line <= self.end_position().line
+    }
+
     pub fn len(&self) -> usize {
         self.end_position.byte_offset - self.start_position.byte_offset
     }

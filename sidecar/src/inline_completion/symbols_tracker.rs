@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
 };
 
+use futures::{stream, StreamExt};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -115,6 +116,17 @@ struct GetDocumentOutlineRequest {
     file_path: String,
 }
 
+pub struct SymbolInRequestSnippet {
+    fs_file_path: String,
+    range: Range,
+    content: String,
+}
+
+struct SymbolsInRangeRequest {
+    fs_file_path: String,
+    range: Range,
+}
+
 enum SharedStateRequest {
     GetFileContent(String),
     GetDocumentLines(GetDocumentLinesRequest),
@@ -126,6 +138,7 @@ enum SharedStateRequest {
     GetDefinitionOutline(GetDefinitionOutlineRequest),
     GetDocumentOutline(GetDocumentOutlineRequest),
     GetSymbolHistory,
+    GetSymbolsInRange(SymbolsInRangeRequest),
 }
 
 enum SharedStateResponse {
@@ -138,6 +151,7 @@ enum SharedStateResponse {
     GetDefinitionOutlineResponse(Vec<String>),
     GetSymbolHistoryResponse(Vec<SymbolInformation>),
     GetDocumentOutlineResponse(Option<Vec<OutlineNode>>),
+    SymbolsInRangeResponse(Vec<OutlineNode>),
 }
 
 /// We are keeping track of the symbol node where the user is editing, this can
@@ -256,7 +270,26 @@ impl SharedState {
                 let response = self.get_outline_nodes(&file_path).await;
                 SharedStateResponse::GetDocumentOutlineResponse(response)
             }
+            SharedStateRequest::GetSymbolsInRange(symbols_in_range_request) => {
+                let response = self.get_symbols_in_range(symbols_in_range_request).await;
+                SharedStateResponse::SymbolsInRangeResponse(response)
+            }
         }
+    }
+
+    async fn get_symbols_in_range(&self, request: SymbolsInRangeRequest) -> Vec<OutlineNode> {
+        let outline_nodes: Vec<OutlineNode>;
+        {
+            let document_lines = self.document_lines.lock().await;
+            if let Some(document_line) = document_lines.get(&request.fs_file_path) {
+                outline_nodes = document_line.get_symbols_in_ranges(vec![request.range].as_slice());
+            } else {
+                // TODO(skcd): This is wrong, because we should be still returning
+                // None instead of blank outline nodes
+                outline_nodes = vec![];
+            }
+        }
+        outline_nodes
     }
 
     async fn get_definition_outline(&self, request: GetDefinitionOutlineRequest) -> Vec<String> {
@@ -768,6 +801,25 @@ impl SymbolTrackerInline {
         let response = receiver.await;
         if let Ok(SharedStateResponse::GetDocumentOutlineResponse(response)) = response {
             response
+        } else {
+            None
+        }
+    }
+
+    pub async fn get_symbols_in_range(
+        &self,
+        fs_file_path: &str,
+        range: &Range,
+    ) -> Option<Vec<OutlineNode>> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request = SharedStateRequest::GetSymbolsInRange(SymbolsInRangeRequest {
+            fs_file_path: fs_file_path.to_owned(),
+            range: range.clone(),
+        });
+        let _ = self.sender.send((request, sender));
+        let response = receiver.await;
+        if let Ok(SharedStateResponse::SymbolsInRangeResponse(response)) = response {
+            Some(response)
         } else {
             None
         }

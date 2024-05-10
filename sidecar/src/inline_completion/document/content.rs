@@ -410,6 +410,29 @@ impl DocumentEditLines {
         content
     }
 
+    pub fn get_symbols_in_ranges(&self, range: &[Range]) -> Vec<OutlineNode> {
+        // over here we are trying to get the outline node and do it this way:
+        // - we look at the range which is requested and generate it back
+        // - we check if the symbols are going to intersect with the range we are querying for
+        // if there is intersection we insert it (super easy)
+        let selected_ranges = range.iter().collect::<HashSet<&Range>>();
+        self.outline_nodes
+            .iter()
+            .filter_map(|outline_node| {
+                let outline_node_range = outline_node.range();
+                if selected_ranges
+                    .iter()
+                    .any(|selected_range| outline_node_range.contains(selected_range))
+                {
+                    Some(outline_node.clone())
+                } else {
+                    // we are totally okay over here
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
     pub fn get_edited_lines_in_range(&self, range: &Range) -> Vec<usize> {
         (range.start_line()..range.end_line())
             .into_iter()

@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::agentic::tool::broker::ToolBroker;
 
 use super::{
-    identifier::{MechaCodeSymbolThinking, SymbolIdentifier},
+    identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
     types::{Symbol, SymbolEvent, SymbolEventRequest, SymbolEventResponse},
 };
@@ -41,6 +41,7 @@ pub struct SymbolLocker {
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
     )>,
     tools: Arc<ToolBox>,
+    llm_properties: LLMProperties,
 }
 
 impl SymbolLocker {
@@ -50,11 +51,13 @@ impl SymbolLocker {
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         tools: Arc<ToolBox>,
+        llm_properties: LLMProperties,
     ) -> Self {
         Self {
             symbols: Arc::new(Mutex::new(HashMap::new())),
             hub_sender,
             tools,
+            llm_properties,
         }
     }
 
@@ -92,6 +95,7 @@ impl SymbolLocker {
             request,
             self.hub_sender.clone(),
             self.tools.clone(),
+            self.llm_properties.clone(),
         );
 
         // now we let it rip, we give the symbol the receiver and ask it

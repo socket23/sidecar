@@ -8,7 +8,9 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{events::input::SymbolInputEvent, manager::SymbolManager},
+        symbol::{
+            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
+        },
         tool::{
             broker::ToolBroker,
             code_edit::models::broker::CodeEditBroker,
@@ -57,12 +59,18 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
     ));
+    let llm_properties = LLMProperties::new(
+        LLMType::ClaudeHaiku,
+        LLMProvider::Anthropic,
+        api_key.clone(),
+    );
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_url.to_owned(),
         sender,
+        llm_properties,
     );
     let symbol_input = SymbolInputEvent::new(
         user_context,

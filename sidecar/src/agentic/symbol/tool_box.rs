@@ -9,7 +9,10 @@ use crate::agentic::symbol::identifier::Snippet;
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantResponse;
 use crate::agentic::tool::errors::ToolError;
-use crate::agentic::tool::filtering::broker::{CodeToEditFilterRequest, CodeToEditFilterResponse};
+use crate::agentic::tool::filtering::broker::{
+    CodeToEditFilterRequest, CodeToEditFilterResponse, CodeToEditSymbolRequest,
+    CodeToEditSymbolResponse,
+};
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::gotodefintion::{GoToDefinitionRequest, GoToDefinitionResponse};
 use crate::agentic::tool::lsp::gotoimplementations::{
@@ -48,6 +51,26 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    pub async fn filter_code_snippets_in_symbol_for_editing(
+        &self,
+        xml_string: String,
+        query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<CodeToEditSymbolResponse, SymbolError> {
+        let request = ToolInput::FilterCodeSnippetsForEditingSingleSymbols(
+            CodeToEditSymbolRequest::new(xml_string, query, llm, provider, api_keys),
+        );
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .code_to_edit_in_symbol()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn get_outline_nodes(&self, fs_file_path: &str) -> Option<Vec<OutlineNodeContent>> {

@@ -19,24 +19,22 @@ use llm_client::{
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    agentic::{symbol::identifier::Snippet, tool::lsp::open_file::OpenFileResponse},
-    chunking::types::OutlineNodeContent,
+    agentic::{
+        symbol::{
+            events::edit::{SymbolToEdit, SymbolToEditRequest},
+            identifier::Snippet,
+        },
+        tool::lsp::open_file::OpenFileResponse,
+    },
+    chunking::{text_document::Range, types::OutlineNodeContent},
 };
 
 use super::{
     errors::SymbolError,
+    events::types::SymbolEvent,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
 };
-
-#[derive(Debug, Clone)]
-pub enum SymbolEvent {
-    Create,
-    AskQuestion,
-    UserFeedback,
-    Delete,
-    Edit,
-}
 
 #[derive(Debug, Clone)]
 pub struct SymbolEventRequest {
@@ -96,6 +94,12 @@ impl Symbol {
         }
     }
 
+    // find the name of the sub-symbol
+    pub fn find_subsymbol_in_range(&self, range: &Range, fs_file_path: &str) -> Option<String> {
+        self.mecha_code_symbol
+            .find_symbol_in_range(range, fs_file_path)
+    }
+
     fn add_implementation_snippet(&mut self, snippet: Snippet) {
         self.mecha_code_symbol.add_implementation(snippet);
     }
@@ -118,7 +122,7 @@ impl Symbol {
     async fn setup_implementations(&mut self, snippets: Vec<Snippet>) {}
 
     /// Code selection logic for the symbols here
-    async fn generate_initial_request(&mut self) -> Result<MechaCodeSymbolThinking, SymbolError> {
+    async fn generate_initial_request(&mut self) -> Result<SymbolEvent, SymbolError> {
         let steps = self.mecha_code_symbol.steps().to_vec();
         if let Some(snippet) = self
             .mecha_code_symbol
@@ -267,6 +271,65 @@ impl Symbol {
             {
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us
+                let filtered_list = self
+                    .tools
+                    .filter_code_snippets_in_symbol_for_editing(
+                        ranked_xml_list,
+                        steps.join("\n"),
+                        self.llm_properties.llm().clone(),
+                        self.llm_properties.provider().clone(),
+                        self.llm_properties.api_key().clone(),
+                    )
+                    .await?;
+
+                // now we take this filtered list and try to generate back and figure out
+                // the ranges which need to be edited
+                let code_to_edit_list = filtered_list.code_to_edit_list();
+                // we use this to map it back to the symbols which we should
+                // be editing and then send those are requests to the hub
+                // which will forward it to the right symbol
+                let sub_symbols_to_edit = reverse_lookup
+                    .into_iter()
+                    .filter_map(|reverse_lookup| {
+                        let idx = reverse_lookup.idx();
+                        let range = reverse_lookup.range();
+                        let fs_file_path = reverse_lookup.fs_file_path();
+                        let outline = reverse_lookup.is_outline();
+                        let found_reason_to_edit = code_to_edit_list
+                            .snippets()
+                            .into_iter()
+                            .find(|snippet| snippet.id() == idx)
+                            .map(|snippet| snippet.reason_to_edit().to_owned());
+                        match found_reason_to_edit {
+                            Some(reason) => {
+                                let symbol_in_range =
+                                    self.find_subsymbol_in_range(range, fs_file_path);
+                                // now we need to figure out how to edit it out
+                                // properly
+                                if let Some(symbol) = symbol_in_range {
+                                    Some(SymbolToEdit::new(
+                                        symbol,
+                                        range.clone(),
+                                        fs_file_path.to_owned(),
+                                        vec![reason],
+                                        outline,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }
+                            None => None,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                // TODO(skcd): Figure out what to do over here
+                // when we are sending edit requests
+                Ok(SymbolEvent::Edit(SymbolToEditRequest::new(
+                    sub_symbols_to_edit,
+                    self.symbol_identifier.clone(),
+                )))
+            } else {
+                todo!("what do we do over here")
             }
         } else {
             // we have to figure out the location for this symbol and understand
@@ -274,8 +337,8 @@ impl Symbol {
             // what would be the best way to do this?
             // should we give the folder overview and then ask it
             // or assume that its already written out
+            todo!("figure out what to do here");
         }
-        unimplemented!();
     }
 
     pub async fn run(

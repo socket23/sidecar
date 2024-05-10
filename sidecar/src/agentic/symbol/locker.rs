@@ -10,9 +10,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::agentic::tool::broker::ToolBroker;
 
 use super::{
+    events::types::SymbolEvent,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
-    types::{Symbol, SymbolEvent, SymbolEventRequest, SymbolEventResponse},
+    types::{Symbol, SymbolEventRequest, SymbolEventResponse},
 };
 
 #[derive(Clone)]

@@ -118,4 +118,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn code_to_edit_in_symbol(self) -> Option<CodeToEditSymbolResponse> {
+        match self {
+            ToolOutput::CodeToEditSingleSymbolSnippets(response) => Some(response),
+            _ => None,
+        }
+    }
 }

@@ -117,7 +117,6 @@ impl Snippet {
     }
 
     pub fn to_xml(&self) -> String {
-        let symbol_content = &self.outline_node_content;
         let name = &self.symbol_name;
         let file_path = self.file_path();
         let start_line = self.range().start_line();
@@ -185,6 +184,22 @@ impl SnippetReRankInformation {
         }
     }
 
+    pub fn idx(&self) -> usize {
+        self.idx
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn is_outline(&self) -> bool {
+        self.is_outline
+    }
+
     pub fn set_is_outline(mut self) -> Self {
         self.is_outline = true;
         self
@@ -218,6 +233,24 @@ impl MechaCodeSymbolThinking {
             snippet,
             implementations,
         }
+    }
+
+    pub fn find_symbol_in_range(&self, range: &Range, fs_file_path: &str) -> Option<String> {
+        if let Some(snippet) = &self.snippet {
+            if snippet.range.contains(range) && snippet.fs_file_path == fs_file_path {
+                return Some(snippet.symbol_name.to_owned());
+            }
+        }
+        self.implementations
+            .iter()
+            .find(|snippet| {
+                if snippet.range.contains(range) && snippet.fs_file_path == fs_file_path {
+                    true
+                } else {
+                    false
+                }
+            })
+            .map(|snippet| snippet.symbol_name.to_owned())
     }
 
     pub fn steps(&self) -> &[String] {

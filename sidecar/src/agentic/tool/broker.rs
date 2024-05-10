@@ -81,6 +81,10 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::FilterCodeSnippetsForEditing,
+            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::FilterCodeSnippetsSingleSymbolForEditing,
             Box::new(CodeToEditFormatterBroker::new(llm_client)),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely

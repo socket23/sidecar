@@ -12,39 +12,12 @@ use crate::agentic::{
     tool::filtering::{
         broker::{
             CodeToEditFilterFormatter, CodeToEditFilterRequest, CodeToEditFilterResponse,
+            CodeToEditList, CodeToEditSymbolRequest, CodeToEditSymbolResponse, CodeToNotEditList,
             SnippetWithReason,
         },
         errors::CodeToEditFilteringError,
     },
 };
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "code_to_edit")]
-struct CodeToEditSnippet {
-    id: usize,
-    reason_to_edit: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "code_to_not_edit")]
-struct CodeToNotEditSnippet {
-    id: usize,
-    reason_to_not_edit: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "code_to_edit_list")]
-struct CodeToEditList {
-    #[serde(rename = "$value")]
-    snippets: Vec<CodeToEditSnippet>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "code_to_not_edit_list")]
-struct CodeToNotEditList {
-    #[serde(rename = "$value")]
-    snippets: Vec<CodeToEditSnippet>,
-}
 
 pub struct AnthropicCodeToEditFormatter {
     llm_broker: Arc<LLMBroker>,
@@ -582,11 +555,10 @@ Code location: {code_location}:{start_line}-{end_line}
         .to_owned()
     }
 
-    fn parse_response(
+    fn parse_code_sections(
         &self,
         response: &str,
-        snippets: &[Snippet],
-    ) -> Result<CodeToEditFilterResponse, CodeToEditFilteringError> {
+    ) -> Result<CodeToEditSymbolResponse, CodeToEditFilteringError> {
         // first we want to find the code_to_edit and code_to_not_edit sections
         let mut code_to_edit_list = response
             .lines()
@@ -620,19 +592,33 @@ Code location: {code_location}:{start_line}-{end_line}
             .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
         let code_to_not_edit_list = from_str::<CodeToNotEditList>(&code_to_not_edit_list)
             .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
+        Ok(CodeToEditSymbolResponse::new(
+            code_to_edit_list,
+            code_to_not_edit_list,
+        ))
+    }
+
+    fn parse_response(
+        &self,
+        response: &str,
+        snippets: &[Snippet],
+    ) -> Result<CodeToEditFilterResponse, CodeToEditFilteringError> {
+        let response = self.parse_code_sections(response)?;
+        let code_to_edit_list = response.code_to_edit_list();
+        let code_to_not_edit_list = response.code_to_not_edit_list();
         let snippet_mapping = snippets
             .into_iter()
             .enumerate()
             .collect::<HashMap<usize, &Snippet>>();
         let code_to_edit_list = code_to_edit_list
-            .snippets
+            .snippets()
             .into_iter()
             .filter_map(|code_to_edit| {
-                let snippet = snippet_mapping.get(&code_to_edit.id);
+                let snippet = snippet_mapping.get(&code_to_edit.id());
                 if let Some(snippet) = snippet {
                     Some(SnippetWithReason::new(
                         snippet.clone().clone(),
-                        code_to_edit.reason_to_edit.to_owned(),
+                        code_to_edit.reason_to_edit().to_owned(),
                     ))
                 } else {
                     None
@@ -640,14 +626,14 @@ Code location: {code_location}:{start_line}-{end_line}
             })
             .collect::<Vec<_>>();
         let code_to_not_edit = code_to_not_edit_list
-            .snippets
+            .snippets()
             .into_iter()
             .filter_map(|code_to_not_edit| {
-                let snippet = snippet_mapping.get(&code_to_not_edit.id);
+                let snippet = snippet_mapping.get(&code_to_not_edit.id());
                 if let Some(snippet) = snippet {
                     Some(SnippetWithReason::new(
                         snippet.clone().clone(),
-                        code_to_not_edit.reason_to_edit.to_owned(),
+                        code_to_not_edit.reason_to_not_edit().to_owned(),
                     ))
                 } else {
                     None
@@ -663,6 +649,52 @@ Code location: {code_location}:{start_line}-{end_line}
 
 #[async_trait]
 impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
+    async fn filter_code_snippets_inside_symbol(
+        &self,
+        request: CodeToEditSymbolRequest,
+    ) -> Result<CodeToEditSymbolResponse, CodeToEditFilteringError> {
+        // Here the only difference is that we are asking
+        // for the sections to edit in a single symbol
+        let query = request.query().to_owned();
+        let llm = request.llm().clone();
+        let provider = request.provider().clone();
+        let api_key = request.api_key().clone();
+        let xml_string = request.xml_string();
+        let user_query = format!(
+            r#"<user_query>
+{query}
+</user_query>
+
+<rerank_list>
+{xml_string}
+</rerank_list>"#
+        );
+        let system_message = self.system_message();
+        let messages = vec![
+            LLMClientMessage::system(system_message),
+            LLMClientMessage::user(user_query),
+        ];
+        let llm_request = LLMClientCompletionRequest::new(llm, messages, 0.1, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_broker
+            .stream_completion(
+                api_key,
+                llm_request,
+                provider,
+                vec![(
+                    "event_type".to_owned(),
+                    "code_snippet_to_edit_for_symbol".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await
+            .map_err(|e| CodeToEditFilteringError::LLMClientError(e))?;
+        self.parse_code_sections(&response)
+    }
+
     async fn filter_code_snippets(
         &self,
         request: CodeToEditFilterRequest,

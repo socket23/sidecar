@@ -227,7 +227,6 @@ impl Symbol {
                 })
                 .collect::<Vec<_>>();
             // we update the snippets we have stored here into the symbol itself
-            let implementation_cloned = implementation_content.to_vec();
             {
                 implementation_content
                     .into_iter()

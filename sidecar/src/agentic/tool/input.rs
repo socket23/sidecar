@@ -3,7 +3,7 @@ use super::{
     code_edit::{find::FindCodeSelectionInput, types::CodeEdit},
     code_symbol::important::{CodeSymbolImportantRequest, CodeSymbolImportantWideSearch},
     errors::ToolError,
-    filtering::broker::CodeToEditFilterRequest,
+    filtering::broker::{CodeToEditFilterRequest, CodeToEditSymbolRequest},
     grep::file::FindInFileRequest,
     lsp::{
         diagnostics::LSPDiagnosticsInput, gotodefintion::GoToDefinitionRequest,
@@ -25,6 +25,7 @@ pub enum ToolInput {
     GrepSingleFile(FindInFileRequest),
     SymbolImplementations(GoToImplementationRequest),
     FilterCodeSnippetsForEditing(CodeToEditFilterRequest),
+    FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest),
 }
 
 impl ToolInput {
@@ -41,6 +42,9 @@ impl ToolInput {
             ToolInput::GrepSingleFile(_) => ToolType::GrepInFile,
             ToolInput::SymbolImplementations(_) => ToolType::GoToImplementations,
             ToolInput::FilterCodeSnippetsForEditing(_) => ToolType::FilterCodeSnippetsForEditing,
+            ToolInput::FilterCodeSnippetsForEditingSingleSymbols(_) => {
+                ToolType::FilterCodeSnippetsSingleSymbolForEditing
+            }
         }
     }
 
@@ -149,5 +153,29 @@ impl ToolInput {
         }
     }
 
-    // pub fn filter_code_snippets_single_symbol(self) -> Result<
+    pub fn filter_code_snippets_single_symbol(self) -> Result<CodeToEditSymbolRequest, ToolError> {
+        if let ToolInput::FilterCodeSnippetsForEditingSingleSymbols(
+            filter_code_snippets_for_editing,
+        ) = self
+        {
+            Ok(filter_code_snippets_for_editing)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn filter_code_snippets_request(
+        self,
+    ) -> Result<either::Either<CodeToEditFilterRequest, CodeToEditSymbolRequest>, ToolError> {
+        if let ToolInput::FilterCodeSnippetsForEditing(filter_code_snippets_for_editing) = self {
+            Ok(either::Left(filter_code_snippets_for_editing))
+        } else if let ToolInput::FilterCodeSnippetsForEditingSingleSymbols(
+            filter_code_snippets_for_editing,
+        ) = self
+        {
+            Ok(either::Right(filter_code_snippets_for_editing))
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
 }

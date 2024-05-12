@@ -10,4 +10,5 @@ pub enum SymbolEvent {
     UserFeedback,
     Delete,
     Edit(SymbolToEditRequest),
+    Outline,
 }

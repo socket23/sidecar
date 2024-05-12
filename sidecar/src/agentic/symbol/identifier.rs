@@ -267,6 +267,7 @@ impl MechaCodeSymbolThinking {
         let file_path = &snippet_to_edit.fs_file_path;
         let file_content = tools.file_open(file_path.to_owned()).await;
         // we have to grab the file content
+        let range = snippet_to_edit.range();
     }
 
     // potentital issue here is that the ranges might change after an edit

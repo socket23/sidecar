@@ -47,10 +47,25 @@ impl SymbolEventRequest {
             event: SymbolEvent::InitialRequest,
         }
     }
+
+    pub fn outline(symbol: SymbolIdentifier) -> Self {
+        Self {
+            symbol,
+            event: SymbolEvent::Outline,
+        }
+    }
 }
 
 pub enum SymbolEventResponse {
     TaskDone(String),
+}
+
+impl SymbolEventResponse {
+    pub fn to_string(self) -> String {
+        match self {
+            Self::TaskDone(reply) => reply,
+        }
+    }
 }
 
 /// The symbol is going to spin in the background and keep working on things
@@ -340,6 +355,9 @@ impl Symbol {
                     }
                     SymbolEvent::UserFeedback => {
                         todo!("user feedback is not implemented yet");
+                    }
+                    SymbolEvent::Outline => {
+                        todo!("we are waiting on the outline");
                     }
                 }
             })

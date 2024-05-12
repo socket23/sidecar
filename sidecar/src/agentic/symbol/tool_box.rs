@@ -1,14 +1,15 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::agentic::symbol::identifier::Snippet;
+use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_symbol::important::{
-    CodeSymbolImportantRequest, CodeSymbolImportantResponse,
+    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolWithThinking,
 };
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
@@ -31,6 +32,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::identifier::MechaCodeSymbolThinking;
+use super::types::{SymbolEventRequest, SymbolEventResponse};
 use super::ui_event::UIEvent;
 
 #[derive(Clone)]
@@ -59,7 +61,7 @@ impl ToolBox {
         }
     }
 
-    pub async fn gather_important_symbols(
+    pub async fn gather_important_symbols_with_definition(
         &self,
         fs_file_path: &str,
         file_content: &str,
@@ -68,7 +70,11 @@ impl ToolBox {
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         query: &str,
-    ) -> Result<(), SymbolError> {
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<Vec<Option<(CodeSymbolWithThinking, String)>>, SymbolError> {
         let language = self
             .editor_parsing
             .for_file_path(fs_file_path)
@@ -101,11 +107,98 @@ impl ToolBox {
             .into_iter()
             .map(|symbol| symbol.clone())
             .collect::<Vec<_>>();
-        // now that we have the symbols to grab, we can try to get the outline
-        // - for these symbols and use them as context for code editing
-        // - create the prompt for code editing
-        // - check LSP diagnostics for follow ups and errors
-        todo!("not finished implementing yet")
+        let symbol_locations = stream::iter(symbols_to_grab)
+            .map(|symbol| async move {
+                let symbol_name = symbol.code_symbol();
+                let location = self.find_symbol_in_file(symbol_name, file_content).await;
+                (symbol, location)
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
+
+        // we want to grab the defintion of these symbols over here, so we can either
+        // ask the hub and get it back or do something else... asking the hub is the best
+        // thing to do over here
+        // we now need to go to the definitions of these symbols and then ask the hub
+        // manager to grab the outlines
+        let symbol_to_definition = stream::iter(
+            symbol_locations
+                .into_iter()
+                .map(|symbol_location| (symbol_location, hub_sender.clone())),
+        )
+        .map(|((symbol, location), hub_sender)| async move {
+            if let Ok(location) = location {
+                // we might not get the position here for some weird reason which
+                // is also fine
+                let position = location.get_position();
+                if let Some(position) = position {
+                    let possible_file_path = self
+                        .go_to_definition(fs_file_path, position)
+                        .await
+                        .map(|position| {
+                            // there are multiple definitions here for some
+                            // reason which I can't recall why, but we will
+                            // always take the first one and run with it cause
+                            // we then let this symbol agent take care of things
+                            // TODO(skcd): The symbol needs to be on the
+                            // correct file path over here
+                            let symbol_file_path = position
+                                .definitions()
+                                .first()
+                                .map(|definition| definition.file_path().to_owned());
+                            symbol_file_path
+                        })
+                        .ok()
+                        .flatten();
+                    if let Some(definition_file_path) = possible_file_path {
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        // we have the possible file path over here
+                        let _ = hub_sender.send((
+                            SymbolEventRequest::outline(SymbolIdentifier::with_file_path(
+                                symbol.code_symbol(),
+                                &definition_file_path,
+                            )),
+                            sender,
+                        ));
+                        receiver
+                            .await
+                            .map(|response| response.to_string())
+                            .ok()
+                            .map(|definition_outline| (symbol, definition_outline))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await;
+        Ok(symbol_to_definition)
+    }
+
+    async fn find_symbol_in_file(
+        &self,
+        symbol_name: &str,
+        file_contents: &str,
+    ) -> Result<FindInFileResponse, SymbolError> {
+        // Here we are going to get the position of the symbol
+        let request = ToolInput::GrepSingleFile(FindInFileRequest::new(
+            file_contents.to_owned(),
+            symbol_name.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .grep_single_file()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn filter_code_snippets_in_symbol_for_editing(

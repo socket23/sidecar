@@ -84,6 +84,13 @@ impl ToolOutput {
         ToolOutput::GoToImplementation(go_to_implementation)
     }
 
+    pub fn get_important_symbols(self) -> Option<CodeSymbolImportantResponse> {
+        match self {
+            ToolOutput::ImportantSymbols(response) => Some(response),
+            _ => None,
+        }
+    }
+
     pub fn get_file_open_response(self) -> Option<OpenFileResponse> {
         match self {
             ToolOutput::FileOpen(file_open) => Some(file_open),

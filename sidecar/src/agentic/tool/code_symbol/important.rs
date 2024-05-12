@@ -208,7 +208,7 @@ impl CodeSymbolImportantRequest {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolWithThinking {
     code_symbol: String,
     thinking: String,

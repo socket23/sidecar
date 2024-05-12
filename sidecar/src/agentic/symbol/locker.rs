@@ -10,6 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::agentic::tool::broker::ToolBroker;
 
 use super::{
+    errors::SymbolError,
     events::types::SymbolEvent,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
@@ -74,7 +75,10 @@ impl SymbolLocker {
         // we will send the response in this sender
     }
 
-    pub async fn create_symbol_agent(&self, request: MechaCodeSymbolThinking) {
+    pub async fn create_symbol_agent(
+        &self,
+        request: MechaCodeSymbolThinking,
+    ) -> Result<(), SymbolError> {
         // say we create the symbol agent, what happens next
         // the agent can have its own events which it might need to do, including the
         // followups or anything else
@@ -97,11 +101,15 @@ impl SymbolLocker {
             self.hub_sender.clone(),
             self.tools.clone(),
             self.llm_properties.clone(),
-        );
+        )
+        .await?;
 
         // now we let it rip, we give the symbol the receiver and ask it
         // to go crazy with it
-        tokio::spawn(async move { symbol.run(receiver).await });
+        tokio::spawn(async move {
+            let _ = symbol.run(receiver).await;
+        });
         // fin
+        Ok(())
     }
 }

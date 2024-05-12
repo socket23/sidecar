@@ -10,6 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::input::ToolInput;
+use crate::chunking::editor_parsing::{self, EditorParsing};
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
     inline_completion::symbols_tracker::SymbolTrackerInline,
@@ -38,6 +39,7 @@ pub struct SymbolManager {
     symbol_locker: SymbolLocker,
     tools: Arc<ToolBroker>,
     symbol_broker: Arc<SymbolTrackerInline>,
+    editor_parsing: Arc<EditorParsing>,
     tool_box: Arc<ToolBox>,
     editor_url: String,
     llm_properties: LLMProperties,
@@ -47,6 +49,7 @@ impl SymbolManager {
     pub fn new(
         tools: Arc<ToolBroker>,
         symbol_broker: Arc<SymbolTrackerInline>,
+        editor_parsing: Arc<EditorParsing>,
         editor_url: String,
         ui_sender: UnboundedSender<UIEvent>,
         llm_properties: LLMProperties,
@@ -58,6 +61,7 @@ impl SymbolManager {
         let tool_box = Arc::new(ToolBox::new(
             tools.clone(),
             symbol_broker.clone(),
+            editor_parsing.clone(),
             editor_url.to_owned(),
             ui_sender.clone(),
         ));
@@ -76,6 +80,7 @@ impl SymbolManager {
         Self {
             sender,
             symbol_locker,
+            editor_parsing,
             tools,
             symbol_broker,
             tool_box,
@@ -103,7 +108,7 @@ impl SymbolManager {
                 // This is where we are creating all the symbols
                 let _ = stream::iter(symbols)
                     .map(|symbol_request| async move {
-                        let _ = self.symbol_locker.create_symbol_agent(symbol_request);
+                        let _ = self.symbol_locker.create_symbol_agent(symbol_request).await;
                     })
                     .buffer_unordered(100)
                     .collect::<Vec<_>>()

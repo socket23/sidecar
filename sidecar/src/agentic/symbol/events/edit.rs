@@ -64,4 +64,8 @@ impl SymbolToEditRequest {
     pub fn symbols(&self) -> &[SymbolToEdit] {
         self.symbols.as_slice()
     }
+
+    pub fn symbol_identifier(&self) -> &SymbolIdentifier {
+        &self.symbol_identifier
+    }
 }

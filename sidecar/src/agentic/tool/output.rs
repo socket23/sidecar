@@ -84,6 +84,13 @@ impl ToolOutput {
         ToolOutput::GoToImplementation(go_to_implementation)
     }
 
+    pub fn get_code_edit_output(self) -> Option<String> {
+        match self {
+            ToolOutput::CodeEditTool(output) => Some(output),
+            _ => None,
+        }
+    }
+
     pub fn get_important_symbols(self) -> Option<CodeSymbolImportantResponse> {
         match self {
             ToolOutput::ImportantSymbols(response) => Some(response),

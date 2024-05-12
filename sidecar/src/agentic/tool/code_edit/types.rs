@@ -30,6 +30,34 @@ pub struct CodeEdit {
     provider: LLMProvider,
 }
 
+impl CodeEdit {
+    pub fn new(
+        code_above: Option<String>,
+        code_below: Option<String>,
+        fs_file_path: String,
+        code_to_edit: String,
+        extra_context: String,
+        language: String,
+        instruction: String,
+        model: LLMType,
+        api_key: LLMProviderAPIKeys,
+        provider: LLMProvider,
+    ) -> Self {
+        Self {
+            code_above,
+            code_below,
+            fs_file_path,
+            code_to_edit,
+            extra_context,
+            language,
+            model,
+            instruction,
+            api_key,
+            provider,
+        }
+    }
+}
+
 pub struct CodeEditingTool {
     llm_client: Arc<LLMBroker>,
     broker: Arc<CodeEditBroker>,

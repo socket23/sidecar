@@ -5,7 +5,7 @@ use super::edit::SymbolToEditRequest;
 
 #[derive(Debug, Clone)]
 pub enum SymbolEvent {
-    Create,
+    InitialRequest,
     AskQuestion,
     UserFeedback,
     Delete,

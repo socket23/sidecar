@@ -7,7 +7,9 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::identifier::Snippet;
 use crate::agentic::tool::base::Tool;
-use crate::agentic::tool::code_symbol::important::CodeSymbolImportantResponse;
+use crate::agentic::tool::code_symbol::important::{
+    CodeSymbolImportantRequest, CodeSymbolImportantResponse,
+};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
     CodeToEditFilterRequest, CodeToEditFilterResponse, CodeToEditSymbolRequest,
@@ -19,6 +21,7 @@ use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
+use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
 use crate::{
@@ -34,6 +37,7 @@ use super::ui_event::UIEvent;
 pub struct ToolBox {
     tools: Arc<ToolBroker>,
     symbol_broker: Arc<SymbolTrackerInline>,
+    editor_parsing: Arc<EditorParsing>,
     editor_url: String,
     ui_events: UnboundedSender<UIEvent>,
 }
@@ -42,15 +46,66 @@ impl ToolBox {
     pub fn new(
         tools: Arc<ToolBroker>,
         symbol_broker: Arc<SymbolTrackerInline>,
+        editor_parsing: Arc<EditorParsing>,
         editor_url: String,
         ui_events: UnboundedSender<UIEvent>,
     ) -> Self {
         Self {
             tools,
             symbol_broker,
+            editor_parsing,
             editor_url,
             ui_events,
         }
+    }
+
+    pub async fn gather_important_symbols(
+        &self,
+        fs_file_path: &str,
+        file_content: &str,
+        selection_range: &Range,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        query: &str,
+    ) -> Result<(), SymbolError> {
+        let language = self
+            .editor_parsing
+            .for_file_path(fs_file_path)
+            .map(|language_config| language_config.get_language())
+            .flatten()
+            .unwrap_or("".to_owned());
+        let request = ToolInput::RequestImportantSymbols(CodeSymbolImportantRequest::new(
+            None,
+            vec![],
+            fs_file_path.to_owned(),
+            file_content.to_owned(),
+            selection_range.clone(),
+            llm,
+            provider,
+            api_keys,
+            // TODO(skcd): fill in the language over here by using editor parsing
+            language,
+            query.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let response = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_important_symbols()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        let symbols_to_grab = response
+            .symbols()
+            .into_iter()
+            .map(|symbol| symbol.clone())
+            .collect::<Vec<_>>();
+        // now that we have the symbols to grab, we can try to get the outline
+        // - for these symbols and use them as context for code editing
+        // - create the prompt for code editing
+        // - check LSP diagnostics for follow ups and errors
+        todo!("not finished implementing yet")
     }
 
     pub async fn filter_code_snippets_in_symbol_for_editing(

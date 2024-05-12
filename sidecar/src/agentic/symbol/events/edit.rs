@@ -25,6 +25,26 @@ impl SymbolToEdit {
             instructions,
         }
     }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn is_outline(&self) -> bool {
+        self.outline
+    }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
+
+    pub fn instructions(&self) -> &[String] {
+        self.instructions.as_slice()
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -39,5 +59,9 @@ impl SymbolToEditRequest {
             symbol_identifier: identifier,
             symbols,
         }
+    }
+
+    pub fn symbols(&self) -> &[SymbolToEdit] {
+        self.symbols.as_slice()
     }
 }

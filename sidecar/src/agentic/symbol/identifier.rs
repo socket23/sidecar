@@ -2,17 +2,23 @@
 //! location for it
 //! We can also use the tools along with this symbol to traverse the code graph
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
-use derivative::Derivative;
 use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::chunking::{
-    text_document::Range,
-    types::{OutlineNode, OutlineNodeContent, OutlineNodeType},
+use crate::chunking::{text_document::Range, types::OutlineNodeContent};
+
+use super::{
+    errors::SymbolError,
+    events::{
+        edit::{SymbolToEdit, SymbolToEditRequest},
+        types::SymbolEvent,
+    },
+    tool_box::ToolBox,
+    types::SymbolEventRequest,
 };
 
 #[derive(Debug, Clone)]
@@ -70,6 +76,23 @@ impl Snippet {
             content,
             language: None,
             outline_node_content,
+        }
+    }
+
+    pub fn is_potential_match(&self, range: &Range, fs_file_path: &str, is_outline: bool) -> bool {
+        if &self.range == range && self.fs_file_path == fs_file_path {
+            if is_outline {
+                if self.outline_node_content.is_class_type() {
+                    true
+                } else {
+                    // TODO(skcd): This feels wrong, but I am not sure yet
+                    false
+                }
+            } else {
+                true
+            }
+        } else {
+            false
         }
     }
 
@@ -213,6 +236,8 @@ pub struct MechaCodeSymbolThinking {
     is_new: bool,
     file_path: String,
     snippet: Option<Snippet>,
+    // this contains all the implementations, if there were children before
+    // for example: functions inside the class, they all get flattened over here
     implementations: Vec<Snippet>,
 }
 
@@ -233,6 +258,36 @@ impl MechaCodeSymbolThinking {
             snippet,
             implementations,
         }
+    }
+
+    // Here we present the code snippet which we will be editing to the LLM
+    // and ask it to gather all the symbols which might be relevant before
+    // making an edit
+    pub async fn gather_context(&self, snippet_to_edit: &Snippet, tools: Arc<ToolBox>) {
+        let file_path = &snippet_to_edit.fs_file_path;
+        let file_content = tools.file_open(file_path.to_owned()).await;
+        // we have to grab the file content
+    }
+
+    // potentital issue here is that the ranges might change after an edit
+    // has been made, we have to be careful about that, for now we ball
+    pub fn find_symbol_to_edit(
+        &self,
+        range: &Range,
+        fs_file_path: &str,
+        is_outline: bool,
+    ) -> Option<Snippet> {
+        if let Some(snippet) = self.snippet.as_ref() {
+            if snippet.is_potential_match(range, fs_file_path, is_outline) {
+                return Some(snippet.clone());
+            }
+        }
+        // now we look at the implementations and try to find the potential match
+        // over here
+        self.implementations
+            .iter()
+            .find(|snippet| snippet.is_potential_match(range, fs_file_path, is_outline))
+            .map(|snippet| snippet.clone())
     }
 
     pub fn find_symbol_in_range(&self, range: &Range, fs_file_path: &str) -> Option<String> {
@@ -277,8 +332,8 @@ impl MechaCodeSymbolThinking {
         self.snippet = Some(snippet);
     }
 
-    pub fn get_snippet(&self) -> Option<&Snippet> {
-        self.snippet.as_ref()
+    pub fn get_snippet(&self) -> Option<Snippet> {
+        self.snippet.clone()
     }
 
     pub fn add_step(&mut self, step: &str) {
@@ -299,6 +354,121 @@ impl MechaCodeSymbolThinking {
 
     pub fn set_implementations(&mut self, snippets: Vec<Snippet>) {
         self.implementations = snippets;
+    }
+
+    pub async fn initial_request(
+        &self,
+        tool_box: Arc<ToolBox>,
+        llm_properties: LLMProperties,
+    ) -> Result<SymbolEventRequest, SymbolError> {
+        // TODO(skcd): We need to generate the implementation always
+        let steps = self.steps();
+        if self.get_snippet().is_some() {
+            // This is what we are trying to figure out
+            // the idea representation here will be in the form of
+            // now that we have added the snippets, we can ask the llm to rerank
+            // the implementation snippets and figure out which to edit
+            // once we have which to edit, we can then go to the references and keep
+            // going from there whichever the LLM thinks is important for maintaining
+            // the overall structure of the query
+            // we also insert our own snipet into this
+            // re-ranking for a complete symbol looks very different
+            // we have to carefully craft the prompt in such a way that all the important
+            // details are laid out properly
+            // if its a class we call it a class, and if there are functions inside
+            // it we call them out in a section, check how symbols are implemented
+            // for a given LLM somewhere in the code
+            // we have the text for all the snippets which are part of the class
+            // there will be some here which will be the class definition and some
+            // which are not part of it
+            // so we use the ones which are part of the class defintion and name it
+            // specially, so we can use it
+            // struct A {....} is a special symbol
+            // impl A {....} is also special and we show the symbols inside it one by
+            // one for each function and in the order of they occur in the file
+            // once we have the response we can set the agent to task on each of these snippets
+
+            // TODO(skcd): We want to send this request for reranking
+            // and get back the snippet indexes
+            // and then we parse it back from here to get back to the symbol
+            // we are interested in
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request() {
+                // now we send it over to the LLM and register as a rearank operation
+                // and then ask the llm to reply back to us
+                let filtered_list = tool_box
+                    .filter_code_snippets_in_symbol_for_editing(
+                        ranked_xml_list,
+                        steps.join("\n"),
+                        llm_properties.llm().clone(),
+                        llm_properties.provider().clone(),
+                        llm_properties.api_key().clone(),
+                    )
+                    .await?;
+
+                // now we take this filtered list and try to generate back and figure out
+                // the ranges which need to be edited
+                let code_to_edit_list = filtered_list.code_to_edit_list();
+                // we use this to map it back to the symbols which we should
+                // be editing and then send those are requests to the hub
+                // which will forward it to the right symbol
+                let sub_symbols_to_edit = reverse_lookup
+                    .into_iter()
+                    .filter_map(|reverse_lookup| {
+                        let idx = reverse_lookup.idx();
+                        let range = reverse_lookup.range();
+                        let fs_file_path = reverse_lookup.fs_file_path();
+                        let outline = reverse_lookup.is_outline();
+                        let found_reason_to_edit = code_to_edit_list
+                            .snippets()
+                            .into_iter()
+                            .find(|snippet| snippet.id() == idx)
+                            .map(|snippet| snippet.reason_to_edit().to_owned());
+                        match found_reason_to_edit {
+                            Some(reason) => {
+                                let symbol_in_range =
+                                    self.find_symbol_in_range(range, fs_file_path);
+                                // now we need to figure out how to edit it out
+                                // properly
+                                if let Some(symbol) = symbol_in_range {
+                                    Some(SymbolToEdit::new(
+                                        symbol,
+                                        range.clone(),
+                                        fs_file_path.to_owned(),
+                                        vec![reason],
+                                        outline,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }
+                            None => None,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                // The idea with the edit requests is that the symbol agent
+                // will send this over and then act on it by itself
+                // this case is peculiar cause we are editing our own state
+                // so we have to think about what that will look like for the agent
+                // should we start working on it just at that point, or send it over
+                // and keep a tag of the request we are making?
+                Ok(SymbolEventRequest::new(
+                    self.to_symbol_identifier(),
+                    SymbolEvent::Edit(SymbolToEditRequest::new(
+                        sub_symbols_to_edit,
+                        self.to_symbol_identifier(),
+                    )),
+                ))
+            } else {
+                todo!("what do we do over here")
+            }
+        } else {
+            // we have to figure out the location for this symbol and understand
+            // where we want to put this symbol at
+            // what would be the best way to do this?
+            // should we give the folder overview and then ask it
+            // or assume that its already written out
+            todo!("figure out what to do here");
+        }
     }
 
     // To xml is a common way to say that the data object implements a way to be

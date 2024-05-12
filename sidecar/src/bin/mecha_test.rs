@@ -68,6 +68,7 @@ async fn main() {
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
+        editor_parsing,
         editor_url.to_owned(),
         sender,
         llm_properties,

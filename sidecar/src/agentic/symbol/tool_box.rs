@@ -6,8 +6,10 @@ use llm_client::clients::types::LLMType;
 use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
+use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolWithThinking,
 };
@@ -59,6 +61,66 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    pub async fn check_code_correctness(
+        &self,
+        fs_file_path: &str,
+        file_content: &str,
+        selection_range: &Range,
+        edited_code: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<(), SymbolError> {
+        // to make sure that the edit really worked, we have to do the following:
+        // - first we apply the change to the file and then invoke the LSP for diagnostics
+        // - once we have the diagnostics we enter the correction loop where we might
+        // have to follow the symbols or do soething else
+        // - we can also invoke the LLM here to check if the edited code is correct
+        todo!("we have to figure out this loop properly");
+        Ok(())
+    }
+
+    pub async fn code_edit(
+        &self,
+        fs_file_path: &str,
+        file_content: &str,
+        selection_range: &Range,
+        extra_context: &str,
+        instruction: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<String, SymbolError> {
+        // we need to get the range above and then below and then in the selection
+        let language = self
+            .editor_parsing
+            .for_file_path(fs_file_path)
+            .map(|language_config| language_config.get_language())
+            .flatten()
+            .unwrap_or("".to_owned());
+        let (above, below, in_range_selection) =
+            split_file_content_into_parts(file_content, selection_range);
+        let request = ToolInput::CodeEditing(CodeEdit::new(
+            above,
+            below,
+            fs_file_path.to_owned(),
+            in_range_selection,
+            extra_context.to_owned(),
+            language.to_owned(),
+            instruction.to_owned(),
+            llm,
+            api_keys,
+            provider,
+        ));
+        let _ = self.ui_events.send(UIEvent::ToolEvent(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_edit_output()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn gather_important_symbols_with_definition(

@@ -4,6 +4,7 @@
 
 pub mod errors;
 pub mod events;
+pub mod helpers;
 pub mod identifier;
 pub mod locker;
 pub mod manager;

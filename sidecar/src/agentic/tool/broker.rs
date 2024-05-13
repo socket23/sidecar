@@ -13,6 +13,7 @@ use super::{
         find::FindCodeSectionsToEdit, models::broker::CodeEditBroker, types::CodeEditingTool,
     },
     code_symbol::important::CodeSymbolImportantBroker,
+    editor::apply::EditorApply,
     errors::ToolError,
     filtering::broker::CodeToEditFormatterBroker,
     grep::file::FindInFile,
@@ -87,6 +88,7 @@ impl ToolBroker {
             ToolType::FilterCodeSnippetsSingleSymbolForEditing,
             Box::new(CodeToEditFormatterBroker::new(llm_client)),
         );
+        tools.insert(ToolType::EditorApplyEdits, Box::new(EditorApply::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

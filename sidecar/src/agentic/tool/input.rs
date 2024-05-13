@@ -2,6 +2,7 @@ use super::{
     base::ToolType,
     code_edit::{find::FindCodeSelectionInput, types::CodeEdit},
     code_symbol::important::{CodeSymbolImportantRequest, CodeSymbolImportantWideSearch},
+    editor::apply::EditorApplyRequest,
     errors::ToolError,
     filtering::broker::{CodeToEditFilterRequest, CodeToEditSymbolRequest},
     grep::file::FindInFileRequest,
@@ -26,6 +27,7 @@ pub enum ToolInput {
     SymbolImplementations(GoToImplementationRequest),
     FilterCodeSnippetsForEditing(CodeToEditFilterRequest),
     FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest),
+    EditorApplyChange(EditorApplyRequest),
 }
 
 impl ToolInput {
@@ -45,6 +47,15 @@ impl ToolInput {
             ToolInput::FilterCodeSnippetsForEditingSingleSymbols(_) => {
                 ToolType::FilterCodeSnippetsSingleSymbolForEditing
             }
+            ToolInput::EditorApplyChange(_) => ToolType::EditorApplyEdits,
+        }
+    }
+
+    pub fn editor_apply_changes(self) -> Result<EditorApplyRequest, ToolError> {
+        if let ToolInput::EditorApplyChange(editor_apply_request) = self {
+            Ok(editor_apply_request)
+        } else {
+            Err(ToolError::WrongToolInput)
         }
     }
 

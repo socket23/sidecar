@@ -24,6 +24,16 @@ pub struct LSPDiagnosticsInput {
     editor_url: String,
 }
 
+impl LSPDiagnosticsInput {
+    pub fn new(fs_file_path: String, range: Range, editor_url: String) -> Self {
+        Self {
+            fs_file_path,
+            range,
+            editor_url,
+        }
+    }
+}
+
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Diagnostic {
     diagnostic: String,

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use regex::Regex;
-use tracing::debug;
 
 use crate::repo::types::RepoRef;
 

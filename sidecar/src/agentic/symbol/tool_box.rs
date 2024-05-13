@@ -13,12 +13,14 @@ use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolWithThinking,
 };
+use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
     CodeToEditFilterRequest, CodeToEditFilterResponse, CodeToEditSymbolRequest,
     CodeToEditSymbolResponse,
 };
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
+use crate::agentic::tool::lsp::diagnostics::{LSPDiagnosticsInput, LSPDiagnosticsOutput};
 use crate::agentic::tool::lsp::gotodefintion::{GoToDefinitionRequest, GoToDefinitionResponse};
 use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
@@ -78,8 +80,20 @@ impl ToolBox {
         // - once we have the diagnostics we enter the correction loop where we might
         // have to follow the symbols or do soething else
         // - we can also invoke the LLM here to check if the edited code is correct
+
+        // apply the changes to the editor
+        let editor_response = self
+            .apply_edits_to_editor(fs_file_path, selection_range, edited_code)
+            .await?;
+
+        // talk to the LSP and see if there are mistakes
+        let _lsp_diagnostics = self
+            .get_lsp_diagnostics(fs_file_path, editor_response.range())
+            .await?;
+
+        // Now we look at the lsp diagnsotics and try to fix them, there are many options here
+        // to choose from
         todo!("we have to figure out this loop properly");
-        Ok(())
     }
 
     pub async fn code_edit(
@@ -242,6 +256,46 @@ impl ToolBox {
         .collect::<Vec<_>>()
         .await;
         Ok(symbol_to_definition)
+    }
+
+    async fn get_lsp_diagnostics(
+        &self,
+        fs_file_path: &str,
+        range: &Range,
+    ) -> Result<LSPDiagnosticsOutput, SymbolError> {
+        let input = ToolInput::LSPDiagnostics(LSPDiagnosticsInput::new(
+            fs_file_path.to_owned(),
+            range.clone(),
+            self.editor_url.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEvent::ToolEvent(input.clone()));
+        self.tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_lsp_diagnostics()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    async fn apply_edits_to_editor(
+        &self,
+        fs_file_path: &str,
+        range: &Range,
+        updated_code: &str,
+    ) -> Result<EditorApplyResponse, SymbolError> {
+        let input = ToolInput::EditorApplyChange(EditorApplyRequest::new(
+            fs_file_path.to_owned(),
+            updated_code.to_owned(),
+            range.clone(),
+            self.editor_url.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEvent::ToolEvent(input.clone()));
+        self.tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_editor_apply_response()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     async fn find_symbol_in_file(

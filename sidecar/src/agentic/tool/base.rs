@@ -27,6 +27,8 @@ pub enum ToolType {
     // filtering queries go here
     FilterCodeSnippetsForEditing,
     FilterCodeSnippetsSingleSymbolForEditing,
+    // editor requests
+    EditorApplyEdits,
 }
 
 #[async_trait]

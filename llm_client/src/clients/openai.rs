@@ -3,8 +3,9 @@
 use async_openai::{
     config::{AzureConfig, OpenAIConfig},
     types::{
-        ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
-        CreateChatCompletionRequestArgs, FunctionCall, Role,
+        ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs,
+        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
+        ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, FunctionCall, Role,
     },
     Client,
 };
@@ -50,35 +51,39 @@ impl OpenAIClient {
             .map(|message| {
                 let role = message.role();
                 match role {
-                    LLMClientRole::User => ChatCompletionRequestMessageArgs::default()
+                    LLMClientRole::User => ChatCompletionRequestUserMessageArgs::default()
                         .role(Role::User)
                         .content(message.content().to_owned())
                         .build()
+                        .map(|message| ChatCompletionRequestMessage::User(message))
                         .map_err(|e| LLMClientError::OpenAPIError(e)),
-                    LLMClientRole::System => ChatCompletionRequestMessageArgs::default()
+                    LLMClientRole::System => ChatCompletionRequestSystemMessageArgs::default()
                         .role(Role::System)
                         .content(message.content().to_owned())
                         .build()
+                        .map(|message| ChatCompletionRequestMessage::System(message))
                         .map_err(|e| LLMClientError::OpenAPIError(e)),
-                    // the assistant is the one which ends up calling the function, so we need to
-                    // handle the case where the function is called by the assistant here
+                    // TODO(skcd): This might be wrong, but for now its okay as we
+                    // do not use these branches at all
                     LLMClientRole::Assistant => match message.get_function_call() {
-                        Some(function_call) => ChatCompletionRequestMessageArgs::default()
+                        Some(function_call) => ChatCompletionRequestAssistantMessageArgs::default()
                             .role(Role::Function)
                             .function_call(FunctionCall {
                                 name: function_call.name().to_owned(),
                                 arguments: function_call.arguments().to_owned(),
                             })
                             .build()
+                            .map(|message| ChatCompletionRequestMessage::Assistant(message))
                             .map_err(|e| LLMClientError::OpenAPIError(e)),
-                        None => ChatCompletionRequestMessageArgs::default()
+                        None => ChatCompletionRequestAssistantMessageArgs::default()
                             .role(Role::Assistant)
                             .content(message.content().to_owned())
                             .build()
+                            .map(|message| ChatCompletionRequestMessage::Assistant((message)))
                             .map_err(|e| LLMClientError::OpenAPIError(e)),
                     },
                     LLMClientRole::Function => match message.get_function_call() {
-                        Some(function_call) => ChatCompletionRequestMessageArgs::default()
+                        Some(function_call) => ChatCompletionRequestAssistantMessageArgs::default()
                             .role(Role::Function)
                             .content(message.content().to_owned())
                             .function_call(FunctionCall {
@@ -86,6 +91,7 @@ impl OpenAIClient {
                                 arguments: function_call.arguments().to_owned(),
                             })
                             .build()
+                            .map(|message| ChatCompletionRequestMessage::Assistant(message))
                             .map_err(|e| LLMClientError::OpenAPIError(e)),
                         None => Err(LLMClientError::FunctionCallNotPresent),
                     },
@@ -109,12 +115,12 @@ impl OpenAIClient {
             // needs to be updated to support this
             return match api_key {
                 LLMProviderAPIKeys::OpenAIAzureConfig(api_key) => {
-                    let config = OpenAIConfig::new().with_api_key(api_key.api_key).with_api_base(api_key.api_base);
+                    let config = OpenAIConfig::new()
+                        .with_api_key(api_key.api_key)
+                        .with_api_base(api_key.api_base);
                     Ok(OpenAIClientType::OpenAIClient(Client::with_config(config)))
                 }
-                _ => {
-                    Err(LLMClientError::WrongAPIKeyType)
-                }
+                _ => Err(LLMClientError::WrongAPIKeyType),
             };
         }
         match api_key {

@@ -1,8 +1,4 @@
-use async_openai::{
-    config::AzureConfig,
-    types::{ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs},
-    Client,
-};
+use async_openai::{config::AzureConfig, types::CreateChatCompletionRequestArgs, Client};
 use futures::StreamExt;
 use llm_client::clients::{
     openai::OpenAIClient,
@@ -22,7 +18,9 @@ async fn main() {
         });
     let request = LLMClientCompletionRequest::new(
         llm_client::clients::types::LLMType::GPT3_5_16k,
-        vec![LLMClientMessage::system("message".to_owned())],
+        vec![LLMClientMessage::system(
+            "tell me how to add 2 numbers in rust".to_owned(),
+        )],
         1.0,
         None,
     );

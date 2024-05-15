@@ -101,6 +101,7 @@ impl SymbolManager {
                 .await
                 .map_err(|e| SymbolError::ToolError(e))?
             {
+                println!("{:?}", &important_symbols);
                 let symbols = self
                     .tool_box
                     .important_symbols(important_symbols)

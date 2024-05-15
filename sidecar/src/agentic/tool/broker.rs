@@ -98,10 +98,15 @@ impl ToolBroker {
 impl Tool for ToolBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let tool_type = input.tool_type();
+        let time_start = std::time::Instant::now();
         if let Some(tool) = self.tools.get(&tool_type) {
-            tool.invoke(input).await
+            let result = tool.invoke(input).await;
+            println!("Tool(OK): time taken: {:?}", time_start.elapsed());
+            result
         } else {
-            Err(ToolError::MissingTool)
+            let result = Err(ToolError::MissingTool);
+            println!("Tool(Err): time taken: {:?}", time_start.elapsed());
+            result
         }
     }
 }

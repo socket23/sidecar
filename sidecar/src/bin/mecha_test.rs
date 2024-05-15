@@ -36,14 +36,14 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let current_query = "I want to create a new groq provider".to_owned();
+    let current_query = "Where do we load all the files in the folder and read them?".to_owned();
     let anthropic_api_key = "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".to_owned();
     let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(anthropic_api_key));
     let user_context = UserContext::new(
         vec![],
         vec![],
         None,
-        vec!["/Users/skcd/scratch/sidecar/llm_client".to_owned()],
+        vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
     // this is the current running debuggable editor
     let editor_url = "http://localhost:64276".to_owned();

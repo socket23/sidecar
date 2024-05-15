@@ -194,8 +194,6 @@ impl LLMClient for GeminiProClient {
                 .await
         )?;
 
-        dbg!(&response.status());
-
         if !response.status().is_success() {
             return Err(LLMClientError::FailedToGetResponse);
         }
@@ -203,7 +201,6 @@ impl LLMClient for GeminiProClient {
         let mut buffered_string = "".to_owned();
         let mut response_stream = response.bytes_stream().eventsource();
         while let Some(event) = response_stream.next().await {
-            // println!("{:?}", event);
             if let Ok(event) = event {
                 let parsed_event =
                     serde_json::from_slice::<GeminiProResponse>(event.data.as_bytes())?;

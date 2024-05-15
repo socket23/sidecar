@@ -116,6 +116,9 @@ impl LLMTokenizer {
             LLMType::Gpt4 => Some("gpt-4-0613".to_owned()),
             LLMType::Gpt4Turbo => Some("gpt-4-1106-preview".to_owned()),
             LLMType::Gpt4_32k => Some("gpt-4-32k-0613".to_owned()),
+            // TODO(skcd): This is the wrong tokenizer we really want to use
+            // the new o200k here, but tiktoken needs to upgrade first
+            LLMType::Gpt4O => Some("gpt-4-32k-0613".to_owned()),
             _ => None,
         }
     }

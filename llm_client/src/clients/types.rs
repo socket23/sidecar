@@ -16,6 +16,7 @@ pub enum LLMType {
     Gpt4,
     GPT3_5_16k,
     Gpt4_32k,
+    Gpt4O,
     Gpt4Turbo,
     DeepSeekCoder1_3BInstruct,
     DeepSeekCoder33BInstruct,
@@ -83,6 +84,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "CohereRerankV3" => Ok(LLMType::CohereRerankV3),
                     "GeminiPro1.5" => Ok(LLMType::GeminiPro),
                     "Llama3_8bInstruct" => Ok(LLMType::Llama3_8bInstruct),
+                    "Gpt4O" => Ok(LLMType::Gpt4O),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -96,7 +98,11 @@ impl LLMType {
     pub fn is_openai(&self) -> bool {
         matches!(
             self,
-            LLMType::Gpt4 | LLMType::GPT3_5_16k | LLMType::Gpt4_32k | LLMType::Gpt4Turbo
+            LLMType::Gpt4
+                | LLMType::GPT3_5_16k
+                | LLMType::Gpt4_32k
+                | LLMType::Gpt4Turbo
+                | LLMType::Gpt4O
         )
     }
 
@@ -147,6 +153,7 @@ impl fmt::Display for LLMType {
             LLMType::CohereRerankV3 => write!(f, "CohereRerankV3"),
             LLMType::Llama3_8bInstruct => write!(f, "Llama3_8bInstruct"),
             LLMType::GeminiPro => write!(f, "GeminiPro1.5"),
+            LLMType::Gpt4O => write!(f, "Gpt4O"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

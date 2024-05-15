@@ -27,6 +27,7 @@ impl InLineEditPromptBroker {
             .insert_prompt_generator(LLMType::GPT3_5_16k, Box::new(OpenAILineEditPrompt::new()))
             .insert_prompt_generator(LLMType::Gpt4, Box::new(OpenAILineEditPrompt::new()))
             .insert_prompt_generator(LLMType::Gpt4_32k, Box::new(OpenAILineEditPrompt::new()))
+            .insert_prompt_generator(LLMType::Gpt4O, Box::new(OpenAILineEditPrompt::new()))
             .insert_prompt_generator(
                 LLMType::MistralInstruct,
                 Box::new(MistralLineEditPrompt::new()),

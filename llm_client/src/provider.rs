@@ -179,6 +179,12 @@ pub struct OpenAIProvider {
     pub api_key: String,
 }
 
+impl OpenAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct TogetherAIProvider {
     pub api_key: String,

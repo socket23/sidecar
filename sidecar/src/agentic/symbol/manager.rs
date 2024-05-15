@@ -93,6 +93,7 @@ impl SymbolManager {
     // mode once, we have the symbols from it we can use them to spin up sub-symbols as well
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
         let tool_input = input_event.tool_use_on_initial_invocation();
+        println!("{:?}", &tool_input);
         if let Some(tool_input) = tool_input {
             if let ToolOutput::ImportantSymbols(important_symbols) = self
                 .tools

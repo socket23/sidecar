@@ -40,6 +40,10 @@ impl CodeSymbolImportantBroker {
             LLMType::ClaudeOpus,
             Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
         );
+        llms.insert(
+            LLMType::Gpt4O,
+            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+        );
         Self { llms }
     }
 }
@@ -66,6 +70,8 @@ impl Tool for CodeSymbolImportantBroker {
                             .await
                             .map(|response| ToolOutput::important_symbols(response))
                             .map_err(|e| ToolError::CodeSymbolError(e));
+                    } else {
+                        println!("we are so fucked");
                     }
                 }
             };

@@ -41,7 +41,7 @@ async fn main() {
     let api_key = LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
         "sk-proj-pSZWQwKPmH1QU8Rb0xQtT3BlbkFJlIbeVo7YPOjU0IcEz96F".to_owned(),
     ));
-    let gemini_pro_api_key = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgsSsoOXxvdaBHTZGPuz3jQgBZfNOr5G2W6DLbuXnHZOe7hB2Ww8Bu0gJ70MipnX--vXvLUdXo8Uo85JMhffEdyu67AnRLSoq0kqj9wkr5-YiF99APG8rwDK0uff22OzQTZiRXOSQcXXjFgaik4PhMhdU8E7r0SEop1EBwaCgYKAfESARESFQHGX2Mi0uOhwJ9sFvd4qEdd-eKE5Q0177".to_owned(), "anton-390822".to_owned()));
+    let gemini_pro_api_key = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgu2VofzcrqkQC8l8yggBSF8QFLPJ-lSanpzppXt3qb5CcMZsCs_GuIx6TZYjv4-SFh4GqZZ5Oj9nZuT8w5XCnI_uUsdOhpZgcKfna7LflzL0icGmtlAwxKnllhoUAxhkDWk5dW9YNOqrYFLHFH-8hr1xSGOKD2TNJGZvQaCgYKAQISARESFQHGX2MiIl17m2iL4z8UY2YozmmU9A0177".to_owned(), "anton-390822".to_owned()));
 
     let user_context = UserContext::new(
         vec![],

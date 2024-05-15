@@ -122,12 +122,29 @@ struct SystemInstruction {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct GeminiSafetySetting {
+    #[serde(rename = "category")]
+    category: String,
+    #[serde(rename = "threshold")]
+    threshold: String,
+}
+
+impl GeminiSafetySetting {
+    pub fn new(category: String, threshold: String) -> Self {
+        Self {
+            category,
+            threshold,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GeminiProRequestBody {
     contents: Vec<Content>,
     system_instruction: Option<SystemInstruction>,
     generation_config: GenerationConfig,
-    safety_settings: Vec<String>,
+    safety_settings: Vec<GeminiSafetySetting>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -173,8 +190,26 @@ impl LLMClient for GeminiProClient {
             contents: messages,
             system_instruction: system_message,
             generation_config,
-            safety_settings: vec![],
+            safety_settings: vec![
+                GeminiSafetySetting::new(
+                    "HARM_CATEGORY_HATE_SPEECH".to_string(),
+                    "BLOCK_ONLY_HIGH".to_string(),
+                ),
+                GeminiSafetySetting::new(
+                    "HARM_CATEGORY_DANGEROUS_CONTENT".to_string(),
+                    "BLOCK_ONLY_HIGH".to_string(),
+                ),
+                GeminiSafetySetting::new(
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT".to_string(),
+                    "BLOCK_ONLY_HIGH".to_string(),
+                ),
+                GeminiSafetySetting::new(
+                    "HARM_CATEGORY_HARASSMENT".to_string(),
+                    "BLOCK_ONLY_HIGH".to_string(),
+                ),
+            ],
         };
+        println!("{:?}", serde_json::to_string(&request));
         let api_key = self.get_api_key(&provider_api_key);
         let api_base = self.get_api_base(&provider_api_key);
         if api_key.is_none() || api_base.is_none() {
@@ -201,6 +236,7 @@ impl LLMClient for GeminiProClient {
         let mut buffered_string = "".to_owned();
         let mut response_stream = response.bytes_stream().eventsource();
         while let Some(event) = response_stream.next().await {
+            println!("{:?}", event);
             if let Ok(event) = event {
                 let parsed_event =
                     serde_json::from_slice::<GeminiProResponse>(event.data.as_bytes())?;

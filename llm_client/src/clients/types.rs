@@ -117,6 +117,10 @@ impl LLMType {
         )
     }
 
+    pub fn is_openai_gpt4o(&self) -> bool {
+        matches!(self, LLMType::Gpt4O)
+    }
+
     pub fn is_gemini_pro(&self) -> bool {
         self == &LLMType::GeminiPro
     }

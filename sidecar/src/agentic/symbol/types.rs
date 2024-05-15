@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     errors::SymbolError,
-    events::types::SymbolEvent,
+    events::{edit::SymbolToEdit, types::SymbolEvent},
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
 };
@@ -277,6 +277,12 @@ impl Symbol {
             .await
     }
 
+    async fn edit_sub_symbol(&self, subsymbol: &SymbolToEdit) {
+        // this generally runs in a loop so thats what we are going to do, run
+        // a simple loop with (4 tool usage, 3 times) times around with a verfiication loop at the end of it
+        // to make sure that the changes are done, this is done by a LLM.
+    }
+
     // we are going to edit the symbols over here
     // some challenges:
     // - we want this to be fully parallel first of all
@@ -286,6 +292,8 @@ impl Symbol {
     async fn edit_implementations(
         &self,
         edit_request: SymbolToEditRequest,
+        // we might have a user event here in the future which either stops the edit
+        // or makes something else happen
     ) -> Result<(), SymbolError> {
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
@@ -297,6 +305,7 @@ impl Symbol {
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
             // being editing
+            self.edit_sub_symbol(sub_symbol_to_edit).await;
             let file_path = sub_symbol_to_edit.fs_file_path();
             let range = sub_symbol_to_edit.range();
             let is_outline = sub_symbol_to_edit.is_outline();

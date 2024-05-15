@@ -45,6 +45,12 @@ pub struct LSPDiagnosticsOutput {
     diagnostics: Vec<Diagnostic>,
 }
 
+impl LSPDiagnosticsOutput {
+    pub fn get_diagnostics(&self) -> &[Diagnostic] {
+        self.diagnostics.as_slice()
+    }
+}
+
 impl LSPDiagnostics {
     pub fn new() -> Self {
         Self {

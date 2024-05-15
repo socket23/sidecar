@@ -18,6 +18,7 @@ use futures::{stream, StreamExt};
 use tokio::sync::Mutex;
 
 use crate::{
+    agentic::tool::broker::ToolBroker,
     chunking::{
         editor_parsing::EditorParsing,
         text_document::{Position, Range},
@@ -627,7 +628,7 @@ impl SymbolTrackerInline {
         let shared_state = Arc::new(SharedState {
             document_lines: Mutex::new(HashMap::new()),
             document_history: Mutex::new(Vec::new()),
-            editor_parsing: editor_parsing.clone(),
+            editor_parsing,
             symbol_history: Arc::new(Mutex::new(Vec::new())),
         });
         let shared_state_cloned = shared_state.clone();

@@ -65,6 +65,23 @@ impl ToolBox {
         }
     }
 
+    pub async fn context_gathering(
+        &self,
+        fs_file_path: &str,
+        file_content: &str,
+        selection_range: &Range,
+        instructions: &str,
+        llm: &LLMType,
+        provider: &LLMProvider,
+        api_keys: &LLMProviderAPIKeys,
+    ) -> Result<(), SymbolError> {
+        // only use visible file for now, and do dfs from the symbols (which is basically reference checking)
+        // we keep track of this for checking how deep do we have to go
+        // this is the context gathering step
+        // but it should be part of the symbol itself
+        Ok(())
+    }
+
     pub async fn check_code_correctness(
         &self,
         fs_file_path: &str,
@@ -87,12 +104,20 @@ impl ToolBox {
             .await?;
 
         // talk to the LSP and see if there are mistakes
-        let _lsp_diagnostics = self
+        let lsp_diagnostics = self
             .get_lsp_diagnostics(fs_file_path, editor_response.range())
             .await?;
 
         // Now we look at the lsp diagnsotics and try to fix them, there are many options here
         // to choose from
+        // once we have lsp diagnostics we can either take an action if its possible
+        // to take an action
+        // the best thing to do here is to do both:
+        // ask if the LLM wants to rewrite the code or give it the quick fix options
+        // both of these are valid tools which the LLM can use
+        // there can be 2 cases which happen over here: we might have to fix the imports
+        // before we start the self-correction loop or do it after
+        // maybe we enable this somehow? .... thinking
         todo!("we have to figure out this loop properly");
     }
 

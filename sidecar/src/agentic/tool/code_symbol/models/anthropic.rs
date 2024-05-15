@@ -837,7 +837,10 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantWideSearch,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(code_symbols.model().is_anthropic() || code_symbols.model().is_openai_gpt4o()) {
+        if !(code_symbols.model().is_anthropic()
+            || code_symbols.model().is_openai_gpt4o()
+            || code_symbols.model().is_gemini_pro())
+        {
             return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
         }
         let api_key = code_symbols.api_key();

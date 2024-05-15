@@ -4,7 +4,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{AnthropicAPIKey, GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
@@ -36,16 +36,18 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let current_query = "I want to create a new groq provider".to_owned();
+    let current_query = "Where do we pass the file context to the agent for the prompt?".to_owned();
     let openai_api_key = "".to_owned();
     let api_key = LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
         "sk-proj-pSZWQwKPmH1QU8Rb0xQtT3BlbkFJlIbeVo7YPOjU0IcEz96F".to_owned(),
     ));
+    let gemini_pro_api_key = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgsSsoOXxvdaBHTZGPuz3jQgBZfNOr5G2W6DLbuXnHZOe7hB2Ww8Bu0gJ70MipnX--vXvLUdXo8Uo85JMhffEdyu67AnRLSoq0kqj9wkr5-YiF99APG8rwDK0uff22OzQTZiRXOSQcXXjFgaik4PhMhdU8E7r0SEop1EBwaCgYKAfESARESFQHGX2Mi0uOhwJ9sFvd4qEdd-eKE5Q0177".to_owned(), "anton-390822".to_owned()));
+
     let user_context = UserContext::new(
         vec![],
         vec![],
         None,
-        vec!["/Users/skcd/scratch/sidecar/llm_client".to_owned()],
+        vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
     // this is the current running debuggable editor
     let editor_url = "http://localhost:64276".to_owned();
@@ -73,9 +75,9 @@ async fn main() {
     );
     let symbol_input = SymbolInputEvent::new(
         user_context,
-        LLMType::Gpt4O,
-        LLMProvider::OpenAI,
-        api_key,
+        LLMType::GeminiPro,
+        LLMProvider::GeminiPro,
+        gemini_pro_api_key,
         current_query.to_owned(),
     );
 

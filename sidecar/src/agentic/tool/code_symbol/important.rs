@@ -44,6 +44,10 @@ impl CodeSymbolImportantBroker {
             LLMType::Gpt4O,
             Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
         );
+        llms.insert(
+            LLMType::GeminiPro,
+            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+        );
         Self { llms }
     }
 }

@@ -15,6 +15,7 @@ use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
 use crate::{
+    agentic::tool::broker::ToolBroker,
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     db::sqlite::{self, SqlDb},
     inline_completion::{state::FillInMiddleState, symbols_tracker::SymbolTrackerInline},

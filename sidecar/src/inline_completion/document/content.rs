@@ -320,6 +320,8 @@ pub struct DocumentEditLines {
     function_information: Vec<FunctionInformation>,
     outline_nodes: Vec<OutlineNode>,
     import_identifier_nodes: Vec<(String, Range)>,
+    // we should have an option to delete the bag of words, cause this does not
+    // make sense
 }
 
 impl DocumentEditLines {

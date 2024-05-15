@@ -45,6 +45,7 @@ impl EditorApplyRequest {
 pub struct EditorApplyResponse {
     fs_file_path: String,
     new_range: Range,
+    success: bool,
 }
 
 impl EditorApplyResponse {

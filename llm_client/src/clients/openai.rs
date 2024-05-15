@@ -3,9 +3,9 @@
 use async_openai::{
     config::{AzureConfig, OpenAIConfig},
     types::{
-        ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs,
-        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, FunctionCall, Role,
+        ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
+        ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+        CreateChatCompletionRequestArgs, FunctionCall, Role,
     },
     Client,
 };
@@ -37,6 +37,7 @@ impl OpenAIClient {
             LLMType::Gpt4 => Some("gpt-4-0613".to_owned()),
             LLMType::Gpt4Turbo => Some("gpt-4-1106-preview".to_owned()),
             LLMType::Gpt4_32k => Some("gpt-4-32k-0613".to_owned()),
+            LLMType::Gpt4O => Some("gpt-4o-2024-05-13".to_owned()),
             LLMType::DeepSeekCoder33BInstruct => Some("deepseek-coder-33b".to_owned()),
             _ => None,
         }

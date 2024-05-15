@@ -1,14 +1,6 @@
-use async_openai::{config::AzureConfig, types::CreateChatCompletionRequestArgs, Client};
-use futures::StreamExt;
+use llm_client::clients::types::LLMClientCompletionStringRequest;
 use llm_client::{
-    clients::types::LLMClientCompletionStringRequest, provider::AzureConfig as ProviderAzureConfig,
-};
-use llm_client::{
-    clients::{
-        ollama::OllamaClient,
-        openai::OpenAIClient,
-        types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage},
-    },
+    clients::{ollama::OllamaClient, types::LLMClient},
     provider::OllamaProvider,
 };
 

@@ -95,7 +95,7 @@ pub struct Symbol {
     // TODO(skcd): this is a skill issue right here
     // we do not want to clone so aggresively here, we should be able to work
     // with just references somehow if we were not mutating our state so much
-    mecha_code_symbol: Arc<Mutex<MechaCodeSymbolThinking>>,
+    mecha_code_symbol: Arc<MechaCodeSymbolThinking>,
     #[derivative(PartialEq = "ignore")]
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
@@ -116,7 +116,7 @@ impl Symbol {
         llm_properties: LLMProperties,
     ) -> Result<Self, SymbolError> {
         let mut symbol = Self {
-            mecha_code_symbol: Arc::new(Mutex::new(mecha_code_symbol)),
+            mecha_code_symbol: Arc::new(mecha_code_symbol),
             symbol_identifier,
             hub_sender,
             tools,
@@ -136,22 +136,18 @@ impl Symbol {
         fs_file_path: &str,
     ) -> Option<String> {
         self.mecha_code_symbol
-            .lock()
-            .await
             .find_symbol_in_range(range, fs_file_path)
+            .await
     }
 
     async fn add_implementation_snippet(&mut self, snippet: Snippet) {
-        self.mecha_code_symbol
-            .lock()
-            .await
-            .add_implementation(snippet);
+        self.mecha_code_symbol.add_implementation(snippet).await;
     }
 
     async fn grab_implementations(&mut self) -> Result<(), SymbolError> {
         let snippet: Option<Snippet>;
         {
-            snippet = self.mecha_code_symbol.lock().await.get_snippet();
+            snippet = self.mecha_code_symbol.get_snippet();
         }
         if let Some(snippet) = snippet {
             // We first rerank the snippets and then ask the llm for which snippets
@@ -271,8 +267,6 @@ impl Symbol {
         // this is a very big block because of the LLM request, but lets see how
         // this plays out in practice
         self.mecha_code_symbol
-            .lock()
-            .await
             .initial_request(self.tools.clone(), self.llm_properties.clone())
             .await
     }

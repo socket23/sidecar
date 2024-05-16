@@ -4,6 +4,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
+use futures::{lock::Mutex, stream, StreamExt};
 use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
@@ -232,13 +233,13 @@ impl SnippetReRankInformation {
 #[derive(Debug)]
 pub struct MechaCodeSymbolThinking {
     symbol_name: String,
-    steps: Vec<String>,
+    steps: Mutex<Vec<String>>,
     is_new: bool,
     file_path: String,
     snippet: Option<Snippet>,
     // this contains all the implementations, if there were children before
     // for example: functions inside the class, they all get flattened over here
-    implementations: Vec<Snippet>,
+    implementations: Mutex<Vec<Snippet>>,
 }
 
 impl MechaCodeSymbolThinking {
@@ -252,11 +253,11 @@ impl MechaCodeSymbolThinking {
     ) -> Self {
         Self {
             symbol_name,
-            steps,
+            steps: Mutex::new(steps),
             is_new,
             file_path,
             snippet,
-            implementations,
+            implementations: Mutex::new(implementations),
         }
     }
 
@@ -272,7 +273,7 @@ impl MechaCodeSymbolThinking {
 
     // potentital issue here is that the ranges might change after an edit
     // has been made, we have to be careful about that, for now we ball
-    pub fn find_symbol_to_edit(
+    pub async fn find_symbol_to_edit(
         &self,
         range: &Range,
         fs_file_path: &str,
@@ -286,18 +287,22 @@ impl MechaCodeSymbolThinking {
         // now we look at the implementations and try to find the potential match
         // over here
         self.implementations
+            .lock()
+            .await
             .iter()
             .find(|snippet| snippet.is_potential_match(range, fs_file_path, is_outline))
             .map(|snippet| snippet.clone())
     }
 
-    pub fn find_symbol_in_range(&self, range: &Range, fs_file_path: &str) -> Option<String> {
+    pub async fn find_symbol_in_range(&self, range: &Range, fs_file_path: &str) -> Option<String> {
         if let Some(snippet) = &self.snippet {
             if snippet.range.contains(range) && snippet.fs_file_path == fs_file_path {
                 return Some(snippet.symbol_name.to_owned());
             }
         }
         self.implementations
+            .lock()
+            .await
             .iter()
             .find(|snippet| {
                 if snippet.range.contains(range) && snippet.fs_file_path == fs_file_path {
@@ -309,8 +314,13 @@ impl MechaCodeSymbolThinking {
             .map(|snippet| snippet.symbol_name.to_owned())
     }
 
-    pub fn steps(&self) -> &[String] {
-        self.steps.as_slice()
+    pub async fn steps(&self) -> Vec<String> {
+        self.steps
+            .lock()
+            .await
+            .iter()
+            .map(|step| step.to_owned())
+            .collect()
     }
 
     pub fn is_new(&self) -> bool {
@@ -337,24 +347,30 @@ impl MechaCodeSymbolThinking {
         self.snippet.clone()
     }
 
-    pub fn add_step(&mut self, step: &str) {
-        self.steps.push(step.to_owned());
+    pub async fn add_step(&self, step: &str) {
+        self.steps.lock().await.push(step.to_owned());
     }
 
     pub fn fs_file_path(&self) -> &str {
         &self.file_path
     }
 
-    pub fn add_implementation(&mut self, implementation: Snippet) {
-        self.implementations.push(implementation);
+    pub async fn add_implementation(&self, implementation: Snippet) {
+        self.implementations.lock().await.push(implementation);
     }
 
-    pub fn get_implementations(&self) -> &[Snippet] {
-        self.implementations.as_slice()
+    pub async fn get_implementations(&self) -> Vec<Snippet> {
+        self.implementations
+            .lock()
+            .await
+            .iter()
+            .map(|snippet| snippet.clone())
+            .collect()
     }
 
-    pub fn set_implementations(&mut self, snippets: Vec<Snippet>) {
-        self.implementations = snippets;
+    pub async fn set_implementations(&mut self, snippets: Vec<Snippet>) {
+        let mut implementations = self.implementations.lock().await;
+        *implementations = snippets;
     }
 
     pub async fn initial_request(
@@ -363,7 +379,7 @@ impl MechaCodeSymbolThinking {
         llm_properties: LLMProperties,
     ) -> Result<SymbolEventRequest, SymbolError> {
         // TODO(skcd): We need to generate the implementation always
-        let steps = self.steps();
+        let steps = self.steps().await;
         if self.get_snippet().is_some() {
             // This is what we are trying to figure out
             // the idea representation here will be in the form of
@@ -393,7 +409,7 @@ impl MechaCodeSymbolThinking {
             // and get back the snippet indexes
             // and then we parse it back from here to get back to the symbol
             // we are interested in
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request() {
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request().await {
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us
                 let filtered_list = tool_box
@@ -412,9 +428,8 @@ impl MechaCodeSymbolThinking {
                 // we use this to map it back to the symbols which we should
                 // be editing and then send those are requests to the hub
                 // which will forward it to the right symbol
-                let sub_symbols_to_edit = reverse_lookup
-                    .into_iter()
-                    .filter_map(|reverse_lookup| {
+                let sub_symbols_to_edit = stream::iter(reverse_lookup)
+                    .filter_map(|reverse_lookup| async move {
                         let idx = reverse_lookup.idx();
                         let range = reverse_lookup.range();
                         let fs_file_path = reverse_lookup.fs_file_path();
@@ -427,9 +442,7 @@ impl MechaCodeSymbolThinking {
                         match found_reason_to_edit {
                             Some(reason) => {
                                 let symbol_in_range =
-                                    self.find_symbol_in_range(range, fs_file_path);
-                                // now we need to figure out how to edit it out
-                                // properly
+                                    self.find_symbol_in_range(range, fs_file_path).await;
                                 if let Some(symbol) = symbol_in_range {
                                     Some(SymbolToEdit::new(
                                         symbol,
@@ -445,7 +458,9 @@ impl MechaCodeSymbolThinking {
                             None => None,
                         }
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Vec<_>>()
+                    .await;
+
                 // The idea with the edit requests is that the symbol agent
                 // will send this over and then act on it by itself
                 // this case is peculiar cause we are editing our own state
@@ -489,7 +504,7 @@ impl MechaCodeSymbolThinking {
     // to look at, the structure I can come up with is something like this:
     // idx -> (Range + FS_FILE_PATH + is_outline)
     // fin
-    pub fn to_llm_request(&self) -> Option<(String, Vec<SnippetReRankInformation>)> {
+    pub async fn to_llm_request(&self) -> Option<(String, Vec<SnippetReRankInformation>)> {
         if let Some(snippet) = &self.snippet {
             let is_function = snippet
                 .outline_node_content
@@ -521,13 +536,12 @@ impl MechaCodeSymbolThinking {
                 // this is the ost interesting part since we do know what the implementation
                 // block looks like with the functions removed, we can use huristics
                 // to fix it or expose it as part of the outline nodes
-                let class_implementations = self
-                    .implementations
+                let implementations = self.get_implementations().await;
+                let class_implementations = implementations
                     .iter()
                     .filter(|implementation| implementation.outline_node_content.is_class_type())
                     .collect::<Vec<_>>();
-                let functions = self
-                    .implementations
+                let functions = implementations
                     .iter()
                     .filter(|implemenation| implemenation.outline_node_content.is_function_type())
                     .collect::<Vec<_>>();

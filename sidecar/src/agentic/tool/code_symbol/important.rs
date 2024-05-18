@@ -162,6 +162,32 @@ pub struct CodeSymbolUtilityRequest {
 }
 
 impl CodeSymbolUtilityRequest {
+    pub fn new(
+        user_query: String,
+        definitions_alredy_present: Vec<String>,
+        fs_file_path: String,
+        fs_file_content: String,
+        selection_range: Range,
+        language: String,
+        llm_type: LLMType,
+        llm_provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+        user_context: UserContext,
+    ) -> Self {
+        Self {
+            user_query,
+            definitions_alredy_present,
+            fs_file_content,
+            fs_file_path,
+            selection_range,
+            language,
+            llm_provider,
+            llm_type,
+            api_key,
+            user_context,
+        }
+    }
+
     pub fn definitions(&self) -> &[String] {
         self.definitions_alredy_present.as_slice()
     }

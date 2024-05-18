@@ -160,4 +160,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn utility_code_search_response(self) -> Option<CodeSymbolImportantResponse> {
+        match self {
+            ToolOutput::UtilityCodeSearch(response) => Some(response),
+            _ => None,
+        }
+    }
 }

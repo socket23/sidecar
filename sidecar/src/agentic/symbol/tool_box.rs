@@ -12,7 +12,7 @@ use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
-    CodeSymbolWithThinking,
+    CodeSymbolUtilityRequest, CodeSymbolWithThinking,
 };
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
@@ -69,10 +69,13 @@ impl ToolBox {
 
     pub async fn utlity_symbols_search(
         &self,
+        user_query: &str,
         already_collected_definitions: &[CodeSymbolWithThinking],
         outline_node_content: &OutlineNodeContent,
         fs_file_content: &str,
+        fs_file_path: &str,
         user_context: &UserContext,
+        language: &str,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
@@ -84,7 +87,50 @@ impl ToolBox {
 
         // we have to create the query here using the outline node we are interested in
         // and the definitions which we already know about
-        // let request = CodeSymbolImportantWideSearch::new(user_context.clone());
+        let request = CodeSymbolUtilityRequest::new(
+            user_query.to_owned(),
+            already_collected_definitions
+                .into_iter()
+                .map(|symbol_with_thinking| {
+                    let file_path = symbol_with_thinking.file_path();
+                    let symbol_name = symbol_with_thinking.code_symbol();
+                    // TODO(skcd): This is horribly wrong, we want to get the full symbol
+                    // over here and not just the symbol name since that does not make sense
+                    // or at the very least the outline for the symbol
+                    format!(
+                        r#"<snippet>
+<file_path>
+{file_path}
+</file_path>
+<symbol_name>
+{symbol_name}
+</symbol_name>
+</snippet>"#
+                    )
+                })
+                .collect::<Vec<_>>(),
+            fs_file_path.to_owned(),
+            fs_file_content.to_owned(),
+            outline_node_content.range().clone(),
+            language.to_owned(),
+            llm,
+            provider,
+            api_keys,
+            user_context.clone(),
+        );
+        let tool_input = ToolInput::CodeSymbolUtilitySearch(request);
+        let _ = self.ui_events.send(UIEvent::ToolEvent(tool_input.clone()));
+        // These are the code symbols which are important from the global search
+        // we might have some errors over here which we should fix later on, but we
+        // will get on that
+        // TODO(skcd): Figure out the best way to fix them
+        let code_symbols = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .utility_code_search_response()
+            .ok_or(SymbolError::WrongToolOutput)?;
         Ok(())
     }
 

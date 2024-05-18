@@ -9,4 +9,10 @@ pub enum SymbolError {
 
     #[error("Wrong tool output")]
     WrongToolOutput,
+
+    #[error("Expected file to exist")]
+    ExpectedFileToExist,
+
+    #[error("Symbol not found")]
+    SymbolNotFound,
 }

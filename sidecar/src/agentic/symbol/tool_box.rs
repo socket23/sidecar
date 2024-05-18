@@ -162,6 +162,24 @@ impl ToolBox {
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    // We use this to gather util functions or other functionality which might
+    // be helpful for answering the user query
+    pub async fn codebase_wide_context_gathering(
+        &self,
+        fs_file_path: &str,
+        symbol_name: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        query: &str,
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<(), SymbolError> {
+        unimplemented!();
+    }
+
     pub async fn gather_important_symbols_with_definition(
         &self,
         fs_file_path: &str,

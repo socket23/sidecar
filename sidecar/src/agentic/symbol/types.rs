@@ -140,6 +140,54 @@ impl Symbol {
             .await
     }
 
+    async fn find_symbol_to_edit(
+        &self,
+        symbol_to_edit: &SymbolToEdit,
+    ) -> Result<OutlineNodeContent, SymbolError> {
+        let outline_nodes = self
+            .tools
+            .get_outline_nodes(symbol_to_edit.fs_file_path())
+            .await
+            .ok_or(SymbolError::ExpectedFileToExist)?;
+        let mut filtered_outline_nodes = outline_nodes
+            .into_iter()
+            .filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name())
+            .collect::<Vec<OutlineNodeContent>>();
+        // There can be multiple nodes here which have the same name, we need to pick
+        // the one we are interested in, an easy way to check this is to literally
+        // check the absolute distance between the symbol we want to edit and the symbol
+        filtered_outline_nodes.sort_by(|outline_node_first, outline_node_second| {
+            // does it sort properly
+            let distance_first: i64 = if symbol_to_edit
+                .range()
+                .intersects_without_byte(outline_node_first.range())
+            {
+                0
+            } else {
+                symbol_to_edit
+                    .range()
+                    .minimal_line_distance(outline_node_first.range())
+            };
+
+            let distance_second: i64 = if symbol_to_edit
+                .range()
+                .intersects_without_byte(outline_node_second.range())
+            {
+                0
+            } else {
+                symbol_to_edit
+                    .range()
+                    .minimal_line_distance(outline_node_second.range())
+            };
+            distance_first.cmp(&distance_second)
+        });
+        if filtered_outline_nodes.is_empty() {
+            Err(SymbolError::SymbolNotFound)
+        } else {
+            Ok(filtered_outline_nodes.remove(0))
+        }
+    }
+
     async fn add_implementation_snippet(&mut self, snippet: Snippet) {
         self.mecha_code_symbol.add_implementation(snippet).await;
     }
@@ -271,10 +319,16 @@ impl Symbol {
             .await
     }
 
-    async fn edit_sub_symbol(&self, subsymbol: &SymbolToEdit) {
-        // this generally runs in a loop so thats what we are going to do, run
-        // a simple loop with (4 tool usage, 3 times) times around with a verfiication loop at the end of it
-        // to make sure that the changes are done, this is done by a LLM.
+    // TODO(skcd): Handle the cases where the outline is within a symbol and spread
+    // across different lines (as is the case in typescript and python)
+    // for now we are focussing on rust
+    async fn edit_sub_symbol(&self, subsymbol: &SymbolToEdit) -> Result<(), SymbolError> {
+        let symbol_to_edit = self.find_symbol_to_edit(subsymbol).await?;
+        // we have 2 tools which can be used here and they are both kind of interesting:
+        // - one of them is the grab definitions which are relevant
+        // - one of them is the global context search
+        // - first we try to check if the sub-symbol exists in the file
+        todo!("implement the sub-symbol editing");
     }
 
     // we are going to edit the symbols over here
@@ -303,6 +357,8 @@ impl Symbol {
             let file_path = sub_symbol_to_edit.fs_file_path();
             let range = sub_symbol_to_edit.range();
             let is_outline = sub_symbol_to_edit.is_outline();
+            // can we edit on the same line location in the file at the same time
+            // seems doable right?
         }
         Ok(())
     }

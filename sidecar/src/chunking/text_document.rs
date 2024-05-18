@@ -1,3 +1,5 @@
+use std::num;
+
 use crate::repo::types::RepoRef;
 
 use super::{languages::TSLanguageConfig, types::FunctionInformation};
@@ -296,6 +298,41 @@ impl Range {
 
     pub fn byte_size(&self) -> usize {
         self.end_byte() + 1 - self.start_byte()
+    }
+
+    pub fn intersects_without_byte(&self, other: &Range) -> bool {
+        if self.start_line() <= other.end_line() && self.end_line() >= other.end_line() {
+            true
+        } else if self.start_line() <= other.start_line() && self.end_line() >= other.start_line() {
+            true
+        } else if other.start_line() <= self.end_line() && other.end_line() >= self.end_line() {
+            true
+        } else if other.start_line() <= self.start_line() && other.end_line() >= self.start_line() {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn minimal_line_distance(&self, other: &Range) -> i64 {
+        let self_start_line: i64 = self.start_line().try_into().unwrap();
+        let self_end_line: i64 = other.start_line().try_into().unwrap();
+        let other_start_line: i64 = other.start_line().try_into().unwrap();
+        let other_end_line: i64 = other.end_line().try_into().unwrap();
+        let mut distances = vec![
+            self_start_line - other_start_line,
+            self_start_line - other_end_line,
+            self_end_line - other_start_line,
+            self_end_line - other_end_line,
+        ]
+        .into_iter()
+        .map(|distance| distance.abs())
+        .collect::<Vec<i64>>();
+        distances.sort();
+        distances
+            .get(0)
+            .map(|number| number.clone())
+            .unwrap_or(i64::MAX)
     }
 }
 

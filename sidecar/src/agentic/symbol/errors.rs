@@ -15,4 +15,7 @@ pub enum SymbolError {
 
     #[error("Symbol not found")]
     SymbolNotFound,
+
+    #[error("Unable to read file contents")]
+    UnableToReadFileContent,
 }

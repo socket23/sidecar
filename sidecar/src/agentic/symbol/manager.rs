@@ -92,6 +92,7 @@ impl SymbolManager {
     // once we have the initial request, which we will go through the initial request
     // mode once, we have the symbols from it we can use them to spin up sub-symbols as well
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
+        let user_context = input_event.provided_context().clone();
         let tool_input = input_event.tool_use_on_initial_invocation();
         println!("{:?}", &tool_input);
         if let Some(tool_input) = tool_input {
@@ -104,7 +105,7 @@ impl SymbolManager {
                 println!("{:?}", &important_symbols);
                 let symbols = self
                     .tool_box
-                    .important_symbols(important_symbols)
+                    .important_symbols(important_symbols, user_context)
                     .await
                     .map_err(|e| e.into())?;
                 // This is where we are creating all the symbols

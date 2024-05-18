@@ -10,7 +10,8 @@ use llm_client::{
 use crate::agentic::tool::code_symbol::{
     important::{
         CodeSymbolImportant, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
-        CodeSymbolImportantWideSearch, CodeSymbolWithSteps, CodeSymbolWithThinking,
+        CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
+        CodeSymbolWithThinking,
     },
     types::CodeSymbolError,
 };
@@ -133,7 +134,315 @@ impl Reply {
 }
 
 impl AnthropicCodeSymbolImportant {
-    pub fn system_message_context_wide(
+    async fn user_message_for_utility_symbols(
+        &self,
+        user_request: CodeSymbolUtilityRequest,
+    ) -> Result<String, CodeSymbolError> {
+        // definitions which are already present
+        let definitions = user_request.definitions().join("\n");
+        let user_query = user_request.user_query().to_owned();
+        // We need to grab the code context above, below and in the selection
+        let file_path = user_request.fs_file_path().to_owned();
+        let language = user_request.language().to_owned();
+        let lines = user_request
+            .file_content()
+            .lines()
+            .enumerate()
+            .collect::<Vec<(usize, _)>>();
+        let selection_range = user_request.selection_range();
+        let line_above = (selection_range.start_line() as i64) - 1;
+        let line_below = (selection_range.end_line() as i64) + 1;
+        let code_above = lines
+            .iter()
+            .filter(|(line_number, _)| *line_number as i64 <= line_above)
+            .map(|(_, line)| *line)
+            .collect::<Vec<&str>>()
+            .join("\n");
+        let code_below = lines
+            .iter()
+            .filter(|(line_number, _)| *line_number as i64 >= line_below)
+            .map(|(_, line)| *line)
+            .collect::<Vec<&str>>()
+            .join("\n");
+        let code_selection = lines
+            .iter()
+            .filter(|(line_number, _)| {
+                *line_number as i64 >= selection_range.start_line() as i64
+                    && *line_number as i64 <= selection_range.end_line() as i64
+            })
+            .map(|(_, line)| *line)
+            .collect::<Vec<&str>>()
+            .join("\n");
+        let user_context = user_request.user_context();
+        let context_string = user_context
+            .to_xml()
+            .await
+            .map_err(|e| CodeSymbolError::UserContextError(e))?;
+        Ok(format!(
+            r#"Here is all the required context:
+<user_query>
+{user_query}
+</user_query>
+
+<context>
+{context_string}
+</context>
+
+Now the code which needs to be edited (we also show the code above, below and in the selection):
+<file_path>
+{file_path}
+</file_path>
+<code_above>
+```{language}
+{code_above}
+```
+</code_above>
+<code_below>
+```{language}
+{code_below}
+```
+</code_below>
+<code_in_selection>
+```{language}
+{code_selection}
+```
+</code_in_selection>
+
+code symbols already selected:
+<already_selected>
+{definitions}
+</alredy_selected>
+
+As a reminder again here's the user query and the code we are focussing on. You have to grab more code symbols to make sure that the user query can be satisfied
+<user_query>
+{user_query}
+</user_query>
+
+<code_in_selection>
+<file_path>
+{file_path}
+</file_path>
+<content>
+```{language}
+{code_selection}
+```
+</content>
+</code_in_selection>"#
+        ))
+    }
+
+    fn system_message_for_utility_function(&self) -> String {
+        format!(
+            r#"You are a search engine which makes no mistakes while retriving important classes, functions or other values which would be important for the given user-query.
+The user has already taken a pass and retrived some important code symbols to use. You have to make sure you select ANYTHING else which would be necessary for satisfying the user-query.
+- The user has selected some context manually in the form of <selection> where we have to select the extra context.
+- You will be given files which contains a lot of code, you have to select the "code symbols" which are important.
+- "code symbols" here referes to the different classes, functions or constants which will be necessary to help with the user query.
+- Now you will write a step by step process for gathering this extra context.
+- In your step by step list make sure taht the symbols are listed in the order in which they are relevant.
+- Strictly follow the reply format which is mentioned to you below, your reply should always start with the <reply> tag and end with the </reply> tag
+
+Let's focus on getting the "code symbols" which are absolutely necessary to satisfy the user query for the given <code_selection>
+
+As a reminder, we only want to grab extra code symbols only for the code which we want to edit in <code_selection> section, nothing else
+
+As an example, given the following code selection and the extra context already selected by the user.
+<code_selection>
+<file_path>
+sidecar/broker/fill_in_middle.rs
+</file_path>
+```rust
+pub struct FillInMiddleBroker {{
+    providers: HashMap<LLMType, Box<dyn FillInMiddleFormatter + Send + Sync>>,
+}}
+
+impl FillInMiddleBroker {{
+    pub fn new() -> Self {{
+        let broker = Self {{
+            providers: HashMap::new(),
+        }};
+        broker
+            .add_llm(
+                LLMType::CodeLlama13BInstruct,
+                Box::new(CodeLlamaFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::CodeLlama7BInstruct,
+                Box::new(CodeLlamaFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::DeepSeekCoder1_3BInstruct,
+                Box::new(DeepSeekFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::DeepSeekCoder6BInstruct,
+                Box::new(DeepSeekFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::DeepSeekCoder33BInstruct,
+                Box::new(DeepSeekFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::ClaudeHaiku,
+                Box::new(ClaudeFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::ClaudeOpus,
+                Box::new(ClaudeFillInMiddleFormatter::new()),
+            )
+            .add_llm(
+                LLMType::ClaudeSonnet,
+                Box::new(ClaudeFillInMiddleFormatter::new()),
+            )
+    }}
+```
+</code_selection>
+
+The user query is:
+<user_query>
+I want to add support for the grok llm
+</user_query>
+
+Already selected snippets:
+<already_selected>
+<code_symbol>
+<file_path>
+sidecar/llm_prompts/src/fim/types.rs
+</file_path>
+<name>
+FillInMiddleFormatter
+</name>
+<content>
+```rust
+pub trait FillInMiddleFormatter {{
+    fn fill_in_middle(
+        &self,
+        request: FillInMiddleRequest,
+    ) -> Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest>;
+}}
+```
+</content>
+</code_symbol>
+<code_symbol>
+<file_path>
+sidecar/llm_prompts/src/fim/types.rs
+</file_path>
+<name>
+FillInMiddleRequest
+</name>
+<content>
+```rust
+pub struct FillInMiddleRequest {{
+    prefix: String,
+    suffix: String,
+    llm_type: LLMType,
+    stop_words: Vec<String>,
+    completion_tokens: Option<i64>,
+    current_line_content: String,
+    is_current_line_whitespace: bool,
+    current_line_indentation: String,
+}}
+```
+</content>
+</code_symbol>
+<code_symbol>
+<file_path>
+sidecar/llm_client/src/clients/types.rs
+</file_path>
+<name>
+LLMClientCompletionRequest
+</name>
+<content>
+```rust
+#[derive(Clone, Debug)]
+pub struct LLMClientCompletionRequest {{
+    model: LLMType,
+    messages: Vec<LLMClientMessage>,
+    temperature: f32,
+    frequency_penalty: Option<f32>,
+    stop_words: Option<Vec<String>>,
+    max_tokens: Option<usize>,
+}}
+```
+</content>
+</code_symbol>
+</already_selected>
+
+<selection>
+<selection_item>
+<file_path>
+sidecar/llm_prompts/src/fim/deepseek.rs
+</file_path>
+<content>
+```rust
+pub struct DeepSeekFillInMiddleFormatter;
+
+impl DeepSeekFillInMiddleFormatter {{
+    pub fn new() -> Self {{
+        Self
+    }}
+}}
+
+impl FillInMiddleFormatter for DeepSeekFillInMiddleFormatter {{
+    fn fill_in_middle(
+        &self,
+        request: FillInMiddleRequest,
+    ) -> Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest> {{
+        // format is
+        // <｜fim▁begin｜>{{prefix}}<｜fim▁hole｜>{{suffix}}<｜fim▁end｜>
+        // https://ollama.ai/library/deepseek
+        let prefix = request.prefix();
+        let suffix = request.suffix();
+        let response = format!("<｜fim▁begin｜>{{prefix}}<｜fim▁hole｜>{{suffix}}<｜fim▁end｜>");
+        let string_request =
+            LLMClientCompletionStringRequest::new(request.llm().clone(), response, 0.0, None)
+                .set_stop_words(request.stop_words())
+                .set_max_tokens(512);
+        Either::Right(string_request)
+    }}
+}}
+```
+</content>
+</selection_item>
+<selection_item>
+<file_path>
+sidecar/llm_prompts/src/fim/grok.rs
+</file_path>
+<content>
+```rust
+fn grok_fill_in_middle_formatter(
+    &self,
+    request: FillInMiddleRequest,
+) -> Either<LLMClientCompletionRequest, LLMClientCompletionStringRequest> {{
+    todo!("this still needs to be implemented by following the website")
+}}
+```
+</content>
+</selection_item>
+</selection>
+
+Your reply should be:
+<reply>
+<symbol_list>
+<symbol>
+<name>
+grok_fill_in_middle_formatter
+</name>
+<file_path>
+sidecar/llm_prompts/src/fim/grok.rs
+</file_path>
+<thinking>
+We require the grok_fill_in_middle_formatter since this function is the one which seems to be implementing the function to conver FillInMiddleRequest to the appropriate LLM request.
+</thinking>
+</symbol>
+</symbol_list>
+</reply>
+
+Notice here that we made sure to include the `grok_fill_in_middle_formatter` and did not care about the DeepSeekFillInMiddleFormatter since its not necessary for the user query which asks us to implement the grok llm support
+"#
+        )
+    }
+    fn system_message_context_wide(
         &self,
         code_symbol_search_context_wide: &CodeSymbolImportantWideSearch,
     ) -> String {
@@ -145,7 +454,7 @@ You will be given context which the user has selected in <user_context> and you 
 - "code symbols" here referes to the different classes, functions, or constants which might be necessary to answer the user query.
 - Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_item> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
-- Strictly followt he reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
+- Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
 
 Let's focus on getting the "code symbols" which are necessary to satisfy the user query.
 
@@ -403,10 +712,8 @@ We have to add the newly created endpoint in inline_completion to add support fo
 </reply>"#
         )
     }
-    pub fn system_message(
-        &self,
-        code_symbol_important_request: &CodeSymbolImportantRequest,
-    ) -> String {
+
+    fn system_message(&self, code_symbol_important_request: &CodeSymbolImportantRequest) -> String {
         if code_symbol_important_request.symbol_identifier().is_some() {
             todo!("we need to figure it out")
         } else {
@@ -854,7 +1161,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         );
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -869,14 +1176,53 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             .await?;
         Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
     }
+
+    async fn gather_utility_symbols(
+        &self,
+        utility_symbol_request: CodeSymbolUtilityRequest,
+    ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
+        if !(utility_symbol_request.model().is_anthropic()
+            || utility_symbol_request.model().is_openai_gpt4o()
+            || utility_symbol_request.model().is_gemini_pro())
+        {
+            return Err(CodeSymbolError::WrongLLM(
+                utility_symbol_request.model().clone(),
+            ));
+        }
+        let api_key = utility_symbol_request.api_key();
+        let provider = utility_symbol_request.provider();
+        let model = utility_symbol_request.model();
+        let system_message = LLMClientMessage::system(self.system_message_for_utility_function());
+        let user_message = LLMClientMessage::user(
+            self.user_message_for_utility_symbols(utility_symbol_request)
+                .await?,
+        );
+        let messages =
+            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_key,
+                messages,
+                provider,
+                vec![(
+                    "request_type".to_owned(),
+                    "utility_function_search".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+        Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use serde_xml_rs::from_str;
-
-    use super::{AnthropicCodeSymbolImportant, StepListItem};
+    use super::AnthropicCodeSymbolImportant;
 
     #[test]
     fn test_parsing_works_for_important_symbol() {

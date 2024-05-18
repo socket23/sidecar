@@ -11,7 +11,8 @@ use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::important::{
-    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolWithThinking,
+    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
+    CodeSymbolWithThinking,
 };
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
@@ -29,6 +30,7 @@ use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
+use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, input::ToolInput, lsp::open_file::OpenFileRequest},
     inline_completion::symbols_tracker::SymbolTrackerInline,
@@ -65,20 +67,24 @@ impl ToolBox {
         }
     }
 
-    pub async fn context_gathering(
+    pub async fn utlity_symbols_search(
         &self,
-        fs_file_path: &str,
-        file_content: &str,
-        selection_range: &Range,
-        instructions: &str,
-        llm: &LLMType,
-        provider: &LLMProvider,
-        api_keys: &LLMProviderAPIKeys,
+        already_collected_definitions: &[CodeSymbolWithThinking],
+        outline_node_content: &OutlineNodeContent,
+        fs_file_content: &str,
+        user_context: &UserContext,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
     ) -> Result<(), SymbolError> {
-        // only use visible file for now, and do dfs from the symbols (which is basically reference checking)
-        // we keep track of this for checking how deep do we have to go
-        // this is the context gathering step
-        // but it should be part of the symbol itself
+        // we are going to use the long context search here to check if there are
+        // other utility functions we can and should use for implementing this feature
+        // In our user-query we tell the LLM about what symbols are already included
+        // and we ask the LLM to collect the other utility symbols which are missed
+
+        // we have to create the query here using the outline node we are interested in
+        // and the definitions which we already know about
+        // let request = CodeSymbolImportantWideSearch::new(user_context.clone());
         Ok(())
     }
 
@@ -162,6 +168,13 @@ impl ToolBox {
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    pub async fn get_file_content(&self, fs_file_path: &str) -> Result<String, SymbolError> {
+        self.symbol_broker
+            .get_file_content(fs_file_path)
+            .await
+            .ok_or(SymbolError::UnableToReadFileContent)
+    }
+
     // We use this to gather util functions or other functionality which might
     // be helpful for answering the user query
     pub async fn codebase_wide_context_gathering(
@@ -193,6 +206,8 @@ impl ToolBox {
             SymbolEventRequest,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        // we get back here the defintion outline along with the reasoning on why
+        // we need to look at the symbol
     ) -> Result<Vec<Option<(CodeSymbolWithThinking, String)>>, SymbolError> {
         let language = self
             .editor_parsing
@@ -493,6 +508,7 @@ impl ToolBox {
     pub async fn important_symbols(
         &self,
         important_symbols: CodeSymbolImportantResponse,
+        user_context: UserContext,
     ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
         let symbols = important_symbols.symbols();
         let ordered_symbols = important_symbols.ordered_symbols();
@@ -513,6 +529,7 @@ impl ToolBox {
                         ordered_symbol.file_path().to_owned(),
                         None,
                         vec![],
+                        user_context.clone(),
                     ),
                 );
             } else {
@@ -526,6 +543,7 @@ impl ToolBox {
                         ordered_symbol.file_path().to_owned(),
                         None,
                         vec![],
+                        user_context.clone(),
                     ),
                 );
             }

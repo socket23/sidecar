@@ -55,30 +55,42 @@ impl CodeSymbolImportantBroker {
 #[async_trait]
 impl Tool for CodeSymbolImportantBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
-        let context = input.code_symbol_search();
-        if let Ok(context) = context {
-            match context {
-                either::Left(context) => {
-                    if let Some(implementation) = self.llms.get(context.model()) {
-                        return implementation
-                            .get_important_symbols(context)
-                            .await
-                            .map(|response| ToolOutput::important_symbols(response))
-                            .map_err(|e| ToolError::CodeSymbolError(e));
+        // PS: This is getting out of hand
+        if input.is_utility_code_search() {
+            let context = input.utility_code_search()?;
+            if let Some(implementation) = self.llms.get(&context.model()) {
+                return implementation
+                    .gather_utility_symbols(context)
+                    .await
+                    .map(|response| ToolOutput::utility_code_symbols(response))
+                    .map_err(|e| ToolError::CodeSymbolError(e));
+            }
+        } else {
+            let context = input.code_symbol_search();
+            if let Ok(context) = context {
+                match context {
+                    either::Left(context) => {
+                        if let Some(implementation) = self.llms.get(context.model()) {
+                            return implementation
+                                .get_important_symbols(context)
+                                .await
+                                .map(|response| ToolOutput::important_symbols(response))
+                                .map_err(|e| ToolError::CodeSymbolError(e));
+                        }
                     }
-                }
-                either::Right(context) => {
-                    if let Some(implementation) = self.llms.get(context.model()) {
-                        return implementation
-                            .context_wide_search(context)
-                            .await
-                            .map(|response| ToolOutput::important_symbols(response))
-                            .map_err(|e| ToolError::CodeSymbolError(e));
-                    } else {
-                        println!("we are so fucked");
+                    either::Right(context) => {
+                        if let Some(implementation) = self.llms.get(context.model()) {
+                            return implementation
+                                .context_wide_search(context)
+                                .await
+                                .map(|response| ToolOutput::important_symbols(response))
+                                .map_err(|e| ToolError::CodeSymbolError(e));
+                        } else {
+                            println!("we are so fucked");
+                        }
                     }
-                }
-            };
+                };
+            }
         }
         Err(ToolError::WrongToolInput)
     }
@@ -131,6 +143,62 @@ impl CodeSymbolImportantWideSearch {
     }
 
     pub fn remove_user_context(self) -> UserContext {
+        self.user_context
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CodeSymbolUtilityRequest {
+    user_query: String,
+    definitions_alredy_present: Vec<String>,
+    fs_file_path: String,
+    fs_file_content: String,
+    selection_range: Range,
+    language: String,
+    llm_type: LLMType,
+    llm_provider: LLMProvider,
+    api_key: LLMProviderAPIKeys,
+    user_context: UserContext,
+}
+
+impl CodeSymbolUtilityRequest {
+    pub fn definitions(&self) -> &[String] {
+        self.definitions_alredy_present.as_slice()
+    }
+
+    pub fn selection_range(&self) -> &Range {
+        &self.selection_range
+    }
+
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn file_content(&self) -> &str {
+        &self.fs_file_content
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
+    }
+
+    pub fn model(&self) -> LLMType {
+        self.llm_type.clone()
+    }
+
+    pub fn provider(&self) -> LLMProvider {
+        self.llm_provider.clone()
+    }
+
+    pub fn api_key(&self) -> LLMProviderAPIKeys {
+        self.api_key.clone()
+    }
+
+    pub fn user_context(self) -> UserContext {
         self.user_context
     }
 }
@@ -318,6 +386,11 @@ pub trait CodeSymbolImportant {
     async fn context_wide_search(
         &self,
         context_wide_search: CodeSymbolImportantWideSearch,
+    ) -> Result<CodeSymbolImportantResponse, CodeSymbolError>;
+
+    async fn gather_utility_symbols(
+        &self,
+        utility_symbol_request: CodeSymbolUtilityRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError>;
 }
 

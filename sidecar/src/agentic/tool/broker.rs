@@ -71,6 +71,10 @@ impl ToolBroker {
             Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
         );
         tools.insert(
+            ToolType::UtilityCodeSymbolSearch,
+            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+        );
+        tools.insert(
             ToolType::GoToDefinitions,
             Box::new(LSPGoToDefinition::new()),
         );

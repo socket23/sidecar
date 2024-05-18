@@ -19,9 +19,11 @@ pub enum ToolType {
     LSPDiagnostics,
     ReRank,
     // WebScrape,
+    // searches of different kind are over here
     FindCodeSnippets,
     RequestImportantSymbols,
     FindCodeSymbolsCodeBaseWide,
+    UtilityCodeSymbolSearch,
     GrepInFile,
     GoToImplementations,
     // filtering queries go here

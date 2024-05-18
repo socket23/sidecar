@@ -1,7 +1,9 @@
 use super::{
     base::ToolType,
     code_edit::{find::FindCodeSelectionInput, types::CodeEdit},
-    code_symbol::important::{CodeSymbolImportantRequest, CodeSymbolImportantWideSearch},
+    code_symbol::important::{
+        CodeSymbolImportantRequest, CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest,
+    },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
     filtering::broker::{CodeToEditFilterRequest, CodeToEditSymbolRequest},
@@ -19,6 +21,7 @@ pub enum ToolInput {
     LSPDiagnostics(LSPDiagnosticsInput),
     FindCodeSnippets(FindCodeSelectionInput),
     ReRank(ReRankEntriesForBroker),
+    CodeSymbolUtilitySearch(CodeSymbolUtilityRequest),
     RequestImportantSymbols(CodeSymbolImportantRequest),
     RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch),
     GoToDefinition(GoToDefinitionRequest),
@@ -48,6 +51,7 @@ impl ToolInput {
                 ToolType::FilterCodeSnippetsSingleSymbolForEditing
             }
             ToolInput::EditorApplyChange(_) => ToolType::EditorApplyEdits,
+            ToolInput::CodeSymbolUtilitySearch(_) => ToolType::UtilityCodeSymbolSearch,
         }
     }
 
@@ -118,6 +122,22 @@ impl ToolInput {
     pub fn is_rerank(self) -> Result<ReRankEntriesForBroker, ToolError> {
         if let ToolInput::ReRank(rerank) = self {
             Ok(rerank)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn is_utility_code_search(&self) -> bool {
+        if let ToolInput::CodeSymbolUtilitySearch(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn utility_code_search(self) -> Result<CodeSymbolUtilityRequest, ToolError> {
+        if let ToolInput::CodeSymbolUtilitySearch(request) = self {
+            Ok(request)
         } else {
             Err(ToolError::WrongToolInput)
         }

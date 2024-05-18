@@ -323,11 +323,29 @@ impl Symbol {
     // across different lines (as is the case in typescript and python)
     // for now we are focussing on rust
     async fn edit_sub_symbol(&self, subsymbol: &SymbolToEdit) -> Result<(), SymbolError> {
+        let file_content = self
+            .tools
+            .get_file_content(&subsymbol.fs_file_path())
+            .await?;
         let symbol_to_edit = self.find_symbol_to_edit(subsymbol).await?;
+        let selection_range = symbol_to_edit.range();
         // we have 2 tools which can be used here and they are both kind of interesting:
         // - one of them is the grab definitions which are relevant
         // - one of them is the global context search
         // - first we try to check if the sub-symbol exists in the file
+        let interested_defintiions = self
+            .tools
+            .gather_important_symbols_with_definition(
+                symbol_to_edit.fs_file_path(),
+                &file_content,
+                selection_range,
+                self.llm_properties.llm().clone(),
+                self.llm_properties.provider().clone(),
+                self.llm_properties.api_key().clone(),
+                &subsymbol.instructions().join("\n"),
+                self.hub_sender.clone(),
+            )
+            .await?;
         todo!("implement the sub-symbol editing");
     }
 

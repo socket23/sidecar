@@ -51,6 +51,7 @@ pub enum ToolOutput {
     CodeToEditSnippets(CodeToEditFilterResponse),
     CodeToEditSingleSymbolSnippets(CodeToEditSymbolResponse),
     EditorApplyChanges(EditorApplyResponse),
+    UtilityCodeSearch(CodeSymbolImportantResponse),
 }
 
 impl ToolOutput {
@@ -72,6 +73,10 @@ impl ToolOutput {
 
     pub fn important_symbols(important_symbols: CodeSymbolImportantResponse) -> Self {
         ToolOutput::ImportantSymbols(important_symbols)
+    }
+
+    pub fn utility_code_symbols(important_symbols: CodeSymbolImportantResponse) -> Self {
+        ToolOutput::UtilityCodeSearch(important_symbols)
     }
 
     pub fn go_to_definition(go_to_definition: GoToDefinitionResponse) -> Self {

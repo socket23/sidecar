@@ -43,7 +43,7 @@ impl FindInFileResponse {
 impl FindInFile {
     pub fn get_symbol_location(&self, input: FindInFileRequest) -> Option<Position> {
         let symbol = &input.file_symbol;
-        let mut file_lines = input
+        let file_lines = input
             .file_contents
             .lines()
             .enumerate()

@@ -37,6 +37,10 @@ impl SymbolInputEvent {
         }
     }
 
+    pub fn provided_context(&self) -> &UserContext {
+        &self.context
+    }
+
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball

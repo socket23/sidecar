@@ -10,7 +10,10 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::chunking::{text_document::Range, types::OutlineNodeContent};
+use crate::{
+    chunking::{text_document::Range, types::OutlineNodeContent},
+    user_context::types::UserContext,
+};
 
 use super::{
     errors::SymbolError,
@@ -240,6 +243,9 @@ pub struct MechaCodeSymbolThinking {
     // this contains all the implementations, if there were children before
     // for example: functions inside the class, they all get flattened over here
     implementations: Mutex<Vec<Snippet>>,
+    // This can be updated on the fly when the user provides more context
+    // We can think of this as a long term storage
+    provided_user_context: UserContext,
 }
 
 impl MechaCodeSymbolThinking {
@@ -250,6 +256,7 @@ impl MechaCodeSymbolThinking {
         file_path: String,
         snippet: Option<Snippet>,
         implementations: Vec<Snippet>,
+        provided_user_context: UserContext,
     ) -> Self {
         Self {
             symbol_name,
@@ -258,7 +265,12 @@ impl MechaCodeSymbolThinking {
             file_path,
             snippet,
             implementations: Mutex::new(implementations),
+            provided_user_context,
         }
+    }
+
+    pub fn user_context(&self) -> &UserContext {
+        &self.provided_user_context
     }
 
     // Here we present the code snippet which we will be editing to the LLM

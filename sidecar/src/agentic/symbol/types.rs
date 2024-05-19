@@ -329,6 +329,10 @@ impl Symbol {
             .await?;
         let symbol_to_edit = self.find_symbol_to_edit(subsymbol).await?;
         let selection_range = symbol_to_edit.range();
+        let language = self
+            .tools
+            .detect_language(&subsymbol.fs_file_path())
+            .unwrap_or("".to_owned());
         // we have 2 tools which can be used here and they are both kind of interesting:
         // - one of them is the grab definitions which are relevant
         // - one of them is the global context search
@@ -346,6 +350,36 @@ impl Symbol {
                 self.hub_sender.clone(),
             )
             .await?;
+        let codebase_wide_search = self
+            .tools
+            .utlity_symbols_search(
+                &subsymbol.instructions().join("\n"),
+                interested_defintiions
+                    .iter()
+                    .filter_map(|interested_symbol| {
+                        if let Some((code_symbol, _)) = interested_symbol {
+                            Some(code_symbol)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                &symbol_to_edit,
+                &file_content,
+                &subsymbol.fs_file_path(),
+                self.mecha_code_symbol.user_context(),
+                &language,
+                self.llm_properties.llm().clone(),
+                self.llm_properties.provider().clone(),
+                self.llm_properties.api_key().clone(),
+                self.hub_sender.clone(),
+            )
+            .await;
+
+        // cool now we have all the symbols which are necessary for making the edit
+        // and more importantly we have all the context which is required
+        // we can send the edit request
         todo!("implement the sub-symbol editing");
     }
 

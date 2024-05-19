@@ -67,10 +67,16 @@ impl ToolBox {
         }
     }
 
+    pub fn detect_language(&self, fs_file_path: &str) -> Option<String> {
+        self.editor_parsing
+            .for_file_path(fs_file_path)
+            .map(|ts_language_config| ts_language_config.language_str.to_owned())
+    }
+
     pub async fn utlity_symbols_search(
         &self,
         user_query: &str,
-        already_collected_definitions: &[CodeSymbolWithThinking],
+        already_collected_definitions: &[&CodeSymbolWithThinking],
         outline_node_content: &OutlineNodeContent,
         fs_file_content: &str,
         fs_file_path: &str,

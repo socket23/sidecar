@@ -143,54 +143,6 @@ impl Symbol {
             .await
     }
 
-    async fn find_symbol_to_edit(
-        &self,
-        symbol_to_edit: &SymbolToEdit,
-    ) -> Result<OutlineNodeContent, SymbolError> {
-        let outline_nodes = self
-            .tools
-            .get_outline_nodes(symbol_to_edit.fs_file_path())
-            .await
-            .ok_or(SymbolError::ExpectedFileToExist)?;
-        let mut filtered_outline_nodes = outline_nodes
-            .into_iter()
-            .filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name())
-            .collect::<Vec<OutlineNodeContent>>();
-        // There can be multiple nodes here which have the same name, we need to pick
-        // the one we are interested in, an easy way to check this is to literally
-        // check the absolute distance between the symbol we want to edit and the symbol
-        filtered_outline_nodes.sort_by(|outline_node_first, outline_node_second| {
-            // does it sort properly
-            let distance_first: i64 = if symbol_to_edit
-                .range()
-                .intersects_without_byte(outline_node_first.range())
-            {
-                0
-            } else {
-                symbol_to_edit
-                    .range()
-                    .minimal_line_distance(outline_node_first.range())
-            };
-
-            let distance_second: i64 = if symbol_to_edit
-                .range()
-                .intersects_without_byte(outline_node_second.range())
-            {
-                0
-            } else {
-                symbol_to_edit
-                    .range()
-                    .minimal_line_distance(outline_node_second.range())
-            };
-            distance_first.cmp(&distance_second)
-        });
-        if filtered_outline_nodes.is_empty() {
-            Err(SymbolError::SymbolNotFound)
-        } else {
-            Ok(filtered_outline_nodes.remove(0))
-        }
-    }
-
     async fn add_implementation_snippet(&mut self, snippet: Snippet) {
         self.mecha_code_symbol.add_implementation(snippet).await;
     }
@@ -333,7 +285,7 @@ impl Symbol {
             .tools
             .get_file_content(&subsymbol.fs_file_path())
             .await?;
-        let symbol_to_edit = self.find_symbol_to_edit(subsymbol).await?;
+        let symbol_to_edit = self.tools.find_symbol_to_edit(subsymbol).await?;
         let selection_range = symbol_to_edit.range();
         let language = self
             .tools
@@ -423,11 +375,7 @@ impl Symbol {
             .tools
             .get_file_content(&sub_symbol.fs_file_path())
             .await?;
-        let language = self
-            .tools
-            .detect_language(sub_symbol.fs_file_path())
-            .unwrap_or("".to_owned());
-        let symbol_to_edit = self.find_symbol_to_edit(sub_symbol).await?;
+        let symbol_to_edit = self.tools.find_symbol_to_edit(sub_symbol).await?;
         let response = self
             .tools
             .code_edit(

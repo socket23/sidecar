@@ -37,6 +37,7 @@ use crate::{
 };
 
 use super::errors::SymbolError;
+use super::events::edit::SymbolToEdit;
 use super::identifier::MechaCodeSymbolThinking;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
 use super::ui_event::UIEvent;
@@ -64,6 +65,53 @@ impl ToolBox {
             editor_parsing,
             editor_url,
             ui_events,
+        }
+    }
+
+    pub async fn find_symbol_to_edit(
+        &self,
+        symbol_to_edit: &SymbolToEdit,
+    ) -> Result<OutlineNodeContent, SymbolError> {
+        let outline_nodes = self
+            .get_outline_nodes(symbol_to_edit.fs_file_path())
+            .await
+            .ok_or(SymbolError::ExpectedFileToExist)?;
+        let mut filtered_outline_nodes = outline_nodes
+            .into_iter()
+            .filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name())
+            .collect::<Vec<OutlineNodeContent>>();
+        // There can be multiple nodes here which have the same name, we need to pick
+        // the one we are interested in, an easy way to check this is to literally
+        // check the absolute distance between the symbol we want to edit and the symbol
+        filtered_outline_nodes.sort_by(|outline_node_first, outline_node_second| {
+            // does it sort properly
+            let distance_first: i64 = if symbol_to_edit
+                .range()
+                .intersects_without_byte(outline_node_first.range())
+            {
+                0
+            } else {
+                symbol_to_edit
+                    .range()
+                    .minimal_line_distance(outline_node_first.range())
+            };
+
+            let distance_second: i64 = if symbol_to_edit
+                .range()
+                .intersects_without_byte(outline_node_second.range())
+            {
+                0
+            } else {
+                symbol_to_edit
+                    .range()
+                    .minimal_line_distance(outline_node_second.range())
+            };
+            distance_first.cmp(&distance_second)
+        });
+        if filtered_outline_nodes.is_empty() {
+            Err(SymbolError::SymbolNotFound)
+        } else {
+            Ok(filtered_outline_nodes.remove(0))
         }
     }
 
@@ -263,7 +311,7 @@ impl ToolBox {
         &self,
         fs_file_path: &str,
         file_content: &str,
-        selection_range: &Range,
+        symbol_edited: &SymbolToEdit,
         edited_code: &str,
         llm: LLMType,
         provider: LLMProvider,
@@ -275,27 +323,28 @@ impl ToolBox {
         // have to follow the symbols or do soething else
         // - we can also invoke the LLM here to check if the edited code is correct
 
-        // apply the changes to the editor
-        let editor_response = self
-            .apply_edits_to_editor(fs_file_path, selection_range, edited_code)
-            .await?;
+        // // apply the changes to the editor
+        // let editor_response = self
+        //     .apply_edits_to_editor(fs_file_path, selection_range, edited_code)
+        //     .await?;
 
-        // talk to the LSP and see if there are mistakes
-        let lsp_diagnostics = self
-            .get_lsp_diagnostics(fs_file_path, editor_response.range())
-            .await?;
+        // // talk to the LSP and see if there are mistakes
+        // let lsp_diagnostics = self
+        //     .get_lsp_diagnostics(fs_file_path, editor_response.range())
+        //     .await?;
 
-        // Now we look at the lsp diagnsotics and try to fix them, there are many options here
-        // to choose from
-        // once we have lsp diagnostics we can either take an action if its possible
-        // to take an action
-        // the best thing to do here is to do both:
-        // ask if the LLM wants to rewrite the code or give it the quick fix options
-        // both of these are valid tools which the LLM can use
-        // there can be 2 cases which happen over here: we might have to fix the imports
-        // before we start the self-correction loop or do it after
-        // maybe we enable this somehow? .... thinking
-        todo!("we have to figure out this loop properly");
+        // // Now we look at the lsp diagnsotics and try to fix them, there are many options here
+        // // to choose from
+        // // once we have lsp diagnostics we can either take an action if its possible
+        // // to take an action
+        // // the best thing to do here is to do both:
+        // // ask if the LLM wants to rewrite the code or give it the quick fix options
+        // // both of these are valid tools which the LLM can use
+        // // there can be 2 cases which happen over here: we might have to fix the imports
+        // // before we start the self-correction loop or do it after
+        // // maybe we enable this somehow? .... thinking
+        // todo!("we have to figure out this loop properly");
+        todo!("we want to complete this")
     }
 
     pub async fn code_edit(

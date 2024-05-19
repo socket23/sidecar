@@ -31,6 +31,10 @@ pub enum ToolType {
     FilterCodeSnippetsSingleSymbolForEditing,
     // editor requests
     EditorApplyEdits,
+    // quick fix options
+    GetQuickFix,
+    // apply quick fix
+    ApplyQuickFix,
 }
 
 #[async_trait]

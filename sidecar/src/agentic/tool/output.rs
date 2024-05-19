@@ -10,6 +10,7 @@ use super::{
         gotodefintion::GoToDefinitionResponse,
         gotoimplementations::GoToImplementationResponse,
         open_file::{OpenFileRequest, OpenFileResponse},
+        quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
     rerank::base::ReRankEntriesForBroker,
 };
@@ -52,9 +53,19 @@ pub enum ToolOutput {
     CodeToEditSingleSymbolSnippets(CodeToEditSymbolResponse),
     EditorApplyChanges(EditorApplyResponse),
     UtilityCodeSearch(CodeSymbolImportantResponse),
+    GetQuickFixList(GetQuickFixResponse),
+    LSPQuickFixInvoation(LSPQuickFixInvocationResponse),
 }
 
 impl ToolOutput {
+    pub fn quick_fix_invocation_result(output: LSPQuickFixInvocationResponse) -> Self {
+        ToolOutput::LSPQuickFixInvoation(output)
+    }
+
+    pub fn quick_fix_list(output: GetQuickFixResponse) -> Self {
+        ToolOutput::GetQuickFixList(output)
+    }
+
     pub fn code_edit_output(output: String) -> Self {
         ToolOutput::CodeEditTool(output)
     }

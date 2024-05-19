@@ -79,7 +79,11 @@ impl ToolBox {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-    ) -> Result<(), SymbolError> {
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<Vec<Option<(CodeSymbolWithThinking, String)>>, SymbolError> {
         // we are going to use the long context search here to check if there are
         // other utility functions we can and should use for implementing this feature
         // In our user-query we tell the LLM about what symbols are already included
@@ -124,6 +128,10 @@ impl ToolBox {
         // we might have some errors over here which we should fix later on, but we
         // will get on that
         // TODO(skcd): Figure out the best way to fix them
+        // pick up from here, we need to run some cleanup things over here, to make sure
+        // that we dont make mistakes while grabbing the code symbols
+        // for now: we can assume that there are no errors over here, we can work with
+        // this assumption for now
         let code_symbols = self
             .tools
             .invoke(tool_input)
@@ -131,7 +139,118 @@ impl ToolBox {
             .map_err(|e| SymbolError::ToolError(e))?
             .utility_code_search_response()
             .ok_or(SymbolError::WrongToolOutput)?;
-        Ok(())
+
+        let file_paths_to_open: Vec<String> = code_symbols
+            .symbols()
+            .iter()
+            .map(|symbol| symbol.file_path().to_owned())
+            .collect::<Vec<_>>();
+        // We have the file content for the file paths which the retrival
+        // engine presented us with
+        let file_to_content_mapping = stream::iter(file_paths_to_open)
+            .map(|file_to_open| async move {
+                let tool_input = ToolInput::OpenFile(OpenFileRequest::new(
+                    file_to_open.to_owned(),
+                    self.editor_url.to_owned(),
+                ));
+                (
+                    file_to_open,
+                    self.tools
+                        .invoke(tool_input)
+                        .await
+                        .map(|tool_output| tool_output.get_file_open_response()),
+                )
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(
+                |(fs_file_path, open_file_response)| match open_file_response {
+                    Ok(Some(response)) => Some((fs_file_path, response.contents())),
+                    _ => None,
+                },
+            )
+            .collect::<HashMap<String, String>>();
+        // After this we want to grab the symbol definition after looking at where
+        // the symbol is in the file
+        let symbols_to_grab = code_symbols.remove_symbols();
+        let symbol_locations = stream::iter(symbols_to_grab)
+            .map(|symbol| async {
+                let symbol_name = symbol.code_symbol();
+                let fs_file_path = symbol.file_path();
+                if let Some(file_content) = file_to_content_mapping.get(fs_file_path) {
+                    let location = self.find_symbol_in_file(symbol_name, file_content).await;
+                    Some((symbol, location))
+                } else {
+                    None
+                }
+            })
+            .buffer_unordered(100)
+            .filter_map(|content| futures::future::ready(content))
+            .collect::<Vec<_>>()
+            .await;
+
+        // We now have the locations and the symbol as well, we now ask the symbol manager
+        // for the outline for this symbol
+        let symbol_to_definition = stream::iter(
+            symbol_locations
+                .into_iter()
+                .map(|symbol_location| (symbol_location, hub_sender.clone())),
+        )
+        .map(|((symbol, location), hub_sender)| async move {
+            if let Ok(location) = location {
+                // we might not get the position here for some weird reason which
+                // is also fine
+                let position = location.get_position();
+                if let Some(position) = position {
+                    let possible_file_path = self
+                        .go_to_definition(fs_file_path, position)
+                        .await
+                        .map(|position| {
+                            // there are multiple definitions here for some
+                            // reason which I can't recall why, but we will
+                            // always take the first one and run with it cause
+                            // we then let this symbol agent take care of things
+                            // TODO(skcd): The symbol needs to be on the
+                            // correct file path over here
+                            let symbol_file_path = position
+                                .definitions()
+                                .first()
+                                .map(|definition| definition.file_path().to_owned());
+                            symbol_file_path
+                        })
+                        .ok()
+                        .flatten();
+                    if let Some(definition_file_path) = possible_file_path {
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        // we have the possible file path over here
+                        let _ = hub_sender.send((
+                            SymbolEventRequest::outline(SymbolIdentifier::with_file_path(
+                                symbol.code_symbol(),
+                                &definition_file_path,
+                            )),
+                            sender,
+                        ));
+                        receiver
+                            .await
+                            .map(|response| response.to_string())
+                            .ok()
+                            .map(|definition_outline| (symbol, definition_outline))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await;
+        Ok(symbol_to_definition)
     }
 
     pub async fn check_code_correctness(

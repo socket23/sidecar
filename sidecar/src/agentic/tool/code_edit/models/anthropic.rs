@@ -16,7 +16,7 @@ impl AnthropicCodeEditFromatter {
             r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
 Follow the user's requirements carefully and to the letter.
 - The user instructions are present in <user_instruction> tag.
-- Modify the code or create new code.
+- Modify the code or create new code, the code is present in <code_to_edit>
 - The code present above the section you have to edit will be given in <code_above> section.
 - The code present below the section you have to edit will be given in <code_below> section.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
@@ -24,7 +24,31 @@ Follow the user's requirements carefully and to the letter.
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
-- You must always answer in {language} code."#
+- You must always answer in {language} code.
+- Your reply should be contained in the <reply> tags.
+
+We are also showing you an example:
+
+<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_to_edit>
+```python
+def add(a, b):
+    return a + b
+</code_to_edit>
+
+Your reply is:
+<reply>
+```python
+def add(a, b):
+    print(a, b)
+    return a + b
+```
+</reply>
+
+Notice how we rewrote the whole section of the code which needs to be changed again."#
         )
     }
 

@@ -17,8 +17,11 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
     agentic::{
-        symbol::{events::edit::SymbolToEditRequest, identifier::Snippet},
-        tool::lsp::open_file::OpenFileResponse,
+        symbol::{
+            events::edit::SymbolToEditRequest, helpers::split_file_content_into_parts,
+            identifier::Snippet,
+        },
+        tool::{code_edit::types::CodeEdit, input::ToolInput, lsp::open_file::OpenFileResponse},
     },
     chunking::{text_document::Range, types::OutlineNodeContent},
 };
@@ -322,7 +325,10 @@ impl Symbol {
     // TODO(skcd): Handle the cases where the outline is within a symbol and spread
     // across different lines (as is the case in typescript and python)
     // for now we are focussing on rust
-    async fn edit_sub_symbol(&self, subsymbol: &SymbolToEdit) -> Result<(), SymbolError> {
+    async fn grab_context_for_editing(
+        &self,
+        subsymbol: &SymbolToEdit,
+    ) -> Result<Vec<String>, SymbolError> {
         let file_content = self
             .tools
             .get_file_content(&subsymbol.fs_file_path())
@@ -375,12 +381,67 @@ impl Symbol {
                 self.llm_properties.api_key().clone(),
                 self.hub_sender.clone(),
             )
-            .await;
+            .await?;
 
         // cool now we have all the symbols which are necessary for making the edit
         // and more importantly we have all the context which is required
         // we can send the edit request
-        todo!("implement the sub-symbol editing");
+        // this is the planning stage at this point, now we can begin the editing
+        let outlines = interested_defintiions
+            .iter()
+            .filter_map(|interesed_definitions| {
+                if let Some(interesed_definitions) = interesed_definitions {
+                    Some(interesed_definitions.1.to_owned())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .chain(
+                codebase_wide_search
+                    .iter()
+                    .filter_map(|codebase_wide_definitions| {
+                        if let Some(interested_definitions) = codebase_wide_definitions {
+                            Some(interested_definitions.1.to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .collect::<Vec<_>>();
+        Ok(outlines)
+    }
+
+    async fn edit_code(
+        &self,
+        sub_symbol: &SymbolToEdit,
+        context: Vec<String>,
+    ) -> Result<String, SymbolError> {
+        let file_content = self
+            .tools
+            .get_file_content(&sub_symbol.fs_file_path())
+            .await?;
+        let language = self
+            .tools
+            .detect_language(sub_symbol.fs_file_path())
+            .unwrap_or("".to_owned());
+        let symbol_to_edit = self.find_symbol_to_edit(sub_symbol).await?;
+        let response = self
+            .tools
+            .code_edit(
+                sub_symbol.fs_file_path(),
+                &file_content,
+                symbol_to_edit.range(),
+                context.join("\n"),
+                sub_symbol.instructions().join("\n"),
+                self.llm_properties.llm().clone(),
+                self.llm_properties.provider().clone(),
+                self.llm_properties.api_key().clone(),
+            )
+            .await?;
+        Ok(response)
     }
 
     // we are going to edit the symbols over here
@@ -392,25 +453,22 @@ impl Symbol {
     async fn edit_implementations(
         &self,
         edit_request: SymbolToEditRequest,
-        // we might have a user event here in the future which either stops the edit
-        // or makes something else happen
     ) -> Result<(), SymbolError> {
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
-        // now we get to work on all of them with as much parallelism as possible
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
-            // being editing
-            self.edit_sub_symbol(sub_symbol_to_edit).await;
-            let file_path = sub_symbol_to_edit.fs_file_path();
-            let range = sub_symbol_to_edit.range();
-            let is_outline = sub_symbol_to_edit.is_outline();
-            // can we edit on the same line location in the file at the same time
-            // seems doable right?
+            let context_for_editing = self.grab_context_for_editing(&sub_symbol_to_edit).await?;
+            let edited_code = self
+                .edit_code(&sub_symbol_to_edit, context_for_editing)
+                .await?;
+            // debugging loop after this
+            // we want to call the check_code_correctness function after this
+            // to make sure that there are no more errors with the code
         }
         Ok(())
     }

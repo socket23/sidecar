@@ -19,8 +19,11 @@ use super::{
     grep::file::FindInFile,
     input::ToolInput,
     lsp::{
-        diagnostics::LSPDiagnostics, gotodefintion::LSPGoToDefinition,
-        gotoimplementations::LSPGoToImplementation, open_file::LSPOpenFile,
+        diagnostics::LSPDiagnostics,
+        gotodefintion::LSPGoToDefinition,
+        gotoimplementations::LSPGoToImplementation,
+        open_file::LSPOpenFile,
+        quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
     },
     output::ToolOutput,
     rerank::base::ReRankBroker,
@@ -93,6 +96,11 @@ impl ToolBroker {
             Box::new(CodeToEditFormatterBroker::new(llm_client)),
         );
         tools.insert(ToolType::EditorApplyEdits, Box::new(EditorApply::new()));
+        tools.insert(ToolType::GetQuickFix, Box::new(LSPQuickFixClient::new()));
+        tools.insert(
+            ToolType::ApplyQuickFix,
+            Box::new(LSPQuickFixInvocationClient::new()),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

@@ -317,6 +317,26 @@ impl ToolBox {
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
     ) -> Result<(), SymbolError> {
+        // code correction looks like this:
+        // - apply the edited code to the original selection
+        // - look at the code actions which are available
+        // - take one of the actions or edit code as required
+        // - once we have no LSP errors or anything we are good
+        let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
+
+        let mut updated_code = edited_code.to_owned();
+        let mut edited_range = symbol_to_edit.range().clone();
+        loop {
+            let editor_response = self
+                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code)
+                .await?;
+
+            // Now we check for LSP diagnostics
+            let lsp_diagnostics = self
+                .get_lsp_diagnostics(fs_file_path, &edited_range)
+                .await?;
+        }
+
         // to make sure that the edit really worked, we have to do the following:
         // - first we apply the change to the file and then invoke the LSP for diagnostics
         // - once we have the diagnostics we enter the correction loop where we might

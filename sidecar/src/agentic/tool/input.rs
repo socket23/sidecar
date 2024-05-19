@@ -9,8 +9,11 @@ use super::{
     filtering::broker::{CodeToEditFilterRequest, CodeToEditSymbolRequest},
     grep::file::FindInFileRequest,
     lsp::{
-        diagnostics::LSPDiagnosticsInput, gotodefintion::GoToDefinitionRequest,
-        gotoimplementations::GoToImplementationRequest, open_file::OpenFileRequest,
+        diagnostics::LSPDiagnosticsInput,
+        gotodefintion::GoToDefinitionRequest,
+        gotoimplementations::GoToImplementationRequest,
+        open_file::OpenFileRequest,
+        quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
     rerank::base::ReRankEntriesForBroker,
 };
@@ -31,6 +34,8 @@ pub enum ToolInput {
     FilterCodeSnippetsForEditing(CodeToEditFilterRequest),
     FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest),
     EditorApplyChange(EditorApplyRequest),
+    QuickFixRequest(GetQuickFixRequest),
+    QuickFixInvocationRequest(LSPQuickFixInvocationRequest),
 }
 
 impl ToolInput {
@@ -52,6 +57,24 @@ impl ToolInput {
             }
             ToolInput::EditorApplyChange(_) => ToolType::EditorApplyEdits,
             ToolInput::CodeSymbolUtilitySearch(_) => ToolType::UtilityCodeSymbolSearch,
+            ToolInput::QuickFixRequest(_) => ToolType::GetQuickFix,
+            ToolInput::QuickFixInvocationRequest(_) => ToolType::ApplyQuickFix,
+        }
+    }
+
+    pub fn quick_fix_invocation_request(self) -> Result<LSPQuickFixInvocationRequest, ToolError> {
+        if let ToolInput::QuickFixInvocationRequest(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn quick_fix_request(self) -> Result<GetQuickFixRequest, ToolError> {
+        if let ToolInput::QuickFixRequest(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput)
         }
     }
 

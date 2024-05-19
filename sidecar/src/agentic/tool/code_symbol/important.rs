@@ -397,6 +397,10 @@ impl CodeSymbolImportantResponse {
         self.symbols.as_slice()
     }
 
+    pub fn remove_symbols(self) -> Vec<CodeSymbolWithThinking> {
+        self.symbols
+    }
+
     pub fn ordered_symbols(&self) -> &[CodeSymbolWithSteps] {
         self.ordered_symbols.as_slice()
     }

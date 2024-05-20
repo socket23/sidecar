@@ -28,6 +28,16 @@ pub struct CodeCorrectnessAction {
     index: i64,
 }
 
+impl CodeCorrectnessAction {
+    pub fn thinking(&self) -> &str {
+        &self.thinking
+    }
+
+    pub fn index(&self) -> i64 {
+        self.index
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CodeCorrectnessRequest {
     fs_file_contents: String,

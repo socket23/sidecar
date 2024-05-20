@@ -10,7 +10,9 @@ use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_edit::types::CodeEdit;
-use crate::agentic::tool::code_symbol::correctness::CodeCorrectnessRequest;
+use crate::agentic::tool::code_symbol::correctness::{
+    CodeCorrectnessAction, CodeCorrectnessRequest,
+};
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
     CodeSymbolUtilityRequest, CodeSymbolWithThinking,
@@ -31,7 +33,8 @@ use crate::agentic::tool::lsp::gotoimplementations::{
 };
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{
-    GetQuickFixRequest, GetQuickFixResponse, QuickFixOption,
+    GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
+    LSPQuickFixInvocationResponse, QuickFixOption,
 };
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
@@ -318,6 +321,9 @@ impl ToolBox {
         symbol_edited: &SymbolToEdit,
         original_code: &str,
         edited_code: &str,
+        // this is the context from the code edit which we want to keep using while
+        // fixing
+        code_edit_extra_context: &str,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
@@ -330,7 +336,15 @@ impl ToolBox {
         let instructions = symbol_edited.instructions().join("\n");
         let fs_file_path = symbol_edited.fs_file_path();
         let symbol_name = symbol_edited.symbol_name();
+        let mut tries = 0;
+        let max_tries = 5;
         loop {
+            // keeping a try counter
+            if tries >= max_tries {
+                break;
+            }
+            tries = tries + 1;
+
             let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
             let fs_file_content = self.file_open(fs_file_path.to_owned()).await?.contents();
 
@@ -353,8 +367,9 @@ impl ToolBox {
 
             // Now we get all the quick fixes which are available in the editor
             let quick_fix_actions = self
-                .get_quick_fix_actions(fs_file_path, &edited_range, request_id)
-                .await?;
+                .get_quick_fix_actions(fs_file_path, &edited_range, request_id.to_owned())
+                .await?
+                .remove_options();
 
             // now we can send over the request to the LLM to select the best tool
             // for editing the code out
@@ -367,7 +382,7 @@ impl ToolBox {
                     &instructions,
                     original_code,
                     lsp_diagnostics.remove_diagnostics(),
-                    quick_fix_actions.remove_options(),
+                    quick_fix_actions.to_vec(),
                     llm.clone(),
                     provider.clone(),
                     api_keys.clone(),
@@ -377,6 +392,26 @@ impl ToolBox {
             // Now that we have the selected action, we can chose what to do about it
             // there might be a case that we have to re-write the code completely, since
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
+            let selected_action_index = selected_action.index();
+            let selected_action_thinking = selected_action.thinking();
+
+            // code edit is a special operation which is not present in the quick-fix
+            // but is provided by us, the way to check this is by looking at the index and seeing
+            // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
+            if selected_action_index >= quick_fix_actions.len() as i64 {
+                todo!("implement the code edit flow over here")
+            } else {
+                // invoke the code action over here with the ap
+                let response = self
+                    .invoke_quick_action(selected_action_index, &request_id)
+                    .await?;
+                if response.is_success() {
+                    // great we have a W
+                } else {
+                    // boo something bad happened, we should probably log and do something about this here
+                    // for now we assume its all Ws
+                }
+            }
         }
         // todo!("we have to figure out this loop properly");
         todo!("we want to complete this")
@@ -395,7 +430,7 @@ impl ToolBox {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-    ) -> Result<GetQuickFixResponse, SymbolError> {
+    ) -> Result<CodeCorrectnessAction, SymbolError> {
         let (code_above, code_below, code_in_selection) =
             split_file_content_into_parts(fs_file_content, edited_range);
         let request = ToolInput::CodeCorrectnessAction(CodeCorrectnessRequest::new(
@@ -418,7 +453,7 @@ impl ToolBox {
             .invoke(request)
             .await
             .map_err(|e| SymbolError::ToolError(e))?
-            .get_quick_fix_actions()
+            .get_code_correctness_action()
             .ok_or(SymbolError::WrongToolOutput)
     }
 
@@ -463,29 +498,29 @@ impl ToolBox {
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    async fn invoke_quick_action(
+        &self,
+        quick_fix_index: i64,
+        request_id: &str,
+    ) -> Result<LSPQuickFixInvocationResponse, SymbolError> {
+        let request = ToolInput::QuickFixInvocationRequest(LSPQuickFixInvocationRequest::new(
+            request_id.to_owned(),
+            quick_fix_index,
+            self.editor_url.to_owned(),
+        ));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_quick_fix_invocation_result()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
     pub async fn get_file_content(&self, fs_file_path: &str) -> Result<String, SymbolError> {
         self.symbol_broker
             .get_file_content(fs_file_path)
             .await
             .ok_or(SymbolError::UnableToReadFileContent)
-    }
-
-    // We use this to gather util functions or other functionality which might
-    // be helpful for answering the user query
-    pub async fn codebase_wide_context_gathering(
-        &self,
-        fs_file_path: &str,
-        symbol_name: &str,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_keys: LLMProviderAPIKeys,
-        query: &str,
-        hub_sender: UnboundedSender<(
-            SymbolEventRequest,
-            tokio::sync::oneshot::Sender<SymbolEventResponse>,
-        )>,
-    ) -> Result<(), SymbolError> {
-        unimplemented!();
     }
 
     pub async fn gather_important_symbols_with_definition(

@@ -37,6 +37,7 @@ pub enum ToolType {
     ApplyQuickFix,
     // Error correction tool selection
     CodeCorrectnessActionSelection,
+    CodeEditingForError,
 }
 
 #[async_trait]

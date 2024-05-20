@@ -3,6 +3,7 @@ use super::{
     code_edit::{find::FindCodeSelectionInput, types::CodeEdit},
     code_symbol::{
         correctness::CodeCorrectnessRequest,
+        error_fix::CodeEditingErrorRequest,
         important::{
             CodeSymbolImportantRequest, CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest,
         },
@@ -40,6 +41,7 @@ pub enum ToolInput {
     QuickFixRequest(GetQuickFixRequest),
     QuickFixInvocationRequest(LSPQuickFixInvocationRequest),
     CodeCorrectnessAction(CodeCorrectnessRequest),
+    CodeEditingError(CodeEditingErrorRequest),
 }
 
 impl ToolInput {
@@ -64,6 +66,15 @@ impl ToolInput {
             ToolInput::QuickFixRequest(_) => ToolType::GetQuickFix,
             ToolInput::QuickFixInvocationRequest(_) => ToolType::ApplyQuickFix,
             ToolInput::CodeCorrectnessAction(_) => ToolType::CodeCorrectnessActionSelection,
+            ToolInput::CodeEditingError(_) => ToolType::CodeEditingForError,
+        }
+    }
+
+    pub fn code_editing_error(self) -> Result<CodeEditingErrorRequest, ToolError> {
+        if let ToolInput::CodeEditingError(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput)
         }
     }
 

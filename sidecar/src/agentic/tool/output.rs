@@ -56,6 +56,7 @@ pub enum ToolOutput {
     GetQuickFixList(GetQuickFixResponse),
     LSPQuickFixInvoation(LSPQuickFixInvocationResponse),
     CodeCorrectnessAction(CodeCorrectnessAction),
+    CodeEditingForError(String),
 }
 
 impl ToolOutput {

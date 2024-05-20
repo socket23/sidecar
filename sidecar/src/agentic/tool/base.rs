@@ -35,6 +35,8 @@ pub enum ToolType {
     GetQuickFix,
     // apply quick fix
     ApplyQuickFix,
+    // Error correction tool selection
+    CodeCorrectnessActionSelection,
 }
 
 #[async_trait]

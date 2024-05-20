@@ -30,6 +30,16 @@ pub struct QuickFixOption {
     number: i64,
 }
 
+impl QuickFixOption {
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn index(&self) -> i64 {
+        self.number
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GetQuickFixResponse {
     options: Vec<QuickFixOption>,

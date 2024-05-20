@@ -22,7 +22,7 @@ use crate::{
 use super::{models::anthropic::AnthropicCodeSymbolImportant, types::CodeSymbolError};
 
 pub struct CodeSymbolImportantBroker {
-    pub llms: HashMap<LLMType, Box<dyn CodeSymbolImportant + Send + Sync>>,
+    llms: HashMap<LLMType, Box<dyn CodeSymbolImportant + Send + Sync>>,
 }
 
 impl CodeSymbolImportantBroker {
@@ -85,8 +85,6 @@ impl Tool for CodeSymbolImportantBroker {
                                 .await
                                 .map(|response| ToolOutput::important_symbols(response))
                                 .map_err(|e| ToolError::CodeSymbolError(e));
-                        } else {
-                            println!("we are so fucked");
                         }
                     }
                 };

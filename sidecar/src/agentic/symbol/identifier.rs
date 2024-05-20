@@ -273,16 +273,6 @@ impl MechaCodeSymbolThinking {
         &self.provided_user_context
     }
 
-    // Here we present the code snippet which we will be editing to the LLM
-    // and ask it to gather all the symbols which might be relevant before
-    // making an edit
-    pub async fn gather_context(&self, snippet_to_edit: &Snippet, tools: Arc<ToolBox>) {
-        let file_path = &snippet_to_edit.fs_file_path;
-        let file_content = tools.file_open(file_path.to_owned()).await;
-        // we have to grab the file content
-        let range = snippet_to_edit.range();
-    }
-
     // potentital issue here is that the ranges might change after an edit
     // has been made, we have to be careful about that, for now we ball
     pub async fn find_symbol_to_edit(

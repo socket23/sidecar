@@ -12,7 +12,7 @@ use super::{
     code_edit::{
         find::FindCodeSectionsToEdit, models::broker::CodeEditBroker, types::CodeEditingTool,
     },
-    code_symbol::important::CodeSymbolImportantBroker,
+    code_symbol::{correctness::CodeCorrectnessBroker, important::CodeSymbolImportantBroker},
     editor::apply::EditorApply,
     errors::ToolError,
     filtering::broker::CodeToEditFormatterBroker,
@@ -90,6 +90,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::FilterCodeSnippetsForEditing,
             Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::CodeCorrectnessActionSelection,
+            Box::new(CodeCorrectnessBroker::new(llm_client.clone())),
         );
         tools.insert(
             ToolType::FilterCodeSnippetsSingleSymbolForEditing,

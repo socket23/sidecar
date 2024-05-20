@@ -10,6 +10,7 @@ use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_edit::types::CodeEdit;
+use crate::agentic::tool::code_symbol::correctness::CodeCorrectnessRequest;
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
     CodeSymbolUtilityRequest, CodeSymbolWithThinking,
@@ -21,12 +22,17 @@ use crate::agentic::tool::filtering::broker::{
     CodeToEditSymbolResponse,
 };
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
-use crate::agentic::tool::lsp::diagnostics::{LSPDiagnosticsInput, LSPDiagnosticsOutput};
+use crate::agentic::tool::lsp::diagnostics::{
+    Diagnostic, LSPDiagnosticsInput, LSPDiagnosticsOutput,
+};
 use crate::agentic::tool::lsp::gotodefintion::{GoToDefinitionRequest, GoToDefinitionResponse};
 use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
+use crate::agentic::tool::lsp::quick_fix::{
+    GetQuickFixRequest, GetQuickFixResponse, QuickFixOption,
+};
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
@@ -309,9 +315,8 @@ impl ToolBox {
 
     pub async fn check_code_correctness(
         &self,
-        fs_file_path: &str,
-        file_content: &str,
         symbol_edited: &SymbolToEdit,
+        original_code: &str,
         edited_code: &str,
         llm: LLMType,
         provider: LLMProvider,
@@ -322,11 +327,16 @@ impl ToolBox {
         // - look at the code actions which are available
         // - take one of the actions or edit code as required
         // - once we have no LSP errors or anything we are good
-        let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
-
-        let mut updated_code = edited_code.to_owned();
-        let mut edited_range = symbol_to_edit.range().clone();
+        let instructions = symbol_edited.instructions().join("\n");
+        let fs_file_path = symbol_edited.fs_file_path();
+        let symbol_name = symbol_edited.symbol_name();
         loop {
+            let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
+            let fs_file_content = self.file_open(fs_file_path.to_owned()).await?.contents();
+
+            let updated_code = edited_code.to_owned();
+            let edited_range = symbol_to_edit.range().clone();
+            let request_id = uuid::Uuid::new_v4().to_string();
             let editor_response = self
                 .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code)
                 .await?;
@@ -340,9 +350,76 @@ impl ToolBox {
             if lsp_diagnostics.get_diagnostics().is_empty() {
                 break;
             }
+
+            // Now we get all the quick fixes which are available in the editor
+            let quick_fix_actions = self
+                .get_quick_fix_actions(fs_file_path, &edited_range, request_id)
+                .await?;
+
+            // now we can send over the request to the LLM to select the best tool
+            // for editing the code out
+            let selected_action = self
+                .code_correctness_action_selection(
+                    fs_file_path,
+                    &fs_file_content,
+                    &edited_range,
+                    symbol_name,
+                    &instructions,
+                    original_code,
+                    lsp_diagnostics.remove_diagnostics(),
+                    quick_fix_actions.remove_options(),
+                    llm.clone(),
+                    provider.clone(),
+                    api_keys.clone(),
+                )
+                .await?;
+
+            // Now that we have the selected action, we can chose what to do about it
+            // there might be a case that we have to re-write the code completely, since
+            // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
         }
         // todo!("we have to figure out this loop properly");
         todo!("we want to complete this")
+    }
+
+    async fn code_correctness_action_selection(
+        &self,
+        fs_file_path: &str,
+        fs_file_content: &str,
+        edited_range: &Range,
+        symbol_name: &str,
+        instruction: &str,
+        previous_code: &str,
+        diagnostics: Vec<Diagnostic>,
+        quick_fix_actions: Vec<QuickFixOption>,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<GetQuickFixResponse, SymbolError> {
+        let (code_above, code_below, code_in_selection) =
+            split_file_content_into_parts(fs_file_content, edited_range);
+        let request = ToolInput::CodeCorrectnessAction(CodeCorrectnessRequest::new(
+            fs_file_content.to_owned(),
+            fs_file_path.to_owned(),
+            code_above,
+            code_below,
+            code_in_selection,
+            symbol_name.to_owned(),
+            instruction.to_owned(),
+            diagnostics,
+            quick_fix_actions,
+            previous_code.to_owned(),
+            llm,
+            provider,
+            api_keys,
+        ));
+        let _ = self.ui_events.send(UIEvent::ToolEvent(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_quick_fix_actions()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn code_edit(
@@ -532,6 +609,27 @@ impl ToolBox {
         .collect::<Vec<_>>()
         .await;
         Ok(symbol_to_definition)
+    }
+
+    async fn get_quick_fix_actions(
+        &self,
+        fs_file_path: &str,
+        range: &Range,
+        request_id: String,
+    ) -> Result<GetQuickFixResponse, SymbolError> {
+        let request = ToolInput::QuickFixRequest(GetQuickFixRequest::new(
+            fs_file_path.to_owned(),
+            self.editor_url.to_owned(),
+            range.clone(),
+            request_id,
+        ));
+        let _ = self.ui_events.send(UIEvent::ToolEvent(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_quick_fix_actions()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     async fn get_lsp_diagnostics(

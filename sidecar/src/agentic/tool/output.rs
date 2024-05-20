@@ -107,6 +107,13 @@ impl ToolOutput {
         ToolOutput::GoToImplementation(go_to_implementation)
     }
 
+    pub fn get_quick_fix_actions(self) -> Option<GetQuickFixResponse> {
+        match self {
+            ToolOutput::GetQuickFixList(output) => Some(output),
+            _ => None,
+        }
+    }
+
     pub fn get_lsp_diagnostics(self) -> Option<LSPDiagnosticsOutput> {
         match self {
             ToolOutput::LSPDiagnostics(output) => Some(output),

@@ -32,6 +32,34 @@ pub struct CodeEditingErrorRequest {
 }
 
 impl CodeEditingErrorRequest {
+    pub fn new(
+        fs_file_path: String,
+        code_above: Option<String>,
+        code_below: Option<String>,
+        code_in_selection: String,
+        extra_context: String,
+        original_code: String,
+        error_instructions: String,
+        previous_instructions: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Self {
+        Self {
+            fs_file_path,
+            code_above,
+            code_below,
+            code_in_selection,
+            extra_context,
+            original_code,
+            previous_instructions,
+            error_instructions,
+            llm,
+            provider,
+            api_keys,
+        }
+    }
+
     pub fn llm(&self) -> &LLMType {
         &self.llm
     }
@@ -70,6 +98,10 @@ impl CodeEditingErrorRequest {
 
     pub fn error_instructions(&self) -> &str {
         &self.error_instructions
+    }
+
+    pub fn extra_context(&self) -> &str {
+        &self.extra_context
     }
 }
 

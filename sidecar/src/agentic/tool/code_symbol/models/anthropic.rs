@@ -10,6 +10,7 @@ use llm_client::{
 use crate::agentic::tool::{
     code_symbol::{
         correctness::{CodeCorrectness, CodeCorrectnessAction, CodeCorrectnessRequest},
+        error_fix::{CodeEditingErrorRequest, CodeSymbolErrorFix},
         important::{
             CodeSymbolImportant, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
             CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
@@ -138,6 +139,126 @@ impl Reply {
 }
 
 impl AnthropicCodeSymbolImportant {
+    fn user_message_for_code_error_fix(
+        &self,
+        code_error_fix_request: &CodeEditingErrorRequest,
+    ) -> String {
+        let user_instruction = code_error_fix_request.instructions();
+        let user_instruction = format!(
+            r#"<user_instruction>
+{user_instruction}
+</user_instruction>"#
+        );
+
+        let file_path = code_error_fix_request.fs_file_path();
+        let code_above = code_error_fix_request.code_above().unwrap_or("".to_owned());
+        let code_below = code_error_fix_request.code_below().unwrap_or("".to_owned());
+        let code_in_selection = code_error_fix_request.code_in_selection();
+        let original_code = code_error_fix_request.original_code();
+        let error_instructions = code_error_fix_request.error_instructions();
+
+        let file = format!(
+            r#"<file>
+<file_path>
+{file_path}
+</file_path>
+<code_above>
+{code_above}
+</code_above>
+<code_below>
+{code_below}
+</code_below>
+<code_in_selection>
+{code_in_selection}
+</code_in_selection>
+</file>"#
+        );
+
+        let original_code = format!(
+            r#"<original_code>
+{original_code}
+</original_code>"#
+        );
+
+        let error_instructions = format!(
+            r#"<error_instructions>
+{error_instructions}
+</error_instructions>"#
+        );
+
+        // The prompt is formatted over here
+        format!(
+            r#"<query>
+{user_instruction}
+
+{file}
+
+{original_code}
+
+{error_instructions}
+</query>"#
+        )
+    }
+
+    fn system_message_for_code_error_fix(&self) -> String {
+        format!(
+            r#"You are an expert software engineer who is tasked with fixing broken written written by a junior engineer.
+- The junior engineer has taken the instructions which were provided in <user_instructions> and made edits to the code which is now present in <code_in_selection> section.
+- The original code before any changes were made is present in <original_code> , this should help you understand how the junior engineer went about making changes.
+- You are also shown the whole file content in the <file> section, this will be useful for you to understand the overall context in which the change was made.
+- The user has also noticed some errors with the modified code which is present in <code_in_selection> and given their reasoning in <error_instructions> section.
+- You have to rewrite the code which is present only in <code_in_selection> making sure that the error instructions present in <error_instructions> are handled.
+
+An example is shown below to you:
+
+<user_instruction>
+We want to be able to subtract 4 numbers instead of 2
+</user_instruction>
+
+<file>
+<file_path>
+testing/maths.py
+</file_path>
+<code_above>
+```python
+def add(a, b):
+    return a + b
+```
+</code_above>
+<code_below>
+```python
+def multiply(a, b):
+    return a * b
+```
+</code_below>
+<code_in_selection>
+```python
+def subtract(a, b, c):
+    return a - b - c
+</code_in_selection>
+</file>
+
+<original_code>
+```python
+def subtract(a, b):
+    return a - b
+```
+</original_code>
+
+<error_instructions>
+You are subtracting 3 numbers not 4
+</error_instructions>
+
+Your reply is:
+<reply>
+```python
+def subtract(a, b, c, d):
+    return a - b - c - d
+```
+</reply>
+"#
+        )
+    }
     fn system_message_for_correctness_check(&self) -> String {
         format!(
             r#"You are an expert software engineer who is tasked with taking actions for fixing errors in the code which is being written in the editor.
@@ -1511,6 +1632,39 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
             from_str::<CodeCorrectnessAction>(&fixed_response)
                 .map_err(|e| CodeSymbolError::SerdeError(e))?;
         Ok(parsed_response)
+    }
+}
+
+#[async_trait]
+impl CodeSymbolErrorFix for AnthropicCodeSymbolImportant {
+    async fn fix_code_symbol(
+        &self,
+        code_fix: CodeEditingErrorRequest,
+    ) -> Result<String, CodeSymbolError> {
+        let model = code_fix.llm().clone();
+        let provider = code_fix.llm_provider().clone();
+        let api_keys = code_fix.llm_api_keys().clone();
+        let system_message = LLMClientMessage::system(self.system_message_for_code_error_fix());
+        let user_message = LLMClientMessage::user(self.user_message_for_code_error_fix(&code_fix));
+        let messages =
+            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.2, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                messages,
+                provider,
+                vec![(
+                    "request_type".to_owned(),
+                    "fix_code_symbol_code_editing".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+        Ok(response)
     }
 }
 

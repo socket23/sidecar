@@ -35,7 +35,6 @@ pub struct CodeCorrectnessRequest {
     code_above: Option<String>,
     code_below: Option<String>,
     code_in_selection: String,
-    range: Range,
     symbol_name: String,
     instruction: String,
     previous_code: String,
@@ -47,6 +46,37 @@ pub struct CodeCorrectnessRequest {
 }
 
 impl CodeCorrectnessRequest {
+    pub fn new(
+        fs_file_contents: String,
+        fs_file_path: String,
+        code_above: Option<String>,
+        code_below: Option<String>,
+        code_in_selection: String,
+        symbol_name: String,
+        instruction: String,
+        diagnostics: Vec<Diagnostic>,
+        quick_fix_actions: Vec<QuickFixOption>,
+        previous_code: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Self {
+        Self {
+            fs_file_contents,
+            fs_file_path,
+            code_above,
+            code_below,
+            code_in_selection,
+            previous_code,
+            quick_fix_actions,
+            instruction,
+            symbol_name,
+            diagnostics,
+            llm,
+            provider,
+            api_keys,
+        }
+    }
     pub fn file_content(&self) -> &str {
         &self.fs_file_contents
     }

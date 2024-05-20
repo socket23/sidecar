@@ -45,6 +45,12 @@ pub struct GetQuickFixResponse {
     options: Vec<QuickFixOption>,
 }
 
+impl GetQuickFixResponse {
+    pub fn remove_options(self) -> Vec<QuickFixOption> {
+        self.options
+    }
+}
+
 pub struct LSPQuickFixClient {
     client: reqwest::Client,
 }

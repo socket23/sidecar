@@ -59,6 +59,10 @@ impl LSPDiagnosticsOutput {
     pub fn get_diagnostics(&self) -> &[Diagnostic] {
         self.diagnostics.as_slice()
     }
+
+    pub fn remove_diagnostics(self) -> Vec<Diagnostic> {
+        self.diagnostics
+    }
 }
 
 impl LSPDiagnostics {

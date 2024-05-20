@@ -34,10 +34,20 @@ impl LSPDiagnosticsInput {
     }
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Diagnostic {
     diagnostic: String,
     range: Range,
+}
+
+impl Diagnostic {
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn diagnostic(&self) -> &str {
+        &self.diagnostic
+    }
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]

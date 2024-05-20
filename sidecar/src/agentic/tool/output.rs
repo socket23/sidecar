@@ -1,7 +1,7 @@
 //! Contains the output of a tool which can be used by any of the callers
 
 use super::{
-    code_symbol::important::CodeSymbolImportantResponse,
+    code_symbol::{correctness::CodeCorrectnessAction, important::CodeSymbolImportantResponse},
     editor::apply::EditorApplyResponse,
     filtering::broker::{CodeToEditFilterResponse, CodeToEditSymbolResponse},
     grep::file::FindInFileResponse,
@@ -55,9 +55,14 @@ pub enum ToolOutput {
     UtilityCodeSearch(CodeSymbolImportantResponse),
     GetQuickFixList(GetQuickFixResponse),
     LSPQuickFixInvoation(LSPQuickFixInvocationResponse),
+    CodeCorrectnessAction(CodeCorrectnessAction),
 }
 
 impl ToolOutput {
+    pub fn code_correctness_action(output: CodeCorrectnessAction) -> Self {
+        ToolOutput::CodeCorrectnessAction(output)
+    }
+
     pub fn quick_fix_invocation_result(output: LSPQuickFixInvocationResponse) -> Self {
         ToolOutput::LSPQuickFixInvoation(output)
     }

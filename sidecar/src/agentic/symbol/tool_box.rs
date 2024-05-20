@@ -335,34 +335,12 @@ impl ToolBox {
             let lsp_diagnostics = self
                 .get_lsp_diagnostics(fs_file_path, &edited_range)
                 .await?;
+
+            // We also give it the option to edit the code as required
+            if lsp_diagnostics.get_diagnostics().is_empty() {
+                break;
+            }
         }
-
-        // to make sure that the edit really worked, we have to do the following:
-        // - first we apply the change to the file and then invoke the LSP for diagnostics
-        // - once we have the diagnostics we enter the correction loop where we might
-        // have to follow the symbols or do soething else
-        // - we can also invoke the LLM here to check if the edited code is correct
-
-        // // apply the changes to the editor
-        // let editor_response = self
-        //     .apply_edits_to_editor(fs_file_path, selection_range, edited_code)
-        //     .await?;
-
-        // // talk to the LSP and see if there are mistakes
-        // let lsp_diagnostics = self
-        //     .get_lsp_diagnostics(fs_file_path, editor_response.range())
-        //     .await?;
-
-        // // Now we look at the lsp diagnsotics and try to fix them, there are many options here
-        // // to choose from
-        // // once we have lsp diagnostics we can either take an action if its possible
-        // // to take an action
-        // // the best thing to do here is to do both:
-        // // ask if the LLM wants to rewrite the code or give it the quick fix options
-        // // both of these are valid tools which the LLM can use
-        // // there can be 2 cases which happen over here: we might have to fix the imports
-        // // before we start the self-correction loop or do it after
-        // // maybe we enable this somehow? .... thinking
         // todo!("we have to figure out this loop properly");
         todo!("we want to complete this")
     }

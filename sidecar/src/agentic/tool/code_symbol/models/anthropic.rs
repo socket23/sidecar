@@ -7,13 +7,17 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
-use crate::agentic::tool::code_symbol::{
-    important::{
-        CodeSymbolImportant, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
-        CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
-        CodeSymbolWithThinking,
+use crate::agentic::tool::{
+    code_symbol::{
+        correctness::{CodeCorrectness, CodeCorrectnessAction, CodeCorrectnessRequest},
+        important::{
+            CodeSymbolImportant, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
+            CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
+            CodeSymbolWithThinking,
+        },
+        types::CodeSymbolError,
     },
-    types::CodeSymbolError,
+    lsp::diagnostics::Diagnostic,
 };
 
 pub struct AnthropicCodeSymbolImportant {
@@ -134,6 +138,237 @@ impl Reply {
 }
 
 impl AnthropicCodeSymbolImportant {
+    fn system_message_for_correctness_check(&self) -> String {
+        format!(
+            r#"You are an expert software engineer who is tasked with taking actions for fixing errors in the code which is being written in the editor.
+- You will be given a list of actions you can take on the code to fix the various errors which are present.
+- The code has been edited so that the user instruction present in <user_instruction> section is satisfied.
+- The previous version of the code is shown to you in <previous_code>, this was the original code has now been edited to <re_written_code>
+- You are also shown the whole file content in <file> section, this is useful to understand the overall context in which the change was made.
+- The various errors which are present in the edited code are shown to you as <diagnostic_list>
+- The actions you can take to fix the errors present in <diagnostic_list> is shown in <action_list>
+- You have to only select a single action, even if multiple actions will be required for making the fix.
+- One of the actions "edit code" is special because you might have noticed that the code is wrong and you have to fix it completely.
+
+An example is shown below to you:
+<query>
+<file>
+<file_path>
+testing/maths.py
+</file_path>
+<code_above>
+def add(a, b):
+    return a + b
+</code_above>
+<code_below>
+def multiply(a, b):
+    return a * b
+</code_below>
+<code_in_selection>
+def subtract(a: str, b: str):
+    return a - b
+</code_in_selection>
+</file>
+<diagnostic_list>
+<diagnostic>
+<file_path>
+testing/maths.py
+</file_path>
+<content>
+    return a - b
+</content>
+<message>
+Cannot subtract a from b when both are strings
+</message>
+<diagnostic>
+</diagnostic_list>
+<action_list>
+<action>
+<index>
+0
+</index>
+<intent>
+code edit
+</intent>
+</action>
+</action_list>
+<user_instruction>
+change the types to int
+</user_instruction>
+<previous_code>
+def subtract(a: float, b: float):
+    return a - b
+</previous_code>
+<re_written_code>
+def subtract(a: str, b: str):
+    return a - b
+</re_written_code>
+</query>
+
+Your reply should be:
+<code_action>
+<thinking>
+We need to change the type sfor a and b to int
+</thinking>
+<index>
+0
+</index>
+</code_action>
+
+You can notice how we selected code edit as our action and also included a thinking field for it to justify how to fix it.
+You have to do that always and only select a single action at a time."#
+        )
+    }
+    fn format_lsp_diagnostic_for_prompt(
+        &self,
+        fs_file_content_lines: &[String],
+        fs_file_path: String,
+        diagnostic: &Diagnostic,
+    ) -> Option<String> {
+        let diagnostic_range = diagnostic.range();
+        let diagnostic_message = diagnostic.diagnostic();
+        // grab the content which is inside the diagnostic range
+        let diagnostic_start_line = diagnostic_range.start_line();
+        let diagnostic_end_line = diagnostic_range.end_line();
+        if diagnostic_start_line >= fs_file_content_lines.len()
+            || diagnostic_end_line >= fs_file_content_lines.len()
+        {
+            return None;
+        }
+        let content = fs_file_content_lines[diagnostic_start_line..diagnostic_end_line]
+            .into_iter()
+            .map(|line| line.to_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let file_path = format!(
+            "{}-{}:{}",
+            fs_file_path, diagnostic_start_line, diagnostic_end_line
+        );
+        let message = format!(
+            r#"<diagnostic>
+<file_path>
+{file_path}
+</file_path>
+<content>
+{content}
+</content>
+<message>
+{diagnostic_message}
+</message>
+<diagnostic>"#
+        );
+        Some(message)
+    }
+
+    fn format_code_correctness_request(
+        &self,
+        code_correctness_request: CodeCorrectnessRequest,
+    ) -> String {
+        let fs_file_content_lines = code_correctness_request
+            .file_content()
+            .lines()
+            .into_iter()
+            .map(|line| line.to_owned())
+            .collect::<Vec<_>>();
+        let diagnostics = code_correctness_request.diagnostics();
+        let fs_file_path = code_correctness_request.fs_file_path();
+        let formatted_diagnostics = diagnostics
+            .into_iter()
+            .filter_map(|diagnostics| {
+                self.format_lsp_diagnostic_for_prompt(
+                    fs_file_content_lines.as_slice(),
+                    fs_file_path.to_owned(),
+                    diagnostics,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // now we show the quick actions which are avaiable as tools along with
+        // the code edit which is always an option as well
+        let mut quick_actions = code_correctness_request
+            .quick_fix_actions()
+            .into_iter()
+            .map(|quick_action| {
+                let index = quick_action.index();
+                let label = quick_action.label();
+                format!(
+                    r#"<action>
+<index>
+{index}
+</index>
+<intent>
+{label}
+</intent>
+</action>"#
+                )
+            })
+            .collect::<Vec<_>>();
+        let actions_until_now = quick_actions.len();
+        quick_actions.push(format!(
+            r#"<action>
+<index>
+{actions_until_now}
+</index>
+<intent>
+edit code
+</intent>
+</action>"#
+        ));
+
+        let formatted_actions = quick_actions.join("\n");
+
+        let code_above = code_correctness_request
+            .code_above()
+            .unwrap_or("".to_owned());
+        let code_below = code_correctness_request
+            .code_below()
+            .unwrap_or("".to_owned());
+        let code_in_selection = code_correctness_request.code_in_selection();
+
+        let previous_code = code_correctness_request.previous_code();
+        let instruction = code_correctness_request.instruction();
+
+        // now we can create the query and have the llm choose it
+        let file_content = format!(
+            r#"<file>
+<file_path>
+{fs_file_path}
+</file_path>
+<code_above>
+{code_above}
+</code_above>
+<code_below>
+{code_below}
+</code_below>
+<code_in_selection>
+{code_in_selection}
+</code_in_selection>
+</file>"#
+        );
+
+        format!(
+            r#"<query>
+{file_content}
+<diagnostic_list>
+{formatted_diagnostics}
+</diagnostic_list>
+<action_list>
+{formatted_actions}
+</action_list>
+<user_instruction>
+{instruction}
+</user_instruction>
+<previous_code>
+{previous_code}
+</previous_code>
+<re_written_code>
+{code_in_selection}
+</re_written_code>
+</query>"#
+        )
+    }
+
     async fn user_message_for_utility_symbols(
         &self,
         user_request: CodeSymbolUtilityRequest,
@@ -1216,6 +1451,66 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             )
             .await?;
         Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+    }
+}
+
+#[async_trait]
+impl CodeCorrectness for AnthropicCodeSymbolImportant {
+    async fn decide_tool_use(
+        &self,
+        code_correctness_request: CodeCorrectnessRequest,
+    ) -> Result<CodeCorrectnessAction, CodeSymbolError> {
+        let llm = code_correctness_request.llm().clone();
+        let provider = code_correctness_request.llm_provider().clone();
+        let api_keys = code_correctness_request.llm_api_keys().clone();
+        let system_message = LLMClientMessage::system(self.system_message_for_correctness_check());
+        let user_message =
+            LLMClientMessage::user(self.format_code_correctness_request(code_correctness_request));
+        let messages =
+            LLMClientCompletionRequest::new(llm, vec![system_message, user_message], 0.0, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                messages,
+                provider,
+                vec![(
+                    "request_type".to_owned(),
+                    "code_correctness_tool_use".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+        // now that we have the response we have to make sure to parse the thinking
+        // process properly or else it will blow up in our faces pretty quickly
+        let mut inside_thinking = false;
+        let fixed_response = response
+            .lines()
+            .into_iter()
+            .map(|response| {
+                if response.starts_with("<thinking>") {
+                    inside_thinking = true;
+                    return response.to_owned();
+                } else if response.starts_with("</thinking>") {
+                    inside_thinking = false;
+                    return response.to_owned();
+                }
+                if inside_thinking {
+                    // espcae the string here
+                    Self::unescape_xml(response.to_owned())
+                } else {
+                    response.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let parsed_response: CodeCorrectnessAction =
+            from_str::<CodeCorrectnessAction>(&fixed_response)
+                .map_err(|e| CodeSymbolError::SerdeError(e))?;
+        Ok(parsed_response)
     }
 }
 

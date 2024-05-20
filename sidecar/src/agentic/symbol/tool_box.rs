@@ -13,6 +13,7 @@ use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::correctness::{
     CodeCorrectnessAction, CodeCorrectnessRequest,
 };
+use crate::agentic::tool::code_symbol::error_fix::CodeEditingErrorRequest;
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
     CodeSymbolUtilityRequest, CodeSymbolWithThinking,
@@ -345,8 +346,8 @@ impl ToolBox {
             }
             tries = tries + 1;
 
-            let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
-            let fs_file_content = self.file_open(fs_file_path.to_owned()).await?.contents();
+            let mut symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
+            let mut fs_file_content = self.file_open(fs_file_path.to_owned()).await?.contents();
 
             let updated_code = edited_code.to_owned();
             let edited_range = symbol_to_edit.range().clone();
@@ -354,6 +355,11 @@ impl ToolBox {
             let editor_response = self
                 .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code)
                 .await?;
+
+            // after applying the edits to the editor, we will need to get the file
+            // contents and the symbol again
+            let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
+            let fs_file_content = self.file_open(fs_file_path.to_owned()).await?.contents();
 
             // Now we check for LSP diagnostics
             let lsp_diagnostics = self
@@ -393,13 +399,31 @@ impl ToolBox {
             // there might be a case that we have to re-write the code completely, since
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
             let selected_action_index = selected_action.index();
-            let selected_action_thinking = selected_action.thinking();
 
             // code edit is a special operation which is not present in the quick-fix
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
             if selected_action_index >= quick_fix_actions.len() as i64 {
-                todo!("implement the code edit flow over here")
+                let fixed_code = self
+                    .code_correctness_with_edits(
+                        fs_file_path,
+                        &fs_file_content,
+                        symbol_to_edit.range(),
+                        code_edit_extra_context.to_owned(),
+                        selected_action.thinking(),
+                        &instructions,
+                        original_code,
+                        llm.clone(),
+                        provider.clone(),
+                        api_keys.clone(),
+                    )
+                    .await?;
+
+                // after this we have to apply the edits to the editor again and being
+                // the loop again
+                let _ = self
+                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code)
+                    .await?;
             } else {
                 // invoke the code action over here with the ap
                 let response = self
@@ -413,8 +437,46 @@ impl ToolBox {
                 }
             }
         }
-        // todo!("we have to figure out this loop properly");
-        todo!("we want to complete this")
+        Ok(())
+    }
+
+    async fn code_correctness_with_edits(
+        &self,
+        fs_file_path: &str,
+        fs_file_content: &str,
+        edited_range: &Range,
+        extra_context: String,
+        error_instruction: &str,
+        instructions: &str,
+        previous_code: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<String, SymbolError> {
+        let (code_above, code_below, code_in_selection) =
+            split_file_content_into_parts(fs_file_content, edited_range);
+        let code_editing_error_request = ToolInput::CodeEditingError(CodeEditingErrorRequest::new(
+            fs_file_path.to_owned(),
+            code_above,
+            code_below,
+            code_in_selection,
+            extra_context,
+            previous_code.to_owned(),
+            error_instruction.to_owned(),
+            instructions.to_owned(),
+            llm,
+            provider,
+            api_keys,
+        ));
+        let _ = self
+            .ui_events
+            .send(UIEvent::ToolEvent(code_editing_error_request.clone()));
+        self.tools
+            .invoke(code_editing_error_request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .code_editing_for_error_fix()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     async fn code_correctness_action_selection(

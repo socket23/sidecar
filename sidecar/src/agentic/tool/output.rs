@@ -205,4 +205,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn code_editing_for_error_fix(self) -> Option<String> {
+        match self {
+            ToolOutput::CodeEditingForError(output) => Some(output),
+            _ => None,
+        }
+    }
 }

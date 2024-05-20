@@ -157,6 +157,14 @@ impl AnthropicCodeSymbolImportant {
         let original_code = code_error_fix_request.original_code();
         let error_instructions = code_error_fix_request.error_instructions();
 
+        let extra_data = code_error_fix_request.extra_context();
+
+        let extra_context = format!(
+            r#"<extra_context>
+{extra_data}
+</extra_context>"#
+        );
+
         let file = format!(
             r#"<file>
 <file_path>
@@ -191,6 +199,8 @@ impl AnthropicCodeSymbolImportant {
             r#"<query>
 {user_instruction}
 
+{extra_context}
+
 {file}
 
 {original_code}
@@ -203,6 +213,7 @@ impl AnthropicCodeSymbolImportant {
     fn system_message_for_code_error_fix(&self) -> String {
         format!(
             r#"You are an expert software engineer who is tasked with fixing broken written written by a junior engineer.
+- All the definitions of code symbols which you might require are also provided to you in <extra_data> section, these are important as they show which functions or parameters you can use on different classes.
 - The junior engineer has taken the instructions which were provided in <user_instructions> and made edits to the code which is now present in <code_in_selection> section.
 - The original code before any changes were made is present in <original_code> , this should help you understand how the junior engineer went about making changes.
 - You are also shown the whole file content in the <file> section, this will be useful for you to understand the overall context in which the change was made.

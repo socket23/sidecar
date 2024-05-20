@@ -190,4 +190,18 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_code_correctness_action(self) -> Option<CodeCorrectnessAction> {
+        match self {
+            ToolOutput::CodeCorrectnessAction(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_quick_fix_invocation_result(self) -> Option<LSPQuickFixInvocationResponse> {
+        match self {
+            ToolOutput::LSPQuickFixInvoation(output) => Some(output),
+            _ => None,
+        }
+    }
 }

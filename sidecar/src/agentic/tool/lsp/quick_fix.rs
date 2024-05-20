@@ -108,6 +108,12 @@ pub struct LSPQuickFixInvocationResponse {
     invocation_success: bool,
 }
 
+impl LSPQuickFixInvocationResponse {
+    pub fn is_success(&self) -> bool {
+        self.invocation_success
+    }
+}
+
 pub struct LSPQuickFixInvocationClient {
     client: reqwest::Client,
 }

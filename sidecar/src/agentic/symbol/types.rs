@@ -453,6 +453,10 @@ impl Symbol {
                     self.llm_properties.api_key().clone(),
                 )
                 .await;
+
+            // once we have successfully changed the implementation over here
+            // we have to start looking for followups over here
+            // F in the chat for error handling :')
         }
         Ok(())
     }

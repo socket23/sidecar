@@ -3,5 +3,6 @@
 pub mod diagnostics;
 pub mod gotodefintion;
 pub mod gotoimplementations;
+pub mod gotoreferences;
 pub mod open_file;
 pub mod quick_fix;

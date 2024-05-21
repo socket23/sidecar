@@ -25,6 +25,7 @@ use super::{
         diagnostics::LSPDiagnostics,
         gotodefintion::LSPGoToDefinition,
         gotoimplementations::LSPGoToImplementation,
+        gotoreferences::LSPGoToReferences,
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
     },
@@ -84,6 +85,7 @@ impl ToolBroker {
             ToolType::GoToDefinitions,
             Box::new(LSPGoToDefinition::new()),
         );
+        tools.insert(ToolType::GoToReferences, Box::new(LSPGoToReferences::new()));
         tools.insert(ToolType::OpenFile, Box::new(LSPOpenFile::new()));
         tools.insert(ToolType::GrepInFile, Box::new(FindInFile::new()));
         tools.insert(

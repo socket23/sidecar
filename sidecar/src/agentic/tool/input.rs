@@ -16,6 +16,7 @@ use super::{
         diagnostics::LSPDiagnosticsInput,
         gotodefintion::GoToDefinitionRequest,
         gotoimplementations::GoToImplementationRequest,
+        gotoreferences::{GoToReferencesRequest, GoToReferencesResponse},
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
@@ -32,6 +33,7 @@ pub enum ToolInput {
     RequestImportantSymbols(CodeSymbolImportantRequest),
     RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch),
     GoToDefinition(GoToDefinitionRequest),
+    GoToReference(GoToReferencesRequest),
     OpenFile(OpenFileRequest),
     GrepSingleFile(FindInFileRequest),
     SymbolImplementations(GoToImplementationRequest),
@@ -54,6 +56,7 @@ impl ToolInput {
             ToolInput::RequestImportantSymbols(_) => ToolType::RequestImportantSymbols,
             ToolInput::RequestImportantSybmolsCodeWide(_) => ToolType::FindCodeSymbolsCodeBaseWide,
             ToolInput::GoToDefinition(_) => ToolType::GoToDefinitions,
+            ToolInput::GoToReference(_) => ToolType::GoToReferences,
             ToolInput::OpenFile(_) => ToolType::OpenFile,
             ToolInput::GrepSingleFile(_) => ToolType::GrepInFile,
             ToolInput::SymbolImplementations(_) => ToolType::GoToImplementations,
@@ -113,6 +116,14 @@ impl ToolInput {
     pub fn symbol_implementations(self) -> Result<GoToImplementationRequest, ToolError> {
         if let ToolInput::SymbolImplementations(symbol_implementations) = self {
             Ok(symbol_implementations)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn reference_request(self) -> Result<GoToReferencesRequest, ToolError> {
+        if let ToolInput::GoToReference(request) = self {
+            Ok(request)
         } else {
             Err(ToolError::WrongToolInput)
         }

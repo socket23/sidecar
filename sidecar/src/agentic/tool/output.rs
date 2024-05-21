@@ -9,6 +9,7 @@ use super::{
         diagnostics::LSPDiagnosticsOutput,
         gotodefintion::GoToDefinitionResponse,
         gotoimplementations::GoToImplementationResponse,
+        gotoreferences::GoToReferencesResponse,
         open_file::{OpenFileRequest, OpenFileResponse},
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
@@ -46,6 +47,7 @@ pub enum ToolOutput {
     ReRankSnippets(ReRankEntriesForBroker),
     ImportantSymbols(CodeSymbolImportantResponse),
     GoToDefinition(GoToDefinitionResponse),
+    GoToReference(GoToReferencesResponse),
     FileOpen(OpenFileResponse),
     GrepSingleFile(FindInFileResponse),
     GoToImplementation(GoToImplementationResponse),
@@ -60,6 +62,10 @@ pub enum ToolOutput {
 }
 
 impl ToolOutput {
+    pub fn go_to_reference(refernece: GoToReferencesResponse) -> Self {
+        ToolOutput::GoToReference(refernece)
+    }
+
     pub fn code_correctness_action(output: CodeCorrectnessAction) -> Self {
         ToolOutput::CodeCorrectnessAction(output)
     }

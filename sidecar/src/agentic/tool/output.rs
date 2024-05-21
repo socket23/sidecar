@@ -212,6 +212,13 @@ impl ToolOutput {
         }
     }
 
+    pub fn get_references(self) -> Option<GoToReferencesResponse> {
+        match self {
+            ToolOutput::GoToReference(output) => Some(output),
+            _ => None,
+        }
+    }
+
     pub fn code_editing_for_error_fix(self) -> Option<String> {
         match self {
             ToolOutput::CodeEditingForError(output) => Some(output),

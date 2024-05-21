@@ -32,6 +32,7 @@ use crate::agentic::tool::lsp::gotodefintion::{GoToDefinitionRequest, GoToDefini
 use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
+use crate::agentic::tool::lsp::gotoreferences::{GoToReferencesRequest, GoToReferencesResponse};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
@@ -335,12 +336,116 @@ impl ToolBox {
         // over here we have to check if its a function or a class
         if symbol_to_edit.is_function_type() {
             // what to do over here, we create the prompt properly over here
+            // we look at the position of the function and ask for the next action
+            // to take on various positions given some context about the request
+            // and asking for where to go next and what to change, if its a lot
+            // we have to figure out a better way to handle this and break up the
+            // function calls in batches, but for now its fine
         } else if symbol_to_edit.is_class_definition() {
             // we create the prompt properly over here
         } else {
             // something else over here, wonder what it could be
         }
         Ok(())
+    }
+
+    async fn get_code_symbol_for_references(
+        &self,
+        original_symbol: &OutlineNodeContent,
+        references: GoToReferencesResponse,
+    ) -> Result<Vec<SymbolEventRequest>, SymbolError> {
+        let symbol_name = original_symbol.name().to_owned();
+        let reference_locations = references.locations();
+        let file_paths = reference_locations
+            .iter()
+            .map(|reference| reference.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+        // we invoke a request to open the file
+        let _ = stream::iter(file_paths.clone())
+            .map(|fs_file_path| async {
+                // get the file content
+                let _ = self.file_open(fs_file_path).await;
+                ()
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
+
+        // next we ask the symbol manager for all the symbols in the file and try
+        // to locate our symbol inside one of the symbols?
+        // once we have the outline node, we can try to understand which symbol
+        // the position is part of and use that for creating the containing scope
+        // of the symbol
+        let file_path_to_outline_nodes = stream::iter(file_paths.clone())
+            .map(|fs_file_path| async {
+                self.get_outline_nodes_grouped(&fs_file_path)
+                    .await
+                    .map(|outline_nodes| (fs_file_path, outline_nodes))
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|s| s)
+            .collect::<HashMap<String, Vec<OutlineNode>>>();
+
+        // now we need to look for the smallet symbol which contains the node we are interested
+        todo!("we have to handle things over here by looking at the references and using the agent to decide where to go next");
+    }
+
+    // we need to search for the smallest node which contains this position or range
+    fn search_for_smallest_node(
+        &self,
+        fs_file_path: &str,
+        position: Position,
+        outline_nodes: Vec<OutlineNode>,
+    ) -> Option<OutlineNode> {
+        let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
+            // we need to check if the outline node contains the range we are interested in
+            outline_node
+                .range()
+                .contains(&Range::new(position.clone(), position.clone()))
+        });
+        match outline_node_possible {
+            Some(outline_node) => {
+                // we try to find the smallest node over here which contains the position
+                let sub_child_node =
+                    outline_node
+                        .children()
+                        .into_iter()
+                        .find(|outline_node_content| {
+                            outline_node_content
+                                .range()
+                                .contains(&Range::new(position.clone(), position.clone()))
+                        });
+                // we want to send here that this is the function we are interested in doing
+                // changes to and we have some context about the class we are part of
+                todo!("figure out what to do over here")
+            }
+            None => {
+                // if there is no such outline node, then we can just give snippets out
+                todo!("")
+            }
+        }
+    }
+
+    async fn go_to_references(
+        &self,
+        fs_file_path: &str,
+        position: &Position,
+    ) -> Result<GoToReferencesResponse, SymbolError> {
+        let input = ToolInput::GoToReference(GoToReferencesRequest::new(
+            fs_file_path.to_owned(),
+            position.clone(),
+            self.editor_url.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEvent::ToolEvent(input.clone()));
+        self.tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_references()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn check_code_correctness(
@@ -832,6 +937,10 @@ impl ToolBox {
             .map_err(|e| SymbolError::ToolError(e))?
             .code_to_edit_in_symbol()
             .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn get_outline_nodes_grouped(&self, fs_file_path: &str) -> Option<Vec<OutlineNode>> {
+        self.symbol_broker.get_symbols_outline(fs_file_path).await
     }
 
     pub async fn get_outline_nodes(&self, fs_file_path: &str) -> Option<Vec<OutlineNodeContent>> {

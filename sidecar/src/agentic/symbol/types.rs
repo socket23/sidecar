@@ -11,17 +11,14 @@ use std::{
 };
 
 use derivative::Derivative;
-use futures::{lock::Mutex, stream, StreamExt};
+use futures::{stream, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
     agentic::{
-        symbol::{
-            events::edit::SymbolToEditRequest, helpers::split_file_content_into_parts,
-            identifier::Snippet,
-        },
-        tool::{code_edit::types::CodeEdit, input::ToolInput, lsp::open_file::OpenFileResponse},
+        symbol::{events::edit::SymbolToEditRequest, identifier::Snippet},
+        tool::lsp::open_file::OpenFileResponse,
     },
     chunking::{text_document::Range, types::OutlineNodeContent},
 };
@@ -37,6 +34,16 @@ use super::{
 pub struct SymbolEventRequest {
     symbol: SymbolIdentifier,
     event: SymbolEvent,
+}
+
+impl SymbolEventRequest {
+    pub fn event(&self) -> &SymbolEvent {
+        &self.event
+    }
+
+    pub fn symbol(&self) -> &SymbolIdentifier {
+        &self.symbol
+    }
 }
 
 impl SymbolEventRequest {
@@ -67,6 +74,21 @@ impl SymbolEventResponse {
     pub fn to_string(self) -> String {
         match self {
             Self::TaskDone(reply) => reply,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EditedCodeSymbol {
+    original_code: String,
+    edited_code: String,
+}
+
+impl EditedCodeSymbol {
+    pub fn new(original_code: String, edited_code: String) -> Self {
+        Self {
+            original_code,
+            edited_code,
         }
     }
 }
@@ -370,12 +392,13 @@ impl Symbol {
         &self,
         sub_symbol: &SymbolToEdit,
         context: Vec<String>,
-    ) -> Result<String, SymbolError> {
+    ) -> Result<EditedCodeSymbol, SymbolError> {
         let file_content = self
             .tools
             .get_file_content(&sub_symbol.fs_file_path())
             .await?;
         let symbol_to_edit = self.tools.find_symbol_to_edit(sub_symbol).await?;
+        let content = symbol_to_edit.content().to_owned();
         let response = self
             .tools
             .code_edit(
@@ -389,7 +412,7 @@ impl Symbol {
                 self.llm_properties.api_key().clone(),
             )
             .await?;
-        Ok(response)
+        Ok(EditedCodeSymbol::new(content, response))
     }
 
     // we are going to edit the symbols over here
@@ -411,12 +434,25 @@ impl Symbol {
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
             let context_for_editing = self.grab_context_for_editing(&sub_symbol_to_edit).await?;
+            // always return the original code which was present here in case of rollbacks
             let edited_code = self
-                .edit_code(&sub_symbol_to_edit, context_for_editing)
+                .edit_code(&sub_symbol_to_edit, context_for_editing.to_owned())
                 .await?;
+            let original_code = &edited_code.original_code;
+            let edited_code = &edited_code.edited_code;
             // debugging loop after this
-            // we want to call the check_code_correctness function after this
-            // to make sure that there are no more errors with the code
+            let _ = self
+                .tools
+                .check_code_correctness(
+                    &sub_symbol_to_edit,
+                    original_code,
+                    edited_code,
+                    &context_for_editing.join("\n"),
+                    self.llm_properties.llm().clone(),
+                    self.llm_properties.provider().clone(),
+                    self.llm_properties.api_key().clone(),
+                )
+                .await;
         }
         Ok(())
     }
@@ -462,7 +498,7 @@ impl Symbol {
                         // everywhere at the same time unless its on the same file
                         // but for now, we are gonna pleb our way and make edits
                         // one by one
-                        todo!("we have to edit the request here");
+                        symbol.edit_implementations(edit_request).await
                     }
                     SymbolEvent::AskQuestion => {
                         todo!("ask question is not implemented yet");

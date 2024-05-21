@@ -18,9 +18,25 @@ pub struct RefereneceLocation {
     range: Range,
 }
 
+impl RefereneceLocation {
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GoToReferencesResponse {
     references_location: Vec<RefereneceLocation>,
+}
+
+impl GoToReferencesResponse {
+    pub fn locations(self) -> Vec<RefereneceLocation> {
+        self.references_location
+    }
 }
 
 impl GoToReferencesRequest {

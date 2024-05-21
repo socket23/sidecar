@@ -394,12 +394,18 @@ impl ToolBox {
     }
 
     // we need to search for the smallest node which contains this position or range
-    fn search_for_smallest_node(
+    async fn search_for_smallest_node(
         &self,
         fs_file_path: &str,
         position: Position,
         outline_nodes: Vec<OutlineNode>,
-    ) -> Option<OutlineNode> {
+        // this is becoming annoying now cause we will need a drain for this while
+        // writing a unit-test for this
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<(), SymbolError> {
         let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
             // we need to check if the outline node contains the range we are interested in
             outline_node
@@ -409,7 +415,7 @@ impl ToolBox {
         match outline_node_possible {
             Some(outline_node) => {
                 // we try to find the smallest node over here which contains the position
-                let sub_child_node =
+                let child_node_possible =
                     outline_node
                         .children()
                         .into_iter()
@@ -418,13 +424,43 @@ impl ToolBox {
                                 .range()
                                 .contains(&Range::new(position.clone(), position.clone()))
                         });
+                let outline_node_fs_file_path = outline_node.content().fs_file_path();
+                let outline_node_identifier_range = outline_node.content().identifier_range();
+                // we can go to definition of the node and then ask the symbol for the outline over
+                // here so the symbol knows about everything
+                let definitions = self
+                    .go_to_definition(
+                        outline_node_fs_file_path,
+                        outline_node_identifier_range.start_position(),
+                    )
+                    .await?;
+                if let Some(definition) = definitions.definitions().get(0) {
+                    let fs_file_path = definition.file_path();
+                    let symbol_name = outline_node.name();
+                    let symbol_outline = self
+                        .get_outline_for_symbol_identifier(
+                            fs_file_path,
+                            symbol_name,
+                            hub_sender.clone(),
+                        )
+                        .await;
+                    // This is now perfect since we have the symbol outline which we
+                    // want to send over as context
+                    // along with other metadata to create the followup-request required
+                    // for making the edits as required
+                } else {
+                    // if there are no definitions, then we are good and can keep it simple
+                    // as we have it over here normally
+                }
                 // we want to send here that this is the function we are interested in doing
                 // changes to and we have some context about the class we are part of
+                // once we have the child node we have to figure out what to do next because of it
                 todo!("figure out what to do over here")
             }
             None => {
-                // if there is no such outline node, then we can just give snippets out
-                todo!("")
+                // if there is no such outline node, then what should we do? cause we still
+                // need an outline of sorts
+                todo!("figure out what to do when its not part of an outline node at all");
             }
         }
     }
@@ -937,6 +973,33 @@ impl ToolBox {
             .map_err(|e| SymbolError::ToolError(e))?
             .code_to_edit_in_symbol()
             .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    /// We want to generate the outline for the symbol
+    async fn get_outline_for_symbol_identifier(
+        &self,
+        fs_file_path: &str,
+        symbol_name: &str,
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<String, SymbolError> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let _ = hub_sender.send((
+            SymbolEventRequest::outline(SymbolIdentifier::with_file_path(
+                symbol_name,
+                fs_file_path,
+            )),
+            sender,
+        ));
+        let response = receiver
+            .await
+            .map(|response| response.to_string())
+            .map_err(|e| SymbolError::RecvError(e));
+        // this gives us the outline we need for the outline of the symbol which
+        // we are interested in
+        response
     }
 
     pub async fn get_outline_nodes_grouped(&self, fs_file_path: &str) -> Option<Vec<OutlineNode>> {

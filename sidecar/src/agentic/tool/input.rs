@@ -4,6 +4,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessRequest,
         error_fix::CodeEditingErrorRequest,
+        followup::CodeFollowupEditDeicisionRequest,
         important::{
             CodeSymbolImportantRequest, CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest,
         },
@@ -44,6 +45,7 @@ pub enum ToolInput {
     QuickFixInvocationRequest(LSPQuickFixInvocationRequest),
     CodeCorrectnessAction(CodeCorrectnessRequest),
     CodeEditingError(CodeEditingErrorRequest),
+    CodeFollowupEditDecision(CodeFollowupEditDeicisionRequest),
 }
 
 impl ToolInput {
@@ -70,6 +72,7 @@ impl ToolInput {
             ToolInput::QuickFixInvocationRequest(_) => ToolType::ApplyQuickFix,
             ToolInput::CodeCorrectnessAction(_) => ToolType::CodeCorrectnessActionSelection,
             ToolInput::CodeEditingError(_) => ToolType::CodeEditingForError,
+            ToolInput::CodeFollowupEditDecision(_) => ToolType::CodeFollowupEditDecision,
         }
     }
 

@@ -1,6 +1,11 @@
 //! Contains a lock on the different symbols and maintains them running in memory
 //! this way we are able to manage different symbols and their run-time while running
 //! them in a session.
+//! Symbol locker has access to the whole fs file-system and can run searches
+//! if the file path is not correct or incorrect, cause we have so much information
+//! over here, if the symbol is properly defined we are sure to find it, even if there
+//! are multiples we have enough context here to gather the information required
+//! to create the correct symbol and send it over
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -72,7 +77,25 @@ impl SymbolLocker {
     ) {
         let request = request_event.0;
         let sender = request_event.1;
+        let symbol_identifier = request.symbol();
+        let event = request.event();
+        // the events do not matter as much as finding the correct symbol
+        // to send to for the request
         // we will send the response in this sender
+        // your job is to strictly forward the request to the right symbol
+        // or find one if it does not exist at the location we are talking about
+        match event {
+            SymbolEvent::AskQuestion => {
+                todo!("we have to implement this")
+            }
+            SymbolEvent::Edit(edit_operation) => {}
+            SymbolEvent::Delete => {}
+            SymbolEvent::InitialRequest => {}
+            SymbolEvent::Outline => {
+                todo!("we have to implement this")
+            }
+            SymbolEvent::UserFeedback => {}
+        }
     }
 
     pub async fn create_symbol_agent(

@@ -15,8 +15,8 @@ use crate::agentic::tool::code_symbol::correctness::{
 };
 use crate::agentic::tool::code_symbol::error_fix::CodeEditingErrorRequest;
 use crate::agentic::tool::code_symbol::important::{
-    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
-    CodeSymbolUtilityRequest, CodeSymbolWithThinking,
+    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolUtilityRequest,
+    CodeSymbolWithThinking,
 };
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;

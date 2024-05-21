@@ -317,6 +317,24 @@ impl ToolBox {
         Ok(symbol_to_definition)
     }
 
+    pub async fn check_for_followups(
+        &self,
+        symbol_edited: &SymbolToEdit,
+        original_code: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<(), SymbolError> {
+        // followups here are made for checking the references or different symbols
+        // or if something has changed
+        // first do we show the agent the chagned data and then ask it to decide
+        // where to go next or should we do something else?
+        // another idea here would be to use the definitions or the references
+        // of various symbols to find them and then navigate to them
+        let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await;
+        Ok(())
+    }
+
     pub async fn check_code_correctness(
         &self,
         symbol_edited: &SymbolToEdit,

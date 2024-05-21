@@ -132,6 +132,7 @@ pub struct OutlineNodeContent {
     // The content here gives the outline of the node which we are interested in
     content: String,
     fs_file_path: String,
+    identifier_range: Range,
 }
 
 impl OutlineNodeContent {
@@ -141,6 +142,7 @@ impl OutlineNodeContent {
         r#type: OutlineNodeType,
         content: String,
         fs_file_path: String,
+        identifier_range: Range,
     ) -> Self {
         Self {
             range,
@@ -148,6 +150,7 @@ impl OutlineNodeContent {
             r#type,
             content,
             fs_file_path,
+            identifier_range,
         }
     }
 

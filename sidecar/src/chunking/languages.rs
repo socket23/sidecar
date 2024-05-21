@@ -191,8 +191,10 @@ impl TSLanguageConfig {
                     // which we want to parse out
                     let mut end_index = start_index + 1;
                     let mut class_name = None;
+                    let mut class_name_range = None;
                     let mut function_range = None;
                     let mut function_name = None;
+                    let mut function_name_range = None;
                     let mut function_class_name = None;
                     let mut children = vec![];
                     while end_index < outline_nodes.len() {
@@ -208,6 +210,7 @@ impl TSLanguageConfig {
                                     child_range.start_byte(),
                                     child_range.end_byte(),
                                 ));
+                                class_name_range = Some(child_range);
                             }
                             OutlineNodeType::Function => {
                                 function_range = Some(child_range);
@@ -219,6 +222,7 @@ impl TSLanguageConfig {
                                         child_range.start_byte(),
                                         child_range.end_byte(),
                                     );
+                                    function_name_range = Some(child_range.clone());
                                     function_name = Some(current_function_name);
                                 }
                             }
@@ -233,8 +237,11 @@ impl TSLanguageConfig {
                                 }
                             }
                             OutlineNodeType::FunctionBody => {
-                                if let (Some(function_range), Some(function_name)) =
-                                    (function_range, function_name)
+                                if let (
+                                    Some(function_range),
+                                    Some(function_name),
+                                    Some(function_name_range),
+                                ) = (function_range, function_name, function_name_range)
                                 {
                                     if let Some(function_class_name) = function_class_name {
                                         let mut class_functions = independent_functions_for_class
@@ -252,6 +259,7 @@ impl TSLanguageConfig {
                                                 child_range.start_byte() - 1,
                                             ),
                                             fs_file_path.to_owned(),
+                                            function_name_range,
                                         ));
                                     } else {
                                         children.push(OutlineNodeContent::new(
@@ -266,6 +274,7 @@ impl TSLanguageConfig {
                                                 child_range.start_byte() - 1,
                                             ),
                                             fs_file_path.to_owned(),
+                                            function_name_range,
                                         ));
                                     }
                                 }
@@ -296,6 +305,7 @@ impl TSLanguageConfig {
                             outline_range.end_byte(),
                         ),
                         fs_file_path.to_owned(),
+                        class_name_range.expect("class name range to be present"),
                     );
                     compressed_outline.push(OutlineNode::new(
                         class_outline,
@@ -309,6 +319,7 @@ impl TSLanguageConfig {
                     // next node which is a function name
                     let mut end_index = start_index + 1;
                     let mut function_name: Option<String> = None;
+                    let mut function_range = None;
                     let mut function_class_name: Option<String> = None;
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
@@ -318,6 +329,7 @@ impl TSLanguageConfig {
                                 child_range.start_byte(),
                                 child_range.end_byte(),
                             ));
+                            function_range = Some(child_range);
                             end_index = end_index + 1;
                         } else if let OutlineNodeType::FunctionClassName = child_node_type {
                             function_class_name = Some(get_string_from_bytes(
@@ -327,7 +339,9 @@ impl TSLanguageConfig {
                             ));
                             end_index = end_index + 1;
                         } else if let OutlineNodeType::FunctionBody = child_node_type {
-                            if let Some(ref function_name) = function_name {
+                            if let (Some(ref function_name), Some(ref function_name_range)) =
+                                (&function_name, function_range)
+                            {
                                 if let Some(ref function_class_name) = function_class_name {
                                     let class_functions = independent_functions_for_class
                                         .entry(function_class_name.to_owned())
@@ -345,6 +359,7 @@ impl TSLanguageConfig {
                                             child_range.start_byte() - 1,
                                         ),
                                         fs_file_path.to_owned(),
+                                        function_name_range.clone(),
                                     ));
                                 } else {
                                     compressed_outline.push(OutlineNode::new(
@@ -361,6 +376,7 @@ impl TSLanguageConfig {
                                                 child_range.start_byte() - 1,
                                             ),
                                             fs_file_path.to_owned(),
+                                            function_name_range.clone(),
                                         ),
                                         vec![],
                                         self.language_str.to_owned(),

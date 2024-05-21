@@ -12,7 +12,7 @@ pub enum ToolType {
     OpenFile,
     // Search,
     GoToDefinitions,
-    // GoToReferences,
+    GoToReferences,
     // FileSystem,
     // FolderOutline,
     // Terminal,

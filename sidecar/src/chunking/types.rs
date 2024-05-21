@@ -186,6 +186,10 @@ impl OutlineNodeContent {
     pub fn is_function_type(&self) -> bool {
         self.outline_node_type().is_function()
     }
+
+    pub fn identifier_range(&self) -> &Range {
+        &self.identifier_range
+    }
 }
 
 #[derive(Debug, Clone)]

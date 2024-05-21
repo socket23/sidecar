@@ -331,7 +331,15 @@ impl ToolBox {
         // where to go next or should we do something else?
         // another idea here would be to use the definitions or the references
         // of various symbols to find them and then navigate to them
-        let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await;
+        let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
+        // over here we have to check if its a function or a class
+        if symbol_to_edit.is_function_type() {
+            // what to do over here, we create the prompt properly over here
+        } else if symbol_to_edit.is_class_definition() {
+            // we create the prompt properly over here
+        } else {
+            // something else over here, wonder what it could be
+        }
         Ok(())
     }
 

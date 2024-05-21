@@ -1,4 +1,5 @@
 use thiserror::Error;
+use tokio::sync::oneshot::error::RecvError;
 
 use crate::agentic::tool::errors::ToolError;
 
@@ -18,4 +19,7 @@ pub enum SymbolError {
 
     #[error("Unable to read file contents")]
     UnableToReadFileContent,
+
+    #[error("channel recieve error: {0}")]
+    RecvError(RecvError),
 }

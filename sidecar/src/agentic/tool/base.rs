@@ -38,6 +38,8 @@ pub enum ToolType {
     // Error correction tool selection
     CodeCorrectnessActionSelection,
     CodeEditingForError,
+    // Followup decision
+    CodeFollowupEditDecision,
 }
 
 #[async_trait]

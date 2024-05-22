@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::text_document::Range;
 
 /// Some common types which can be reused across calls
@@ -274,6 +276,32 @@ impl OutlineNode {
     pub fn get_outline_short(&self) -> String {
         // we have to carefully construct this over here, but for now we just return
         // the content
+        match &self.content.r#type {
+            OutlineNodeType::Class | OutlineNodeType::ClassDefinition => {
+                let start_line = self.range().start_line();
+                let end_line = self.range().end_line();
+                let mut line_numbers_included = (start_line..=end_line)
+                    .map(|line_number| (line_number, true))
+                    .collect::<HashMap<usize, bool>>();
+                self.children.iter().for_each(|children| {
+                    let child_range = children.range();
+                    let start_line = child_range.start_line();
+                    let end_line = child_range.end_line();
+                    (start_line..=end_line).into_iter().for_each(|line_number| {
+                        if let Some(line_content) = line_numbers_included.get_mut(&line_number) {
+                            *line_content = false;
+                        }
+                    });
+                });
+
+                // now we have the line numbers here which should not be included
+                // for the functions which we have we want to get their outline as well, so we can keep going
+                // TODO(skcd): Pick this up from here and complete getting the outline for the functions
+                // as well and constructing a correct outline for the symbol
+            }
+            OutlineNodeType::Function => {}
+            _ => {}
+        }
         self.content.content.to_owned()
     }
 

@@ -47,6 +47,10 @@ impl SymbolEventRequest {
     pub fn symbol(&self) -> &SymbolIdentifier {
         &self.symbol
     }
+
+    pub fn remove_event(self) -> SymbolEvent {
+        self.event
+    }
 }
 
 impl SymbolEventRequest {

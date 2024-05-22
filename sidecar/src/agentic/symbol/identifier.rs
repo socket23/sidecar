@@ -181,6 +181,10 @@ impl SymbolIdentifier {
         }
     }
 
+    pub fn fs_file_path(&self) -> Option<String> {
+        self.fs_file_path.clone()
+    }
+
     pub fn symbol_name(&self) -> &str {
         &self.symbol_name
     }

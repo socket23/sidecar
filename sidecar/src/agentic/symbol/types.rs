@@ -183,6 +183,16 @@ impl Symbol {
         self.mecha_code_symbol.add_implementation(snippet).await;
     }
 
+    async fn get_outline(&self) -> Result<(), SymbolError> {
+        // to grab the outline first we need to understand the definition snippet
+        // of the node and then create it appropriately
+        // First thing we want to do here is to find the symbols which are present
+        // in the file and get the one which corresponds to us, once we have that
+        // we go to all the implementations and grab them as well and generate
+        // the outline which is required
+        Ok(())
+    }
+
     async fn grab_implementations(&mut self) -> Result<(), SymbolError> {
         let snippet: Option<Snippet>;
         {
@@ -539,6 +549,8 @@ impl Symbol {
                         todo!("user feedback is not implemented yet");
                     }
                     SymbolEvent::Outline => {
+                        // we have been asked to provide an outline of the symbol we are part of
+                        // this is a bit easy to do so lets try and finish this
                         todo!("we are waiting on the outline");
                     }
                 }

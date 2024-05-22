@@ -26,6 +26,30 @@ pub struct ClassSymbolFollowupRequest {
     api_keys: LLMProviderAPIKeys,
 }
 
+impl ClassSymbolFollowupRequest {
+    pub fn new(
+        fs_file_path: String,
+        original_code: String,
+        language: String,
+        edited_code: String,
+        instructions: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Self {
+        Self {
+            fs_file_path,
+            original_code,
+            language,
+            edited_code,
+            instructions,
+            llm,
+            provider,
+            api_keys,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ClassSymbolMember {
     line: String,

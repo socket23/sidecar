@@ -467,6 +467,17 @@ impl Symbol {
             // once we have successfully changed the implementation over here
             // we have to start looking for followups over here
             // F in the chat for error handling :')
+            let _ = self
+                .tools
+                .check_for_followups(
+                    &sub_symbol_to_edit,
+                    &original_code,
+                    self.llm_properties.llm().clone(),
+                    self.llm_properties.provider().clone(),
+                    self.llm_properties.api_key().clone(),
+                    self.hub_sender.clone(),
+                )
+                .await;
         }
         Ok(())
     }

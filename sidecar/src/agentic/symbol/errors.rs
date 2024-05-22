@@ -31,4 +31,7 @@ pub enum SymbolError {
 
     #[error("No containing symbol found")]
     NoContainingSymbolFound,
+
+    #[error("No outline node satisfy position")]
+    NoOutlineNodeSatisfyPosition,
 }

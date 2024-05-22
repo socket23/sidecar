@@ -8,15 +8,12 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::{
-    agentic::tool::{
-        base::Tool,
-        errors::ToolError,
-        input::ToolInput,
-        lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
-        output::ToolOutput,
-    },
-    chunking::text_document::Range,
+use crate::agentic::tool::{
+    base::Tool,
+    errors::ToolError,
+    input::ToolInput,
+    lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
+    output::ToolOutput,
 };
 
 use super::{models::anthropic::AnthropicCodeSymbolImportant, types::CodeSymbolError};

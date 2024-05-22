@@ -46,6 +46,10 @@ impl GoToImplementationResponse {
     pub fn get_implementation_locations_vec(&self) -> &[ImplementationLocation] {
         self.implementation_locations.as_slice()
     }
+
+    pub fn remove_implementations_vec(self) -> Vec<ImplementationLocation> {
+        self.implementation_locations
+    }
 }
 
 pub struct LSPGoToImplementation {

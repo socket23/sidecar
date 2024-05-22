@@ -34,4 +34,7 @@ pub enum SymbolError {
 
     #[error("No outline node satisfy position")]
     NoOutlineNodeSatisfyPosition,
+
+    #[error("No outline node with name found: {0}")]
+    OutlineNodeNotFound(String),
 }

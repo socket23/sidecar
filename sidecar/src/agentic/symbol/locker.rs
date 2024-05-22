@@ -12,7 +12,7 @@ use std::{collections::HashMap, sync::Arc};
 use futures::lock::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::agentic::tool::broker::ToolBroker;
+use crate::user_context::types::UserContext;
 
 use super::{
     errors::SymbolError,
@@ -49,6 +49,7 @@ pub struct SymbolLocker {
     )>,
     tools: Arc<ToolBox>,
     llm_properties: LLMProperties,
+    user_context: UserContext,
 }
 
 impl SymbolLocker {
@@ -59,12 +60,14 @@ impl SymbolLocker {
         )>,
         tools: Arc<ToolBox>,
         llm_properties: LLMProperties,
+        user_context: UserContext,
     ) -> Self {
         Self {
             symbols: Arc::new(Mutex::new(HashMap::new())),
             hub_sender,
             tools,
             llm_properties,
+            user_context,
         }
     }
 
@@ -77,24 +80,45 @@ impl SymbolLocker {
     ) {
         let request = request_event.0;
         let sender = request_event.1;
-        let symbol_identifier = request.symbol();
-        let event = request.event();
-        // the events do not matter as much as finding the correct symbol
-        // to send to for the request
-        // we will send the response in this sender
-        // your job is to strictly forward the request to the right symbol
-        // or find one if it does not exist at the location we are talking about
-        match event {
-            SymbolEvent::AskQuestion(ask_question) => {
-                todo!("we have to implement this")
+        let symbol_identifier = request.symbol().clone();
+        let mut does_exist = false;
+        {
+            if self.symbols.lock().await.get(&symbol_identifier).is_none() {
+                // if symbol already exists then we can just forward it to the symbol
+            } else {
+                does_exist = false;
+                // the symbol does not exist and we have to create it first and then send it over
             }
-            SymbolEvent::Edit(edit_operation) => {}
-            SymbolEvent::Delete => {}
-            SymbolEvent::InitialRequest => {}
-            SymbolEvent::Outline => {
-                todo!("we have to implement this")
+        }
+
+        if !does_exist {
+            if symbol_identifier.fs_file_path().is_none() {
+                // well this kind of sucks, cause we do not know where the symbol is anymore
+                // worst case this means that we have to create a new symbol somehow
+                // best case this could mean that we fucked up majorly somewhere... what should we do???
+                todo!("we are mostly fucked if this is the case, we have to figure out how to handle the request coming in but not having the file path later on")
+            } else {
+                // the symbol does not exist so we have to make sure that we can send it over somehow
+                let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
+                    symbol_identifier.symbol_name().to_owned(),
+                    vec![],
+                    false,
+                    symbol_identifier.fs_file_path().expect("to present"),
+                    None,
+                    vec![],
+                    self.user_context.clone(),
+                );
+                // we create the symbol over here, but what about the context, I want
+                // to pass it to the symbol over here
+                let _ = self.create_symbol_agent(mecha_code_symbol_thinking).await;
             }
-            SymbolEvent::UserFeedback => {}
+        }
+
+        // at this point we have also tried creating the symbol agent, so we can start logging it
+        {
+            if let Some(symbol) = self.symbols.lock().await.get(&symbol_identifier) {
+                let _ = symbol.send((request.remove_event(), sender));
+            }
         }
     }
 

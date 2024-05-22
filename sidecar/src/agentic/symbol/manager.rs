@@ -11,6 +11,7 @@ use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::input::ToolInput;
 use crate::chunking::editor_parsing::{self, EditorParsing};
+use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
     inline_completion::symbols_tracker::SymbolTrackerInline,
@@ -53,6 +54,9 @@ impl SymbolManager {
         editor_url: String,
         ui_sender: UnboundedSender<UIEvent>,
         llm_properties: LLMProperties,
+        // This is a hack and not a proper one at that, we obviously want to
+        // do better over here
+        user_context: UserContext,
     ) -> Self {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
             SymbolEventRequest,
@@ -65,8 +69,12 @@ impl SymbolManager {
             editor_url.to_owned(),
             ui_sender.clone(),
         ));
-        let symbol_locker =
-            SymbolLocker::new(sender.clone(), tool_box.clone(), llm_properties.clone());
+        let symbol_locker = SymbolLocker::new(
+            sender.clone(),
+            tool_box.clone(),
+            llm_properties.clone(),
+            user_context,
+        );
         let cloned_symbol_locker = symbol_locker.clone();
         let cloned_ui_sender = ui_sender.clone();
         tokio::spawn(async move {
@@ -123,9 +131,5 @@ impl SymbolManager {
             println!("this is wrong, please look at the comment here");
         }
         Ok(())
-    }
-
-    async fn invoke_tool_broker(&self, tool_input: ToolInput) -> Result<ToolOutput, ToolError> {
-        self.tools.invoke(tool_input).await
     }
 }

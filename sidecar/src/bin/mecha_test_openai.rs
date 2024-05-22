@@ -72,6 +72,7 @@ async fn main() {
         editor_url.to_owned(),
         sender,
         llm_properties,
+        user_context.clone(),
     );
     let symbol_input = SymbolInputEvent::new(
         user_context,

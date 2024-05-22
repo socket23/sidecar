@@ -39,7 +39,7 @@ pub enum ToolType {
     CodeCorrectnessActionSelection,
     CodeEditingForError,
     // Followup decision
-    CodeFollowupEditDecision,
+    ClassSymbolFollowup,
 }
 
 #[async_trait]

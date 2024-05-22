@@ -11,6 +11,10 @@ use crate::agentic::tool::{
     code_symbol::{
         correctness::{CodeCorrectness, CodeCorrectnessAction, CodeCorrectnessRequest},
         error_fix::{CodeEditingErrorRequest, CodeSymbolErrorFix},
+        followup::{
+            ClassSymbolFollowup, ClassSymbolFollowupRequest, ClassSymbolFollowupResponse,
+            ClassSymbolMember,
+        },
         important::{
             CodeSymbolImportant, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
             CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
@@ -139,6 +143,154 @@ impl Reply {
 }
 
 impl AnthropicCodeSymbolImportant {
+    fn fix_class_symbol_response(
+        &self,
+        response: String,
+    ) -> Result<ClassSymbolFollowupResponse, CodeSymbolError> {
+        let lines = response
+            .lines()
+            .into_iter()
+            .map(|line| line.to_owned())
+            .collect::<Vec<_>>();
+        let mut fixed_lines = vec![];
+        let mut inside_thinking = false;
+        for line in lines.into_iter() {
+            if line == "<thinking>" || line == "<line>" {
+                inside_thinking = true;
+                fixed_lines.push(line);
+                continue;
+            } else if line == "</thinking>" || line == "</line>" {
+                inside_thinking = false;
+                fixed_lines.push(line);
+                continue;
+            }
+            if inside_thinking {
+                fixed_lines.push(Self::unescape_xml(line));
+            } else {
+                fixed_lines.push(line);
+            }
+        }
+        let fixed_response = fixed_lines.join("\n");
+        from_str::<ClassSymbolFollowupResponse>(&fixed_response)
+            .map(|response| {
+                let members = response.members();
+                let members = members
+                    .into_iter()
+                    .map(|member| {
+                        let line = member.line();
+                        let name = member.name();
+                        let thinking = member.thinking();
+                        ClassSymbolMember::new(
+                            Self::escape_xml(line.to_owned()),
+                            name.to_owned(),
+                            Self::escape_xml(thinking.to_owned()),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                ClassSymbolFollowupResponse::new(members)
+            })
+            .map_err(|e| CodeSymbolError::SerdeError(e))
+    }
+
+    fn system_message_for_class_symbol(&self) -> String {
+        r#"You are an expert software engineer tasked with coming up with the next set of steps which need to be done because some class or enum definition has changed. More specifically some part of the class or enum defintiions have changed and we have to understand which identifier symbols to follow.
+- You will be provided with the original code for the symbol we are looking at and the content of the symbol after we have made the edits. You have to only select the identifiers which we should follow (usually by doing go-to-references) since they have changed in a big way.
+- The original code for the symbol will be provided in <original_code> section and the edited code in <edited_code> section.
+- The instructions for why the change was made is also provided in <instructions> section
+- You have to select the class memebers for which we need to check where it is being used and make necessary changes.
+
+An example is given to you below:
+
+<file_path>
+testing/component.rs
+</file_path>
+
+<instructions>
+We need to keep track of the symbol name along with the outline
+</instructions>
+
+<original_content>
+```rust
+struct SymbolTracker {
+    symbol: String,
+    range: Range,
+}
+```
+</original_content>
+
+<edited_code>
+```rust
+struct SymbolTracker {
+    // we are going to track the name and the outline together here as (symbol_name, outline)
+    symbol: (
+        String,
+        String,
+    ),
+    range: Range,
+    is_edited: bool,
+}
+```
+</edited_code>
+
+Your reply should be stricly in the following format with it contained in the xml section called <members_to_follow>:
+<members_to_follow>
+<member>
+<line>
+    symbol: (
+</line>
+<name>
+symbol
+</name>
+<thinking>
+We need to check where symbol is being used because the types have changed and we are tracking the content as well
+</thinking>
+</member>
+<member>
+<line>
+    is_edited: bool,
+</line>
+<name>
+is_edited
+</name>
+<thinking>
+is_edited has been also added possibly to keep track if the symbol was recently edited. It would be good to check if its being used anywhere and
+keep track of that
+</thinking>
+</member>
+</members_to_follow>
+
+As you can observer, we do not just include the symbol but also the line containing the symbol and the partial line (see how for symbol the type is spread across lines but we are including just the first line), we also include the name of the symbol since that's really important for identifying it and the thinking process behind why the symbol should be followed."#.to_owned()
+    }
+
+    fn user_message_for_class_symbol(&self, request: ClassSymbolFollowupRequest) -> String {
+        let file_path = request.fs_file_path();
+        let original_code = request.original_code();
+        let edited_code = request.edited_code();
+        let instructions = request.instructions();
+        let language = request.language();
+        format!(
+            r#"<file_path>
+{file_path}
+</file_path>
+
+<instructions>
+{instructions}
+</instructions>
+
+<original_code>
+```{language}
+{original_code}
+```
+</original_code>
+
+<edited_code>
+```{language}
+{edited_code}
+```
+</edited_code>"#
+        )
+    }
+
     fn user_message_for_code_error_fix(
         &self,
         code_error_fix_request: &CodeEditingErrorRequest,
@@ -1676,6 +1828,39 @@ impl CodeSymbolErrorFix for AnthropicCodeSymbolImportant {
             )
             .await?;
         Ok(response)
+    }
+}
+
+#[async_trait]
+impl ClassSymbolFollowup for AnthropicCodeSymbolImportant {
+    async fn get_class_symbol(
+        &self,
+        request: ClassSymbolFollowupRequest,
+    ) -> Result<ClassSymbolFollowupResponse, CodeSymbolError> {
+        let model = request.llm().clone();
+        let provider = request.provider().clone();
+        let api_keys = request.api_keys().clone();
+        let system_message = LLMClientMessage::system(self.system_message_for_class_symbol());
+        let user_message = LLMClientMessage::user(self.user_message_for_class_symbol(request));
+        let messages =
+            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.2, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                messages,
+                provider,
+                vec![(
+                    "request_type".to_owned(),
+                    "class_symbols_to_follow".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+        self.fix_class_symbol_response(response)
     }
 }
 

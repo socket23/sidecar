@@ -357,13 +357,26 @@ impl ToolBox {
                 )
                 .await;
         } else if symbol_to_edit.is_class_definition() {
-            // TODO(skcd): Do this properly for the class and if its not attached
-            // to any class of function we have to figure out what to do about that
-            // we create the prompt properly over here
+            // TODO(skcd): Show the AI the changed parts over here between the original
+            // code and the changed node and ask it for the symbols which we should go
+            // to references for, that way we are able to do the finer garained changes
+            // as and when required
         } else {
             // something else over here, wonder what it could be
+            return Err(SymbolError::NoContainingSymbolFound);
         }
         Ok(())
+    }
+
+    async fn invoke_references_check_for_class_definition(
+        &self,
+        symbol_edited: &SymbolToEdit,
+        original_code: &str,
+        original_symbol: &OutlineNodeContent,
+    ) -> Result<(), SymbolError> {
+        // we need to first ask the LLM for the class properties if any we have
+        // to followup on if they changed
+        todo!("we have to finish this")
     }
 
     async fn invoke_followup_on_references(

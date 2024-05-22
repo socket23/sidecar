@@ -28,4 +28,7 @@ pub enum SymbolError {
 
     #[error("Symbol not contained in a child")]
     SymbolNotContainedInChild,
+
+    #[error("No containing symbol found")]
+    NoContainingSymbolFound,
 }

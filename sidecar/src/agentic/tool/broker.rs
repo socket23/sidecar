@@ -14,7 +14,7 @@ use super::{
     },
     code_symbol::{
         correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
-        important::CodeSymbolImportantBroker,
+        followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -106,13 +106,17 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::FilterCodeSnippetsSingleSymbolForEditing,
-            Box::new(CodeToEditFormatterBroker::new(llm_client)),
+            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
         );
         tools.insert(ToolType::EditorApplyEdits, Box::new(EditorApply::new()));
         tools.insert(ToolType::GetQuickFix, Box::new(LSPQuickFixClient::new()));
         tools.insert(
             ToolType::ApplyQuickFix,
             Box::new(LSPQuickFixInvocationClient::new()),
+        );
+        tools.insert(
+            ToolType::ClassSymbolFollowup,
+            Box::new(ClassSymbolFollowupBroker::new(llm_client.clone())),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

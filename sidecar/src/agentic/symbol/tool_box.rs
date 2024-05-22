@@ -4,7 +4,6 @@ use std::sync::Arc;
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
-use tokenizers::pattern::Pattern;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
@@ -80,6 +79,160 @@ impl ToolBox {
             editor_parsing,
             editor_url,
             ui_events,
+        }
+    }
+
+    pub async fn outline_nodes_for_symbol(
+        &self,
+        fs_file_path: &str,
+        symbol_name: &str,
+    ) -> Result<String, SymbolError> {
+        // send an open file request here first
+        let _ = self.file_open(fs_file_path.to_owned()).await?;
+        let outline_node_possible = self
+            .symbol_broker
+            .get_symbols_outline(fs_file_path)
+            .await
+            .ok_or(SymbolError::ExpectedFileToExist)?
+            .into_iter()
+            .find(|outline_node| outline_node.name() == symbol_name);
+        if let Some(outline_node) = outline_node_possible {
+            // we check for 2 things here:
+            // - its either a function or a class like symbol
+            // - if its a function no need to check for implementations
+            // - if its a class then we still need to check for implementations
+            if outline_node.is_funciton() {
+                // just return this over here
+                let fs_file_path = format!(
+                    "{}-{}:{}",
+                    outline_node.fs_file_path(),
+                    outline_node.range().start_line(),
+                    outline_node.range().end_line()
+                );
+                let content = outline_node.get_outline_short();
+                Ok(format!(
+                    "<outline_list>
+<outline>
+<symbol_name>
+{symbol_name}
+</symbol_name>
+<file_path>
+{fs_file_path}
+</file_path>
+<content>
+{content}
+</content>
+</outline>
+</outline_list>"
+                ))
+            } else {
+                // we need to check for implementations as well and then return it
+                let identifier_position = outline_node.identifier_range();
+                // now we go to the implementations using this identifier node
+                let identifier_node_positions = self
+                    .go_to_implementations_exact(
+                        fs_file_path,
+                        &identifier_position.start_position(),
+                    )
+                    .await?
+                    .remove_implementations_vec();
+                // Now that we have the identifier positions we want to grab the
+                // remaining implementations as well
+                let file_paths = identifier_node_positions
+                    .into_iter()
+                    .map(|implementation| implementation.fs_file_path().to_owned())
+                    .collect::<HashSet<String>>();
+                // send a request to open all these files
+                let _ = stream::iter(file_paths.clone())
+                    .map(|fs_file_path| async move { self.file_open(fs_file_path).await })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await;
+                // Now all files are opened so we have also parsed them in the symbol broker
+                // so we can grab the appropriate outlines properly over here
+                let file_path_to_outline_nodes = stream::iter(file_paths)
+                    .map(|fs_file_path| async move {
+                        let symbols = self.symbol_broker.get_symbols_outline(&fs_file_path).await;
+                        (fs_file_path, symbols)
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .filter_map(
+                        |(fs_file_path, outline_nodes_maybe)| match outline_nodes_maybe {
+                            Some(outline_nodes) => Some((fs_file_path, outline_nodes)),
+                            None => None,
+                        },
+                    )
+                    .filter_map(|(fs_file_path, outline_nodes)| {
+                        match outline_nodes
+                            .into_iter()
+                            .find(|outline_node| outline_node.name() == symbol_name)
+                        {
+                            Some(outline_node) => Some((fs_file_path, outline_node)),
+                            None => None,
+                        }
+                    })
+                    .collect::<HashMap<String, OutlineNode>>();
+
+                // we need to get the outline for the symbol over here
+                let mut outlines = vec![];
+                for (fs_file_path, outline_node) in file_path_to_outline_nodes.into_iter() {
+                    // Fuck it we ball, let's return the full outline here we need to truncate it later on
+                    let fs_file_path = format!(
+                        "{}-{}:{}",
+                        outline_node.fs_file_path(),
+                        outline_node.range().start_line(),
+                        outline_node.range().end_line()
+                    );
+                    let outline = outline_node.get_outline_short();
+                    outlines.push(format!(
+                        r#"<outline>
+<symbol_name>
+{symbol_name}
+</symbol_name>
+<file_path>
+{fs_file_path}
+</file_path>
+<content>
+{outline}
+</content>
+</outline>"#
+                    ))
+                }
+
+                // now add the identifier node which we are originally looking at the implementations for
+                let fs_file_path = format!(
+                    "{}-{}:{}",
+                    outline_node.fs_file_path(),
+                    outline_node.range().start_line(),
+                    outline_node.range().end_line()
+                );
+                let outline = outline_node.get_outline_short();
+                outlines.push(format!(
+                    r#"<outline>
+<symbol_name>
+{symbol_name}
+</symbol_name>
+<file_path>
+{fs_file_path}
+</file_path>
+<content>
+{outline}
+</content>
+</outline>"#
+                ));
+                let joined_outlines = outlines.join("\n");
+                Ok(format!(
+                    r#"<outline_list>
+{joined_outlines}
+</outline_line>"#
+                ))
+            }
+        } else {
+            // we did not find anything here so skip this part
+            Err(SymbolError::OutlineNodeNotFound(symbol_name.to_owned()))
         }
     }
 
@@ -1888,6 +2041,26 @@ Please handle these changes as required."#
             mecha_symbols.push(code_snippet);
         }
         Ok(mecha_symbols)
+    }
+
+    async fn go_to_implementations_exact(
+        &self,
+        fs_file_path: &str,
+        position: &Position,
+    ) -> Result<GoToImplementationResponse, SymbolError> {
+        let _ = self.file_open(fs_file_path.to_owned()).await?;
+        let request = ToolInput::SymbolImplementations(GoToImplementationRequest::new(
+            fs_file_path.to_owned(),
+            position.clone(),
+            self.editor_url.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_go_to_implementation()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn go_to_implementation(

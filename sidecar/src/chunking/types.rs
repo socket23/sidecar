@@ -212,6 +212,10 @@ impl OutlineNode {
         }
     }
 
+    pub fn identifier_range(&self) -> &Range {
+        self.content.identifier_range()
+    }
+
     pub fn fs_file_path(&self) -> &str {
         self.content.fs_file_path()
     }
@@ -265,6 +269,12 @@ impl OutlineNode {
 
     pub fn is_funciton(&self) -> bool {
         matches!(self.content.r#type, OutlineNodeType::Function)
+    }
+
+    pub fn get_outline_short(&self) -> String {
+        // we have to carefully construct this over here, but for now we just return
+        // the content
+        self.content.content.to_owned()
     }
 
     pub fn get_outline(&self) -> Option<String> {

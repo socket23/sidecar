@@ -229,4 +229,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn class_symbols_to_followup(self) -> Option<ClassSymbolFollowupResponse> {
+        match self {
+            ToolOutput::ClassSymbolFollowupResponse(output) => Some(output),
+            _ => None,
+        }
+    }
 }

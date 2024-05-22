@@ -4,7 +4,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessRequest,
         error_fix::CodeEditingErrorRequest,
-        followup::CodeFollowupEditDeicisionRequest,
+        followup::ClassSymbolFollowupRequest,
         important::{
             CodeSymbolImportantRequest, CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest,
         },
@@ -45,7 +45,7 @@ pub enum ToolInput {
     QuickFixInvocationRequest(LSPQuickFixInvocationRequest),
     CodeCorrectnessAction(CodeCorrectnessRequest),
     CodeEditingError(CodeEditingErrorRequest),
-    CodeFollowupEditDecision(CodeFollowupEditDeicisionRequest),
+    ClassSymbolFollowup(ClassSymbolFollowupRequest),
 }
 
 impl ToolInput {
@@ -72,7 +72,7 @@ impl ToolInput {
             ToolInput::QuickFixInvocationRequest(_) => ToolType::ApplyQuickFix,
             ToolInput::CodeCorrectnessAction(_) => ToolType::CodeCorrectnessActionSelection,
             ToolInput::CodeEditingError(_) => ToolType::CodeEditingForError,
-            ToolInput::CodeFollowupEditDecision(_) => ToolType::CodeFollowupEditDecision,
+            ToolInput::ClassSymbolFollowup(_) => ToolType::ClassSymbolFollowup,
         }
     }
 
@@ -126,6 +126,14 @@ impl ToolInput {
 
     pub fn reference_request(self) -> Result<GoToReferencesRequest, ToolError> {
         if let ToolInput::GoToReference(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn class_symbol_followup(self) -> Result<ClassSymbolFollowupRequest, ToolError> {
+        if let ToolInput::ClassSymbolFollowup(request) = self {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput)

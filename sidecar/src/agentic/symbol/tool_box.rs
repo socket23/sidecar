@@ -1908,7 +1908,7 @@ Please handle these changes as required."#
                 position,
                 self.editor_url.to_owned(),
             ));
-            self.ui_events.send(UIEvent::from(request.clone()));
+            let _ = self.ui_events.send(UIEvent::from(request.clone()));
             self.tools
                 .invoke(request)
                 .await

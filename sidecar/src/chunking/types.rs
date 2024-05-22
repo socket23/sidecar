@@ -212,6 +212,10 @@ impl OutlineNode {
         }
     }
 
+    pub fn fs_file_path(&self) -> &str {
+        self.content.fs_file_path()
+    }
+
     pub fn outline_node_type(&self) -> &OutlineNodeType {
         self.content.outline_node_type()
     }

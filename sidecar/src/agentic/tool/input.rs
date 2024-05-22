@@ -17,7 +17,7 @@ use super::{
         diagnostics::LSPDiagnosticsInput,
         gotodefintion::GoToDefinitionRequest,
         gotoimplementations::GoToImplementationRequest,
-        gotoreferences::{GoToReferencesRequest, GoToReferencesResponse},
+        gotoreferences::GoToReferencesRequest,
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },

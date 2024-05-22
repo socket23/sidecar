@@ -4,9 +4,20 @@
 use super::edit::SymbolToEditRequest;
 
 #[derive(Debug, Clone)]
+pub struct AskQuestionRequest {
+    question: String,
+}
+
+impl AskQuestionRequest {
+    pub fn new(question: String) -> Self {
+        Self { question }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum SymbolEvent {
     InitialRequest,
-    AskQuestion,
+    AskQuestion(AskQuestionRequest),
     UserFeedback,
     Delete,
     Edit(SymbolToEditRequest),

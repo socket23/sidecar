@@ -85,7 +85,7 @@ impl SymbolLocker {
         // your job is to strictly forward the request to the right symbol
         // or find one if it does not exist at the location we are talking about
         match event {
-            SymbolEvent::AskQuestion => {
+            SymbolEvent::AskQuestion(ask_question) => {
                 todo!("we have to implement this")
             }
             SymbolEvent::Edit(edit_operation) => {}

@@ -22,4 +22,10 @@ pub enum SymbolError {
 
     #[error("channel recieve error: {0}")]
     RecvError(RecvError),
+
+    #[error("No definition found: {0}")]
+    DefinitionNotFound(String),
+
+    #[error("Symbol not contained in a child")]
+    SymbolNotContainedInChild,
 }

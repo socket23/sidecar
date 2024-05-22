@@ -325,6 +325,10 @@ impl ToolBox {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
     ) -> Result<(), SymbolError> {
         // followups here are made for checking the references or different symbols
         // or if something has changed
@@ -335,13 +339,26 @@ impl ToolBox {
         let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
         // over here we have to check if its a function or a class
         if symbol_to_edit.is_function_type() {
-            // what to do over here, we create the prompt properly over here
-            // we look at the position of the function and ask for the next action
-            // to take on various positions given some context about the request
-            // and asking for where to go next and what to change, if its a lot
-            // we have to figure out a better way to handle this and break up the
-            // function calls in batches, but for now its fine
+            // we do need to get the references over here for the function and
+            // send them over as followups to check wherever they are being used
+            let references = self
+                .go_to_references(
+                    symbol_edited.fs_file_path(),
+                    &symbol_edited.range().start_position(),
+                )
+                .await?;
+            let _ = self
+                .invoke_followup_on_references(
+                    symbol_edited,
+                    original_code,
+                    &symbol_to_edit,
+                    references,
+                    hub_sender,
+                )
+                .await;
         } else if symbol_to_edit.is_class_definition() {
+            // TODO(skcd): Do this properly for the class and if its not attached
+            // to any class of function we have to figure out what to do about that
             // we create the prompt properly over here
         } else {
             // something else over here, wonder what it could be
@@ -349,12 +366,17 @@ impl ToolBox {
         Ok(())
     }
 
-    async fn get_code_symbol_for_references(
+    async fn invoke_followup_on_references(
         &self,
+        symbol_edited: &SymbolToEdit,
+        original_code: &str,
         original_symbol: &OutlineNodeContent,
         references: GoToReferencesResponse,
-    ) -> Result<Vec<SymbolEventRequest>, SymbolError> {
-        let symbol_name = original_symbol.name().to_owned();
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<(), SymbolError> {
         let reference_locations = references.locations();
         let file_paths = reference_locations
             .iter()
@@ -376,7 +398,7 @@ impl ToolBox {
         // once we have the outline node, we can try to understand which symbol
         // the position is part of and use that for creating the containing scope
         // of the symbol
-        let file_path_to_outline_nodes = stream::iter(file_paths.clone())
+        let mut file_path_to_outline_nodes = stream::iter(file_paths.clone())
             .map(|fs_file_path| async {
                 self.get_outline_nodes_grouped(&fs_file_path)
                     .await
@@ -389,15 +411,105 @@ impl ToolBox {
             .filter_map(|s| s)
             .collect::<HashMap<String, Vec<OutlineNode>>>();
 
-        // now we need to look for the smallet symbol which contains the node we are interested
-        todo!("we have to handle things over here by looking at the references and using the agent to decide where to go next");
+        // now we have to group the files along with the positions/ranges of the references
+        let mut file_paths_to_locations: HashMap<String, Vec<Range>> = Default::default();
+        reference_locations.iter().for_each(|reference| {
+            let file_path = reference.fs_file_path();
+            let range = reference.range().clone();
+            if let Some(file_pointer) = file_paths_to_locations.get_mut(file_path) {
+                file_pointer.push(range);
+            } else {
+                file_paths_to_locations.insert(file_path.to_owned(), vec![range]);
+            }
+        });
+
+        let edited_code = original_symbol.content();
+        stream::iter(
+            file_paths_to_locations
+                .into_iter()
+                .filter_map(|(file_path, ranges)| {
+                    if let Some(outline_nodes) = file_path_to_outline_nodes.remove(&file_path) {
+                        Some((file_path, ranges, hub_sender.clone(), outline_nodes))
+                    } else {
+                        None
+                    }
+                })
+                .map(|(fs_file_path, ranges, hub_sender, outline_nodes)| {
+                    ranges
+                        .into_iter()
+                        .map(|range| (range, hub_sender.clone(), outline_nodes.to_vec()))
+                        .collect::<Vec<_>>()
+                })
+                .flatten(),
+        )
+        .map(|(range, hub_sender, outline_nodes)| async move {
+            self.send_request_for_followup(
+                original_code,
+                edited_code,
+                symbol_edited,
+                range.start_position(),
+                outline_nodes,
+                hub_sender,
+            )
+            .await
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await;
+        // not entirely convinced that this is the best way to do this, but I think
+        // it makes sense to do it this way
+        Ok(())
+    }
+
+    fn create_instruction_prompt_for_followup(
+        &self,
+        original_code: &str,
+        edited_code: &str,
+        symbol_edited: &SymbolToEdit,
+        child_symbol: &OutlineNodeContent,
+        file_path_for_followup: &str,
+        symbol_content_with_highlight: String,
+    ) -> String {
+        let symbol_edited_name = symbol_edited.symbol_name();
+        let symbol_fs_file_path = symbol_edited.fs_file_path();
+        let instructions = symbol_edited.instructions().join("\n");
+        let child_symbol_name = child_symbol.name();
+        format!(
+            r#"Another engineer has changed the code for `{symbol_edited_name}` which is present in `{symbol_fs_file_path}`
+The original code for `{symbol_edited_name}` is given below along with the new code and the instructions for why the change was done:
+<old_code>
+{original_code}
+</old_code>
+
+<new_code>
+{edited_code}
+</new_code>
+
+<instructions_for_change>
+{instructions}
+</instructions_for_change>
+
+The `{symbol_edited_name}` is being used in `{child_symbol_name}` in the following line:
+<file_path>
+{file_path_for_followup}
+</file_path>
+<content>
+{symbol_content_with_highlight}
+</content>
+
+There might be need for futher changes to the `{child_symbol_name}`
+Please handle these changes as required."#
+        )
     }
 
     // we need to search for the smallest node which contains this position or range
-    async fn search_for_smallest_node(
+    async fn send_request_for_followup(
         &self,
-        fs_file_path: &str,
-        position: Position,
+        original_code: &str,
+        edited_code: &str,
+        symbol_to_edit: &SymbolToEdit,
+        position_to_search: Position,
+        // This is pretty expensive to copy again and again
         outline_nodes: Vec<OutlineNode>,
         // this is becoming annoying now cause we will need a drain for this while
         // writing a unit-test for this
@@ -408,9 +520,10 @@ impl ToolBox {
     ) -> Result<(), SymbolError> {
         let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
             // we need to check if the outline node contains the range we are interested in
-            outline_node
-                .range()
-                .contains(&Range::new(position.clone(), position.clone()))
+            outline_node.range().contains(&Range::new(
+                position_to_search.clone(),
+                position_to_search.clone(),
+            ))
         });
         match outline_node_possible {
             Some(outline_node) => {
@@ -420,10 +533,12 @@ impl ToolBox {
                         .children()
                         .into_iter()
                         .find(|outline_node_content| {
-                            outline_node_content
-                                .range()
-                                .contains(&Range::new(position.clone(), position.clone()))
+                            outline_node_content.range().contains(&Range::new(
+                                position_to_search.clone(),
+                                position_to_search.clone(),
+                            ))
                         });
+
                 let outline_node_fs_file_path = outline_node.content().fs_file_path();
                 let outline_node_identifier_range = outline_node.content().identifier_range();
                 // we can go to definition of the node and then ask the symbol for the outline over
@@ -437,25 +552,87 @@ impl ToolBox {
                 if let Some(definition) = definitions.definitions().get(0) {
                     let fs_file_path = definition.file_path();
                     let symbol_name = outline_node.name();
-                    let symbol_outline = self
-                        .get_outline_for_symbol_identifier(
-                            fs_file_path,
-                            symbol_name,
-                            hub_sender.clone(),
-                        )
-                        .await;
+                    if let Some(child_node) = child_node_possible {
+                        // we need to get a few lines above and below the place where the defintion is present
+                        // so we can show that to the LLM properly and ask it to make changes
+                        let start_line = child_node.range().start_line();
+                        let content_with_line_numbers = child_node
+                            .content()
+                            .lines()
+                            .enumerate()
+                            .map(|(index, line)| (index + start_line, line.to_owned()))
+                            .collect::<Vec<_>>();
+                        // Now we collect 4 lines above and below the position we are interested in
+                        let position_line_number = position_to_search.line() as i64;
+                        let symbol_content_to_send = content_with_line_numbers
+                            .into_iter()
+                            .filter_map(|(line_number, line_content)| {
+                                if line_number as i64 <= position_line_number + 4
+                                    && line_number as i64 >= position_line_number - 4
+                                {
+                                    if line_number as i64 == position_line_number {
+                                        // if this is the line number we are interested in then we have to highlight
+                                        // this for the LLM
+                                        Some(format!(
+                                            r#"<line_with_reference>
+{line_content}
+</line_with_reference>"#
+                                        ))
+                                    } else {
+                                        Some(line_content)
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        let instruction_prompt = self.create_instruction_prompt_for_followup(
+                            original_code,
+                            edited_code,
+                            symbol_to_edit,
+                            &child_node,
+                            &format!(
+                                "{}-{}:{}",
+                                child_node.fs_file_path(),
+                                child_node.range().start_line(),
+                                child_node.range().end_line()
+                            ),
+                            symbol_content_to_send,
+                        );
+                        // now we can send it over to the hub sender for handling the change
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        let _ = hub_sender.send((
+                            SymbolEventRequest::ask_question(
+                                SymbolIdentifier::with_file_path(
+                                    outline_node.name(),
+                                    outline_node.fs_file_path(),
+                                ),
+                                instruction_prompt,
+                            ),
+                            sender,
+                        ));
+                        // Figure out what to do with the receiver over here
+                        let response = receiver.await;
+                        // this also feels a bit iffy to me, since this will block
+                        // the other requests from happening unless we do everything in parallel
+                        Ok(())
+                    } else {
+                        // honestly this might be the case that the position where we got the reference is in some global zone
+                        // which is hard to handle right now, we can just return and error and keep going
+                        return Err(SymbolError::SymbolNotContainedInChild);
+                    }
                     // This is now perfect since we have the symbol outline which we
                     // want to send over as context
                     // along with other metadata to create the followup-request required
                     // for making the edits as required
                 } else {
-                    // if there are no definitions, then we are good and can keep it simple
-                    // as we have it over here normally
+                    // if there are no defintions, this is bad since we do require some kind
+                    // of definition to be present here
+                    return Err(SymbolError::DefinitionNotFound(
+                        outline_node.name().to_owned(),
+                    ));
                 }
-                // we want to send here that this is the function we are interested in doing
-                // changes to and we have some context about the class we are part of
-                // once we have the child node we have to figure out what to do next because of it
-                todo!("figure out what to do over here")
             }
             None => {
                 // if there is no such outline node, then what should we do? cause we still

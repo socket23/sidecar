@@ -25,7 +25,10 @@ use crate::{
 
 use super::{
     errors::SymbolError,
-    events::{edit::SymbolToEdit, types::SymbolEvent},
+    events::{
+        edit::SymbolToEdit,
+        types::{AskQuestionRequest, SymbolEvent},
+    },
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
 };
@@ -62,6 +65,13 @@ impl SymbolEventRequest {
         Self {
             symbol,
             event: SymbolEvent::Outline,
+        }
+    }
+
+    pub fn ask_question(symbol: SymbolIdentifier, question: String) -> Self {
+        Self {
+            symbol,
+            event: SymbolEvent::AskQuestion(AskQuestionRequest::new(question)),
         }
     }
 }
@@ -504,7 +514,7 @@ impl Symbol {
                         // one by one
                         symbol.edit_implementations(edit_request).await
                     }
-                    SymbolEvent::AskQuestion => {
+                    SymbolEvent::AskQuestion(ask_question_request) => {
                         todo!("ask question is not implemented yet");
                     }
                     SymbolEvent::Delete => {

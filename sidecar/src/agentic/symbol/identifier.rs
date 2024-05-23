@@ -243,7 +243,7 @@ pub struct MechaCodeSymbolThinking {
     steps: Mutex<Vec<String>>,
     is_new: bool,
     file_path: String,
-    snippet: Option<Snippet>,
+    snippet: Mutex<Option<Snippet>>,
     // this contains all the implementations, if there were children before
     // for example: functions inside the class, they all get flattened over here
     implementations: Mutex<Vec<Snippet>>,
@@ -267,7 +267,7 @@ impl MechaCodeSymbolThinking {
             steps: Mutex::new(steps),
             is_new,
             file_path,
-            snippet,
+            snippet: Mutex::new(snippet),
             implementations: Mutex::new(implementations),
             provided_user_context,
         }
@@ -309,7 +309,7 @@ impl MechaCodeSymbolThinking {
         fs_file_path: &str,
         is_outline: bool,
     ) -> Option<Snippet> {
-        if let Some(snippet) = self.snippet.as_ref() {
+        if let Some(snippet) = self.snippet.lock().await.as_ref() {
             if snippet.is_potential_match(range, fs_file_path, is_outline) {
                 return Some(snippet.clone());
             }
@@ -325,7 +325,7 @@ impl MechaCodeSymbolThinking {
     }
 
     pub async fn find_symbol_in_range(&self, range: &Range, fs_file_path: &str) -> Option<String> {
-        if let Some(snippet) = &self.snippet {
+        if let Some(snippet) = self.snippet.lock().await.as_ref() {
             if snippet.range.contains(range) && snippet.fs_file_path == fs_file_path {
                 return Some(snippet.symbol_name.to_owned());
             }
@@ -369,12 +369,17 @@ impl MechaCodeSymbolThinking {
         }
     }
 
-    pub fn set_snippet(&mut self, snippet: Snippet) {
-        self.snippet = Some(snippet);
+    pub async fn set_snippet(&self, snippet: Snippet) {
+        let mut snippet_inside = self.snippet.lock().await;
+        *snippet_inside = Some(snippet);
     }
 
-    pub fn get_snippet(&self) -> Option<Snippet> {
-        self.snippet.clone()
+    pub async fn is_snippet_present(&self) -> bool {
+        self.snippet.lock().await.is_some()
+    }
+
+    pub async fn get_snippet(&self) -> Option<Snippet> {
+        self.snippet.lock().await.clone()
     }
 
     pub async fn add_step(&self, step: &str) {
@@ -398,7 +403,7 @@ impl MechaCodeSymbolThinking {
             .collect()
     }
 
-    pub async fn set_implementations(&mut self, snippets: Vec<Snippet>) {
+    pub async fn set_implementations(&self, snippets: Vec<Snippet>) {
         let mut implementations = self.implementations.lock().await;
         *implementations = snippets;
     }
@@ -410,7 +415,7 @@ impl MechaCodeSymbolThinking {
     ) -> Result<SymbolEventRequest, SymbolError> {
         // TODO(skcd): We need to generate the implementation always
         let steps = self.steps().await;
-        if self.get_snippet().is_some() {
+        if self.is_snippet_present().await {
             // This is what we are trying to figure out
             // the idea representation here will be in the form of
             // now that we have added the snippets, we can ask the llm to rerank
@@ -535,7 +540,7 @@ impl MechaCodeSymbolThinking {
     // idx -> (Range + FS_FILE_PATH + is_outline)
     // fin
     pub async fn to_llm_request(&self) -> Option<(String, Vec<SnippetReRankInformation>)> {
-        if let Some(snippet) = &self.snippet {
+        if let Some(snippet) = self.snippet.lock().await.as_ref() {
             let is_function = snippet
                 .outline_node_content
                 .outline_node_type()

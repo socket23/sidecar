@@ -273,6 +273,30 @@ impl MechaCodeSymbolThinking {
         }
     }
 
+    // we need to find the snippet in the code symbol in the file we are interested
+    // in and then use that for providing answers
+    pub async fn find_snippet_and_create(
+        symbol_name: &str,
+        steps: Vec<String>,
+        file_path: &str,
+        provided_user_context: UserContext,
+        tools: Arc<ToolBox>,
+    ) -> Option<Self> {
+        let snippet_maybe = tools.find_snippet_for_symbol(file_path, symbol_name).await;
+        match snippet_maybe {
+            Ok(snippet) => Some(MechaCodeSymbolThinking::new(
+                symbol_name.to_owned(),
+                steps,
+                false,
+                file_path.to_owned(),
+                Some(snippet),
+                vec![],
+                provided_user_context,
+            )),
+            Err(_) => None,
+        }
+    }
+
     pub fn user_context(&self) -> &UserContext {
         &self.provided_user_context
     }

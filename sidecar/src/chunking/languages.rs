@@ -260,6 +260,7 @@ impl TSLanguageConfig {
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range,
+                                            child_range,
                                         ));
                                     } else {
                                         children.push(OutlineNodeContent::new(
@@ -275,6 +276,7 @@ impl TSLanguageConfig {
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range,
+                                            child_range,
                                         ));
                                     }
                                 }
@@ -306,6 +308,8 @@ impl TSLanguageConfig {
                         ),
                         fs_file_path.to_owned(),
                         class_name_range.expect("class name range to be present"),
+                        // This is incorrect
+                        outline_range,
                     );
                     compressed_outline.push(OutlineNode::new(
                         class_outline,
@@ -360,6 +364,7 @@ impl TSLanguageConfig {
                                         ),
                                         fs_file_path.to_owned(),
                                         function_name_range.clone(),
+                                        child_range,
                                     ));
                                 } else {
                                     compressed_outline.push(OutlineNode::new(
@@ -377,6 +382,7 @@ impl TSLanguageConfig {
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range.clone(),
+                                            child_range,
                                         ),
                                         vec![],
                                         self.language_str.to_owned(),

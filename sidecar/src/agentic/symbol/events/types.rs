@@ -12,6 +12,10 @@ impl AskQuestionRequest {
     pub fn new(question: String) -> Self {
         Self { question }
     }
+
+    pub fn get_question(&self) -> &str {
+        &self.question
+    }
 }
 
 #[derive(Debug, Clone)]

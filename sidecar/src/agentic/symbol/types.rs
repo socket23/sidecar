@@ -550,6 +550,12 @@ impl Symbol {
                         symbol.edit_implementations(edit_request).await
                     }
                     SymbolEvent::AskQuestion(ask_question_request) => {
+                        // if we are going to ask a question we have to first
+                        // figure out which sub-node to edit and then being
+                        // editing it
+                        // for doing this we have to referesh all the implementations
+                        // and get them together, once we have that we can ask the LLM
+                        // to select the sub modules which need to change and go forward making the edits
                         todo!("ask question is not implemented yet");
                     }
                     SymbolEvent::Delete => {
@@ -562,7 +568,7 @@ impl Symbol {
                         // we have been asked to provide an outline of the symbol we are part of
                         // this is a bit easy to do so lets try and finish this
                         let outline = symbol.get_outline().await;
-                        match outline {
+                        let _ = match outline {
                             Ok(outline) => sender.send(SymbolEventResponse::TaskDone(outline)),
                             Err(_) => sender.send(SymbolEventResponse::TaskDone(
                                 "failed to get outline".to_owned(),

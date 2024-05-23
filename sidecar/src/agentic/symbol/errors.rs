@@ -37,4 +37,7 @@ pub enum SymbolError {
 
     #[error("No outline node with name found: {0}")]
     OutlineNodeNotFound(String),
+
+    #[error("Snippet not found")]
+    SnippetNotFound,
 }

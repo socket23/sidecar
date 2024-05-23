@@ -99,6 +99,7 @@ pub fn rust_language_config() -> TSLanguageConfig {
             (call_expression function: (field_expression field: (field_identifier) @identifier))
             (call_expression function: (identifier) @identifier)"
             .to_owned()],
+        // we are missing generic types over here
         outline_query: Some(
             r#"
             (struct_item

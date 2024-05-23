@@ -1886,6 +1886,85 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    // This helps us find the snippet for the symbol in the file, this is the
+    // best way to do this as this is always exact and we never make mistakes
+    // over here since we are using the LSP as well
+    pub async fn find_snippet_for_symbol(
+        &self,
+        fs_file_path: &str,
+        symbol_name: &str,
+    ) -> Result<Snippet, SymbolError> {
+        // we always open the document before asking for an outline
+        let file_open_result = self.file_open(fs_file_path.to_owned()).await?;
+        println!("{:?}", file_open_result);
+        let language = file_open_result.language().to_owned();
+        // we add the document for parsing over here
+        self.symbol_broker
+            .add_document(
+                file_open_result.fs_file_path().to_owned(),
+                file_open_result.contents(),
+                language,
+            )
+            .await;
+
+        // we grab the outlines over here
+        let outline_nodes = self.symbol_broker.get_symbols_outline(fs_file_path).await;
+
+        // We will either get an outline node or we will get None
+        // for today, we will go with the following assumption
+        // - if the document has already been open, then its good
+        // - otherwise we open the document and parse it again
+        if let Some(outline_nodes) = outline_nodes {
+            let mut outline_nodes = self.grab_symbols_from_outline(outline_nodes, symbol_name);
+
+            // if there are no outline nodes, then we have to skip this part
+            // and keep going
+            if outline_nodes.is_empty() {
+                // here we need to do go-to-definition
+                // first we check where the symbol is present on the file
+                // and we can use goto-definition
+                // so we first search the file for where the symbol is
+                // this will be another invocation to the tools
+                // and then we ask for the definition once we find it
+                let file_data = self.file_open(fs_file_path.to_owned()).await?;
+                let file_content = file_data.contents();
+                // now we parse it and grab the outline nodes
+                let find_in_file = self
+                    .find_in_file(file_content, symbol_name.to_owned())
+                    .await
+                    .map(|find_in_file| find_in_file.get_position())
+                    .ok()
+                    .flatten();
+                // now that we have a poition, we can ask for go-to-definition
+                if let Some(file_position) = find_in_file {
+                    let definition = self.go_to_definition(fs_file_path, file_position).await?;
+                    // let definition_file_path = definition.file_path().to_owned();
+                    let snippet_node = self
+                        .grab_symbol_content_from_definition(symbol_name, definition)
+                        .await?;
+                    Ok(snippet_node)
+                } else {
+                    Err(SymbolError::SnippetNotFound)
+                }
+            } else {
+                // if we have multiple outline nodes, then we need to select
+                // the best one, this will require another invocation from the LLM
+                // we have the symbol, we can just use the outline nodes which is
+                // the first
+                let outline_node = outline_nodes.remove(0);
+                Ok(Snippet::new(
+                    outline_node.name().to_owned(),
+                    outline_node.range().clone(),
+                    outline_node.fs_file_path().to_owned(),
+                    outline_node.content().to_owned(),
+                    outline_node,
+                ))
+            }
+        } else {
+            Err(SymbolError::OutlineNodeNotFound(symbol_name.to_owned()))
+        }
+    }
+
     // TODO(skcd): Improve this since we have code symbols which might be duplicated
     // because there can be repetitions and we can'nt be sure where they exist
     // one key hack here is that we can legit search for this symbol and get
@@ -1933,19 +2012,19 @@ Please handle these changes as required."#
                 );
             }
         });
-        symbols.iter().for_each(|symbol| {
-            // if we do not have the new symbols being tracked here, we use it
-            // for exploration
+        for symbol in symbols.iter() {
             if !new_symbols.contains(symbol.code_symbol()) {
                 symbols_to_visit.insert(symbol.code_symbol().to_owned());
                 if let Some(code_snippet) = final_code_snippets.get_mut(symbol.code_symbol()) {
-                    code_snippet.add_step(symbol.thinking());
+                    let _ = code_snippet.add_step(symbol.thinking()).await;
                 }
             }
-        });
+        }
 
         let mut mecha_symbols = vec![];
 
+        // TODO(skcd): Refactor the code below to be the same as find_snippet_for_symbol
+        // so we can contain the logic in a single place
         for (_, mut code_snippet) in final_code_snippets.into_iter() {
             // we always open the document before asking for an outline
             let file_open_result = self

@@ -135,6 +135,7 @@ pub struct OutlineNodeContent {
     content: String,
     fs_file_path: String,
     identifier_range: Range,
+    body_range: Range,
 }
 
 impl OutlineNodeContent {
@@ -145,6 +146,7 @@ impl OutlineNodeContent {
         content: String,
         fs_file_path: String,
         identifier_range: Range,
+        body_range: Range,
     ) -> Self {
         Self {
             range,
@@ -153,6 +155,7 @@ impl OutlineNodeContent {
             content,
             fs_file_path,
             identifier_range,
+            body_range,
         }
     }
 
@@ -293,6 +296,17 @@ impl OutlineNode {
                         }
                     });
                 });
+                let _ = self
+                    .content
+                    .content()
+                    .lines()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, line)| (idx + start_line, line.to_owned()))
+                    .collect::<Vec<_>>();
+
+                // we only keep the lines which are not covered by any of the functions over here
+                // since these are important for the outline as well
 
                 // now we have the line numbers here which should not be included
                 // for the functions which we have we want to get their outline as well, so we can keep going

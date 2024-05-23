@@ -17,7 +17,7 @@ use crate::user_context::types::UserContext;
 use super::{
     errors::SymbolError,
     events::types::SymbolEvent,
-    identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
+    identifier::{LLMProperties, MechaCodeSymbolThinking, Snippet, SymbolIdentifier},
     tool_box::ToolBox,
     types::{Symbol, SymbolEventRequest, SymbolEventResponse},
 };
@@ -92,25 +92,36 @@ impl SymbolLocker {
         }
 
         if !does_exist {
-            if symbol_identifier.fs_file_path().is_none() {
+            if let Some(fs_file_path) = symbol_identifier.fs_file_path() {
+                // grab the snippet for this symbol
+                let snippet = self
+                    .tools
+                    .find_snippet_for_symbol(&fs_file_path, symbol_identifier.symbol_name())
+                    .await;
+                if let Ok(snippet) = snippet {
+                    // the symbol does not exist so we have to make sure that we can send it over somehow
+                    let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
+                        symbol_identifier.symbol_name().to_owned(),
+                        vec![],
+                        false,
+                        symbol_identifier.fs_file_path().expect("to present"),
+                        Some(snippet),
+                        vec![],
+                        self.user_context.clone(),
+                    );
+                    // we create the symbol over here, but what about the context, I want
+                    // to pass it to the symbol over here
+                    let _ = self.create_symbol_agent(mecha_code_symbol_thinking).await;
+                } else {
+                    // we are fucked over here since we didn't find a snippet for the symbol
+                    // which is supposed to have some presence in the file
+                    todo!("no snippet found for the snippet, we are screwed over here, look at the comment above");
+                }
+            } else {
                 // well this kind of sucks, cause we do not know where the symbol is anymore
                 // worst case this means that we have to create a new symbol somehow
                 // best case this could mean that we fucked up majorly somewhere... what should we do???
                 todo!("we are mostly fucked if this is the case, we have to figure out how to handle the request coming in but not having the file path later on")
-            } else {
-                // the symbol does not exist so we have to make sure that we can send it over somehow
-                let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
-                    symbol_identifier.symbol_name().to_owned(),
-                    vec![],
-                    false,
-                    symbol_identifier.fs_file_path().expect("to present"),
-                    None,
-                    vec![],
-                    self.user_context.clone(),
-                );
-                // we create the symbol over here, but what about the context, I want
-                // to pass it to the symbol over here
-                let _ = self.create_symbol_agent(mecha_code_symbol_thinking).await;
             }
         }
 

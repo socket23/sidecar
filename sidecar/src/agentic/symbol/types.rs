@@ -187,10 +187,6 @@ impl Symbol {
             .await
     }
 
-    async fn add_implementation_snippet(&mut self, snippet: Snippet) {
-        self.mecha_code_symbol.add_implementation(snippet).await;
-    }
-
     async fn get_outline(&self) -> Result<String, SymbolError> {
         // to grab the outline first we need to understand the definition snippet
         // of the node and then create it appropriately
@@ -203,10 +199,10 @@ impl Symbol {
             .await
     }
 
-    async fn grab_implementations(&mut self) -> Result<(), SymbolError> {
+    async fn grab_implementations(&self) -> Result<(), SymbolError> {
         let snippet: Option<Snippet>;
         {
-            snippet = self.mecha_code_symbol.get_snippet();
+            snippet = self.mecha_code_symbol.get_snippet().await.clone();
         }
         if let Some(snippet) = snippet {
             // We first rerank the snippets and then ask the llm for which snippets
@@ -312,14 +308,33 @@ impl Symbol {
                 .collect::<Vec<_>>();
             // we update the snippets we have stored here into the symbol itself
             {
-                implementation_content
-                    .into_iter()
-                    .for_each(|implementation_snippet| {
-                        let _ = self.add_implementation_snippet(implementation_snippet);
-                    });
+                self.mecha_code_symbol
+                    .set_implementations(implementation_content)
+                    .await;
             }
         }
         Ok(())
+    }
+
+    /// Refreshing the state here implies the following:
+    /// - we figure out all the implementations again and also
+    /// our core snippet again
+    /// - this way even if there have been changes we are almost always
+    /// correct
+    async fn refresh_state(&self) {
+        // do we really have to do this? or can we get away from this just by
+        // not worrying about things?
+        let snippet = self
+            .tools
+            .find_snippet_for_symbol(self.fs_file_path(), self.symbol_name())
+            .await;
+        // if we do have a snippet here which is present update it, otherwise its a pretty
+        // bad sign that we had the snippet before but do not have it now
+        if let Ok(snippet) = snippet {
+            self.mecha_code_symbol.set_snippet(snippet).await;
+        }
+        // now grab the implementations again
+        let _ = self.grab_implementations().await;
     }
 
     async fn generate_initial_request(&self) -> Result<SymbolEventRequest, SymbolError> {
@@ -328,6 +343,14 @@ impl Symbol {
         self.mecha_code_symbol
             .initial_request(self.tools.clone(), self.llm_properties.clone())
             .await
+    }
+
+    // The protocol here is that the questions are just plain text, its on the symbol
+    // to decide if it needs to collect more information or make changes, we need to carefully
+    // figure that out over here
+    // what tools do we provide to the symbol for this?
+    async fn answer_question(&self, question: &str) -> Result<SymbolEventRequest, SymbolError> {
+        todo!("we need to make sure this works")
     }
 
     // TODO(skcd): Handle the cases where the outline is within a symbol and spread
@@ -543,6 +566,8 @@ impl Symbol {
                         }
                     }
                     SymbolEvent::Edit(edit_request) => {
+                        // we refresh our state always
+                        symbol.refresh_state().await;
                         // one of the primary goals here is that we can make edits
                         // everywhere at the same time unless its on the same file
                         // but for now, we are gonna pleb our way and make edits
@@ -550,6 +575,8 @@ impl Symbol {
                         symbol.edit_implementations(edit_request).await
                     }
                     SymbolEvent::AskQuestion(ask_question_request) => {
+                        // we refresh our state always
+                        symbol.refresh_state().await;
                         // if we are going to ask a question we have to first
                         // figure out which sub-node to edit and then being
                         // editing it

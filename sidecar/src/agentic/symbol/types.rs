@@ -350,6 +350,11 @@ impl Symbol {
     // figure that out over here
     // what tools do we provide to the symbol for this?
     async fn answer_question(&self, question: &str) -> Result<SymbolEventRequest, SymbolError> {
+        // The idea here we want to do is:
+        // - We first ask which symbols we want to go towards and also do a global search
+        // - We then do a question for any followup changes which we need to do on these other symbols (ask them a query and wait for the result)
+        // - Use the returned data to create the final edit or answer question here as required
+        // - Finally if our shape has changed we need to schedule followups
         todo!("we need to make sure this works")
     }
 

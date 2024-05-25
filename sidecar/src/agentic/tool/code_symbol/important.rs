@@ -236,6 +236,7 @@ pub struct CodeSymbolToAskQuestionsRequest {
     symbol_identifier: String,
     fs_file_path: String,
     language: String,
+    extra_data: String,
     code_above: Option<String>,
     code_below: Option<String>,
     code_in_selection: String,
@@ -251,6 +252,7 @@ impl CodeSymbolToAskQuestionsRequest {
         symbol_identifier: String,
         fs_file_path: String,
         language: String,
+        extra_data: String,
         code_above: Option<String>,
         code_below: Option<String>,
         code_in_selection: String,
@@ -264,6 +266,7 @@ impl CodeSymbolToAskQuestionsRequest {
             symbol_identifier,
             fs_file_path,
             language,
+            extra_data,
             code_above,
             code_below,
             code_in_selection,
@@ -274,12 +277,48 @@ impl CodeSymbolToAskQuestionsRequest {
         }
     }
 
-    pub fn history(&self) -> &str {
-        &self.history
+    pub fn api_key(&self) -> &LLMProviderAPIKeys {
+        &self.api_key
+    }
+
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
     }
 
     pub fn symbol_identifier(&self) -> &str {
         &self.symbol_identifier
+    }
+
+    pub fn history(&self) -> &str {
+        &self.history
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.query
+    }
+
+    pub fn extra_data(&self) -> &str {
+        &self.extra_data
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn code_above(&self) -> Option<String> {
+        self.code_above.clone()
+    }
+
+    pub fn code_below(&self) -> Option<String> {
+        self.code_below.clone()
+    }
+
+    pub fn code_in_selection(&self) -> &str {
+        &self.code_in_selection
+    }
+
+    pub fn model(&self) -> &LLMType {
+        &self.llm_type
     }
 }
 

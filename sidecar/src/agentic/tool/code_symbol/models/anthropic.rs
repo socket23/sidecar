@@ -200,6 +200,861 @@ impl AnthropicCodeSymbolImportant {
             .map_err(|e| CodeSymbolError::SerdeError(e))
     }
 
+    fn user_message_for_ask_question_symbols(
+        &self,
+        request: CodeSymbolToAskQuestionsRequest,
+    ) -> String {
+        let user_query = request.user_query();
+        let extra_data = request.extra_data();
+        let fs_file_path = request.fs_file_path();
+        let code_above = request.code_above().unwrap_or("".to_owned());
+        let code_below = request.code_below().unwrap_or("".to_owned());
+        let code_in_selection = request.code_in_selection();
+        format!(
+            r#"<user_query>
+{user_query}
+</user_query>
+<file>
+<file_path>
+{fs_file_path}
+</file_path>
+<code_above>
+{code_above}
+</code_above>
+<code_below>
+{code_below}
+</code_below>
+<code_in_selection>
+{code_in_selection}
+</code_in_selection>
+</file>
+<extra_data>
+{extra_data}
+</extra_data>"#
+        )
+    }
+
+    fn system_message_for_ask_question_symbols(
+        &self,
+        symbol_name: &str,
+        fs_file_path: &str,
+    ) -> String {
+        format!(
+            r#"You are an expert software engineer who is going to look at some more symbols to deeply answer the user query.
+- You are reponsible for any changes which need to be made to <symbol_name>{symbol_name}</symbol_name> present in file {fs_file_path}
+- The user query is given to you in <user_query>
+- The <user_query> is one of the following use case:
+<use_case_list>
+<use_case>
+Reference change: A code symbol struct, implementation, trait, subclass, enum, function, constant or type has changed, you have to figure out what needs to be changed and we want to make some changes to our own implementation
+</use_case>
+<use_case>
+We are going to add more functionality which the user wants to create using the <user_query>
+</use_case>
+<use_case>
+The <user_query> is about asking for some important information
+</use_case>
+<use_case>
+<user_query> wants to gather more information about a particular workflow which the user has asked for in their query
+</use_case>
+</use_case_list>
+- You have to select at the most 5 symbols and you can do the following:
+<operation>
+You can initiate a read operation on one of the symbols and gather more information before answering the user query. This allows you to understand the complete picture of how to answer the user query.
+</operation>
+- Now first think step by step on how you are going to approach this problem and write down your steps in <steps_to_answer> section
+- Your reply should be in the <reply> tag
+
+We are now going to show you an example:
+<user_query>
+I want to try and grab the prettier settings from the language config as a fall back instead of erroring out
+</user_query>
+<file>
+<file_path>
+crates/prettier/src/prettier.rs
+</file_path>
+<code_above>
+```rust
+impl Parser {{
+    #[cfg(not(any(test, feature = "test-support")))]
+    pub async fn start(
+        server_id: LanguageServerId,
+        prettier_dir: PathBuf,
+        node: Arc<dyn NodeRuntime>,
+        cx: AsyncAppContext,
+    ) -> anyhow::Result<Self> {{
+        use lsp::LanguageServerBinary;
+        let executor = cx.background_executor().clone();
+        anyhow::ensure!(
+            prettier_dir.is_dir(),
+            "Prettier dir {{prettier_dir:?}} is not a directory"
+        );
+        let prettier_server = DEFAULT_PRETTIER_DIR.join(PRETTIER_SERVER_FILE);
+        anyhow::ensure!(
+            prettier_server.is_file(),
+            "no prettier server package found at {{prettier_server:?}}"
+        );
+        let node_path = executor
+            .spawn(async move {{ node.binary_path().await }})
+            .await?;
+        let server = LanguageServer::new(
+            Arc::new(parking_lot::Mutex::new(None)),
+            server_id,
+            LanguageServerBinary {{
+                path: node_path,
+                arguments: vec![prettier_server.into(), prettier_dir.as_path().into()],
+                env: None,
+            }},
+            &prettier_dir,
+            None,
+            cx.clone(),
+        )
+        .context("prettier server creation")?;
+        let server = cx
+            .update(|cx| executor.spawn(server.initialize(None, cx)))?
+            .await
+            .context("prettier server initialization")?;
+        Ok(Self::Real(RealPrettier {{
+            server,
+            default: prettier_dir == DEFAULT_PRETTIER_DIR.as_path(),
+            prettier_dir,
+        }}))
+    }}
+```
+</code_above>
+<code_below>
+```rust
+    pub async fn clear_cache(&self) -> anyhow::Result<()> {{
+        match self {{
+            Self::Real(local) => local
+                .server
+                .request::<ClearCache>(())
+                .await
+                .context("prettier clear cache"),
+            #[cfg(any(test, feature = "test-support"))]
+            Self::Test(_) => Ok(()),
+        }}
+    }}
+}}
+```
+</code_below>
+<code_in_selection>
+```rust
+    pub async fn format(
+        &self,
+        buffer: &Model<Buffer>,
+        buffer_path: Option<PathBuf>,
+        cx: &mut AsyncAppContext,
+    ) -> anyhow::Result<Diff> {{
+        match self {{
+            Self::Real(local) => {{
+                let params = buffer
+                    .update(cx, |buffer, cx| {{
+                        let buffer_language = buffer.language();
+                        let language_settings = language_settings(buffer_language, buffer.file(), cx);
+                        let prettier_settings = &language_settings.prettier;
+                        anyhow::ensure!(
+                            prettier_settings.allowed,
+                            "Cannot format: prettier is not allowed for language {{buffer_language:?}}"
+                        );
+                        let prettier_node_modules = self.prettier_dir().join("node_modules");
+                        anyhow::ensure!(
+                            prettier_node_modules.is_dir(),
+                            "Prettier node_modules dir does not exist: {{prettier_node_modules:?}}"
+                        );
+                        let plugin_name_into_path = |plugin_name: &str| {{
+                            let prettier_plugin_dir = prettier_node_modules.join(plugin_name);
+                            [
+                                prettier_plugin_dir.join("dist").join("index.mjs"),
+                                prettier_plugin_dir.join("dist").join("index.js"),
+                                prettier_plugin_dir.join("dist").join("plugin.js"),
+                                prettier_plugin_dir.join("index.mjs"),
+                                prettier_plugin_dir.join("index.js"),
+                                prettier_plugin_dir.join("plugin.js"),
+                                // this one is for @prettier/plugin-php
+                                prettier_plugin_dir.join("standalone.js"),
+                                prettier_plugin_dir,
+                            ]
+                            .into_iter()
+                            .find(|possible_plugin_path| possible_plugin_path.is_file())
+                        }};
+                        // Tailwind plugin requires being added last
+                        // https://github.com/tailwindlabs/prettier-plugin-tailwindcss#compatibility-with-other-prettier-plugins
+                        let mut add_tailwind_back = false;
+                        let mut located_plugins = prettier_settings.plugins.iter()
+                            .filter(|plugin_name| {{
+                                if plugin_name.as_str() == TAILWIND_PRETTIER_PLUGIN_PACKAGE_NAME {{
+                                    add_tailwind_back = true;
+                                    false
+                                }} else {{
+                                    true
+                                }}
+                            }})
+                            .map(|plugin_name| {{
+                                let plugin_path = plugin_name_into_path(plugin_name);
+                                (plugin_name.clone(), plugin_path)
+                            }})
+                            .collect::<Vec<_>>();
+                        if add_tailwind_back {{
+                            located_plugins.push((
+                                TAILWIND_PRETTIER_PLUGIN_PACKAGE_NAME.to_owned(),
+                                plugin_name_into_path(TAILWIND_PRETTIER_PLUGIN_PACKAGE_NAME),
+                            ));
+                        }}
+                        let prettier_options = if self.is_default() {{
+                            let mut options = prettier_settings.options.clone();
+                            if !options.contains_key("tabWidth") {{
+                                options.insert(
+                                    "tabWidth".to_string(),
+                                    serde_json::Value::Number(serde_json::Number::from(
+                                        language_settings.tab_size.get(),
+                                    )),
+                                );
+                            }}
+                            if !options.contains_key("printWidth") {{
+                                options.insert(
+                                    "printWidth".to_string(),
+                                    serde_json::Value::Number(serde_json::Number::from(
+                                        language_settings.preferred_line_length,
+                                    )),
+                                );
+                            }}
+                            if !options.contains_key("useTabs") {{
+                                options.insert(
+                                    "useTabs".to_string(),
+                                    serde_json::Value::Bool(language_settings.hard_tabs),
+                                );
+                            }}
+                            Some(options)
+                        }} else {{
+                            None
+                        }};
+                        let plugins = located_plugins
+                            .into_iter()
+                            .filter_map(|(plugin_name, located_plugin_path)| {{
+                                match located_plugin_path {{
+                                    Some(path) => Some(path),
+                                    None => {{
+                                        log::error!("Have not found plugin path for {{plugin_name:?}} inside {{prettier_node_modules:?}}");
+                                        None
+                                    }}
+                                }}
+                            }})
+                            .collect();
+
+                            if prettier_settings.parser.is_none() && buffer_path.is_none() {{
+                                log::error!("Formatting unsaved file with prettier failed. No prettier parser configured for language");
+                                return Err(anyhow!("Cannot determine prettier parser for unsaved file"));
+                        }}
+
+                        log::debug!(
+                            "Formatting file {{:?}} with prettier, plugins :{{:?}}, options: {{:?}}",
+                            buffer.file().map(|f| f.full_path(cx)),
+                            plugins,
+                            prettier_options,
+                        );
+                        anyhow::Ok(FormatParams {{
+                            text: buffer.text(),
+                            options: FormatOptions {{
+                                parser: prettier_settings.parser.clone(),
+                                parser: prettier_parser.map(ToOwned::to_owned),
+                                plugins,
+                                path: buffer_path,
+                                prettier_options,
+                            }},
+                        }})
+                    }})?
+                    .context("prettier params calculation")?;
+                let response = local
+                    .server
+                    .request::<Format>(params)
+                    .await
+                    .context("prettier format request")?;
+                let diff_task = buffer.update(cx, |buffer, cx| buffer.diff(response.text, cx))?;
+                Ok(diff_task.await)
+            }}
+            #[cfg(any(test, feature = "test-support"))]
+            Self::Test(_) => Ok(buffer
+                .update(cx, |buffer, cx| {{
+                    match buffer
+                        .language()
+                        .map(|language| language.lsp_id())
+                        .as_deref()
+                    {{
+                        Some("rust") => anyhow::bail!("prettier does not support Rust"),
+                        Some(_other) => {{
+                            let formatted_text = buffer.text() + FORMAT_SUFFIX;
+                            Ok(buffer.diff(formatted_text, cx))
+                        }}
+                        None => panic!("Should not format buffer without a language with prettier"),
+                    }}
+                }})??
+                .await),
+        }}
+    }}
+```
+</code_in_selection>
+</file>
+<extra_data>
+<symbol_name>
+Buffer
+</symbol_name>
+<fs_file_path>
+crates/languages/src/buffer.rs
+</fs_file_path>
+<content>
+```rust
+/// An in-memory representation of a source code file, including its text,
+/// syntax trees, git status, and diagnostics.
+pub struct Buffer {{
+    text: TextBuffer,
+    diff_base: Option<Rope>,
+    git_diff: git::diff::BufferDiff,
+    file: Option<Arc<dyn File>>,
+    /// The mtime of the file when this buffer was last loaded from
+    /// or saved to disk.
+    saved_mtime: Option<SystemTime>,
+    /// The version vector when this buffer was last loaded from
+    /// or saved to disk.
+    saved_version: clock::Global,
+    transaction_depth: usize,
+    was_dirty_before_starting_transaction: Option<bool>,
+    reload_task: Option<Task<Result<()>>>,
+    language: Option<Arc<Language>>,
+    autoindent_requests: Vec<Arc<AutoindentRequest>>,
+    pending_autoindent: Option<Task<()>>,
+    sync_parse_timeout: Duration,
+    syntax_map: Mutex<SyntaxMap>,
+    parsing_in_background: bool,
+    parse_count: usize,
+    diagnostics: SmallVec<[(LanguageServerId, DiagnosticSet); 2]>,
+    remote_selections: TreeMap<ReplicaId, SelectionSet>,
+    selections_update_count: usize,
+    diagnostics_update_count: usize,
+    diagnostics_timestamp: clock::Lamport,
+    file_update_count: usize,
+    git_diff_update_count: usize,
+    completion_triggers: Vec<String>,
+    completion_triggers_timestamp: clock::Lamport,
+    deferred_ops: OperationQueue<Operation>,
+    capability: Capability,
+    has_conflict: bool,
+    diff_base_version: usize,
+}}
+
+impl Buffer {{
+    /// Create a new buffer with the given base text.
+    pub fn local<T: Into<String>>(base_text: T, cx: &mut ModelContext<Self>) -> Self {{
+        Self::build(
+            TextBuffer::new(0, cx.entity_id().as_non_zero_u64().into(), base_text.into()),
+            None,
+            None,
+            Capability::ReadWrite,
+        )
+    }}
+
+    /// Assign a language to the buffer, returning the buffer.
+    pub fn with_language(mut self, language: Arc<Language>, cx: &mut ModelContext<Self>) -> Self {{
+        self.set_language(Some(language), cx);
+        self
+    }}
+
+    /// Returns the [Capability] of this buffer.
+    pub fn capability(&self) -> Capability {{
+        self.capability
+    }}
+
+    /// Whether this buffer can only be read.
+    pub fn read_only(&self) -> bool {{
+        self.capability == Capability::ReadOnly
+    }}
+
+    /// Builds a [Buffer] with the given underlying [TextBuffer], diff base, [File] and [Capability].
+    pub fn build(
+        buffer: TextBuffer,
+        diff_base: Option<String>,
+        file: Option<Arc<dyn File>>,
+        capability: Capability,
+    ) -> Self {{
+        let saved_mtime = file.as_ref().and_then(|file| file.mtime());
+
+        Self {{
+            saved_mtime,
+            saved_version: buffer.version(),
+            reload_task: None,
+            transaction_depth: 0,
+            was_dirty_before_starting_transaction: None,
+            text: buffer,
+            diff_base: diff_base
+                .map(|mut raw_diff_base| {{
+                    LineEnding::normalize(&mut raw_diff_base);
+                    raw_diff_base
+                }})
+                .map(Rope::from),
+            diff_base_version: 0,
+            git_diff: git::diff::BufferDiff::new(),
+            file,
+            capability,
+            syntax_map: Mutex::new(SyntaxMap::new()),
+            parsing_in_background: false,
+            parse_count: 0,
+            sync_parse_timeout: Duration::from_millis(1),
+            autoindent_requests: Default::default(),
+            pending_autoindent: Default::default(),
+            language: None,
+            remote_selections: Default::default(),
+            selections_update_count: 0,
+            diagnostics: Default::default(),
+            diagnostics_update_count: 0,
+            diagnostics_timestamp: Default::default(),
+            file_update_count: 0,
+            git_diff_update_count: 0,
+            completion_triggers: Default::default(),
+            completion_triggers_timestamp: Default::default(),
+            deferred_ops: OperationQueue::new(),
+            has_conflict: false,
+        }}
+    }}
+
+    /// Retrieve a snapshot of the buffer's current state. This is computationally
+    /// cheap, and allows reading from the buffer on a background thread.
+    pub fn snapshot(&self) -> BufferSnapshot {{
+        let text = self.text.snapshot();
+        let mut syntax_map = self.syntax_map.lock();
+        syntax_map.interpolate(&text);
+        let syntax = syntax_map.snapshot();
+
+        BufferSnapshot {{
+            text,
+            syntax,
+            git_diff: self.git_diff.clone(),
+            file: self.file.clone(),
+            remote_selections: self.remote_selections.clone(),
+            diagnostics: self.diagnostics.clone(),
+            diagnostics_update_count: self.diagnostics_update_count,
+            file_update_count: self.file_update_count,
+            git_diff_update_count: self.git_diff_update_count,
+            language: self.language.clone(),
+            parse_count: self.parse_count,
+            selections_update_count: self.selections_update_count,
+        }}
+    }}
+
+    #[cfg(test)]
+    pub(crate) fn as_text_snapshot(&self) -> &text::BufferSnapshot {{
+        &self.text
+    }}
+
+    /// Retrieve a snapshot of the buffer's raw text, without any
+    /// language-related state like the syntax tree or diagnostics.
+    pub fn text_snapshot(&self) -> text::BufferSnapshot {{
+        self.text.snapshot()
+    }}
+
+    /// The file associated with the buffer, if any.
+    pub fn file(&self) -> Option<&Arc<dyn File>> {{
+        self.file.as_ref()
+    }}
+
+    /// The version of the buffer that was last saved or reloaded from disk.
+    pub fn saved_version(&self) -> &clock::Global {{
+        &self.saved_version
+    }}
+
+    /// The mtime of the buffer's file when the buffer was last saved or reloaded from disk.
+    pub fn saved_mtime(&self) -> Option<SystemTime> {{
+        self.saved_mtime
+    }}
+
+    /// Assign a language to the buffer.
+    pub fn set_language(&mut self, language: Option<Arc<Language>>, cx: &mut ModelContext<Self>) {{
+        self.parse_count += 1;
+        self.syntax_map.lock().clear();
+        self.language = language;
+        self.reparse(cx);
+        cx.emit(Event::LanguageChanged);
+    }}
+
+    /// Assign a language registry to the buffer. This allows the buffer to retrieve
+    /// other languages if parts of the buffer are written in different languages.
+    pub fn set_language_registry(&mut self, language_registry: Arc<LanguageRegistry>) {{
+        self.syntax_map
+            .lock()
+            .set_language_registry(language_registry);
+    }}
+
+    /// Assign the buffer a new [Capability].
+    pub fn set_capability(&mut self, capability: Capability, cx: &mut ModelContext<Self>) {{
+        self.capability = capability;
+        cx.emit(Event::CapabilityChanged)
+    }}
+
+    /// Waits for the buffer to receive operations up to the given version.
+    pub fn wait_for_version(&mut self, version: clock::Global) -> impl Future<Output = Result<()>> {{
+        self.text.wait_for_version(version)
+    }}
+
+    /// Forces all futures returned by [`Buffer::wait_for_version`], [`Buffer::wait_for_edits`], or
+    /// [`Buffer::wait_for_version`] to resolve with an error.
+    pub fn give_up_waiting(&mut self) {{
+        self.text.give_up_waiting();
+    }}
+
+    fn did_edit(
+        &mut self,
+        old_version: &clock::Global,
+        was_dirty: bool,
+        cx: &mut ModelContext<Self>,
+    ) {{
+        if self.edits_since::<usize>(old_version).next().is_none() {{
+            return;
+        }}
+
+        self.reparse(cx);
+
+        cx.emit(Event::Edited);
+        if was_dirty != self.is_dirty() {{
+            cx.emit(Event::DirtyChanged);
+        }}
+        cx.notify();
+    }}
+
+    /// Applies the given remote operations to the buffer.
+    pub fn apply_ops<I: IntoIterator<Item = Operation>>(
+        &mut self,
+        ops: I,
+        cx: &mut ModelContext<Self>,
+    ) -> Result<()> {{
+        self.pending_autoindent.take();
+        let was_dirty = self.is_dirty();
+        let old_version = self.version.clone();
+        let mut deferred_ops = Vec::new();
+        let buffer_ops = ops
+            .into_iter()
+            .filter_map(|op| match op {{
+                Operation::Buffer(op) => Some(op),
+                _ => {{
+                    if self.can_apply_op(&op) {{
+                        self.apply_op(op, cx);
+                    }} else {{
+                        deferred_ops.push(op);
+                    }}
+                    None
+                }}
+            }})
+            .collect::<Vec<_>>();
+        self.text.apply_ops(buffer_ops)?;
+        self.deferred_ops.insert(deferred_ops);
+        self.flush_deferred_ops(cx);
+        self.did_edit(&old_version, was_dirty, cx);
+        // Notify independently of whether the buffer was edited as the operations could include a
+        // selection update.
+        cx.notify();
+        Ok(())
+    }}
+
+    fn flush_deferred_ops(&mut self, cx: &mut ModelContext<Self>) {{
+        let mut deferred_ops = Vec::new();
+        for op in self.deferred_ops.drain().iter().cloned() {{
+            if self.can_apply_op(&op) {{
+                self.apply_op(op, cx);
+            }} else {{
+                deferred_ops.push(op);
+            }}
+        }}
+        self.deferred_ops.insert(deferred_ops);
+    }}
+
+    fn can_apply_op(&self, operation: &Operation) -> bool {{
+        match operation {{
+            Operation::Buffer(_) => {{
+                unreachable!("buffer operations should never be applied at this layer")
+            }}
+            Operation::UpdateDiagnostics {{
+                diagnostics: diagnostic_set,
+                ..
+            }} => diagnostic_set.iter().all(|diagnostic| {{
+                self.text.can_resolve(&diagnostic.range.start)
+                    && self.text.can_resolve(&diagnostic.range.end)
+            }}),
+            Operation::UpdateSelections {{ selections, .. }} => selections
+                .iter()
+                .all(|s| self.can_resolve(&s.start) && self.can_resolve(&s.end)),
+            Operation::UpdateCompletionTriggers {{ .. }} => true,
+        }}
+    }}
+
+    fn apply_op(&mut self, operation: Operation, cx: &mut ModelContext<Self>) {{
+        match operation {{
+            Operation::Buffer(_) => {{
+                unreachable!("buffer operations should never be applied at this layer")
+            }}
+            Operation::UpdateDiagnostics {{
+                server_id,
+                diagnostics: diagnostic_set,
+                lamport_timestamp,
+            }} => {{
+                let snapshot = self.snapshot();
+                self.apply_diagnostic_update(
+                    server_id,
+                    DiagnosticSet::from_sorted_entries(diagnostic_set.iter().cloned(), &snapshot),
+                    lamport_timestamp,
+                    cx,
+                );
+            }}
+            Operation::UpdateSelections {{
+                selections,
+                lamport_timestamp,
+                line_mode,
+                cursor_shape,
+            }} => {{
+                if let Some(set) = self.remote_selections.get(&lamport_timestamp.replica_id) {{
+                    if set.lamport_timestamp > lamport_timestamp {{
+                        return;
+                    }}
+                }}
+
+                self.remote_selections.insert(
+                    lamport_timestamp.replica_id,
+                    SelectionSet {{
+                        selections,
+                        lamport_timestamp,
+                        line_mode,
+                        cursor_shape,
+                    }},
+                );
+                self.text.lamport_clock.observe(lamport_timestamp);
+                self.selections_update_count += 1;
+            }}
+            Operation::UpdateCompletionTriggers {{
+                triggers,
+                lamport_timestamp,
+            }} => {{
+                self.completion_triggers = triggers;
+                self.text.lamport_clock.observe(lamport_timestamp);
+            }}
+        }}
+    }}
+
+    fn apply_diagnostic_update(
+        &mut self,
+        server_id: LanguageServerId,
+        diagnostics: DiagnosticSet,
+        lamport_timestamp: clock::Lamport,
+        cx: &mut ModelContext<Self>,
+    ) {{
+        if lamport_timestamp > self.diagnostics_timestamp {{
+            let ix = self.diagnostics.binary_search_by_key(&server_id, |e| e.0);
+            if diagnostics.len() == 0 {{
+                if let Ok(ix) = ix {{
+                    self.diagnostics.remove(ix);
+                }}
+            }} else {{
+                match ix {{
+                    Err(ix) => self.diagnostics.insert(ix, (server_id, diagnostics)),
+                    Ok(ix) => self.diagnostics[ix].1 = diagnostics,
+                }};
+            }}
+            self.diagnostics_timestamp = lamport_timestamp;
+            self.diagnostics_update_count += 1;
+            self.text.lamport_clock.observe(lamport_timestamp);
+            cx.notify();
+            cx.emit(Event::DiagnosticsUpdated);
+        }}
+    }}
+
+    fn send_operation(&mut self, operation: Operation, cx: &mut ModelContext<Self>) {{
+        cx.emit(Event::Operation(operation));
+    }}
+
+    /// Removes the selections for a given peer.
+    pub fn remove_peer(&mut self, replica_id: ReplicaId, cx: &mut ModelContext<Self>) {{
+        self.remote_selections.remove(&replica_id);
+        cx.notify();
+    }}
+
+    /// Undoes the most recent transaction.
+    pub fn undo(&mut self, cx: &mut ModelContext<Self>) -> Option<TransactionId> {{
+        let was_dirty = self.is_dirty();
+        let old_version = self.version.clone();
+
+        if let Some((transaction_id, operation)) = self.text.undo() {{
+            self.send_operation(Operation::Buffer(operation), cx);
+            self.did_edit(&old_version, was_dirty, cx);
+            Some(transaction_id)
+        }} else {{
+            None
+        }}
+    }}
+
+    /// Manually undoes a specific transaction in the buffer's undo history.
+    pub fn undo_transaction(
+        &mut self,
+        transaction_id: TransactionId,
+        cx: &mut ModelContext<Self>,
+    ) -> bool {{
+        let was_dirty = self.is_dirty();
+        let old_version = self.version.clone();
+        if let Some(operation) = self.text.undo_transaction(transaction_id) {{
+            self.send_operation(Operation::Buffer(operation), cx);
+            self.did_edit(&old_version, was_dirty, cx);
+            true
+        }} else {{
+            false
+        }}
+    }}
+
+    /// Manually undoes all changes after a given transaction in the buffer's undo history.
+    pub fn undo_to_transaction(
+        &mut self,
+        transaction_id: TransactionId,
+        cx: &mut ModelContext<Self>,
+    ) -> bool {{
+        let was_dirty = self.is_dirty();
+        let old_version = self.version.clone();
+
+        let operations = self.text.undo_to_transaction(transaction_id);
+        let undone = !operations.is_empty();
+        for operation in operations {{
+            self.send_operation(Operation::Buffer(operation), cx);
+        }}
+        if undone {{
+            self.did_edit(&old_version, was_dirty, cx)
+        }}
+        undone
+    }}
+
+    /// Manually redoes a specific transaction in the buffer's redo history.
+    pub fn redo(&mut self, cx: &mut ModelContext<Self>) -> Option<TransactionId> {{
+        let was_dirty = self.is_dirty();
+        let old_version = self.version.clone();
+
+        if let Some((transaction_id, operation)) = self.text.redo() {{
+            self.send_operation(Operation::Buffer(operation), cx);
+            self.did_edit(&old_version, was_dirty, cx);
+            Some(transaction_id)
+        }} else {{
+            None
+        }}
+    }}
+
+    /// Returns the primary [Language] assigned to this [Buffer].
+    pub fn language(&self) -> Option<&Arc<Language>> {{
+        self.language.as_ref()
+    }}
+
+    /// Manually undoes all changes until a given transaction in the buffer's redo history.
+    pub fn redo_to_transaction(
+        &mut self,
+        transaction_id: TransactionId,
+        cx: &mut ModelContext<Self>,
+    ) -> bool {{
+        let was_dirty = self.is_dirty();
+        let old_version = self.version.clone();
+
+        let operations = self.text.redo_to_transaction(transaction_id);
+        let redone = !operations.is_empty();
+        for operation in operations {{
+            self.send_operation(Operation::Buffer(operation), cx);
+        }}
+        if redone {{
+            self.did_edit(&old_version, was_dirty, cx)
+        }}
+        redone
+    }}
+
+    /// Override current completion triggers with the user-provided completion triggers.
+    pub fn set_completion_triggers(&mut self, triggers: Vec<String>, cx: &mut ModelContext<Self>) {{
+        self.completion_triggers.clone_from(&triggers);
+        self.completion_triggers_timestamp = self.text.lamport_clock.tick();
+        self.send_operation(
+            Operation::UpdateCompletionTriggers {{
+                triggers,
+                lamport_timestamp: self.completion_triggers_timestamp,
+            }},
+            cx,
+        );
+        cx.notify();
+    }}
+
+    /// Returns a list of strings which trigger a completion menu for this language.
+    /// Usually this is driven by LSP server which returns a list of trigger characters for completions.
+    pub fn completion_triggers(&self) -> &[String] {{
+        &self.completion_triggers
+    }}
+}}
+```
+</content>
+</extra_data>
+<extra_data>
+
+
+Your reply will start now and you should reply strictly in the following format:
+<reply>
+<steps_to_answer>
+- For answering the user query we have to understand how we are getting the prettier config from the language
+- `prettier_settings` is being used today to get the prettier parser
+- the language configuration seems to be contained in `prettier is not allowed for language {{buffer_language:?}}"`
+- we are getting the language configuration by calling `buffer_language` function
+- we should check what `get_language` returns to understand what properies `buffer_language` has
+</steps_to_answer>
+<symbol_list>
+<symbol>
+<name>
+Language
+</name>
+<line_content>
+    pub fn language(&self) -> Option<&Arc<Language>> {{
+</line_content>
+<file_path>
+crates/language/src/buffer.rs
+</file_path>
+<thinking>
+Does the language type expose any prettier settings, because we want to get it so we can use that as the fallback 
+</thinking>
+</symbol>
+<symbol>
+</symbol_list>
+</reply>"#
+        )
+    }
+
+    fn system_message_for_ask_edit_symbols(
+        &self,
+        symbol_name: &str,
+        fs_file_path: &str,
+        code_symbol_list: Vec<String>,
+    ) -> String {
+        let code_symbol_list_comma_separater = code_symbol_list.join(" ,");
+        format!(
+            r#"You are an expert software engineer who is tasked with making a change which satisfies the <user_query>
+- You are reponsible for any changes which need to be made to <symbol_name>{symbol_name}</symbol_name> present in file {fs_file_path}
+- Right now we are focussed on a section of <symbol_name>{symbol_name}</symbol_name> which is shown to you in the code selection.
+- The <user_query> tag contains the user query.
+- The <user_query> is one of the following user case:
+<use_case_list>
+<use_case>
+Reference change: a code symbol {code_symbol_list_comma_separater} has changed, you have to figure out what needs to be changed and we want to make some changes to our own implementation
+</use_case>
+<use_case>
+We are going to add more functionality which the user wants to create using the <user_query>
+</use_case>
+<use_case>
+The <user_query> is about asking for some important information
+</use_case>
+<use_case>
+<user_query> wants to gather more information about a particular workflow which the user has asked for in their query
+</use_case>
+</use_case_list>
+- You have to select at most 5 symbols and you can do the following:
+<operation>
+You can initiate a write operation on one of the symbols and change their implementation. This allows you to make the required changes before satisfying the user query or making changes to yourself if required.
+</operation>
+- Now first think step by step on how you are going to approach this problem and write down your steps in <steps_to_answer> section
+- Your reply should be in <reply> tag"#
+        )
+    }
+
     fn system_message_for_class_symbol(&self) -> String {
         r#"You are an expert software engineer tasked with coming up with the next set of steps which need to be done because some class or enum definition has changed. More specifically some part of the class or enum defintiions have changed and we have to understand which identifier symbols to follow.
 - You will be provided with the original code for the symbol we are looking at and the content of the symbol after we have made the edits. You have to only select the identifiers which we should follow (usually by doing go-to-references) since they have changed in a big way.
@@ -1743,6 +2598,38 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<(), CodeSymbolError> {
+        if !(self.is_model_supported(&request.model())) {
+            return Err(CodeSymbolError::WrongLLM(request.model().clone()));
+        }
+        let model = request.model().clone();
+        let api_key = request.api_key().clone();
+        let provider = request.provider().clone();
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_ask_question_symbols(
+                request.symbol_identifier(),
+                request.fs_file_path(),
+            ));
+        let user_message =
+            LLMClientMessage::user(self.user_message_for_ask_question_symbols(request));
+        let messages =
+            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_key,
+                messages,
+                provider,
+                vec![(
+                    "request_type".to_owned(),
+                    "ask_questions_to_symbol".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await;
+        // now we want to parse the reply here properly
         todo!("we still need to implement this")
     }
 }

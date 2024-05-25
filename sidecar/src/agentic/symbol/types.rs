@@ -582,12 +582,12 @@ impl Symbol {
                     SymbolEvent::AskQuestion(ask_question_request) => {
                         // we refresh our state always
                         symbol.refresh_state().await;
-                        // if we are going to ask a question we have to first
-                        // figure out which sub-node to edit and then being
-                        // editing it
-                        // for doing this we have to referesh all the implementations
-                        // and get them together, once we have that we can ask the LLM
-                        // to select the sub modules which need to change and go forward making the edits
+                        // we will the following in sequence:
+                        // - ask for information from surrounding nodes
+                        // - ask for changes which need to be made to the surrounding nodes
+                        // - refresh our state
+                        // - edit ourselves if required or formulate the answer
+                        // - followup
                         todo!("ask question is not implemented yet");
                     }
                     SymbolEvent::Delete => {

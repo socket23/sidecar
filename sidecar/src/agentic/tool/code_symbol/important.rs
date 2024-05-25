@@ -19,7 +19,10 @@ use crate::{
     user_context::types::UserContext,
 };
 
-use super::{models::anthropic::AnthropicCodeSymbolImportant, types::CodeSymbolError};
+use super::{
+    models::anthropic::{AnthropicCodeSymbolImportant, CodeSymbolToAskQuestionsResponse},
+    types::CodeSymbolError,
+};
 
 pub struct CodeSymbolImportantBroker {
     llms: HashMap<LLMType, Box<dyn CodeSymbolImportant + Send + Sync>>,
@@ -519,7 +522,7 @@ pub trait CodeSymbolImportant {
     async fn symbols_to_ask_questions(
         &self,
         request: CodeSymbolToAskQuestionsRequest,
-    ) -> Result<(), CodeSymbolError>;
+    ) -> Result<CodeSymbolToAskQuestionsResponse, CodeSymbolError>;
 }
 
 // implement passing in just the user context and getting the data back

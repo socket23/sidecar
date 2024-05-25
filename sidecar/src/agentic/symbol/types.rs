@@ -584,6 +584,7 @@ impl Symbol {
                         symbol.refresh_state().await;
                         // we will the following in sequence:
                         // - ask for information from surrounding nodes
+                        // - refresh the state
                         // - ask for changes which need to be made to the surrounding nodes
                         // - refresh our state
                         // - edit ourselves if required or formulate the answer

@@ -97,6 +97,113 @@ pub struct Reply {
     step_by_step: StepList,
 }
 
+// <reply>
+// <steps_to_answer>
+// - For answering the user query we have to understand how we are getting the prettier config from the language
+// - `prettier_settings` is being used today to get the prettier parser
+// - the language configuration seems to be contained in `prettier is not allowed for language {{buffer_language:?}}"`
+// - we are getting the language configuration by calling `buffer_language` function
+// - we should check what `get_language` returns to understand what properies `buffer_language` has
+// </steps_to_answer>
+// <symbol_list>
+// <symbol>
+// <name>
+// Language
+// </name>
+// <line_content>
+//     pub fn language(&self) -> Option<&Arc<Language>> {{
+// </line_content>
+// <file_path>
+// crates/language/src/buffer.rs
+// </file_path>
+// <thinking>
+// Does the language type expose any prettier settings, because we want to get it so we can use that as the fallback
+// </thinking>
+// </symbol>
+// <symbol>
+// </symbol_list>
+// </reply>
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "symbol")]
+pub struct AskQuestionSymbolHint {
+    name: String,
+    line_content: String,
+    file_path: String,
+    thinking: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "reply")]
+pub struct CodeSymbolToAskQuestionsResponse {
+    steps_to_answer: String,
+    symbol_list: Vec<AskQuestionSymbolHint>,
+}
+
+impl CodeSymbolToAskQuestionsResponse {
+    fn escape_string(self) -> Self {
+        let steps_to_answer = AnthropicCodeSymbolImportant::escape_xml(self.steps_to_answer);
+        let symbol_list = self.symbol_list;
+        Self {
+            steps_to_answer,
+            symbol_list: symbol_list
+                .into_iter()
+                .map(|symbol_list| AskQuestionSymbolHint {
+                    name: symbol_list.name,
+                    line_content: AnthropicCodeSymbolImportant::escape_xml(
+                        symbol_list.line_content,
+                    ),
+                    file_path: symbol_list.file_path,
+                    thinking: AnthropicCodeSymbolImportant::escape_xml(symbol_list.thinking),
+                })
+                .collect(),
+        }
+    }
+    fn parse_response(response: String) -> Result<Self, CodeSymbolError> {
+        // we need to parse the sections of the reply properly
+        // we can start with opening and closing brackets and unescape the lines properly
+        let lines = response
+            .lines()
+            .into_iter()
+            .map(|line| line.to_owned())
+            .collect::<Vec<_>>();
+        let tags = vec!["steps_to_answer", "line_content", "thinking"]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect::<Vec<_>>();
+        let mut final_lines = vec![];
+        let mut inside = false;
+        for line in lines.into_iter() {
+            if tags.iter().any(|tag| line.starts_with(&format!("<{tag}>"))) {
+                inside = true;
+                final_lines.push(line);
+                continue;
+            }
+            if tags
+                .iter()
+                .any(|tag| line.starts_with(&format!("</{tag}>")))
+            {
+                inside = false;
+                final_lines.push(line);
+                continue;
+            }
+            if inside {
+                final_lines.push(AnthropicCodeSymbolImportant::unescape_xml(line));
+            } else {
+                final_lines.push(line);
+            }
+        }
+
+        let final_line = final_lines.join("\n");
+        let parsed_reply = serde_xml_rs::from_str::<CodeSymbolToAskQuestionsResponse>(&final_line)
+            .map_err(|e| CodeSymbolError::SerdeError(e))?
+            .escape_string();
+
+        // Now we need to escape the strings again for xml
+        Ok(parsed_reply)
+    }
+}
+
 impl Reply {
     pub fn fix_escaped_string(self) -> Self {
         let step_by_step = self
@@ -241,6 +348,8 @@ impl AnthropicCodeSymbolImportant {
     ) -> String {
         format!(
             r#"You are an expert software engineer who is going to look at some more symbols to deeply answer the user query.
+- You are reponsible for answering the <user_query>
+- You are also given the implementations of some of the code symbols we have gathered since these are important to answer the user query.
 - You are reponsible for any changes which need to be made to <symbol_name>{symbol_name}</symbol_name> present in file {fs_file_path}
 - The user query is given to you in <user_query>
 - The <user_query> is one of the following use case:
@@ -263,6 +372,23 @@ The <user_query> is about asking for some important information
 You can initiate a read operation on one of the symbols and gather more information before answering the user query. This allows you to understand the complete picture of how to answer the user query.
 </operation>
 - Now first think step by step on how you are going to approach this problem and write down your steps in <steps_to_answer> section
+- Here are some approaches and questions you can ask for the symbol:
+<approach_list>
+<approach>
+You can ask to follow a given symbol more deeply. This allows you to focus on a symbol more deeply and ask deeper questions for the symbol
+For example you might want to follow the function call more deeply if say the function returns back the symbol
+```rust
+fn some_function(parameter1: Parameter1, parameter2: Parameter2) -> ReturnType {{
+    // rest of the code 
+}}
+```
+Here you might want to follow the `ReturnType` to understand more about how the symbol is constructed or what kind of functionality is available on it.
+</approach>
+<approach>
+You suspect that the some code symbol in the code selection can more deeply answer the user query, so its worthwhile following that symbol and asking it a deeper question.  
+</approach>
+</approach_list>
+These are just examples of approaches you can take, keep them in mind and be more imaginative when answering the user query.
 - Your reply should be in the <reply> tag
 
 We are now going to show you an example:
@@ -2597,7 +2723,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
     async fn symbols_to_ask_questions(
         &self,
         request: CodeSymbolToAskQuestionsRequest,
-    ) -> Result<(), CodeSymbolError> {
+    ) -> Result<CodeSymbolToAskQuestionsResponse, CodeSymbolError> {
         if !(self.is_model_supported(&request.model())) {
             return Err(CodeSymbolError::WrongLLM(request.model().clone()));
         }
@@ -2628,9 +2754,9 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 .collect(),
                 sender,
             )
-            .await;
+            .await?;
         // now we want to parse the reply here properly
-        todo!("we still need to implement this")
+        CodeSymbolToAskQuestionsResponse::parse_response(response)
     }
 }
 

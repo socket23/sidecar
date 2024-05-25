@@ -17,8 +17,8 @@ use crate::agentic::tool::{
         },
         important::{
             CodeSymbolImportant, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
-            CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
-            CodeSymbolWithThinking,
+            CodeSymbolImportantWideSearch, CodeSymbolToAskQuestionsRequest,
+            CodeSymbolUtilityRequest, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
         types::CodeSymbolError,
     },
@@ -1735,6 +1735,13 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             )
             .await?;
         Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+    }
+
+    async fn symbols_to_ask_questions(
+        &self,
+        request: CodeSymbolToAskQuestionsRequest,
+    ) -> Result<(), CodeSymbolError> {
+        todo!("we still need to implement this")
     }
 }
 

@@ -227,6 +227,59 @@ impl CodeSymbolUtilityRequest {
     }
 }
 
+/// This request will give us code symbols and additional questions
+/// we want to ask them before making our edits
+/// This way we can ensure that the world moves to the state we are interested in
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSymbolToAskQuestionsRequest {
+    history: String,
+    symbol_identifier: String,
+    fs_file_path: String,
+    code_above: Option<String>,
+    code_below: Option<String>,
+    code_in_selection: String,
+    llm_type: LLMType,
+    provider: LLMProvider,
+    api_key: LLMProviderAPIKeys,
+    query: String,
+}
+
+impl CodeSymbolToAskQuestionsRequest {
+    pub fn new(
+        history: String,
+        symbol_identifier: String,
+        fs_file_path: String,
+        code_above: Option<String>,
+        code_below: Option<String>,
+        code_in_selection: String,
+        llm_type: LLMType,
+        provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+        query: String,
+    ) -> Self {
+        Self {
+            history,
+            symbol_identifier,
+            fs_file_path,
+            code_above,
+            code_below,
+            code_in_selection,
+            llm_type,
+            provider,
+            api_key,
+            query,
+        }
+    }
+
+    pub fn history(&self) -> &str {
+        &self.history
+    }
+
+    pub fn symbol_identifier(&self) -> &str {
+        &self.symbol_identifier
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolImportantRequest {
     // if we have any symbol identifier here which we are focussing on, we keep
@@ -420,6 +473,11 @@ pub trait CodeSymbolImportant {
         &self,
         utility_symbol_request: CodeSymbolUtilityRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError>;
+
+    async fn symbols_to_ask_questions(
+        &self,
+        request: CodeSymbolToAskQuestionsRequest,
+    ) -> Result<(), CodeSymbolError>;
 }
 
 // implement passing in just the user context and getting the data back

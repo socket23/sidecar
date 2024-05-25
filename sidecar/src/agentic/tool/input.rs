@@ -227,14 +227,6 @@ impl ToolInput {
         }
     }
 
-    pub fn code_symbol_important(self) -> Result<CodeSymbolImportantRequest, ToolError> {
-        if let ToolInput::RequestImportantSymbols(request_code_symbol_important) = self {
-            Ok(request_code_symbol_important)
-        } else {
-            Err(ToolError::WrongToolInput)
-        }
-    }
-
     pub fn codebase_wide_important_symbols(
         self,
     ) -> Result<CodeSymbolImportantWideSearch, ToolError> {

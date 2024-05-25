@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
 };
 
 use crate::agentic::tool::{
@@ -32,6 +32,14 @@ pub struct AnthropicCodeSymbolImportant {
 impl AnthropicCodeSymbolImportant {
     pub fn new(llm_client: Arc<LLMBroker>) -> Self {
         Self { llm_client }
+    }
+
+    fn is_model_supported(&self, llm_type: &LLMType) -> bool {
+        if llm_type.is_anthropic() || llm_type.is_openai() || llm_type.is_gemini_pro() {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -1663,10 +1671,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantWideSearch,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(code_symbols.model().is_anthropic()
-            || code_symbols.model().is_openai_gpt4o()
-            || code_symbols.model().is_gemini_pro())
-        {
+        if !(self.is_model_supported(code_symbols.model())) {
             return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
         }
         let api_key = code_symbols.api_key();
@@ -1700,10 +1705,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         utility_symbol_request: CodeSymbolUtilityRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(utility_symbol_request.model().is_anthropic()
-            || utility_symbol_request.model().is_openai_gpt4o()
-            || utility_symbol_request.model().is_gemini_pro())
-        {
+        if !(self.is_model_supported(&utility_symbol_request.model())) {
             return Err(CodeSymbolError::WrongLLM(
                 utility_symbol_request.model().clone(),
             ));

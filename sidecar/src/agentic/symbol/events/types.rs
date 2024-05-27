@@ -1,7 +1,7 @@
 //! The different kind of events which the symbols can invoke and needs to work
 //! on
 
-use super::edit::SymbolToEditRequest;
+use super::{edit::SymbolToEditRequest, probe::SymbolToProbeRequest};
 
 #[derive(Debug, Clone)]
 pub struct AskQuestionRequest {
@@ -26,4 +26,6 @@ pub enum SymbolEvent {
     Delete,
     Edit(SymbolToEditRequest),
     Outline,
+    // Probe
+    Probe(SymbolToProbeRequest),
 }

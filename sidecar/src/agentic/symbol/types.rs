@@ -27,6 +27,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::SymbolToEdit,
+        probe::SymbolToProbeRequest,
         types::{AskQuestionRequest, SymbolEvent},
     },
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
@@ -313,6 +314,20 @@ impl Symbol {
                     .await;
             }
         }
+        Ok(())
+    }
+
+    // We are asked on the complete symbol a question
+    // - we have to first find the sub-symbol we are interested in
+    // - then ask it the probing question
+    // - once we have the probing question, we send over the request and wait for the response
+    // - and finally we stop doing this.
+    async fn probe_request(&self, request: SymbolToProbeRequest) -> Result<(), SymbolError> {
+        // First we refresh our state over here
+        self.refresh_state().await;
+
+        // Next we grab the important definitions which we are interested in
+        // let definitions = self.tools.gather_important_symbols_with_definition(fs_file_path, file_content, selection_range, llm, provider, api_keys, query, hub_sender)
         Ok(())
     }
 
@@ -611,6 +626,10 @@ impl Symbol {
                         Ok(())
                     }
                     SymbolEvent::Probe(probe_request) => {
+                        // we make the probe request an explicit request
+                        // we are still going to do the same things just
+                        // that this one is for gathering answeres
+                        let _ = symbol.probe_request(probe_request).await;
                         todo!("we need to implement this")
                     }
                 }

@@ -408,6 +408,21 @@ impl MechaCodeSymbolThinking {
         *implementations = snippets;
     }
 
+    // We are going to select the sub-symbol to probe over here
+    pub async fn subsymbol_to_probe(
+        &self,
+        tool_box: Arc<ToolBox>,
+        probe_request: String,
+    ) -> Result<(), SymbolError> {
+        if self.is_snippet_present().await {
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request().await {
+                // Now we try to filter the ranked entries
+            }
+        } else {
+        }
+        Ok(())
+    }
+
     pub async fn initial_request(
         &self,
         tool_box: Arc<ToolBox>,

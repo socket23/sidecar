@@ -18,14 +18,15 @@ use crate::agentic::tool::code_symbol::followup::{
     ClassSymbolFollowupRequest, ClassSymbolFollowupResponse, ClassSymbolMember,
 };
 use crate::agentic::tool::code_symbol::important::{
-    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolUtilityRequest,
-    CodeSymbolWithThinking,
+    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolToAskQuestionsRequest,
+    CodeSymbolUtilityRequest, CodeSymbolWithThinking,
 };
+use crate::agentic::tool::code_symbol::models::anthropic::CodeSymbolShouldAskQuestionsResponse;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
     CodeToEditFilterRequest, CodeToEditFilterResponse, CodeToEditSymbolRequest,
-    CodeToEditSymbolResponse,
+    CodeToEditSymbolResponse, CodeToProbeFilterResponse,
 };
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::diagnostics::{
@@ -52,6 +53,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
+use super::events::probe::SymbolToProbeRequest;
 use super::identifier::MechaCodeSymbolThinking;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
 use super::ui_event::UIEvent;
@@ -80,6 +82,75 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    pub async fn should_follow_subsymbol_for_probing(
+        &self,
+        snippet: &Snippet,
+        reason: &str,
+        history: &str,
+        query: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+    ) -> Result<CodeSymbolShouldAskQuestionsResponse, SymbolError> {
+        let file_contents = self.file_open(snippet.file_path().to_owned()).await?;
+        let file_contents = file_contents.contents();
+        let range = snippet.range();
+        let (above, below, in_selection) = split_file_content_into_parts(&file_contents, range);
+        let request = ToolInput::ProbePossibleRequest(CodeSymbolToAskQuestionsRequest::new(
+            history.to_owned(),
+            snippet.symbol_name().to_owned(),
+            snippet.file_path().to_owned(),
+            snippet.language().to_owned(),
+            "".to_owned(),
+            above,
+            below,
+            in_selection,
+            llm,
+            provider,
+            api_key,
+            // Here we can join the queries we get from the reason to the real user query
+            format!(
+                r"#The original user query is:
+{query}
+
+We also believe this symbol needs to be probed because of:
+{reason}#"
+            ),
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_should_probe_symbol()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn probe_sub_symbols(
+        &self,
+        snippets: Vec<Snippet>,
+        request: &SymbolToProbeRequest,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+    ) -> Result<CodeToProbeFilterResponse, SymbolError> {
+        let probe_request = request.probe_request();
+        let request = ToolInput::ProbeSubSymbol(CodeToEditFilterRequest::new(
+            snippets,
+            probe_request.to_owned(),
+            llm,
+            provider,
+            api_key,
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_probe_sub_symbol()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn outline_nodes_for_symbol(

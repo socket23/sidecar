@@ -1729,6 +1729,17 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    pub async fn filter_code_snippets_for_probing(
+        &self,
+        xml_string: String,
+        query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<(), SymbolError> {
+        Ok(())
+    }
+
     pub async fn filter_code_snippets_in_symbol_for_editing(
         &self,
         xml_string: String,

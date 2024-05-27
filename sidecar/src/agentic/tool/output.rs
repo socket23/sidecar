@@ -10,7 +10,9 @@ use super::{
         },
     },
     editor::apply::EditorApplyResponse,
-    filtering::broker::{CodeToEditFilterResponse, CodeToEditSymbolResponse},
+    filtering::broker::{
+        CodeToEditFilterResponse, CodeToEditSymbolResponse, CodeToProbeFilterResponse,
+    },
     grep::file::FindInFileResponse,
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
@@ -70,9 +72,14 @@ pub enum ToolOutput {
     // Probe requests
     ProbePossible(CodeSymbolShouldAskQuestionsResponse),
     ProbeQuestion(CodeSymbolToAskQuestionsResponse),
+    ProbeSubSymbol(CodeToProbeFilterResponse),
 }
 
 impl ToolOutput {
+    pub fn probe_sub_symbol(response: CodeToProbeFilterResponse) -> Self {
+        ToolOutput::ProbeSubSymbol(response)
+    }
+
     pub fn probe_possible(response: CodeSymbolShouldAskQuestionsResponse) -> Self {
         ToolOutput::ProbePossible(response)
     }

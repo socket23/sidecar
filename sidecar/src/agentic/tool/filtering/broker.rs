@@ -30,6 +30,23 @@ impl SnippetWithReason {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_probe")]
+pub struct CodeToProbeSnippet {
+    id: usize,
+    reason_to_probe: String,
+}
+
+impl CodeToProbeSnippet {
+    pub fn id(&self) -> usize {
+        self.id.clone()
+    }
+
+    pub fn reason_to_probe(&self) -> &str {
+        &self.reason_to_probe
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "code_to_edit")]
 pub struct CodeToEditSnippet {
     id: usize,
@@ -43,6 +60,23 @@ impl CodeToEditSnippet {
 
     pub fn reason_to_edit(&self) -> &str {
         &self.reason_to_edit
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_not_probe")]
+pub struct CodeToNotProbeSnippet {
+    id: usize,
+    reason_to_not_probe: String,
+}
+
+impl CodeToNotProbeSnippet {
+    pub fn id(&self) -> usize {
+        self.id.clone()
+    }
+
+    pub fn reason_to_no_probe(&self) -> &str {
+        &self.reason_to_not_probe
     }
 }
 
@@ -64,6 +98,19 @@ impl CodeToNotEditSnippet {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_probe_list")]
+pub struct CodeToProbeList {
+    #[serde(rename = "$value")]
+    snippets: Vec<CodeToProbeSnippet>,
+}
+
+impl CodeToProbeList {
+    pub fn snippets(&self) -> &[CodeToProbeSnippet] {
+        self.snippets.as_slice()
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "code_to_edit_list")]
 pub struct CodeToEditList {
     #[serde(rename = "$value")]
@@ -72,6 +119,19 @@ pub struct CodeToEditList {
 
 impl CodeToEditList {
     pub fn snippets(&self) -> &[CodeToEditSnippet] {
+        self.snippets.as_slice()
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_not_probe_list")]
+pub struct CodeToNotProbeList {
+    #[serde(rename = "$value")]
+    snippets: Vec<CodeToNotProbeSnippet>,
+}
+
+impl CodeToNotProbeList {
+    pub fn snippets(&self) -> &[CodeToNotProbeSnippet] {
         self.snippets.as_slice()
     }
 }
@@ -116,6 +176,50 @@ impl CodeToEditSymbolResponse {
 }
 
 #[derive(Debug, Clone)]
+pub struct CodeToProbeSymbolResponse {
+    code_to_probe_list: CodeToProbeList,
+    code_to_not_probe_list: CodeToNotProbeList,
+}
+
+impl CodeToProbeSymbolResponse {
+    pub fn new(
+        code_to_probe_list: CodeToProbeList,
+        code_to_not_probe_list: CodeToNotProbeList,
+    ) -> Self {
+        Self {
+            code_to_not_probe_list,
+            code_to_probe_list,
+        }
+    }
+
+    pub fn code_to_probe_list(&self) -> &CodeToProbeList {
+        &self.code_to_probe_list
+    }
+
+    pub fn code_to_not_probe_list(&self) -> &CodeToNotProbeList {
+        &self.code_to_not_probe_list
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CodeToProbeFilterResponse {
+    snippets_to_probe_ordered: Vec<SnippetWithReason>,
+    snippets_to_not_probe: Vec<SnippetWithReason>,
+}
+
+impl CodeToProbeFilterResponse {
+    pub fn new(
+        snippets_to_probe_ordered: Vec<SnippetWithReason>,
+        snippets_to_not_probe: Vec<SnippetWithReason>,
+    ) -> Self {
+        Self {
+            snippets_to_not_probe,
+            snippets_to_probe_ordered,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CodeToEditFilterResponse {
     snippets_to_edit_ordered: Vec<SnippetWithReason>,
     snippets_to_not_edit: Vec<SnippetWithReason>,
@@ -128,7 +232,7 @@ impl CodeToEditFilterResponse {
     ) -> Self {
         Self {
             snippets_to_edit_ordered: snippets_to_edit,
-            snippets_to_not_edit: snippets_to_not_edit,
+            snippets_to_not_edit,
         }
     }
 }
@@ -263,31 +367,50 @@ pub trait CodeToEditFilterFormatter {
         &self,
         request: CodeToEditSymbolRequest,
     ) -> Result<CodeToEditSymbolResponse, CodeToEditFilteringError>;
+
+    // this request is for probing
+    async fn filter_code_snippet_inside_symbol_for_probing(
+        &self,
+        request: CodeToEditFilterRequest,
+    ) -> Result<CodeToProbeFilterResponse, CodeToEditFilteringError>;
 }
 
 #[async_trait]
 impl Tool for CodeToEditFormatterBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
-        let context = input.filter_code_snippets_request()?;
-        match context {
-            either::Left(request) => {
-                if let Some(llm) = self.llms.get(&request.llm) {
-                    llm.filter_code_snippets(request)
-                        .await
-                        .map_err(|e| ToolError::CodeToEditFiltering(e))
-                        .map(|result| ToolOutput::CodeToEditSnippets(result))
-                } else {
-                    Err(ToolError::WrongToolInput)
-                }
+        if input.is_probe_subsymbol() {
+            let context = input.probe_subsymbol()?;
+            if let Some(llm) = self.llms.get(context.llm()) {
+                return llm
+                    .filter_code_snippet_inside_symbol_for_probing(context)
+                    .await
+                    .map_err(|e| ToolError::CodeToEditFiltering(e))
+                    .map(|response| ToolOutput::probe_sub_symbol(response));
+            } else {
+                Err(ToolError::WrongToolInput)
             }
-            either::Right(context) => {
-                if let Some(llm) = self.llms.get(&context.llm) {
-                    llm.filter_code_snippets_inside_symbol(context)
-                        .await
-                        .map_err(|e| ToolError::CodeToEditFiltering(e))
-                        .map(|result| ToolOutput::CodeToEditSingleSymbolSnippets(result))
-                } else {
-                    Err(ToolError::WrongToolInput)
+        } else {
+            let context = input.filter_code_snippets_request()?;
+            match context {
+                either::Left(request) => {
+                    if let Some(llm) = self.llms.get(&request.llm) {
+                        llm.filter_code_snippets(request)
+                            .await
+                            .map_err(|e| ToolError::CodeToEditFiltering(e))
+                            .map(|result| ToolOutput::CodeToEditSnippets(result))
+                    } else {
+                        Err(ToolError::WrongToolInput)
+                    }
+                }
+                either::Right(context) => {
+                    if let Some(llm) = self.llms.get(&context.llm) {
+                        llm.filter_code_snippets_inside_symbol(context)
+                            .await
+                            .map_err(|e| ToolError::CodeToEditFiltering(e))
+                            .map(|result| ToolOutput::CodeToEditSingleSymbolSnippets(result))
+                    } else {
+                        Err(ToolError::WrongToolInput)
+                    }
                 }
             }
         }

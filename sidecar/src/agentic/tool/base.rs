@@ -43,6 +43,7 @@ pub enum ToolType {
     // Probe operation
     ProbePossible,
     ProbeQuestion,
+    ProbeSubSymbol,
 }
 
 #[async_trait]

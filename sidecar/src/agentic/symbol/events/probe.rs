@@ -14,5 +14,19 @@ pub struct SymbolToProbeHistory {
 pub struct SymbolToProbeRequest {
     symbol_identifier: SymbolIdentifier,
     probe_request: String,
-    history: SymbolToProbeHistory,
+    history: Vec<SymbolToProbeHistory>,
+}
+
+impl SymbolToProbeRequest {
+    pub fn new(
+        symbol_identifier: SymbolIdentifier,
+        probe_request: String,
+        history: Vec<SymbolToProbeHistory>,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            probe_request,
+            history,
+        }
+    }
 }

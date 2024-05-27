@@ -48,6 +48,8 @@ pub enum ToolInput {
     CodeCorrectnessAction(CodeCorrectnessRequest),
     CodeEditingError(CodeEditingErrorRequest),
     ClassSymbolFollowup(ClassSymbolFollowupRequest),
+    // probe request
+    ProbeSubSymbol(CodeToEditFilterRequest),
     ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
     ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
 }
@@ -79,6 +81,23 @@ impl ToolInput {
             ToolInput::ClassSymbolFollowup(_) => ToolType::ClassSymbolFollowup,
             ToolInput::ProbePossibleRequest(_) => ToolType::ProbePossible,
             ToolInput::ProbeQuestionAskRequest(_) => ToolType::ProbeQuestion,
+            ToolInput::ProbeSubSymbol(_) => ToolType::ProbeSubSymbol,
+        }
+    }
+
+    pub fn is_probe_subsymbol(&self) -> bool {
+        if let ToolInput::ProbeSubSymbol(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn probe_subsymbol(self) -> Result<CodeToEditFilterRequest, ToolError> {
+        if let ToolInput::ProbeSubSymbol(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput)
         }
     }
 

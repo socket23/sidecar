@@ -268,4 +268,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_probe_symbol_deeper(self) -> Option<CodeSymbolToAskQuestionsResponse> {
+        match self {
+            ToolOutput::ProbeQuestion(request) => Some(request),
+            _ => None,
+        }
+    }
 }

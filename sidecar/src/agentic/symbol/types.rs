@@ -372,7 +372,8 @@ impl Symbol {
         .buffer_unordered(100)
         .collect::<Vec<_>>()
         .await;
-        let filetered_snippets = filtering_response
+
+        let filtered_snippets = filtering_response
             .into_iter()
             .filter_map(|(reason, snippet, probe_deeper)| match probe_deeper {
                 Ok(probe_deeper) => {
@@ -385,10 +386,90 @@ impl Symbol {
                 Err(_) => None,
             })
             .collect::<Vec<_>>();
-        // TODO(skcd): We have the sub-symbols above, now we just need to send all
-        // of them the question of probing and get back the data from here, each sub-symbols
-        // returns a list of symbols which we can follow
-        // - ask the sub-symbol the probing question
+        let snippet_to_symbols_to_follow = stream::iter(filtered_snippets)
+            .map(|(_, snippet, reason_to_follow)| async move {
+                let response = self
+                    .tools
+                    .probe_deeper_in_symbol(
+                        &snippet,
+                        &reason_to_follow,
+                        history,
+                        query,
+                        self.llm_properties.llm().clone(),
+                        self.llm_properties.provider().clone(),
+                        self.llm_properties.api_key().clone(),
+                    )
+                    .await;
+                (snippet, response)
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
+
+        // Now for each snippet we want to grab the definition of the symbol it belongs
+        let snippet_to_follow_with_definitions =
+            stream::iter(snippet_to_symbols_to_follow.into_iter().filter_map(
+                |(snippet, response)| match response {
+                    Ok(response) => Some((snippet, response)),
+                    Err(_) => None,
+                },
+            ))
+            .map(|(snippet, response)| async move {
+                let referred_snippet = &snippet;
+                // we want to parse the reponse here properly and get back the
+                // snippets which are the most important by going to their definitions
+                let symbols_to_follow_list = response.symbol_list();
+                let definitions_to_follow = stream::iter(symbols_to_follow_list)
+                    .map(|symbol_to_follow| async move {
+                        let definitions_for_snippet = self
+                            .tools
+                            .go_to_definition_using_symbol(
+                                referred_snippet,
+                                symbol_to_follow.file_path(),
+                                symbol_to_follow.line_content(),
+                                symbol_to_follow.name(),
+                            )
+                            .await;
+                        (symbol_to_follow, definitions_for_snippet)
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await;
+                // Now that we have this, we can ask the LLM to generate the next set of probe-queries
+                // if required unless it already has the answer
+                (snippet, definitions_to_follow)
+            })
+            // we go through the snippets one by one
+            .buffered(1)
+            .collect::<Vec<_>>()
+            .await;
+
+        // - ask the followup question to the symbol containing the definition we are interested in
+        // - we can concat the various questions about the symbols together and just ask the symbol
+        // the question maybe?
+        snippet_to_follow_with_definitions.into_iter().for_each(
+            |(snippet, ask_question_symbol_hint)| {
+                let questions_with_definitions = ask_question_symbol_hint
+                    .into_iter()
+                    .filter_map(|(ask_question_hint, definition_path_and_range)| {
+                        match definition_path_and_range {
+                            Ok(definition_path_and_range) => {
+                                Some((ask_question_hint, definition_path_and_range))
+                            }
+                            Err(_) => None,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                // To be very honest here we can ask if we want to send one more probe
+                // message over here if this is useful to find the changes
+                // TODO(skcd): Pick this up from here for sending over a request to the LLM
+                // to figure out if:
+                // - A: we have all the information required to answer
+                // - B: if we need to go deeper into the symbol for looking into the information
+                // If this is not useful we can stop over here
+            },
+        );
         // - wait for the reply and then return the answer
 
         // Next we grab the important definitions which we are interested in

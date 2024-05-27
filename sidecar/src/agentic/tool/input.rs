@@ -6,8 +6,10 @@ use super::{
         error_fix::CodeEditingErrorRequest,
         followup::ClassSymbolFollowupRequest,
         important::{
-            CodeSymbolImportantRequest, CodeSymbolImportantWideSearch, CodeSymbolUtilityRequest,
+            CodeSymbolImportantRequest, CodeSymbolImportantWideSearch,
+            CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
+        models::anthropic::CodeSymbolShouldAskQuestionsResponse,
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
@@ -46,6 +48,8 @@ pub enum ToolInput {
     CodeCorrectnessAction(CodeCorrectnessRequest),
     CodeEditingError(CodeEditingErrorRequest),
     ClassSymbolFollowup(ClassSymbolFollowupRequest),
+    ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
+    ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
 }
 
 impl ToolInput {
@@ -73,6 +77,40 @@ impl ToolInput {
             ToolInput::CodeCorrectnessAction(_) => ToolType::CodeCorrectnessActionSelection,
             ToolInput::CodeEditingError(_) => ToolType::CodeEditingForError,
             ToolInput::ClassSymbolFollowup(_) => ToolType::ClassSymbolFollowup,
+            ToolInput::ProbePossibleRequest(_) => ToolType::ProbePossible,
+            ToolInput::ProbeQuestionAskRequest(_) => ToolType::ProbeQuestion,
+        }
+    }
+
+    pub fn probe_possible_request(self) -> Result<CodeSymbolToAskQuestionsRequest, ToolError> {
+        if let ToolInput::ProbePossibleRequest(output) = self {
+            Ok(output)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn probe_question_request(self) -> Result<CodeSymbolToAskQuestionsRequest, ToolError> {
+        if let ToolInput::ProbeQuestionAskRequest(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn is_probe_possible_request(&self) -> bool {
+        if let ToolInput::ProbePossibleRequest(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_probe_question(&self) -> bool {
+        if let ToolInput::ProbeQuestionAskRequest(_) = self {
+            true
+        } else {
+            false
         }
     }
 

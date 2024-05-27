@@ -2,8 +2,12 @@
 
 use super::{
     code_symbol::{
-        correctness::CodeCorrectnessAction, followup::ClassSymbolFollowupResponse,
-        important::CodeSymbolImportantResponse,
+        correctness::CodeCorrectnessAction,
+        followup::ClassSymbolFollowupResponse,
+        important::{CodeSymbolImportantResponse, CodeSymbolToAskQuestionsRequest},
+        models::anthropic::{
+            CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
+        },
     },
     editor::apply::EditorApplyResponse,
     filtering::broker::{CodeToEditFilterResponse, CodeToEditSymbolResponse},
@@ -63,9 +67,16 @@ pub enum ToolOutput {
     CodeCorrectnessAction(CodeCorrectnessAction),
     CodeEditingForError(String),
     ClassSymbolFollowupResponse(ClassSymbolFollowupResponse),
+    // Probe requests
+    ProbePossible(CodeSymbolShouldAskQuestionsResponse),
+    ProbeQuestion(CodeSymbolToAskQuestionsResponse),
 }
 
 impl ToolOutput {
+    pub fn probe_possible(response: CodeSymbolShouldAskQuestionsResponse) -> Self {
+        ToolOutput::ProbePossible(response)
+    }
+
     pub fn go_to_reference(refernece: GoToReferencesResponse) -> Self {
         ToolOutput::GoToReference(refernece)
     }

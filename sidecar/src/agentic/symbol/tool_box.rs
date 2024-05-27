@@ -4,6 +4,7 @@ use std::sync::Arc;
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
+use tokenizers::pattern::Pattern;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
@@ -21,7 +22,9 @@ use crate::agentic::tool::code_symbol::important::{
     CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolToAskQuestionsRequest,
     CodeSymbolUtilityRequest, CodeSymbolWithThinking,
 };
-use crate::agentic::tool::code_symbol::models::anthropic::CodeSymbolShouldAskQuestionsResponse;
+use crate::agentic::tool::code_symbol::models::anthropic::{
+    CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
+};
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
@@ -32,7 +35,9 @@ use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::diagnostics::{
     Diagnostic, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
-use crate::agentic::tool::lsp::gotodefintion::{GoToDefinitionRequest, GoToDefinitionResponse};
+use crate::agentic::tool::lsp::gotodefintion::{
+    DefinitionPathAndRange, GoToDefinitionRequest, GoToDefinitionResponse,
+};
 use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
@@ -84,6 +89,200 @@ impl ToolBox {
         }
     }
 
+    /// Takes a file path and the line content and the symbol to search for
+    /// in the file
+    /// This way we are able to go to the definition of the file which contains
+    /// this symbol and send the appropriate request to it
+    pub async fn go_to_definition_using_symbol(
+        &self,
+        snippet: &Snippet,
+        fs_file_path: &str,
+        line_content: &str,
+        symbol_to_search: &str,
+        // we are returning the definition path and range along with the symbol where the go-to-definition belongs to
+        // along with the outline of the symbol containing the go-to-definition
+    ) -> Result<Vec<(DefinitionPathAndRange, String, String)>, SymbolError> {
+        let file_contents = self.file_open(fs_file_path.to_owned()).await?;
+        let selection_range = snippet.range();
+        let mut containing_lines = file_contents
+            .contents()
+            .lines()
+            .enumerate()
+            .into_iter()
+            .map(|(index, line)| (index as i64, line))
+            .filter_map(|(index, line)| {
+                let start_line = selection_range.start_line() as i64;
+                let end_line = selection_range.end_line() as i64;
+                let minimum_distance =
+                    std::cmp::min(i64::abs(start_line - index), i64::abs(end_line - index));
+                if line.contains(line_content) {
+                    Some((minimum_distance, (line.to_owned(), index)))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        // sort it by the smallest distance from the range we are interested in first
+        containing_lines.sort_by(|a, b| a.0.cmp(&b.0));
+        // Now take the first one
+        let symbol_location =
+            if let Some((line, line_index)) = containing_lines.first().map(|first| &first.1) {
+                // Find the symbol in the line now
+                // our home fed needle in haystack which works on character level instead
+                // of byte level
+                fn find_needle_position(haystack: &str, needle: &str) -> Option<usize> {
+                    let haystack_char_indices: Vec<_> = haystack.char_indices().collect();
+
+                    haystack.find(needle).map(|byte_pos| {
+                        haystack_char_indices
+                            .iter()
+                            .position(|(b, _)| *b == byte_pos)
+                            .unwrap()
+                    })
+                }
+                let position = find_needle_position(line, symbol_to_search);
+                match position {
+                    Some(position) => Ok(Position::new(
+                        (*line_index).try_into().expect("i64 to usize to work"),
+                        position,
+                        0,
+                    )),
+                    None => Err(SymbolError::SymbolNotFound),
+                }
+            } else {
+                Err(SymbolError::NoOutlineNodeSatisfyPosition)
+            }?;
+
+        // Now we can invoke a go-to-definition on the symbol over here and get back
+        // the containing symbol which has this symbol we are interested in visiting
+        let go_to_definition = self
+            .go_to_definition(fs_file_path, symbol_location)
+            .await?
+            .definitions();
+
+        // interested files
+        let files_interested = go_to_definition
+            .iter()
+            .map(|definition| definition.file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        // open all these files and get back the outline nodes from these
+        let _ = stream::iter(files_interested.into_iter())
+            .map(|file| async move {
+                let _ = self.file_open(file).await;
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
+        // Now check in the outline nodes for a given file which biggest symbol contains this range
+        let definitions_to_outline_node =
+            stream::iter(go_to_definition.into_iter().map(|definition| {
+                let file_path = definition.file_path().to_owned();
+                (definition, file_path)
+            }))
+            .map(|(definition, fs_file_path)| async move {
+                let outline_nodes = self.symbol_broker.get_symbols_outline(&fs_file_path).await;
+                (definition, outline_nodes)
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|(definition, outline_nodes_maybe)| {
+                if let Some(outline_node) = outline_nodes_maybe {
+                    Some((definition, outline_node))
+                } else {
+                    None
+                }
+            })
+            .filter_map(|(definition, outline_nodes)| {
+                let possible_outline_node = outline_nodes
+                    .into_iter()
+                    .find(|outline_node| outline_node.range().contains(definition.range()));
+                if let Some(outline_node) = possible_outline_node {
+                    Some((definition, outline_node))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // // Now we want to go from the definitions we are interested in to the snippet
+        // // where we will be asking the question and also get the outline for it
+        let definition_to_outline_node_name_and_definition =
+            stream::iter(definitions_to_outline_node)
+                .map(|(definition, outline_node)| async move {
+                    let fs_file_path = outline_node.fs_file_path();
+                    let symbol_outline = self
+                        .outline_nodes_for_symbol(&fs_file_path, outline_node.name())
+                        .await;
+                    (definition, outline_node.name().to_owned(), symbol_outline)
+                })
+                .buffer_unordered(100)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .filter_map(
+                    |(definition, symbol_name, symbol_outline)| match symbol_outline {
+                        Ok(symbol_outline) => Some((definition, symbol_name, symbol_outline)),
+                        Err(_) => None,
+                    },
+                )
+                .collect::<Vec<_>>();
+
+        // // Now that we have the outline node which we are interested in, we need to
+        // // find the outline node which we can use to guarantee that this works
+        // // Once we have the definition we can figure out the symbol which contains this
+        // // Now we try to find the line which is closest the the snippet or contained
+        // // within it for a lack of better word
+        Ok(definition_to_outline_node_name_and_definition)
+    }
+
+    pub async fn probe_deeper_in_symbol(
+        &self,
+        snippet: &Snippet,
+        reason: &str,
+        history: &str,
+        query: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Result<CodeSymbolToAskQuestionsResponse, SymbolError> {
+        let file_contents = self.file_open(snippet.file_path().to_owned()).await?;
+        let file_contents = file_contents.contents();
+        let range = snippet.range();
+        let (above, below, in_selection) = split_file_content_into_parts(&file_contents, range);
+        let request = ToolInput::ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest::new(
+            history.to_owned(),
+            snippet.symbol_name().to_owned(),
+            snippet.file_path().to_owned(),
+            snippet.language().to_owned(),
+            "".to_owned(),
+            above,
+            below,
+            in_selection,
+            llm,
+            provider,
+            api_keys,
+            format!(
+                r#"The user has asked the following query:
+{query}
+
+We also belive this symbol needs to be probed because of:
+{reason}"#
+            ),
+        ));
+        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        // This is broken because of the types over here
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_probe_symbol_deeper()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    // This is used to ask which sub-symbols we are going to follow deeper
     pub async fn should_follow_subsymbol_for_probing(
         &self,
         snippet: &Snippet,
@@ -2169,7 +2368,7 @@ Please handle these changes as required."#
                                 definition,
                             )
                             .await?;
-                        code_snippet.set_snippet(snippet_node);
+                        code_snippet.set_snippet(snippet_node).await;
                     }
                 } else {
                     // if we have multiple outline nodes, then we need to select
@@ -2177,13 +2376,15 @@ Please handle these changes as required."#
                     // we have the symbol, we can just use the outline nodes which is
                     // the first
                     let outline_node = outline_nodes.remove(0);
-                    code_snippet.set_snippet(Snippet::new(
-                        outline_node.name().to_owned(),
-                        outline_node.range().clone(),
-                        outline_node.fs_file_path().to_owned(),
-                        outline_node.content().to_owned(),
-                        outline_node,
-                    ));
+                    code_snippet
+                        .set_snippet(Snippet::new(
+                            outline_node.name().to_owned(),
+                            outline_node.range().clone(),
+                            outline_node.fs_file_path().to_owned(),
+                            outline_node.content().to_owned(),
+                            outline_node,
+                        ))
+                        .await;
                 }
             } else {
                 // if this is new, then we probably do not have a file path

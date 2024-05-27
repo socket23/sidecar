@@ -9,7 +9,6 @@ use super::{
             CodeSymbolImportantRequest, CodeSymbolImportantWideSearch,
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
-        models::anthropic::CodeSymbolShouldAskQuestionsResponse,
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,

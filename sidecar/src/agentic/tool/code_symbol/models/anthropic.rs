@@ -133,11 +133,35 @@ pub struct AskQuestionSymbolHint {
     thinking: String,
 }
 
+impl AskQuestionSymbolHint {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn line_content(&self) -> &str {
+        &self.line_content
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
+
+    pub fn thinking(&self) -> &str {
+        &self.thinking
+    }
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct CodeSymbolToAskQuestionsResponse {
     steps_to_answer: String,
     symbol_list: Vec<AskQuestionSymbolHint>,
+}
+
+impl CodeSymbolToAskQuestionsResponse {
+    pub fn symbol_list(self) -> Vec<AskQuestionSymbolHint> {
+        self.symbol_list
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

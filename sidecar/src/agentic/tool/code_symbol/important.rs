@@ -540,11 +540,14 @@ pub trait CodeSymbolImportant {
         utility_symbol_request: CodeSymbolUtilityRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError>;
 
+    // Use this to ask probing questions to the various identifiers
     async fn symbols_to_probe_questions(
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<CodeSymbolToAskQuestionsResponse, CodeSymbolError>;
 
+    // asks if we want to get more probing question to the snippet we are interested
+    // in
     async fn should_probe_question_request(
         &self,
         request: CodeSymbolToAskQuestionsRequest,

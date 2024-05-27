@@ -143,11 +143,19 @@ pub struct CodeSymbolToAskQuestionsResponse {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct CodeSymbolShouldAskQuestionsResponse {
-    should_ask_questions: bool,
-    reason: String,
+    thinking: bool,
+    should_follow: String,
 }
 
 impl CodeSymbolShouldAskQuestionsResponse {
+    pub fn thinking(&self) -> bool {
+        self.thinking
+    }
+
+    pub fn should_follow(&self) -> &str {
+        &self.should_follow
+    }
+
     pub fn parse_response(
         response: String,
     ) -> Result<CodeSymbolShouldAskQuestionsResponse, CodeSymbolError> {
@@ -155,11 +163,11 @@ impl CodeSymbolShouldAskQuestionsResponse {
         let mut fixed_lines = vec![];
         let mut is_inside = false;
         response.lines().into_iter().for_each(|line| {
-            if line.starts_with("<reason>") {
+            if line.starts_with("<should_follow>") {
                 is_inside = true;
                 fixed_lines.push(line.to_owned());
                 return;
-            } else if line.starts_with("</reason>") {
+            } else if line.starts_with("</should_follow>") {
                 is_inside = false;
                 fixed_lines.push(line.to_owned())
             }
@@ -173,8 +181,8 @@ impl CodeSymbolShouldAskQuestionsResponse {
             .map_err(|e| CodeSymbolError::SerdeError(e));
         match parsed_response {
             Ok(response) => Ok(CodeSymbolShouldAskQuestionsResponse {
-                should_ask_questions: response.should_ask_questions,
-                reason: AnthropicCodeSymbolImportant::escape_xml(response.reason),
+                thinking: response.thinking,
+                should_follow: AnthropicCodeSymbolImportant::escape_xml(response.should_follow),
             }),
             Err(e) => Err(e),
         }

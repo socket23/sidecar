@@ -342,7 +342,7 @@ impl Symbol {
             )
             .await?;
         // - ask if we should probe the sub-symbols here
-        stream::iter(
+        let filtering_response = stream::iter(
             sub_symbol_request
                 .snippets_to_probe_ordered()
                 .into_iter()
@@ -367,10 +367,27 @@ impl Symbol {
                     llm_properties.api_key().clone(),
                 )
                 .await;
+            (reason, snippet, response)
         })
         .buffer_unordered(100)
         .collect::<Vec<_>>()
         .await;
+        let filetered_snippets = filtering_response
+            .into_iter()
+            .filter_map(|(reason, snippet, probe_deeper)| match probe_deeper {
+                Ok(probe_deeper) => {
+                    if probe_deeper.thinking() {
+                        Some((reason, snippet, probe_deeper.should_follow().to_owned()))
+                    } else {
+                        None
+                    }
+                }
+                Err(_) => None,
+            })
+            .collect::<Vec<_>>();
+        // TODO(skcd): We have the sub-symbols above, now we just need to send all
+        // of them the question of probing and get back the data from here, each sub-symbols
+        // returns a list of symbols which we can follow
         // - ask the sub-symbol the probing question
         // - wait for the reply and then return the answer
 

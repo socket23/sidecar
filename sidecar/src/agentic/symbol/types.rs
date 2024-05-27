@@ -589,6 +589,7 @@ impl Symbol {
                         // - refresh our state
                         // - edit ourselves if required or formulate the answer
                         // - followup
+                        // - task 1: sending probes to the world about gathering information
                         todo!("ask question is not implemented yet");
                     }
                     SymbolEvent::Delete => {

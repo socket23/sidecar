@@ -140,6 +140,47 @@ pub struct CodeSymbolToAskQuestionsResponse {
     symbol_list: Vec<AskQuestionSymbolHint>,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "reply")]
+pub struct CodeSymbolShouldAskQuestionsResponse {
+    should_ask_questions: bool,
+    reason: String,
+}
+
+impl CodeSymbolShouldAskQuestionsResponse {
+    pub fn parse_response(
+        response: String,
+    ) -> Result<CodeSymbolShouldAskQuestionsResponse, CodeSymbolError> {
+        // parse out the string properly over here
+        let mut fixed_lines = vec![];
+        let mut is_inside = false;
+        response.lines().into_iter().for_each(|line| {
+            if line.starts_with("<reason>") {
+                is_inside = true;
+                fixed_lines.push(line.to_owned());
+                return;
+            } else if line.starts_with("</reason>") {
+                is_inside = false;
+                fixed_lines.push(line.to_owned())
+            }
+            if is_inside {
+                fixed_lines.push(AnthropicCodeSymbolImportant::unescape_xml(line.to_owned()));
+            } else {
+                fixed_lines.push(line.to_owned());
+            }
+        });
+        let parsed_response = from_str::<CodeSymbolShouldAskQuestionsResponse>(&response)
+            .map_err(|e| CodeSymbolError::SerdeError(e));
+        match parsed_response {
+            Ok(response) => Ok(CodeSymbolShouldAskQuestionsResponse {
+                should_ask_questions: response.should_ask_questions,
+                reason: AnthropicCodeSymbolImportant::escape_xml(response.reason),
+            }),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 impl CodeSymbolToAskQuestionsResponse {
     fn escape_string(self) -> Self {
         let steps_to_answer = AnthropicCodeSymbolImportant::escape_xml(self.steps_to_answer);
@@ -1895,6 +1936,315 @@ Does the language type expose any prettier settings, because we want to get it s
         )
     }
 
+    fn user_message_for_should_ask_questions(
+        &self,
+        request: CodeSymbolToAskQuestionsRequest,
+    ) -> String {
+        let user_query = request.user_query();
+        let file_path = request.fs_file_path();
+        let code_above = request.code_above().unwrap_or("".to_owned());
+        let code_below = request.code_below().unwrap_or("".to_owned());
+        let code_in_selection = request.code_in_selection();
+        let history = request.history();
+        let extra_data = request.extra_data();
+        format!(
+            r#"<user_query>
+{user_query}
+</user_query>
+
+<file>
+<file_path>
+{file_path}
+</file_path>
+<code_above>
+{code_above}
+</code_above>
+<code_below>
+{code_below}
+</code_below>
+<code_in_selection>
+{code_in_selection}
+</code_in_selection>
+</file>
+
+<history>
+{history}
+</history>
+
+<extra_data>
+{extra_data}
+</extra_data>"#
+        )
+    }
+    fn system_message_for_should_ask_questions(&self) -> String {
+        r#"You are an expert software engineer who is going to decide if the context you have up until now is enough to answer the user request.
+- You are focussed on the code which is present in <code_selection> section, additionally you are also show the code above and below the selection in <code_above> and <code_below> sections.
+- The context you have accumulated up until now is shown to you in <history> and <extra_data> section.
+- You are responsible for telling us if you have enough context from <history> section and the <extra_data> section.
+- You have to decide if you can answer the user query or you need to see more code sections before you are able to answer the user query.
+Below we show you an example of what the input will look like:
+
+<user_query>
+`LLMProvider` seems to contain the information for providers we have to understand how it is defined?
+</user_query>
+
+<file>
+<file_path>
+llm_client/src/provider.rs
+</file_path>
+<code_above>
+```rust
+//! Contains types for setting the provider for the LLM, we are going to support
+//! 3 things for now:
+//! - CodeStory
+//! - OpenAI
+//! - Ollama
+//! - Azure
+//! - together.ai
+
+use crate::clients::types::LLMType;
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
+pub struct AzureOpenAIDeploymentId {
+    pub deployment_id: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
+pub struct CodeStoryLLMTypes {
+    // shoehorning the llm type here so we can provide the correct api keys
+    pub llm_type: Option<LLMType>,
+}
+
+impl CodeStoryLLMTypes {
+    pub fn new() -> Self {
+        Self { llm_type: None }
+    }
+}
+```
+</code_above>
+<code_below>
+```rust
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub enum LLMProviderAPIKeys {
+    OpenAI(OpenAIProvider),
+    TogetherAI(TogetherAIProvider),
+    Ollama(OllamaProvider),
+    OpenAIAzureConfig(AzureConfig),
+    LMStudio(LMStudioConfig),
+    OpenAICompatible(OpenAICompatibleConfig),
+    CodeStory,
+    Anthropic(AnthropicAPIKey),
+    FireworksAI(FireworksAPIKey),
+    GeminiPro(GeminiProAPIKey),
+}
+
+impl LLMProviderAPIKeys {
+    pub fn is_openai(&self) -> bool {
+        matches!(self, LLMProviderAPIKeys::OpenAI(_))
+    }
+
+    pub fn provider_type(&self) -> LLMProvider {
+        match self {
+            LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
+            LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
+            LLMProviderAPIKeys::Ollama(_) => LLMProvider::Ollama,
+            LLMProviderAPIKeys::OpenAIAzureConfig(_) => {
+                LLMProvider::Azure(AzureOpenAIDeploymentId {
+                    deployment_id: "".to_owned(),
+                })
+            }
+            LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
+            LLMProviderAPIKeys::CodeStory => {
+                LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
+            }
+            LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
+            LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
+            LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
+            LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
+        }
+    }
+
+    // Gets the relevant key from the llm provider
+    pub fn key(&self, llm_provider: &LLMProvider) -> Option<Self> {
+        match llm_provider {
+            LLMProvider::OpenAI => {
+                if let LLMProviderAPIKeys::OpenAI(key) = self {
+                    Some(LLMProviderAPIKeys::OpenAI(key.clone()))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::TogetherAI => {
+                if let LLMProviderAPIKeys::TogetherAI(key) = self {
+                    Some(LLMProviderAPIKeys::TogetherAI(key.clone()))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::Ollama => {
+                if let LLMProviderAPIKeys::Ollama(key) = self {
+                    Some(LLMProviderAPIKeys::Ollama(key.clone()))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::LMStudio => {
+                if let LLMProviderAPIKeys::LMStudio(key) = self {
+                    Some(LLMProviderAPIKeys::LMStudio(key.clone()))
+                } else {
+                    None
+                }
+            }
+            // Azure is weird, so we are have to copy the config which we get
+            // from the provider keys and then set the deployment id of it
+            // properly for the azure provider, if its set to "" that means
+            // we do not have a deployment key and we should be returning quickly
+            // here.
+            // NOTE: We should change this to using the codestory configuration
+            // and make calls appropriately, for now this is fine
+            LLMProvider::Azure(deployment_id) => {
+                if deployment_id.deployment_id == "" {
+                    return None;
+                }
+                if let LLMProviderAPIKeys::OpenAIAzureConfig(key) = self {
+                    let mut azure_config = key.clone();
+                    azure_config.deployment_id = deployment_id.deployment_id.to_owned();
+                    Some(LLMProviderAPIKeys::OpenAIAzureConfig(azure_config))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::CodeStory(_) => Some(LLMProviderAPIKeys::CodeStory),
+            LLMProvider::OpenAICompatible => {
+                if let LLMProviderAPIKeys::OpenAICompatible(openai_compatible) = self {
+                    Some(LLMProviderAPIKeys::OpenAICompatible(
+                        openai_compatible.clone(),
+                    ))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::Anthropic => {
+                if let LLMProviderAPIKeys::Anthropic(api_key) = self {
+                    Some(LLMProviderAPIKeys::Anthropic(api_key.clone()))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::FireworksAI => {
+                if let LLMProviderAPIKeys::FireworksAI(api_key) = self {
+                    Some(LLMProviderAPIKeys::FireworksAI(api_key.clone()))
+                } else {
+                    None
+                }
+            }
+            LLMProvider::GeminiPro => {
+                if let LLMProviderAPIKeys::GeminiPro(api_key) = self {
+                    Some(LLMProviderAPIKeys::GeminiPro(api_key.clone()))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct OpenAIProvider {
+    pub api_key: String,
+}
+
+impl OpenAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct TogetherAIProvider {
+    pub api_key: String,
+}
+
+impl TogetherAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct GeminiProAPIKey {
+    pub api_key: String,
+    pub api_base: String,
+}
+```
+</code_below>
+<code_in_selection>
+```rust
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
+pub enum LLMProvider {
+    OpenAI,
+    TogetherAI,
+    Ollama,
+    LMStudio,
+    CodeStory(CodeStoryLLMTypes),
+    Azure(AzureOpenAIDeploymentId),
+    OpenAICompatible,
+    Anthropic,
+    FireworksAI,
+    GeminiPro,
+}
+
+impl LLMProvider {
+    pub fn is_codestory(&self) -> bool {
+        matches!(self, LLMProvider::CodeStory(_))
+    }
+
+    pub fn is_anthropic_api_key(&self) -> bool {
+        matches!(self, LLMProvider::Anthropic)
+    }
+}
+```
+</code_in_selection>
+</file>
+
+<history>
+<item>
+<file_path>
+sidecar/src/agentic/tool/filtering/broker.rs:136-143
+</file_path>
+<content>
+```rust
+#[derive(Debug, Clone)]
+pub struct CodeToEditFilterRequest {
+    snippets: Vec<Snippet>,
+    query: String,
+    llm: LLMType,
+    provider: LLMProvider,
+    api_key: LLMProviderAPIKeys,
+}
+```
+</content>
+<question>
+What are the various providers we support?
+</question>
+</item>
+</history>
+
+<extra_data>
+</extra_data>
+
+
+Your reply is:
+<reply>
+<thinking>
+I have all the information for what kind of providers are supported as `LLMProvider` is an enum which has entries for the different kind of providers we have in the codebase.
+</thinking>
+<should_follow>
+false
+</should_follow>
+</reply>"#.to_owned()
+    }
+
     fn system_message_for_ask_question_symbols(
         &self,
         symbol_name: &str,
@@ -1923,7 +2273,7 @@ The <user_query> is about asking for some important information
 </use_case_list>
 - You have to select at the most 5 symbols and you can do the following:
 <operation>
-You can initiate a read operation on one of the symbols and gather more information before answering the user query. This allows you to understand the complete picture of how to answer the user query.
+You can initiate a read operation on one of the symbols and gather more information before answering the user query. This allows you to understand the complete picture of how to answer the user query. You can do this in form of another question to the symbol, so they can answer it for you.
 </operation>
 - Now first think step by step on how you are going to approach this problem and write down your steps in <steps_to_answer> section
 - Here are some approaches and questions you can ask for the symbol:
@@ -1943,6 +2293,7 @@ You suspect that the some code symbol in the code selection can more deeply answ
 </approach>
 </approach_list>
 These are just examples of approaches you can take, keep them in mind and be more imaginative when answering the user query.
+- You will also be given the <history> of sequence of questions which have been asked, this allows you to keep track of every interaction that has happend up until now and use that for figuring out your next set of symbols to select.
 - Your reply should be in the <reply> tag
 
 We are now going to show you an example:
@@ -3265,7 +3616,7 @@ The user has already taken a pass and retrived some important code symbols to us
 - You will be given files which contains a lot of code, you have to select the "code symbols" which are important.
 - "code symbols" here referes to the different classes, functions or constants which will be necessary to help with the user query.
 - Now you will write a step by step process for gathering this extra context.
-- In your step by step list make sure taht the symbols are listed in the order in which they are relevant.
+- In your step by step list make sure that the symbols are listed in the order in which they are relevant.
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with the <reply> tag and end with the </reply> tag
 
 Let's focus on getting the "code symbols" which are absolutely necessary to satisfy the user query for the given <code_selection>
@@ -4238,7 +4589,9 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
     }
 
-    async fn symbols_to_ask_questions(
+    // This replies back with more data about what questions to ask further
+    // we can just initiate a stop operation and call it a day
+    async fn symbols_to_probe_questions(
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<CodeSymbolToAskQuestionsResponse, CodeSymbolError> {
@@ -4275,6 +4628,39 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             .await?;
         // now we want to parse the reply here properly
         CodeSymbolToAskQuestionsResponse::parse_response(response)
+    }
+
+    async fn should_probe_question_request(
+        &self,
+        request: CodeSymbolToAskQuestionsRequest,
+    ) -> Result<CodeSymbolShouldAskQuestionsResponse, CodeSymbolError> {
+        let model = request.model().clone();
+        let api_key = request.api_key().clone();
+        let provider = request.provider().clone();
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_should_ask_questions());
+        let user_message =
+            LLMClientMessage::user(self.user_message_for_should_ask_questions(request));
+        let messages =
+            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_key,
+                messages,
+                provider,
+                vec![(
+                    "request_type".to_owned(),
+                    "ask_questions_to_symbol".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+        // parse out the response over here
+        CodeSymbolShouldAskQuestionsResponse::parse_response(response)
     }
 }
 

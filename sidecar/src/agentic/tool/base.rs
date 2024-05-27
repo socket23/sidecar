@@ -40,6 +40,9 @@ pub enum ToolType {
     CodeEditingForError,
     // Followup decision
     ClassSymbolFollowup,
+    // Probe operation
+    ProbePossible,
+    ProbeQuestion,
 }
 
 #[async_trait]

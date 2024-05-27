@@ -20,7 +20,10 @@ use crate::{
 };
 
 use super::{
-    models::anthropic::{AnthropicCodeSymbolImportant, CodeSymbolToAskQuestionsResponse},
+    models::anthropic::{
+        AnthropicCodeSymbolImportant, CodeSymbolShouldAskQuestionsResponse,
+        CodeSymbolToAskQuestionsResponse,
+    },
     types::CodeSymbolError,
 };
 
@@ -59,7 +62,25 @@ impl CodeSymbolImportantBroker {
 impl Tool for CodeSymbolImportantBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         // PS: This is getting out of hand
-        if input.is_utility_code_search() {
+        if input.is_probe_possible_request() {
+            let context = input.probe_possible_request()?;
+            if let Some(implementation) = self.llms.get(&context.model()) {
+                return implementation
+                    .should_probe_question_request(context)
+                    .await
+                    .map(|response| ToolOutput::probe_possible(response))
+                    .map_err(|e| ToolError::CodeSymbolError(e));
+            }
+        } else if input.is_probe_question() {
+            let context = input.probe_question_request()?;
+            if let Some(implementation) = self.llms.get(&context.model()) {
+                return implementation
+                    .symbols_to_probe_questions(context)
+                    .await
+                    .map(|response| ToolOutput::ProbeQuestion(response))
+                    .map_err(|e| ToolError::CodeSymbolError(e));
+            }
+        } else if input.is_utility_code_search() {
             let context = input.utility_code_search()?;
             if let Some(implementation) = self.llms.get(&context.model()) {
                 return implementation
@@ -519,10 +540,15 @@ pub trait CodeSymbolImportant {
         utility_symbol_request: CodeSymbolUtilityRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError>;
 
-    async fn symbols_to_ask_questions(
+    async fn symbols_to_probe_questions(
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<CodeSymbolToAskQuestionsResponse, CodeSymbolError>;
+
+    async fn should_probe_question_request(
+        &self,
+        request: CodeSymbolToAskQuestionsRequest,
+    ) -> Result<CodeSymbolShouldAskQuestionsResponse, CodeSymbolError>;
 }
 
 // implement passing in just the user context and getting the data back

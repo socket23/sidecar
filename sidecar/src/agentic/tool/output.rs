@@ -254,4 +254,18 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_probe_sub_symbol(self) -> Option<CodeToProbeFilterResponse> {
+        match self {
+            ToolOutput::ProbeSubSymbol(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_should_probe_symbol(self) -> Option<CodeSymbolShouldAskQuestionsResponse> {
+        match self {
+            ToolOutput::ProbePossible(request) => Some(request),
+            _ => None,
+        }
+    }
 }

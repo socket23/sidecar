@@ -165,6 +165,10 @@ impl Snippet {
         )
         .to_owned()
     }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -395,12 +399,18 @@ impl MechaCodeSymbolThinking {
     }
 
     pub async fn get_implementations(&self) -> Vec<Snippet> {
-        self.implementations
+        let mut implementations = self
+            .implementations
             .lock()
             .await
             .iter()
             .map(|snippet| snippet.clone())
-            .collect()
+            .collect::<Vec<_>>();
+        let self_implementation = self.get_snippet().await;
+        if let Some(snippet) = self_implementation {
+            implementations.push(snippet);
+        }
+        implementations
     }
 
     pub async fn set_implementations(&self, snippets: Vec<Snippet>) {

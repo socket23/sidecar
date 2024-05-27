@@ -29,4 +29,12 @@ impl SymbolToProbeRequest {
             history,
         }
     }
+
+    pub fn probe_request(&self) -> &str {
+        &self.probe_request
+    }
+
+    pub fn history(&self) -> &str {
+        todo!("figure out how to format this over here")
+    }
 }

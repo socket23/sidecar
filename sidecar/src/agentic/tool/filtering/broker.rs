@@ -27,6 +27,14 @@ impl SnippetWithReason {
     pub fn new(snippet: Snippet, reason: String) -> Self {
         Self { snippet, reason }
     }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    pub fn remove_snippet(self) -> Snippet {
+        self.snippet
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -216,6 +224,10 @@ impl CodeToProbeFilterResponse {
             snippets_to_not_probe,
             snippets_to_probe_ordered,
         }
+    }
+
+    pub fn snippets_to_probe_ordered(self) -> Vec<SnippetWithReason> {
+        self.snippets_to_probe_ordered
     }
 }
 

@@ -326,6 +326,54 @@ impl Symbol {
         // First we refresh our state over here
         self.refresh_state().await;
 
+        let history = request.history();
+        let query = request.probe_request();
+
+        let snippets = self.mecha_code_symbol.get_implementations().await;
+        // - sub-symbol selection for probing
+        let sub_symbol_request = self
+            .tools
+            .probe_sub_symbols(
+                snippets,
+                &request,
+                self.llm_properties.llm().clone(),
+                self.llm_properties.provider().clone(),
+                self.llm_properties.api_key().clone(),
+            )
+            .await?;
+        // - ask if we should probe the sub-symbols here
+        stream::iter(
+            sub_symbol_request
+                .snippets_to_probe_ordered()
+                .into_iter()
+                .map(|snippet_with_reason| {
+                    let reason = snippet_with_reason.reason().to_owned();
+                    let snippet = snippet_with_reason.remove_snippet();
+                    (reason, snippet, self.llm_properties.clone())
+                }),
+        )
+        .map(|(reason, snippet, llm_properties)| async move {
+            // Now depending on the response here we can exlcude/include
+            // the symbols which we want to follow and ask for more information
+            let response = self
+                .tools
+                .should_follow_subsymbol_for_probing(
+                    &snippet,
+                    &reason,
+                    history,
+                    query,
+                    llm_properties.llm().clone(),
+                    llm_properties.provider().clone(),
+                    llm_properties.api_key().clone(),
+                )
+                .await;
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await;
+        // - ask the sub-symbol the probing question
+        // - wait for the reply and then return the answer
+
         // Next we grab the important definitions which we are interested in
         // let definitions = self.tools.gather_important_symbols_with_definition(fs_file_path, file_content, selection_range, llm, provider, api_keys, query, hub_sender)
         Ok(())

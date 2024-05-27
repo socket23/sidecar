@@ -610,6 +610,9 @@ impl Symbol {
                         };
                         Ok(())
                     }
+                    SymbolEvent::Probe(probe_request) => {
+                        todo!("we need to implement this")
+                    }
                 }
             })
             .buffer_unordered(1000)

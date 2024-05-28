@@ -45,6 +45,7 @@ pub enum ToolType {
     ProbeQuestion,
     ProbeSubSymbol,
     ProbeFollowAlongSymbol,
+    ProbeSummarizeAnswer,
 }
 
 #[async_trait]

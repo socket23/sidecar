@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use gix::objs::commit::message;
 use serde_xml_rs::from_str;
 use std::sync::Arc;
 
@@ -17,10 +16,10 @@ use crate::agentic::tool::{
             ClassSymbolMember,
         },
         important::{
-            CodeSymbolFollowAlongForProbing, CodeSymbolImportant, CodeSymbolImportantRequest,
-            CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
-            CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
-            CodeSymbolWithThinking,
+            CodeSubSymbolProbingResult, CodeSymbolFollowAlongForProbing, CodeSymbolImportant,
+            CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
+            CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
+            CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
         types::CodeSymbolError,
     },
@@ -2051,6 +2050,142 @@ Does the language type expose any prettier settings, because we want to get it s
 <symbol>
 </symbol_list>
 </reply>"#
+        )
+    }
+
+    fn system_message_for_summarizing_probe_result(&self) -> String {
+        r#"You are an expert software engineer who is an expert at summarising the work done by other engineers who are trying to more deeply answer user queries.
+- The user query is present in <user_query> section.
+- You are working on the <current_symbol> and the other engineers have looked at various sections of this symbol and generted answers which would help you better answer the <user_query>
+- The other engineers have all looked at various portions of the code and tried to answer the user query you can see what they found in <sub_symbol_probing> section.
+- You have to answer the <user_query> after understanding the questions and the responses we got from following the other symbols which the other engineers have already done.
+- When summarizing the information make sure that if you think some symbol is important you keep track of the file name and the name of the symbol as well, this is extremely important.
+
+Below we are showing you an example of how the input will look like:
+<user_query>
+Do we store the author name along with the movies?
+</user_query>
+
+<history>
+<item>
+<symbol>
+City
+</symbol>
+<file_path>
+city/mod.rs
+</file_path>
+<content>
+```rust
+impl City {
+    fn get_theaters(&self) -> &[Theater] {
+        self.theaters.as_slice
+    }
+}
+```
+</content>
+<question>
+Do we store the actors for each movie?
+</question>
+</item>
+</histroy>
+
+<current_symbol>
+<symbol_name>
+Theater
+</symbol_name>
+<content>
+use artwork::movies::Movie;
+use artwork::location::Location;
+
+#[derive(Debug)]
+struct Theater {
+    movies: Vec<Movie>,
+    location: Location,
+    max_capacity: usize,
+}
+
+impl Theater {
+    fn movies(&self) -> &[Movie] {
+        self.movies.as_slice()
+    }
+
+    fn location(&self) -> &Location {
+        &self.location
+    }
+
+    fn max_capacity(&self) -> usize {
+        self.max_capacity
+    }
+}
+</content>
+</current_symbol>
+
+<sub_symbol_probing>
+<symbol>
+<name>
+movies
+</name>
+<file_path>
+src/movies.rs
+</file_path>
+<content>
+```rust
+    fn movies(&self) -> &[Movie] {
+        self.movies.as_slice()
+    }
+```
+</content>
+<probing_results>
+Movie defined in src/movies.rs does not contain actors or any reference to it as the structure of Movie has no reference to actors.
+```rust
+struct Movie {
+    name: String,
+    lenght_in_seconds: usize,
+}
+```
+</probing_results>
+</symbol>
+</sub_symbol_probing>
+
+Your reply:
+<reply>
+After following `movies` function in `Theater` we can see that `Movie` defined in src/movies.rs does not contain actors as a field and it is missing it from the definition. 
+</reply>
+
+Your reply should always be contained in <reply> tags, and the summarized result in between the tags.
+"#.to_owned()
+    }
+
+    fn user_message_for_summarizing_probe_result(
+        &self,
+        request: CodeSymbolProbingSummarize,
+    ) -> String {
+        let user_query = request.user_query();
+        let history = request.history();
+        let symbol_name = request.symbol_identifier();
+        let symbol_content = request.symbol_outline();
+        let symbol_probing_results = request.symbol_probing_results();
+        format!(
+            r#"<user_query>
+{user_query}
+</user_query>
+
+<history>
+{history}
+</history>
+
+<current_symbol>
+<symbol_name>
+{symbol_name}
+</symbol_name>
+<content>
+{symbol_content}
+</content>
+</current_symbol>
+
+<sub_symbol_probing>
+{symbol_probing_results}
+</sub_symbol_probing>"#
         )
     }
 
@@ -5025,6 +5160,54 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             .await?;
         // Now we want to parse this response properly
         ProbeNextSymbol::parse_response(&response)
+    }
+
+    async fn probe_summarize_answer(
+        &self,
+        request: CodeSymbolProbingSummarize,
+    ) -> Result<String, CodeSymbolError> {
+        let llm = request.llm().clone();
+        let provider = request.provider().clone();
+        let api_keys = request.api_keys().clone();
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_summarizing_probe_result());
+        let user_message =
+            LLMClientMessage::user(self.user_message_for_summarizing_probe_result(request));
+        let messages =
+            LLMClientCompletionRequest::new(llm, vec![system_message, user_message], 0.0, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                messages,
+                provider,
+                vec![(
+                    "request_type".to_owned(),
+                    "probe_summarize_results".to_owned(),
+                )]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+        // The response we get back here is just going to be inside <reply>{reply}</reply> tags, so we can parse it very easily
+        let response_lines = response.lines();
+        let mut final_answer = vec![];
+        let mut is_inside = false;
+        for line in response_lines {
+            if line.starts_with("<reply>") {
+                is_inside = true;
+                continue;
+            } else if line.starts_with("</reply>") {
+                is_inside = false;
+                continue;
+            }
+            if is_inside {
+                final_answer.push(line.to_owned());
+            }
+        }
+        Ok(final_answer.join("\n"))
     }
 }
 

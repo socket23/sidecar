@@ -621,9 +621,14 @@ impl Symbol {
                 (snippet, probing_results)
             })
             .buffer_unordered(100)
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            .await;
 
-        // Next we grab the important definitions which we are interested in
+        // Lets be dumb over here and just paste the replies we are getting at this point with some hint about the symbol
+        // this way we make it a problem for the LLM to answer it at the end
+
+        // Now that we have the final answers, we can combine this together and send a reply to the calling symbol
+        // we will keep things in a structured way over here and carry out the replies
         Ok(())
     }
 

@@ -118,6 +118,18 @@ impl ToolBroker {
             ToolType::ClassSymbolFollowup,
             Box::new(ClassSymbolFollowupBroker::new(llm_client.clone())),
         );
+        tools.insert(
+            ToolType::ProbePossible,
+            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::ProbeQuestion,
+            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::ProbeSubSymbol,
+            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

@@ -120,7 +120,7 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::ProbePossible,
-            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
         );
         tools.insert(
             ToolType::ProbeQuestion,
@@ -128,7 +128,7 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::ProbeSubSymbol,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
         );
         tools.insert(
             ToolType::ProbeFollowAlongSymbol,

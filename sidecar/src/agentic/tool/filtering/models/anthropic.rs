@@ -914,7 +914,17 @@ This defines the schema and model for products. A product has a name, descriptio
 </reason_to_not_probe>
 </code_to_not_probe>
 </code_to_not_probe_list>
-</example>"#.to_owned()
+</example>
+
+Always remember that you have to reply in the following format:
+<code_to_probe_list>
+{list of snippets we want to probe}
+</code_to_probe_list>
+<code_to_not_probe_list>
+{list of snippets we want to not probe anymore}
+</code_to_not_probe_list>
+If there are no snippets which need to be probed then reply with an emply list of items for <code_to_not_probe_list>.
+Similarly if there are no snippets which you need to probe then reply with an emplty list of items for <code_to_probe_list>."#.to_owned()
     }
 
     fn system_message_for_probing(&self) -> String {
@@ -928,17 +938,17 @@ This defines the schema and model for products. A product has a name, descriptio
 <id>
 0
 </id>
-<probe_reason>
+<reason_to_probe>
 {{your reason for probing}}
-</probe_reason>
+</reason_to_probe>
 - There will be code section which are not necessary to answer the user query, let's say you do not want to ask further questions to the snippet section with id 1, you must provide the reason for not probing and then you must output in the following format:
 <code_to_not_probe>
 <id>
 0
 </id>
-<no_probe_reason>
+<reason_to_not_probe>
 {{your reason for not probing}}
-</no_probe_reason>
+</reason_to_not_probe>
 </code_to_not_probe>
 
 Here is the example contained in the <example> section.

@@ -98,6 +98,7 @@ impl SymbolEventRequest {
     }
 }
 
+#[derive(Debug)]
 pub enum SymbolEventResponse {
     TaskDone(String),
 }
@@ -172,7 +173,7 @@ impl Symbol {
         tools: Arc<ToolBox>,
         llm_properties: LLMProperties,
     ) -> Result<Self, SymbolError> {
-        let mut symbol = Self {
+        let symbol = Self {
             mecha_code_symbol: Arc::new(mecha_code_symbol),
             symbol_identifier,
             hub_sender,
@@ -393,18 +394,21 @@ impl Symbol {
                     llm_properties.api_key().clone(),
                 )
                 .await;
+            println!("Response: {:?}", &response);
             (reason, snippet, response)
         })
         .buffer_unordered(100)
         .collect::<Vec<_>>()
         .await;
 
+        println!("Snippet filtering response: {:?}", &filtering_response);
+
         let filtered_snippets = filtering_response
             .into_iter()
             .filter_map(|(reason, snippet, probe_deeper)| match probe_deeper {
                 Ok(probe_deeper) => {
-                    if probe_deeper.thinking() {
-                        Some((reason, snippet, probe_deeper.should_follow().to_owned()))
+                    if probe_deeper.should_follow() {
+                        Some((reason, snippet, probe_deeper.thinking().to_owned()))
                     } else {
                         None
                     }
@@ -431,6 +435,11 @@ impl Symbol {
             .buffer_unordered(100)
             .collect::<Vec<_>>()
             .await;
+
+        println!(
+            "Snippet to symbols to follow: {:?}",
+            snippet_to_symbols_to_follow
+        );
 
         // Now for each snippet we want to grab the definition of the symbol it belongs
         let snippet_to_follow_with_definitions =
@@ -977,9 +986,12 @@ impl Symbol {
                             .await;
                         let _ = match reply {
                             Ok(reply) => sender.send(SymbolEventResponse::TaskDone(reply)),
-                            Err(_) => sender.send(SymbolEventResponse::TaskDone(
-                                "failed to look depeer to answer user query".to_owned(),
-                            )),
+                            Err(e) => {
+                                println!("Error when probing: {:?}", e);
+                                sender.send(SymbolEventResponse::TaskDone(
+                                    "failed to look depeer to answer user query".to_owned(),
+                                ))
+                            }
                         };
                         Ok(())
                     }

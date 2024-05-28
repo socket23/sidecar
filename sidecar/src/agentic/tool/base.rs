@@ -48,6 +48,42 @@ pub enum ToolType {
     ProbeSummarizeAnswer,
 }
 
+impl std::fmt::Display for ToolType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ToolType::CodeEditing => write!(f, "Code Editing"),
+            ToolType::OpenFile => write!(f, "Open File"),
+            ToolType::GoToDefinitions => write!(f, "Go To Definitions"),
+            ToolType::GoToReferences => write!(f, "Go To References"),
+            ToolType::LSPDiagnostics => write!(f, "LSP Diagnostics"),
+            ToolType::ReRank => write!(f, "Re-Rank"),
+            ToolType::FindCodeSnippets => write!(f, "Find Code Snippets"),
+            ToolType::RequestImportantSymbols => write!(f, "Request Important Symbols"),
+            ToolType::FindCodeSymbolsCodeBaseWide => write!(f, "Find Code Symbols Code Base Wide"),
+            ToolType::UtilityCodeSymbolSearch => write!(f, "Utility Code Symbol Search"),
+            ToolType::GrepInFile => write!(f, "Grep In File"),
+            ToolType::GoToImplementations => write!(f, "Go To Implementations"),
+            ToolType::FilterCodeSnippetsForEditing => write!(f, "Filter Code Snippets For Editing"),
+            ToolType::FilterCodeSnippetsSingleSymbolForEditing => {
+                write!(f, "Filter Code Snippets Single Symbol For Editing")
+            }
+            ToolType::EditorApplyEdits => write!(f, "Editor Apply Edits"),
+            ToolType::GetQuickFix => write!(f, "Get Quick Fix"),
+            ToolType::ApplyQuickFix => write!(f, "Apply Quick Fix"),
+            ToolType::CodeCorrectnessActionSelection => {
+                write!(f, "Code Correctness Action Selection")
+            }
+            ToolType::CodeEditingForError => write!(f, "Code Editing For Error"),
+            ToolType::ClassSymbolFollowup => write!(f, "Class Symbol Followup"),
+            ToolType::ProbePossible => write!(f, "Probe Possible"),
+            ToolType::ProbeQuestion => write!(f, "Probe Question"),
+            ToolType::ProbeSubSymbol => write!(f, "Probe Sub Symbol"),
+            ToolType::ProbeFollowAlongSymbol => write!(f, "Probe Follow Along Symbol"),
+            ToolType::ProbeSummarizeAnswer => write!(f, "Probe Summarize Answer"),
+        }
+    }
+}
+
 #[async_trait]
 pub trait Tool {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError>;

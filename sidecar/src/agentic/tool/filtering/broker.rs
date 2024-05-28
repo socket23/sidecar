@@ -10,8 +10,11 @@ use llm_client::{
 use crate::agentic::{
     symbol::identifier::Snippet,
     tool::{
-        base::Tool, errors::ToolError, filtering::errors::CodeToEditFilteringError,
-        input::ToolInput, output::ToolOutput,
+        base::{Tool, ToolType},
+        errors::ToolError,
+        filtering::errors::CodeToEditFilteringError,
+        input::ToolInput,
+        output::ToolOutput,
     },
 };
 
@@ -108,7 +111,7 @@ impl CodeToNotEditSnippet {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "code_to_probe_list")]
 pub struct CodeToProbeList {
-    #[serde(rename = "$value")]
+    #[serde(default, rename = "$value")]
     snippets: Vec<CodeToProbeSnippet>,
 }
 
@@ -134,7 +137,7 @@ impl CodeToEditList {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "code_to_not_probe_list")]
 pub struct CodeToNotProbeList {
-    #[serde(rename = "$value")]
+    #[serde(default, rename = "$value")]
     snippets: Vec<CodeToNotProbeSnippet>,
 }
 
@@ -399,7 +402,7 @@ impl Tool for CodeToEditFormatterBroker {
                     .map_err(|e| ToolError::CodeToEditFiltering(e))
                     .map(|response| ToolOutput::probe_sub_symbol(response));
             } else {
-                Err(ToolError::WrongToolInput)
+                Err(ToolError::WrongToolInput(ToolType::ProbeSubSymbol))
             }
         } else {
             let context = input.filter_code_snippets_request()?;
@@ -411,7 +414,9 @@ impl Tool for CodeToEditFormatterBroker {
                             .map_err(|e| ToolError::CodeToEditFiltering(e))
                             .map(|result| ToolOutput::CodeToEditSnippets(result))
                     } else {
-                        Err(ToolError::WrongToolInput)
+                        Err(ToolError::WrongToolInput(
+                            ToolType::FilterCodeSnippetsForEditing,
+                        ))
                     }
                 }
                 either::Right(context) => {
@@ -421,7 +426,9 @@ impl Tool for CodeToEditFormatterBroker {
                             .map_err(|e| ToolError::CodeToEditFiltering(e))
                             .map(|result| ToolOutput::CodeToEditSingleSymbolSnippets(result))
                     } else {
-                        Err(ToolError::WrongToolInput)
+                        Err(ToolError::WrongToolInput(
+                            ToolType::FilterCodeSnippetsSingleSymbolForEditing,
+                        ))
                     }
                 }
             }

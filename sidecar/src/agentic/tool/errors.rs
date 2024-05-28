@@ -2,8 +2,8 @@ use llm_client::clients::types::LLMClientError;
 use thiserror::Error;
 
 use super::{
-    code_symbol::types::CodeSymbolError, filtering::errors::CodeToEditFilteringError,
-    rerank::base::ReRankError,
+    base::ToolType, code_symbol::types::CodeSymbolError,
+    filtering::errors::CodeToEditFilteringError, rerank::base::ReRankError,
 };
 
 #[derive(Debug, Error)]
@@ -14,8 +14,8 @@ pub enum ToolError {
     #[error("LLM not supported for tool")]
     LLMNotSupported,
 
-    #[error("Wrong tool input found")]
-    WrongToolInput,
+    #[error("Wrong tool input found: {0}")]
+    WrongToolInput(ToolType),
 
     #[error("LLM Client call error: {0}")]
     LLMClientError(LLMClientError),

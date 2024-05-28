@@ -62,7 +62,16 @@ impl CodeSymbolImportantBroker {
 impl Tool for CodeSymbolImportantBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         // PS: This is getting out of hand
-        if input.is_probe_follow_along_symbol_request() {
+        if input.is_probe_summarization_request() {
+            let context = input.probe_summarization_request()?;
+            if let Some(implementation) = self.llms.get(context.llm()) {
+                return implementation
+                    .probe_summarize_answer(context)
+                    .await
+                    .map(|response| ToolOutput::probe_summarization_result(response))
+                    .map_err(|e| ToolError::CodeSymbolError(e));
+            }
+        } else if input.is_probe_follow_along_symbol_request() {
             let context = input.probe_follow_along_symbol()?;
             if let Some(implementation) = self.llms.get(context.llm()) {
                 return implementation

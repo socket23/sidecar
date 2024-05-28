@@ -74,9 +74,14 @@ pub enum ToolOutput {
     ProbeQuestion(CodeSymbolToAskQuestionsResponse),
     ProbeSubSymbol(CodeToProbeFilterResponse),
     ProbeFollowAlongSymbol(ProbeNextSymbol),
+    ProbeSummarizationResult(String),
 }
 
 impl ToolOutput {
+    pub fn probe_summarization_result(response: String) -> Self {
+        ToolOutput::ProbeSummarizationResult(response)
+    }
+
     pub fn probe_follow_along_symbol(response: ProbeNextSymbol) -> Self {
         ToolOutput::ProbeFollowAlongSymbol(response)
     }
@@ -256,6 +261,13 @@ impl ToolOutput {
     pub fn class_symbols_to_followup(self) -> Option<ClassSymbolFollowupResponse> {
         match self {
             ToolOutput::ClassSymbolFollowupResponse(output) => Some(output),
+            _ => None,
+        }
+    }
+
+    pub fn get_probe_summarize_result(self) -> Option<String> {
+        match self {
+            ToolOutput::ProbeSummarizationResult(output) => Some(output),
             _ => None,
         }
     }

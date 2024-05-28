@@ -134,6 +134,10 @@ impl ToolBroker {
             ToolType::ProbeFollowAlongSymbol,
             Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
         );
+        tools.insert(
+            ToolType::ProbeSummarizeAnswer,
+            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

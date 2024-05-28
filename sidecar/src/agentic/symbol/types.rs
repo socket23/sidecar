@@ -20,7 +20,11 @@ use crate::{
         symbol::{events::edit::SymbolToEditRequest, identifier::Snippet},
         tool::{
             code_symbol::{
-                important::CodeSymbolFollowAlongForProbing, models::anthropic::ProbeNextSymbol,
+                important::{
+                    CodeSubSymbolProbingResult, CodeSymbolFollowAlongForProbing,
+                    CodeSymbolProbingSummarize,
+                },
+                models::anthropic::ProbeNextSymbol,
             },
             lsp::open_file::OpenFileResponse,
         },
@@ -342,7 +346,7 @@ impl Symbol {
             SymbolEventRequest,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<String, SymbolError> {
         // First we refresh our state over here
         self.refresh_state().await;
 
@@ -626,10 +630,48 @@ impl Symbol {
 
         // Lets be dumb over here and just paste the replies we are getting at this point with some hint about the symbol
         // this way we make it a problem for the LLM to answer it at the end
+        let sub_symbol_probe_result = probe_answers
+            .into_iter()
+            .filter_map(|probing_result| {
+                let snippet = probing_result.0;
+                let answers = probing_result
+                    .1
+                    .into_iter()
+                    .filter_map(|answer| match answer {
+                        Ok(answer) => Some(answer),
+                        Err(_) => None,
+                    })
+                    .collect::<Vec<_>>();
+                if answers.is_empty() {
+                    None
+                } else {
+                    Some(CodeSubSymbolProbingResult::new(
+                        snippet.symbol_name().to_owned(),
+                        snippet.file_path().to_owned(),
+                        answers,
+                        snippet.content().to_owned(),
+                    ))
+                }
+            })
+            .collect::<Vec<_>>();
 
-        // Now that we have the final answers, we can combine this together and send a reply to the calling symbol
-        // we will keep things in a structured way over here and carry out the replies
-        Ok(())
+        if sub_symbol_probe_result.is_empty() {
+            Ok("no information found to reply to the user query".to_owned())
+        } else {
+            // summarize the results over here properly
+            let request = CodeSymbolProbingSummarize::new(
+                query.to_owned(),
+                history.to_owned(),
+                self.mecha_code_symbol.symbol_name().to_owned(),
+                self.get_outline().await?,
+                self.mecha_code_symbol.fs_file_path().to_owned(),
+                sub_symbol_probe_result,
+                self.llm_properties.llm().clone(),
+                self.llm_properties.provider().clone(),
+                self.llm_properties.api_key().clone(),
+            );
+            self.tools.probing_results_summarize(request).await
+        }
     }
 
     /// Refreshing the state here implies the following:
@@ -930,10 +972,16 @@ impl Symbol {
                         // we make the probe request an explicit request
                         // we are still going to do the same things just
                         // that this one is for gathering answeres
-                        let _ = symbol
+                        let reply = symbol
                             .probe_request(probe_request, symbol.hub_sender.clone())
                             .await;
-                        todo!("we need to implement this")
+                        let _ = match reply {
+                            Ok(reply) => sender.send(SymbolEventResponse::TaskDone(reply)),
+                            Err(_) => sender.send(SymbolEventResponse::TaskDone(
+                                "failed to look depeer to answer user query".to_owned(),
+                            )),
+                        };
+                        Ok(())
                     }
                 }
             })

@@ -332,13 +332,21 @@ impl Reply {
     }
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+pub struct ProbeShouldFollowInfo {
+    name: String,
+    #[serde(rename = "file_path")]
+    file_path: String,
+    reason: String,
+}
+
 #[derive(serde::Deserialize, Debug)]
 #[serde(rename = "tool")]
 pub enum ProbeNextSymbol {
     #[serde(rename = "answer_user_query")]
     AnswerUserQuery(String),
     #[serde(rename = "should_follow")]
-    ShouldFollow(String),
+    ShouldFollow(ProbeShouldFollowInfo),
     #[serde(rename = "wrong_path")]
     WrongPath(String),
     #[serde(rename = "")]
@@ -353,14 +361,14 @@ impl ProbeNextSymbol {
         let mut is_inside = false;
         for line in response_lines {
             if line.starts_with("<answer_user_query>")
-                || line.starts_with("<should_follow>")
+                || line.starts_with("<reason>")
                 || line.starts_with("<wrong_path>")
             {
                 is_inside = true;
                 final_lines.push(line.to_owned());
                 continue;
             } else if line.starts_with("</answer_user_query>")
-                || line.starts_with("</should_follow>")
+                || line.starts_with("</reason>")
                 || line.starts_with("</wrong_path>")
             {
                 is_inside = false;
@@ -381,9 +389,11 @@ impl ProbeNextSymbol {
             Self::AnswerUserQuery(response) => {
                 Self::AnswerUserQuery(AnthropicCodeSymbolImportant::escape_xml(response))
             }
-            Self::ShouldFollow(response) => {
-                Self::ShouldFollow(AnthropicCodeSymbolImportant::escape_xml(response))
-            }
+            Self::ShouldFollow(response) => Self::ShouldFollow(ProbeShouldFollowInfo {
+                name: response.name,
+                file_path: response.file_path,
+                reason: AnthropicCodeSymbolImportant::escape_xml(response.reason),
+            }),
             Self::WrongPath(response) => {
                 Self::WrongPath(AnthropicCodeSymbolImportant::escape_xml(response))
             }
@@ -2035,8 +2045,8 @@ Does the language type expose any prettier settings, because we want to get it s
 - You are given this history of the various clicks we have done up until now in the editor to get to the current location in the codebase in <history> tag.
 - You are also given some extra symbols which we have accumulated up until now in the <extra_data> section.
 - Our current position is present in <file> section under the <code_in_selection> tag. This is the code snippet we are focussed on and where we initiated the jump to the next symbol either by clicking go-to-definition, or go-to-implementation.
-- We have determined the next symbol we can jump to, and ask depeer question in <next_symbol> section. This is because we followed a previous function or class or variable and decided to go to the definition.
-- The reason why next symbol is possible is also show to you in <reason_for_next_symbol> which contains the position where we clicked to go to the next symbol in <jump_to_next_symbol> tag. This gives you an idea for why we are jumping and the link between the current position we are in and the next symbol we want to jump to.
+- We have determined the next symbols we can jump to, and ask depeer question in <next_symbols> section. We will show you the list of next symbols in <next_symbol_names> too. This is because we followed a previous function or class or variable and decided to go to the definition.
+- The reason why one of the next symbols is possible is also show to you in <reason_for_next_symbol> which contains the position where we clicked to go to the next symbol in <jump_to_next_symbol> tag. This gives you an idea for why we are jumping and the link between the current position we are in and the next symbol we want to jump to.
 - Since asking for a new question to another symbol takes time, we advice you to think hard and decide if you really want to go deeper or you have enough information to answer the user query.
 You are given 3 tools which you can use as your response:
 1. <answer_user_query>
@@ -2049,7 +2059,15 @@ The format for this tool use is:
 If you choose to follow the next symbol, then your reply should contain the question you want to ask the next symbol.
 The format for this tool use is:
 <should_follow>
+<name>
+{name of the symbol to follow should be one of the names in <next_symbol_names>}
+</name>
+<file_path>
+{file path of the symbol to follow}
+</file_path>
+<reason>
 {your question for the next symbol considering every other context which has been provided to you}
+</reason>
 </should_follow>
 3. <wrong_path>
 If you believe going depeer in this path will not return an answer, you can stop here and reply with the reason why you think following the next symbol will not yield the answer
@@ -2132,7 +2150,11 @@ Do we store the actors for each movie?
 <extra_data>
 </extra_data>
 
-<next_symbol>
+<next_symbol_names>
+Movie
+</next_symbol_names>
+
+<next_symbols>
 <file_path>
 artwork/movies.rs
 </file_path>
@@ -2154,11 +2176,11 @@ impl Movie {
 }
 ```
 </content>
-</next_symbol>
+</next_symbols>
 
-<reason_for_next_symbol>
+<jump_to_next_symbol>
 We followed `Movie` as it was the return type for `movies` function in `Theater`. We can now learn if movie has the information about the actors. 
-</reason_for_next_symbol>
+</jump_to_next_symbol>
 
 Your reply:
 <tool>
@@ -2187,7 +2209,8 @@ You can understand from the response here how we did not have to follow the next
         let code_below = request.code_below().unwrap_or("".to_owned());
         let code_in_selection = request.code_in_selection();
         let history = request.history();
-        let next_symbol_outline = request.next_symbol_outline();
+        let next_symbol_outline = request.next_symbol_outline().join("\n");
+        let next_symbol_names = request.next_symbol_names().join("\n");
         let reference_link = request.next_symbol_link();
         format!(
             r#"<user_query>
@@ -2219,13 +2242,17 @@ You can understand from the response here how we did not have to follow the next
 {history}
 </history>
 
-<next_symbol>
-{next_symbol_outline}
-</next_symbol>
+<next_symbol_names>
+{next_symbol_names}
+</next_symbol_names>
 
-<reason_for_next_symbol>
+<next_symbols>
+{next_symbol_outline}
+</next_symbols>
+
+<jump_to_next_symbol>
 {reference_link}
-</reason_for_next_symbol>"#
+</jump_to_next_symbol>"#
         )
     }
 

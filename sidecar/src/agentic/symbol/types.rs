@@ -18,7 +18,10 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use crate::{
     agentic::{
         symbol::{events::edit::SymbolToEditRequest, identifier::Snippet},
-        tool::lsp::open_file::OpenFileResponse,
+        tool::{
+            code_symbol::important::CodeSymbolFollowAlongForProbing,
+            lsp::open_file::OpenFileResponse,
+        },
     },
     chunking::{text_document::Range, types::OutlineNodeContent},
 };
@@ -30,6 +33,7 @@ use super::{
         probe::SymbolToProbeRequest,
         types::{AskQuestionRequest, SymbolEvent},
     },
+    helpers::split_file_content_into_parts,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
 };
@@ -447,8 +451,8 @@ impl Symbol {
         // - ask the followup question to the symbol containing the definition we are interested in
         // - we can concat the various questions about the symbols together and just ask the symbol
         // the question maybe?
-        snippet_to_follow_with_definitions.into_iter().for_each(
-            |(snippet, ask_question_symbol_hint)| {
+        stream::iter(snippet_to_follow_with_definitions)
+            .map(|(snippet, ask_question_symbol_hint)| async move {
                 let questions_with_definitions = ask_question_symbol_hint
                     .into_iter()
                     .filter_map(|(ask_question_hint, definition_path_and_range)| {
@@ -461,6 +465,60 @@ impl Symbol {
                     })
                     .collect::<Vec<_>>();
 
+                // What we want to create is this: CodeSymbolFollowAlongForProbing
+                let file_content = self.tools.file_open(snippet.file_path().to_owned()).await;
+                if let Err(_) = file_content {
+                    return Err(SymbolError::ExpectedFileToExist);
+                }
+                let snippet_range = snippet.range();
+                let file_content = file_content.expect("if let Err to work").contents();
+                let file_contents_ref = &file_content;
+                let probe_results = stream::iter(questions_with_definitions)
+                    .map(|(_, definitions)| async move {
+                        let next_symbol_link = definitions.0;
+                        let definitions = definitions.1;
+                        // we might also want to grab some kind of outline for the symbol hint we are gonig to be using
+                        // we are missing the code above, code below and the in selection
+                        // should we recosinder the snippet over here or maybe we just keep it as it is
+                        let (code_above, code_below, code_in_selection) =
+                            split_file_content_into_parts(file_contents_ref, snippet_range);
+                        let definition_names = definitions
+                            .iter()
+                            .map(|definition| definition.1.to_owned())
+                            .collect::<Vec<_>>();
+                        let definition_outlines = definitions
+                            .into_iter()
+                            .map(|definition| definition.2)
+                            .collect::<Vec<_>>();
+                        let request = CodeSymbolFollowAlongForProbing::new(
+                            history.to_owned(),
+                            self.mecha_code_symbol.symbol_name().to_owned(),
+                            self.mecha_code_symbol.fs_file_path().to_owned(),
+                            self.tools
+                                .detect_language(self.mecha_code_symbol.fs_file_path())
+                                .unwrap_or("".to_owned()),
+                            definition_names,
+                            definition_outlines,
+                            code_above,
+                            code_below,
+                            code_in_selection,
+                            self.llm_properties.llm().clone(),
+                            self.llm_properties.provider().clone(),
+                            self.llm_properties.api_key().clone(),
+                            query.to_owned(),
+                            next_symbol_link,
+                        );
+                        let probe_result =
+                            self.tools.next_symbol_should_probe_request(request).await;
+                        // Now we get the response from here and we can decide what to do with it
+                        probe_result
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await;
+
+                Ok(probe_results)
+
                 // To be very honest here we can ask if we want to send one more probe
                 // message over here if this is useful to find the changes
                 // TODO(skcd): Pick this up from here for sending over a request to the LLM
@@ -468,12 +526,13 @@ impl Symbol {
                 // - A: we have all the information required to answer
                 // - B: if we need to go deeper into the symbol for looking into the information
                 // If this is not useful we can stop over here
-            },
-        );
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
         // - wait for the reply and then return the answer
 
         // Next we grab the important definitions which we are interested in
-        // let definitions = self.tools.gather_important_symbols_with_definition(fs_file_path, file_content, selection_range, llm, provider, api_keys, query, hub_sender)
         Ok(())
     }
 

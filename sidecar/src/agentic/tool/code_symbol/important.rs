@@ -269,8 +269,8 @@ pub struct CodeSymbolFollowAlongForProbing {
     symbol_identifier: String,
     fs_file_path: String,
     language: String,
-    next_symbol_name: String,
-    next_symbol_outline: String,
+    next_symbol_names: Vec<String>,
+    next_symbol_outlines: Vec<String>,
     // This is for the current file we are interested in
     code_above: Option<String>,
     code_below: Option<String>,
@@ -288,8 +288,8 @@ impl CodeSymbolFollowAlongForProbing {
         symbol_identifier: String,
         fs_file_path: String,
         language: String,
-        next_symbol_name: String,
-        next_symbol_outline: String,
+        next_symbol_names: Vec<String>,
+        next_symbol_outlines: Vec<String>,
         code_above: Option<String>,
         code_below: Option<String>,
         code_in_selection: String,
@@ -304,8 +304,8 @@ impl CodeSymbolFollowAlongForProbing {
             symbol_identifier,
             fs_file_path,
             language,
-            next_symbol_name,
-            next_symbol_outline,
+            next_symbol_names,
+            next_symbol_outlines,
             code_above,
             code_below,
             code_in_selection,
@@ -345,8 +345,12 @@ impl CodeSymbolFollowAlongForProbing {
         &self.language
     }
 
-    pub fn next_symbol_outline(&self) -> &str {
-        &self.next_symbol_outline
+    pub fn next_symbol_names(&self) -> &[String] {
+        self.next_symbol_names.as_slice()
+    }
+
+    pub fn next_symbol_outline(&self) -> &[String] {
+        self.next_symbol_outlines.as_slice()
     }
 
     pub fn llm(&self) -> &LLMType {

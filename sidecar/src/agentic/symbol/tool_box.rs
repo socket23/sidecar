@@ -19,11 +19,11 @@ use crate::agentic::tool::code_symbol::followup::{
     ClassSymbolFollowupRequest, ClassSymbolFollowupResponse, ClassSymbolMember,
 };
 use crate::agentic::tool::code_symbol::important::{
-    CodeSymbolImportantRequest, CodeSymbolImportantResponse, CodeSymbolToAskQuestionsRequest,
-    CodeSymbolUtilityRequest, CodeSymbolWithThinking,
+    CodeSymbolFollowAlongForProbing, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
+    CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest, CodeSymbolWithThinking,
 };
 use crate::agentic::tool::code_symbol::models::anthropic::{
-    CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
+    CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
 };
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
@@ -89,6 +89,22 @@ impl ToolBox {
         }
     }
 
+    /// Sends the request to figure out if we need to go ahead and probe the
+    /// next symbol for a reply
+    pub async fn next_symbol_should_probe_request(
+        &self,
+        request: CodeSymbolFollowAlongForProbing,
+    ) -> Result<ProbeNextSymbol, SymbolError> {
+        let tool_input = ToolInput::ProbeFollowAlongSymbol(request);
+        let _ = self.ui_events.send(UIEvent::from(tool_input.clone()));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_should_probe_next_symbol()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
     /// Takes a file path and the line content and the symbol to search for
     /// in the file
     /// This way we are able to go to the definition of the file which contains
@@ -99,13 +115,15 @@ impl ToolBox {
         fs_file_path: &str,
         line_content: &str,
         symbol_to_search: &str,
+        // The first thing we are returning here is the highlight of the symbol
+        // along with the content
         // we are returning the definition path and range along with the symbol where the go-to-definition belongs to
         // along with the outline of the symbol containing the go-to-definition
-    ) -> Result<Vec<(DefinitionPathAndRange, String, String)>, SymbolError> {
-        let file_contents = self.file_open(fs_file_path.to_owned()).await?;
+    ) -> Result<(String, Vec<(DefinitionPathAndRange, String, String)>), SymbolError> {
+        let file_contents = self.file_open(fs_file_path.to_owned()).await?.contents();
         let selection_range = snippet.range();
+        let file_with_lines = file_contents.lines().enumerate().collect::<Vec<_>>();
         let mut containing_lines = file_contents
-            .contents()
             .lines()
             .enumerate()
             .into_iter()
@@ -152,6 +170,33 @@ impl ToolBox {
             } else {
                 Err(SymbolError::NoOutlineNodeSatisfyPosition)
             }?;
+
+        // Grab the 4 lines before and 4 lines after from the file content and show that as the highlight
+        let position_line_number = symbol_location.line() as i64;
+        // symbol link to send
+        let symbol_link = file_with_lines
+            .into_iter()
+            .filter_map(|(line_number, line_content)| {
+                if line_number as i64 <= position_line_number + 4
+                    && line_number as i64 >= position_line_number - 4
+                {
+                    if line_number as i64 == position_line_number {
+                        // if this is the line number we are interested in then we have to highlight
+                        // this for the LLM
+                        Some(format!(
+                            r#"<line_with_reference>
+{line_content}
+</line_with_reference>"#
+                        ))
+                    } else {
+                        Some(line_content.to_owned())
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
 
         // Now we can invoke a go-to-definition on the symbol over here and get back
         // the containing symbol which has this symbol we are interested in visiting
@@ -235,7 +280,7 @@ impl ToolBox {
         // // Once we have the definition we can figure out the symbol which contains this
         // // Now we try to find the line which is closest the the snippet or contained
         // // within it for a lack of better word
-        Ok(definition_to_outline_node_name_and_definition)
+        Ok((symbol_link, definition_to_outline_node_name_and_definition))
     }
 
     pub async fn probe_deeper_in_symbol(

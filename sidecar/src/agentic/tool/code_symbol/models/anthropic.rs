@@ -239,16 +239,27 @@ impl CodeSymbolToAskQuestionsResponse {
                     .into_iter()
                     .map(|symbol_list| AskQuestionSymbolHint {
                         name: symbol_list.name,
-                        line_content: AnthropicCodeSymbolImportant::escape_xml(
-                            symbol_list.line_content,
-                        ),
+                        line_content: symbol_list
+                            .line_content
+                            .lines()
+                            .into_iter()
+                            .map(|line| AnthropicCodeSymbolImportant::escape_xml(line.to_owned()))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
                         file_path: symbol_list.file_path,
-                        thinking: AnthropicCodeSymbolImportant::escape_xml(symbol_list.thinking),
+                        thinking: symbol_list
+                            .thinking
+                            .lines()
+                            .into_iter()
+                            .map(|line| AnthropicCodeSymbolImportant::escape_xml(line.to_owned()))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
                     })
                     .collect(),
             ),
         }
     }
+
     fn parse_response(response: String) -> Result<Self, CodeSymbolError> {
         // we need to parse the sections of the reply properly
         // we can start with opening and closing brackets and unescape the lines properly
@@ -4918,19 +4929,13 @@ We have to add the newly created endpoint in inline_completion to add support fo
     }
 
     fn unescape_xml(s: String) -> String {
-        s.replace("\"", "&quot;")
-            .replace("'", "&apos;")
-            .replace(">", "&gt;")
-            .replace("<", "&lt;")
-            .replace("&", "&amp;")
+        quick_xml::escape::escape(&s).to_string()
     }
 
     fn escape_xml(s: String) -> String {
-        s.replace("&quot;", "\"")
-            .replace("&apos;", "'")
-            .replace("&gt;", ">")
-            .replace("&lt;", "<")
-            .replace("&amp;", "&")
+        quick_xml::escape::unescape(&s)
+            .expect("to work")
+            .to_string()
     }
 
     // Welcome to the jungle and an important lesson on why xml sucks sometimes
@@ -5625,8 +5630,8 @@ This function likely handles requests for getting explanations from the agent, w
 <symbol>
 <name>sidecar::webserver::agent::followup_chat</name>
 <line_content>
-            &amp;quot;/followup_chat&amp;quot;,
-            post(sidecar::webserver::agent::followup_chat),
+        "/followup_chat",
+        post(sidecar::webserver::agent::followup_chat),
 </line_content>
 <file_path>
 /Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs

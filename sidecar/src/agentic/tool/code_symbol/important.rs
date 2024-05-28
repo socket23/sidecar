@@ -251,6 +251,61 @@ impl CodeSymbolUtilityRequest {
     }
 }
 
+/// This requests determines if we have to follow the next code symbol
+/// or if we have enough information at this point to stop and answer the user
+/// query, or we are on the wrong trail or we need to keep probing
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSymbolFollowAlongForProbing {
+    history: String,
+    symbol_identifier: String,
+    fs_file_path: String,
+    language: String,
+    next_symbol_name: String,
+    next_symbol_outline: String,
+    // This is for the current file we are interested in
+    code_above: Option<String>,
+    code_below: Option<String>,
+    code_in_selection: String,
+    llm_type: LLMType,
+    provider: LLMProvider,
+    api_key: LLMProviderAPIKeys,
+    query: String,
+}
+
+impl CodeSymbolFollowAlongForProbing {
+    pub fn new(
+        history: String,
+        symbol_identifier: String,
+        fs_file_path: String,
+        language: String,
+        next_symbol_name: String,
+        next_symbol_outline: String,
+        code_above: Option<String>,
+        code_below: Option<String>,
+        code_in_selection: String,
+        llm_type: LLMType,
+        provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+        query: String,
+    ) -> Self {
+        Self {
+            history,
+            symbol_identifier,
+            fs_file_path,
+            language,
+            next_symbol_name,
+            next_symbol_outline,
+            code_above,
+            code_below,
+            code_in_selection,
+            llm_type,
+            provider,
+            api_key,
+            query,
+        }
+    }
+}
+
 /// This request will give us code symbols and additional questions
 /// we want to ask them before making our edits
 /// This way we can ensure that the world moves to the state we are interested in
@@ -552,6 +607,13 @@ pub trait CodeSymbolImportant {
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<CodeSymbolShouldAskQuestionsResponse, CodeSymbolError>;
+
+    /// figures out if the next symbol is necessary to be probed or we have a possible
+    /// answer or have hit a dead-end and its not worth following this trail anymore
+    async fn should_probe_follow_along_symbol_request(
+        &self,
+        request: CodeSymbolFollowAlongForProbing,
+    ) -> Result<(), CodeSymbolError>;
 }
 
 // implement passing in just the user context and getting the data back

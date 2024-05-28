@@ -51,6 +51,7 @@ pub enum ToolInput {
     ProbeSubSymbol(CodeToEditFilterRequest),
     ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
     ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
+    ProbeFollowAlongSymbol(CodeSymbolToAskQuestionsRequest),
 }
 
 impl ToolInput {
@@ -81,6 +82,7 @@ impl ToolInput {
             ToolInput::ProbePossibleRequest(_) => ToolType::ProbePossible,
             ToolInput::ProbeQuestionAskRequest(_) => ToolType::ProbeQuestion,
             ToolInput::ProbeSubSymbol(_) => ToolType::ProbeSubSymbol,
+            ToolInput::ProbeFollowAlongSymbol(_) => ToolType::ProbeFollowAlongSymbol,
         }
     }
 

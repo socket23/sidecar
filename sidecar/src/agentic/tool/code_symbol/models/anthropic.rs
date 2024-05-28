@@ -16,9 +16,10 @@ use crate::agentic::tool::{
             ClassSymbolMember,
         },
         important::{
-            CodeSymbolImportant, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
-            CodeSymbolImportantWideSearch, CodeSymbolToAskQuestionsRequest,
-            CodeSymbolUtilityRequest, CodeSymbolWithSteps, CodeSymbolWithThinking,
+            CodeSymbolFollowAlongForProbing, CodeSymbolImportant, CodeSymbolImportantRequest,
+            CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
+            CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
+            CodeSymbolWithThinking,
         },
         types::CodeSymbolError,
     },
@@ -4693,6 +4694,13 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             .await?;
         // parse out the response over here
         CodeSymbolShouldAskQuestionsResponse::parse_response(response)
+    }
+
+    async fn should_probe_follow_along_symbol_request(
+        &self,
+        request: CodeSymbolFollowAlongForProbing,
+    ) -> Result<(), CodeSymbolError> {
+        todo!("we sitll need to implement this")
     }
 }
 

@@ -19,7 +19,9 @@ use crate::{
     agentic::{
         symbol::{events::edit::SymbolToEditRequest, identifier::Snippet},
         tool::{
-            code_symbol::important::CodeSymbolFollowAlongForProbing,
+            code_symbol::{
+                important::CodeSymbolFollowAlongForProbing, models::anthropic::ProbeNextSymbol,
+            },
             lsp::open_file::OpenFileResponse,
         },
     },
@@ -30,7 +32,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::SymbolToEdit,
-        probe::SymbolToProbeRequest,
+        probe::{SymbolToProbeHistory, SymbolToProbeRequest},
         types::{AskQuestionRequest, SymbolEvent},
     },
     helpers::split_file_content_into_parts,
@@ -81,6 +83,13 @@ impl SymbolEventRequest {
         Self {
             symbol,
             event: SymbolEvent::AskQuestion(AskQuestionRequest::new(question)),
+        }
+    }
+
+    pub fn probe_request(symbol: SymbolIdentifier, request: SymbolToProbeRequest) -> Self {
+        Self {
+            symbol,
+            event: SymbolEvent::Probe(request),
         }
     }
 }
@@ -326,11 +335,20 @@ impl Symbol {
     // - then ask it the probing question
     // - once we have the probing question, we send over the request and wait for the response
     // - and finally we stop doing this.
-    async fn probe_request(&self, request: SymbolToProbeRequest) -> Result<(), SymbolError> {
+    async fn probe_request(
+        &self,
+        request: SymbolToProbeRequest,
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<(), SymbolError> {
         // First we refresh our state over here
         self.refresh_state().await;
 
         let history = request.history();
+        let history_slice = request.history_slice();
+        let history_ref = &history;
         let query = request.probe_request();
 
         let snippets = self.mecha_code_symbol.get_implementations().await;
@@ -364,7 +382,7 @@ impl Symbol {
                 .should_follow_subsymbol_for_probing(
                     &snippet,
                     &reason,
-                    history,
+                    history_ref,
                     query,
                     llm_properties.llm().clone(),
                     llm_properties.provider().clone(),
@@ -397,7 +415,7 @@ impl Symbol {
                     .probe_deeper_in_symbol(
                         &snippet,
                         &reason_to_follow,
-                        history,
+                        history_ref,
                         query,
                         self.llm_properties.llm().clone(),
                         self.llm_properties.provider().clone(),
@@ -451,7 +469,7 @@ impl Symbol {
         // - ask the followup question to the symbol containing the definition we are interested in
         // - we can concat the various questions about the symbols together and just ask the symbol
         // the question maybe?
-        stream::iter(snippet_to_follow_with_definitions)
+        let probe_results = stream::iter(snippet_to_follow_with_definitions)
             .map(|(snippet, ask_question_symbol_hint)| async move {
                 let questions_with_definitions = ask_question_symbol_hint
                     .into_iter()
@@ -491,7 +509,7 @@ impl Symbol {
                             .map(|definition| definition.2)
                             .collect::<Vec<_>>();
                         let request = CodeSymbolFollowAlongForProbing::new(
-                            history.to_owned(),
+                            history_ref.to_owned(),
                             self.mecha_code_symbol.symbol_name().to_owned(),
                             self.mecha_code_symbol.fs_file_path().to_owned(),
                             self.tools
@@ -517,7 +535,7 @@ impl Symbol {
                     .collect::<Vec<_>>()
                     .await;
 
-                Ok(probe_results)
+                Ok((snippet, probe_results))
 
                 // To be very honest here we can ask if we want to send one more probe
                 // message over here if this is useful to find the changes
@@ -530,7 +548,80 @@ impl Symbol {
             .buffer_unordered(100)
             .collect::<Vec<_>>()
             .await;
-        // - wait for the reply and then return the answer
+
+        // - depending on the probe result we can either
+        // - - send one more request at this point
+        // - - or we have the answer to the user query
+        // - questions: what if one of the probes here tells us that we have the answer already?
+        let probe_results = probe_results
+            .into_iter()
+            .filter_map(|probe_result| match probe_result {
+                Ok(probe_result) => Some(probe_result),
+                Err(_) => None,
+            })
+            .collect::<Vec<_>>();
+
+        let hub_sender_ref = &hub_sender;
+
+        let probe_answers = stream::iter(probe_results)
+            .map(|probe_result| async move {
+                let snippet = probe_result.0;
+                let symbol_name = snippet.symbol_name();
+                let snippet_file_path = snippet.file_path();
+                let snippet_content = snippet.content();
+                let probe_results = probe_result
+                    .1
+                    .into_iter()
+                    .filter_map(|s| match s {
+                        Ok(s) => Some(s),
+                        Err(_) => None,
+                    })
+                    .collect::<Vec<_>>();
+                let probing_results = stream::iter(probe_results)
+                    .map(|probe_result| async move {
+                        match probe_result {
+                            ProbeNextSymbol::AnswerUserQuery(answer) => Ok(answer),
+                            ProbeNextSymbol::Empty => Ok("".to_owned()),
+                            ProbeNextSymbol::ShouldFollow(should_follow_request) => {
+                                let file_path = should_follow_request.file_path();
+                                let symbol_name = should_follow_request.name();
+                                let reason = should_follow_request.reason();
+                                let symbol_identifier =
+                                    SymbolIdentifier::with_file_path(symbol_name, file_path);
+                                let mut history = history_slice.to_vec();
+                                let new_history_element = SymbolToProbeHistory::new(
+                                    symbol_name.to_owned(),
+                                    snippet_file_path.to_owned(),
+                                    snippet_content.to_owned(),
+                                    query.to_owned(),
+                                );
+                                history.push(new_history_element);
+                                let symbol_to_probe_request = SymbolToProbeRequest::new(
+                                    symbol_identifier.clone(),
+                                    reason.to_owned(),
+                                    history,
+                                );
+                                let (sender, receiver) = tokio::sync::oneshot::channel();
+                                let _ = hub_sender_ref.clone().send((
+                                    SymbolEventRequest::probe_request(
+                                        symbol_identifier,
+                                        symbol_to_probe_request,
+                                    ),
+                                    sender,
+                                ));
+                                let response = receiver.await.map(|response| response.to_string());
+                                response
+                            }
+                            ProbeNextSymbol::WrongPath(wrong_path) => Ok(wrong_path),
+                        }
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await;
+                (snippet, probing_results)
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>();
 
         // Next we grab the important definitions which we are interested in
         Ok(())
@@ -834,7 +925,9 @@ impl Symbol {
                         // we make the probe request an explicit request
                         // we are still going to do the same things just
                         // that this one is for gathering answeres
-                        let _ = symbol.probe_request(probe_request).await;
+                        let _ = symbol
+                            .probe_request(probe_request, symbol.hub_sender.clone())
+                            .await;
                         todo!("we need to implement this")
                     }
                 }

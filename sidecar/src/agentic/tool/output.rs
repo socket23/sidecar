@@ -6,7 +6,7 @@ use super::{
         followup::ClassSymbolFollowupResponse,
         important::{CodeSymbolImportantResponse, CodeSymbolToAskQuestionsRequest},
         models::anthropic::{
-            CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
+            CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
     },
     editor::apply::EditorApplyResponse,
@@ -73,9 +73,14 @@ pub enum ToolOutput {
     ProbePossible(CodeSymbolShouldAskQuestionsResponse),
     ProbeQuestion(CodeSymbolToAskQuestionsResponse),
     ProbeSubSymbol(CodeToProbeFilterResponse),
+    ProbeFollowAlongSymbol(ProbeNextSymbol),
 }
 
 impl ToolOutput {
+    pub fn probe_follow_along_symbol(response: ProbeNextSymbol) -> Self {
+        ToolOutput::ProbeFollowAlongSymbol(response)
+    }
+
     pub fn probe_sub_symbol(response: CodeToProbeFilterResponse) -> Self {
         ToolOutput::ProbeSubSymbol(response)
     }

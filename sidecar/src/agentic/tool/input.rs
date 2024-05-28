@@ -119,6 +119,22 @@ impl ToolInput {
         }
     }
 
+    pub fn probe_follow_along_symbol(self) -> Result<CodeSymbolFollowAlongForProbing, ToolError> {
+        if let ToolInput::ProbeFollowAlongSymbol(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn is_probe_follow_along_symbol_request(&self) -> bool {
+        if let ToolInput::ProbeFollowAlongSymbol(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn is_probe_possible_request(&self) -> bool {
         if let ToolInput::ProbePossibleRequest(_) = self {
             true

@@ -7,8 +7,8 @@ use super::{
         followup::ClassSymbolFollowupRequest,
         important::{
             CodeSymbolFollowAlongForProbing, CodeSymbolImportantRequest,
-            CodeSymbolImportantWideSearch, CodeSymbolToAskQuestionsRequest,
-            CodeSymbolUtilityRequest,
+            CodeSymbolImportantWideSearch, CodeSymbolProbingSummarize,
+            CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
     },
     editor::apply::EditorApplyRequest,
@@ -53,7 +53,7 @@ pub enum ToolInput {
     ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
     ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
     ProbeFollowAlongSymbol(CodeSymbolFollowAlongForProbing),
-    ProbeSummarizeAnswerRequest(()),
+    ProbeSummarizeAnswerRequest(CodeSymbolProbingSummarize),
 }
 
 impl ToolInput {
@@ -126,6 +126,22 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn probe_summarization_request(self) -> Result<CodeSymbolProbingSummarize, ToolError> {
+        if let ToolInput::ProbeSummarizeAnswerRequest(response) = self {
+            Ok(response)
+        } else {
+            Err(ToolError::WrongToolInput)
+        }
+    }
+
+    pub fn is_probe_summarization_request(&self) -> bool {
+        if let ToolInput::ProbeSummarizeAnswerRequest(_) = self {
+            true
+        } else {
+            false
         }
     }
 

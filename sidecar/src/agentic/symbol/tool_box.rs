@@ -20,7 +20,8 @@ use crate::agentic::tool::code_symbol::followup::{
 };
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolFollowAlongForProbing, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
-    CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest, CodeSymbolWithThinking,
+    CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
+    CodeSymbolWithThinking,
 };
 use crate::agentic::tool::code_symbol::models::anthropic::{
     CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
@@ -87,6 +88,21 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// Sends the request to summarize the probing results
+    pub async fn probing_results_summarize(
+        &self,
+        request: CodeSymbolProbingSummarize,
+    ) -> Result<String, SymbolError> {
+        let tool_input = ToolInput::ProbeSummarizeAnswerRequest(request);
+        let _ = self.ui_events.send(UIEvent::from(tool_input.clone()));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_probe_summarize_result()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// Sends the request to figure out if we need to go ahead and probe the

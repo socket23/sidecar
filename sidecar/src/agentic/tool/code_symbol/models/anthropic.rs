@@ -340,6 +340,20 @@ pub struct ProbeShouldFollowInfo {
     reason: String,
 }
 
+impl ProbeShouldFollowInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+}
+
 #[derive(serde::Deserialize, Debug)]
 #[serde(rename = "tool")]
 pub enum ProbeNextSymbol {

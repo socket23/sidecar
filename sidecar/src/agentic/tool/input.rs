@@ -6,8 +6,9 @@ use super::{
         error_fix::CodeEditingErrorRequest,
         followup::ClassSymbolFollowupRequest,
         important::{
-            CodeSymbolImportantRequest, CodeSymbolImportantWideSearch,
-            CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
+            CodeSymbolFollowAlongForProbing, CodeSymbolImportantRequest,
+            CodeSymbolImportantWideSearch, CodeSymbolToAskQuestionsRequest,
+            CodeSymbolUtilityRequest,
         },
     },
     editor::apply::EditorApplyRequest,
@@ -51,7 +52,7 @@ pub enum ToolInput {
     ProbeSubSymbol(CodeToEditFilterRequest),
     ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
     ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
-    ProbeFollowAlongSymbol(CodeSymbolToAskQuestionsRequest),
+    ProbeFollowAlongSymbol(CodeSymbolFollowAlongForProbing),
 }
 
 impl ToolInput {

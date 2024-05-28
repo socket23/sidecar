@@ -280,4 +280,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_should_probe_next_symbol(self) -> Option<ProbeNextSymbol> {
+        match self {
+            ToolOutput::ProbeFollowAlongSymbol(response) => Some(response),
+            _ => None,
+        }
+    }
 }

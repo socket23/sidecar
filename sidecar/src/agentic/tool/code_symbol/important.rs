@@ -260,6 +260,141 @@ impl CodeSymbolUtilityRequest {
     }
 }
 
+/// Contains the probing results from a sub-symbol
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSubSymbolProbingResult {
+    symbol_name: String,
+    fs_file_path: String,
+    probing_results: Vec<String>,
+    content: String,
+}
+
+impl CodeSubSymbolProbingResult {
+    pub fn new(
+        symbol_name: String,
+        fs_file_path: String,
+        probing_results: Vec<String>,
+        content: String,
+    ) -> Self {
+        Self {
+            symbol_name,
+            fs_file_path,
+            probing_results,
+            content,
+        }
+    }
+
+    pub fn to_xml(&self) -> String {
+        let symbol_name = &self.symbol_name;
+        let file_path = &self.fs_file_path;
+        let probing_results = self.probing_results.join("\n");
+        let content = &self.content;
+        format!(
+            r#"<symbol>
+<name>
+{symbol_name}
+</name>
+<file_path>
+{file_path}
+</file_path>
+<content>
+{content}
+</content>
+<probing_results>
+{probing_results}
+</probing_results>
+</symbol>"#
+        )
+    }
+}
+
+/// This request is used to answer the probing request in total after we have
+/// explored the current node properly.
+/// We do many explorations from the current symbol and we summarize our answers
+/// here
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSymbolProbingSummarize {
+    query: String,
+    history: String,
+    symbol_identifier: String,
+    symbol_outline: String,
+    fs_file_path: String,
+    probing_results: Vec<CodeSubSymbolProbingResult>,
+    llm: LLMType,
+    provider: LLMProvider,
+    api_keys: LLMProviderAPIKeys,
+}
+
+impl CodeSymbolProbingSummarize {
+    pub fn new(
+        query: String,
+        history: String,
+        symbol_identifier: String,
+        symbol_outline: String,
+        fs_file_path: String,
+        probing_results: Vec<CodeSubSymbolProbingResult>,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+    ) -> Self {
+        Self {
+            query,
+            history,
+            symbol_identifier,
+            symbol_outline,
+            fs_file_path,
+            probing_results,
+            llm,
+            provider,
+            api_keys,
+        }
+    }
+
+    pub fn symbol_probing_results(&self) -> String {
+        self.probing_results
+            .iter()
+            .map(|probing_result| probing_result.to_xml())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn symbol_outline(&self) -> &str {
+        &self.symbol_outline
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.query
+    }
+
+    pub fn history(&self) -> &str {
+        &self.history
+    }
+
+    pub fn symbol_identifier(&self) -> &str {
+        &self.symbol_identifier
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn probing_results(&self) -> &[CodeSubSymbolProbingResult] {
+        self.probing_results.as_slice()
+    }
+
+    pub fn llm(&self) -> &LLMType {
+        &self.llm
+    }
+
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    pub fn api_keys(&self) -> &LLMProviderAPIKeys {
+        &self.api_keys
+    }
+}
+
 /// This requests determines if we have to follow the next code symbol
 /// or if we have enough information at this point to stop and answer the user
 /// query, or we are on the wrong trail or we need to keep probing
@@ -678,6 +813,12 @@ pub trait CodeSymbolImportant {
         &self,
         request: CodeSymbolFollowAlongForProbing,
     ) -> Result<ProbeNextSymbol, CodeSymbolError>;
+
+    /// summarizes the results from the different probes running in the background
+    async fn probe_summarize_answer(
+        &self,
+        request: CodeSymbolProbingSummarize,
+    ) -> Result<String, CodeSymbolError>;
 }
 
 // implement passing in just the user context and getting the data back

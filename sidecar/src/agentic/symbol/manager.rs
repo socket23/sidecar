@@ -17,6 +17,7 @@ use crate::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
+use super::events::probe::SymbolToProbeRequest;
 use super::identifier::LLMProperties;
 use super::tool_box::ToolBox;
 use super::ui_event::UIEvent;
@@ -95,6 +96,18 @@ impl SymbolManager {
             editor_url,
             llm_properties,
         }
+    }
+
+    // This is just for testing out the flow for single input events
+    pub async fn probe_request(&self, input_event: SymbolEventRequest) -> Result<(), SymbolError> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let _ = self
+            .symbol_locker
+            .process_request((input_event, sender))
+            .await;
+        let response = receiver.await;
+        println!("{:?}", response.expect("to work"));
+        Ok(())
     }
 
     // once we have the initial request, which we will go through the initial request

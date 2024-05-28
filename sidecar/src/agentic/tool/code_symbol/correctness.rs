@@ -9,7 +9,7 @@ use llm_client::{
 };
 
 use crate::agentic::tool::{
-    base::Tool,
+    base::{Tool, ToolType},
     errors::ToolError,
     input::ToolInput,
     lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
@@ -187,7 +187,9 @@ impl Tool for CodeCorrectnessBroker {
                 .map(|response| ToolOutput::code_correctness_action(response))
                 .map_err(|e| ToolError::CodeSymbolError(e))
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(
+                ToolType::CodeCorrectnessActionSelection,
+            ))
         }
     }
 }

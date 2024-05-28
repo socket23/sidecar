@@ -101,7 +101,7 @@ impl ToolInput {
         if let ToolInput::ProbeSubSymbol(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ProbeSubSymbol))
         }
     }
 
@@ -109,7 +109,7 @@ impl ToolInput {
         if let ToolInput::ProbePossibleRequest(output) = self {
             Ok(output)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ProbePossible))
         }
     }
 
@@ -117,7 +117,7 @@ impl ToolInput {
         if let ToolInput::ProbeQuestionAskRequest(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ProbeQuestion))
         }
     }
 
@@ -125,7 +125,7 @@ impl ToolInput {
         if let ToolInput::ProbeFollowAlongSymbol(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ProbeFollowAlongSymbol))
         }
     }
 
@@ -133,7 +133,7 @@ impl ToolInput {
         if let ToolInput::ProbeSummarizeAnswerRequest(response) = self {
             Ok(response)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ProbeSummarizeAnswer))
         }
     }
 
@@ -173,7 +173,7 @@ impl ToolInput {
         if let ToolInput::CodeEditingError(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::CodeEditingForError))
         }
     }
 
@@ -181,7 +181,9 @@ impl ToolInput {
         if let ToolInput::CodeCorrectnessAction(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(
+                ToolType::CodeCorrectnessActionSelection,
+            ))
         }
     }
 
@@ -189,7 +191,7 @@ impl ToolInput {
         if let ToolInput::QuickFixInvocationRequest(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::GetQuickFix))
         }
     }
 
@@ -197,7 +199,7 @@ impl ToolInput {
         if let ToolInput::QuickFixRequest(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ApplyQuickFix))
         }
     }
 
@@ -205,7 +207,7 @@ impl ToolInput {
         if let ToolInput::EditorApplyChange(editor_apply_request) = self {
             Ok(editor_apply_request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::EditorApplyEdits))
         }
     }
 
@@ -213,7 +215,7 @@ impl ToolInput {
         if let ToolInput::SymbolImplementations(symbol_implementations) = self {
             Ok(symbol_implementations)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::GoToImplementations))
         }
     }
 
@@ -221,7 +223,7 @@ impl ToolInput {
         if let ToolInput::GoToReference(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::GoToReferences))
         }
     }
 
@@ -229,7 +231,7 @@ impl ToolInput {
         if let ToolInput::ClassSymbolFollowup(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ClassSymbolFollowup))
         }
     }
 
@@ -237,7 +239,7 @@ impl ToolInput {
         if let ToolInput::GrepSingleFile(grep_single_file) = self {
             Ok(grep_single_file)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::GrepInFile))
         }
     }
 
@@ -245,7 +247,7 @@ impl ToolInput {
         if let ToolInput::OpenFile(open_file) = self {
             Ok(open_file)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::OpenFile))
         }
     }
 
@@ -253,7 +255,7 @@ impl ToolInput {
         if let ToolInput::GoToDefinition(definition_request) = self {
             Ok(definition_request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::GoToDefinitions))
         }
     }
 
@@ -261,7 +263,7 @@ impl ToolInput {
         if let ToolInput::CodeEditing(code_edit) = self {
             Ok(code_edit)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::CodeEditing))
         }
     }
 
@@ -269,7 +271,7 @@ impl ToolInput {
         if let ToolInput::LSPDiagnostics(lsp_diagnostics) = self {
             Ok(lsp_diagnostics)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::LSPDiagnostics))
         }
     }
 
@@ -277,7 +279,7 @@ impl ToolInput {
         if let ToolInput::FindCodeSnippets(find_code_snippets) = self {
             Ok(find_code_snippets)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::FindCodeSnippets))
         }
     }
 
@@ -285,7 +287,7 @@ impl ToolInput {
         if let ToolInput::ReRank(rerank) = self {
             Ok(rerank)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::ReRank))
         }
     }
 
@@ -301,7 +303,7 @@ impl ToolInput {
         if let ToolInput::CodeSymbolUtilitySearch(request) = self {
             Ok(request)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::UtilityCodeSymbolSearch))
         }
     }
 
@@ -316,7 +318,7 @@ impl ToolInput {
         {
             Ok(either::Either::Right(request_code_symbol_important))
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::UtilityCodeSymbolSearch))
         }
     }
 
@@ -326,7 +328,7 @@ impl ToolInput {
         if let ToolInput::RequestImportantSybmolsCodeWide(request_code_symbol_important) = self {
             Ok(request_code_symbol_important)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(ToolType::RequestImportantSymbols))
         }
     }
 
@@ -334,7 +336,9 @@ impl ToolInput {
         if let ToolInput::FilterCodeSnippetsForEditing(filter_code_snippets_for_editing) = self {
             Ok(filter_code_snippets_for_editing)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(
+                ToolType::FilterCodeSnippetsForEditing,
+            ))
         }
     }
 
@@ -345,7 +349,9 @@ impl ToolInput {
         {
             Ok(filter_code_snippets_for_editing)
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(
+                ToolType::FilterCodeSnippetsSingleSymbolForEditing,
+            ))
         }
     }
 
@@ -360,7 +366,9 @@ impl ToolInput {
         {
             Ok(either::Right(filter_code_snippets_for_editing))
         } else {
-            Err(ToolError::WrongToolInput)
+            Err(ToolError::WrongToolInput(
+                ToolType::FilterCodeSnippetsForEditing,
+            ))
         }
     }
 }

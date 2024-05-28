@@ -128,7 +128,8 @@ impl SymbolLocker {
         // at this point we have also tried creating the symbol agent, so we can start logging it
         {
             if let Some(symbol) = self.symbols.lock().await.get(&symbol_identifier) {
-                let _ = symbol.send((request.remove_event(), sender));
+                let response = symbol.send((request.remove_event(), sender));
+                println!("{:?}", response.is_err());
             }
         }
     }
@@ -154,18 +155,24 @@ impl SymbolLocker {
 
         // now we create the symbol and let it rip
         let symbol = Symbol::new(
-            symbol_identifier,
+            symbol_identifier.clone(),
             request,
             self.hub_sender.clone(),
             self.tools.clone(),
             self.llm_properties.clone(),
         )
-        .await?;
+        .await;
+
+        println!("Symbol::new is_err: {:?}", symbol.is_err());
+
+        let symbol = symbol?;
 
         // now we let it rip, we give the symbol the receiver and ask it
         // to go crazy with it
         tokio::spawn(async move {
-            let _ = symbol.run(receiver).await;
+            println!("spawning symbol: {:?}", symbol_identifier);
+            let response = symbol.run(receiver).await;
+            println!("{:?}", response.is_err());
         });
         // fin
         Ok(())

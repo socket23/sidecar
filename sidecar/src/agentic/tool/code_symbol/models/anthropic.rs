@@ -153,32 +153,45 @@ impl AskQuestionSymbolHint {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "symbol_list")]
+pub struct CodeSymbolToAskQuestionsSymboList {
+    #[serde(rename = "$value")]
+    symbol_list: Vec<AskQuestionSymbolHint>,
+}
+
+impl CodeSymbolToAskQuestionsSymboList {
+    pub fn new(symbol_list: Vec<AskQuestionSymbolHint>) -> Self {
+        Self { symbol_list }
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct CodeSymbolToAskQuestionsResponse {
     steps_to_answer: String,
-    symbol_list: Vec<AskQuestionSymbolHint>,
+    symbol_list: CodeSymbolToAskQuestionsSymboList,
 }
 
 impl CodeSymbolToAskQuestionsResponse {
     pub fn symbol_list(self) -> Vec<AskQuestionSymbolHint> {
-        self.symbol_list
+        self.symbol_list.symbol_list
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct CodeSymbolShouldAskQuestionsResponse {
-    thinking: bool,
-    should_follow: String,
+    thinking: String,
+    should_follow: bool,
 }
 
 impl CodeSymbolShouldAskQuestionsResponse {
-    pub fn thinking(&self) -> bool {
-        self.thinking
+    pub fn thinking(&self) -> &str {
+        &self.thinking
     }
 
-    pub fn should_follow(&self) -> &str {
-        &self.should_follow
+    pub fn should_follow(&self) -> bool {
+        self.should_follow
     }
 
     pub fn parse_response(
@@ -188,11 +201,11 @@ impl CodeSymbolShouldAskQuestionsResponse {
         let mut fixed_lines = vec![];
         let mut is_inside = false;
         response.lines().into_iter().for_each(|line| {
-            if line.starts_with("<should_follow>") {
+            if line.starts_with("<thinking>") {
                 is_inside = true;
                 fixed_lines.push(line.to_owned());
                 return;
-            } else if line.starts_with("</should_follow>") {
+            } else if line.starts_with("</thinking>") {
                 is_inside = false;
                 fixed_lines.push(line.to_owned())
             }
@@ -206,8 +219,8 @@ impl CodeSymbolShouldAskQuestionsResponse {
             .map_err(|e| CodeSymbolError::SerdeError(e));
         match parsed_response {
             Ok(response) => Ok(CodeSymbolShouldAskQuestionsResponse {
-                thinking: response.thinking,
-                should_follow: AnthropicCodeSymbolImportant::escape_xml(response.should_follow),
+                thinking: AnthropicCodeSymbolImportant::escape_xml(response.thinking),
+                should_follow: response.should_follow,
             }),
             Err(e) => Err(e),
         }
@@ -220,17 +233,20 @@ impl CodeSymbolToAskQuestionsResponse {
         let symbol_list = self.symbol_list;
         Self {
             steps_to_answer,
-            symbol_list: symbol_list
-                .into_iter()
-                .map(|symbol_list| AskQuestionSymbolHint {
-                    name: symbol_list.name,
-                    line_content: AnthropicCodeSymbolImportant::escape_xml(
-                        symbol_list.line_content,
-                    ),
-                    file_path: symbol_list.file_path,
-                    thinking: AnthropicCodeSymbolImportant::escape_xml(symbol_list.thinking),
-                })
-                .collect(),
+            symbol_list: CodeSymbolToAskQuestionsSymboList::new(
+                symbol_list
+                    .symbol_list
+                    .into_iter()
+                    .map(|symbol_list| AskQuestionSymbolHint {
+                        name: symbol_list.name,
+                        line_content: AnthropicCodeSymbolImportant::escape_xml(
+                            symbol_list.line_content,
+                        ),
+                        file_path: symbol_list.file_path,
+                        thinking: AnthropicCodeSymbolImportant::escape_xml(symbol_list.thinking),
+                    })
+                    .collect(),
+            ),
         }
     }
     fn parse_response(response: String) -> Result<Self, CodeSymbolError> {
@@ -245,9 +261,21 @@ impl CodeSymbolToAskQuestionsResponse {
             .into_iter()
             .map(|s| s.to_owned())
             .collect::<Vec<_>>();
+        let same_line_tags = vec!["name", "line_content", "file_path"]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect::<Vec<_>>();
         let mut final_lines = vec![];
         let mut inside = false;
         for line in lines.into_iter() {
+            // if both the opening and closing tags are contained in the same line
+            // we can just add the line and short-circuit the flow
+            if same_line_tags.iter().any(|tag| {
+                line.starts_with(&format!("<{tag}>")) && line.contains(&format!("</{tag}>"))
+            }) {
+                final_lines.push(line);
+                continue;
+            }
             if tags.iter().any(|tag| line.starts_with(&format!("<{tag}>"))) {
                 inside = true;
                 final_lines.push(line);
@@ -269,11 +297,13 @@ impl CodeSymbolToAskQuestionsResponse {
         }
 
         let final_line = final_lines.join("\n");
-        let parsed_reply = serde_xml_rs::from_str::<CodeSymbolToAskQuestionsResponse>(&final_line)
-            .map_err(|e| CodeSymbolError::SerdeError(e))?
+        println!("Trying to parse: {}", &final_line);
+        let parsed_reply = quick_xml::de::from_str::<CodeSymbolToAskQuestionsResponse>(&final_line)
+            .map_err(|e| CodeSymbolError::QuickXMLError(e))?
             .escape_string();
 
         // Now we need to escape the strings again for xml
+        // TODO(skcd): Make this work over here
         Ok(parsed_reply)
     }
 }
@@ -495,7 +525,12 @@ impl AnthropicCodeSymbolImportant {
 </file>
 <extra_data>
 {extra_data}
-</extra_data>"#
+</extra_data>
+
+As a reminder the code in selection is:
+<code_in_selection>
+{code_in_selection}
+</code_in_selection>"#
         )
     }
 
@@ -2452,6 +2487,16 @@ You can understand from the response here how we did not have to follow the next
 - The context you have accumulated up until now is shown to you in <history> and <extra_data> section.
 - You are responsible for telling us if you have enough context from <history> section and the <extra_data> section.
 - You have to decide if you can answer the user query or you need to see more code sections before you are able to answer the user query.
+- Your reply should be in the following format:
+<reply>
+<should_follow>
+{if we need to check additional code snippets to answer the user query}, its a boolean: true or false
+</should_follow>
+<thinking>
+{your reason for deciding if we need to follow additional code snippets or if we do not decide to do it, the reason for that}
+</thinking>
+</reply>
+
 Below we show you an example of what the input will look like:
 
 <user_query>
@@ -3516,7 +3561,11 @@ Does the language type expose any prettier settings, because we want to get it s
 </symbol>
 <symbol>
 </symbol_list>
-</reply>"#
+</reply>
+
+Notice how each xml tag ends with a new line and the content begins after the tag line, follow this format strictly.
+In <line_content> only include a single line where the symbol you are interested in is contained.
+You must only select symbols and lines to reply from the <code_in_selection> section and from no where else! This is very important."#
         )
     }
 
@@ -5340,7 +5389,13 @@ impl ClassSymbolFollowup for AnthropicCodeSymbolImportant {
 #[cfg(test)]
 mod tests {
 
-    use super::AnthropicCodeSymbolImportant;
+    use serde_xml_rs::from_str;
+
+    use crate::agentic::tool::code_symbol::models::anthropic::{
+        AskQuestionSymbolHint, CodeSymbolToAskQuestionsSymboList,
+    };
+
+    use super::{AnthropicCodeSymbolImportant, CodeSymbolToAskQuestionsResponse};
 
     #[test]
     fn test_parsing_works_for_important_symbol() {
@@ -5517,5 +5572,72 @@ pub async fn new(config: LLMBrokerConfiguration) -> Result<Self, LLMClientError>
 
         let parsed_response = AnthropicCodeSymbolImportant::parse_response(reply);
         assert!(parsed_response.is_ok());
+    }
+
+    #[test]
+    fn test_parsing_code_symbol_to_follow_questions() {
+        let response = r#"<reply>
+<steps_to_answer>
+- The `agent_router` function defines the routes related to the agent functionality, but it does not directly handle the requests to the LLM client.
+- The routes defined in `agent_router` are likely responsible for handling user requests and forwarding them to the appropriate components that interact with the LLM client.
+- To find where the actual requests to the LLM client are sent, we need to trace the code execution from these routes to the components responsible for interacting with the LLM client.
+- We should look at the functions associated with each route, such as `sidecar::webserver::agent::search_agent`, `sidecar::webserver::agent::hybrid_search`, `sidecar::webserver::agent::explain`, and `sidecar::webserver::agent::followup_chat`.
+</steps_to_answer>
+<symbol_list>
+<symbol>
+<name>
+sidecar::webserver::agent::search_agent
+</name>
+<line_content>
+            get(sidecar::webserver::agent::search_agent),
+</line_content>
+<file_path>
+/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
+</file_path>
+<thinking>
+This function likely handles the search agent requests and may contain code that interacts with the LLM client for search-related tasks.
+</thinking>
+</symbol>
+<symbol>
+<name>sidecar::webserver::agent::hybrid_search</name>
+<line_content>
+            get(sidecar::webserver::agent::hybrid_search),
+</line_content>
+<file_path>
+/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
+</file_path>
+<thinking>
+This function likely handles hybrid search requests, which could involve combining different search techniques, potentially including interactions with the LLM client.
+</thinking>
+</symbol>
+<symbol>
+<name>sidecar::webserver::agent::explain</name>
+<line_content>
+        .route(get(sidecar::webserver::agent::explain))
+</line_content>
+<file_path>
+/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
+</file_path>
+<thinking>
+This function likely handles requests for getting explanations from the agent, which could involve interacting with the LLM client to generate explanations.
+</thinking>
+</symbol>
+<symbol>
+<name>sidecar::webserver::agent::followup_chat</name>
+<line_content>
+            &amp;quot;/followup_chat&amp;quot;,
+            post(sidecar::webserver::agent::followup_chat),
+</line_content>
+<file_path>
+/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
+</file_path>
+<thinking>
+This function likely handles POST requests for follow-up chat interactions with the agent, which could involve sending user input to the LLM client and receiving responses.
+</thinking>
+</symbol>
+</symbol_list>
+</reply>"#.to_owned();
+        let output = CodeSymbolToAskQuestionsResponse::parse_response(response);
+        assert!(output.is_ok());
     }
 }

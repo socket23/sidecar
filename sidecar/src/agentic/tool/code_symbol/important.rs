@@ -22,7 +22,7 @@ use crate::{
 use super::{
     models::anthropic::{
         AnthropicCodeSymbolImportant, CodeSymbolShouldAskQuestionsResponse,
-        CodeSymbolToAskQuestionsResponse,
+        CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
     },
     types::CodeSymbolError,
 };
@@ -270,6 +270,7 @@ pub struct CodeSymbolFollowAlongForProbing {
     provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
     query: String,
+    next_symbol_link: String,
 }
 
 impl CodeSymbolFollowAlongForProbing {
@@ -287,6 +288,7 @@ impl CodeSymbolFollowAlongForProbing {
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
         query: String,
+        next_symbol_link: String,
     ) -> Self {
         Self {
             history,
@@ -302,7 +304,56 @@ impl CodeSymbolFollowAlongForProbing {
             provider,
             api_key,
             query,
+            next_symbol_link,
         }
+    }
+
+    pub fn next_symbol_link(&self) -> &str {
+        &self.next_symbol_link
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.query
+    }
+
+    pub fn code_above(&self) -> Option<String> {
+        self.code_above.clone()
+    }
+
+    pub fn code_below(&self) -> Option<String> {
+        self.code_below.clone()
+    }
+
+    pub fn code_in_selection(&self) -> &str {
+        &self.code_in_selection
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+
+    pub fn next_symbol_outline(&self) -> &str {
+        &self.next_symbol_outline
+    }
+
+    pub fn llm(&self) -> &LLMType {
+        &self.llm_type
+    }
+
+    pub fn llm_provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    pub fn api_keys(&self) -> &LLMProviderAPIKeys {
+        &self.api_key
+    }
+
+    pub fn history(&self) -> &str {
+        &self.history
     }
 }
 
@@ -613,7 +664,7 @@ pub trait CodeSymbolImportant {
     async fn should_probe_follow_along_symbol_request(
         &self,
         request: CodeSymbolFollowAlongForProbing,
-    ) -> Result<(), CodeSymbolError>;
+    ) -> Result<ProbeNextSymbol, CodeSymbolError>;
 }
 
 // implement passing in just the user context and getting the data back

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use gix::objs::commit::message;
 use serde_xml_rs::from_str;
 use std::sync::Arc;
 
@@ -328,6 +329,66 @@ impl Reply {
             .map(|step| CodeSymbolWithSteps::new(step.name, step.step, step.new, step.file_path))
             .collect();
         CodeSymbolImportantResponse::new(code_symbols_with_thinking, code_symbols_with_steps)
+    }
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename = "tool")]
+pub enum ProbeNextSymbol {
+    #[serde(rename = "answer_user_query")]
+    AnswerUserQuery(String),
+    #[serde(rename = "should_follow")]
+    ShouldFollow(String),
+    #[serde(rename = "wrong_path")]
+    WrongPath(String),
+    #[serde(rename = "")]
+    Empty,
+}
+
+impl ProbeNextSymbol {
+    fn parse_response(response: &str) -> Result<Self, CodeSymbolError> {
+        // here we want to escape any of the strings which are inside the answer_user_query or should_follow or wrong_path tags
+        let response_lines = response.lines();
+        let mut final_lines = vec![];
+        let mut is_inside = false;
+        for line in response_lines {
+            if line.starts_with("<answer_user_query>")
+                || line.starts_with("<should_follow>")
+                || line.starts_with("<wrong_path>")
+            {
+                is_inside = true;
+                final_lines.push(line.to_owned());
+                continue;
+            } else if line.starts_with("</answer_user_query>")
+                || line.starts_with("</should_follow>")
+                || line.starts_with("</wrong_path>")
+            {
+                is_inside = false;
+                final_lines.push(line.to_owned());
+                continue;
+            }
+            if is_inside {
+                final_lines.push(AnthropicCodeSymbolImportant::unescape_xml(line.to_owned()));
+            } else {
+                final_lines.push(line.to_owned());
+            }
+        }
+        let fixed_response = final_lines.join("\n");
+        let parsed_response = from_str::<ProbeNextSymbol>(&fixed_response)
+            .map_err(|e| CodeSymbolError::SerdeError(e))?;
+        // Now we fix the lines in parsed_response again
+        Ok(match parsed_response {
+            Self::AnswerUserQuery(response) => {
+                Self::AnswerUserQuery(AnthropicCodeSymbolImportant::escape_xml(response))
+            }
+            Self::ShouldFollow(response) => {
+                Self::ShouldFollow(AnthropicCodeSymbolImportant::escape_xml(response))
+            }
+            Self::WrongPath(response) => {
+                Self::WrongPath(AnthropicCodeSymbolImportant::escape_xml(response))
+            }
+            Self::Empty => Self::Empty,
+        })
     }
 }
 
@@ -1969,6 +2030,205 @@ Does the language type expose any prettier settings, because we want to get it s
         )
     }
 
+    fn system_message_for_probe_next_symbol(&self) -> String {
+        r#"You are an expert software engineer who is an expert at deciding if we have enough information to answer the user query or we need to look deeper in the codebase while working in an editor.
+- You are given this history of the various clicks we have done up until now in the editor to get to the current location in the codebase in <history> tag.
+- You are also given some extra symbols which we have accumulated up until now in the <extra_data> section.
+- Our current position is present in <file> section under the <code_in_selection> tag. This is the code snippet we are focussed on and where we initiated the jump to the next symbol either by clicking go-to-definition, or go-to-implementation.
+- We have determined the next symbol we can jump to, and ask depeer question in <next_symbol> section. This is because we followed a previous function or class or variable and decided to go to the definition.
+- The reason why next symbol is possible is also show to you in <reason_for_next_symbol> which contains the position where we clicked to go to the next symbol in <jump_to_next_symbol> tag. This gives you an idea for why we are jumping and the link between the current position we are in and the next symbol we want to jump to.
+- Since asking for a new question to another symbol takes time, we advice you to think hard and decide if you really want to go deeper or you have enough information to answer the user query.
+You are given 3 tools which you can use as your response:
+1. <answer_user_query>
+If you choose answer user query, then you have enough information to answer the user query and your reply should contain the answer to the user query.
+The format for this tool use is:
+<answer_user_query>
+{your answer here}
+</answer_user_query>
+2. <should_follow>
+If you choose to follow the next symbol, then your reply should contain the question you want to ask the next symbol.
+The format for this tool use is:
+<should_follow>
+{your question for the next symbol considering every other context which has been provided to you}
+</should_follow>
+3. <wrong_path>
+If you believe going depeer in this path will not return an answer, you can stop here and reply with the reason why you think following the next symbol will not yield the answer
+The format for this tool use is
+<wrong_path>
+{The reason why this is the wrong path to follow}
+</wrong_path>
+You must choose one of the 3 tools always!
+
+Below we show you an example of what the input will look like:
+
+<user_query>
+Theaters might have information about the movies, we want to check if movies have authors.
+</user_query>
+
+<file>
+<file_path>
+artwork/theather.rs
+</file_path>
+<code_above>
+```rust
+use artwork::movies::Movie;
+use artwork::location::Location;
+
+#[derive(Debug)]
+struct Theater {
+    movies: Vec<Movie>,
+    location: Location,
+    max_capacity: usize,
+}
+```
+```
+</code_above>
+<code_below>
+```rust
+    fn location(&self) -> &Location {
+        &self.location
+    }
+
+    fn max_capacity(&self) -> usize {
+        self.max_capacity
+    }
+}
+```
+</code_below>
+<code_in_selection>
+```rust
+impl Theater {
+    fn movies(&self) -> &[Movie] {
+        self.movies.as_slice()
+    }
+
+```
+</code_in_selection>
+</file>
+
+<history>
+<item>
+<symbol>
+City
+</symbol>
+<file_path>
+city/mod.rs
+</file_path>
+<content>
+```rust
+impl City {
+    fn get_theaters(&self) -> &[Theater] {
+        self.theaters.as_slice
+    }
+}
+```
+</content>
+<question>
+Do we store the actors for each movie?
+</question>
+</item>
+</histroy>
+
+<extra_data>
+</extra_data>
+
+<next_symbol>
+<file_path>
+artwork/movies.rs
+</file_path>
+<content>
+```rust
+struct Movie {
+    name: String,
+    lenght_in_seconds: usize,
+}
+
+impl Movie {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn length_in_seconds(&self) -> usize {
+        self.length_in_seconds
+    }
+}
+```
+</content>
+</next_symbol>
+
+<reason_for_next_symbol>
+We followed `Movie` as it was the return type for `movies` function in `Theater`. We can now learn if movie has the information about the actors. 
+</reason_for_next_symbol>
+
+Your reply:
+<tool>
+<answer_user_query>
+We can already see that the movie type does not have the actors so we can answer the user query at this point. The code here illustrates this:
+```rust
+struct Movie {
+    name: String,
+    lenght_in_seconds: usize,
+}
+```
+</answer_user_query>
+</tool>
+
+You can understand from the response here how we did not have to follow the next symbol since we can already see that the movie struct does not contain the actors."#.to_owned()
+    }
+
+    fn user_message_for_probe_next_symbol(
+        &self,
+        request: CodeSymbolFollowAlongForProbing,
+    ) -> String {
+        let user_query = request.user_query();
+        let file_path = request.file_path();
+        let language = request.language();
+        let code_above = request.code_above().unwrap_or("".to_owned());
+        let code_below = request.code_below().unwrap_or("".to_owned());
+        let code_in_selection = request.code_in_selection();
+        let history = request.history();
+        let next_symbol_outline = request.next_symbol_outline();
+        let reference_link = request.next_symbol_link();
+        format!(
+            r#"<user_query>
+{user_query}
+</user_query>
+
+<file>
+<file_path>
+{file_path}
+</file_path>
+<code_above>
+```{language}
+{code_above}
+```
+</code_above>
+<code_below>
+```{language}
+{code_below}
+```
+</code_below>
+<code_in_selection>
+```{language}
+{code_in_selection}
+```
+</code_in_selection>
+</file>
+
+<history>
+{history}
+</history>
+
+<next_symbol>
+{next_symbol_outline}
+</next_symbol>
+
+<reason_for_next_symbol>
+{reference_link}
+</reason_for_next_symbol>"#
+        )
+    }
+
     fn user_message_for_should_ask_questions(
         &self,
         request: CodeSymbolToAskQuestionsRequest,
@@ -2012,6 +2272,7 @@ Does the language type expose any prettier settings, because we want to get it s
     fn system_message_for_should_ask_questions(&self) -> String {
         r#"You are an expert software engineer who is going to decide if the context you have up until now is enough to answer the user request.
 - You are focussed on the code which is present in <code_selection> section, additionally you are also show the code above and below the selection in <code_above> and <code_below> sections.
+- You are given this history of the various clicks we have done up until now in the editor to get to the current location in the codebase in <history> tag.
 - The context you have accumulated up until now is shown to you in <history> and <extra_data> section.
 - You are responsible for telling us if you have enough context from <history> section and the <extra_data> section.
 - You have to decide if you can answer the user query or you need to see more code sections before you are able to answer the user query.
@@ -4699,8 +4960,30 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
     async fn should_probe_follow_along_symbol_request(
         &self,
         request: CodeSymbolFollowAlongForProbing,
-    ) -> Result<(), CodeSymbolError> {
-        todo!("we sitll need to implement this")
+    ) -> Result<ProbeNextSymbol, CodeSymbolError> {
+        let llm = request.llm().clone();
+        let provider = request.llm_provider().clone();
+        let api_keys = request.api_keys().clone();
+        let system_message = LLMClientMessage::system(self.system_message_for_probe_next_symbol());
+        let user_messagee =
+            LLMClientMessage::user(self.user_message_for_probe_next_symbol(request));
+        let messages =
+            LLMClientCompletionRequest::new(llm, vec![system_message, user_messagee], 0.0, None);
+        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                messages,
+                provider,
+                vec![("request_type".to_owned(), "probe_next_symbol".to_owned())]
+                    .into_iter()
+                    .collect(),
+                sender,
+            )
+            .await?;
+        // Now we want to parse this response properly
+        ProbeNextSymbol::parse_response(&response)
     }
 }
 

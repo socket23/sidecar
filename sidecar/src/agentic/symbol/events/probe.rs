@@ -8,6 +8,7 @@ pub struct SymbolToProbeHistory {
     symbol: String,
     fs_file_path: String,
     content: String,
+    question: String,
 }
 
 #[derive(Debug, Clone)]

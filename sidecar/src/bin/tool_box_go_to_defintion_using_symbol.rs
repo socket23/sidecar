@@ -48,11 +48,13 @@ async fn main() {
     ));
 
     let range = Range::new(Position::new(139, 0, 0), Position::new(157, 0, 0));
-    let fs_file_path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs".to_owned();
-    let line_content = "post(sidecar::webserver::agent::followup_chat),".to_owned();
-    let symbol_to_search = "followup_chat".to_owned();
+    let fs_file_path =
+        "/Users/skcd/scratch/sidecar/sidecar/src/webserver/agent_stream.rs".to_owned();
+    let line_content = "    mut agent: Agent,".to_owned();
+    let symbol_to_search = "Agent".to_owned();
     // This is what I have to debug
-    let _ = tool_box
+    let response = tool_box
         .go_to_definition_using_symbol(&range, &fs_file_path, &line_content, &symbol_to_search)
         .await;
+    println!("{:?}", response);
 }

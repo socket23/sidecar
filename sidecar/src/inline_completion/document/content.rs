@@ -775,7 +775,11 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
-        dbg!("document_lines.generate_outline", &instant.elapsed());
+        dbg!(
+            "document_lines.generate_outline",
+            &instant.elapsed(),
+            &self.outline_nodes.len()
+        );
 
         self.import_identifier_nodes = if let (Some(language_config), Some(tree)) = (
             self.editor_parsing.for_file_path(&self.file_path),

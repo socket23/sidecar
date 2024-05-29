@@ -44,6 +44,8 @@ use super::{
     tool_box::ToolBox,
 };
 
+const BUFFER_LIMIT: usize = 1;
+
 #[derive(Debug, Clone)]
 pub struct SymbolEventRequest {
     symbol: SymbolIdentifier,
@@ -394,14 +396,14 @@ impl Symbol {
                     llm_properties.api_key().clone(),
                 )
                 .await;
-            println!("Response: {:?}", &response);
+            // println!("Response: {:?}", &response);
             (reason, snippet, response)
         })
-        .buffer_unordered(100)
+        .buffer_unordered(BUFFER_LIMIT)
         .collect::<Vec<_>>()
         .await;
 
-        println!("Snippet filtering response: {:?}", &filtering_response);
+        // println!("Snippet filtering response: {:?}", &filtering_response);
 
         let filtered_snippets = filtering_response
             .into_iter()
@@ -432,14 +434,14 @@ impl Symbol {
                     .await;
                 (snippet, response)
             })
-            .buffer_unordered(100)
+            .buffer_unordered(BUFFER_LIMIT)
             .collect::<Vec<_>>()
             .await;
 
-        println!(
-            "Snippet to symbols to follow: {:?}",
-            snippet_to_symbols_to_follow
-        );
+        // println!(
+        //     "Snippet to symbols to follow: {:?}",
+        //     snippet_to_symbols_to_follow
+        // );
 
         // Now for each snippet we want to grab the definition of the symbol it belongs
         let snippet_to_follow_with_definitions =
@@ -459,7 +461,7 @@ impl Symbol {
                         let definitions_for_snippet = self
                             .tools
                             .go_to_definition_using_symbol(
-                                referred_snippet,
+                                referred_snippet.range(),
                                 symbol_to_follow.file_path(),
                                 symbol_to_follow.line_content(),
                                 symbol_to_follow.name(),
@@ -467,7 +469,7 @@ impl Symbol {
                             .await;
                         (symbol_to_follow, definitions_for_snippet)
                     })
-                    .buffer_unordered(100)
+                    .buffer_unordered(BUFFER_LIMIT)
                     .collect::<Vec<_>>()
                     .await;
                 // Now that we have this, we can ask the LLM to generate the next set of probe-queries
@@ -478,6 +480,11 @@ impl Symbol {
             .buffered(1)
             .collect::<Vec<_>>()
             .await;
+
+        // println!(
+        //     "Snippet to follow with definitions: {:?}",
+        //     &snippet_to_follow_with_definitions
+        // );
 
         // - ask the followup question to the symbol containing the definition we are interested in
         // - we can concat the various questions about the symbols together and just ask the symbol
@@ -558,7 +565,7 @@ impl Symbol {
                 // - B: if we need to go deeper into the symbol for looking into the information
                 // If this is not useful we can stop over here
             })
-            .buffer_unordered(100)
+            .buffer_unordered(BUFFER_LIMIT)
             .collect::<Vec<_>>()
             .await;
 
@@ -573,6 +580,8 @@ impl Symbol {
                 Err(_) => None,
             })
             .collect::<Vec<_>>();
+
+        // println!("Probe results: {:?}", &probe_results);
 
         let hub_sender_ref = &hub_sender;
 
@@ -614,6 +623,10 @@ impl Symbol {
                                     reason.to_owned(),
                                     history,
                                 );
+                                println!(
+                                    "Probing: {:?} with reason: {}",
+                                    &symbol_identifier, reason
+                                );
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
                                 let _ = hub_sender_ref.clone().send((
                                     SymbolEventRequest::probe_request(
@@ -628,12 +641,12 @@ impl Symbol {
                             ProbeNextSymbol::WrongPath(wrong_path) => Ok(wrong_path),
                         }
                     })
-                    .buffer_unordered(100)
+                    .buffer_unordered(BUFFER_LIMIT)
                     .collect::<Vec<_>>()
                     .await;
                 (snippet, probing_results)
             })
-            .buffer_unordered(100)
+            .buffer_unordered(BUFFER_LIMIT)
             .collect::<Vec<_>>()
             .await;
 

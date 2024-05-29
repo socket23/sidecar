@@ -127,8 +127,12 @@ impl ToolBox {
     /// this symbol and send the appropriate request to it
     pub async fn go_to_definition_using_symbol(
         &self,
-        snippet: &Snippet,
+        snippet_range: &Range,
         fs_file_path: &str,
+        // Line content here can be multi-line because LLMs are dumb machines
+        // which do not follow the instructions provided to them
+        // in which case we have to split the lines on \n and then find the line
+        // which will contain the symbol_to_search
         line_content: &str,
         symbol_to_search: &str,
         // The first thing we are returning here is the highlight of the symbol
@@ -136,8 +140,20 @@ impl ToolBox {
         // we are returning the definition path and range along with the symbol where the go-to-definition belongs to
         // along with the outline of the symbol containing the go-to-definition
     ) -> Result<(String, Vec<(DefinitionPathAndRange, String, String)>), SymbolError> {
+        let line_content_to_track = line_content
+            .lines()
+            .find(|line| line.contains(symbol_to_search));
+        if let None = line_content_to_track {
+            return Err(SymbolError::SymbolNotFoundInLine(
+                symbol_to_search.to_owned(),
+                line_content.to_owned(),
+            ));
+        }
+        let line_content = line_content_to_track
+            .expect("if let None to hold")
+            .to_owned();
         let file_contents = self.file_open(fs_file_path.to_owned()).await?.contents();
-        let selection_range = snippet.range();
+        let selection_range = snippet_range;
         let file_with_lines = file_contents.lines().enumerate().collect::<Vec<_>>();
         let mut containing_lines = file_contents
             .lines()
@@ -149,7 +165,7 @@ impl ToolBox {
                 let end_line = selection_range.end_line() as i64;
                 let minimum_distance =
                     std::cmp::min(i64::abs(start_line - index), i64::abs(end_line - index));
-                if line.contains(line_content) {
+                if line.contains(&line_content) {
                     Some((minimum_distance, (line.to_owned(), index)))
                 } else {
                     None
@@ -164,14 +180,17 @@ impl ToolBox {
                 // Find the symbol in the line now
                 // our home fed needle in haystack which works on character level instead
                 // of byte level
+                // This returns the last character position where the needle is contained in
+                // the haystack
                 fn find_needle_position(haystack: &str, needle: &str) -> Option<usize> {
                     let haystack_char_indices: Vec<_> = haystack.char_indices().collect();
-
-                    haystack.find(needle).map(|byte_pos| {
+                    haystack.rfind(needle).map(|byte_pos| {
                         haystack_char_indices
                             .iter()
                             .position(|(b, _)| *b == byte_pos)
                             .unwrap()
+                            + needle.chars().count()
+                            - 1
                     })
                 }
                 let position = find_needle_position(line, symbol_to_search);
@@ -230,7 +249,14 @@ impl ToolBox {
         // open all these files and get back the outline nodes from these
         let _ = stream::iter(files_interested.into_iter())
             .map(|file| async move {
-                let _ = self.file_open(file).await;
+                let file_open = self.file_open(file.to_owned()).await;
+                // now we also add it to the symbol tracker forcefully
+                if let Ok(file_open) = file_open {
+                    let language = file_open.language().to_owned();
+                    self.symbol_broker
+                        .force_add_document(file, file_open.contents(), language)
+                        .await;
+                }
             })
             .buffer_unordered(100)
             .collect::<Vec<_>>()
@@ -257,9 +283,11 @@ impl ToolBox {
                 }
             })
             .filter_map(|(definition, outline_nodes)| {
-                let possible_outline_node = outline_nodes
-                    .into_iter()
-                    .find(|outline_node| outline_node.range().contains(definition.range()));
+                let possible_outline_node = outline_nodes.into_iter().find(|outline_node| {
+                    outline_node
+                        .range()
+                        .contains_check_line_column(definition.range())
+                });
                 if let Some(outline_node) = possible_outline_node {
                     Some((definition, outline_node))
                 } else {
@@ -269,7 +297,7 @@ impl ToolBox {
             .collect::<Vec<_>>();
 
         // // Now we want to go from the definitions we are interested in to the snippet
-        // // where we will be asking the question and also get the outline for it
+        // // where we will be asking the question and also get the outline(???) for it
         let definition_to_outline_node_name_and_definition =
             stream::iter(definitions_to_outline_node)
                 .map(|(definition, outline_node)| async move {
@@ -440,7 +468,7 @@ We also believe this symbol needs to be probed because of:
                     outline_node.range().start_line(),
                     outline_node.range().end_line()
                 );
-                let content = outline_node.get_outline_short();
+                let content = outline_node.content().content();
                 Ok(format!(
                     "<outline_list>
 <outline>
@@ -2238,11 +2266,10 @@ Please handle these changes as required."#
     ) -> Result<Snippet, SymbolError> {
         // we always open the document before asking for an outline
         let file_open_result = self.file_open(fs_file_path.to_owned()).await?;
-        println!("{:?}", file_open_result);
         let language = file_open_result.language().to_owned();
         // we add the document for parsing over here
         self.symbol_broker
-            .add_document(
+            .force_add_document(
                 file_open_result.fs_file_path().to_owned(),
                 file_open_result.contents(),
                 language,
@@ -2251,6 +2278,7 @@ Please handle these changes as required."#
 
         // we grab the outlines over here
         let outline_nodes = self.symbol_broker.get_symbols_outline(fs_file_path).await;
+        println!("{:?}", &outline_nodes);
 
         // We will either get an outline node or we will get None
         // for today, we will go with the following assumption

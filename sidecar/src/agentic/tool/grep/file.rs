@@ -30,6 +30,7 @@ impl FindInFileRequest {
     }
 }
 
+#[derive(Debug)]
 pub struct FindInFileResponse {
     position: Option<Position>,
 }

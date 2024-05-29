@@ -1354,7 +1354,16 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
 
 <rerank_list>
 {input_formatted}
-</rerank_list>"#
+</rerank_list>
+
+Remeber that your reply should be strictly in the following format:
+<code_to_probe_list>
+{{list of snippets we want to probe in the format specified}}
+</code_to_probe_list>
+<code_to_not_probe_list>
+{{list of snippets we want to not probe anymore in the format specified}}
+</code_to_not_probe_list>
+"#
         );
         let system_message = self.system_message_for_probing();
         let messages = vec![

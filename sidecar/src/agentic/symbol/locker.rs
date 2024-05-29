@@ -115,7 +115,12 @@ impl SymbolLocker {
                 } else {
                     // we are fucked over here since we didn't find a snippet for the symbol
                     // which is supposed to have some presence in the file
-                    todo!("no snippet found for the snippet, we are screwed over here, look at the comment above");
+                    println!(
+                        "Snippet not found for: {} in {}",
+                        symbol_identifier.symbol_name(),
+                        fs_file_path
+                    );
+                    todo!("no snippet found for the snippet, we are screwed over here, look at the comment above, for symbol");
                 }
             } else {
                 // well this kind of sucks, cause we do not know where the symbol is anymore

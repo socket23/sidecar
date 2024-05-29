@@ -182,7 +182,7 @@ impl CodeSymbolToAskQuestionsResponse {
 #[serde(rename = "reply")]
 pub struct CodeSymbolShouldAskQuestionsResponse {
     thinking: String,
-    should_follow: bool,
+    context_enough: bool,
 }
 
 impl CodeSymbolShouldAskQuestionsResponse {
@@ -191,7 +191,7 @@ impl CodeSymbolShouldAskQuestionsResponse {
     }
 
     pub fn should_follow(&self) -> bool {
-        self.should_follow
+        self.context_enough
     }
 
     pub fn parse_response(
@@ -220,7 +220,7 @@ impl CodeSymbolShouldAskQuestionsResponse {
         match parsed_response {
             Ok(response) => Ok(CodeSymbolShouldAskQuestionsResponse {
                 thinking: AnthropicCodeSymbolImportant::escape_xml(response.thinking),
-                should_follow: response.should_follow,
+                context_enough: response.context_enough,
             }),
             Err(e) => Err(e),
         }
@@ -308,7 +308,6 @@ impl CodeSymbolToAskQuestionsResponse {
         }
 
         let final_line = final_lines.join("\n");
-        println!("Trying to parse: {}", &final_line);
         let parsed_reply = quick_xml::de::from_str::<CodeSymbolToAskQuestionsResponse>(&final_line)
             .map_err(|e| CodeSymbolError::QuickXMLError(e))?
             .escape_string();
@@ -541,7 +540,29 @@ impl AnthropicCodeSymbolImportant {
 As a reminder the code in selection is:
 <code_in_selection>
 {code_in_selection}
-</code_in_selection>"#
+</code_in_selection>
+
+Your reply for the symbol list you are interested in should be strictly in the following format:
+<symbol_list>
+<steps_to_answer>
+{{The steps you are gonig to take to answer the user query}}
+</steps_to_answer>
+<symbol>
+<name>
+{{name of the symbol you are interested in}}
+</name>
+<line_content>
+{{the line containing the symbol you are interested in, this should ALWAYS be a single line}}
+</line_content>
+<file_path>
+{{the file path where this symbol and the line containing it are located}}
+</file_path>
+<thinking>
+{{your reason behind choosing this symbol}}
+</thinking>
+</symbol>
+... {{more symbols here if required}}
+</symbol_list>"#
         )
     }
 
@@ -589,7 +610,29 @@ The implementation of the dependency of the function needs to change to satisfy 
 </approach>
 </approach_list>
 These are just examples of approaches you can take, keep them in mind and be critical and helpful when implementing the user query.
-- Your reply should be in the <reply> tag
+- Your reply should be in the <reply> tag and strictly follow this format:
+<reply>
+<steps_to_answer>
+{{The steps you are gonig to take to answer the user query}}
+</steps_to_answer>
+<symbol_list>
+<symbol>
+<name>
+{{name of the symbol you are interested in}}
+</name>
+<line_content>
+{{the line containing the symbol you are interested in}}
+</line_content>
+<file_path>
+{{the file path where this symbol and the line containing it are located}}
+</file_path>
+<thinking>
+{{your reason behind choosing this symbol}}
+</thinking>
+</symbol>
+... {{more symbols here if required}}
+</symbol_list>
+</reply>
 
 We are now going to show you an example:
 <user_query>
@@ -2258,7 +2301,7 @@ The format for this tool use is:
 {name of the symbol to follow should be one of the names in <next_symbol_names>}
 </name>
 <file_path>
-{file path of the symbol to follow}
+{file path of the symbol to follow without the line-numbers}
 </file_path>
 <reason>
 {your question for the next symbol considering every other context which has been provided to you}
@@ -2492,20 +2535,21 @@ You can understand from the response here how we did not have to follow the next
         )
     }
     fn system_message_for_should_ask_questions(&self) -> String {
-        r#"You are an expert software engineer who is going to decide if the context you have up until now is enough to answer the user request.
+        r#"You are an expert software engineer who is going to decide if the context you have up until now is enough to answer the user request and we are working in the context of a code editor or IDE which implies we have operations like go-to-definition , go-to-reference, go-to-implementation.
 - You are focussed on the code which is present in <code_selection> section, additionally you are also show the code above and below the selection in <code_above> and <code_below> sections.
 - You are given this history of the various clicks we have done up until now in the editor to get to the current location in the codebase in <history> tag.
 - The context you have accumulated up until now is shown to you in <history> and <extra_data> section.
-- You are responsible for telling us if you have enough context from <history> section and the <extra_data> section.
+- You are responsible for telling us if you have enough context from <history> section and the <extra_data> section along with the code you can see right now to answer the user query.
 - You have to decide if you can answer the user query or you need to see more code sections before you are able to answer the user query.
+- From the code in <code_in_selection> you can go deeper into 
 - Your reply should be in the following format:
 <reply>
-<should_follow>
-{if we need to check additional code snippets to answer the user query}, its a boolean: true or false
-</should_follow>
 <thinking>
-{your reason for deciding if we need to follow additional code snippets or if we do not decide to do it, the reason for that}
+{your reason for deciding if we need to dive deeper into the code to completely answer the user query.}
 </thinking>
+<context_enough>
+{reply with either true or false} if in your <thinking> you realise that we should follow some more symbols to completely answer the question, then reply with true otherwise reply with false
+</context_enough>
 </reply>
 
 Below we show you an example of what the input will look like:
@@ -2765,9 +2809,69 @@ Your reply is:
 <thinking>
 I have all the information for what kind of providers are supported as `LLMProvider` is an enum which has entries for the different kind of providers we have in the codebase.
 </thinking>
-<should_follow>
+<context_enough>
 false
-</should_follow>
+</context_enough>
+</reply>
+
+
+Here's another example where we need to ask deeper questions:
+
+<user_query>
+Do movies store the actors along with them?
+</user_query>
+
+<file>
+<file_path>
+src/theater.rs
+</file_path>
+<code_above>
+</code_above>
+<code_below>
+</code_below>
+<code_in_selection>
+```rust
+use artwork::movies::Movie;
+use artwork::location::Location;
+
+#[derive(Debug)]
+struct Theater {
+    movies: Vec<Movie>,
+    location: Location,
+    max_capacity: usize,
+}
+
+impl Theater {
+    fn movies(&self) -> &[Movie] {
+        self.movies.as_slice()
+    }
+
+    fn location(&self) -> &Location {
+        &self.location
+    }
+
+    fn max_capacity(&self) -> usize {
+        self.max_capacity
+    }
+}
+```
+</code_in_selection>
+</file>
+
+<history>
+</history>
+
+<extra_data>
+</extra_data>
+
+Your reply should be:
+<reply>
+<thinking>
+We should look at `Movie` defined in the movie function to understand if actors are stored with the moveis.
+</thinking>
+<context_enough>
+true
+</context_enough>
 </reply>"#.to_owned()
     }
 

@@ -40,4 +40,7 @@ pub enum SymbolError {
 
     #[error("Snippet not found")]
     SnippetNotFound,
+
+    #[error("Symbol: {0} not found in the line content: {1}")]
+    SymbolNotFoundInLine(String, String),
 }

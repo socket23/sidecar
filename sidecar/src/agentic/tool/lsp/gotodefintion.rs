@@ -80,3 +80,28 @@ impl Tool for LSPGoToDefinition {
         Ok(ToolOutput::GoToDefinition(response))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        agentic::tool::{base::Tool, input::ToolInput},
+        chunking::text_document::Position,
+    };
+
+    use super::LSPGoToDefinition;
+
+    /// This test runs with a live editor, sometime later we can abstract this
+    /// part out
+    #[tokio::test]
+    async fn test_lsp_invocation() {
+        let input = ToolInput::GoToDefinition(super::GoToDefinitionRequest {
+            fs_file_path: "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
+            editor_url: "http://localhost:42423".to_owned(),
+            position: Position::new(144, 54, 0),
+        });
+        let lsp_go_to_definition = LSPGoToDefinition::new();
+        let result = lsp_go_to_definition.invoke(input).await;
+        println!("{:?}", result);
+        assert!(false);
+    }
+}

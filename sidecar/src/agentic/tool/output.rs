@@ -25,12 +25,14 @@ use super::{
     rerank::base::ReRankEntriesForBroker,
 };
 
+#[derive(Debug)]
 pub struct CodeToEditSnippet {
     start_line: i64,
     end_line: i64,
     thinking: String,
 }
 
+#[derive(Debug)]
 pub struct CodeToEditToolOutput {
     snipets: Vec<CodeToEditSnippet>,
 }
@@ -49,6 +51,7 @@ impl CodeToEditToolOutput {
     }
 }
 
+#[derive(Debug)]
 pub enum ToolOutput {
     CodeEditTool(String),
     LSPDiagnostics(LSPDiagnosticsOutput),

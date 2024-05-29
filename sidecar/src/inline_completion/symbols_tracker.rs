@@ -57,6 +57,9 @@ struct AddDocumentRequest {
     document_path: String,
     language: String,
     content: String,
+    /// Force update can be used to over-write the contents of the what we are
+    /// tracking in the document and make it seem like its a new document
+    force_update: bool,
 }
 
 impl AddDocumentRequest {
@@ -65,7 +68,13 @@ impl AddDocumentRequest {
             document_path,
             language,
             content,
+            force_update: false,
         }
+    }
+
+    pub fn set_foce_update(mut self) -> Self {
+        self.force_update = true;
+        self
     }
 }
 
@@ -215,6 +224,7 @@ impl SharedState {
                         add_document_request.document_path,
                         add_document_request.content,
                         add_document_request.language,
+                        add_document_request.force_update,
                     )
                     .await;
                 SharedStateResponse::Ok
@@ -459,16 +469,21 @@ impl SharedState {
         None
     }
 
-    async fn add_document(&self, document_path: String, content: String, language: String) {
+    async fn add_document(
+        &self,
+        document_path: String,
+        content: String,
+        language: String,
+        force_update: bool,
+    ) {
         if !should_track_file(&document_path) {
             return;
         }
         // First we check if the document is already present in the history
         self.track_file(document_path.to_owned()).await;
-        // Next we will create an entry in the document lines if it does not exist
-        {
-            let mut document_lines = self.document_lines.lock().await;
-            if !document_lines.contains_key(&document_path) {
+        if force_update {
+            {
+                let mut document_lines = self.document_lines.lock().await;
                 let document_lines_entry = DocumentEditLines::new(
                     document_path.to_owned(),
                     content,
@@ -476,8 +491,23 @@ impl SharedState {
                     self.editor_parsing.clone(),
                 );
                 document_lines.insert(document_path.clone(), document_lines_entry);
+                assert!(document_lines.contains_key(&document_path));
             }
-            assert!(document_lines.contains_key(&document_path));
+        } else {
+            // Next we will create an entry in the document lines if it does not exist
+            {
+                let mut document_lines = self.document_lines.lock().await;
+                if !document_lines.contains_key(&document_path) {
+                    let document_lines_entry = DocumentEditLines::new(
+                        document_path.to_owned(),
+                        content,
+                        language,
+                        self.editor_parsing.clone(),
+                    );
+                    document_lines.insert(document_path.clone(), document_lines_entry);
+                }
+                assert!(document_lines.contains_key(&document_path));
+            }
         }
     }
 
@@ -698,6 +728,21 @@ impl SymbolTrackerInline {
         } else {
             None
         }
+    }
+
+    /// This adds the document as a new entry even if it already existed
+    pub async fn force_add_document(
+        &self,
+        document_path: String,
+        content: String,
+        langauge: String,
+    ) {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request = SharedStateRequest::AddDocument(
+            AddDocumentRequest::new(document_path, langauge, content).set_foce_update(),
+        );
+        let _ = self.sender.send((request, sender));
+        let _ = receiver.await;
     }
 
     pub async fn add_document(&self, document_path: String, content: String, language: String) {

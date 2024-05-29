@@ -375,10 +375,11 @@ impl TSLanguageConfig {
                                             get_string_from_bytes(
                                                 &source_code_vec,
                                                 outline_range.start_byte(),
-                                                // -1 here is not perfect, this might
-                                                // not work for python for example, we should
-                                                // figure out how to handle this properly
-                                                child_range.start_byte() - 1,
+                                                // since this is a function, we want
+                                                // the complete range of the function here
+                                                // and not just the child range end which would
+                                                // be the function body
+                                                outline_range.end_byte(),
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range.clone(),
@@ -389,6 +390,9 @@ impl TSLanguageConfig {
                                     ));
                                 }
                             }
+                            end_index = end_index + 1;
+                        } else if let OutlineNodeType::FunctionParameterIdentifier = child_node_type
+                        {
                             end_index = end_index + 1;
                         } else {
                             break;
@@ -435,7 +439,7 @@ impl TSLanguageConfig {
                     outline_node
                 }
             })
-            .collect()
+            .collect::<Vec<_>>()
     }
 
     pub fn generate_import_identifier_nodes(
@@ -2491,6 +2495,12 @@ fn something_else_function() {
 
 }
 
+fn something_else_over_here_wtf() {
+    let a = "";
+    let b = "";
+    let c = "";
+}
+
 type SomethingType = string;
 
 trait SomethingTrait {
@@ -2510,6 +2520,7 @@ trait SomethingTrait {
             &tree,
             "/tmp/something".to_owned(),
         );
+        println!("{:?}", outline);
         assert_eq!(outline.len(), 6);
     }
 

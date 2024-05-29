@@ -52,7 +52,7 @@ async fn main() {
         vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
     // this is the current running debuggable editor
-    let editor_url = "http://localhost:51332".to_owned();
+    let editor_url = "http://localhost:42423".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -104,7 +104,7 @@ async fn main() {
         tokio::select! {
             event = receiver.recv() => {
                 if let Some(event) = event {
-                    info!("event: {:?}", event);
+                    // info!("event: {:?}", event);
                 } else {
                     break; // Receiver closed, exit the loop
                 }

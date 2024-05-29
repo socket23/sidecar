@@ -90,6 +90,8 @@ pub enum OutlineNodeType {
     FunctionClassName,
     // The function parameter identifier
     FunctionParameterIdentifier,
+    // The decorators which are present on top of functions/classes
+    Decorator,
 }
 
 impl OutlineNodeType {
@@ -121,6 +123,7 @@ impl OutlineNodeType {
             "function.body" => Some(Self::FunctionBody),
             "class.function.name" => Some(Self::FunctionClassName),
             "parameter.identifier" => Some(Self::FunctionParameterIdentifier),
+            "decorator" => Some(Self::Decorator),
             _ => None,
         }
     }

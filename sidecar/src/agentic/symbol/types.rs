@@ -44,7 +44,7 @@ use super::{
     tool_box::ToolBox,
 };
 
-const BUFFER_LIMIT: usize = 1;
+const BUFFER_LIMIT: usize = 100;
 
 #[derive(Debug, Clone)]
 pub struct SymbolEventRequest {
@@ -355,6 +355,7 @@ impl Symbol {
 
         let history = request.history();
         let history_slice = request.history_slice();
+        let original_request = request.original_request();
         let history_ref = &history;
         let query = request.probe_request();
 
@@ -621,6 +622,7 @@ impl Symbol {
                                 let symbol_to_probe_request = SymbolToProbeRequest::new(
                                     symbol_identifier.clone(),
                                     reason.to_owned(),
+                                    original_request.to_owned(),
                                     history,
                                 );
                                 println!(
@@ -692,7 +694,13 @@ impl Symbol {
                 self.llm_properties.provider().clone(),
                 self.llm_properties.api_key().clone(),
             );
-            self.tools.probing_results_summarize(request).await
+            let result = self.tools.probing_results_summarize(request).await;
+            println!(
+                "Probing finished for {} with result: {:?}",
+                &self.mecha_code_symbol.symbol_name(),
+                &result
+            );
+            result
         }
     }
 

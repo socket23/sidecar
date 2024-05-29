@@ -67,7 +67,6 @@ impl CodeSymbolImportantBroker {
 impl Tool for CodeSymbolImportantBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         // PS: This is getting out of hand
-        println!("Input: {:?}", &input);
         if input.is_probe_summarization_request() {
             let context = input.probe_summarization_request()?;
             if let Some(implementation) = self.llms.get(context.llm()) {

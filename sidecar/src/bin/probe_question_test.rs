@@ -92,9 +92,12 @@ async fn main() {
         "agent_router",
         "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs",
     );
+
+    let request = "Where are we sending the request to the LLM client?".to_owned();
     let probe_request = SymbolToProbeRequest::new(
         symbol_identifier.clone(),
-        "Where are we sending the request to the LLM client?".to_owned(),
+        request.to_owned(),
+        request.to_owned(),
         vec![],
     );
     let probe_request = SymbolEventRequest::probe_request(symbol_identifier, probe_request);

@@ -159,6 +159,7 @@ impl SymbolLocker {
         }
 
         // now we create the symbol and let it rip
+        let symbol_name = symbol_identifier.symbol_name().to_owned();
         let symbol = Symbol::new(
             symbol_identifier.clone(),
             request,
@@ -168,7 +169,11 @@ impl SymbolLocker {
         )
         .await;
 
-        println!("Symbol::new is_err: {:?}", symbol.is_err());
+        println!(
+            "Symbol::new({:?}) is_err: {:?}",
+            symbol_name,
+            symbol.is_err()
+        );
 
         let symbol = symbol?;
 

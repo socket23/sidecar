@@ -191,7 +191,9 @@ impl CodeSymbolShouldAskQuestionsResponse {
     }
 
     pub fn should_follow(&self) -> bool {
-        self.context_enough
+        // if we have enough context then we do not need to follow the symbols
+        // any longer, if thats not the case then we need to follow it more
+        !self.context_enough
     }
 
     pub fn parse_response(
@@ -239,21 +241,11 @@ impl CodeSymbolToAskQuestionsResponse {
                     .into_iter()
                     .map(|symbol_list| AskQuestionSymbolHint {
                         name: symbol_list.name,
-                        line_content: symbol_list
-                            .line_content
-                            .lines()
-                            .into_iter()
-                            .map(|line| AnthropicCodeSymbolImportant::escape_xml(line.to_owned()))
-                            .collect::<Vec<_>>()
-                            .join("\n"),
+                        line_content: AnthropicCodeSymbolImportant::escape_xml(
+                            symbol_list.line_content,
+                        ),
                         file_path: symbol_list.file_path,
-                        thinking: symbol_list
-                            .thinking
-                            .lines()
-                            .into_iter()
-                            .map(|line| AnthropicCodeSymbolImportant::escape_xml(line.to_owned()))
-                            .collect::<Vec<_>>()
-                            .join("\n"),
+                        thinking: AnthropicCodeSymbolImportant::escape_xml(symbol_list.thinking),
                     })
                     .collect(),
             ),
@@ -2548,7 +2540,7 @@ You can understand from the response here how we did not have to follow the next
 {your reason for deciding if we need to dive deeper into the code to completely answer the user query.}
 </thinking>
 <context_enough>
-{reply with either true or false} if in your <thinking> you realise that we should follow some more symbols to completely answer the question, then reply with true otherwise reply with false
+{reply with either true or false} if in your <thinking> you realise that we should follow some more symbols to completely answer the question, then reply with flase otherwise reply with true
 </context_enough>
 </reply>
 
@@ -3677,6 +3669,52 @@ Does the language type expose any prettier settings, because we want to get it s
 <symbol>
 </symbol_list>
 </reply>
+
+We will also show you some more examples to help you understand how to do symbol selection just the name and the line content for the symbol_list below,
+
+Example 1:
+<code_in_selection>
+```rust
+let message =
+        Message::new("message", "sender", "receiver);
+message.send().await;
+```rust
+</code_in_selection>
+and you want to select the `new` function in Message::new you would do the following:
+<symbol>
+<name>
+new
+</new>
+<line_content>
+        Message::new("message", "sender", "receiver);
+</line_content>
+</symbol>
+
+Example 2:
+<code_above>
+```rust
+use city::Movie;
+```
+</code_above>
+<code_in_selection>
+```rust
+fn has_started(
+    movie: Movie,
+    time_now: usize,
+) -> bool {{
+    movie.start_time() <= time_now
+}}
+</code_in_selection>
+and you want to select the `Movie` you will do the following:
+<symbol>
+<name>
+Movie
+</name>
+<line_content>
+    movie: Movie,
+</line_content>
+</symbol>
+As you can see we ALWAYS select symbol from the code selection and never make mistakes when selecting the line, even if the import was a valid selection in this case but it was outside the <code_in_selection> block.
 
 Notice how each xml tag ends with a new line and the content begins after the tag line, follow this format strictly.
 In <line_content> only include a single line where the symbol you are interested in is contained.
@@ -5036,9 +5074,18 @@ We have to add the newly created endpoint in inline_completion to add support fo
         quick_xml::escape::escape(&s).to_string()
     }
 
+    fn dirty_escape_fix(s: String) -> String {
+        s.replace("&quot;", "\"")
+            .replace("&apos;", "'")
+            .replace("&gt;", ">")
+            .replace("&lt;", "<")
+            .replace("&amp;", "&")
+    }
+
     fn escape_xml(s: String) -> String {
         quick_xml::escape::unescape(&s)
-            .expect("to work")
+            .map(|output| output.to_string())
+            .unwrap_or(Self::dirty_escape_fix(s))
             .to_string()
     }
 
@@ -5685,63 +5732,54 @@ pub async fn new(config: LLMBrokerConfiguration) -> Result<Self, LLMClientError>
 
     #[test]
     fn test_parsing_code_symbol_to_follow_questions() {
-        let response = r#"<reply>
+        let response = r#"
+<reply>
 <steps_to_answer>
-- The `agent_router` function defines the routes related to the agent functionality, but it does not directly handle the requests to the LLM client.
-- The routes defined in `agent_router` are likely responsible for handling user requests and forwarding them to the appropriate components that interact with the LLM client.
-- To find where the actual requests to the LLM client are sent, we need to trace the code execution from these routes to the components responsible for interacting with the LLM client.
-- We should look at the functions associated with each route, such as `sidecar::webserver::agent::search_agent`, `sidecar::webserver::agent::hybrid_search`, `sidecar::webserver::agent::explain`, and `sidecar::webserver::agent::followup_chat`.
+- To understand how the `hybrid_search` function works, we need to inspect the implementation of the `Agent::code_search_hybrid` method, which is responsible for performing the hybrid search.
+- We also need to understand how the `Agent` struct is initialized for the semantic search, as this is done in the `Agent::prepare_for_semantic_search` method.
+- Additionally, we should look at how the search results are combined and scored, as mentioned in the comments.
 </steps_to_answer>
 <symbol_list>
 <symbol>
 <name>
-sidecar::webserver::agent::search_agent
+Agent::code_search_hybrid
 </name>
 <line_content>
-            get(sidecar::webserver::agent::search_agent),
+    let hybrid_search_results = agent.code_search_hybrid(&query).await.unwrap_or(vec![]);
 </line_content>
 <file_path>
-/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
+/Users/skcd/scratch/sidecar/sidecar/src/webserver/agent.rs
 </file_path>
 <thinking>
-This function likely handles the search agent requests and may contain code that interacts with the LLM client for search-related tasks.
+This line calls the `code_search_hybrid` method on the `Agent` struct, which is likely the core implementation of the hybrid search functionality. We need to inspect this method to understand how the hybrid search is performed.
 </thinking>
 </symbol>
 <symbol>
-<name>sidecar::webserver::agent::hybrid_search</name>
+<name>
+Agent::prepare_for_semantic_search
+</name>
 <line_content>
-            get(sidecar::webserver::agent::hybrid_search),
+    let mut agent = Agent::prepare_for_semantic_search(
 </line_content>
 <file_path>
-/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
+/Users/skcd/scratch/sidecar/sidecar/src/webserver/agent.rs
 </file_path>
 <thinking>
-This function likely handles hybrid search requests, which could involve combining different search techniques, potentially including interactions with the LLM client.
+This line initializes the `Agent` struct for the semantic search. We should inspect the `prepare_for_semantic_search` method to understand how the `Agent` is set up for the hybrid search, which includes the semantic search component.
 </thinking>
 </symbol>
 <symbol>
-<name>sidecar::webserver::agent::explain</name>
+<name>
+HybridSearchResponse
+</name>
 <line_content>
-        .route(get(sidecar::webserver::agent::explain))
+    Ok(json(HybridSearchResponse {
 </line_content>
 <file_path>
-/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
+/Users/skcd/scratch/sidecar/sidecar/src/webserver/agent.rs
 </file_path>
 <thinking>
-This function likely handles requests for getting explanations from the agent, which could involve interacting with the LLM client to generate explanations.
-</thinking>
-</symbol>
-<symbol>
-<name>sidecar::webserver::agent::followup_chat</name>
-<line_content>
-        "/followup_chat",
-        post(sidecar::webserver::agent::followup_chat),
-</line_content>
-<file_path>
-/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs
-</file_path>
-<thinking>
-This function likely handles POST requests for follow-up chat interactions with the agent, which could involve sending user input to the LLM client and receiving responses.
+This struct represents the response of the hybrid search. We should inspect its fields to understand how the search results are structured and returned.
 </thinking>
 </symbol>
 </symbol_list>

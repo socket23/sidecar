@@ -52,7 +52,7 @@ async fn main() {
         vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
     // this is the current running debuggable editor
-    let editor_url = "http://localhost:42423".to_owned();
+    let editor_url = "http://localhost:59008".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(

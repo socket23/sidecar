@@ -294,6 +294,9 @@ impl TSLanguageConfig {
                                 // can not have another class definition inside
                                 // it
                             }
+                            OutlineNodeType::Decorator => {
+                                // if its a decorator we just skip for now
+                            }
                         }
                         end_index = end_index + 1;
                     }
@@ -419,6 +422,11 @@ impl TSLanguageConfig {
                 OutlineNodeType::FunctionParameterIdentifier => {
                     start_index = start_index + 1;
                     // we want to track this going on
+                }
+                OutlineNodeType::Decorator => {
+                    start_index = start_index + 1;
+                    // we are not going to track the decorators right now, we will figure out
+                    // what to do about decorators in a bit
                 }
             }
         }

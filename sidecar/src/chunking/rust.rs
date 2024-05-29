@@ -102,6 +102,7 @@ pub fn rust_language_config() -> TSLanguageConfig {
         // we are missing generic types over here
         outline_query: Some(
             r#"
+            (attribute_item) @decorator
             (struct_item
                 name: (type_identifier) @definition.class.name
               ) @definition.class.declaration

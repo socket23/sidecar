@@ -37,7 +37,7 @@ impl AnthropicCodeSymbolImportant {
     }
 
     fn is_model_supported(&self, llm_type: &LLMType) -> bool {
-        if llm_type.is_anthropic() || llm_type.is_openai() || llm_type.is_gemini_pro() {
+        if llm_type.is_anthropic() || llm_type.is_openai() || llm_type.is_gemini_model() {
             true
         } else {
             false
@@ -5207,7 +5207,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !code_symbols.model().is_anthropic() {
+        if !code_symbols.model().is_gemini_model() {
             return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
         }
         let system_message = LLMClientMessage::system(self.system_message(&code_symbols));
@@ -5254,7 +5254,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         );
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5289,7 +5289,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         );
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5329,7 +5329,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_ask_question_symbols(request));
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5371,7 +5371,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         );
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5408,7 +5408,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_probe_next_symbol(request));
         let messages =
             LLMClientCompletionRequest::new(llm, vec![system_message, user_messagee], 0.0, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5438,7 +5438,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_summarizing_probe_result(request));
         let messages =
             LLMClientCompletionRequest::new(llm, vec![system_message, user_message], 0.0, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5488,7 +5488,7 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.format_code_correctness_request(code_correctness_request));
         let messages =
             LLMClientCompletionRequest::new(llm, vec![system_message, user_message], 0.0, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5548,7 +5548,7 @@ impl CodeSymbolErrorFix for AnthropicCodeSymbolImportant {
         let user_message = LLMClientMessage::user(self.user_message_for_code_error_fix(&code_fix));
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.2, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -5581,7 +5581,7 @@ impl ClassSymbolFollowup for AnthropicCodeSymbolImportant {
         let user_message = LLMClientMessage::user(self.user_message_for_class_symbol(request));
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.2, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(

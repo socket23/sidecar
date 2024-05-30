@@ -6,7 +6,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{AnthropicAPIKey, GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 use sidecar::{
     agentic::{
@@ -44,14 +44,14 @@ async fn main() {
     tracing_subscribe_default();
     let current_query =
         "Where are we sending the request to the LLM clients? from the agent".to_owned();
-    let anthropic_api_key = "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".to_owned();
-    let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(anthropic_api_key));
+    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
     let user_context = UserContext::new(
         vec![],
         vec![],
         None,
         vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
+    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCguiRZP_3G8vUxvkKgrEfcTyGu-xdqdv5SyXsgvWKuaxJSjjTTRH7_cvzsYrOqyyZ_P7-gQFw_L1VRsl1xITfFsvTbVJLsaYUqVGBwKNG4d8obg6OQctm36QxeWwTGYNvke10k_oMW1ygkhIzjIsogk_d_PnBfecn8TubmkaCgYKAeMSARESFQHGX2MiUhp9vFKvNq1Lp7CMO-x2pA0178".to_owned(), "anton-390822".to_owned()));
     // this is the current running debuggable editor
     let editor_url = "http://localhost:59293".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
@@ -66,27 +66,27 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
     ));
-    let llm_properties = LLMProperties::new(
+    let gemini_llm_properties = LLMProperties::new(
+        LLMType::GeminiProFlash,
+        LLMProvider::GeminiPro,
+        gemini_pro_keys.clone(),
+    );
+    let anthropic_llm_properties = LLMProperties::new(
         LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,
-        api_key.clone(),
+        anthropic_api_keys.clone(),
     );
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
         editor_url.to_owned(),
         sender,
-        llm_properties,
+        // This is where we are setting the LLM properties
+        gemini_llm_properties.clone(),
         user_context.clone(),
-    );
-    let symbol_input = SymbolInputEvent::new(
-        user_context,
-        LLMType::ClaudeSonnet,
-        LLMProvider::Anthropic,
-        api_key,
-        current_query.to_owned(),
     );
 
     // let agent_symbol_identifier = SymbolIdentifier::with_file_path(

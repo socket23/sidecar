@@ -59,6 +59,10 @@ impl CodeSymbolImportantBroker {
             LLMType::GeminiPro,
             Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
         );
+        llms.insert(
+            LLMType::GeminiProFlash,
+            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+        );
         Self { llms }
     }
 }

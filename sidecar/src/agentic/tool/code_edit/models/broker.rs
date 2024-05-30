@@ -97,6 +97,14 @@ impl CodeEditBroker {
             LLMType::ClaudeOpus,
             Box::new(AnthropicCodeEditFromatter::new()),
         );
+        models.insert(
+            LLMType::GeminiPro,
+            Box::new(AnthropicCodeEditFromatter::new()),
+        );
+        models.insert(
+            LLMType::GeminiProFlash,
+            Box::new(AnthropicCodeEditFromatter::new()),
+        );
         Self { models }
     }
 

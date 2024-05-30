@@ -31,6 +31,7 @@ pub enum LLMType {
     PPLXSonnetSmall,
     CohereRerankV3,
     GeminiPro,
+    GeminiProFlash,
     Custom(String),
 }
 
@@ -85,6 +86,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "GeminiPro1.5" => Ok(LLMType::GeminiPro),
                     "Llama3_8bInstruct" => Ok(LLMType::Llama3_8bInstruct),
                     "Gpt4O" => Ok(LLMType::Gpt4O),
+                    "GeminiProFlash" => Ok(LLMType::GeminiProFlash),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -119,6 +121,10 @@ impl LLMType {
 
     pub fn is_openai_gpt4o(&self) -> bool {
         matches!(self, LLMType::Gpt4O)
+    }
+
+    pub fn is_gemini_model(&self) -> bool {
+        self == &LLMType::GeminiPro || self == &LLMType::GeminiProFlash
     }
 
     pub fn is_gemini_pro(&self) -> bool {
@@ -158,6 +164,7 @@ impl fmt::Display for LLMType {
             LLMType::Llama3_8bInstruct => write!(f, "Llama3_8bInstruct"),
             LLMType::GeminiPro => write!(f, "GeminiPro1.5"),
             LLMType::Gpt4O => write!(f, "Gpt4O"),
+            LLMType::GeminiProFlash => write!(f, "GeminiProFlash"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

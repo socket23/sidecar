@@ -261,9 +261,9 @@ impl LLMClient for GeminiProClient {
 
     async fn stream_prompt_completion(
         &self,
-        api_key: LLMProviderAPIKeys,
-        request: LLMClientCompletionStringRequest,
-        sender: UnboundedSender<LLMClientCompletionResponse>,
+        _api_key: LLMProviderAPIKeys,
+        _request: LLMClientCompletionStringRequest,
+        _sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
         Err(LLMClientError::GeminiProDoesNotSupportPromptCompletion)
     }

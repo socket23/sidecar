@@ -300,7 +300,7 @@ impl LLMClient for AnthropicClient {
                         model_str.to_owned(),
                     ));
                 }
-                Err(e) => {
+                Err(_e) => {
                     // dbg!(e);
                     break;
                 }

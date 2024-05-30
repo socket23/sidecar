@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
-use crate::clients::types::{LLMClientCompletionRequest, LLMClientMessage};
+use crate::clients::types::LLMClientCompletionRequest;
 
 extern crate serde_json;
 

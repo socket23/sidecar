@@ -88,7 +88,7 @@ impl OpenAICompatibleClient {
                             .role(Role::Assistant)
                             .content(message.content().to_owned())
                             .build()
-                            .map(|message| ChatCompletionRequestMessage::Assistant((message)))
+                            .map(|message| ChatCompletionRequestMessage::Assistant(message))
                             .map_err(|e| LLMClientError::OpenAPIError(e)),
                     },
                     LLMClientRole::Function => match message.get_function_call() {
@@ -131,7 +131,7 @@ impl OpenAICompatibleClient {
     fn generate_completion_openai_client(
         &self,
         api_key: LLMProviderAPIKeys,
-        llm_model: &LLMType,
+        _llm_model: &LLMType,
     ) -> Result<Client<OpenAIConfig>, LLMClientError> {
         match api_key {
             LLMProviderAPIKeys::OpenAICompatible(openai_compatible) => {

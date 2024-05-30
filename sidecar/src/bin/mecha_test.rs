@@ -87,7 +87,7 @@ async fn main() {
 
     // after the initial request this is the reply we get back, so lets try to make this work end to end for this case
 
-    let request = CodeSymbolImportantResponse::new(
+    let _ = CodeSymbolImportantResponse::new(
         vec![
             CodeSymbolWithThinking::new("LLMProvider".to_owned(), "We need to add a new variant to the LLMProvider enum to support the new Groq provider.".to_owned(), "/Users/skcd/scratch/sidecar/llm_client/src/provider.rs".to_owned()),
             CodeSymbolWithThinking::new("LLMProviderAPIKeys".to_owned(),"We need to add a new variant to the LLMProviderAPIKeys enum to hold the API key for the Groq provider.".to_owned(), "/Users/skcd/scratch/sidecar/llm_client/src/provider.rs".to_owned()),

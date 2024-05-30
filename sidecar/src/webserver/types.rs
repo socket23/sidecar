@@ -42,30 +42,6 @@ impl IntoResponse for Error {
 }
 
 impl Error {
-    fn new(kind: ErrorKind, message: impl Into<Cow<'static, str>>) -> Error {
-        let status = match kind {
-            ErrorKind::Configuration
-            | ErrorKind::Unknown
-            | ErrorKind::UpstreamService
-            | ErrorKind::Internal
-            | ErrorKind::Custom => StatusCode::INTERNAL_SERVER_ERROR,
-            ErrorKind::User => StatusCode::BAD_REQUEST,
-            ErrorKind::NotFound => StatusCode::NOT_FOUND,
-        };
-
-        let body = EndpointError {
-            kind,
-            message: message.into(),
-        };
-
-        Error { status, body }
-    }
-
-    fn with_status(mut self, status_code: StatusCode) -> Self {
-        self.status = status_code;
-        self
-    }
-
     fn internal<S: std::fmt::Display>(message: S) -> Self {
         Error {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -74,40 +50,6 @@ impl Error {
                 message: message.to_string().into(),
             },
         }
-    }
-
-    fn user<S: std::fmt::Display>(message: S) -> Self {
-        Error {
-            status: StatusCode::BAD_REQUEST,
-            body: EndpointError {
-                kind: ErrorKind::User,
-                message: message.to_string().into(),
-            },
-        }
-    }
-
-    fn not_found<S: std::fmt::Display>(message: S) -> Self {
-        Error {
-            status: StatusCode::NOT_FOUND,
-            body: EndpointError {
-                kind: ErrorKind::NotFound,
-                message: message.to_string().into(),
-            },
-        }
-    }
-
-    fn unauthorized<S: std::fmt::Display>(message: S) -> Self {
-        Error {
-            status: StatusCode::UNAUTHORIZED,
-            body: EndpointError {
-                kind: ErrorKind::User,
-                message: message.to_string().into(),
-            },
-        }
-    }
-
-    fn message(&self) -> &str {
-        self.body.message.as_ref()
     }
 }
 

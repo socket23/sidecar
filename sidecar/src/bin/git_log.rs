@@ -143,8 +143,8 @@ fn run(args: Args) -> anyhow::Result<()> {
                 let info = info?;
                 let commit = info.object()?;
                 let commit_ref = commit.decode()?;
-                let changes = commit.tree().unwrap().changes();
-                let commit_tree = commit_ref.tree();
+                let _ = commit.tree().unwrap().changes();
+                let _ = commit_ref.tree();
                 Ok(LogEntryInfo {
                     commit_id: commit.id().to_hex().to_string(),
                     parents: info

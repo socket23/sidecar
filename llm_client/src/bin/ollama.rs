@@ -68,7 +68,7 @@ Remember to APPLY THE EDITS from the ## Export to codebase section and make sure
         0.7,
         None,
     );
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = ollam_client
         .stream_prompt_completion(api_key, request, sender)
         .await;

@@ -391,7 +391,7 @@ pub struct ArticleBuilder {
 }
 
 impl ArticleBuilder {
-    fn new<T: IntoUrl>(url: T) -> Result<Self> {
+    fn _new<T: IntoUrl>(url: T) -> Result<Self> {
         let url = url.into_url()?;
 
         Ok(ArticleBuilder {

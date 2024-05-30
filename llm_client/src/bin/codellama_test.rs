@@ -1,9 +1,6 @@
 use llm_client::clients::togetherai::TogetherAIClient;
 use llm_client::clients::types::LLMClientCompletionStringRequest;
-use llm_client::{
-    clients::types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage},
-    provider::TogetherAIProvider,
-};
+use llm_client::{clients::types::LLMClient, provider::TogetherAIProvider};
 
 // "{% if messages[0]['role'] == 'system' %}
 // {% set user_index = 1 %}
@@ -160,7 +157,7 @@ Destination: user
     //     .await;
     // dbg!(&response);
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let response = togetherai
+    let _response = togetherai
         .stream_prompt_completion(api_key, request, sender)
         .await;
 }

@@ -112,7 +112,7 @@ impl ContextWindowTracker {
 #[derive(Debug)]
 pub struct ContextParserInLineEdit {
     language: String,
-    unique_identifier: String,
+    _unique_identifier: String,
     first_line_index: i64,
     last_line_index: i64,
     is_complete: bool,
@@ -137,7 +137,7 @@ impl ContextParserInLineEdit {
         let comment_style = "//".to_owned();
         Self {
             language,
-            unique_identifier: unique_identifier.to_owned(),
+            _unique_identifier: unique_identifier.to_owned(),
             first_line_index: lines_count,
             last_line_index: -1,
             is_complete: false,

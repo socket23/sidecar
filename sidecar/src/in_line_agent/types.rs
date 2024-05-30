@@ -262,12 +262,12 @@ impl InLineAgentMessage {
 pub struct InLineAgent {
     application: Application,
     repo_ref: RepoRef,
-    session_id: uuid::Uuid,
+    _session_id: uuid::Uuid,
     inline_agent_messages: Vec<InLineAgentMessage>,
     llm_broker: Arc<LLMBroker>,
     llm_prompt_formatter: Arc<InLineEditPromptBroker>,
     chat_broker: Arc<LLMChatModelBroker>,
-    sql_db: SqlDb,
+    _sql_db: SqlDb,
     editor_parsing: EditorParsing,
     // TODO(skcd): Break this out and don't use cross crate dependency like this
     editor_request: ProcessInEditorRequest,
@@ -290,11 +290,11 @@ impl InLineAgent {
         Self {
             application,
             repo_ref,
-            session_id: uuid::Uuid::new_v4(),
+            _session_id: uuid::Uuid::new_v4(),
             inline_agent_messages: messages,
             llm_broker,
             llm_prompt_formatter,
-            sql_db,
+            _sql_db: sql_db,
             sender,
             editor_request,
             editor_parsing,
@@ -1010,7 +1010,7 @@ impl InLineAgent {
         document_symbols: Vec<DocumentSymbol>,
         language: &str,
         file_path: &str,
-        query: &str,
+        _query: &str,
     ) -> Vec<(InLineDocRequest, DocumentSymbol)> {
         document_symbols
             .into_iter()

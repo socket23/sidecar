@@ -305,7 +305,7 @@ impl DocumentLine {
 pub struct DocumentEditLines {
     lines: Vec<DocumentLine>,
     file_path: String,
-    language: String,
+    _language: String,
     // What snippets are in the document
     // Some things we should take care of:
     // when providing context to the inline autocomplete we want to make sure that
@@ -338,7 +338,7 @@ impl DocumentEditLines {
                     content: "".to_string(),
                 }],
                 file_path,
-                language,
+                _language: language,
                 window_snippets: vec![],
                 editor_parsing,
                 tree: None,
@@ -357,7 +357,7 @@ impl DocumentEditLines {
             DocumentEditLines {
                 lines,
                 file_path,
-                language,
+                _language: language,
                 window_snippets: vec![],
                 editor_parsing,
                 tree: None,

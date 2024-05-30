@@ -5,8 +5,6 @@ use llm_client::{
     },
     provider::{AnthropicAPIKey, LLMProviderAPIKeys},
 };
-use reqwest::Client;
-use serde_json::json;
 
 #[tokio::main]
 async fn main() {
@@ -285,7 +283,7 @@ As a reminder the section in <prompt> where you have to make changes is over her
         None,
     )
     .set_max_tokens(4096);
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = anthropic_client
         .stream_completion(api_key, request, sender)
         .await;

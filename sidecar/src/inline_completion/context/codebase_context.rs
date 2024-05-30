@@ -24,7 +24,7 @@ pub struct CodeBaseContext {
     cursor_position: Position,
     symbol_tracker: Arc<SymbolTrackerInline>,
     editor_parsing: Arc<EditorParsing>,
-    request_id: String,
+    _request_id: String,
 }
 
 /// The Codebase context helps truncate the context in the clipboard into the limit of the
@@ -65,7 +65,7 @@ impl CodeBaseContext {
             cursor_position,
             symbol_tracker,
             editor_parsing,
-            request_id,
+            _request_id: request_id,
         }
     }
 

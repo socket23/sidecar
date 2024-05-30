@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use futures::stream::select;
 use llm_client::{
     clients::{
         anthropic::AnthropicClient,
@@ -19,7 +18,7 @@ async fn main() {
     let ts_language_parsing = TSLanguageParsing::init();
     let parsed_ts_file =
         ts_language_parsing.chunk_file(&fs_file_path, &fs_file_contents, None, None);
-    let id_span_mapping = parsed_ts_file
+    let _id_span_mapping = parsed_ts_file
         .to_vec()
         .into_iter()
         .enumerate()
@@ -63,7 +62,7 @@ switch (part) {
 The comments provide a brief explanation of what each case is checking based on the part passed to the isVisible method."#.to_owned();
     // now we create the spans in the format of LLMClientMessage
     // and then we send them to the LLMClient
-    let mut spans_content = parsed_ts_file
+    let spans_content = parsed_ts_file
         .to_vec()
         .into_iter()
         .enumerate()
@@ -103,7 +102,7 @@ First give a brief reasoning for your answer and then print the ranking
     let anthropic_client = AnthropicClient::new();
     let anthropic_api_key = "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".to_owned();
     let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(anthropic_api_key));
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let messages = vec![
             LLMClientMessage::system(r#"You are an expert at ranking the code snippets which are most relevant to the message provided by the user.

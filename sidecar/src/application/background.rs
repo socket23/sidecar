@@ -253,38 +253,6 @@ impl BoundSyncQueue {
         Ok(finished.recv_async().await?)
     }
 
-    pub(crate) async fn remove(self, reporef: RepoRef) -> Option<()> {
-        let active = self
-            .1
-            .active
-            .update_async(&reporef, |_, v| {
-                v.pipes.remove();
-                v.set_status(|_| SyncStatus::Removed);
-            })
-            .await;
-
-        if active.is_none() {
-            self.0
-                .repo_pool
-                .update_async(&reporef, |_k, v| v.mark_removed())
-                .await?;
-
-            self.enqueue_sync(vec![reporef]).await;
-        }
-
-        Some(())
-    }
-
-    pub(crate) async fn cancel(&self, reporef: RepoRef) {
-        self.1
-            .active
-            .update_async(&reporef, |_, v| {
-                v.set_status(|_| SyncStatus::Cancelling);
-                v.pipes.cancel();
-            })
-            .await;
-    }
-
     pub async fn startup_scan(self) -> anyhow::Result<()> {
         let Self(Application { repo_pool, .. }, _) = &self;
 
@@ -409,14 +377,6 @@ impl SyncPipes {
             Some(ControlEvent::Remove)
         )
     }
-
-    pub(crate) fn cancel(&self) {
-        *self.event.write().unwrap() = Some(ControlEvent::Cancel);
-    }
-
-    pub(crate) fn remove(&self) {
-        *self.event.write().unwrap() = Some(ControlEvent::Remove);
-    }
 }
 
 pub struct SyncHandle {
@@ -430,17 +390,8 @@ pub struct SyncHandle {
 type Result<T> = std::result::Result<T, SyncError>;
 #[derive(thiserror::Error, Debug)]
 pub(super) enum SyncError {
-    #[error("path not allowed: {0:?}")]
-    PathNotAllowed(PathBuf),
-
-    #[error("folder cleanup failed: path: {0:?}, error: {1}")]
-    RemoveLocal(PathBuf, std::io::Error),
-
     #[error("tantivy: {0:?}")]
     Tantivy(anyhow::Error),
-
-    #[error("syncing in progress")]
-    SyncInProgress,
 
     #[error("cancelled by user")]
     Cancelled,

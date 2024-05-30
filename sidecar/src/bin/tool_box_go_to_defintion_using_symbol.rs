@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use llm_client::{broker::LLMBroker, config::LLMBrokerConfiguration};
 use sidecar::{
     agentic::{
-        symbol::{identifier::Snippet, tool_box::ToolBox},
+        symbol::tool_box::ToolBox,
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
     chunking::{

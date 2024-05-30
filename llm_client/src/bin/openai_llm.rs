@@ -1,5 +1,3 @@
-use async_openai::{config::AzureConfig, types::CreateChatCompletionRequestArgs, Client};
-use futures::StreamExt;
 use llm_client::clients::{
     openai::OpenAIClient,
     types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage},
@@ -24,7 +22,7 @@ async fn main() {
         1.0,
         None,
     );
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = openai_client
         .stream_completion(api_key, request, sender)
         .await;

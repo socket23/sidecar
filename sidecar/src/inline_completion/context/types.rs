@@ -186,16 +186,16 @@ impl DocumentLines {
 
 #[derive(Debug, Clone)]
 pub struct CodeSelection {
-    range: Range,
-    file_path: String,
+    _range: Range,
+    _file_path: String,
     content: String,
 }
 
 impl CodeSelection {
     pub fn new(range: Range, file_path: String, content: String) -> Self {
         Self {
-            range,
-            file_path,
+            _range: range,
+            _file_path: file_path,
             content,
         }
     }

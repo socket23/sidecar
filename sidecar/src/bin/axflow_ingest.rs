@@ -1,6 +1,6 @@
 //! Helper script to test ingestion with axflow
 
-use sidecar::{agent::llm_funcs, reporting::axflow::client::AxflowClient};
+use sidecar::agent::llm_funcs;
 
 #[tokio::main]
 async fn main() {

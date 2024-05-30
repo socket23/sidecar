@@ -1,17 +1,13 @@
 use llm_client::{
     clients::{
         fireworks::FireworksAIClient,
-        togetherai::TogetherAIClient,
         types::{LLMClient, LLMClientCompletionStringRequest, LLMType},
     },
-    provider::{FireworksAPIKey, LLMProviderAPIKeys, TogetherAIProvider},
+    provider::{FireworksAPIKey, LLMProviderAPIKeys},
 };
 
 #[tokio::main]
 async fn main() {
-    let api_key = LLMProviderAPIKeys::TogetherAI(TogetherAIProvider {
-        api_key: "cc10d6774e67efef2004b85efdb81a3c9ba0b7682cc33d59c30834183502208d".to_owned(),
-    });
     let api_key = LLMProviderAPIKeys::FireworksAI(FireworksAPIKey {
         api_key: "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
     });
@@ -251,7 +247,7 @@ pub enum CodebaseContextString {
         None,
     )
     .set_max_tokens(100);
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = client
         .stream_prompt_completion(api_key, request, sender)
         .await;

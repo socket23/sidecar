@@ -1,5 +1,3 @@
-use std::num;
-
 use crate::repo::types::RepoRef;
 
 use super::{languages::TSLanguageConfig, types::FunctionInformation};
@@ -7,9 +5,9 @@ use super::{languages::TSLanguageConfig, types::FunctionInformation};
 #[derive(Debug)]
 pub struct TextDocument {
     text: String,
-    repo_ref: RepoRef,
-    fs_file_path: String,
-    relative_path: String,
+    _repo_ref: RepoRef,
+    _fs_file_path: String,
+    _relative_path: String,
 }
 
 impl TextDocument {
@@ -21,9 +19,9 @@ impl TextDocument {
     ) -> Self {
         Self {
             text,
-            repo_ref,
-            fs_file_path,
-            relative_path,
+            _repo_ref: repo_ref,
+            _fs_file_path: fs_file_path,
+            _relative_path: relative_path,
         }
     }
 
@@ -249,7 +247,11 @@ impl Range {
             && self.end_position.byte_offset >= other.end_position.byte_offset
     }
 
-    pub fn guard_large_expansion(selection_range: Self, expanded_range: Self, size: usize) -> Self {
+    pub fn guard_large_expansion(
+        selection_range: Self,
+        expanded_range: Self,
+        _size: usize,
+    ) -> Self {
         let start_line_difference =
             if selection_range.start_position().line() > expanded_range.start_position().line() {
                 selection_range.start_position().line() - expanded_range.start_position().line()
@@ -379,7 +381,7 @@ impl DocumentSymbol {
         tree_cursor: &mut tree_sitter::TreeCursor<'a>,
         node: &tree_sitter::Node<'a>,
         regex: regex::Regex,
-        source_code: &str,
+        _source_code: &str,
     ) -> Option<tree_sitter::Node<'a>> {
         node.children(tree_cursor)
             .find(|node| regex.is_match(node.kind()))

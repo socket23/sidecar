@@ -15,14 +15,12 @@ struct ReRankQuery {
 
 #[derive(Debug, serde::Deserialize)]
 struct ReRankResponse {
-    id: String,
     results: Vec<ReRankResult>,
 }
 
 #[derive(Debug, serde::Deserialize)]
 struct ReRankResult {
     index: usize,
-    relevance_score: f64,
 }
 
 // TODO(skcd): Figure out the right layer to put this in, it feels awkward

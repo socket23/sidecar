@@ -13,7 +13,7 @@ use sidecar::{
 async fn main() -> anyhow::Result<()> {
     let configuration = Arc::new(Configuration::parse());
     let sql_db = Arc::new(sqlite::init(configuration).await?);
-    let result = read_all_entries(sql_db).await;
+    let _ = read_all_entries(sql_db).await;
     Ok(())
 }
 

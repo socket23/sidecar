@@ -1234,7 +1234,7 @@ Code location: {code_location}:{start_line}-{end_line}
                 let snippet = snippet_mapping.get(&code_to_edit.id());
                 if let Some(snippet) = snippet {
                     Some(SnippetWithReason::new(
-                        snippet.clone().clone(),
+                        (*snippet).clone(),
                         code_to_edit.reason_to_probe().to_owned(),
                     ))
                 } else {
@@ -1249,7 +1249,7 @@ Code location: {code_location}:{start_line}-{end_line}
                 let snippet = snippet_mapping.get(&code_to_not_edit.id());
                 if let Some(snippet) = snippet {
                     Some(SnippetWithReason::new(
-                        snippet.clone().clone(),
+                        (*snippet).clone(),
                         code_to_not_edit.reason_to_no_probe().to_owned(),
                     ))
                 } else {
@@ -1282,7 +1282,7 @@ Code location: {code_location}:{start_line}-{end_line}
                 let snippet = snippet_mapping.get(&code_to_edit.id());
                 if let Some(snippet) = snippet {
                     Some(SnippetWithReason::new(
-                        snippet.clone().clone(),
+                        (*snippet).clone(),
                         code_to_edit.reason_to_edit().to_owned(),
                     ))
                 } else {
@@ -1297,7 +1297,7 @@ Code location: {code_location}:{start_line}-{end_line}
                 let snippet = snippet_mapping.get(&code_to_not_edit.id());
                 if let Some(snippet) = snippet {
                     Some(SnippetWithReason::new(
-                        snippet.clone().clone(),
+                        (*snippet).clone(),
                         code_to_not_edit.reason_to_not_edit().to_owned(),
                     ))
                 } else {

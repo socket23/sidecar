@@ -5336,7 +5336,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 provider,
                 vec![(
                     "request_type".to_owned(),
-                    "ask_questions_to_symbol".to_owned(),
+                    "symbols_to_probe_questions".to_owned(),
                 )]
                 .into_iter()
                 .collect(),
@@ -5376,7 +5376,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 provider,
                 vec![(
                     "request_type".to_owned(),
-                    "ask_questions_to_symbol".to_owned(),
+                    "should_probe_question_request".to_owned(),
                 )]
                 .into_iter()
                 .collect(),

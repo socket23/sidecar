@@ -941,6 +941,7 @@ Similarly if there are no snippets which you need to probe then reply with an em
 <reason_to_probe>
 {{your reason for probing}}
 </reason_to_probe>
+</code_to_probe>
 - There will be code section which are not necessary to answer the user query, let's say you do not want to ask further questions to the snippet section with id 1, you must provide the reason for not probing and then you must output in the following format:
 <code_to_not_probe>
 <id>
@@ -955,7 +956,51 @@ Here is the example contained in the <example> section.
 
 {example_message}
 
-This example is for reference. You must strictly follow the format shown in the example when replying.
+Some example of outputs and cases you need to handle:
+<example>
+<scenario>
+there are no <code_to_not_probe_list> items
+</scenario>
+<output>
+</code_to_probe_list≥
+<code_to_probe>
+<id>
+0
+</id>
+<reason_to_probe>
+{{your reason for probing this code section}}
+</reason_to_probe>
+<code_to_probe>
+{{more code to probe list items...}}
+</code_to_probe_list>
+</code_to_not_probe_list>
+</code_to_not_probe_list>
+
+Notice how we include the elements for <code_to_probe_list> and even if the <code_to_not_probe_list> is empty we still output it as empty list.
+</example>
+<example>
+<scenario>
+there are no <code_to_probe_list> items
+</scenario>
+<output>
+<code_to_probe_list>
+</code_to_probe_list>
+<code_to_not_probe_list>
+<code_to_not_probe>
+<id>
+0
+</id>
+<reason_to_not_probe>
+{{your reason for not probing}}
+</reason_to_not_probe>
+</code_to_not_probe>
+{{more code to not probe list items here...}}
+</code_to_not_probe_list>
+</output>
+</example>
+
+
+These example is for reference. You must strictly follow the format shown in the example when replying.
 Please provide the order along with the reason in 2 lists, one for code snippets which you want to probe and the other for symbols we do not have to probe to answer the user query."#
         )
     }
@@ -1363,6 +1408,8 @@ Remeber that your reply should be strictly in the following format:
 <code_to_not_probe_list>
 {{list of snippets we want to not probe anymore in the format specified}}
 </code_to_not_probe_list>
+
+Remember to include both <code_to_probe_list> and <code_to_not_probe_list> sections
 "#
         );
         let system_message = self.system_message_for_probing();

@@ -301,7 +301,7 @@ impl LLMClient for CodeStoryClient {
 
     async fn stream_prompt_completion(
         &self,
-        api_key: LLMProviderAPIKeys,
+        _api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionStringRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {

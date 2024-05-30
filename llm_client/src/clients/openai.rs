@@ -80,7 +80,7 @@ impl OpenAIClient {
                             .role(Role::Assistant)
                             .content(message.content().to_owned())
                             .build()
-                            .map(|message| ChatCompletionRequestMessage::Assistant((message)))
+                            .map(|message| ChatCompletionRequestMessage::Assistant(message))
                             .map_err(|e| LLMClientError::OpenAPIError(e)),
                     },
                     LLMClientRole::Function => match message.get_function_call() {

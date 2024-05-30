@@ -4,7 +4,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessAction,
         followup::ClassSymbolFollowupResponse,
-        important::{CodeSymbolImportantResponse, CodeSymbolToAskQuestionsRequest},
+        important::CodeSymbolImportantResponse,
         models::anthropic::{
             CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
@@ -19,7 +19,7 @@ use super::{
         gotodefintion::GoToDefinitionResponse,
         gotoimplementations::GoToImplementationResponse,
         gotoreferences::GoToReferencesResponse,
-        open_file::{OpenFileRequest, OpenFileResponse},
+        open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
     rerank::base::ReRankEntriesForBroker,
@@ -30,6 +30,20 @@ pub struct CodeToEditSnippet {
     start_line: i64,
     end_line: i64,
     thinking: String,
+}
+
+impl CodeToEditSnippet {
+    pub fn start_line(&self) -> i64 {
+        self.start_line
+    }
+
+    pub fn end_line(&self) -> i64 {
+        self.end_line
+    }
+
+    pub fn thinking(&self) -> &str {
+        &self.thinking
+    }
 }
 
 #[derive(Debug)]

@@ -52,7 +52,7 @@ struct Workload<'a> {
 }
 
 impl<'a> Workload<'a> {
-    pub fn new(
+    pub fn _new(
         cache: &'a FileCacheSnapshot<'a>,
         repo_disk_path: &'a Path,
         repo_name: &'a str,

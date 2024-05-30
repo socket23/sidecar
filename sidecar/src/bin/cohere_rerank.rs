@@ -21,7 +21,7 @@ async fn main() {
     let ts_language_parsing = TSLanguageParsing::init();
     let parsed_ts_file =
         ts_language_parsing.chunk_file(&fs_file_path, &fs_file_contents, None, None);
-    let id_span_mapping = parsed_ts_file
+    let _ = parsed_ts_file
         .to_vec()
         .into_iter()
         .enumerate()

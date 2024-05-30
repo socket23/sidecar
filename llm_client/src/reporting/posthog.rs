@@ -92,7 +92,12 @@ impl PosthogClient {
         response: &str,
         metadata: HashMap<String, String>,
     ) {
-        let mut event = PosthogEvent::new("model_config");
+        let mut event = PosthogEvent::new(
+            metadata
+                .get("event_type")
+                .map(|event_type| event_type.to_owned())
+                .unwrap_or("unknown_event".to_owned()),
+        );
         let _ = event.insert_prop("user_id", self.user_id.to_owned());
         metadata.into_iter().for_each(|(key, value)| {
             let _ = event.insert_prop(key, value);

@@ -8,16 +8,13 @@ use futures::{stream, StreamExt};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::tool::base::Tool;
-use crate::agentic::tool::errors::ToolError;
-use crate::agentic::tool::input::ToolInput;
-use crate::chunking::editor_parsing::{self, EditorParsing};
+use crate::chunking::editor_parsing::EditorParsing;
 use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
-use super::events::probe::SymbolToProbeRequest;
 use super::identifier::LLMProperties;
 use super::tool_box::ToolBox;
 use super::ui_event::UIEvent;

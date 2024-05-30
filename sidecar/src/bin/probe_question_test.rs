@@ -11,18 +11,12 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
-            events::{input::SymbolInputEvent, probe::SymbolToProbeRequest},
+            events::probe::SymbolToProbeRequest,
             identifier::{LLMProperties, SymbolIdentifier},
             manager::SymbolManager,
             types::SymbolEventRequest,
         },
-        tool::{
-            broker::ToolBroker,
-            code_edit::models::broker::CodeEditBroker,
-            code_symbol::important::{
-                CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
-            },
-        },
+        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
     application::logging::tracing::tracing_subscribe_default,
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
@@ -64,7 +58,7 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
     ));
-    let gemini_llm_properties = LLMProperties::new(
+    let _gemini_llm_properties = LLMProperties::new(
         LLMType::GeminiProFlash,
         LLMProvider::GeminiPro,
         gemini_pro_keys.clone(),
@@ -120,7 +114,7 @@ async fn main() {
     loop {
         tokio::select! {
             event = receiver.recv() => {
-                if let Some(event) = event {
+                if let Some(_event) = event {
                     // info!("event: {:?}", event);
                 } else {
                     break; // Receiver closed, exit the loop

@@ -2,7 +2,6 @@ use super::agent_stream::generate_agent_stream;
 use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
-use futures::{stream, StreamExt};
 use llm_prompts::reranking::types::TERMINAL_OUTPUT;
 use std::collections::HashSet;
 
@@ -19,9 +18,7 @@ use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
-use crate::user_context::types::{
-    FileContentValue, UserContext, VariableInformation, VariableType,
-};
+use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 
 use super::types::ApiResponse;
 use super::types::Result;

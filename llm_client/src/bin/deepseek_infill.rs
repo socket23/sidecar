@@ -1,11 +1,8 @@
-use llm_client::clients::codestory::CodeStoryClient;
 use llm_client::clients::togetherai::TogetherAIClient;
 use llm_client::clients::types::LLMClient;
+use llm_client::clients::types::LLMClientCompletionStringRequest;
+use llm_client::provider::LLMProviderAPIKeys;
 use llm_client::provider::TogetherAIProvider;
-use llm_client::{
-    clients::{ollama::OllamaClient, types::LLMClientCompletionStringRequest},
-    provider::{LLMProviderAPIKeys, OllamaProvider},
-};
 
 #[tokio::main]
 async fn main() {
@@ -17,18 +14,12 @@ async fn main() {
     // when we add comments to the prompt it still works
     let prompt =
         "<｜fim▁begin｜>// Clipboard: function add(a: number, b: number) {\n\t#We are going to add 2 numbers\n\treturn a + b;\n}\n// Path: testing.ts\nfunction subtract(a<｜fim▁hole｜>)<｜fim▁end｜>";
-    let request = LLMClientCompletionStringRequest::new(
-        llm_client::clients::types::LLMType::DeepSeekCoder6BInstruct,
-        prompt.to_owned(),
-        0.2,
-        None,
-    );
     // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     // let response = client
     //     .stream_prompt_completion(api_key, request, sender)
     //     .await;
     // println!("{}", response.expect("to work"));
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let request = LLMClientCompletionStringRequest::new(
         llm_client::clients::types::LLMType::DeepSeekCoder33BInstruct,
         prompt.to_owned(),

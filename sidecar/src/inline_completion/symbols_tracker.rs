@@ -14,11 +14,9 @@ use std::{
     sync::Arc,
 };
 
-use futures::{stream, StreamExt};
 use tokio::sync::Mutex;
 
 use crate::{
-    agentic::tool::broker::ToolBroker,
     chunking::{
         editor_parsing::EditorParsing,
         text_document::{Position, Range},
@@ -124,12 +122,6 @@ struct GetDefinitionOutlineRequest {
 
 struct GetDocumentOutlineRequest {
     file_path: String,
-}
-
-pub struct SymbolInRequestSnippet {
-    fs_file_path: String,
-    range: Range,
-    content: String,
 }
 
 struct SymbolsInRangeRequest {

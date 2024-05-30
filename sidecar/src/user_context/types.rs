@@ -42,7 +42,7 @@ impl VariableInformation {
     }
 
     pub fn to_xml(self) -> String {
-        let mut xml = "".to_owned();
+        let xml = "".to_owned();
         let variable_name = self.name;
         let location = format!(
             "{}:{}-{}",

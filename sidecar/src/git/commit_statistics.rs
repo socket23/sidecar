@@ -331,6 +331,12 @@ pub struct GitLogFileInformation {
     commit_timestamp: i64,
 }
 
+impl GitLogFileInformation {
+    pub fn commit_hash(&self) -> &str {
+        &self.commit_hash
+    }
+}
+
 impl GitLogScore {
     pub fn get_score_for_file(&self, relative_file_path: &str) -> f32 {
         // If we don't have data about the file we should just mark it with the

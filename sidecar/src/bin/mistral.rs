@@ -9,9 +9,6 @@ use futures::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    let api_base = "".to_owned();
-    let api_key = "".to_owned();
-    let api_version = "".to_owned();
     // This is as easy as it is to get this to work
     // now we try to see what features we can power
     let mistral_config = OpenAIConfig::new().with_api_base("http://localhost:1234/v1".to_owned());
@@ -39,7 +36,7 @@ async fn main() {
         .content("\nWhen asked for your name, you must respond with \"Aide\".\nFollow the user's requirements carefully & to the letter.\nYour responses should be informative and logical.\nYou should always adhere to technical information.\nIf the user asks for code or technical questions, you must provide code suggestions and adhere to technical information.\nIf the question is related to a developer, you must respond with content related to a developer.\n\nA software developer is using an AI chatbot in a code editor.\nThe developer added the following request to the chat and your goal is to select a function to perform the request.\n\nRequest: can you add a comment to this?\n\nAvailable functions:\nFunction Id: code\nFunction Description: Add code to an already existing code base\n\nFunction Id: doc\nFunction Description: Add documentation comment for this symbol\n\nFunction Id: edit\nFunction Description: Refactors the selected code based on requirements provided by the user\n\nFunction Id: tests\nFunction Description: Generate unit tests for the selected code\n\nFunction Id: fix\nFunction Description: Propose a fix for the problems in the selected code\n\nFunction Id: explain\nFunction Description: Explain how the selected code works\n\nFunction Id: unknown\nFunction Description: Intent of this command is unclear or is not related to information technologies\n\n\nHere are some examples to make the instructions clearer:\nRequest: Add a function that returns the sum of two numbers\nResponse: code\n\nRequest: Add jsdoc to this method\nResponse: doc\n\nRequest: Change this method to use async/await\nResponse: edit\n\nRequest: Write a set of detailed unit test functions for the code above.\nResponse: tests\n\nRequest: There is a problem in this code. Rewrite the code to show it with the bug fixed.\nResponse: fix\n\nRequest: Write an explanation for the code above as paragraphs of text.\nResponse: explain\n\nRequest: Add a dog to this comment.\nResponse: unknown\n\nRequest: can you add a comment to this?\nResponse:\n    ")
         .build()
         .unwrap();
-    let azure_client = Client::with_config(mistral_azure_config);
+    let _azure_client = Client::with_config(mistral_azure_config);
     let client = Client::with_config(mistral_config);
     let max_tokens: u16 = 1000;
     let chat_request_args = request_args

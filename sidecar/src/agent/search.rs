@@ -23,7 +23,7 @@ use anyhow::Result;
 use futures::{pin_mut, FutureExt, StreamExt};
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientCompletionResponse, LLMClientMessage},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
     tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerInput},
 };
 use llm_prompts::{
@@ -31,7 +31,6 @@ use llm_prompts::{
 };
 use once_cell::sync::OnceCell;
 use rake::StopWords;
-use tiktoken_rs::CoreBPE;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, info, warn};

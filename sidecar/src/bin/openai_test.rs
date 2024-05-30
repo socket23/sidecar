@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 /// Binary to check if we can call openai
 use async_openai::config::AzureConfig;
 use async_openai::types::ChatCompletionRequestMessageArgs;
@@ -7,7 +5,6 @@ use async_openai::types::CreateChatCompletionRequestArgs;
 use async_openai::types::Role;
 use async_openai::Client;
 use futures::StreamExt;
-use sidecar::agent::prompts;
 use sidecar::reporting::posthog::client::client;
 use sidecar::reporting::posthog::client::PosthogClient;
 use sidecar::reporting::posthog::client::PosthogEvent;
@@ -38,8 +35,8 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
 
     let event = PosthogEvent::new("rust_event");
     let start_time = std::time::Instant::now();
-    let capture_status = posthog_client.capture(event).await;
-    let time_taken = start_time.elapsed().as_millis();
+    let _ = posthog_client.capture(event).await;
+    let _ = start_time.elapsed().as_millis();
 
     let client = Client::with_config(azure_config);
 
@@ -50,7 +47,7 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
         .content("message")
         .build()
         .unwrap();
-    let user_message = ChatCompletionRequestMessageArgs::default()
+    let _ = ChatCompletionRequestMessageArgs::default()
         .role(Role::User)
         .content("can you please write me a song")
         .build()
@@ -63,8 +60,8 @@ async fn main_func(posthog_client: PosthogClient) -> anyhow::Result<()> {
     let mut event = PosthogEvent::new("rust_something");
     let start_time = std::time::Instant::now();
     let _ = event.insert_prop("request", chat_request_args.clone());
-    let capture_status = posthog_client.capture(event).await;
-    let time_taken = start_time.elapsed().as_millis();
+    let _ = posthog_client.capture(event).await;
+    let _ = start_time.elapsed().as_millis();
     let stream_messages = client.chat().create_stream(chat_request_args).await?;
 
     let _ = stream_messages
@@ -83,37 +80,3 @@ fn posthog_client() -> PosthogClient {
         "codestory".to_owned(),
     )
 }
-
-fn posthog_client_for_prompts() -> PosthogClient {
-    client(
-        "phc_z7MDEpnPj4isTCmgPTgw89VavfBox7vvWzVAtpgAtkr",
-        "codestory".to_owned(),
-    )
-}
-
-// async fn llm_request() {
-//     use sidecar::agent::llm_funcs::LlmClient;
-
-//     let client = LlmClient::codestory_infra(Arc::new(posthog_client()));
-
-//     let messages = vec![sidecar::agent::llm_funcs::llm::Message::system(
-//         "write something for me!!!!",
-//     )];
-//     let functions = serde_json::from_value::<Vec<sidecar::agent::llm_funcs::llm::Function>>(
-//         prompts::functions(false), // Only add proc if there are paths in context
-//     )
-//     .unwrap();
-
-//     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-//     let response = client
-//         .stream_response(
-//             sidecar::agent::llm_funcs::llm::OpenAIModel::GPT4,
-//             messages,
-//             None,
-//             0.0,
-//             None,
-//             sender,
-//         )
-//         .await;
-//     dbg!(&response);
-// }

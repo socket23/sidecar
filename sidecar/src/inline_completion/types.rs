@@ -38,7 +38,6 @@ use super::{
 const CLIPBOARD_CONTEXT: usize = 50;
 const CODEBASE_CONTEXT: usize = 3000;
 const ANTHROPIC_CODEBASE_CONTEXT: usize = 5_000;
-const SAME_FILE_CONTEXT: usize = 350;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TypeIdentifierPosition {
@@ -192,47 +191,29 @@ impl TypeIdentifier {
 
 #[derive(Debug, Clone)]
 pub struct FillInMiddleError {
-    error_count: usize,
-    missing_count: usize,
+    _error_count: usize,
+    _missing_count: usize,
 }
 
 impl FillInMiddleError {
     pub fn new(error_count: usize, missing_count: usize) -> Self {
         Self {
-            error_count,
-            missing_count,
+            _error_count: error_count,
+            _missing_count: missing_count,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct FillInMiddleStreamContext {
-    file_path: String,
     prefix_at_cursor_position: String,
-    document_prefix: String,
-    document_suffix: String,
     next_non_empty_line: Option<String>,
-    editor_parsing: Arc<EditorParsing>,
-    errors: Option<FillInMiddleError>,
 }
 
 impl FillInMiddleStreamContext {
-    fn new(
-        file_path: String,
-        prefix_at_cursor_position: String,
-        document_prefix: String,
-        document_suffix: String,
-        editor_parsing: Arc<EditorParsing>,
-        errors: Option<FillInMiddleError>,
-        next_non_empty_line: Option<String>,
-    ) -> Self {
+    fn new(prefix_at_cursor_position: String, next_non_empty_line: Option<String>) -> Self {
         Self {
-            file_path,
             prefix_at_cursor_position,
-            document_prefix,
-            document_suffix,
-            editor_parsing,
-            errors,
             next_non_empty_line,
         }
     }
@@ -245,7 +226,6 @@ pub struct FillInMiddleCompletionAgent {
     editor_parsing: Arc<EditorParsing>,
     answer_mode: Arc<LLMAnswerModelBroker>,
     symbol_tracker: Arc<SymbolTrackerInline>,
-    is_multiline: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -301,7 +281,6 @@ impl FillInMiddleCompletionAgent {
         fill_in_middle_broker: Arc<FillInMiddleBroker>,
         editor_parsing: Arc<EditorParsing>,
         symbol_tracker: Arc<SymbolTrackerInline>,
-        is_multiline: bool,
     ) -> Self {
         Self {
             llm_broker,
@@ -310,7 +289,6 @@ impl FillInMiddleCompletionAgent {
             fill_in_middle_broker,
             editor_parsing,
             symbol_tracker,
-            is_multiline,
         }
     }
 
@@ -438,22 +416,9 @@ impl FillInMiddleCompletionAgent {
         // TODO(skcd): Can we also grab the context from other functions which might be useful for the completion.
         // TODO(skcd): We also want to grab the recent edits which might be useful for the completion.
 
-        // Grab the error and missing values from tree-sitter
-        let errors = grab_errors_using_tree_sitter(
-            self.editor_parsing.clone(),
-            &completion_request.text,
-            &completion_request.filepath,
-        )
-        .map(|(error, missing)| FillInMiddleError::new(error, missing));
-
         // Now we are going to grab the current line prefix
         let cursor_prefix = Arc::new(FillInMiddleStreamContext::new(
-            completion_request.filepath.to_owned(),
             document_lines.prefix_at_line(completion_request.position)?,
-            document_lines.document_prefix(completion_request.position)?,
-            document_lines.document_suffix(completion_request.position)?,
-            self.editor_parsing.clone(),
-            errors,
             document_lines.next_non_empty_line(completion_request.position),
         ));
 
@@ -850,185 +815,4 @@ fn immediate_terminating_condition(
     }
 
     TerminationCondition::Not
-}
-
-fn grab_errors_using_tree_sitter(
-    editor_parsing: Arc<EditorParsing>,
-    file_content: &str,
-    file_path: &str,
-) -> Option<(usize, usize)> {
-    let language_config = editor_parsing.for_file_path(file_path);
-    if let Some(language_config) = language_config {
-        let mut parser = tree_sitter::Parser::new();
-        let grammar = language_config.grammar;
-        let _ = parser.set_language(grammar());
-        let tree = parser.parse(file_content.as_bytes(), None);
-        if let Some(tree) = tree {
-            let mut cursor = tree.walk();
-            Some(walk_tree_for_errors_and_missing(&mut cursor))
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
-fn walk_tree_for_errors_and_missing(cursor: &mut TreeCursor) -> (usize, usize) {
-    let mut missing = 0;
-    let mut error = 0;
-    loop {
-        let node = cursor.node();
-
-        if node.is_missing() {
-            missing = missing + 1;
-        }
-        if node.is_error() {
-            error = error + 1;
-        }
-
-        if cursor.goto_first_child() {
-            let (error_child, missing_child) = walk_tree_for_errors_and_missing(cursor);
-            missing = missing + missing_child;
-            error = error + error_child;
-            cursor.goto_parent();
-        }
-
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    (error, missing)
-}
-
-fn check_terminating_condition_by_comparing_errors(
-    language_config: &TSLanguageConfig,
-    prefix: &str,
-    suffix: &str,
-    text_to_insert: &str,
-    inserted_range: &Range,
-    previous_errors: Option<FillInMiddleError>,
-) -> bool {
-    if let None = previous_errors {
-        return false;
-    }
-    let previous_errors = previous_errors.expect("if let None to hold");
-    let final_document =
-        prefix.to_owned() + &insert_string_and_check_suffix(text_to_insert, suffix);
-    let grammar = language_config.grammar;
-    let mut parser = tree_sitter::Parser::new();
-    let _ = parser.set_language(grammar());
-    let tree = parser.parse(final_document.as_bytes(), None);
-    if let Some(tree) = tree {
-        let mut cursor = tree.walk();
-        let (error, missing) = walk_tree_for_errors_and_missing(&mut cursor);
-        // Now we are going to check if any of the errors or missing have stayed the same
-        // or increased after the insertion, this is important because
-        // the user might have typed in `fn add()`
-        // this can also introduce errors and when we get the first line we might not have
-        // reduced the errors at that point
-        if error >= previous_errors.error_count || missing >= previous_errors.missing_count {
-            false
-        } else {
-            true
-        }
-    } else {
-        false
-    }
-}
-
-/// The condition here is that we might be matching some characters in the suffix
-/// which are on the same line as the inserted text
-/// imagine you are doing the following:
-/// console.log(<cursor_here>)
-/// and the completion here is a, b, c)
-/// vscode here will show the completion as valid and also match the closing bracket
-/// so when joining the string we have to take care of this case on our own
-fn insert_string_and_check_suffix(text_to_insert: &str, suffix: &str) -> String {
-    // if the suffix does not exist and it starts with a new line, then just go to the next line
-    if suffix.starts_with("\n") {
-        return text_to_insert.to_owned() + suffix;
-    }
-    let suffix_lines = suffix
-        .lines()
-        .into_iter()
-        .map(|line| line.to_owned())
-        .collect::<Vec<String>>();
-    let text_to_insert_lines = text_to_insert
-        .lines()
-        .into_iter()
-        .map(|line| line.to_owned())
-        .collect::<Vec<String>>();
-    if suffix_lines.is_empty() {
-        text_to_insert.to_owned()
-    } else if text_to_insert_lines.is_empty() {
-        suffix.to_owned()
-    } else {
-        let suffix_first_line = suffix_lines[0].clone();
-        let text_to_insert_first_line = text_to_insert_lines[0].clone();
-        // Now we need to match the characters from the suffix line which are also present in the text_to_insert line
-        // and then generate the final line over here
-        let mut text_to_insert_position = 0;
-        let mut suffix_first_line_index = 0;
-        while suffix_first_line_index < suffix_first_line.len() {
-            if text_to_insert_position >= text_to_insert_first_line.len() {
-                break;
-            }
-            if suffix_first_line.chars().nth(suffix_first_line_index)
-                == text_to_insert_first_line
-                    .chars()
-                    .nth(text_to_insert_position)
-            {
-                suffix_first_line_index = suffix_first_line_index + 1;
-                text_to_insert_position = text_to_insert_position + 1;
-            } else {
-                text_to_insert_position = text_to_insert_position + 1;
-            }
-        }
-        let remaining_suffix = if suffix_first_line_index < suffix_first_line.len() {
-            &suffix_first_line[suffix_first_line_index..]
-        } else {
-            ""
-        };
-        // create the new first line here
-        let text_to_insert_first_line = text_to_insert_first_line + remaining_suffix;
-        // now create the text to insert from the remaining lines
-        let text_to_insert = if text_to_insert_lines.len() > 1 {
-            text_to_insert_first_line + "\n" + &text_to_insert_lines[1..].join("\n")
-        } else {
-            text_to_insert_first_line
-        };
-        let final_text = if suffix_lines.len() > 1 {
-            text_to_insert + "\n" + &suffix_lines[1..].join("\n")
-        } else {
-            text_to_insert
-        };
-        // Now the total string will look like the following:
-        // text_to_insert_first_line + remaining_suffix from first line
-        // text_to_insert_rest_of_lines
-        // suffix_rest of the lines
-        final_text
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use crate::inline_completion::types::insert_string_and_check_suffix;
-
-    #[test]
-    fn test_check_insert_string_and_check_suffix() {
-        let text_to_insert = "(a, b, c)".to_owned();
-        let suffix = ")\nsomething_else".to_owned();
-        let final_text = insert_string_and_check_suffix(&text_to_insert, &suffix);
-        assert_eq![final_text, "(a, b, c)\nsomething_else"];
-    }
-
-    #[test]
-    fn test_check_insert_with_pending_brackets() {
-        let text_to_insert = "(a, b, c, d){\nconsole.log('blah');}".to_owned();
-        let suffix = ")".to_owned();
-        let final_text = insert_string_and_check_suffix(&text_to_insert, &suffix);
-        assert_eq![final_text, "(a, b, c, d){\nconsole.log('blah');}"];
-    }
 }

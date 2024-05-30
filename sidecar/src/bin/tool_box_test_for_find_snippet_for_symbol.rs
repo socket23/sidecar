@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use llm_client::{broker::LLMBroker, config::LLMBrokerConfiguration};
 use sidecar::{
     agentic::{
-        symbol::{identifier::Snippet, tool_box::ToolBox},
+        symbol::tool_box::ToolBox,
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
     chunking::{
@@ -47,10 +47,10 @@ async fn main() {
         sender,
     ));
 
-    let range = Range::new(Position::new(139, 0, 0), Position::new(157, 0, 0));
+    let _ = Range::new(Position::new(139, 0, 0), Position::new(157, 0, 0));
     let fs_file_path =
         "/Users/skcd/scratch/sidecar/sidecar/src/webserver/agent_stream.rs".to_owned();
-    let line_content = "post(sidecar::webserver::agent::followup_chat),".to_owned();
+    let _ = "post(sidecar::webserver::agent::followup_chat),".to_owned();
     let symbol_to_search = "generate_agent_stream".to_owned();
     // This is what I have to debug
     let snippet = tool_box

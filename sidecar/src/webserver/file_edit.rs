@@ -275,15 +275,6 @@ fn is_new_edit_model(model: &LLMType) -> bool {
     }
 }
 
-fn get_edit_model(model: &LLMType) -> LLMType {
-    if model.is_anthropic() {
-        // if this an anthropic model we can just use the haiku model
-        LLMType::ClaudeHaiku
-    } else {
-        model.clone()
-    }
-}
-
 // We use this enum as a placeholder for the different type of variables which we support exporting at the
 // moment
 #[derive(Debug, Clone)]

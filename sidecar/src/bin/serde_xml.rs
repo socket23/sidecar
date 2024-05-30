@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_xml_rs::{from_str, to_string};
+use serde_xml_rs::from_str;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Item {

@@ -4,26 +4,19 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
         symbol::{
             events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
         },
-        tool::{
-            broker::ToolBroker,
-            code_edit::models::broker::CodeEditBroker,
-            code_symbol::important::{
-                CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
-            },
-        },
+        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
     user_context::types::UserContext,
 };
-use tracing::info;
 
 fn default_index_dir() -> PathBuf {
     match directories::ProjectDirs::from("ai", "codestory", "sidecar") {
@@ -37,7 +30,7 @@ fn default_index_dir() -> PathBuf {
 #[tokio::main]
 async fn main() {
     let current_query = "Where do we pass the file context to the agent for the prompt?".to_owned();
-    let openai_api_key = "".to_owned();
+    let _openai_api_key = "".to_owned();
     let api_key = LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
         "sk-proj-pSZWQwKPmH1QU8Rb0xQtT3BlbkFJlIbeVo7YPOjU0IcEz96F".to_owned(),
     ));
@@ -64,7 +57,7 @@ async fn main() {
         Arc::new(TSLanguageParsing::init()),
     ));
     let llm_properties = LLMProperties::new(LLMType::Gpt4O, LLMProvider::OpenAI, api_key.clone());
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),

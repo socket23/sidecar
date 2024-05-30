@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use gix::index::extension::end_of_index_entry;
-
 /// Context trimming helps us reduce the context required before we pass it to a LLM, for now
 /// we will try to build this up as many hurestics adn reducing the blast radius of all the things
 /// which are needed for LLM.
@@ -9,7 +7,7 @@ use gix::index::extension::end_of_index_entry;
 /// - de-duplicate the code snippets (and merge the precise locations together)
 /// - ask the LLM to go through the data using the query and figure out if the context is indeed required
 /// - and finally once we have all the context we can just ask the LLM to answer
-use crate::{repo::types::RepoRef, webserver::agent::PreciseContext};
+use crate::webserver::agent::PreciseContext;
 
 use super::agent::{CurrentViewPort, CursorPosition, DeepContextForView, Position};
 
@@ -22,17 +20,11 @@ pub struct TrimmedContext {
     pub precise_context_map: HashMap<String, Vec<PreciseContext>>,
 }
 
-pub struct ViewPortContext {
-    view_port_string: String,
-    cursor_in_view_port: bool,
-}
-
 pub async fn trim_deep_context(context: DeepContextForView) -> TrimmedContext {
     // grab the precis-context here and use a hashing function to only keep the non-duplicates
     let mut precise_context_map: HashMap<String, Vec<PreciseContext>> = Default::default();
     let current_view_port = context.current_view_port;
     let current_cursor_position = context.cursor_position;
-    let repo_ref = context.repo_ref;
     context.precise_context.into_iter().for_each(|context| {
         let definition_context = &context.definition_snippet;
         // get a hashing function now and only keep them

@@ -1802,10 +1802,9 @@ pub fn chunk_tree(
     coalesce: usize,
     buffer_content: &str,
 ) -> Vec<Span> {
-    let mut chunks: Vec<Span> = vec![];
     let root_node = tree.root_node();
     let split_lines = buffer_content.lines().collect::<Vec<_>>();
-    chunks = chunk_node(root_node, language, max_characters_per_chunk);
+    let mut chunks = chunk_node(root_node, language, max_characters_per_chunk);
 
     if chunks.len() == 0 {
         return Default::default();

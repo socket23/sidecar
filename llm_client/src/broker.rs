@@ -29,6 +29,7 @@ use crate::{
     },
     config::LLMBrokerConfiguration,
     provider::{CodeStoryLLMTypes, LLMProvider, LLMProviderAPIKeys},
+    reporting::posthog::{posthog_client, PosthogClient},
     sqlite,
 };
 
@@ -37,6 +38,7 @@ pub type SqlDb = Arc<SqlitePool>;
 pub struct LLMBroker {
     pub providers: HashMap<LLMProvider, Box<dyn LLMClient + Send + Sync>>,
     db: SqlDb,
+    posthog_client: Arc<PosthogClient>,
 }
 
 pub type LLMBrokerResponse = Result<String, LLMClientError>;
@@ -44,9 +46,13 @@ pub type LLMBrokerResponse = Result<String, LLMClientError>;
 impl LLMBroker {
     pub async fn new(config: LLMBrokerConfiguration) -> Result<Self, LLMClientError> {
         let sqlite = Arc::new(sqlite::init(config).await?);
+        // later we need to configure the user id over here to be the one from
+        // the client machine we are running it on
+        let posthog_client = Arc::new(posthog_client("agentic"));
         let broker = Self {
             providers: HashMap::new(),
             db: sqlite,
+            posthog_client,
         };
         Ok(broker
             .add_provider(LLMProvider::OpenAI, Box::new(OpenAIClient::new()))
@@ -151,6 +157,11 @@ impl LLMBroker {
                 let temperature = request.temperature();
                 let str_metadata = serde_json::to_string(&metadata).unwrap_or_default();
                 let llm_type_str = serde_json::to_string(&llm_type)?;
+                // Log to posthog as well
+                let _ = self
+                    .posthog_client
+                    .capture_reqeust_and_response(&request, result.as_str(), metadata)
+                    .await;
                 let messages = serde_json::to_string(&request.messages())?;
                 let mut tx = self
                     .db

@@ -850,14 +850,15 @@ This code handles the checkout process. It receives the cart ID and payment info
 This code processes the actual payment by creating a Stripe charge. The payment info comes from the checkout process. If the payment fails, that could explain the checkout error, so this is important to investigate.
 </reason_to_probe>
 </code_to_probe>
+<code_to_probe>
 <id>
 8
 </id>
 <reason_to_probe>
 This defines the schema and model for orders. An order contains references to the user and product items, the total price, payment info, and status. It's important for understanding the structure of an order, but unlikely to contain bugs.
-</reason_to_edit>
-<reason_to_probe>
-</code_to_edit_list>
+</reason_to_probe>
+</code_to_probe>
+</code_to_probe_list>
 <code_to_not_probe_list>
 <code_to_not_probe>
 <id>
@@ -867,12 +868,14 @@ This defines the schema and model for orders. An order contains references to th
 This defines the schema and model for shopping carts. A cart contains references to the user and product items. It also has a virtual property to calculate the total price. It's used in the checkout process but probably not the source of the bug.
 </reason_to_not_probe>
 </code_to_not_probe>
+<code_to_not_probe>
 <id>
 5
 </di>
 <reason_to_not_probe>
 This is the main Express server file. It sets up MongoDB, middleware, routes, and error handling. While it's crucial for the app as a whole, it doesn't contain any checkout-specific logic.
-<<reason_to_not_probe>
+</reason_to_not_probe>
+</code_to_not_probe>
 <code_to_not_probe>
 <id>
 0
@@ -964,7 +967,7 @@ Some more examples of outputs and cases you need to handle:
 there are no <code_to_not_probe_list> items
 </scenario>
 <output>
-</code_to_probe_list≥
+</code_to_probe_list>
 <code_to_probe>
 <id>
 0

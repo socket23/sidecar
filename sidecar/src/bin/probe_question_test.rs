@@ -42,8 +42,6 @@ fn default_index_dir() -> PathBuf {
 #[tokio::main]
 async fn main() {
     tracing_subscribe_default();
-    let current_query =
-        "Where are we sending the request to the LLM clients? from the agent".to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
     let user_context = UserContext::new(
         vec![],
@@ -85,10 +83,15 @@ async fn main() {
         editor_url.to_owned(),
         sender,
         // This is where we are setting the LLM properties
-        gemini_llm_properties.clone(),
+        anthropic_llm_properties.clone(),
         user_context.clone(),
     );
 
+    let webserver_symbol_identifier = SymbolIdentifier::with_file_path(
+        "agent_router",
+        "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs",
+    );
+    let webserver_request = "Where are we sending the reuqest to the LLM client?".to_owned();
     // let agent_symbol_identifier = SymbolIdentifier::with_file_path(
     //     "Agent",
     //     "/Users/skcd/scratch/sidecar/sidecar/src/agent/types.rs",
@@ -99,18 +102,19 @@ async fn main() {
     //     "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs",
     // );
     // let symbol_request = "how id model configuration passed to the llm client in agent? start from here cause this is the how the webserver handles the request coming from elsewhere. I want to focus on whats the data structure and where it is used to exchange this information with the llm client".to_owned();
-    let symbol_probing_tool_use = SymbolIdentifier::with_file_path(
-        "main",
-        "/Users/skcd/scratch/sidecar/sidecar/src/bin/probe_question_test.rs",
-    );
-    let symbol_probing_request = "What are the tools which are used we initiate a probe request on a symbol (assume the complete code workflow), exaplain in detail to me the ToolTypes which is being used and how it is being used.";
+    // let symbol_probing_tool_use = SymbolIdentifier::with_file_path(
+    //     "main",
+    //     "/Users/skcd/scratch/sidecar/sidecar/src/bin/probe_question_test.rs",
+    // );
+    // let symbol_probing_request = "What are the tools which are used we initiate a probe request on a symbol (assume the complete code workflow), exaplain in detail to me the ToolTypes which is being used and how it is being used.";
     let probe_request = SymbolToProbeRequest::new(
-        symbol_probing_tool_use.clone(),
-        symbol_probing_request.to_owned(),
-        symbol_probing_request.to_owned(),
+        webserver_symbol_identifier.clone(),
+        webserver_request.to_owned(),
+        webserver_request.to_owned(),
         vec![],
     );
-    let probe_request = SymbolEventRequest::probe_request(symbol_probing_tool_use, probe_request);
+    let probe_request =
+        SymbolEventRequest::probe_request(webserver_symbol_identifier, probe_request);
     let mut probe_task = Box::pin(symbol_manager.probe_request(probe_request));
 
     loop {

@@ -84,6 +84,13 @@ fn posthog_client() -> PosthogClient {
     )
 }
 
+fn posthog_client_for_prompts() -> PosthogClient {
+    client(
+        "phc_z7MDEpnPj4isTCmgPTgw89VavfBox7vvWzVAtpgAtkr",
+        "codestory".to_owned(),
+    )
+}
+
 // async fn llm_request() {
 //     use sidecar::agent::llm_funcs::LlmClient;
 

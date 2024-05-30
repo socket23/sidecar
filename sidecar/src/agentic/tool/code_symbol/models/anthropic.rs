@@ -2571,7 +2571,7 @@ You can understand from the response here how we did not have to follow the next
 Below we show you an example of what the input will look like:
 
 <user_query>
-`LLMProvider` seems to contain the information for providers we have to understand how it is defined?
+What are the different kind of providers we support using `LLMProvider`?
 </user_query>
 
 <file>
@@ -2823,7 +2823,7 @@ What are the various providers we support?
 Your reply is:
 <reply>
 <thinking>
-I have all the information for what kind of providers are supported as `LLMProvider` is an enum which has entries for the different kind of providers we have in the codebase.
+We can see the different names of the providers which is contained in the enum `LLMProvider`
 </thinking>
 <context_enough>
 false
@@ -2893,20 +2893,44 @@ true
 Some more examples of when you should say <context_enough>flase</context_enough> for certain <thinking>
 
 Example 1:
+<reply>
 <thinking>
 we need to look at methods of XYZ class? (where XYZ is a placeholder for anything)
 <thinking>
 <context_enough>
 false
 </context_enough>
+</reply>
 
 Example 2:
+<reply>
 <thinking>
 I now understand how function_xyz is implemented, I am able to answer the user query (where XYZ is a placeholder)
 </thinking>
 <context_enough>
 false
-</context_enough>"#.to_owned()
+</context_enough>
+</reply>
+
+Example 3:
+<reply>
+<thinking>
+The `Agent::prepare_for_search` function sets up an `Agent` instance to handle a search query and generate a final answer using the LLM client. The `Agent::answer` function is where the LLM client is invoked to generate the final answer based on the search results and code snippets. To understand how the LLM client is invoked, we should follow the implementation of `Agent::answer`.
+</thinking>
+<context_enough>
+false
+</context_enough>
+</reply>
+
+Example 4:
+<reply>
+<thinking>
+The `ConversationMessage` contains the user id and we are storing `user_id` it uniquely with every message 
+</thinking>
+<context_enough>
+true
+</context_enough>
+</reply>"#.to_owned()
     }
 
     fn system_message_for_ask_question_symbols(

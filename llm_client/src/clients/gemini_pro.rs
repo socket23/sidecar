@@ -31,6 +31,7 @@ impl GeminiProClient {
     fn model(&self, model: &LLMType) -> Option<String> {
         match model {
             LLMType::GeminiPro => Some("gemini-pro".to_owned()),
+            LLMType::GeminiProFlash => Some("gemini-1.5-flash-001".to_owned()),
             _ => None,
         }
     }
@@ -209,7 +210,6 @@ impl LLMClient for GeminiProClient {
                 ),
             ],
         };
-        println!("{:?}", serde_json::to_string(&request));
         let api_key = self.get_api_key(&provider_api_key);
         let api_base = self.get_api_base(&provider_api_key);
         if api_key.is_none() || api_base.is_none() {
@@ -217,17 +217,15 @@ impl LLMClient for GeminiProClient {
         }
         let api_key = api_key.expect("to be present");
         let api_base = api_base.expect("to be present");
-        dbg!(&api_key, &api_base);
         // now we need to send a request to the gemini pro api here
-        let response = dbg!(
-            self.client
-                .post(self.get_api_endpoint(&api_base))
-                .header("Authorization", format!("Bearer {}", api_key))
-                .header("Content-Type", "application/json")
-                .json(&request)
-                .send()
-                .await
-        )?;
+        let response = self
+            .client
+            .post(self.get_api_endpoint(&api_base))
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await?;
 
         if !response.status().is_success() {
             return Err(LLMClientError::FailedToGetResponse);
@@ -236,7 +234,6 @@ impl LLMClient for GeminiProClient {
         let mut buffered_string = "".to_owned();
         let mut response_stream = response.bytes_stream().eventsource();
         while let Some(event) = response_stream.next().await {
-            println!("{:?}", event);
             if let Ok(event) = event {
                 let parsed_event =
                     serde_json::from_slice::<GeminiProResponse>(event.data.as_bytes())?;

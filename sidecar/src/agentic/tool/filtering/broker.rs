@@ -364,6 +364,14 @@ impl CodeToEditFormatterBroker {
         );
         llms.insert(
             LLMType::ClaudeOpus,
+            Box::new(AnthropicCodeToEditFormatter::new(llm_broker.clone())),
+        );
+        llms.insert(
+            LLMType::GeminiPro,
+            Box::new(AnthropicCodeToEditFormatter::new(llm_broker.clone())),
+        );
+        llms.insert(
+            LLMType::GeminiProFlash,
             Box::new(AnthropicCodeToEditFormatter::new(llm_broker)),
         );
         Self { llms }

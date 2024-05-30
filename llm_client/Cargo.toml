@@ -24,3 +24,4 @@ tokenizers = { version = "0.13.3", default-features = false, features = ["progre
 tiktoken-rs = "0.5.4"
 async-openai = "0.21.0"
 sqlx = { version = "0.7.2", features = ["sqlite", "migrate", "runtime-tokio-rustls", "chrono", "uuid"]}
+chrono = "0.4.38"

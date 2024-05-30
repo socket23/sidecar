@@ -208,8 +208,6 @@ impl CodeSymbolShouldAskQuestionsResponse {
         // this is the case
         let mut is_current_thinking = false;
         response.lines().into_iter().for_each(|line| {
-            println!("{}", &line);
-            println!("{:?}", &fixed_lines);
             if line.starts_with("<thinking>") {
                 is_inside = true;
                 is_current_thinking = true;
@@ -5362,8 +5360,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_should_ask_questions(request));
         let system_message_content = system_message.content();
         let user_message_content = user_message.content();
-        println!("System message:\n {}", system_message_content);
-        println!("User message:\n {}", user_message_content);
         info!(
             event_name = "should_probe_question_request[request]",
             system_message = system_message_content,

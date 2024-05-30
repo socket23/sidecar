@@ -246,8 +246,6 @@ impl ToolBox {
             .map(|definition| definition.file_path().to_owned())
             .collect::<HashSet<String>>();
 
-        println!("Files interested: {:?}", &files_interested);
-
         // open all these files and get back the outline nodes from these
         let _ = stream::iter(files_interested.into_iter())
             .map(|file| async move {
@@ -271,11 +269,6 @@ impl ToolBox {
             }))
             .map(|(definition, fs_file_path)| async move {
                 let outline_nodes = self.symbol_broker.get_symbols_outline(&fs_file_path).await;
-                println!(
-                    "File path: {:?} and outline nodes: {}",
-                    &fs_file_path,
-                    outline_nodes.is_some()
-                );
                 (definition, outline_nodes)
             })
             .buffer_unordered(100)
@@ -291,18 +284,16 @@ impl ToolBox {
             })
             .filter_map(|(definition, outline_nodes)| {
                 let possible_outline_node = outline_nodes.into_iter().find(|outline_node| {
-                    println!(
-                        "outline node ({:?}) range: {:?} and definition range: {:?}",
-                        outline_node.name(),
-                        outline_node.range(),
-                        definition.range()
-                    );
                     // one of the problems we have over here is that the struct
                     // might be bigger than the parsing we have done because
                     // of decorators etc
                     outline_node
                         .range()
                         .contains_check_line_column(definition.range())
+                        // I do not trust this check, it will probably come bite
+                        // us in the ass later on
+                        || definition.range().contains_check_line_column(outline_node.range()
+                    )
                 });
                 if let Some(outline_node) = possible_outline_node {
                     Some((definition, outline_node))
@@ -311,11 +302,6 @@ impl ToolBox {
                 }
             })
             .collect::<Vec<_>>();
-
-        println!(
-            "definition to outline node: {:?}",
-            &definitions_to_outline_node
-        );
 
         // // Now we want to go from the definitions we are interested in to the snippet
         // // where we will be asking the question and also get the outline(???) for it
@@ -2299,6 +2285,8 @@ Please handle these changes as required."#
 
         // we grab the outlines over here
         let outline_nodes = self.symbol_broker.get_symbols_outline(fs_file_path).await;
+
+        println!("{:?}", outline_nodes.is_some());
 
         // We will either get an outline node or we will get None
         // for today, we will go with the following assumption

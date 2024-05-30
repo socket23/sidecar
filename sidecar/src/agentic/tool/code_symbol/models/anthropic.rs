@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use serde_xml_rs::from_str;
 use std::sync::Arc;
+use tracing::info;
 
 use llm_client::{
     broker::LLMBroker,
@@ -21,7 +22,7 @@ use crate::agentic::tool::{
             CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
             CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
-        types::CodeSymbolError,
+        types::{CodeSymbolError, SerdeError},
     },
     lsp::diagnostics::Diagnostic,
 };
@@ -202,23 +203,48 @@ impl CodeSymbolShouldAskQuestionsResponse {
         // parse out the string properly over here
         let mut fixed_lines = vec![];
         let mut is_inside = false;
+        // we should remove lines where the current value is <thinking> and the next one is </thinking>
+        // this implies that they both are empty and hallucinations, but a better question would be why
+        // this is the case
+        let mut is_current_thinking = false;
         response.lines().into_iter().for_each(|line| {
+            println!("{}", &line);
+            println!("{:?}", &fixed_lines);
             if line.starts_with("<thinking>") {
                 is_inside = true;
+                is_current_thinking = true;
                 fixed_lines.push(line.to_owned());
                 return;
             } else if line.starts_with("</thinking>") {
+                // if the previous one was also </thinking> then we should not add this
+                if fixed_lines.last().map(|s| s.to_owned()) == Some("</thinking>".to_owned()) {
+                    is_current_thinking = false;
+                    return;
+                }
                 is_inside = false;
-                fixed_lines.push(line.to_owned())
+                if is_current_thinking {
+                    is_current_thinking = false;
+                    // remove the last <thinking> which we added
+                    fixed_lines.pop();
+                } else {
+                    is_current_thinking = false;
+                    fixed_lines.push(line.to_owned());
+                }
+                return;
             }
+            is_current_thinking = false;
             if is_inside {
                 fixed_lines.push(AnthropicCodeSymbolImportant::unescape_xml(line.to_owned()));
             } else {
                 fixed_lines.push(line.to_owned());
             }
         });
-        let parsed_response = from_str::<CodeSymbolShouldAskQuestionsResponse>(&response)
-            .map_err(|e| CodeSymbolError::SerdeError(e));
+        let fixed_response = fixed_lines.join("\n");
+        println!("{}", &fixed_response);
+        let parsed_response = from_str::<CodeSymbolShouldAskQuestionsResponse>(&fixed_response)
+            .map_err(|e| {
+                CodeSymbolError::SerdeError(SerdeError::new(e, fixed_response.to_owned()))
+            });
         match parsed_response {
             Ok(response) => Ok(CodeSymbolShouldAskQuestionsResponse {
                 thinking: AnthropicCodeSymbolImportant::escape_xml(response.thinking),
@@ -428,7 +454,7 @@ impl ProbeNextSymbol {
         }
         let fixed_response = final_lines.join("\n");
         let parsed_response = from_str::<ProbeNextSymbol>(&fixed_response)
-            .map_err(|e| CodeSymbolError::SerdeError(e))?;
+            .map_err(|e| CodeSymbolError::SerdeError(SerdeError::new(e, response.to_owned())))?;
         // Now we fix the lines in parsed_response again
         Ok(match parsed_response {
             Self::AnswerUserQuery(response) => {
@@ -494,7 +520,7 @@ impl AnthropicCodeSymbolImportant {
                     .collect::<Vec<_>>();
                 ClassSymbolFollowupResponse::new(members)
             })
-            .map_err(|e| CodeSymbolError::SerdeError(e))
+            .map_err(|e| CodeSymbolError::SerdeError(SerdeError::new(e, fixed_response)))
     }
 
     fn user_message_for_ask_question_symbols(
@@ -2864,7 +2890,25 @@ We should look at `Movie` defined in the movie function to understand if actors 
 <context_enough>
 true
 </context_enough>
-</reply>"#.to_owned()
+</reply>
+
+Some more examples of when you should say <context_enough>flase</context_enough> for certain <thinking>
+
+Example 1:
+<thinking>
+we need to look at methods of XYZ class? (where XYZ is a placeholder for anything)
+<thinking>
+<context_enough>
+false
+</context_enough>
+
+Example 2:
+<thinking>
+I now understand how function_xyz is implemented, I am able to answer the user query (where XYZ is a placeholder)
+</thinking>
+<context_enough>
+false
+</context_enough>"#.to_owned()
     }
 
     fn system_message_for_ask_question_symbols(
@@ -5139,7 +5183,7 @@ We have to add the newly created endpoint in inline_completion to add support fo
         );
         Ok(from_str::<Reply>(&reply)
             .map(|reply| reply.fix_escaped_string())
-            .map_err(|e| CodeSymbolError::SerdeError(e))?)
+            .map_err(|e| CodeSymbolError::SerdeError(SerdeError::new(e, response.to_owned())))?)
     }
 
     async fn user_message_for_codebase_wide_search(
@@ -5316,6 +5360,15 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::system(self.system_message_for_should_ask_questions());
         let user_message =
             LLMClientMessage::user(self.user_message_for_should_ask_questions(request));
+        let system_message_content = system_message.content();
+        let user_message_content = user_message.content();
+        println!("System message:\n {}", system_message_content);
+        println!("User message:\n {}", user_message_content);
+        info!(
+            event_name = "should_probe_question_request[request]",
+            system_message = system_message_content,
+            user_message = user_message_content
+        );
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
         let (sender, _) = tokio::sync::mpsc::unbounded_channel();
@@ -5335,6 +5388,11 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             )
             .await?;
         // parse out the response over here
+        info!(
+            event_name = "should_probe_question_request[response]",
+            response = response,
+        );
+        println!("Should probe question request: {:?}", &response);
         CodeSymbolShouldAskQuestionsResponse::parse_response(response)
     }
 
@@ -5470,8 +5528,9 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
             .collect::<Vec<_>>()
             .join("\n");
         let parsed_response: CodeCorrectnessAction =
-            from_str::<CodeCorrectnessAction>(&fixed_response)
-                .map_err(|e| CodeSymbolError::SerdeError(e))?;
+            from_str::<CodeCorrectnessAction>(&fixed_response).map_err(|e| {
+                CodeSymbolError::SerdeError(SerdeError::new(e, fixed_response.to_owned()))
+            })?;
         Ok(parsed_response)
     }
 }
@@ -5551,7 +5610,10 @@ mod tests {
         AskQuestionSymbolHint, CodeSymbolToAskQuestionsSymboList,
     };
 
-    use super::{AnthropicCodeSymbolImportant, CodeSymbolToAskQuestionsResponse};
+    use super::{
+        AnthropicCodeSymbolImportant, CodeSymbolShouldAskQuestionsResponse,
+        CodeSymbolToAskQuestionsResponse,
+    };
 
     #[test]
     fn test_parsing_works_for_important_symbol() {
@@ -5785,6 +5847,13 @@ This struct represents the response of the hybrid search. We should inspect its 
 </symbol_list>
 </reply>"#.to_owned();
         let output = CodeSymbolToAskQuestionsResponse::parse_response(response);
+        assert!(output.is_ok());
+    }
+
+    #[test]
+    fn test_parsing_code_symbol_should_ask_question_response() {
+        let response = "<reply>\n<thinking>\nThe `Agent` struct contains a field called `chat_broker` of type `Arc&lt;LLMChatModelBroker&gt;`. This field likely holds the broker or client used to send requests to the LLM (Large Language Model) for chat-based interactions. By probing into the implementation of `LLMChatModelBroker`, we may find where the request is sent to the LLM client.\n</thinking>\n</thinking>\n<context_enough>\nfalse\n</context_enough>\n</reply>";
+        let output = CodeSymbolShouldAskQuestionsResponse::parse_response(response.to_owned());
         assert!(output.is_ok());
     }
 }

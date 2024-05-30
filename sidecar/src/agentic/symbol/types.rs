@@ -14,6 +14,7 @@ use derivative::Derivative;
 use futures::{stream, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tracing::info;
 
 use crate::{
     agentic::{
@@ -358,8 +359,10 @@ impl Symbol {
         let original_request = request.original_request();
         let history_ref = &history;
         let query = request.probe_request();
+        let symbol_name = self.mecha_code_symbol.symbol_name();
 
         let snippets = self.mecha_code_symbol.get_implementations().await;
+        info!(event_name = "refresh_state", symbol_name = symbol_name,);
         // - sub-symbol selection for probing
         let sub_symbol_request = self
             .tools
@@ -371,6 +374,7 @@ impl Symbol {
                 self.llm_properties.api_key().clone(),
             )
             .await?;
+        println!("Sub symbol request: {:?}", &sub_symbol_request);
         // - ask if we should probe the sub-symbols here
         let filtering_response = stream::iter(
             sub_symbol_request
@@ -403,6 +407,10 @@ impl Symbol {
         .buffer_unordered(BUFFER_LIMIT)
         .collect::<Vec<_>>()
         .await;
+
+        println!("Sub symbol fetching: {:?}", &filtering_response);
+
+        info!("sub symbol fetching done");
 
         // println!("Snippet filtering response: {:?}", &filtering_response);
 
@@ -439,10 +447,10 @@ impl Symbol {
             .collect::<Vec<_>>()
             .await;
 
-        // println!(
-        //     "Snippet to symbols to follow: {:?}",
-        //     snippet_to_symbols_to_follow
-        // );
+        println!(
+            "Snippet to symbols to follow: {:?}",
+            snippet_to_symbols_to_follow
+        );
 
         // Now for each snippet we want to grab the definition of the symbol it belongs
         let snippet_to_follow_with_definitions =
@@ -459,6 +467,13 @@ impl Symbol {
                 let symbols_to_follow_list = response.symbol_list();
                 let definitions_to_follow = stream::iter(symbols_to_follow_list)
                     .map(|symbol_to_follow| async move {
+                        println!(
+                            "Go to definition using symbol: {:?} {} {} {}",
+                            referred_snippet.range(),
+                            symbol_to_follow.file_path(),
+                            symbol_to_follow.line_content(),
+                            symbol_to_follow.name()
+                        );
                         let definitions_for_snippet = self
                             .tools
                             .go_to_definition_using_symbol(
@@ -482,10 +497,10 @@ impl Symbol {
             .collect::<Vec<_>>()
             .await;
 
-        // println!(
-        //     "Snippet to follow with definitions: {:?}",
-        //     &snippet_to_follow_with_definitions
-        // );
+        println!(
+            "Snippet to follow with definitions: {:?}",
+            &snippet_to_follow_with_definitions
+        );
 
         // - ask the followup question to the symbol containing the definition we are interested in
         // - we can concat the various questions about the symbols together and just ask the symbol
@@ -582,7 +597,7 @@ impl Symbol {
             })
             .collect::<Vec<_>>();
 
-        // println!("Probe results: {:?}", &probe_results);
+        println!("Probe results: {:?}", &probe_results);
 
         let hub_sender_ref = &hub_sender;
 

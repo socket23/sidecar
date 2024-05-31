@@ -1,6 +1,6 @@
 use llm_client::clients::types::{LLMClientCompletionRequest, LLMClientMessage};
 
-use crate::agentic::tool::code_edit::{find::FindCodeSelectionInput, types::CodeEdit};
+use crate::agentic::tool::code_edit::types::CodeEdit;
 
 use super::broker::{CodeEditPromptFormatters, CodeSnippetForEditing};
 

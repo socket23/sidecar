@@ -242,7 +242,7 @@ impl Symbol {
             // llm to generate more output for a step using the context it has
             let implementations = self
                 .tools
-                .go_to_implementation(&snippet, self.symbol_identifier.symbol_name())
+                .go_to_implementation(snippet.file_path(), self.symbol_identifier.symbol_name())
                 .await?;
             let unique_files = implementations
                 .get_implementation_locations_vec()
@@ -254,8 +254,18 @@ impl Symbol {
             let file_content_map = stream::iter(unique_files.clone())
                 .map(|file_path| (file_path, cloned_tools.clone()))
                 .map(|(file_path, tool_box)| async move {
-                    let file_path = file_path.clone();
-                    let file_content = tool_box.file_open(file_path.clone()).await;
+                    let file_path = file_path.to_owned();
+                    let file_content = tool_box.file_open(file_path.to_owned()).await;
+                    // we will also force add the file to the symbol broker
+                    if let Ok(file_content) = &file_content {
+                        let _ = tool_box
+                            .force_add_document(
+                                &file_path,
+                                file_content.contents_ref(),
+                                &file_content.language(),
+                            )
+                            .await;
+                    }
                     (file_path, file_content)
                 })
                 // limit how many files we open in parallel
@@ -270,6 +280,10 @@ impl Symbol {
                 .map(|(file_path, tool_box)| async move {
                     (
                         file_path.to_owned(),
+                        // TODO(skcd): One of the bugs here is that we are also
+                        // returning the node containing the full outline
+                        // which wins over any other node, so this breaks the rest of the
+                        // flow, what should we do here??
                         tool_box.get_outline_nodes(&file_path).await,
                     )
                 })

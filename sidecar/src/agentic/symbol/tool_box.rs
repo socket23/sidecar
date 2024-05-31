@@ -4,7 +4,6 @@ use std::sync::Arc;
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
-use tokenizers::pattern::Pattern;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
@@ -544,7 +543,7 @@ We also believe this symbol needs to be probed because of:
 
                 // we need to get the outline for the symbol over here
                 let mut outlines = vec![];
-                for (fs_file_path, outline_node) in file_path_to_outline_nodes.into_iter() {
+                for (_, outline_node) in file_path_to_outline_nodes.into_iter() {
                     // Fuck it we ball, let's return the full outline here we need to truncate it later on
                     let fs_file_path = format!(
                         "{}-{}:{}",
@@ -1095,21 +1094,19 @@ We also believe this symbol needs to be probed because of:
                         None
                     }
                 })
-                .map(
-                    |(fs_file_path, ranges, hub_sender, outline_nodes, member)| {
-                        ranges
-                            .into_iter()
-                            .map(|range| {
-                                (
-                                    range,
-                                    hub_sender.clone(),
-                                    outline_nodes.to_vec(),
-                                    member.clone(),
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                    },
-                )
+                .map(|(_, ranges, hub_sender, outline_nodes, member)| {
+                    ranges
+                        .into_iter()
+                        .map(|range| {
+                            (
+                                range,
+                                hub_sender.clone(),
+                                outline_nodes.to_vec(),
+                                member.clone(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
                 .flatten(),
         )
         .map(|(range, hub_sender, outline_nodes, member)| async move {
@@ -1175,8 +1172,8 @@ We also believe this symbol needs to be probed because of:
                     )
                     .await?;
                 if let Some(definition) = definitions.definitions().get(0) {
-                    let fs_file_path = definition.file_path();
-                    let symbol_name = outline_node.name();
+                    let _ = definition.file_path();
+                    let _ = outline_node.name();
                     if let Some(child_node) = child_node_possible {
                         // we need to get a few lines above and below the place where the defintion is present
                         // so we can show that to the LLM properly and ask it to make changes
@@ -1240,7 +1237,7 @@ We also believe this symbol needs to be probed because of:
                             sender,
                         ));
                         // Figure out what to do with the receiver over here
-                        let response = receiver.await;
+                        let _ = receiver.await;
                         // this also feels a bit iffy to me, since this will block
                         // the other requests from happening unless we do everything in parallel
                         Ok(())
@@ -2215,6 +2212,23 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    pub async fn force_add_document(
+        &self,
+        fs_file_path: &str,
+        file_contents: &str,
+        language: &str,
+    ) -> Result<(), SymbolError> {
+        let _ = self
+            .symbol_broker
+            .force_add_document(
+                fs_file_path.to_owned(),
+                file_contents.to_owned(),
+                language.to_owned(),
+            )
+            .await;
+        Ok(())
+    }
+
     pub async fn file_open(&self, fs_file_path: String) -> Result<OpenFileResponse, SymbolError> {
         let request = ToolInput::OpenFile(OpenFileRequest::new(
             fs_file_path,
@@ -2522,21 +2536,38 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    // TODO(skcd): Implementation is returning the macros on top of the symbols
+    // which is pretty bad, because we do not capture it properly in our logic
     pub async fn go_to_implementation(
         &self,
-        snippet: &Snippet,
+        fs_file_path: &str,
         symbol_name: &str,
     ) -> Result<GoToImplementationResponse, SymbolError> {
         // LSP requies the EXACT symbol location on where to click go-to-implementation
         // since thats the case we can just open the file and then look for the
         // first occurance of the symbol and grab the location
-        let file_content = self.file_open(snippet.file_path().to_owned()).await?;
-        let find_in_file = self
-            .find_in_file(file_content.contents(), symbol_name.to_owned())
-            .await?;
-        if let Some(position) = find_in_file.get_position() {
+        let file_content = self.file_open(fs_file_path.to_owned()).await?;
+        let language = file_content.language().to_owned();
+        let _ = self
+            .symbol_broker
+            .force_add_document(fs_file_path.to_owned(), file_content.contents(), language)
+            .await;
+        // Now we need to find the outline node which corresponds to the symbol we are
+        // interested in and use that as the position to ask for the implementations
+        let position_from_outline_node = self
+            .symbol_broker
+            .get_symbols_outline(fs_file_path)
+            .await
+            .map(|outline_nodes| {
+                outline_nodes
+                    .into_iter()
+                    .find(|outline_node| outline_node.name() == symbol_name)
+                    .map(|outline_node| outline_node.identifier_range().end_position())
+            })
+            .flatten();
+        if let Some(position) = position_from_outline_node {
             let request = ToolInput::SymbolImplementations(GoToImplementationRequest::new(
-                snippet.file_path().to_owned(),
+                fs_file_path.to_owned(),
                 position,
                 self.editor_url.to_owned(),
             ));

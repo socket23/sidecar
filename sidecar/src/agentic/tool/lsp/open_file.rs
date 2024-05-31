@@ -33,6 +33,10 @@ impl OpenFileResponse {
         self.file_contents
     }
 
+    pub fn contents_ref(&self) -> &str {
+        &self.file_contents
+    }
+
     pub fn fs_file_path(&self) -> &str {
         self.fs_file_path.as_str()
     }

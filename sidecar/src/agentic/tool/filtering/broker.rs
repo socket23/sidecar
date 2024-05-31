@@ -135,19 +135,6 @@ impl CodeToEditList {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "code_to_not_probe_list")]
-pub struct CodeToNotProbeList {
-    #[serde(default, rename = "$value")]
-    snippets: Vec<CodeToNotProbeSnippet>,
-}
-
-impl CodeToNotProbeList {
-    pub fn snippets(&self) -> &[CodeToNotProbeSnippet] {
-        self.snippets.as_slice()
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "code_to_not_edit_list")]
 pub struct CodeToNotEditList {
     #[serde(rename = "$value")]

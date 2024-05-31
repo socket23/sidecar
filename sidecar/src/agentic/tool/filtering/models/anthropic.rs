@@ -13,8 +13,8 @@ use crate::agentic::{
         broker::{
             CodeToEditFilterFormatter, CodeToEditFilterRequest, CodeToEditFilterResponse,
             CodeToEditList, CodeToEditSymbolRequest, CodeToEditSymbolResponse, CodeToNotEditList,
-            CodeToNotProbeList, CodeToProbeFilterResponse, CodeToProbeList,
-            CodeToProbeSymbolResponse, SnippetWithReason,
+            CodeToProbeFilterResponse, CodeToProbeList, CodeToProbeSymbolResponse,
+            SnippetWithReason,
         },
         errors::CodeToEditFilteringError,
     },
@@ -1290,10 +1290,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
 Remember that your reply should be strictly in the following format:
 <code_to_probe_list>
 {{list of snippets we want to probe in the format specified}}
-</code_to_probe_list>
-
-Remember to include both <code_to_probe_list> and <code_to_not_probe_list> sections, and keep the same XML format which we have told you about.
-"#
+</code_to_probe_list>"#
         );
         let system_message = self.system_message_for_probing();
         let messages = vec![

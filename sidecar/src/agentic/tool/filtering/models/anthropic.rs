@@ -859,75 +859,13 @@ This defines the schema and model for orders. An order contains references to th
 </reason_to_probe>
 </code_to_probe>
 </code_to_probe_list>
-<code_to_not_probe_list>
-<code_to_not_probe>
-<id>
-1
-</id>
-<reason_to_not_probe>
-This defines the schema and model for shopping carts. A cart contains references to the user and product items. It also has a virtual property to calculate the total price. It's used in the checkout process but probably not the source of the bug.
-</reason_to_not_probe>
-</code_to_not_probe>
-<code_to_not_probe>
-<id>
-5
-</di>
-<reason_to_not_probe>
-This is the main Express server file. It sets up MongoDB, middleware, routes, and error handling. While it's crucial for the app as a whole, it doesn't contain any checkout-specific logic.
-</reason_to_not_probe>
-</code_to_not_probe>
-<code_to_not_probe>
-<id>
-0
-</id>
-<reason_to_not_probe>
-This code handles user registration and login. It's used to authenticate the user before checkout can occur. But since the error happens after entering payment info, authentication is likely not the problem.
-</reason_to_not_probe>
-</code_to_not_probe>
-<code_to_not_probe>
-<id>
-9
-</id>
-<reason_to_not_probe>
-This code handles adding items to the cart. It's used before the checkout process begins. While it's important for the overall shopping flow, it's unlikely to be directly related to a checkout bug.  
-</reason_to_not_probe>
-</code_to_not_probe>
-<code_to_not_probe>
-<id>
-2
-</id>
-<reason_to_not_probe>
-This code allows fetching the logged-in user's orders. It's used after the checkout process to display order history. It doesn't come into play until after checkout is complete.
-</reason_to_not_probe>
-</code_to_not_probe>
-<code_to_not_probe>
-<id>
-4
-</id>
-<reason_to_not_probe>
-This defines the schema and model for user accounts. A user has an email, password, name, address, phone number, and admin status. The user ID is referenced by the cart and order, but the user model itself is not used in the checkout.
-</reason_to_not_probe>
-</code_to_not_probe>
-<code_to_not_probe>
-<id>
-7
-</id>
-<reason_to_not_probe>
-This defines the schema and model for products. A product has a name, description, price, category, and stock quantity. It's referenced by the cart and order models but is not directly used in the checkout process.
-</reason_to_not_probe>
-</code_to_not_probe>
-</code_to_not_probe_list>
 </example>
 
 Always remember that you have to reply in the following format:
 <code_to_probe_list>
 {list of snippets we want to probe}
 </code_to_probe_list>
-<code_to_not_probe_list>
-{list of snippets we want to not probe anymore}
-</code_to_not_probe_list>
-If there are no snippets which need to be probed then reply with an emply list of items for <code_to_not_probe_list>.
-Similarly if there are no snippets which you need to probe then reply with an emplty list of items for <code_to_probe_list>."#.to_owned()
+If there are no snippets which need to be probed then reply with an emply list of items for <code_to_probe_list>."#.to_owned()
     }
 
     fn system_message_for_probing(&self) -> String {
@@ -935,7 +873,9 @@ Similarly if there are no snippets which you need to probe then reply with an em
         format!(
             r#"You are a powerful code filtering engine. You have to order the code snippets in the order in which you want to ask them more questions, you will only get to ask these code snippets deeper questions by following various code symbols to their definitions or references.
 - Probing a code snippet implies that you can follow the type of a symbol or function call or declaration if you think we should be following that symbol. 
+- The code snippets which you want to probe more should be part of the <code_to_probe_list> section.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
+- You have to order the code to probe snippets in the order of importance, and only include code sections which are part of the <code_to_probe_list>
 - If you want to ask the section with id 0 then you must output in the following format:
 <code_to_probe>
 <id>
@@ -945,15 +885,6 @@ Similarly if there are no snippets which you need to probe then reply with an em
 {{your reason for probing}}
 </reason_to_probe>
 </code_to_probe>
-- There will be code section which are not necessary to answer the user query, let's say you do not want to ask further questions to the snippet section with id 1, you must provide the reason for not probing and then you must output in the following format:
-<code_to_not_probe>
-<id>
-0
-</id>
-<reason_to_not_probe>
-{{your reason for not probing}}
-</reason_to_not_probe>
-</code_to_not_probe>
 
 Here is the example contained in the <example> section.
 
@@ -964,7 +895,7 @@ These example is for reference. You must strictly follow the format shown in the
 Some more examples of outputs and cases you need to handle:
 <example>
 <scenario>
-there are no <code_to_not_probe_list> items
+there are some code sections which are present in <code_to_probe_list>
 </scenario>
 <output>
 </code_to_probe_list>
@@ -978,10 +909,8 @@ there are no <code_to_not_probe_list> items
 <code_to_probe>
 {{more code to probe list items...}}
 </code_to_probe_list>
-</code_to_not_probe_list>
-</code_to_not_probe_list>
 
-Notice how we include the elements for <code_to_probe_list> and even if the <code_to_not_probe_list> is empty we still output it as empty list.
+Notice how we include the elements for <code_to_probe_list>
 </example>
 <example>
 <scenario>
@@ -990,46 +919,6 @@ there are no <code_to_probe_list> items
 <output>
 <code_to_probe_list>
 </code_to_probe_list>
-<code_to_not_probe_list>
-<code_to_not_probe>
-<id>
-0
-</id>
-<reason_to_not_probe>
-{{your reason for not probing}}
-</reason_to_not_probe>
-</code_to_not_probe>
-{{more code to not probe list items here...}}
-</code_to_not_probe_list>
-</output>
-</example>
-<example>
-<scenario>
-Example with both <code_to_probe_list> and <code_to_not_probe_list>
-</scenario>
-<output>
-<code_to_probe_list>
-<code_to_probe>
-<id>
-0
-</id>
-<reason_to_probe>
-{{your reason for probing this code section}}
-</reason_to_probe>
-<code_to_probe>
-{{more code to probe list items...}}
-</code_to_probe_list>
-<code_to_not_probe_list>
-<code_to_not_probe>
-<id>
-1
-</id>
-<reason_to_not_probe>
-{{your reason for probing this code section}}
-</reason_to_not_probe>
-<code_to_not_probe>
-{{more code to not probe list items which strictly follow the same format as above}}
-</code_to_not_probe_list>
 </output>
 </example>
 
@@ -1038,6 +927,7 @@ In this example we still include the <code_to_probe_list> section even if there 
 Please provide the order along with the reason in 2 lists, one for code snippets which you want to probe and the other for symbols we do not have to probe to answer the user query."#
         )
     }
+
     fn system_message(&self) -> String {
         let example_message = self.example_message();
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
@@ -1185,34 +1075,15 @@ Code location: {code_location}:{start_line}-{end_line}
             .take_while(|line| !line.contains("</code_to_probe_list>"))
             .collect::<Vec<&str>>()
             .join("\n");
-        let mut code_to_not_probe_list = response
-            .lines()
-            .into_iter()
-            .skip_while(|line| !line.contains("<code_to_not_probe_list>"))
-            .skip(1)
-            .take_while(|line| !line.contains("</code_to_not_probe_list>"))
-            .collect::<Vec<&str>>()
-            .join("\n");
         code_to_probe_list = format!(
             "<code_to_probe_list>
 {code_to_probe_list}
 </code_to_probe_list>"
         );
-        code_to_not_probe_list = format!(
-            "<code_to_not_probe_list>
-{code_to_not_probe_list}
-</code_to_not_probe_list>"
-        );
         code_to_probe_list = self.parse_response_section(&code_to_probe_list);
-        code_to_not_probe_list = self.parse_response_section(&code_to_not_probe_list);
         let code_to_probe_list = from_str::<CodeToProbeList>(&code_to_probe_list)
             .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
-        let code_to_not_probe_list = from_str::<CodeToNotProbeList>(&code_to_not_probe_list)
-            .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
-        Ok(CodeToProbeSymbolResponse::new(
-            code_to_probe_list,
-            code_to_not_probe_list,
-        ))
+        Ok(CodeToProbeSymbolResponse::new(code_to_probe_list))
     }
 
     fn parse_reponse_for_probing(
@@ -1222,7 +1093,6 @@ Code location: {code_location}:{start_line}-{end_line}
     ) -> Result<CodeToProbeFilterResponse, CodeToEditFilteringError> {
         let response = self.parse_response_for_probing_list(response)?;
         let code_to_probe_list = response.code_to_probe_list();
-        let code_to_not_probe_list = response.code_to_not_probe_list();
         let snippet_mapping = snippets
             .into_iter()
             .enumerate()
@@ -1242,25 +1112,7 @@ Code location: {code_location}:{start_line}-{end_line}
                 }
             })
             .collect::<Vec<_>>();
-        let code_to_not_probe_list = code_to_not_probe_list
-            .snippets()
-            .into_iter()
-            .filter_map(|code_to_not_edit| {
-                let snippet = snippet_mapping.get(&code_to_not_edit.id());
-                if let Some(snippet) = snippet {
-                    Some(SnippetWithReason::new(
-                        (*snippet).clone(),
-                        code_to_not_edit.reason_to_no_probe().to_owned(),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        Ok(CodeToProbeFilterResponse::new(
-            code_to_probe_list,
-            code_to_not_probe_list,
-        ))
+        Ok(CodeToProbeFilterResponse::new(code_to_probe_list, vec![]))
     }
 
     fn parse_response(
@@ -1435,13 +1287,10 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
 {input_formatted}
 </rerank_list>
 
-Remeber that your reply should be strictly in the following format:
+Remember that your reply should be strictly in the following format:
 <code_to_probe_list>
 {{list of snippets we want to probe in the format specified}}
 </code_to_probe_list>
-<code_to_not_probe_list>
-{{list of snippets we want to not probe anymore in the format specified}}
-</code_to_not_probe_list>
 
 Remember to include both <code_to_probe_list> and <code_to_not_probe_list> sections, and keep the same XML format which we have told you about.
 "#

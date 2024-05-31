@@ -189,26 +189,15 @@ impl CodeToEditSymbolResponse {
 #[derive(Debug, Clone)]
 pub struct CodeToProbeSymbolResponse {
     code_to_probe_list: CodeToProbeList,
-    code_to_not_probe_list: CodeToNotProbeList,
 }
 
 impl CodeToProbeSymbolResponse {
-    pub fn new(
-        code_to_probe_list: CodeToProbeList,
-        code_to_not_probe_list: CodeToNotProbeList,
-    ) -> Self {
-        Self {
-            code_to_not_probe_list,
-            code_to_probe_list,
-        }
+    pub fn new(code_to_probe_list: CodeToProbeList) -> Self {
+        Self { code_to_probe_list }
     }
 
     pub fn code_to_probe_list(&self) -> &CodeToProbeList {
         &self.code_to_probe_list
-    }
-
-    pub fn code_to_not_probe_list(&self) -> &CodeToNotProbeList {
-        &self.code_to_not_probe_list
     }
 }
 

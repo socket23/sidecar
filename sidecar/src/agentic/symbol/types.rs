@@ -395,6 +395,7 @@ impl Symbol {
             )
             .await?;
         println!("Sub symbol request: {:?}", &sub_symbol_request);
+
         // - ask if we should probe the sub-symbols here
         let filtering_response = stream::iter(
             sub_symbol_request
@@ -406,23 +407,26 @@ impl Symbol {
                     (reason, snippet, self.llm_properties.clone())
                 }),
         )
-        .map(|(reason, snippet, llm_properties)| async move {
+        .map(|(reason, snippet, _llm_properties)| async move {
+            // TODO(skcd): This asking of question does not feel necessary
+            // since we are doing pre-filtering before
             // Now depending on the response here we can exlcude/include
             // the symbols which we want to follow and ask for more information
-            let response = self
-                .tools
-                .should_follow_subsymbol_for_probing(
-                    &snippet,
-                    &reason,
-                    history_ref,
-                    query,
-                    llm_properties.llm().clone(),
-                    llm_properties.provider().clone(),
-                    llm_properties.api_key().clone(),
-                )
-                .await;
+            // let response = self
+            //     .tools
+            //     .should_follow_subsymbol_for_probing(
+            //         &snippet,
+            //         &reason,
+            //         history_ref,
+            //         query,
+            //         llm_properties.llm().clone(),
+            //         llm_properties.provider().clone(),
+            //         llm_properties.api_key().clone(),
+            //     )
+            //     .await;
             // println!("Response: {:?}", &response);
-            (reason, snippet, response)
+            // (reason, snippet, response)
+            (reason.to_owned(), snippet, reason)
         })
         .buffer_unordered(BUFFER_LIMIT)
         .collect::<Vec<_>>()
@@ -434,19 +438,20 @@ impl Symbol {
 
         // println!("Snippet filtering response: {:?}", &filtering_response);
 
-        let filtered_snippets = filtering_response
-            .into_iter()
-            .filter_map(|(reason, snippet, probe_deeper)| match probe_deeper {
-                Ok(probe_deeper) => {
-                    if probe_deeper.should_follow() {
-                        Some((reason, snippet, probe_deeper.thinking().to_owned()))
-                    } else {
-                        None
-                    }
-                }
-                Err(_) => None,
-            })
-            .collect::<Vec<_>>();
+        // let filtered_snippets = filtering_response
+        //     .into_iter()
+        //     .filter_map(|(reason, snippet, probe_deeper)| match probe_deeper {
+        //         Ok(probe_deeper) => {
+        //             if probe_deeper.should_follow() {
+        //                 Some((reason, snippet, probe_deeper.thinking().to_owned()))
+        //             } else {
+        //                 None
+        //             }
+        //         }
+        //         Err(_) => None,
+        //     })
+        //     .collect::<Vec<_>>();
+        let filtered_snippets = filtering_response;
         let snippet_to_symbols_to_follow = stream::iter(filtered_snippets)
             .map(|(_, snippet, reason_to_follow)| async move {
                 let response = self

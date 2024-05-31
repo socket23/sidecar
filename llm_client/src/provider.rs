@@ -39,6 +39,23 @@ pub enum LLMProvider {
     GeminiPro,
 }
 
+impl std::fmt::Display for LLMProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LLMProvider::OpenAI => write!(f, "OpenAI"),
+            LLMProvider::TogetherAI => write!(f, "TogetherAI"),
+            LLMProvider::Ollama => write!(f, "Ollama"),
+            LLMProvider::LMStudio => write!(f, "LMStudio"),
+            LLMProvider::CodeStory(_) => write!(f, "CodeStory"),
+            LLMProvider::Azure(_) => write!(f, "Azure"),
+            LLMProvider::OpenAICompatible => write!(f, "OpenAICompatible"),
+            LLMProvider::Anthropic => write!(f, "Anthropic"),
+            LLMProvider::FireworksAI => write!(f, "FireworksAI"),
+            LLMProvider::GeminiPro => write!(f, "GeminiPro"),
+        }
+    }
+}
+
 impl LLMProvider {
     pub fn is_codestory(&self) -> bool {
         matches!(self, LLMProvider::CodeStory(_))

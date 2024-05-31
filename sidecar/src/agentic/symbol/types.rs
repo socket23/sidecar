@@ -222,11 +222,15 @@ impl Symbol {
     }
 
     async fn grab_implementations(&self) -> Result<(), SymbolError> {
-        let snippet: Option<Snippet>;
+        let snippet_file_path: Option<String>;
         {
-            snippet = self.mecha_code_symbol.get_snippet().await.clone();
+            snippet_file_path = self
+                .mecha_code_symbol
+                .get_snippet()
+                .await
+                .map(|snippet| snippet.file_path().to_owned());
         }
-        if let Some(snippet) = snippet {
+        if let Some(snippet_file_path) = snippet_file_path {
             // We first rerank the snippets and then ask the llm for which snippets
             // need to be edited
             // this is not perfect as there is heirarchy in the symbols which we might have
@@ -242,7 +246,7 @@ impl Symbol {
             // llm to generate more output for a step using the context it has
             let implementations = self
                 .tools
-                .go_to_implementation(snippet.file_path(), self.symbol_identifier.symbol_name())
+                .go_to_implementation(&snippet_file_path, self.symbol_identifier.symbol_name())
                 .await?;
             let unique_files = implementations
                 .get_implementation_locations_vec()
@@ -316,7 +320,9 @@ impl Symbol {
                                     // this will always give us the biggest range
                                     let first_outline_node = outline_nodes
                                         .iter()
-                                        .filter(|outline_node| outline_node.range().contains(range))
+                                        .filter(|outline_node| {
+                                            outline_node.range().contains_check_line(range)
+                                        })
                                         .next();
                                     first_outline_node.map(|outline_node| outline_node.clone())
                                 } else {

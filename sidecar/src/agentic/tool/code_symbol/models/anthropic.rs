@@ -5247,7 +5247,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 code_symbols.api_key().clone(),
                 messages,
                 code_symbols.provider().clone(),
-                vec![("request_type".to_owned(), "important_symbols".to_owned())]
+                vec![("event_type".to_owned(), "important_symbols".to_owned())]
                     .into_iter()
                     .collect(),
                 sender,
@@ -5283,7 +5283,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 api_key,
                 messages,
                 provider,
-                vec![("request_type".to_owned(), "context_wide_search".to_owned())]
+                vec![("event_type".to_owned(), "context_wide_search".to_owned())]
                     .into_iter()
                     .collect(),
                 sender,
@@ -5319,7 +5319,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 messages,
                 provider,
                 vec![(
-                    "request_type".to_owned(),
+                    "event_type".to_owned(),
                     "utility_function_search".to_owned(),
                 )]
                 .into_iter()
@@ -5359,7 +5359,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 messages,
                 provider,
                 vec![(
-                    "request_type".to_owned(),
+                    "event_type".to_owned(),
                     "symbols_to_probe_questions".to_owned(),
                 )]
                 .into_iter()
@@ -5399,7 +5399,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 messages,
                 provider,
                 vec![(
-                    "request_type".to_owned(),
+                    "event_type".to_owned(),
                     "should_probe_question_request".to_owned(),
                 )]
                 .into_iter()
@@ -5435,7 +5435,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 api_keys,
                 messages,
                 provider,
-                vec![("request_type".to_owned(), "probe_next_symbol".to_owned())]
+                vec![("event_type".to_owned(), "probe_next_symbol".to_owned())]
                     .into_iter()
                     .collect(),
                 sender,
@@ -5466,7 +5466,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 messages,
                 provider,
                 vec![(
-                    "request_type".to_owned(),
+                    "event_type".to_owned(),
                     "probe_summarize_results".to_owned(),
                 )]
                 .into_iter()
@@ -5516,7 +5516,7 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
                 messages,
                 provider,
                 vec![(
-                    "request_type".to_owned(),
+                    "event_type".to_owned(),
                     "code_correctness_tool_use".to_owned(),
                 )]
                 .into_iter()
@@ -5576,7 +5576,7 @@ impl CodeSymbolErrorFix for AnthropicCodeSymbolImportant {
                 messages,
                 provider,
                 vec![(
-                    "request_type".to_owned(),
+                    "event_type".to_owned(),
                     "fix_code_symbol_code_editing".to_owned(),
                 )]
                 .into_iter()
@@ -5609,7 +5609,7 @@ impl ClassSymbolFollowup for AnthropicCodeSymbolImportant {
                 messages,
                 provider,
                 vec![(
-                    "request_type".to_owned(),
+                    "event_type".to_owned(),
                     "class_symbols_to_follow".to_owned(),
                 )]
                 .into_iter()

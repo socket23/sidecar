@@ -4,6 +4,7 @@ members = [
     "difftastic",
     "llm_client",
     "llm_prompts",
+    "logging",
 ]
 
 

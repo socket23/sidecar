@@ -609,7 +609,7 @@ impl ReRank for AnthropicReRank {
                 api_key,
                 request,
                 provider,
-                vec![("request_type".to_owned(), "rerank".to_owned())]
+                vec![("event_type".to_owned(), "rerank".to_owned())]
                     .into_iter()
                     .collect(),
                 sender,

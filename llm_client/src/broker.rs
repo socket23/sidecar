@@ -33,12 +33,15 @@ use crate::{
     sqlite,
 };
 
+use logging::parea::{PareaClient, PareaLogCompletion, PareaLogMessage};
+
 pub type SqlDb = Arc<SqlitePool>;
 
 pub struct LLMBroker {
     pub providers: HashMap<LLMProvider, Box<dyn LLMClient + Send + Sync>>,
     db: SqlDb,
     posthog_client: Arc<PosthogClient>,
+    parea_client: Arc<PareaClient>,
 }
 
 pub type LLMBrokerResponse = Result<String, LLMClientError>;
@@ -49,10 +52,12 @@ impl LLMBroker {
         // later we need to configure the user id over here to be the one from
         // the client machine we are running it on
         let posthog_client = Arc::new(posthog_client("agentic"));
+        let parea_client = Arc::new(PareaClient::new());
         let broker = Self {
             providers: HashMap::new(),
             db: sqlite,
             posthog_client,
+            parea_client,
         };
         Ok(broker
             .add_provider(LLMProvider::OpenAI, Box::new(OpenAIClient::new()))
@@ -128,6 +133,7 @@ impl LLMBroker {
         metadata: HashMap<String, String>,
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> LLMBrokerResponse {
+        let request_id = uuid::Uuid::new_v4();
         let api_key = api_key
             .key(&provider)
             .ok_or(LLMClientError::UnSupportedModel)?;
@@ -151,6 +157,34 @@ impl LLMBroker {
                 .stream_completion(api_key, request.clone(), sender)
                 .await;
             if let Ok(result) = result.as_ref() {
+                let parea_log_completion = PareaLogCompletion::new(
+                    request
+                        .messages()
+                        .into_iter()
+                        .map(|message| {
+                            PareaLogMessage::new(
+                                message.role().to_string(),
+                                message.content().to_owned(),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                    metadata.clone(),
+                    result.to_owned(),
+                    request.temperature(),
+                    request_id.to_string(),
+                    request_id.to_string(),
+                    metadata
+                        .get("root_trace_id")
+                        .map(|s| s.to_owned())
+                        .unwrap_or(request_id.to_string()),
+                    request.model().to_string(),
+                    provider_type.to_string(),
+                    metadata
+                        .get("event_type")
+                        .map(|s| s.to_owned())
+                        .unwrap_or("no_event_type".to_owned()),
+                );
+                let _ = self.parea_client.log_completion(parea_log_completion).await;
                 // we write the inputs to the DB so we can keep track of the inputs
                 // and the result provided by the LLM
                 let llm_type = request.model();

@@ -257,6 +257,9 @@ pub struct MechaCodeSymbolThinking {
     // We store here some memory about what we have discovered and learnt from the exploration
     // this is useful for answering questions to the user when required
     memory: Mutex<Vec<String>>,
+    // We store here the pending requests and the result we are awaiting for it
+    // this allows de-duplication and caching of requests very easily and can be used
+    // as a way to save redundant calls
     pending_probe_request: Mutex<Vec<(String, Shared<tokio::sync::oneshot::Receiver<String>>)>>,
 }
 

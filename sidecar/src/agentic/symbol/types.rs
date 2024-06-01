@@ -363,6 +363,10 @@ impl Symbol {
     // - then ask it the probing question
     // - once we have the probing question, we send over the request and wait for the response
     // - and finally we stop doing this.
+    // TODO(skcd): We need to cache the results for each request here to the symbol
+    // and if there is an error, then we remove it from the cache and what if something
+    // is poll waiting on it, can we pass the progress made up-until now to the calling
+    // request, this way we can store the progress
     async fn probe_request(
         &self,
         request: SymbolToProbeRequest,

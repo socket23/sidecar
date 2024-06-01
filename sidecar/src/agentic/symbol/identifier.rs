@@ -4,7 +4,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use futures::{lock::Mutex, stream, StreamExt};
+use futures::{future::Shared, lock::Mutex, stream, Future, StreamExt};
 use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
@@ -254,6 +254,10 @@ pub struct MechaCodeSymbolThinking {
     // This can be updated on the fly when the user provides more context
     // We can think of this as a long term storage
     provided_user_context: UserContext,
+    // We store here some memory about what we have discovered and learnt from the exploration
+    // this is useful for answering questions to the user when required
+    memory: Mutex<Vec<String>>,
+    pending_probe_request: Mutex<Vec<(String, Shared<tokio::sync::oneshot::Receiver<String>>)>>,
 }
 
 impl MechaCodeSymbolThinking {
@@ -274,6 +278,8 @@ impl MechaCodeSymbolThinking {
             snippet: Mutex::new(snippet),
             implementations: Mutex::new(implementations),
             provided_user_context,
+            memory: Mutex::new(vec![]),
+            pending_probe_request: Mutex::new(vec![]),
         }
     }
 

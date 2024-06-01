@@ -90,6 +90,7 @@ pub async fn run(application: Application) -> Result<()> {
 // - when a file changes, it should still be logged and tracked
 // - when a file is opened, it should be tracked over here too
 pub async fn start(app: Application) -> anyhow::Result<()> {
+    println!("Port: {}", app.config.port);
     let bind = SocketAddr::new(app.config.host.parse()?, app.config.port);
     let mut api = Router::new()
         .route("/config", get(sidecar::webserver::config::get))
@@ -177,6 +178,10 @@ fn tree_sitter_router() -> Router {
         .route(
             "/tree_sitter_valid",
             post(sidecar::webserver::tree_sitter::tree_sitter_node_check),
+        )
+        .route(
+            "/valid_xml",
+            post(sidecar::webserver::tree_sitter::check_valid_xml),
         )
 }
 

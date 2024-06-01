@@ -1,4 +1,5 @@
 use axum::{response::IntoResponse, Extension, Json};
+use quick_xml::events::Event;
 
 use crate::{application::application::Application, chunking::text_document::Range};
 
@@ -96,4 +97,38 @@ pub async fn tree_sitter_node_check(
         None => false,
     };
     Ok(Json(TreeSitterValidResponse { valid }))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CheckValidXMLRequest {
+    input: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CheckValidXMLResponse {
+    valid: bool,
+}
+
+fn validate_xml(xml_data: &str) -> bool {
+    let mut reader = quick_xml::Reader::from_str(xml_data);
+    reader.trim_text(true);
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) => break,
+            Ok(_) => (),
+            Err(_) => return false,
+        }
+    }
+    true
+}
+
+pub async fn check_valid_xml(
+    Extension(_app): Extension<Application>,
+    Json(CheckValidXMLRequest { input }): Json<CheckValidXMLRequest>,
+) -> Result<impl IntoResponse> {
+    println!("we are getting a ping over here");
+    println!("Input: {}", &input);
+    let valid = validate_xml(&input);
+    Ok(Json(CheckValidXMLResponse { valid }))
 }

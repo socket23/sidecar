@@ -11,7 +11,7 @@ use std::{
 };
 
 use derivative::Derivative;
-use futures::{stream, StreamExt};
+use futures::{stream, FutureExt, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::info;
@@ -371,6 +371,8 @@ impl Symbol {
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
     ) -> Result<String, SymbolError> {
+        // we can do a cache check here if we already have the answer or are working
+        // on the similar request
         // First we refresh our state over here
         self.refresh_state().await;
 

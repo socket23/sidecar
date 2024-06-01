@@ -18,6 +18,6 @@ async fn main() {
     });
     tokio::time::sleep(Duration::from_secs(1)).await;
     println!("sending pawn signal");
-    sender.send("pawnn".to_owned());
+    let _ = sender.send("pawnn".to_owned());
     tokio::time::sleep(Duration::from_secs(1)).await;
 }

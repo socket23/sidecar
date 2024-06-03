@@ -104,7 +104,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .nest("/in_editor", in_editor_router())
         .nest("/tree_sitter", tree_sitter_router())
         .nest("/file", file_operations_router())
-        .nest("/inline_completion", inline_completion());
+        .nest("/inline_completion", inline_completion())
+        .nest("/agentic", agentic_router());
 
     api = api.route("/health", get(sidecar::webserver::health::health));
 
@@ -136,6 +137,14 @@ fn repo_router() -> Router {
         .route("/queue", get(sidecar::webserver::repos::queue_status))
         // Gives back the repos we know about
         .route("/repo_list", get(sidecar::webserver::repos::repo_status))
+}
+
+fn agentic_router() -> Router {
+    use axum::routing::*;
+    Router::new().route(
+        "/probe_request",
+        get(sidecar::webserver::agentic::probe_request),
+    )
 }
 
 fn agent_router() -> Router {

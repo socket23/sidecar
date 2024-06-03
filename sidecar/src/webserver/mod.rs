@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod agent_stream;
+pub mod agentic;
 pub mod config;
 pub mod context_trimming;
 pub mod file_edit;

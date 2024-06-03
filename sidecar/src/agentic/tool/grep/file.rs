@@ -15,7 +15,7 @@ impl FindInFile {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct FindInFileRequest {
     file_contents: String,
     file_symbol: String,

@@ -3,7 +3,7 @@
 
 use super::{edit::SymbolToEditRequest, probe::SymbolToProbeRequest};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct AskQuestionRequest {
     question: String,
 }
@@ -18,7 +18,7 @@ impl AskQuestionRequest {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum SymbolEvent {
     InitialRequest,
     AskQuestion(AskQuestionRequest),

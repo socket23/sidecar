@@ -1,6 +1,6 @@
 use crate::{agentic::symbol::identifier::SymbolIdentifier, chunking::text_document::Range};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToEdit {
     outline: bool,
     range: Range,
@@ -47,7 +47,7 @@ impl SymbolToEdit {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToEditRequest {
     symbols: Vec<SymbolToEdit>,
     symbol_identifier: SymbolIdentifier,

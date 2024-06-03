@@ -228,7 +228,7 @@ impl CodeToEditFilterResponse {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct CodeToEditFilterRequest {
     snippets: Vec<Snippet>,
     query: String,
@@ -237,7 +237,7 @@ pub struct CodeToEditFilterRequest {
     api_key: LLMProviderAPIKeys,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct CodeToEditSymbolRequest {
     xml_symbol: String,
     query: String,

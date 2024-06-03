@@ -14,7 +14,7 @@ use crate::agentic::tool::{
 
 use super::types::CodeSymbolError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ClassSymbolFollowupRequest {
     fs_file_path: String,
     original_code: String,

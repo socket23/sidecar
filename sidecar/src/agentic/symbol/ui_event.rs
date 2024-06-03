@@ -6,7 +6,7 @@ use crate::agentic::tool::input::ToolInput;
 
 use super::types::SymbolEventRequest;
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub enum UIEvent {
     SymbolEvent(SymbolEventRequest),
     ToolEvent(ToolInput),

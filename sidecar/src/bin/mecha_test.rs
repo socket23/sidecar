@@ -80,6 +80,7 @@ async fn main() {
         LLMProvider::Anthropic,
         api_key,
         current_query.to_owned(),
+        None,
     );
 
     // execute input on manager

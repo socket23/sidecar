@@ -5,13 +5,17 @@ use axum::{
     Extension, Json,
 };
 use futures::StreamExt;
+use llm_client::{
+    clients::types::LLMType,
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 
 use crate::{
     agentic::{
         symbol::{
-            events::probe::SymbolToProbeRequest,
+            events::{input::SymbolInputEvent, probe::SymbolToProbeRequest},
             identifier::{LLMProperties, SymbolIdentifier},
             manager::SymbolManager,
             types::SymbolEventRequest,
@@ -19,7 +23,7 @@ use crate::{
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
     application::application::Application,
-    user_context::types::UserContext,
+    user_context::types::{FileContentValue, UserContext},
 };
 
 use super::{model_selection::LLMClientConfig, types::Result};
@@ -79,6 +83,81 @@ pub async fn probe_request(
     // Now we want to poll the future of the probe request we are sending
     // along with the ui events so we can return the channel properly
     // how do go about doing that?
+    let event_stream = Sse::new(
+        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
+            sse::Event::default()
+                .json_data(event)
+                .map_err(anyhow::Error::new)
+        }),
+    );
+
+    // return the stream as a SSE event stream over here
+    Ok(event_stream.keep_alive(
+        sse::KeepAlive::new()
+            .interval(Duration::from_secs(3))
+            .event(
+                sse::Event::default()
+                    .json_data(json!({
+                        "keep_alive": "alive"
+                    }))
+                    .expect("json to not fail in keep alive"),
+            ),
+    ))
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct SWEBenchRequest {
+    git_dname: String,
+    problem_statement: String,
+    editor_url: String,
+}
+
+pub async fn swe_bench(
+    Extension(app): Extension<Application>,
+    Json(SWEBenchRequest {
+        git_dname,
+        problem_statement,
+        editor_url,
+    }): Json<SWEBenchRequest>,
+) -> Result<impl IntoResponse> {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let tool_broker = Arc::new(ToolBroker::new(
+        app.llm_broker.clone(),
+        Arc::new(CodeEditBroker::new()),
+        app.symbol_tracker.clone(),
+        app.language_parsing.clone(),
+    ));
+    let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
+    let model = LLMType::ClaudeSonnet;
+    let provider_type = LLMProvider::Anthropic;
+    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    let symbol_manager = SymbolManager::new(
+        tool_broker,
+        app.symbol_tracker.clone(),
+        app.editor_parsing.clone(),
+        editor_url.to_owned(),
+        sender,
+        LLMProperties::new(
+            model.clone(),
+            provider_type.clone(),
+            anthropic_api_keys.clone(),
+        ),
+        user_context.clone(),
+    );
+
+    // Now we send the original request over here and then await on the sender like
+    // before
+    tokio::spawn(async move {
+        let _ = symbol_manager
+            .initial_request(SymbolInputEvent::new(
+                user_context,
+                model,
+                provider_type,
+                anthropic_api_keys,
+                problem_statement,
+            ))
+            .await;
+    });
     let event_stream = Sse::new(
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
             sse::Event::default()

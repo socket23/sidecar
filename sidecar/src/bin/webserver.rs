@@ -141,10 +141,12 @@ fn repo_router() -> Router {
 
 fn agentic_router() -> Router {
     use axum::routing::*;
-    Router::new().route(
-        "/probe_request",
-        get(sidecar::webserver::agentic::probe_request),
-    )
+    Router::new()
+        .route(
+            "/probe_request",
+            post(sidecar::webserver::agentic::probe_request),
+        )
+        .route("/swe_bench", post(sidecar::webserver::agentic::swe_bench))
 }
 
 fn agent_router() -> Router {

@@ -47,7 +47,7 @@ use super::{
 
 const BUFFER_LIMIT: usize = 100;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolEventRequest {
     symbol: SymbolIdentifier,
     event: SymbolEvent,

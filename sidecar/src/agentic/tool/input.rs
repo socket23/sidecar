@@ -26,7 +26,7 @@ use super::{
     rerank::base::ReRankEntriesForBroker,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum ToolInput {
     CodeEditing(CodeEdit),
     LSPDiagnostics(LSPDiagnosticsInput),

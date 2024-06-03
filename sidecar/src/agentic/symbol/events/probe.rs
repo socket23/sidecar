@@ -3,7 +3,7 @@
 
 use crate::agentic::symbol::identifier::SymbolIdentifier;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToProbeHistory {
     symbol: String,
     fs_file_path: String,
@@ -22,7 +22,7 @@ impl SymbolToProbeHistory {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToProbeRequest {
     symbol_identifier: SymbolIdentifier,
     probe_request: String,

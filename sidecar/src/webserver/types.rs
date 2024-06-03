@@ -42,7 +42,7 @@ impl IntoResponse for Error {
 }
 
 impl Error {
-    fn internal<S: std::fmt::Display>(message: S) -> Self {
+    pub fn internal<S: std::fmt::Display>(message: S) -> Self {
         Error {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             body: EndpointError {

@@ -16,7 +16,7 @@ use crate::agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, outp
 
 use super::{models::anthropic::AnthropicCodeSymbolImportant, types::CodeSymbolError};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct CodeEditingErrorRequest {
     fs_file_path: String,
     code_above: Option<String>,

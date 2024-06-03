@@ -35,7 +35,7 @@ impl CodeCorrectnessAction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct CodeCorrectnessRequest {
     fs_file_contents: String,
     fs_file_path: String,

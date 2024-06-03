@@ -54,7 +54,7 @@ impl LLMProperties {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 pub struct Snippet {
     range: Range,
     symbol_name: String,
@@ -171,7 +171,7 @@ impl Snippet {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Deserialize, serde::Serialize)]
 pub struct SymbolIdentifier {
     symbol_name: String,
     fs_file_path: Option<String>,

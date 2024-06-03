@@ -110,6 +110,7 @@ pub struct SWEBenchRequest {
     git_dname: String,
     problem_statement: String,
     editor_url: String,
+    test_command: String,
 }
 
 pub async fn swe_bench(
@@ -118,6 +119,7 @@ pub async fn swe_bench(
         git_dname,
         problem_statement,
         editor_url,
+        test_command,
     }): Json<SWEBenchRequest>,
 ) -> Result<impl IntoResponse> {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -155,6 +157,7 @@ pub async fn swe_bench(
                 provider_type,
                 anthropic_api_keys,
                 problem_statement,
+                Some(test_command),
             ))
             .await;
     });

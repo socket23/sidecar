@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::chunking::text_document::Position;
 use async_recursion::async_recursion;
 use futures::{stream, StreamExt};
@@ -158,21 +160,30 @@ impl UserContext {
     }
 
     // generats the full xml for the input context so the llm can query from it
-    pub async fn to_xml(self) -> Result<String, UserContextError> {
+    pub async fn to_xml(
+        self,
+        file_extension_filters: HashSet<String>,
+    ) -> Result<String, UserContextError> {
         let variable_prompt = self
             .variables
             .into_iter()
             .map(|variable| variable.to_xml())
             .collect::<Vec<_>>()
             .join("\n");
-        let folder_content = stream::iter(self.folder_paths)
-            .map(|folder_path| read_folder_selection(folder_path))
-            .buffered(1)
-            .collect::<Vec<Result<String, UserContextError>>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, UserContextError>>()?
-            .join("\n");
+        let folder_content = stream::iter(
+            self.folder_paths
+                .into_iter()
+                .map(|folder_path| (folder_path, file_extension_filters.clone())),
+        )
+        .map(|(folder_path, file_extension_filters)| {
+            read_folder_selection(folder_path, file_extension_filters)
+        })
+        .buffered(1)
+        .collect::<Vec<Result<String, UserContextError>>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, UserContextError>>()?
+        .join("\n");
         // Now we create the xml string for this
         let mut final_string = "<selection>\n".to_owned();
         final_string.push_str(&variable_prompt);
@@ -184,7 +195,10 @@ impl UserContext {
 }
 
 #[async_recursion]
-pub async fn read_folder_selection(folder_path: String) -> Result<String, UserContextError> {
+pub async fn read_folder_selection(
+    folder_path: String,
+    file_extension_filters: HashSet<String>,
+) -> Result<String, UserContextError> {
     let mut output = String::new();
     output.push_str(&format!(
         "<selection_item>\n<folder>\n<name>\n{}\n</name>\n<file_content>\n",
@@ -203,6 +217,12 @@ pub async fn read_folder_selection(folder_path: String) -> Result<String, UserCo
 
         if path.is_file() {
             let file_path = path.to_str().unwrap().to_owned();
+            let path_extension = path
+                .extension()
+                .map(|extension| extension.to_str())
+                .flatten()
+                .map(|extension| extension.to_owned())
+                .unwrap_or_default();
             if path
                 .extension()
                 .map(|extension| extension == "json")
@@ -227,6 +247,14 @@ pub async fn read_folder_selection(folder_path: String) -> Result<String, UserCo
                 }
                 // if we are in the json flow, then we have already consumed
                 // this file and should break
+                continue;
+            }
+            // we also check the filter here to make sure we are including files
+            // which are passing the filter if the filter is non-emtpy, otherwise
+            // this block does not matter
+            if !file_extension_filters.is_empty()
+                && !file_extension_filters.contains(&path_extension)
+            {
                 continue;
             }
             let content = tokio::fs::read_to_string(&path)
@@ -254,6 +282,7 @@ pub async fn read_folder_selection(folder_path: String) -> Result<String, UserCo
                 path.to_str()
                     .expect("might not work on windows :(")
                     .to_owned(),
+                file_extension_filters.clone(),
             )
             .await?;
             output.push_str(&sub_folder_output);

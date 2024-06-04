@@ -4290,7 +4290,7 @@ edit code
             .join("\n");
         let user_context = user_request.user_context();
         let context_string = user_context
-            .to_xml()
+            .to_xml(Default::default())
             .await
             .map_err(|e| CodeSymbolError::UserContextError(e))?;
         Ok(format!(
@@ -5213,9 +5213,10 @@ We have to add the newly created endpoint in inline_completion to add support fo
         code_symbol_search_context_wide: CodeSymbolImportantWideSearch,
     ) -> Result<String, CodeSymbolError> {
         let user_query = code_symbol_search_context_wide.user_query().to_owned();
+        let file_extension_filter = code_symbol_search_context_wide.file_extension_filters();
         let user_context = code_symbol_search_context_wide.remove_user_context();
         let context_string = user_context
-            .to_xml()
+            .to_xml(file_extension_filter)
             .await
             .map_err(|e| CodeSymbolError::UserContextError(e))?;
         // also send the user query here

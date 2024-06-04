@@ -96,6 +96,12 @@ impl PareaClient {
         let url =
             "https://parea-ai-backend-us-9ac16cdbc7a7b006.onporter.run/api/parea/v1/trace_log";
 
+        let mut metadata = completion.metadata.clone();
+        metadata.insert(
+            "evaluation_metric_names".to_owned(),
+            "XML Checker".to_owned(),
+        );
+
         let body = serde_json::json!({
             "trace_id": completion.trace_id,
             "root_trace_id": completion.root_trace_id,
@@ -113,7 +119,7 @@ impl PareaClient {
             "start_timestamp": chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             "end_timestamp": chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             "status": "success",
-            "metadata": completion.metadata,
+            "metadata": metadata,
             "depth": 0,
             "execution_order": 0
         });

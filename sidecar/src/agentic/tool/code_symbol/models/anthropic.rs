@@ -4557,10 +4557,7 @@ Notice here that we made sure to include the `grok_fill_in_middle_formatter` and
 "#
         )
     }
-    fn system_message_context_wide(
-        &self,
-        code_symbol_search_context_wide: &CodeSymbolImportantWideSearch,
-    ) -> String {
+    fn system_message_context_wide(&self) -> String {
         format!(
             r#"You are a search engine which makes no mistakes while retriving important context for a user-query.
 You will be given context which the user has selected in <user_context> and you have to retrive the "code symbols" which are important for answering to the user query.
@@ -5269,8 +5266,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let api_key = code_symbols.api_key();
         let provider = code_symbols.llm_provider();
         let model = code_symbols.model().clone();
-        let system_message =
-            LLMClientMessage::system(self.system_message_context_wide(&code_symbols));
+        let system_message = LLMClientMessage::system(self.system_message_context_wide());
         let user_message = LLMClientMessage::user(
             self.user_message_for_codebase_wide_search(code_symbols)
                 .await?,

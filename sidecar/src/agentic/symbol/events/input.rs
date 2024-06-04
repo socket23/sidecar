@@ -18,7 +18,10 @@ pub struct SymbolInputEvent {
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
     user_query: String,
+    // We have to use these 2 properties when hacking together the flow
+    // for swe bench
     swe_bench_test_endpoint: Option<String>,
+    repo_map_fs_path: Option<String>,
 }
 
 impl SymbolInputEvent {
@@ -29,6 +32,7 @@ impl SymbolInputEvent {
         api_keys: LLMProviderAPIKeys,
         user_query: String,
         swe_bench_test_endpoint: Option<String>,
+        repo_map_fs_path: Option<String>,
     ) -> Self {
         Self {
             context,
@@ -37,6 +41,7 @@ impl SymbolInputEvent {
             api_keys,
             user_query,
             swe_bench_test_endpoint,
+            repo_map_fs_path,
         }
     }
 

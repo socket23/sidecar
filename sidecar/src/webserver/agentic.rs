@@ -1,9 +1,7 @@
 //! Contains the handler for agnetic requests and how they work
 
-use axum::{
-    response::{sse, IntoResponse, Sse},
-    Extension, Json,
-};
+use axum::response::{sse, IntoResponse, Sse};
+use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::StreamExt;
 use llm_client::{
     clients::types::LLMType,
@@ -110,17 +108,17 @@ pub struct SWEBenchRequest {
     git_dname: String,
     problem_statement: String,
     editor_url: String,
-    test_command: String,
+    test_endpoint: String,
 }
 
 pub async fn swe_bench(
-    Extension(app): Extension<Application>,
-    Json(SWEBenchRequest {
+    axumQuery(SWEBenchRequest {
         git_dname,
         problem_statement,
         editor_url,
-        test_command,
-    }): Json<SWEBenchRequest>,
+        test_endpoint,
+    }): axumQuery<SWEBenchRequest>,
+    Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let tool_broker = Arc::new(ToolBroker::new(
@@ -147,6 +145,8 @@ pub async fn swe_bench(
         user_context.clone(),
     );
 
+    println!("we are getting a hit at this endpoint");
+
     // Now we send the original request over here and then await on the sender like
     // before
     tokio::spawn(async move {
@@ -157,7 +157,7 @@ pub async fn swe_bench(
                 provider_type,
                 anthropic_api_keys,
                 problem_statement,
-                Some(test_command),
+                Some(test_endpoint),
             ))
             .await;
     });

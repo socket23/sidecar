@@ -146,7 +146,7 @@ fn agentic_router() -> Router {
             "/probe_request",
             post(sidecar::webserver::agentic::probe_request),
         )
-        .route("/swe_bench", post(sidecar::webserver::agentic::swe_bench))
+        .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))
 }
 
 fn agent_router() -> Router {

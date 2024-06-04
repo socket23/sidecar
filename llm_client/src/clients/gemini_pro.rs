@@ -100,6 +100,34 @@ impl GeminiProClient {
             _ => None,
         }
     }
+
+    pub async fn count_tokens(
+        &self,
+        context: &str,
+        api_base: &str,
+        api_key: &str,
+        model: &str,
+    ) -> Result<String, LLMClientError> {
+        let token_count_request = GeminiProTokenCountRequestBody {
+            contents: vec![Content {
+                role: "user".to_owned(),
+                parts: vec![HashMap::from([("text".to_owned(), context.to_owned())])],
+            }],
+        };
+        let count_tokens = self
+            .client
+            .post(self.count_tokens_endpoint(&api_base, &model))
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&token_count_request)
+            .send()
+            .await?;
+        let count_tokens_result = count_tokens
+            .bytes()
+            .await
+            .map(|bytes| String::from_utf8(bytes.to_vec()));
+        Ok(count_tokens_result.expect("to work").expect("to work"))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

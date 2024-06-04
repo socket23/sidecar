@@ -81,6 +81,7 @@ async fn main() {
         api_key,
         current_query.to_owned(),
         None,
+        None,
     );
 
     // execute input on manager

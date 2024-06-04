@@ -161,6 +161,7 @@ pub async fn swe_bench(
                 anthropic_api_keys,
                 problem_statement,
                 Some(test_endpoint),
+                repo_map_file,
             ))
             .await;
     });

@@ -24,8 +24,12 @@ impl GeminiProClient {
         }
     }
 
-    pub fn get_api_endpoint(&self, project_id: &str) -> String {
-        format!("https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/gemini-1.5-pro-preview-0409:streamGenerateContent?alt=sse").to_owned()
+    pub fn count_tokens_endpoint(&self, project_id: &str, model: &str) -> String {
+        format!("https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/{model}:countTokens").to_owned()
+    }
+
+    pub fn get_api_endpoint(&self, project_id: &str, model: &str) -> String {
+        format!("https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/{model}:streamGenerateContent?alt=sse").to_owned()
     }
 
     fn model(&self, model: &LLMType) -> Option<String> {
@@ -108,14 +112,14 @@ struct GenerationConfig {
     candidate_count: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Content {
     role: String,
     // the only parts we will be providing is "text": "content"
     parts: Vec<HashMap<String, String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct SystemInstruction {
     role: String,
     // the only parts we will be providing is "text": "content"
@@ -146,6 +150,13 @@ struct GeminiProRequestBody {
     system_instruction: Option<SystemInstruction>,
     generation_config: GenerationConfig,
     safety_settings: Vec<GeminiSafetySetting>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GeminiProTokenCountRequestBody {
+    // system_instructions: Option<SystemInstruction>,
+    contents: Vec<Content>,
+    // tools: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -188,8 +199,8 @@ impl LLMClient for GeminiProClient {
         let messages = self.get_messages(request.messages());
         let generation_config = self.get_generation_config(&request);
         let request = GeminiProRequestBody {
-            contents: messages,
-            system_instruction: system_message,
+            contents: messages.to_vec(),
+            system_instruction: system_message.clone(),
             generation_config,
             safety_settings: vec![
                 GeminiSafetySetting::new(
@@ -210,6 +221,11 @@ impl LLMClient for GeminiProClient {
                 ),
             ],
         };
+        let token_count_request = GeminiProTokenCountRequestBody {
+            // system_instructions: system_message,
+            contents: messages,
+            // tools: vec![],
+        };
         let api_key = self.get_api_key(&provider_api_key);
         let api_base = self.get_api_base(&provider_api_key);
         if api_key.is_none() || api_base.is_none() {
@@ -217,10 +233,28 @@ impl LLMClient for GeminiProClient {
         }
         let api_key = api_key.expect("to be present");
         let api_base = api_base.expect("to be present");
+        println!(
+            "API Endpoint: {:?}",
+            &self.get_api_endpoint(&api_base, &model)
+        );
+
+        let count_tokens = self
+            .client
+            .post(self.count_tokens_endpoint(&api_base, &model))
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&token_count_request)
+            .send()
+            .await?;
+        let count_tokens_result = count_tokens
+            .bytes()
+            .await
+            .map(|bytes| String::from_utf8(bytes.to_vec()));
+        println!("Gemini pro tokens: {:?}", count_tokens_result);
         // now we need to send a request to the gemini pro api here
         let response = self
             .client
-            .post(self.get_api_endpoint(&api_base))
+            .post(self.get_api_endpoint(&api_base, &model))
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&request)
@@ -228,6 +262,7 @@ impl LLMClient for GeminiProClient {
             .await?;
 
         if !response.status().is_success() {
+            println!("{:?}", &response.error_for_status());
             return Err(LLMClientError::FailedToGetResponse);
         }
 
@@ -235,6 +270,7 @@ impl LLMClient for GeminiProClient {
         let mut response_stream = response.bytes_stream().eventsource();
         while let Some(event) = response_stream.next().await {
             if let Ok(event) = event {
+                println!("{:?}", &event);
                 let parsed_event =
                     serde_json::from_slice::<GeminiProResponse>(event.data.as_bytes())?;
                 if let Some(text_part) = parsed_event.candidates[0].content.parts[0].get("text") {

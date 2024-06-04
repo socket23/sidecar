@@ -42,6 +42,7 @@ pub struct SymbolManager {
     tool_box: Arc<ToolBox>,
     editor_url: String,
     llm_properties: LLMProperties,
+    ui_sender: UnboundedSender<UIEvent>,
 }
 
 impl SymbolManager {
@@ -92,6 +93,7 @@ impl SymbolManager {
             tool_box,
             editor_url,
             llm_properties,
+            ui_sender,
         }
     }
 
@@ -114,6 +116,8 @@ impl SymbolManager {
         let tool_input = input_event.tool_use_on_initial_invocation();
         println!("{:?}", &tool_input);
         if let Some(tool_input) = tool_input {
+            // send the tool input to the ui sender
+            let _ = self.ui_sender.send(UIEvent::ToolEvent(tool_input.clone()));
             if let ToolOutput::ImportantSymbols(important_symbols) = self
                 .tools
                 .invoke(tool_input)

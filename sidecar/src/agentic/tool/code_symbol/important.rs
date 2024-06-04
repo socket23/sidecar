@@ -5,7 +5,10 @@
 //! These are like state-machines which are holding memory and moving forward and collaborating.
 
 use async_trait::async_trait;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use llm_client::{
     broker::LLMBroker,
@@ -152,6 +155,7 @@ pub struct CodeSymbolImportantWideSearch {
     llm_type: LLMType,
     llm_provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
+    file_extension_filters: HashSet<String>,
 }
 
 impl CodeSymbolImportantWideSearch {
@@ -168,7 +172,17 @@ impl CodeSymbolImportantWideSearch {
             llm_type,
             llm_provider,
             api_key,
+            file_extension_filters: Default::default(),
         }
+    }
+
+    pub fn set_file_extension_fitler(mut self, file_extension: String) -> Self {
+        self.file_extension_filters.insert(file_extension);
+        self
+    }
+
+    pub fn file_extension_filters(&self) -> HashSet<String> {
+        self.file_extension_filters.clone()
     }
 
     pub fn user_query(&self) -> &str {

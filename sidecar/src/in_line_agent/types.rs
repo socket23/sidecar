@@ -1229,7 +1229,11 @@ impl InLineAgent {
             user_query.to_owned(),
             selection_with_outline.fs_file_path(),
             // TODO(skcd): Check the implementation of this later on
-            vec![user_context.clone().to_xml().await.expect("to work")],
+            vec![user_context
+                .clone()
+                .to_xml(Default::default())
+                .await
+                .expect("to work")],
             language.to_owned(),
         )
     }

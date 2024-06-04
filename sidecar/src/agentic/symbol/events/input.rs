@@ -18,7 +18,7 @@ pub struct SymbolInputEvent {
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
     user_query: String,
-    test_command: Option<String>,
+    swe_bench_test_endpoint: Option<String>,
 }
 
 impl SymbolInputEvent {
@@ -28,7 +28,7 @@ impl SymbolInputEvent {
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         user_query: String,
-        test_command: Option<String>,
+        swe_bench_test_endpoint: Option<String>,
     ) -> Self {
         Self {
             context,
@@ -36,7 +36,7 @@ impl SymbolInputEvent {
             provider,
             api_keys,
             user_query,
-            test_command,
+            swe_bench_test_endpoint,
         }
     }
 

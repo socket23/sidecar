@@ -109,6 +109,8 @@ pub struct SWEBenchRequest {
     problem_statement: String,
     editor_url: String,
     test_endpoint: String,
+    // This is the file path with the repo map present in it
+    repo_map_file: Option<String>,
 }
 
 pub async fn swe_bench(
@@ -117,6 +119,7 @@ pub async fn swe_bench(
         problem_statement,
         editor_url,
         test_endpoint,
+        repo_map_file,
     }): axumQuery<SWEBenchRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {

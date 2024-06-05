@@ -11,7 +11,7 @@ use std::{
 };
 
 use derivative::Derivative;
-use futures::{stream, FutureExt, StreamExt};
+use futures::{stream, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::info;
@@ -51,6 +51,21 @@ const BUFFER_LIMIT: usize = 100;
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolSubStepUpdate {
     sybmol: SymbolIdentifier,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SymbolLocation {
+    snippet: Snippet,
+    symbol_identifier: SymbolIdentifier,
+}
+
+impl SymbolLocation {
+    pub fn new(symbol_identifier: SymbolIdentifier, snippet: Snippet) -> Self {
+        Self {
+            snippet,
+            symbol_identifier,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -799,7 +814,11 @@ impl Symbol {
         // if we do have a snippet here which is present update it, otherwise its a pretty
         // bad sign that we had the snippet before but do not have it now
         if let Ok(snippet) = snippet {
-            self.mecha_code_symbol.set_snippet(snippet).await;
+            self.mecha_code_symbol.set_snippet(snippet.clone()).await;
+            let _ = self.ui_sender.send(UIEventWithID::symbol_location(
+                request_id.to_owned(),
+                SymbolLocation::new(self.symbol_identifier.clone(), snippet),
+            ));
         }
         // now grab the implementations again
         let _ = self.grab_implementations(&request_id).await;

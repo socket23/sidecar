@@ -2,10 +2,11 @@
 //! debugging and having better visibility to what ever is happening
 //! in the symbols
 
-use crate::agentic::tool::input::ToolInput;
+use crate::agentic::tool::{filtering::broker::CodeToProbeFilterResponse, input::ToolInput};
 
 use super::{
     events::input::SymbolInputEvent,
+    identifier::SymbolIdentifier,
     types::{SymbolEventRequest, SymbolLocation},
 };
 
@@ -43,6 +44,16 @@ impl UIEventWithID {
             event: UIEvent::SymbolLoctationUpdate(symbol_location),
         }
     }
+
+    pub fn sub_symbol_step(
+        request_id: String,
+        sub_symbol_request: SymbolEventSubStepRequest,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(sub_symbol_request),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -51,6 +62,7 @@ pub enum UIEvent {
     ToolEvent(ToolInput),
     CodebaseEvent(SymbolInputEvent),
     SymbolLoctationUpdate(SymbolLocation),
+    SymbolEventSubStep(SymbolEventSubStepRequest),
 }
 
 impl From<SymbolEventRequest> for UIEvent {
@@ -62,5 +74,31 @@ impl From<SymbolEventRequest> for UIEvent {
 impl From<ToolInput> for UIEvent {
     fn from(input: ToolInput) -> Self {
         UIEvent::ToolEvent(input)
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum SymbolEventProbeRequest {
+    SubSymbolSelection,
+    ProbeDeeperSymbol,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum SymbolEventSubStep {
+    Probe(SymbolEventProbeRequest),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct SymbolEventSubStepRequest {
+    symbol_identifier: SymbolIdentifier,
+    event: SymbolEventSubStep,
+}
+
+impl SymbolEventSubStepRequest {
+    pub fn new(symbol_identifier: SymbolIdentifier, event: SymbolEventSubStep) -> Self {
+        Self {
+            symbol_identifier,
+            event,
+        }
     }
 }

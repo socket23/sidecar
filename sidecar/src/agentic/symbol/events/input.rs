@@ -49,6 +49,10 @@ impl SymbolInputEvent {
         &self.context
     }
 
+    pub fn has_repo_map(&self) -> bool {
+        self.repo_map_fs_path.is_some()
+    }
+
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball

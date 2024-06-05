@@ -114,7 +114,7 @@ impl SymbolManager {
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
         let user_context = input_event.provided_context().clone();
         let has_repo_map = input_event.has_repo_map();
-        let tool_input = input_event.tool_use_on_initial_invocation();
+        let tool_input = input_event.tool_use_on_initial_invocation().await;
         println!("{:?}", &tool_input);
         if let Some(tool_input) = tool_input {
             // send the tool input to the ui sender

@@ -20,7 +20,6 @@ use super::{
 // models to be the default ones which we can use for searching
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RepoMapSearchQuery {
-    repo_name: String,
     repo_map: String,
     user_query: String,
     llm: LLMType,
@@ -30,7 +29,6 @@ pub struct RepoMapSearchQuery {
 
 impl RepoMapSearchQuery {
     pub fn new(
-        repo_name: String,
         repo_map: String,
         user_query: String,
         llm: LLMType,
@@ -39,7 +37,6 @@ impl RepoMapSearchQuery {
     ) -> Self {
         Self {
             repo_map,
-            repo_name,
             user_query,
             llm,
             provider,

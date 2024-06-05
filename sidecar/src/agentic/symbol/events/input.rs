@@ -4,11 +4,17 @@
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{LLMProvider, LLMProviderAPIKeys},
+    provider::{GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
-    agentic::tool::{code_symbol::important::CodeSymbolImportantWideSearch, input::ToolInput},
+    agentic::tool::{
+        code_symbol::{
+            important::CodeSymbolImportantWideSearch,
+            repo_map_search::{RepoMapSearch, RepoMapSearchQuery},
+        },
+        input::ToolInput,
+    },
     user_context::types::UserContext,
 };
 
@@ -56,7 +62,7 @@ impl SymbolInputEvent {
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball
-    pub fn tool_use_on_initial_invocation(self) -> Option<ToolInput> {
+    pub async fn tool_use_on_initial_invocation(self) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
         let final_model = if self.llm.is_anthropic()
@@ -66,14 +72,35 @@ impl SymbolInputEvent {
         } else {
             self.llm.clone()
         };
-        let code_wide_search: CodeSymbolImportantWideSearch = CodeSymbolImportantWideSearch::new(
-            self.context,
-            self.user_query.to_owned(),
-            final_model,
-            self.provider,
-            self.api_keys,
-        );
-        // Now we try to generate the tool input for this
-        Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search))
+        // TODO(skcd): Toggle the request here depending on if we have the repo map
+        if self.has_repo_map() {
+            let contents = tokio::fs::read_to_string(
+                self.repo_map_fs_path.expect("has_repo_map to not break"),
+            )
+            .await;
+            match contents {
+                Ok(contents) => {
+                    Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
+                        contents,
+                        self.user_query.to_owned(),
+                        LLMType::GeminiProFlash,
+                        LLMProvider::GeminiPro,
+                        LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgsreFyKpOckKAXhxVYd38moWhis96J67_TT4GqPLZm2GbAFY9DnlaaznOravJJoM-LJCeuEN3-vu81imXzZ4SNOfkP_EMqK83NfVKsJp5H4WaIqk2XB-PnyDzmXR7FbsMOwVcKM-FkDc1Or8Ypz4QaaSs8APexkupJbVoMoaCgYKAWgSARESFQHGX2Mi6Pb7nkO8c6oaMhB2flzTRw0179".to_owned(), "anton-390822".to_owned()))
+                    )))
+                }
+                Err(_) => None
+            }
+        } else {
+            let code_wide_search: CodeSymbolImportantWideSearch =
+                CodeSymbolImportantWideSearch::new(
+                    self.context,
+                    self.user_query.to_owned(),
+                    final_model,
+                    self.provider,
+                    self.api_keys,
+                );
+            // Now we try to generate the tool input for this
+            Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search))
+        }
     }
 }

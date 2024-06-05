@@ -21,7 +21,7 @@ use crate::{
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
     application::application::Application,
-    user_context::types::{FileContentValue, UserContext},
+    user_context::types::UserContext,
 };
 
 use super::{model_selection::LLMClientConfig, types::Result};

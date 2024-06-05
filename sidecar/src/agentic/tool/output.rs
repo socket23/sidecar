@@ -92,6 +92,8 @@ pub enum ToolOutput {
     ProbeSubSymbol(CodeToProbeFilterResponse),
     ProbeFollowAlongSymbol(ProbeNextSymbol),
     ProbeSummarizationResult(String),
+    // Repo map result
+    RepoMapSearch(CodeSymbolImportantResponse),
 }
 
 impl ToolOutput {

@@ -10,6 +10,7 @@ use super::{
             CodeSymbolImportantWideSearch, CodeSymbolProbingSummarize,
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
+        repo_map_search::RepoMapSearchQuery,
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
@@ -54,6 +55,8 @@ pub enum ToolInput {
     ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
     ProbeFollowAlongSymbol(CodeSymbolFollowAlongForProbing),
     ProbeSummarizeAnswerRequest(CodeSymbolProbingSummarize),
+    // repo map query
+    RepoMapSearch(RepoMapSearchQuery),
 }
 
 impl ToolInput {
@@ -86,6 +89,7 @@ impl ToolInput {
             ToolInput::ProbeSubSymbol(_) => ToolType::ProbeSubSymbol,
             ToolInput::ProbeFollowAlongSymbol(_) => ToolType::ProbeFollowAlongSymbol,
             ToolInput::ProbeSummarizeAnswerRequest(_) => ToolType::ProbeSummarizeAnswer,
+            ToolInput::RepoMapSearch(_) => ToolType::RepoMapSearch,
         }
     }
 
@@ -94,6 +98,14 @@ impl ToolInput {
             true
         } else {
             false
+        }
+    }
+
+    pub fn repo_map_search_query(self) -> Result<RepoMapSearchQuery, ToolError> {
+        if let ToolInput::RepoMapSearch(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::RepoMapSearch))
         }
     }
 

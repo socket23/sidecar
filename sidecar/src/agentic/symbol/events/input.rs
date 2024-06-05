@@ -18,6 +18,7 @@ use crate::{
     user_context::types::UserContext,
 };
 
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct SymbolInputEvent {
     context: UserContext,
     llm: LLMType,

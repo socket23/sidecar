@@ -48,6 +48,8 @@ async fn main() {
     let file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agent/types.rs";
     let symbol_name = "Agent";
 
-    let response = tool_box.go_to_implementation(file_path, symbol_name).await;
+    let response = tool_box
+        .go_to_implementation(file_path, symbol_name, "")
+        .await;
     println!("{:?}", response);
 }

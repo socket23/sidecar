@@ -43,6 +43,7 @@ use super::{
     helpers::split_file_content_into_parts,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
+    ui_event::UIEventWithID,
 };
 
 const BUFFER_LIMIT: usize = 100;
@@ -148,6 +149,7 @@ pub struct Symbol {
     #[derivative(Debug = "ignore")]
     hub_sender: UnboundedSender<(
         SymbolEventRequest,
+        String,
         // we can await on the receiver
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
     )>,
@@ -166,6 +168,10 @@ pub struct Symbol {
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
     llm_properties: LLMProperties,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl Symbol {
@@ -176,10 +182,13 @@ impl Symbol {
         // to act on certain things
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         tools: Arc<ToolBox>,
         llm_properties: LLMProperties,
+        ui_sender: UnboundedSender<UIEventWithID>,
+        request_id: String,
     ) -> Result<Self, SymbolError> {
         let symbol = Self {
             mecha_code_symbol: Arc::new(mecha_code_symbol),
@@ -187,11 +196,12 @@ impl Symbol {
             hub_sender,
             tools,
             llm_properties,
+            ui_sender,
         };
         // grab the implementations of the symbol
         // TODO(skcd): We also have to grab the diagnostics and auto-start any
         // process which we might want to
-        symbol.grab_implementations().await?;
+        symbol.grab_implementations(&request_id).await?;
         Ok(symbol)
     }
 
@@ -214,7 +224,7 @@ impl Symbol {
             .await
     }
 
-    async fn get_outline(&self) -> Result<String, SymbolError> {
+    async fn get_outline(&self, request_id: String) -> Result<String, SymbolError> {
         // to grab the outline first we need to understand the definition snippet
         // of the node and then create it appropriately
         // First thing we want to do here is to find the symbols which are present
@@ -222,11 +232,11 @@ impl Symbol {
         // we go to all the implementations and grab them as well and generate
         // the outline which is required
         self.tools
-            .outline_nodes_for_symbol(self.fs_file_path(), self.symbol_name())
+            .outline_nodes_for_symbol(self.fs_file_path(), self.symbol_name(), &request_id)
             .await
     }
 
-    async fn grab_implementations(&self) -> Result<(), SymbolError> {
+    async fn grab_implementations(&self, request_id: &str) -> Result<(), SymbolError> {
         let snippet_file_path: Option<String>;
         {
             snippet_file_path = self
@@ -251,7 +261,11 @@ impl Symbol {
             // llm to generate more output for a step using the context it has
             let implementations = self
                 .tools
-                .go_to_implementation(&snippet_file_path, self.symbol_identifier.symbol_name())
+                .go_to_implementation(
+                    &snippet_file_path,
+                    self.symbol_identifier.symbol_name(),
+                    request_id,
+                )
                 .await?;
             let unique_files = implementations
                 .get_implementation_locations_vec()
@@ -264,7 +278,7 @@ impl Symbol {
                 .map(|file_path| (file_path, cloned_tools.clone()))
                 .map(|(file_path, tool_box)| async move {
                     let file_path = file_path.to_owned();
-                    let file_content = tool_box.file_open(file_path.to_owned()).await;
+                    let file_content = tool_box.file_open(file_path.to_owned(), request_id).await;
                     // we will also force add the file to the symbol broker
                     if let Ok(file_content) = &file_content {
                         let _ = tool_box
@@ -377,13 +391,16 @@ impl Symbol {
         request: SymbolToProbeRequest,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: String,
     ) -> Result<String, SymbolError> {
+        let request_id_ref = &request_id;
         // we can do a cache check here if we already have the answer or are working
         // on the similar request
         // First we refresh our state over here
-        self.refresh_state().await;
+        self.refresh_state(request_id_ref.to_owned()).await;
 
         let history = request.history();
         let history_slice = request.history_slice();
@@ -403,6 +420,7 @@ impl Symbol {
                 self.llm_properties.llm().clone(),
                 self.llm_properties.provider().clone(),
                 self.llm_properties.api_key().clone(),
+                request_id_ref,
             )
             .await?;
         println!("Sub symbol request: {:?}", &sub_symbol_request);
@@ -475,6 +493,7 @@ impl Symbol {
                         self.llm_properties.llm().clone(),
                         self.llm_properties.provider().clone(),
                         self.llm_properties.api_key().clone(),
+                        request_id_ref,
                     )
                     .await;
                 (snippet, response)
@@ -517,6 +536,7 @@ impl Symbol {
                                 symbol_to_follow.file_path(),
                                 symbol_to_follow.line_content(),
                                 symbol_to_follow.name(),
+                                request_id_ref,
                             )
                             .await;
                         (symbol_to_follow, definitions_for_snippet)
@@ -556,7 +576,10 @@ impl Symbol {
                     .collect::<Vec<_>>();
 
                 // What we want to create is this: CodeSymbolFollowAlongForProbing
-                let file_content = self.tools.file_open(snippet.file_path().to_owned()).await;
+                let file_content = self
+                    .tools
+                    .file_open(snippet.file_path().to_owned(), request_id_ref)
+                    .await;
                 if let Err(_) = file_content {
                     return Err(SymbolError::ExpectedFileToExist);
                 }
@@ -598,8 +621,10 @@ impl Symbol {
                             query.to_owned(),
                             next_symbol_link,
                         );
-                        let probe_result =
-                            self.tools.next_symbol_should_probe_request(request).await;
+                        let probe_result = self
+                            .tools
+                            .next_symbol_should_probe_request(request, request_id_ref)
+                            .await;
                         // Now we get the response from here and we can decide what to do with it
                         probe_result
                     })
@@ -686,6 +711,7 @@ impl Symbol {
                                         symbol_identifier,
                                         symbol_to_probe_request,
                                     ),
+                                    uuid::Uuid::new_v4().to_string(),
                                     sender,
                                 ));
                                 let response = receiver.await.map(|response| response.to_string());
@@ -738,14 +764,17 @@ impl Symbol {
                 query.to_owned(),
                 history.to_owned(),
                 self.mecha_code_symbol.symbol_name().to_owned(),
-                self.get_outline().await?,
+                self.get_outline(request_id_ref.to_owned()).await?,
                 self.mecha_code_symbol.fs_file_path().to_owned(),
                 sub_symbol_probe_result,
                 self.llm_properties.llm().clone(),
                 self.llm_properties.provider().clone(),
                 self.llm_properties.api_key().clone(),
             );
-            let result = self.tools.probing_results_summarize(request).await;
+            let result = self
+                .tools
+                .probing_results_summarize(request, request_id_ref)
+                .await;
             println!(
                 "Probing finished for {} with result: {:?}",
                 &self.mecha_code_symbol.symbol_name(),
@@ -760,12 +789,12 @@ impl Symbol {
     /// our core snippet again
     /// - this way even if there have been changes we are almost always
     /// correct
-    async fn refresh_state(&self) {
+    async fn refresh_state(&self, request_id: String) {
         // do we really have to do this? or can we get away from this just by
         // not worrying about things?
         let snippet = self
             .tools
-            .find_snippet_for_symbol(self.fs_file_path(), self.symbol_name())
+            .find_snippet_for_symbol(self.fs_file_path(), self.symbol_name(), &request_id)
             .await;
         // if we do have a snippet here which is present update it, otherwise its a pretty
         // bad sign that we had the snippet before but do not have it now
@@ -773,14 +802,17 @@ impl Symbol {
             self.mecha_code_symbol.set_snippet(snippet).await;
         }
         // now grab the implementations again
-        let _ = self.grab_implementations().await;
+        let _ = self.grab_implementations(&request_id).await;
     }
 
-    async fn generate_initial_request(&self) -> Result<SymbolEventRequest, SymbolError> {
+    async fn generate_initial_request(
+        &self,
+        request_id: String,
+    ) -> Result<SymbolEventRequest, SymbolError> {
         // this is a very big block because of the LLM request, but lets see how
         // this plays out in practice
         self.mecha_code_symbol
-            .initial_request(self.tools.clone(), self.llm_properties.clone())
+            .initial_request(self.tools.clone(), self.llm_properties.clone(), request_id)
             .await
     }
 
@@ -803,6 +835,7 @@ impl Symbol {
     async fn grab_context_for_editing(
         &self,
         subsymbol: &SymbolToEdit,
+        request_id: &str,
     ) -> Result<Vec<String>, SymbolError> {
         let file_content = self
             .tools
@@ -829,6 +862,7 @@ impl Symbol {
                 self.llm_properties.api_key().clone(),
                 &subsymbol.instructions().join("\n"),
                 self.hub_sender.clone(),
+                request_id,
             )
             .await?;
         let codebase_wide_search = self
@@ -855,6 +889,7 @@ impl Symbol {
                 self.llm_properties.provider().clone(),
                 self.llm_properties.api_key().clone(),
                 self.hub_sender.clone(),
+                request_id,
             )
             .await?;
 
@@ -893,6 +928,7 @@ impl Symbol {
         &self,
         sub_symbol: &SymbolToEdit,
         context: Vec<String>,
+        request_id: &str,
     ) -> Result<EditedCodeSymbol, SymbolError> {
         let file_content = self
             .tools
@@ -911,6 +947,7 @@ impl Symbol {
                 self.llm_properties.llm().clone(),
                 self.llm_properties.provider().clone(),
                 self.llm_properties.api_key().clone(),
+                request_id,
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))
@@ -925,19 +962,27 @@ impl Symbol {
     async fn edit_implementations(
         &self,
         edit_request: SymbolToEditRequest,
+        request_id: String,
     ) -> Result<(), SymbolError> {
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
+        let request_id_ref = &request_id;
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
-            let context_for_editing = self.grab_context_for_editing(&sub_symbol_to_edit).await?;
+            let context_for_editing = self
+                .grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                .await?;
             // always return the original code which was present here in case of rollbacks
             let edited_code = self
-                .edit_code(&sub_symbol_to_edit, context_for_editing.to_owned())
+                .edit_code(
+                    &sub_symbol_to_edit,
+                    context_for_editing.to_owned(),
+                    &request_id,
+                )
                 .await?;
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
@@ -952,6 +997,7 @@ impl Symbol {
                     self.llm_properties.llm().clone(),
                     self.llm_properties.provider().clone(),
                     self.llm_properties.api_key().clone(),
+                    request_id_ref,
                 )
                 .await;
 
@@ -967,6 +1013,7 @@ impl Symbol {
                     self.llm_properties.provider().clone(),
                     self.llm_properties.api_key().clone(),
                     self.hub_sender.clone(),
+                    request_id_ref,
                 )
                 .await;
         }
@@ -980,6 +1027,7 @@ impl Symbol {
         self,
         receiver: UnboundedReceiver<(
             SymbolEvent,
+            String,
             // we had a single sender over here as a future we can poll
             // for to receieve events from
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
@@ -989,17 +1037,28 @@ impl Symbol {
         receiver_stream
             .map(|symbol_event| (symbol_event, self.clone()))
             .map(|(symbol_event, symbol)| async move {
-                let (event, sender) = symbol_event;
+                let (event, request_id, sender) = symbol_event;
+                let _ = symbol.ui_sender.send(UIEventWithID::from_symbol_event(
+                    request_id.to_owned(),
+                    SymbolEventRequest::new(symbol.symbol_identifier.clone(), event.clone()),
+                ));
                 match event {
                     SymbolEvent::InitialRequest => {
-                        let initial_request = symbol.generate_initial_request().await;
+                        let initial_request =
+                            symbol.generate_initial_request(request_id.to_owned()).await;
                         let _ = sender.send(SymbolEventResponse::TaskDone(
                             "initial list of symbols found".to_owned(),
                         ));
                         match initial_request {
                             Ok(initial_request) => {
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
-                                let _ = symbol.hub_sender.send((initial_request, sender));
+                                let _ = symbol.hub_sender.send((
+                                    initial_request,
+                                    // since this is the initial request, we will end up generating
+                                    // a new request id for this
+                                    uuid::Uuid::new_v4().to_string(),
+                                    sender,
+                                ));
                                 // ideally we want to give this resopnse back to the symbol
                                 // so it can keep track of everything that its doing, we will get to that
                                 let _response = receiver.await;
@@ -1011,16 +1070,16 @@ impl Symbol {
                     }
                     SymbolEvent::Edit(edit_request) => {
                         // we refresh our state always
-                        symbol.refresh_state().await;
+                        symbol.refresh_state(request_id.to_owned()).await;
                         // one of the primary goals here is that we can make edits
                         // everywhere at the same time unless its on the same file
                         // but for now, we are gonna pleb our way and make edits
                         // one by one
-                        symbol.edit_implementations(edit_request).await
+                        symbol.edit_implementations(edit_request, request_id).await
                     }
                     SymbolEvent::AskQuestion(ask_question_request) => {
                         // we refresh our state always
-                        symbol.refresh_state().await;
+                        symbol.refresh_state(request_id).await;
                         // we will the following in sequence:
                         // - ask for information from surrounding nodes
                         // - refresh the state
@@ -1040,7 +1099,7 @@ impl Symbol {
                     SymbolEvent::Outline => {
                         // we have been asked to provide an outline of the symbol we are part of
                         // this is a bit easy to do so lets try and finish this
-                        let outline = symbol.get_outline().await;
+                        let outline = symbol.get_outline(request_id).await;
                         let _ = match outline {
                             Ok(outline) => sender.send(SymbolEventResponse::TaskDone(outline)),
                             Err(_) => sender.send(SymbolEventResponse::TaskDone(
@@ -1054,7 +1113,7 @@ impl Symbol {
                         // we are still going to do the same things just
                         // that this one is for gathering answeres
                         let reply = symbol
-                            .probe_request(probe_request, symbol.hub_sender.clone())
+                            .probe_request(probe_request, symbol.hub_sender.clone(), request_id)
                             .await;
                         let _ = match reply {
                             Ok(reply) => sender.send(SymbolEventResponse::TaskDone(reply)),

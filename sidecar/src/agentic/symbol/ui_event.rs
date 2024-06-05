@@ -4,17 +4,42 @@
 
 use crate::agentic::tool::input::ToolInput;
 
-use super::types::SymbolEventRequest;
+use super::{events::input::SymbolInputEvent, types::SymbolEventRequest};
+
+#[derive(Debug, serde::Serialize)]
+pub struct UIEventWithID {
+    request_id: String,
+    event: UIEvent,
+}
+
+impl UIEventWithID {
+    pub fn from_tool_event(request_id: String, input: ToolInput) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::from(input),
+        }
+    }
+
+    pub fn from_symbol_event(request_id: String, input: SymbolEventRequest) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEvent(input),
+        }
+    }
+
+    pub fn for_codebase_event(request_id: String, input: SymbolInputEvent) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::CodebaseEvent(input),
+        }
+    }
+}
 
 #[derive(Debug, serde::Serialize)]
 pub enum UIEvent {
-    // TODO(skcd): We need the location of the symbol over here
     SymbolEvent(SymbolEventRequest),
-    // TODO(skcd): Add attribution to the symbol
     ToolEvent(ToolInput),
-    // TODO(skcd): We need to send more infromation about
-    // the sub-steps which the agent is taking
-    SymbolEventSubStep,
+    CodebaseEvent(SymbolInputEvent),
 }
 
 impl From<SymbolEventRequest> for UIEvent {

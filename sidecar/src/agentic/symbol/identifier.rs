@@ -294,8 +294,11 @@ impl MechaCodeSymbolThinking {
         file_path: &str,
         provided_user_context: UserContext,
         tools: Arc<ToolBox>,
+        request_id: &str,
     ) -> Option<Self> {
-        let snippet_maybe = tools.find_snippet_for_symbol(file_path, symbol_name).await;
+        let snippet_maybe = tools
+            .find_snippet_for_symbol(file_path, symbol_name, request_id)
+            .await;
         match snippet_maybe {
             Ok(snippet) => Some(MechaCodeSymbolThinking::new(
                 symbol_name.to_owned(),
@@ -446,6 +449,7 @@ impl MechaCodeSymbolThinking {
         &self,
         tool_box: Arc<ToolBox>,
         llm_properties: LLMProperties,
+        request_id: String,
     ) -> Result<SymbolEventRequest, SymbolError> {
         // TODO(skcd): We need to generate the implementation always
         let steps = self.steps().await;
@@ -488,6 +492,7 @@ impl MechaCodeSymbolThinking {
                         llm_properties.llm().clone(),
                         llm_properties.provider().clone(),
                         llm_properties.api_key().clone(),
+                        &request_id,
                     )
                     .await?;
 

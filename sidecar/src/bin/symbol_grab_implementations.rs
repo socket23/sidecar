@@ -88,6 +88,7 @@ async fn main() {
     );
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let symbol = Symbol::new(
         SymbolIdentifier::with_file_path("Agent", &fs_file_path),
@@ -101,6 +102,8 @@ async fn main() {
                 "".to_owned(),
             )),
         ),
+        ui_sender,
+        "".to_owned(),
     )
     .await
     .expect("to work");

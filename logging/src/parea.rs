@@ -121,7 +121,8 @@ impl PareaClient {
             "status": "success",
             "metadata": metadata,
             "depth": 0,
-            "execution_order": 0
+            "execution_order": 0,
+            "evaluation_metric_names": ["XML Checker"],
         });
 
         println!("{:?}", &body);

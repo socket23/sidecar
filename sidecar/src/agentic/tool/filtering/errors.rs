@@ -8,4 +8,7 @@ pub enum CodeToEditFilteringError {
 
     #[error("serde error: {0}")]
     SerdeError(#[from] serde_xml_rs::Error),
+
+    #[error("invalid response")]
+    InvalidResponse,
 }

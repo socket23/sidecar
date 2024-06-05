@@ -75,6 +75,7 @@ async fn main() {
         current_query.to_owned(),
         None,
         None,
+        None,
     );
 
     // execute input on manager

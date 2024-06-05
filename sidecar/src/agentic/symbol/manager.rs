@@ -17,7 +17,7 @@ use crate::{
 
 use super::identifier::LLMProperties;
 use super::tool_box::ToolBox;
-use super::ui_event::UIEvent;
+use super::ui_event::UIEventWithID;
 use super::{
     errors::SymbolError,
     events::input::SymbolInputEvent,
@@ -30,6 +30,7 @@ use super::{
 pub struct SymbolManager {
     sender: UnboundedSender<(
         SymbolEventRequest,
+        String,
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
     )>,
     // this is the channel where the various symbols will use to talk to the manager
@@ -42,7 +43,7 @@ pub struct SymbolManager {
     tool_box: Arc<ToolBox>,
     editor_url: String,
     llm_properties: LLMProperties,
-    ui_sender: UnboundedSender<UIEvent>,
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl SymbolManager {
@@ -51,7 +52,7 @@ impl SymbolManager {
         symbol_broker: Arc<SymbolTrackerInline>,
         editor_parsing: Arc<EditorParsing>,
         editor_url: String,
-        ui_sender: UnboundedSender<UIEvent>,
+        ui_sender: UnboundedSender<UIEventWithID>,
         llm_properties: LLMProperties,
         // This is a hack and not a proper one at that, we obviously want to
         // do better over here
@@ -59,6 +60,7 @@ impl SymbolManager {
     ) -> Self {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>();
         let tool_box = Arc::new(ToolBox::new(
@@ -73,6 +75,7 @@ impl SymbolManager {
             tool_box.clone(),
             llm_properties.clone(),
             user_context,
+            ui_sender.clone(),
         );
         let cloned_symbol_locker = symbol_locker.clone();
         let cloned_ui_sender = ui_sender.clone();
@@ -80,7 +83,7 @@ impl SymbolManager {
             // TODO(skcd): Make this run in full parallelism in the future, for
             // now this is fine
             while let Some(event) = receiver.recv().await {
-                let _ = cloned_ui_sender.send(UIEvent::from(event.0.clone()));
+                // let _ = cloned_ui_sender.send(UIEvent::from(event.0.clone()));
                 let _ = cloned_symbol_locker.process_request(event).await;
             }
         });
@@ -99,11 +102,11 @@ impl SymbolManager {
 
     // This is just for testing out the flow for single input events
     pub async fn probe_request(&self, input_event: SymbolEventRequest) -> Result<(), SymbolError> {
-        let _ = self.ui_sender.send(UIEvent::from(input_event.clone()));
         let (sender, receiver) = tokio::sync::oneshot::channel();
+        let request_id = uuid::Uuid::new_v4().to_string();
         let _ = self
             .symbol_locker
-            .process_request((input_event, sender))
+            .process_request((input_event, request_id, sender))
             .await;
         let response = receiver.await;
         println!("{:?}", response.expect("to work"));
@@ -114,12 +117,19 @@ impl SymbolManager {
     // mode once, we have the symbols from it we can use them to spin up sub-symbols as well
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
         let user_context = input_event.provided_context().clone();
-        let has_repo_map = input_event.has_repo_map();
+        let request_id = uuid::Uuid::new_v4().to_string();
+        self.ui_sender.send(UIEventWithID::for_codebase_event(
+            request_id.to_owned(),
+            input_event.clone(),
+        ));
         let tool_input = input_event.tool_use_on_initial_invocation().await;
         println!("{:?}", &tool_input);
         if let Some(tool_input) = tool_input {
             // send the tool input to the ui sender
-            let _ = self.ui_sender.send(UIEvent::ToolEvent(tool_input.clone()));
+            let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
+                request_id.to_owned(),
+                tool_input.clone(),
+            ));
             if let ToolOutput::ImportantSymbols(important_symbols) = self
                 .tools
                 .invoke(tool_input)
@@ -129,13 +139,17 @@ impl SymbolManager {
                 println!("{:?}", &important_symbols);
                 let symbols = self
                     .tool_box
-                    .important_symbols(important_symbols, user_context)
+                    .important_symbols(important_symbols, user_context, &request_id)
                     .await
                     .map_err(|e| e.into())?;
+                let request_id_ref = &request_id;
                 // This is where we are creating all the symbols
                 let _ = stream::iter(symbols)
                     .map(|symbol_request| async move {
-                        let _ = self.symbol_locker.create_symbol_agent(symbol_request).await;
+                        let _ = self
+                            .symbol_locker
+                            .create_symbol_agent(symbol_request, request_id_ref.to_owned())
+                            .await;
                     })
                     .buffer_unordered(100)
                     .collect::<Vec<_>>()

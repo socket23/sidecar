@@ -20,6 +20,7 @@ use super::{
     identifier::{LLMProperties, MechaCodeSymbolThinking, Snippet, SymbolIdentifier},
     tool_box::ToolBox,
     types::{Symbol, SymbolEventRequest, SymbolEventResponse},
+    ui_event::UIEventWithID,
 };
 
 #[derive(Clone)]
@@ -36,6 +37,7 @@ pub struct SymbolLocker {
                 // and everything related to it
                 UnboundedSender<(
                     SymbolEvent,
+                    String,
                     tokio::sync::oneshot::Sender<SymbolEventResponse>,
                 )>,
             >,
@@ -45,22 +47,26 @@ pub struct SymbolLocker {
     // to the right symbol
     hub_sender: UnboundedSender<(
         SymbolEventRequest,
+        String,
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
     )>,
     tools: Arc<ToolBox>,
     llm_properties: LLMProperties,
     user_context: UserContext,
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl SymbolLocker {
     pub fn new(
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         tools: Arc<ToolBox>,
         llm_properties: LLMProperties,
         user_context: UserContext,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             symbols: Arc::new(Mutex::new(HashMap::new())),
@@ -68,6 +74,7 @@ impl SymbolLocker {
             tools,
             llm_properties,
             user_context,
+            ui_sender,
         }
     }
 
@@ -75,11 +82,13 @@ impl SymbolLocker {
         &self,
         request_event: (
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         ),
     ) {
         let request = request_event.0;
-        let sender = request_event.1;
+        let request_id = request_event.1;
+        let sender = request_event.2;
         let symbol_identifier = request.symbol().clone();
         let mut does_exist = false;
         {
@@ -96,7 +105,11 @@ impl SymbolLocker {
                 // grab the snippet for this symbol
                 let snippet = self
                     .tools
-                    .find_snippet_for_symbol(&fs_file_path, symbol_identifier.symbol_name())
+                    .find_snippet_for_symbol(
+                        &fs_file_path,
+                        symbol_identifier.symbol_name(),
+                        &request_id,
+                    )
                     .await;
                 if let Ok(snippet) = snippet {
                     // the symbol does not exist so we have to make sure that we can send it over somehow
@@ -111,7 +124,9 @@ impl SymbolLocker {
                     );
                     // we create the symbol over here, but what about the context, I want
                     // to pass it to the symbol over here
-                    let _ = self.create_symbol_agent(mecha_code_symbol_thinking).await;
+                    let _ = self
+                        .create_symbol_agent(mecha_code_symbol_thinking, request_id.to_owned())
+                        .await;
                 } else {
                     // we are fucked over here since we didn't find a snippet for the symbol
                     // which is supposed to have some presence in the file
@@ -133,7 +148,7 @@ impl SymbolLocker {
         // at this point we have also tried creating the symbol agent, so we can start logging it
         {
             if let Some(symbol) = self.symbols.lock().await.get(&symbol_identifier) {
-                let response = symbol.send((request.remove_event(), sender));
+                let response = symbol.send((request.remove_event(), request_id, sender));
                 println!("{:?}", response.is_err());
             }
         }
@@ -142,6 +157,7 @@ impl SymbolLocker {
     pub async fn create_symbol_agent(
         &self,
         request: MechaCodeSymbolThinking,
+        request_id: String,
     ) -> Result<(), SymbolError> {
         // say we create the symbol agent, what happens next
         // the agent can have its own events which it might need to do, including the
@@ -151,6 +167,7 @@ impl SymbolLocker {
         let symbol_identifier = request.to_symbol_identifier();
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<(
             SymbolEvent,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>();
         {
@@ -166,6 +183,8 @@ impl SymbolLocker {
             self.hub_sender.clone(),
             self.tools.clone(),
             self.llm_properties.clone(),
+            self.ui_sender.clone(),
+            request_id,
         )
         .await;
 

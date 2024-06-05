@@ -54,7 +54,7 @@ async fn main() {
     let symbol_to_search = "generate_agent_stream".to_owned();
     // This is what I have to debug
     let snippet = tool_box
-        .find_snippet_for_symbol(&fs_file_path, &symbol_to_search)
+        .find_snippet_for_symbol(&fs_file_path, &symbol_to_search, "")
         .await;
     println!("{:?}", &snippet);
 }

@@ -61,7 +61,7 @@ use super::events::edit::SymbolToEdit;
 use super::events::probe::SymbolToProbeRequest;
 use super::identifier::MechaCodeSymbolThinking;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
-use super::ui_event::UIEvent;
+use super::ui_event::{UIEvent, UIEventWithID};
 
 #[derive(Clone)]
 pub struct ToolBox {
@@ -69,7 +69,7 @@ pub struct ToolBox {
     symbol_broker: Arc<SymbolTrackerInline>,
     editor_parsing: Arc<EditorParsing>,
     editor_url: String,
-    ui_events: UnboundedSender<UIEvent>,
+    ui_events: UnboundedSender<UIEventWithID>,
 }
 
 impl ToolBox {
@@ -78,7 +78,7 @@ impl ToolBox {
         symbol_broker: Arc<SymbolTrackerInline>,
         editor_parsing: Arc<EditorParsing>,
         editor_url: String,
-        ui_events: UnboundedSender<UIEvent>,
+        ui_events: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             tools,
@@ -93,9 +93,13 @@ impl ToolBox {
     pub async fn probing_results_summarize(
         &self,
         request: CodeSymbolProbingSummarize,
+        request_id: &str,
     ) -> Result<String, SymbolError> {
         let tool_input = ToolInput::ProbeSummarizeAnswerRequest(request);
-        let _ = self.ui_events.send(UIEvent::from(tool_input.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -109,9 +113,13 @@ impl ToolBox {
     pub async fn next_symbol_should_probe_request(
         &self,
         request: CodeSymbolFollowAlongForProbing,
+        request_id: &str,
     ) -> Result<ProbeNextSymbol, SymbolError> {
         let tool_input = ToolInput::ProbeFollowAlongSymbol(request);
-        let _ = self.ui_events.send(UIEvent::from(tool_input.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -138,6 +146,7 @@ impl ToolBox {
         // along with the content
         // we are returning the definition path and range along with the symbol where the go-to-definition belongs to
         // along with the outline of the symbol containing the go-to-definition
+        request_id: &str,
     ) -> Result<(String, Vec<(DefinitionPathAndRange, String, String)>), SymbolError> {
         let line_content_to_track = line_content
             .lines()
@@ -151,7 +160,10 @@ impl ToolBox {
         let line_content = line_content_to_track
             .expect("if let None to hold")
             .to_owned();
-        let file_contents = self.file_open(fs_file_path.to_owned()).await?.contents();
+        let file_contents = self
+            .file_open(fs_file_path.to_owned(), request_id)
+            .await?
+            .contents();
         let selection_range = snippet_range;
         let file_with_lines = file_contents.lines().enumerate().collect::<Vec<_>>();
         let mut containing_lines = file_contents
@@ -235,7 +247,7 @@ impl ToolBox {
         // Now we can invoke a go-to-definition on the symbol over here and get back
         // the containing symbol which has this symbol we are interested in visiting
         let go_to_definition = self
-            .go_to_definition(fs_file_path, symbol_location)
+            .go_to_definition(fs_file_path, symbol_location, request_id)
             .await?
             .definitions();
 
@@ -248,7 +260,7 @@ impl ToolBox {
         // open all these files and get back the outline nodes from these
         let _ = stream::iter(files_interested.into_iter())
             .map(|file| async move {
-                let file_open = self.file_open(file.to_owned()).await;
+                let file_open = self.file_open(file.to_owned(), request_id).await;
                 // now we also add it to the symbol tracker forcefully
                 if let Ok(file_open) = file_open {
                     let language = file_open.language().to_owned();
@@ -309,7 +321,7 @@ impl ToolBox {
                 .map(|(definition, outline_node)| async move {
                     let fs_file_path = outline_node.fs_file_path();
                     let symbol_outline = self
-                        .outline_nodes_for_symbol(&fs_file_path, outline_node.name())
+                        .outline_nodes_for_symbol(&fs_file_path, outline_node.name(), request_id)
                         .await;
                     (definition, outline_node.name().to_owned(), symbol_outline)
                 })
@@ -342,8 +354,11 @@ impl ToolBox {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<CodeSymbolToAskQuestionsResponse, SymbolError> {
-        let file_contents = self.file_open(snippet.file_path().to_owned()).await?;
+        let file_contents = self
+            .file_open(snippet.file_path().to_owned(), request_id)
+            .await?;
         let file_contents = file_contents.contents();
         let range = snippet.range();
         let (above, below, in_selection) = split_file_content_into_parts(&file_contents, range);
@@ -367,7 +382,10 @@ We also belive this symbol needs to be probed because of:
 {reason}"#
             ),
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         // This is broken because of the types over here
         self.tools
             .invoke(request)
@@ -387,8 +405,11 @@ We also belive this symbol needs to be probed because of:
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<CodeSymbolShouldAskQuestionsResponse, SymbolError> {
-        let file_contents = self.file_open(snippet.file_path().to_owned()).await?;
+        let file_contents = self
+            .file_open(snippet.file_path().to_owned(), request_id)
+            .await?;
         let file_contents = file_contents.contents();
         let range = snippet.range();
         let (above, below, in_selection) = split_file_content_into_parts(&file_contents, range);
@@ -413,7 +434,10 @@ We also believe this symbol needs to be probed because of:
 {reason}#"
             ),
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -429,6 +453,7 @@ We also believe this symbol needs to be probed because of:
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<CodeToProbeFilterResponse, SymbolError> {
         let probe_request = request.probe_request();
         let request = ToolInput::ProbeSubSymbol(CodeToEditFilterRequest::new(
@@ -438,7 +463,10 @@ We also believe this symbol needs to be probed because of:
             provider,
             api_key,
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -451,9 +479,10 @@ We also believe this symbol needs to be probed because of:
         &self,
         fs_file_path: &str,
         symbol_name: &str,
+        request_id: &str,
     ) -> Result<String, SymbolError> {
         // send an open file request here first
-        let _ = self.file_open(fs_file_path.to_owned()).await?;
+        let _ = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let outline_node_possible = self
             .symbol_broker
             .get_symbols_outline(fs_file_path)
@@ -498,6 +527,7 @@ We also believe this symbol needs to be probed because of:
                     .go_to_implementations_exact(
                         fs_file_path,
                         &identifier_position.start_position(),
+                        request_id,
                     )
                     .await?
                     .remove_implementations_vec();
@@ -508,11 +538,14 @@ We also believe this symbol needs to be probed because of:
                     .map(|implementation| implementation.fs_file_path().to_owned())
                     .collect::<HashSet<String>>();
                 // send a request to open all these files
-                let _ = stream::iter(file_paths.clone())
-                    .map(|fs_file_path| async move { self.file_open(fs_file_path).await })
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await;
+                let _ =
+                    stream::iter(file_paths.clone())
+                        .map(|fs_file_path| async move {
+                            self.file_open(fs_file_path, request_id).await
+                        })
+                        .buffer_unordered(100)
+                        .collect::<Vec<_>>()
+                        .await;
                 // Now all files are opened so we have also parsed them in the symbol broker
                 // so we can grab the appropriate outlines properly over here
                 let file_path_to_outline_nodes = stream::iter(file_paths)
@@ -668,8 +701,10 @@ We also believe this symbol needs to be probed because of:
         api_keys: LLMProviderAPIKeys,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: &str,
     ) -> Result<Vec<Option<(CodeSymbolWithThinking, String)>>, SymbolError> {
         // we are going to use the long context search here to check if there are
         // other utility functions we can and should use for implementing this feature
@@ -710,7 +745,10 @@ We also believe this symbol needs to be probed because of:
             user_context.clone(),
         );
         let tool_input = ToolInput::CodeSymbolUtilitySearch(request);
-        let _ = self.ui_events.send(UIEvent::ToolEvent(tool_input.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
         // These are the code symbols which are important from the global search
         // we might have some errors over here which we should fix later on, but we
         // will get on that
@@ -767,7 +805,9 @@ We also believe this symbol needs to be probed because of:
                 let symbol_name = symbol.code_symbol();
                 let fs_file_path = symbol.file_path();
                 if let Some(file_content) = file_to_content_mapping.get(fs_file_path) {
-                    let location = self.find_symbol_in_file(symbol_name, file_content).await;
+                    let location = self
+                        .find_symbol_in_file(symbol_name, file_content, request_id)
+                        .await;
                     Some((symbol, location))
                 } else {
                     None
@@ -792,7 +832,7 @@ We also believe this symbol needs to be probed because of:
                 let position = location.get_position();
                 if let Some(position) = position {
                     let possible_file_path = self
-                        .go_to_definition(fs_file_path, position)
+                        .go_to_definition(fs_file_path, position, request_id)
                         .await
                         .map(|position| {
                             // there are multiple definitions here for some
@@ -817,6 +857,7 @@ We also believe this symbol needs to be probed because of:
                                 symbol.code_symbol(),
                                 &definition_file_path,
                             )),
+                            uuid::Uuid::new_v4().to_string(),
                             sender,
                         ));
                         receiver
@@ -849,8 +890,10 @@ We also believe this symbol needs to be probed because of:
         api_keys: LLMProviderAPIKeys,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: &str,
     ) -> Result<(), SymbolError> {
         // followups here are made for checking the references or different symbols
         // or if something has changed
@@ -872,6 +915,7 @@ We also believe this symbol needs to be probed because of:
                 .go_to_references(
                     symbol_edited.fs_file_path(),
                     &symbol_edited.range().start_position(),
+                    request_id,
                 )
                 .await?;
             let _ = self
@@ -881,6 +925,7 @@ We also believe this symbol needs to be probed because of:
                     &symbol_to_edit,
                     references,
                     hub_sender,
+                    request_id,
                 )
                 .await;
         } else if symbol_to_edit.is_class_definition() {
@@ -898,12 +943,14 @@ We also believe this symbol needs to be probed because of:
                     provider,
                     api_keys,
                     hub_sender.clone(),
+                    request_id,
                 )
                 .await;
             let references = self
                 .go_to_references(
                     symbol_edited.fs_file_path(),
                     &symbol_edited.range().start_position(),
+                    request_id,
                 )
                 .await?;
             let _ = self
@@ -913,6 +960,7 @@ We also believe this symbol needs to be probed because of:
                     &symbol_to_edit,
                     references,
                     hub_sender,
+                    request_id,
                 )
                 .await;
         } else {
@@ -933,8 +981,10 @@ We also believe this symbol needs to be probed because of:
         api_key: LLMProviderAPIKeys,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: &str,
     ) -> Result<(), SymbolError> {
         // we need to first ask the LLM for the class properties if any we have
         // to followup on if they changed
@@ -957,7 +1007,10 @@ We also believe this symbol needs to be probed because of:
             .into_iter()
             .map(|(index, line)| (index + start_line, line.to_owned()))
             .collect::<Vec<_>>();
-        let class_memebers_to_follow = self.check_class_members_to_follow(request).await?.members();
+        let class_memebers_to_follow = self
+            .check_class_members_to_follow(request, request_id)
+            .await?
+            .members();
         // now we need to get the members and schedule a followup along with the refenreces where
         // we might ber using this class
         // Now we have to get the position of the members which we want to follow-along, this is important
@@ -1001,6 +1054,7 @@ We also believe this symbol needs to be probed because of:
                     symbol_edited,
                     edited_symbol,
                     hub_sender,
+                    request_id,
                 )
                 .await;
         })
@@ -1027,10 +1081,14 @@ We also believe this symbol needs to be probed because of:
         edited_symbol: &OutlineNodeContent,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: &str,
     ) -> Result<(), SymbolError> {
-        let references = self.go_to_references(fs_file_path, &position).await?;
+        let references = self
+            .go_to_references(fs_file_path, &position, request_id)
+            .await?;
         let reference_locations = references.locations();
         let file_paths = reference_locations
             .iter()
@@ -1040,7 +1098,7 @@ We also believe this symbol needs to be probed because of:
         let _ = stream::iter(file_paths.clone())
             .map(|fs_file_path| async {
                 // get the file content
-                let _ = self.file_open(fs_file_path).await;
+                let _ = self.file_open(fs_file_path, request_id).await;
                 ()
             })
             .buffer_unordered(100)
@@ -1118,6 +1176,7 @@ We also believe this symbol needs to be probed because of:
                 range.start_position(),
                 outline_nodes,
                 hub_sender,
+                request_id,
             )
             .await
         })
@@ -1137,8 +1196,10 @@ We also believe this symbol needs to be probed because of:
         outline_nodes: Vec<OutlineNode>,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: &str,
     ) -> Result<(), SymbolError> {
         let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
             // we need to check if the outline node contains the range we are interested in
@@ -1169,6 +1230,7 @@ We also believe this symbol needs to be probed because of:
                     .go_to_definition(
                         outline_node_fs_file_path,
                         outline_node_identifier_range.start_position(),
+                        request_id,
                     )
                     .await?;
                 if let Some(definition) = definitions.definitions().get(0) {
@@ -1234,6 +1296,7 @@ We also believe this symbol needs to be probed because of:
                                 ),
                                 instruction_prompt,
                             ),
+                            uuid::Uuid::new_v4().to_string(),
                             sender,
                         ));
                         // Figure out what to do with the receiver over here
@@ -1269,9 +1332,13 @@ We also believe this symbol needs to be probed because of:
     async fn check_class_members_to_follow(
         &self,
         request: ClassSymbolFollowupRequest,
+        request_id: &str,
     ) -> Result<ClassSymbolFollowupResponse, SymbolError> {
         let tool_input = ToolInput::ClassSymbolFollowup(request);
-        let _ = self.ui_events.send(UIEvent::ToolEvent(tool_input.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -1288,8 +1355,10 @@ We also believe this symbol needs to be probed because of:
         references: GoToReferencesResponse,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: &str,
     ) -> Result<(), SymbolError> {
         let reference_locations = references.locations();
         let file_paths = reference_locations
@@ -1300,7 +1369,7 @@ We also believe this symbol needs to be probed because of:
         let _ = stream::iter(file_paths.clone())
             .map(|fs_file_path| async {
                 // get the file content
-                let _ = self.file_open(fs_file_path).await;
+                let _ = self.file_open(fs_file_path, request_id).await;
                 ()
             })
             .buffer_unordered(100)
@@ -1364,6 +1433,7 @@ We also believe this symbol needs to be probed because of:
                 range.start_position(),
                 outline_nodes,
                 hub_sender,
+                request_id,
             )
             .await
         })
@@ -1475,8 +1545,10 @@ Please handle these changes as required."#
         // writing a unit-test for this
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        request_id: &str,
     ) -> Result<(), SymbolError> {
         let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
             // we need to check if the outline node contains the range we are interested in
@@ -1507,6 +1579,7 @@ Please handle these changes as required."#
                     .go_to_definition(
                         outline_node_fs_file_path,
                         outline_node_identifier_range.start_position(),
+                        request_id,
                     )
                     .await?;
                 if let Some(definition) = definitions.definitions().get(0) {
@@ -1570,6 +1643,7 @@ Please handle these changes as required."#
                                 ),
                                 instruction_prompt,
                             ),
+                            uuid::Uuid::new_v4().to_string(),
                             sender,
                         ));
                         // Figure out what to do with the receiver over here
@@ -1606,13 +1680,17 @@ Please handle these changes as required."#
         &self,
         fs_file_path: &str,
         position: &Position,
+        request_id: &str,
     ) -> Result<GoToReferencesResponse, SymbolError> {
         let input = ToolInput::GoToReference(GoToReferencesRequest::new(
             fs_file_path.to_owned(),
             position.clone(),
             self.editor_url.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEvent::ToolEvent(input.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            input.clone(),
+        ));
         self.tools
             .invoke(input)
             .await
@@ -1632,6 +1710,7 @@ Please handle these changes as required."#
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<(), SymbolError> {
         // code correction looks like this:
         // - apply the edited code to the original selection
@@ -1651,23 +1730,29 @@ Please handle these changes as required."#
             tries = tries + 1;
 
             let mut symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
-            let mut fs_file_content = self.file_open(fs_file_path.to_owned()).await?.contents();
+            let mut fs_file_content = self
+                .file_open(fs_file_path.to_owned(), request_id)
+                .await?
+                .contents();
 
             let updated_code = edited_code.to_owned();
             let edited_range = symbol_to_edit.range().clone();
-            let request_id = uuid::Uuid::new_v4().to_string();
+            let lsp_request_id = uuid::Uuid::new_v4().to_string();
             let editor_response = self
-                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code)
+                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
                 .await?;
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
             let symbol_to_edit = self.find_symbol_to_edit(symbol_edited).await?;
-            let fs_file_content = self.file_open(fs_file_path.to_owned()).await?.contents();
+            let fs_file_content = self
+                .file_open(fs_file_path.to_owned(), request_id)
+                .await?
+                .contents();
 
             // Now we check for LSP diagnostics
             let lsp_diagnostics = self
-                .get_lsp_diagnostics(fs_file_path, &edited_range)
+                .get_lsp_diagnostics(fs_file_path, &edited_range, request_id)
                 .await?;
 
             // We also give it the option to edit the code as required
@@ -1677,7 +1762,12 @@ Please handle these changes as required."#
 
             // Now we get all the quick fixes which are available in the editor
             let quick_fix_actions = self
-                .get_quick_fix_actions(fs_file_path, &edited_range, request_id.to_owned())
+                .get_quick_fix_actions(
+                    fs_file_path,
+                    &edited_range,
+                    lsp_request_id.to_owned(),
+                    request_id,
+                )
                 .await?
                 .remove_options();
 
@@ -1696,6 +1786,7 @@ Please handle these changes as required."#
                     llm.clone(),
                     provider.clone(),
                     api_keys.clone(),
+                    request_id,
                 )
                 .await?;
 
@@ -1720,18 +1811,19 @@ Please handle these changes as required."#
                         llm.clone(),
                         provider.clone(),
                         api_keys.clone(),
+                        request_id,
                     )
                     .await?;
 
                 // after this we have to apply the edits to the editor again and being
                 // the loop again
                 let _ = self
-                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code)
+                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code, request_id)
                     .await?;
             } else {
                 // invoke the code action over here with the ap
                 let response = self
-                    .invoke_quick_action(selected_action_index, &request_id)
+                    .invoke_quick_action(selected_action_index, &lsp_request_id, request_id)
                     .await?;
                 if response.is_success() {
                     // great we have a W
@@ -1756,6 +1848,7 @@ Please handle these changes as required."#
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<String, SymbolError> {
         let (code_above, code_below, code_in_selection) =
             split_file_content_into_parts(fs_file_content, edited_range);
@@ -1772,9 +1865,10 @@ Please handle these changes as required."#
             provider,
             api_keys,
         ));
-        let _ = self
-            .ui_events
-            .send(UIEvent::ToolEvent(code_editing_error_request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            code_editing_error_request.clone(),
+        ));
         self.tools
             .invoke(code_editing_error_request)
             .await
@@ -1796,6 +1890,7 @@ Please handle these changes as required."#
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<CodeCorrectnessAction, SymbolError> {
         let (code_above, code_below, code_in_selection) =
             split_file_content_into_parts(fs_file_content, edited_range);
@@ -1814,7 +1909,10 @@ Please handle these changes as required."#
             provider,
             api_keys,
         ));
-        let _ = self.ui_events.send(UIEvent::ToolEvent(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -1833,6 +1931,7 @@ Please handle these changes as required."#
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<String, SymbolError> {
         // we need to get the range above and then below and then in the selection
         let language = self
@@ -1855,7 +1954,10 @@ Please handle these changes as required."#
             api_keys,
             provider,
         ));
-        let _ = self.ui_events.send(UIEvent::ToolEvent(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -1867,12 +1969,17 @@ Please handle these changes as required."#
     async fn invoke_quick_action(
         &self,
         quick_fix_index: i64,
+        lsp_request_id: &str,
         request_id: &str,
     ) -> Result<LSPQuickFixInvocationResponse, SymbolError> {
         let request = ToolInput::QuickFixInvocationRequest(LSPQuickFixInvocationRequest::new(
-            request_id.to_owned(),
+            lsp_request_id.to_owned(),
             quick_fix_index,
             self.editor_url.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -1900,10 +2007,12 @@ Please handle these changes as required."#
         query: &str,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
+            String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         // we get back here the defintion outline along with the reasoning on why
         // we need to look at the symbol
+        request_id: &str,
     ) -> Result<Vec<Option<(CodeSymbolWithThinking, String)>>, SymbolError> {
         let language = self
             .editor_parsing
@@ -1924,7 +2033,10 @@ Please handle these changes as required."#
             language,
             query.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         let response = self
             .tools
             .invoke(request)
@@ -1940,7 +2052,9 @@ Please handle these changes as required."#
         let symbol_locations = stream::iter(symbols_to_grab)
             .map(|symbol| async move {
                 let symbol_name = symbol.code_symbol();
-                let location = self.find_symbol_in_file(symbol_name, file_content).await;
+                let location = self
+                    .find_symbol_in_file(symbol_name, file_content, request_id)
+                    .await;
                 (symbol, location)
             })
             .buffer_unordered(100)
@@ -1964,7 +2078,7 @@ Please handle these changes as required."#
                 let position = location.get_position();
                 if let Some(position) = position {
                     let possible_file_path = self
-                        .go_to_definition(fs_file_path, position)
+                        .go_to_definition(fs_file_path, position, request_id)
                         .await
                         .map(|position| {
                             // there are multiple definitions here for some
@@ -1989,6 +2103,7 @@ Please handle these changes as required."#
                                 symbol.code_symbol(),
                                 &definition_file_path,
                             )),
+                            uuid::Uuid::new_v4().to_string(),
                             sender,
                         ));
                         receiver
@@ -2017,6 +2132,7 @@ Please handle these changes as required."#
         fs_file_path: &str,
         range: &Range,
         request_id: String,
+        tool_use_request_id: &str,
     ) -> Result<GetQuickFixResponse, SymbolError> {
         let request = ToolInput::QuickFixRequest(GetQuickFixRequest::new(
             fs_file_path.to_owned(),
@@ -2024,7 +2140,10 @@ Please handle these changes as required."#
             range.clone(),
             request_id,
         ));
-        let _ = self.ui_events.send(UIEvent::ToolEvent(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            tool_use_request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2037,13 +2156,17 @@ Please handle these changes as required."#
         &self,
         fs_file_path: &str,
         range: &Range,
+        request_id: &str,
     ) -> Result<LSPDiagnosticsOutput, SymbolError> {
         let input = ToolInput::LSPDiagnostics(LSPDiagnosticsInput::new(
             fs_file_path.to_owned(),
             range.clone(),
             self.editor_url.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEvent::ToolEvent(input.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            input.clone(),
+        ));
         self.tools
             .invoke(input)
             .await
@@ -2057,6 +2180,7 @@ Please handle these changes as required."#
         fs_file_path: &str,
         range: &Range,
         updated_code: &str,
+        request_id: &str,
     ) -> Result<EditorApplyResponse, SymbolError> {
         let input = ToolInput::EditorApplyChange(EditorApplyRequest::new(
             fs_file_path.to_owned(),
@@ -2064,7 +2188,10 @@ Please handle these changes as required."#
             range.clone(),
             self.editor_url.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEvent::ToolEvent(input.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            input.clone(),
+        ));
         self.tools
             .invoke(input)
             .await
@@ -2077,13 +2204,17 @@ Please handle these changes as required."#
         &self,
         symbol_name: &str,
         file_contents: &str,
+        request_id: &str,
     ) -> Result<FindInFileResponse, SymbolError> {
         // Here we are going to get the position of the symbol
         let request = ToolInput::GrepSingleFile(FindInFileRequest::new(
             file_contents.to_owned(),
             symbol_name.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2110,11 +2241,15 @@ Please handle these changes as required."#
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<CodeToEditSymbolResponse, SymbolError> {
         let request = ToolInput::FilterCodeSnippetsForEditingSingleSymbols(
             CodeToEditSymbolRequest::new(xml_string, query, llm, provider, api_keys),
         );
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2199,11 +2334,15 @@ Please handle these changes as required."#
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
+        request_id: &str,
     ) -> Result<CodeToEditFilterResponse, SymbolError> {
         let request = ToolInput::FilterCodeSnippetsForEditing(CodeToEditFilterRequest::new(
             snippets, query, llm, provider, api_key,
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2229,12 +2368,19 @@ Please handle these changes as required."#
         Ok(())
     }
 
-    pub async fn file_open(&self, fs_file_path: String) -> Result<OpenFileResponse, SymbolError> {
+    pub async fn file_open(
+        &self,
+        fs_file_path: String,
+        request_id: &str,
+    ) -> Result<OpenFileResponse, SymbolError> {
         let request = ToolInput::OpenFile(OpenFileRequest::new(
             fs_file_path,
             self.editor_url.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2247,9 +2393,13 @@ Please handle these changes as required."#
         &self,
         file_content: String,
         symbol: String,
+        request_id: &str,
     ) -> Result<FindInFileResponse, SymbolError> {
         let request = ToolInput::GrepSingleFile(FindInFileRequest::new(file_content, symbol));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2262,13 +2412,17 @@ Please handle these changes as required."#
         &self,
         fs_file_path: &str,
         position: Position,
+        request_id: &str,
     ) -> Result<GoToDefinitionResponse, SymbolError> {
         let request = ToolInput::GoToDefinition(GoToDefinitionRequest::new(
             fs_file_path.to_owned(),
             self.editor_url.to_owned(),
             position,
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2284,9 +2438,10 @@ Please handle these changes as required."#
         &self,
         fs_file_path: &str,
         symbol_name: &str,
+        request_id: &str,
     ) -> Result<Snippet, SymbolError> {
         // we always open the document before asking for an outline
-        let file_open_result = self.file_open(fs_file_path.to_owned()).await?;
+        let file_open_result = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let language = file_open_result.language().to_owned();
         // we add the document for parsing over here
         self.symbol_broker
@@ -2318,21 +2473,23 @@ Please handle these changes as required."#
                 // so we first search the file for where the symbol is
                 // this will be another invocation to the tools
                 // and then we ask for the definition once we find it
-                let file_data = self.file_open(fs_file_path.to_owned()).await?;
+                let file_data = self.file_open(fs_file_path.to_owned(), request_id).await?;
                 let file_content = file_data.contents();
                 // now we parse it and grab the outline nodes
                 let find_in_file = self
-                    .find_in_file(file_content, symbol_name.to_owned())
+                    .find_in_file(file_content, symbol_name.to_owned(), request_id)
                     .await
                     .map(|find_in_file| find_in_file.get_position())
                     .ok()
                     .flatten();
                 // now that we have a poition, we can ask for go-to-definition
                 if let Some(file_position) = find_in_file {
-                    let definition = self.go_to_definition(fs_file_path, file_position).await?;
+                    let definition = self
+                        .go_to_definition(fs_file_path, file_position, request_id)
+                        .await?;
                     // let definition_file_path = definition.file_path().to_owned();
                     let snippet_node = self
-                        .grab_symbol_content_from_definition(symbol_name, definition)
+                        .grab_symbol_content_from_definition(symbol_name, definition, request_id)
                         .await?;
                     Ok(snippet_node)
                 } else {
@@ -2365,6 +2522,7 @@ Please handle these changes as required."#
         &self,
         important_symbols: CodeSymbolImportantResponse,
         user_context: UserContext,
+        request_id: &str,
     ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
         let symbols = important_symbols.symbols();
         let ordered_symbols = important_symbols.ordered_symbols();
@@ -2420,7 +2578,7 @@ Please handle these changes as required."#
         for (_, mut code_snippet) in final_code_snippets.into_iter() {
             // we always open the document before asking for an outline
             let file_open_result = self
-                .file_open(code_snippet.fs_file_path().to_owned())
+                .file_open(code_snippet.fs_file_path().to_owned(), request_id)
                 .await?;
             println!("{:?}", file_open_result);
             let language = file_open_result.language().to_owned();
@@ -2457,12 +2615,16 @@ Please handle these changes as required."#
                     // this will be another invocation to the tools
                     // and then we ask for the definition once we find it
                     let file_data = self
-                        .file_open(code_snippet.fs_file_path().to_owned())
+                        .file_open(code_snippet.fs_file_path().to_owned(), request_id)
                         .await?;
                     let file_content = file_data.contents();
                     // now we parse it and grab the outline nodes
                     let find_in_file = self
-                        .find_in_file(file_content, code_snippet.symbol_name().to_owned())
+                        .find_in_file(
+                            file_content,
+                            code_snippet.symbol_name().to_owned(),
+                            request_id,
+                        )
                         .await
                         .map(|find_in_file| find_in_file.get_position())
                         .ok()
@@ -2470,13 +2632,18 @@ Please handle these changes as required."#
                     // now that we have a poition, we can ask for go-to-definition
                     if let Some(file_position) = find_in_file {
                         let definition = self
-                            .go_to_definition(&code_snippet.fs_file_path(), file_position)
+                            .go_to_definition(
+                                &code_snippet.fs_file_path(),
+                                file_position,
+                                request_id,
+                            )
                             .await?;
                         // let definition_file_path = definition.file_path().to_owned();
                         let snippet_node = self
                             .grab_symbol_content_from_definition(
                                 &code_snippet.symbol_name(),
                                 definition,
+                                request_id,
                             )
                             .await?;
                         code_snippet.set_snippet(snippet_node).await;
@@ -2520,14 +2687,18 @@ Please handle these changes as required."#
         &self,
         fs_file_path: &str,
         position: &Position,
+        request_id: &str,
     ) -> Result<GoToImplementationResponse, SymbolError> {
-        let _ = self.file_open(fs_file_path.to_owned()).await?;
+        let _ = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let request = ToolInput::SymbolImplementations(GoToImplementationRequest::new(
             fs_file_path.to_owned(),
             position.clone(),
             self.editor_url.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEvent::from(request.clone()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
         self.tools
             .invoke(request)
             .await
@@ -2542,11 +2713,12 @@ Please handle these changes as required."#
         &self,
         fs_file_path: &str,
         symbol_name: &str,
+        request_id: &str,
     ) -> Result<GoToImplementationResponse, SymbolError> {
         // LSP requies the EXACT symbol location on where to click go-to-implementation
         // since thats the case we can just open the file and then look for the
         // first occurance of the symbol and grab the location
-        let file_content = self.file_open(fs_file_path.to_owned()).await?;
+        let file_content = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let language = file_content.language().to_owned();
         let _ = self
             .symbol_broker
@@ -2571,7 +2743,10 @@ Please handle these changes as required."#
                 position,
                 self.editor_url.to_owned(),
             ));
-            let _ = self.ui_events.send(UIEvent::from(request.clone()));
+            let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+                request_id.to_owned(),
+                request.clone(),
+            ));
             self.tools
                 .invoke(request)
                 .await
@@ -2590,6 +2765,7 @@ Please handle these changes as required."#
         &self,
         symbol_name: &str,
         definition: GoToDefinitionResponse,
+        request_id: &str,
     ) -> Result<Snippet, SymbolError> {
         // here we first try to open the file
         // and then read the symbols from it nad then parse
@@ -2598,7 +2774,9 @@ Please handle these changes as required."#
         // we have to figure out how to pick the best one over here
         // TODO(skcd): This will break if we are unable to get definitions properly
         let definition = definition.definitions().remove(0);
-        let _ = self.file_open(definition.file_path().to_owned()).await?;
+        let _ = self
+            .file_open(definition.file_path().to_owned(), request_id)
+            .await?;
         // grab the symbols from the file
         // but we can also try getting it from the symbol broker
         // because we are going to open a file and send a signal to the signal broker

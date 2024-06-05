@@ -18,7 +18,11 @@ use tracing::info;
 
 use crate::{
     agentic::{
-        symbol::{events::edit::SymbolToEditRequest, identifier::Snippet},
+        symbol::{
+            events::edit::SymbolToEditRequest,
+            identifier::Snippet,
+            ui_event::{SymbolEventProbeRequest, SymbolEventSubStep, SymbolEventSubStepRequest},
+        },
         tool::{
             code_symbol::{
                 important::{
@@ -438,6 +442,13 @@ impl Symbol {
                 request_id_ref,
             )
             .await?;
+        let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
+            request_id_ref.to_owned(),
+            SymbolEventSubStepRequest::new(
+                self.symbol_identifier.clone(),
+                SymbolEventSubStep::Probe(SymbolEventProbeRequest::SubSymbolSelection),
+            ),
+        ));
         println!("Sub symbol request: {:?}", &sub_symbol_request);
 
         // - ask if we should probe the sub-symbols here
@@ -516,6 +527,13 @@ impl Symbol {
             .buffer_unordered(BUFFER_LIMIT)
             .collect::<Vec<_>>()
             .await;
+        let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
+            request_id_ref.to_owned(),
+            SymbolEventSubStepRequest::new(
+                self.symbol_identifier.clone(),
+                SymbolEventSubStep::Probe(SymbolEventProbeRequest::ProbeDeeperSymbol),
+            ),
+        ));
 
         println!(
             "Snippet to symbols to follow: {:?}",

@@ -28,6 +28,7 @@ pub struct SymbolInputEvent {
     // for swe bench
     swe_bench_test_endpoint: Option<String>,
     repo_map_fs_path: Option<String>,
+    gcloud_access_token: Option<String>,
 }
 
 impl SymbolInputEvent {
@@ -39,6 +40,7 @@ impl SymbolInputEvent {
         user_query: String,
         swe_bench_test_endpoint: Option<String>,
         repo_map_fs_path: Option<String>,
+        gcloud_access_token: Option<String>,
     ) -> Self {
         Self {
             context,
@@ -48,6 +50,7 @@ impl SymbolInputEvent {
             user_query,
             swe_bench_test_endpoint,
             repo_map_fs_path,
+            gcloud_access_token,
         }
     }
 
@@ -79,16 +82,18 @@ impl SymbolInputEvent {
             )
             .await;
             match contents {
-                Ok(contents) => {
-                    Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
-                        contents,
-                        self.user_query.to_owned(),
-                        LLMType::GeminiProFlash,
-                        LLMProvider::GeminiPro,
-                        LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgsreFyKpOckKAXhxVYd38moWhis96J67_TT4GqPLZm2GbAFY9DnlaaznOravJJoM-LJCeuEN3-vu81imXzZ4SNOfkP_EMqK83NfVKsJp5H4WaIqk2XB-PnyDzmXR7FbsMOwVcKM-FkDc1Or8Ypz4QaaSs8APexkupJbVoMoaCgYKAWgSARESFQHGX2Mi6Pb7nkO8c6oaMhB2flzTRw0179".to_owned(), "anton-390822".to_owned()))
-                    )))
-                }
-                Err(_) => None
+                Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
+                    contents,
+                    self.user_query.to_owned(),
+                    LLMType::GeminiProFlash,
+                    LLMProvider::GeminiPro,
+                    LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new(
+                        self.gcloud_access_token
+                            .expect("swe bench harness always sends this"),
+                        "anton-390822".to_owned(),
+                    )),
+                ))),
+                Err(_) => None,
             }
         } else {
             let code_wide_search: CodeSymbolImportantWideSearch =

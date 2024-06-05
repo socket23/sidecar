@@ -99,6 +99,7 @@ impl SymbolManager {
 
     // This is just for testing out the flow for single input events
     pub async fn probe_request(&self, input_event: SymbolEventRequest) -> Result<(), SymbolError> {
+        let _ = self.ui_sender.send(UIEvent::from(input_event.clone()));
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let _ = self
             .symbol_locker

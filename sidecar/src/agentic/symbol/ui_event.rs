@@ -4,7 +4,10 @@
 
 use crate::agentic::tool::input::ToolInput;
 
-use super::{events::input::SymbolInputEvent, types::SymbolEventRequest};
+use super::{
+    events::input::SymbolInputEvent,
+    types::{SymbolEventRequest, SymbolLocation},
+};
 
 #[derive(Debug, serde::Serialize)]
 pub struct UIEventWithID {
@@ -33,6 +36,13 @@ impl UIEventWithID {
             event: UIEvent::CodebaseEvent(input),
         }
     }
+
+    pub fn symbol_location(request_id: String, symbol_location: SymbolLocation) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolLoctationUpdate(symbol_location),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -40,6 +50,7 @@ pub enum UIEvent {
     SymbolEvent(SymbolEventRequest),
     ToolEvent(ToolInput),
     CodebaseEvent(SymbolInputEvent),
+    SymbolLoctationUpdate(SymbolLocation),
 }
 
 impl From<SymbolEventRequest> for UIEvent {

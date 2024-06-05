@@ -17,7 +17,7 @@ use crate::user_context::types::UserContext;
 use super::{
     errors::SymbolError,
     events::types::SymbolEvent,
-    identifier::{LLMProperties, MechaCodeSymbolThinking, Snippet, SymbolIdentifier},
+    identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
     types::{Symbol, SymbolEventRequest, SymbolEventResponse},
     ui_event::UIEventWithID,

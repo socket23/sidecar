@@ -286,6 +286,10 @@ impl MechaCodeSymbolThinking {
         }
     }
 
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
+
     // we need to find the snippet in the code symbol in the file we are interested
     // in and then use that for providing answers
     pub async fn find_snippet_and_create(
@@ -373,10 +377,6 @@ impl MechaCodeSymbolThinking {
         self.is_new
     }
 
-    pub fn symbol_name(&self) -> &str {
-        &self.symbol_name
-    }
-
     pub fn to_symbol_identifier(&self) -> SymbolIdentifier {
         if self.is_new {
             SymbolIdentifier::new_symbol(&self.symbol_name)
@@ -448,6 +448,7 @@ impl MechaCodeSymbolThinking {
     pub async fn initial_request(
         &self,
         tool_box: Arc<ToolBox>,
+        original_request: &str,
         llm_properties: LLMProperties,
         request_id: String,
     ) -> Result<SymbolEventRequest, SymbolError> {

@@ -1,7 +1,9 @@
 //! The different kind of events which the symbols can invoke and needs to work
 //! on
 
-use super::{edit::SymbolToEditRequest, probe::SymbolToProbeRequest};
+use super::{
+    edit::SymbolToEditRequest, initial_request::InitialRequestData, probe::SymbolToProbeRequest,
+};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AskQuestionRequest {
@@ -20,7 +22,7 @@ impl AskQuestionRequest {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum SymbolEvent {
-    InitialRequest,
+    InitialRequest(InitialRequestData),
     AskQuestion(AskQuestionRequest),
     UserFeedback,
     Delete,

@@ -97,13 +97,6 @@ impl SymbolEventRequest {
         Self { symbol, event }
     }
 
-    pub fn initial_request(symbol: SymbolIdentifier) -> Self {
-        Self {
-            symbol,
-            event: SymbolEvent::InitialRequest,
-        }
-    }
-
     pub fn outline(symbol: SymbolIdentifier) -> Self {
         Self {
             symbol,
@@ -845,11 +838,17 @@ impl Symbol {
     async fn generate_initial_request(
         &self,
         request_id: String,
+        original_request: &str,
     ) -> Result<SymbolEventRequest, SymbolError> {
         // this is a very big block because of the LLM request, but lets see how
         // this plays out in practice
         self.mecha_code_symbol
-            .initial_request(self.tools.clone(), self.llm_properties.clone(), request_id)
+            .initial_request(
+                self.tools.clone(),
+                original_request,
+                self.llm_properties.clone(),
+                request_id,
+            )
             .await
     }
 
@@ -1070,6 +1069,7 @@ impl Symbol {
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
     ) -> Result<(), SymbolError> {
+        println!("Symbol::run({}) at types.rs", self.symbol_name());
         let receiver_stream = UnboundedReceiverStream::new(receiver);
         receiver_stream
             .map(|symbol_event| (symbol_event, self.clone()))
@@ -1080,9 +1080,13 @@ impl Symbol {
                     SymbolEventRequest::new(symbol.symbol_identifier.clone(), event.clone()),
                 ));
                 match event {
-                    SymbolEvent::InitialRequest => {
-                        let initial_request =
-                            symbol.generate_initial_request(request_id.to_owned()).await;
+                    SymbolEvent::InitialRequest(initial_request) => {
+                        let initial_request = symbol
+                            .generate_initial_request(
+                                request_id.to_owned(),
+                                initial_request.get_original_question(),
+                            )
+                            .await;
                         let _ = sender.send(SymbolEventResponse::TaskDone(
                             "initial list of symbols found".to_owned(),
                         ));

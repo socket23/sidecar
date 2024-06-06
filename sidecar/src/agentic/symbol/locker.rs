@@ -198,8 +198,8 @@ impl SymbolLocker {
 
         // now we let it rip, we give the symbol the receiver and ask it
         // to go crazy with it
-        tokio::spawn(async move {
-            println!("spawning symbol: {:?}", symbol_identifier);
+        let _symbol_run_handle = tokio::spawn(async move {
+            println!("spawning symbol: {:?}.run()", symbol_identifier);
             let response = symbol.run(receiver).await;
             println!("{:?}", response.is_err());
         });

@@ -22,6 +22,7 @@
 pub mod action;
 pub mod memory;
 pub mod runner;
+pub mod swe_bench;
 pub mod symbol;
 pub mod tool;
 

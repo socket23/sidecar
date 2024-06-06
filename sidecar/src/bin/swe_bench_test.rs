@@ -91,6 +91,9 @@ async fn main() {
     //     drop(child);
     // });
 
+    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp9khfwaj0".to_owned();
+    let repo_map_fs_path =
+        "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpb0s1ot0p".to_owned();
     let problem_statement = r#"delete() on instances of models without any dependencies doesn't clear PKs.
 
 Description
@@ -103,17 +106,17 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
             vec![],
             vec![],
             None,
-            vec!["/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5".to_owned()],
+            vec![folder_path.to_owned()],
         ),
         LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,
         anthropic_api_keys,
         problem_statement,
         Some("http://localhost:6897/run_tests".to_owned()),
-        Some("/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpu88w4cw3".to_owned()),
+        Some(repo_map_fs_path.to_owned()),
         Some("ya29.a0AXooCgv9vCDMv9wGF9hJnmwMDDfYEzdNwJ9jLHbV8S0XX4GOXYalAERzhLFDyAFLIUt7RxZcXurywd_UcdULC1Yr2SysS319hoiODTlG12x-t1IhQ1nuQn887s6DDdCzVIJD18Kq82G9Oik1hqTTQG-PK_olRacbw2yBgC0UTtGoaCgYKAeISARESFQHGX2MiwHOmoW66tYc9cCb-93HK0w0179".to_owned()),
         Some("django__django-11179".to_owned()),
-        Some("/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5".to_owned()),
+        Some(folder_path.to_owned()),
     );
     let mut probe_task = Box::pin(symbol_manager.initial_request(initial_request));
 

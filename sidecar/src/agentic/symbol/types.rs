@@ -1081,6 +1081,7 @@ impl Symbol {
                 ));
                 match event {
                     SymbolEvent::InitialRequest(initial_request) => {
+                        println!("Symbol::inital_request: {}", symbol.symbol_name());
                         let initial_request = symbol
                             .generate_initial_request(
                                 request_id.to_owned(),

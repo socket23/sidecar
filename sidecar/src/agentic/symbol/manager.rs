@@ -154,7 +154,7 @@ impl SymbolManager {
                 None
             };
 
-            println!("{:?}", &important_symbols);
+            println!("Important symbols {:?}", &important_symbols);
             let tool_output = match important_symbols {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
                 None => self
@@ -163,6 +163,7 @@ impl SymbolManager {
                     .await
                     .map_err(|e| SymbolError::ToolError(e))?,
             };
+
             if let ToolOutput::ImportantSymbols(important_symbols)
             | ToolOutput::RepoMapSearch(important_symbols) = tool_output
             {
@@ -201,6 +202,7 @@ impl SymbolManager {
                 // Once we have the symbols spinning up, we send them the original request
                 // which the user had and send it over and then we can await on all of them
                 // working at the same time.
+                dbg!("initial request");
                 let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
                     (
                         symbol_identifier.clone(),

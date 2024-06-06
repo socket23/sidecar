@@ -189,6 +189,10 @@ impl SymbolManager {
                     .buffer_unordered(100)
                     .collect::<Vec<_>>()
                     .await;
+
+                // Once we have the symbols spinning up, we send them the original request
+                // which the user had and send it over and then we can await on all of them
+                // working at the same time.
             }
         } else {
             // We are for some reason not even invoking the first passage which is

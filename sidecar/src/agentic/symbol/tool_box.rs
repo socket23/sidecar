@@ -2695,6 +2695,14 @@ Please handle these changes as required."#
 
             mecha_symbols.push(code_snippet);
         }
+        dbg!(
+            "Mecha symbols: {} {}",
+            mecha_symbols.len(),
+            mecha_symbols
+                .iter()
+                .map(|mecha_symbol| mecha_symbol.symbol_name().to_owned())
+                .collect::<Vec<_>>()
+        );
         Ok(mecha_symbols)
     }
 

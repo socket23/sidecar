@@ -158,7 +158,7 @@ impl SymbolLocker {
         &self,
         request: MechaCodeSymbolThinking,
         request_id: String,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<SymbolIdentifier, SymbolError> {
         // say we create the symbol agent, what happens next
         // the agent can have its own events which it might need to do, including the
         // followups or anything else
@@ -196,6 +196,8 @@ impl SymbolLocker {
 
         let symbol = symbol?;
 
+        let cloned_symbol_identifier = symbol_identifier.clone();
+
         // now we let it rip, we give the symbol the receiver and ask it
         // to go crazy with it
         let _symbol_run_handle = tokio::spawn(async move {
@@ -204,6 +206,6 @@ impl SymbolLocker {
             println!("{:?}", response.is_err());
         });
         // fin
-        Ok(())
+        Ok(cloned_symbol_identifier)
     }
 }

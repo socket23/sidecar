@@ -60,6 +60,10 @@ impl SymbolInputEvent {
         }
     }
 
+    pub fn user_query(&self) -> &str {
+        &self.user_query
+    }
+
     pub fn get_swe_bench_git_dname(&self) -> Option<String> {
         self.swe_bench_git_dname.clone()
     }

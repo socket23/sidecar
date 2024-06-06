@@ -430,21 +430,6 @@ impl MechaCodeSymbolThinking {
         *implementations = snippets;
     }
 
-    // We are going to select the sub-symbol to probe over here
-    pub async fn subsymbol_to_probe(
-        &self,
-        tool_box: Arc<ToolBox>,
-        probe_request: String,
-    ) -> Result<(), SymbolError> {
-        if self.is_snippet_present().await {
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request().await {
-                // Now we try to filter the ranked entries
-            }
-        } else {
-        }
-        Ok(())
-    }
-
     pub async fn initial_request(
         &self,
         tool_box: Arc<ToolBox>,
@@ -513,7 +498,16 @@ impl MechaCodeSymbolThinking {
                             .snippets()
                             .into_iter()
                             .find(|snippet| snippet.id() == idx)
-                            .map(|snippet| snippet.reason_to_edit().to_owned());
+                            .map(|snippet| {
+                                let reason_to_edit = snippet.reason_to_edit().to_owned();
+                                format!(
+                                    r#"Original user query:
+{original_request}
+
+Reason to edit:
+{reason_to_edit}"#
+                                )
+                            });
                         match found_reason_to_edit {
                             Some(reason) => {
                                 let symbol_in_range =

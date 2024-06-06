@@ -501,16 +501,18 @@ impl MechaCodeSymbolThinking {
                     "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::start({})",
                     self.symbol_name(),
                 );
-                let filtered_list = tool_box
-                    .filter_code_snippets_in_symbol_for_editing(
-                        ranked_xml_list,
-                        steps.join("\n"),
-                        llm_properties.llm().clone(),
-                        llm_properties.provider().clone(),
-                        llm_properties.api_key().clone(),
-                        &request_id,
-                    )
-                    .await?;
+                let filtered_list = dbg!(
+                    tool_box
+                        .filter_code_snippets_in_symbol_for_editing(
+                            ranked_xml_list,
+                            steps.join("\n"),
+                            llm_properties.llm().clone(),
+                            llm_properties.provider().clone(),
+                            llm_properties.api_key().clone(),
+                            &request_id,
+                        )
+                        .await
+                )?;
 
                 // now we take this filtered list and try to generate back and figure out
                 // the ranges which need to be edited

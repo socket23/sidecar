@@ -1088,9 +1088,12 @@ impl Symbol {
                                 initial_request.get_original_question(),
                             )
                             .await;
-                        let _ = sender.send(SymbolEventResponse::TaskDone(
-                            "initial list of symbols found".to_owned(),
-                        ));
+                        let request_sender = sender;
+                        println!(
+                            "Symbol::initial_request::generated({}).is_ok({})",
+                            symbol.symbol_name(),
+                            initial_request.is_ok(),
+                        );
                         match initial_request {
                             Ok(initial_request) => {
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -1101,10 +1104,12 @@ impl Symbol {
                                     uuid::Uuid::new_v4().to_string(),
                                     sender,
                                 ));
+                                let _response = receiver.await;
                                 // ideally we want to give this resopnse back to the symbol
                                 // so it can keep track of everything that its doing, we will get to that
-                                let _response = receiver.await;
-
+                                let _ = request_sender.send(SymbolEventResponse::TaskDone(
+                                    "initial request done".to_owned(),
+                                ));
                                 Ok(())
                             }
                             Err(e) => Err(e),

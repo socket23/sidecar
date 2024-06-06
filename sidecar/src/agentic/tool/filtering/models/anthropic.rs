@@ -1046,7 +1046,7 @@ Code location: {code_location}:{start_line}-{end_line}
 </code_to_edit_list>"
         );
         code_to_not_edit_list = format!(
-            "<code_to_not_edit>
+            "<code_to_not_edit_list>
 {code_to_not_edit_list}
 </code_to_not_edit_list>"
         );

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde_xml_rs::from_str;
 use std::{collections::HashMap, sync::Arc};
 
 use llm_client::{
@@ -170,6 +171,87 @@ impl CodeToEditSymbolResponse {
 
     pub fn code_to_not_edit_list(&self) -> &CodeToNotEditList {
         &self.code_to_not_edit_list
+    }
+
+    fn unescape_xml(s: String) -> String {
+        s.replace("\"", "&quot;")
+            .replace("'", "&apos;")
+            .replace(">", "&gt;")
+            .replace("<", "&lt;")
+            .replace("&", "&amp;")
+    }
+
+    fn parse_response_section(response: &str) -> String {
+        let mut is_inside_reason = false;
+        let mut new_lines = vec![];
+        for line in response.lines() {
+            if line == "<reason_to_edit>"
+                || line == "<reason_to_not_edit>"
+                || line == "<reason_to_probe>"
+                || line == "<reason_to_not_probe>"
+            {
+                is_inside_reason = true;
+                new_lines.push(line.to_owned());
+                continue;
+            } else if line == "</reason_to_edit>"
+                || line == "</reason_to_not_edit>"
+                || line == "</reason_to_probe>"
+                || line == "</reason_to_not_probe>"
+            {
+                is_inside_reason = false;
+                new_lines.push(line.to_owned());
+                continue;
+            }
+            if is_inside_reason {
+                new_lines.push(CodeToEditSymbolResponse::unescape_xml(line.to_owned()));
+            } else {
+                new_lines.push(line.to_owned());
+            }
+        }
+        new_lines.join("\n")
+    }
+
+    pub fn parse_response(response: &str) -> Result<Self, CodeToEditFilteringError> {
+        // first we want to find the code_to_edit and code_to_not_edit sections
+        let mut code_to_edit_list = response
+            .lines()
+            .into_iter()
+            .skip_while(|line| !line.contains("<code_to_edit_list>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</code_to_edit_list>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        let mut code_to_not_edit_list = response
+            .lines()
+            .into_iter()
+            .skip_while(|line| !line.contains("<code_to_not_edit_list>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</code_to_not_edit_list>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        code_to_edit_list = format!(
+            "<code_to_edit_list>
+{code_to_edit_list}
+</code_to_edit_list>"
+        );
+        code_to_not_edit_list = format!(
+            "<code_to_not_edit_list>
+{code_to_not_edit_list}
+</code_to_not_edit_list>"
+        );
+        code_to_edit_list = CodeToEditSymbolResponse::parse_response_section(&code_to_edit_list);
+        code_to_not_edit_list =
+            CodeToEditSymbolResponse::parse_response_section(&code_to_not_edit_list);
+        println!("code_to_edit_list:\n{}", &code_to_edit_list);
+        println!("code_to_not_edit_list:\n{}", &code_to_not_edit_list);
+        let code_to_edit_list = from_str::<CodeToEditList>(&code_to_edit_list)
+            .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
+        let code_to_not_edit_list = from_str::<CodeToNotEditList>(&code_to_not_edit_list)
+            .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
+        Ok(CodeToEditSymbolResponse::new(
+            code_to_edit_list,
+            code_to_not_edit_list,
+        ))
     }
 }
 
@@ -417,5 +499,34 @@ impl Tool for CodeToEditFormatterBroker {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AnthropicCodeToEditFormatter, CodeToEditSymbolResponse};
+
+    #[test]
+    fn test_code_to_edit_list_filtering() {
+        let response = format!(r#"
+<code_to_edit_list>
+<code_to_edit>
+<id>0</id>
+<reason_to_edit>
+This code defines the Collector class, which is responsible for collecting and deleting related objects when an object is deleted. It handles cascading deletes, pre/post delete signals, and optimizations for fast deletes. This is a crucial part of Django's object deletion mechanism, so it's important to understand and potentially debug issues related to deleting objects and their related data.
+</reason_to_edit>
+</code_to_edit>
+</code_to_edit_list>
+
+<code_to_not_edit_list>
+<code_to_not_edit>
+<id>1</id>
+<reason_to_not_edit>
+This is the same code as the previous entry, so there's no need to edit it again.
+</reason_to_not_edit>
+</code_to_not_edit>
+</code_to_not_edit_list>"#).to_owned();
+        let code_to_edit_formatter = CodeToEditSymbolResponse::parse_response(&response);
+        assert!(code_to_edit_formatter.is_ok());
     }
 }

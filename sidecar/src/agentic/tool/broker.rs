@@ -15,6 +15,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
         followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
+        repo_map_search::RepoMapSearchBroker,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -137,6 +138,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::ProbeSummarizeAnswer,
             Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::RepoMapSearch,
+            Box::new(RepoMapSearchBroker::new(llm_client.clone())),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

@@ -197,6 +197,7 @@ impl SymbolManager {
                     .filter_map(|s| s.ok())
                     .collect::<Vec<_>>();
 
+                dbg!("Symbol identifiers size: ({})", symbol_identifiers.len());
                 // Once we have the symbols spinning up, we send them the original request
                 // which the user had and send it over and then we can await on all of them
                 // working at the same time.
@@ -215,6 +216,10 @@ impl SymbolManager {
                 .map(
                     |(symbol_identifier, request_id, symbol_event_request)| async move {
                         let (sender, receiver) = tokio::sync::oneshot::channel();
+                        dbg!(
+                            "sending initial request to symbol: {:?}",
+                            &symbol_identifier
+                        );
                         self.symbol_locker
                             .process_request((symbol_event_request, request_id, sender))
                             .await;

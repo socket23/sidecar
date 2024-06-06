@@ -11,9 +11,7 @@ pub fn python_language_config() -> TSLanguageConfig {
             .into_iter()
             .map(|s| s.to_owned())
             .collect()],
-        documentation_query: vec!["(expression_statement
-                (string) @docComment"
-            .to_owned()],
+        documentation_query: vec!["(expression_statement (string) @comment)".to_owned()],
         function_query: vec![
             "[
                 (function_definition

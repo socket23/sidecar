@@ -125,9 +125,7 @@ impl PareaClient {
             "evaluation_metric_names": vec!["XML Checker"],
         });
 
-        println!("{:?}", &body);
-
-        let response = self
+        let _ = self
             .client
             .post(url)
             .header("Content-Type", "application/json")

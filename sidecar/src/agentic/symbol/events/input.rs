@@ -82,6 +82,7 @@ impl SymbolInputEvent {
                 self.repo_map_fs_path.expect("has_repo_map to not break"),
             )
             .await;
+            println!("repo_map_contents: {}", contents.is_ok());
             match contents {
                 Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
                     contents,

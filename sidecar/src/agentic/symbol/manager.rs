@@ -118,19 +118,20 @@ impl SymbolManager {
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
         let user_context = input_event.provided_context().clone();
         let request_id = uuid::Uuid::new_v4().to_string();
-        self.ui_sender.send(UIEventWithID::for_codebase_event(
+        let _ = self.ui_sender.send(UIEventWithID::for_codebase_event(
             request_id.to_owned(),
             input_event.clone(),
         ));
         let tool_input = input_event.tool_use_on_initial_invocation().await;
-        println!("{:?}", &tool_input);
+        println!("Tool input: {:?}", &tool_input);
         if let Some(tool_input) = tool_input {
             // send the tool input to the ui sender
             let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
                 request_id.to_owned(),
                 tool_input.clone(),
             ));
-            if let ToolOutput::ImportantSymbols(important_symbols) = self
+            if let ToolOutput::ImportantSymbols(important_symbols)
+            | ToolOutput::RepoMapSearch(important_symbols) = self
                 .tools
                 .invoke(tool_input)
                 .await

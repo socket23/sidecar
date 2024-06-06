@@ -365,12 +365,22 @@ impl MechaCodeSymbolThinking {
     }
 
     pub async fn steps(&self) -> Vec<String> {
-        self.steps
+        println!(
+            "mecha_code_symbol_thinking::steps::being({})",
+            &self.symbol_name()
+        );
+        let results = self
+            .steps
             .lock()
             .await
             .iter()
             .map(|step| step.to_owned())
-            .collect()
+            .collect::<Vec<_>>();
+        println!(
+            "mecha_code_symbol_thinking::steps::end({})",
+            &self.symbol_name(),
+        );
+        results
     }
 
     pub fn is_new(&self) -> bool {
@@ -418,6 +428,10 @@ impl MechaCodeSymbolThinking {
             .iter()
             .map(|snippet| snippet.clone())
             .collect::<Vec<_>>();
+        println!(
+            "mecha_code_symbol_thinking::get_implementations::get_snippet({})",
+            &self.symbol_name()
+        );
         let self_implementation = self.get_snippet().await;
         if let Some(snippet) = self_implementation {
             implementations.push(snippet);
@@ -437,8 +451,16 @@ impl MechaCodeSymbolThinking {
         llm_properties: LLMProperties,
         request_id: String,
     ) -> Result<SymbolEventRequest, SymbolError> {
+        println!(
+            "mecha_code_symbol_thinking::symbol_name({})",
+            self.symbol_name()
+        );
         // TODO(skcd): We need to generate the implementation always
         let steps = self.steps().await;
+        println!(
+            "mecha_code_symbol_thinking::steps_end({})",
+            self.symbol_name()
+        );
         if self.is_snippet_present().await {
             // This is what we are trying to figure out
             // the idea representation here will be in the form of
@@ -468,9 +490,17 @@ impl MechaCodeSymbolThinking {
             // and get back the snippet indexes
             // and then we parse it back from here to get back to the symbol
             // we are interested in
+            println!(
+                "mecha_code_symbol_thinking::llm_request::start({})",
+                self.symbol_name()
+            );
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request().await {
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us
+                println!(
+                    "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::start({})",
+                    self.symbol_name(),
+                );
                 let filtered_list = tool_box
                     .filter_code_snippets_in_symbol_for_editing(
                         ranked_xml_list,
@@ -574,7 +604,19 @@ Reason to edit:
     // idx -> (Range + FS_FILE_PATH + is_outline)
     // fin
     pub async fn to_llm_request(&self) -> Option<(String, Vec<SnippetReRankInformation>)> {
-        if let Some(snippet) = self.snippet.lock().await.as_ref() {
+        let snippet_maybe = {
+            // take owernship of the snippet over here
+            self.snippet
+                .lock()
+                .await
+                .as_ref()
+                .map(|snippet| snippet.clone())
+        };
+        if let Some(snippet) = snippet_maybe {
+            println!(
+                "mecha_code_symbol_thinking::to_llm_request::symbol_as_ref({})",
+                &self.symbol_name()
+            );
             let is_function = snippet
                 .outline_node_content
                 .outline_node_type()

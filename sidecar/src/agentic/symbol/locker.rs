@@ -154,7 +154,7 @@ impl SymbolLocker {
         {
             if let Some(symbol) = self.symbols.lock().await.get(&symbol_identifier) {
                 let response = symbol.send((request.remove_event(), request_id, sender));
-                println!("{:?}", response.is_err());
+                println!("Request sending erorr: {:?}", response.is_err());
             }
         }
     }
@@ -176,8 +176,14 @@ impl SymbolLocker {
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>();
         {
+            println!("create_symbol_agent: {}", symbol_identifier.symbol_name());
             let mut symbols = self.symbols.lock().await;
             symbols.insert(symbol_identifier.clone(), sender);
+            println!(
+                "self.symbols.contains(&{}):({})",
+                &symbol_identifier.symbol_name(),
+                symbols.get(&symbol_identifier).is_some(),
+            );
         }
 
         // now we create the symbol and let it rip

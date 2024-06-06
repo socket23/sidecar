@@ -100,6 +100,11 @@ impl SymbolLocker {
             }
         }
 
+        dbg!(format!(
+            "Symbol: {:?} is up? {}",
+            &symbol_identifier, does_exist
+        ));
+
         if !does_exist {
             if let Some(fs_file_path) = symbol_identifier.fs_file_path() {
                 // grab the snippet for this symbol

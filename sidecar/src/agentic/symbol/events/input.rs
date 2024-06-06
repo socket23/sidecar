@@ -30,6 +30,7 @@ pub struct SymbolInputEvent {
     repo_map_fs_path: Option<String>,
     gcloud_access_token: Option<String>,
     swe_bench_id: Option<String>,
+    swe_bench_git_dname: Option<String>,
 }
 
 impl SymbolInputEvent {
@@ -43,6 +44,7 @@ impl SymbolInputEvent {
         repo_map_fs_path: Option<String>,
         gcloud_access_token: Option<String>,
         swe_bench_id: Option<String>,
+        swe_bench_git_dname: Option<String>,
     ) -> Self {
         Self {
             context,
@@ -54,7 +56,12 @@ impl SymbolInputEvent {
             repo_map_fs_path,
             gcloud_access_token,
             swe_bench_id,
+            swe_bench_git_dname,
         }
+    }
+
+    pub fn get_swe_bench_git_dname(&self) -> Option<String> {
+        self.swe_bench_git_dname.clone()
     }
 
     pub fn set_swe_bench_id(mut self, swe_bench_id: String) -> Self {

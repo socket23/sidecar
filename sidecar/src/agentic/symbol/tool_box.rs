@@ -2577,9 +2577,11 @@ Please handle these changes as required."#
         // so we can contain the logic in a single place
         for (_, mut code_snippet) in final_code_snippets.into_iter() {
             // we always open the document before asking for an outline
+            println!("sending request to open file");
             let file_open_result = self
                 .file_open(code_snippet.fs_file_path().to_owned(), request_id)
                 .await?;
+            println!("file open response back");
             println!("{:?}", file_open_result);
             let language = file_open_result.language().to_owned();
             // we add the document for parsing over here

@@ -126,6 +126,7 @@ impl SymbolManager {
             input_event.clone(),
         ));
         let swe_bench_id = input_event.swe_bench_instance_id();
+        let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
         println!("Tool input: {:?}", &tool_input);
         if let Some(tool_input) = tool_input {
@@ -137,10 +138,20 @@ impl SymbolManager {
                 tool_input.clone(),
             ));
             let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
-                self.long_context_cache.check_cache(&swe_bench_id).await
+                let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
+                if let Some(git_dname) = swe_bench_git_dname {
+                    match symbols {
+                        Some(symbols) => Some(symbols),
+                        None => None,
+                    }
+                } else {
+                    symbols
+                }
             } else {
                 None
             };
+
+            println!("{:?}", &important_symbols);
             let tool_output = match important_symbols {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
                 None => self

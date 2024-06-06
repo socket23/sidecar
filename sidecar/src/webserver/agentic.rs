@@ -169,6 +169,7 @@ pub async fn swe_bench(
                     repo_map_file,
                     Some(gcloud_access_token),
                     None,
+                    None,
                 )
                 .set_swe_bench_id(swe_bench_id),
             )

@@ -731,6 +731,11 @@ impl CodeSymbolWithThinking {
         }
     }
 
+    pub fn fs_prefix(mut self, fs_prefix: &str) -> Self {
+        self.file_path = fs_prefix.to_owned() + "/" + &self.file_path;
+        self
+    }
+
     pub fn code_symbol(&self) -> &str {
         &self.code_symbol
     }
@@ -760,6 +765,11 @@ impl CodeSymbolWithSteps {
             is_new,
             file_path,
         }
+    }
+
+    pub fn fs_prefix(mut self, fs_prefix: &str) -> Self {
+        self.file_path = fs_prefix.to_owned() + "/" + &self.file_path;
+        self
     }
 
     pub fn code_symbol(&self) -> &str {
@@ -793,6 +803,23 @@ impl CodeSymbolImportantResponse {
         Self {
             symbols,
             ordered_symbols,
+        }
+    }
+
+    pub fn add_fs_prefix(self, fs_prefix: String) -> Self {
+        let symbols = self.symbols;
+        let ordered_symbols = self.ordered_symbols;
+        let mod_symbols = symbols
+            .into_iter()
+            .map(|symbol| symbol.fs_prefix(&fs_prefix))
+            .collect::<Vec<_>>();
+        let mod_ordered_symbols = ordered_symbols
+            .into_iter()
+            .map(|ordered_symbol| ordered_symbol.fs_prefix(&fs_prefix))
+            .collect::<Vec<_>>();
+        Self {
+            symbols: mod_symbols,
+            ordered_symbols: mod_ordered_symbols,
         }
     }
 

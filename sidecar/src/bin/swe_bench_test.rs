@@ -81,17 +81,19 @@ async fn main() {
         user_context.clone(),
     );
 
-    tokio::spawn(async move {
-        let mut child = Command::new("/Users/skcd/scratch/swe_bench/swe_bench/bin/python3")
-            .arg("/Users/skcd/scratch/swe_bench/run_editor_for_instance.py")
-            .arg("django__django-11179")
-            .arg("/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5")
-            .stdout(std::process::Stdio::piped())
-            .spawn()
-            .expect("to work");
-        // busy waiting on the child
-        let _ = child.wait().await;
-    });
+    // tokio::spawn(async move {
+    //     let mut child = Command::new("/Users/skcd/scratch/swe_bench/swe_bench/bin/python3")
+    //         .arg("/Users/skcd/scratch/swe_bench/run_editor_for_instance.py")
+    //         .arg("django__django-11179")
+    //         .arg("/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5")
+    //         .stdout(std::process::Stdio::piped())
+    //         .spawn()
+    //         .expect("to work");
+    //     // busy waiting on the child
+    //     let _ = child.wait().await;
+    //     let _ = child.kill().await;
+    //     drop(child);
+    // });
 
     let problem_statement = r#"delete() on instances of models without any dependencies doesn't clear PKs.
 
@@ -113,8 +115,9 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
         problem_statement,
         Some("http://localhost:6897/run_tests".to_owned()),
         Some("/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpu88w4cw3".to_owned()),
-        Some("ya29.a0AXooCgt_BiTCT9QBPN-xpsT3QJj6h6rgAFFiZJV_8NOyaK2KjxE8eI9OgVTE83rhJoh_oqEBGBWbYWiDR1YHw_lQJ7dtSWRZRPsngHOy5iVzrpAtxY9cuBDa5aPg_ZNKbR4rcnttYDWvociuzlcv8m-HOPhZIyJoMhtFJdZKJGNLaCgYKAbESARESFQHGX2MiZF_klhi8iTdvsK7l4TicOQ0179".to_owned()),
+        Some("ya29.a0AXooCgv9vCDMv9wGF9hJnmwMDDfYEzdNwJ9jLHbV8S0XX4GOXYalAERzhLFDyAFLIUt7RxZcXurywd_UcdULC1Yr2SysS319hoiODTlG12x-t1IhQ1nuQn887s6DDdCzVIJD18Kq82G9Oik1hqTTQG-PK_olRacbw2yBgC0UTtGoaCgYKAeISARESFQHGX2MiwHOmoW66tYc9cCb-93HK0w0179".to_owned()),
         Some("django__django-11179".to_owned()),
+        Some("/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5".to_owned()),
     );
     let mut probe_task = Box::pin(symbol_manager.initial_request(initial_request));
 

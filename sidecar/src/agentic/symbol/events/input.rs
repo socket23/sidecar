@@ -10,8 +10,7 @@ use llm_client::{
 use crate::{
     agentic::tool::{
         code_symbol::{
-            important::CodeSymbolImportantWideSearch,
-            repo_map_search::{RepoMapSearch, RepoMapSearchQuery},
+            important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
         },
         input::ToolInput,
     },

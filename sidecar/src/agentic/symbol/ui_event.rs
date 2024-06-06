@@ -2,7 +2,7 @@
 //! debugging and having better visibility to what ever is happening
 //! in the symbols
 
-use crate::agentic::tool::{filtering::broker::CodeToProbeFilterResponse, input::ToolInput};
+use crate::agentic::tool::input::ToolInput;
 
 use super::{
     events::input::SymbolInputEvent,

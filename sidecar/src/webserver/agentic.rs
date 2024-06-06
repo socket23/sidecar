@@ -165,6 +165,7 @@ pub async fn swe_bench(
                 Some(test_endpoint),
                 repo_map_file,
                 Some(gcloud_access_token),
+                None,
             ))
             .await;
     });

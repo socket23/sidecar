@@ -7,6 +7,7 @@ use std::sync::Arc;
 use futures::{stream, StreamExt};
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
 use crate::agentic::tool::base::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::user_context::types::UserContext;
@@ -44,6 +45,7 @@ pub struct SymbolManager {
     editor_url: String,
     llm_properties: LLMProperties,
     ui_sender: UnboundedSender<UIEventWithID>,
+    long_context_cache: LongContextSearchCache,
 }
 
 impl SymbolManager {
@@ -97,6 +99,7 @@ impl SymbolManager {
             editor_url,
             llm_properties,
             ui_sender,
+            long_context_cache: LongContextSearchCache::new(),
         }
     }
 
@@ -122,22 +125,41 @@ impl SymbolManager {
             request_id.to_owned(),
             input_event.clone(),
         ));
+        let swe_bench_id = input_event.swe_bench_instance_id();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
         println!("Tool input: {:?}", &tool_input);
         if let Some(tool_input) = tool_input {
             // send the tool input to the ui sender
+            // we need some kind of cache here so we do not invoke the expensive
+            // query so many times
             let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
                 request_id.to_owned(),
                 tool_input.clone(),
             ));
+            let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
+                self.long_context_cache.check_cache(&swe_bench_id).await
+            } else {
+                None
+            };
+            let tool_output = match important_symbols {
+                Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
+                None => self
+                    .tools
+                    .invoke(tool_input)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?,
+            };
             if let ToolOutput::ImportantSymbols(important_symbols)
-            | ToolOutput::RepoMapSearch(important_symbols) = self
-                .tools
-                .invoke(tool_input)
-                .await
-                .map_err(|e| SymbolError::ToolError(e))?
+            | ToolOutput::RepoMapSearch(important_symbols) = tool_output
             {
+                // swe bench caching hit over here we just do it
+                self.long_context_cache
+                    .update_cache(swe_bench_id, &important_symbols)
+                    .await;
+
+                // Debug printing
                 println!("{:?}", &important_symbols);
+
                 let symbols = self
                     .tool_box
                     .important_symbols(important_symbols, user_context, &request_id)

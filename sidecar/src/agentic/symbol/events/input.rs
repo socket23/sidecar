@@ -25,11 +25,11 @@ pub struct SymbolInputEvent {
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
     user_query: String,
-    // We have to use these 2 properties when hacking together the flow
-    // for swe bench
+    // Here we have properties for swe bench which we are sending for testing
     swe_bench_test_endpoint: Option<String>,
     repo_map_fs_path: Option<String>,
     gcloud_access_token: Option<String>,
+    swe_bench_id: Option<String>,
 }
 
 impl SymbolInputEvent {
@@ -42,6 +42,7 @@ impl SymbolInputEvent {
         swe_bench_test_endpoint: Option<String>,
         repo_map_fs_path: Option<String>,
         gcloud_access_token: Option<String>,
+        swe_bench_id: Option<String>,
     ) -> Self {
         Self {
             context,
@@ -52,7 +53,12 @@ impl SymbolInputEvent {
             swe_bench_test_endpoint,
             repo_map_fs_path,
             gcloud_access_token,
+            swe_bench_id,
         }
+    }
+
+    pub fn swe_bench_instance_id(&self) -> Option<String> {
+        self.swe_bench_id.clone()
     }
 
     pub fn provided_context(&self) -> &UserContext {

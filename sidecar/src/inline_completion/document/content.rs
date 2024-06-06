@@ -168,13 +168,13 @@ impl SnippetInformation {
     pub fn merge_snippets(self, after: Self) -> Self {
         let start_line = self.start_line;
         let end_line = after.end_line;
-        dbg!(
-            "merge_snippets",
-            self.start_line,
-            self.end_line,
-            after.start_line,
-            after.end_line
-        );
+        // dbg!(
+        //     "merge_snippets",
+        //     self.start_line,
+        //     self.end_line,
+        //     after.start_line,
+        //     after.end_line
+        // );
         let current_snippet_lines = self
             .snippet_lines
             .iter()
@@ -568,11 +568,11 @@ impl DocumentEditLines {
                     + &end_line_suffix.into_iter().collect::<String>();
             }
             // which lines are we draining in between?
-            dbg!(
-                "sidecar.drain_lines.remove_range",
-                &start_line + 1,
-                &end_line + 1
-            );
+            // dbg!(
+            //     "sidecar.drain_lines.remove_range",
+            //     &start_line + 1,
+            //     &end_line + 1
+            // );
             // remove the lines in between the start line and the end line
             self.lines.drain(start_line + 1..end_line + 1);
         }
@@ -617,7 +617,7 @@ impl DocumentEditLines {
                 first_changed_line.line_status = DocumentLineStatus::Unedited;
             }
         });
-        dbg!("sidecar.insert_at_position", &new_lines);
+        // dbg!("sidecar.insert_at_position", &new_lines);
         // we also need to remove the line at the current line number
         self.lines.remove(position.line());
         // now we add back the lines which need to be inserted
@@ -750,7 +750,7 @@ impl DocumentEditLines {
         // upon
         let instant = std::time::Instant::now();
         self.set_tree();
-        dbg!("document_lines.set_tree", &instant.elapsed());
+        // dbg!("document_lines.set_tree", &instant.elapsed());
         // we need to create ths symbol map here for the file so we can lookup the symbols
         // and add the skeleton of it to the inline completion
 
@@ -765,7 +765,7 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
-        dbg!("document_lines.function_information", &instant.elapsed());
+        // dbg!("document_lines.function_information", &instant.elapsed());
 
         self.outline_nodes = if let (Some(language_config), Some(tree)) = (
             self.editor_parsing.for_file_path(&self.file_path),
@@ -775,11 +775,11 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
-        dbg!(
-            "document_lines.generate_outline",
-            &instant.elapsed(),
-            &self.outline_nodes.len()
-        );
+        // dbg!(
+        //     "document_lines.generate_outline",
+        //     &instant.elapsed(),
+        //     &self.outline_nodes.len()
+        // );
 
         self.import_identifier_nodes = if let (Some(language_config), Some(tree)) = (
             self.editor_parsing.for_file_path(&self.file_path),
@@ -789,7 +789,7 @@ impl DocumentEditLines {
         } else {
             vec![]
         };
-        dbg!("document_lines.import_identifier_nodes", &instant.elapsed());
+        // dbg!("document_lines.import_identifier_nodes", &instant.elapsed());
 
         // check for nodes which have been changed and belong to the range that
         // was inserted, we need to check here in a heriarchial way putting important
@@ -806,7 +806,7 @@ impl DocumentEditLines {
             vec![]
         };
         // what are we doing over here and why is it slow???
-        dbg!("document_lines.changed_outline_nodes", &instant.elapsed());
+        // dbg!("document_lines.changed_outline_nodes", &instant.elapsed());
 
         // after filtered content we have to grab the sliding window context, we generate the windows
         // we have some interesting things we can do while generating the code context
@@ -816,10 +816,10 @@ impl DocumentEditLines {
                 .map(|line| line.to_owned())
                 .collect::<Vec<_>>(),
         );
-        dbg!(
-            "document_lines.snippets_using_sliding_window",
-            &instant.elapsed()
-        );
+        // dbg!(
+        //     "document_lines.snippets_using_sliding_window",
+        //     &instant.elapsed()
+        // );
 
         changed_outline_nodes
     }
@@ -833,17 +833,17 @@ impl DocumentEditLines {
         timestamp: i64,
     ) -> Vec<OutlineNode> {
         let instant = std::time::Instant::now();
-        dbg!("content.change", &range, &new_content);
+        // dbg!("content.change", &range, &new_content);
         self.remove_range(range);
-        dbg!("content.removed", &instant.elapsed());
+        // dbg!("content.removed", &instant.elapsed());
         // Then we insert the new content at the range
         self.insert_at_position(range.start_position(), new_content, timestamp);
-        dbg!("content.insert_at_position", &instant.elapsed());
+        // dbg!("content.insert_at_position", &instant.elapsed());
         // We want to get the code snippets here and make sure that the edited code snippets
         // are together when creating the window
         let outline_nodes = self.generate_snippets(Some(range));
         // is it still slow
-        dbg!("content.generate_snippets", &instant.elapsed());
+        // dbg!("content.generate_snippets", &instant.elapsed());
         outline_nodes
     }
 

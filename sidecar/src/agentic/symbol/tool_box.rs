@@ -2614,6 +2614,8 @@ Please handle these changes as required."#
                 // if there are no outline nodes, then we have to skip this part
                 // and keep going
                 if outline_nodes.is_empty() {
+                    // Let's not do anything over here
+                    continue;
                     // here we need to do go-to-definition
                     // first we check where the symbol is present on the file
                     // and we can use goto-definition

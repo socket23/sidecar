@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use serde_xml_rs::from_str;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use llm_client::{
     broker::LLMBroker,
@@ -1127,12 +1130,14 @@ Code location: {code_location}:{start_line}-{end_line}
             .into_iter()
             .enumerate()
             .collect::<HashMap<usize, &Snippet>>();
+        let mut code_to_edit_ids: HashSet<usize> = Default::default();
         let code_to_edit_list = code_to_edit_list
             .snippets()
             .into_iter()
             .filter_map(|code_to_edit| {
                 let snippet = snippet_mapping.get(&code_to_edit.id());
                 if let Some(snippet) = snippet {
+                    code_to_edit_ids.insert(code_to_edit.id());
                     Some(SnippetWithReason::new(
                         (*snippet).clone(),
                         code_to_edit.reason_to_edit().to_owned(),
@@ -1147,6 +1152,12 @@ Code location: {code_location}:{start_line}-{end_line}
             .into_iter()
             .filter_map(|code_to_not_edit| {
                 let snippet = snippet_mapping.get(&code_to_not_edit.id());
+                // If we have this in the list of code snippets to edit, then we
+                // do not need to contain it in the list for code_to_not_edit
+                // ideally the LLM does not make mistakes like this, but it does
+                if code_to_edit_ids.contains(&code_to_not_edit.id()) {
+                    return None;
+                }
                 if let Some(snippet) = snippet {
                     Some(SnippetWithReason::new(
                         (*snippet).clone(),

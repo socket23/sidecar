@@ -12,10 +12,7 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
-            events::{input::SymbolInputEvent, probe::SymbolToProbeRequest},
-            identifier::{LLMProperties, SymbolIdentifier},
-            manager::SymbolManager,
-            types::SymbolEventRequest,
+            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
         },
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
@@ -24,7 +21,6 @@ use sidecar::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
     user_context::types::UserContext,
 };
-use tokio::process::Command;
 
 fn default_index_dir() -> PathBuf {
     match directories::ProjectDirs::from("ai", "codestory", "sidecar") {

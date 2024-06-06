@@ -10,6 +10,7 @@ use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_edit::types::CodeEdit;
+use crate::agentic::tool::code_symbol;
 use crate::agentic::tool::code_symbol::correctness::{
     CodeCorrectnessAction, CodeCorrectnessRequest,
 };
@@ -2575,14 +2576,11 @@ Please handle these changes as required."#
 
         // TODO(skcd): Refactor the code below to be the same as find_snippet_for_symbol
         // so we can contain the logic in a single place
-        for (_, mut code_snippet) in final_code_snippets.into_iter() {
+        for (_, code_snippet) in final_code_snippets.into_iter() {
             // we always open the document before asking for an outline
-            println!("sending request to open file");
             let file_open_result = self
                 .file_open(code_snippet.fs_file_path().to_owned(), request_id)
                 .await?;
-            println!("file open response back");
-            println!("{:?}", file_open_result);
             let language = file_open_result.language().to_owned();
             // we add the document for parsing over here
             self.symbol_broker
@@ -2606,6 +2604,12 @@ Please handle these changes as required."#
             if let Some(outline_nodes) = outline_nodes {
                 let mut outline_nodes =
                     self.grab_symbols_from_outline(outline_nodes, code_snippet.symbol_name());
+
+                dbg!(
+                    "outline nodes: {} {}",
+                    outline_nodes.len(),
+                    code_snippet.symbol_name()
+                );
 
                 // if there are no outline nodes, then we have to skip this part
                 // and keep going
@@ -2631,6 +2635,11 @@ Please handle these changes as required."#
                         .map(|find_in_file| find_in_file.get_position())
                         .ok()
                         .flatten();
+                    println!(
+                        "Find in file for symbol_name: {} is {:?}",
+                        code_snippet.symbol_name().to_owned(),
+                        &find_in_file
+                    );
                     // now that we have a poition, we can ask for go-to-definition
                     if let Some(file_position) = find_in_file {
                         let definition = self
@@ -2640,6 +2649,7 @@ Please handle these changes as required."#
                                 request_id,
                             )
                             .await?;
+                        dbg!("We have some definitions");
                         // let definition_file_path = definition.file_path().to_owned();
                         let snippet_node = self
                             .grab_symbol_content_from_definition(
@@ -2648,6 +2658,7 @@ Please handle these changes as required."#
                                 request_id,
                             )
                             .await?;
+                        dbg!("we have a snippet node for this");
                         code_snippet.set_snippet(snippet_node).await;
                     }
                 } else {

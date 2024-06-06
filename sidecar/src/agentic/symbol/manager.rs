@@ -8,6 +8,8 @@ use futures::{stream, StreamExt};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
+use crate::agentic::symbol::events::initial_request::InitialRequestData;
+use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::tool::base::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::user_context::types::UserContext;
@@ -127,6 +129,7 @@ impl SymbolManager {
         ));
         let swe_bench_id = input_event.swe_bench_instance_id();
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
+        let user_query = input_event.user_query().to_owned();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
         println!("Tool input: {:?}", &tool_input);
         if let Some(tool_input) = tool_input {
@@ -179,20 +182,53 @@ impl SymbolManager {
                 println!("Symbols over here: {:?}", &symbols);
                 let request_id_ref = &request_id;
                 // This is where we are creating all the symbols
-                let _ = stream::iter(symbols)
+                let symbol_identifiers = stream::iter(symbols)
                     .map(|symbol_request| async move {
-                        let _ = self
+                        let symbol_identifier = self
                             .symbol_locker
                             .create_symbol_agent(symbol_request, request_id_ref.to_owned())
                             .await;
+                        symbol_identifier
                     })
                     .buffer_unordered(100)
                     .collect::<Vec<_>>()
-                    .await;
+                    .await
+                    .into_iter()
+                    .filter_map(|s| s.ok())
+                    .collect::<Vec<_>>();
 
                 // Once we have the symbols spinning up, we send them the original request
                 // which the user had and send it over and then we can await on all of them
                 // working at the same time.
+                let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
+                    (
+                        symbol_identifier.clone(),
+                        request_id_ref.to_owned(),
+                        SymbolEventRequest::new(
+                            symbol_identifier,
+                            SymbolEvent::InitialRequest(InitialRequestData::new(
+                                user_query.to_owned(),
+                            )),
+                        ),
+                    )
+                }))
+                .map(
+                    |(symbol_identifier, request_id, symbol_event_request)| async move {
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        self.symbol_locker
+                            .process_request((symbol_event_request, request_id, sender))
+                            .await;
+                        let response = receiver.await;
+                        dbg!(
+                            "For symbol identifier: {:?} the response is {:?}",
+                            &symbol_identifier,
+                            &response
+                        );
+                    },
+                )
+                .buffer_unordered(100)
+                .collect::<Vec<_>>()
+                .await;
             }
         } else {
             // We are for some reason not even invoking the first passage which is

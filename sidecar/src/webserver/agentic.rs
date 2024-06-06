@@ -112,6 +112,7 @@ pub struct SWEBenchRequest {
     // This is the file path with the repo map present in it
     repo_map_file: Option<String>,
     gcloud_access_token: String,
+    swe_bench_id: String,
 }
 
 pub async fn swe_bench(
@@ -122,6 +123,7 @@ pub async fn swe_bench(
         test_endpoint,
         repo_map_file,
         gcloud_access_token,
+        swe_bench_id,
     }): axumQuery<SWEBenchRequest>,
     Extension(app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
@@ -156,17 +158,20 @@ pub async fn swe_bench(
     // before
     tokio::spawn(async move {
         let _ = symbol_manager
-            .initial_request(SymbolInputEvent::new(
-                user_context,
-                model,
-                provider_type,
-                anthropic_api_keys,
-                problem_statement,
-                Some(test_endpoint),
-                repo_map_file,
-                Some(gcloud_access_token),
-                None,
-            ))
+            .initial_request(
+                SymbolInputEvent::new(
+                    user_context,
+                    model,
+                    provider_type,
+                    anthropic_api_keys,
+                    problem_statement,
+                    Some(test_endpoint),
+                    repo_map_file,
+                    Some(gcloud_access_token),
+                    None,
+                )
+                .set_swe_bench_id(swe_bench_id),
+            )
             .await;
     });
     let event_stream = Sse::new(

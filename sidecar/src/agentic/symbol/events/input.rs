@@ -57,6 +57,11 @@ impl SymbolInputEvent {
         }
     }
 
+    pub fn set_swe_bench_id(mut self, swe_bench_id: String) -> Self {
+        self.swe_bench_id = Some(swe_bench_id);
+        self
+    }
+
     pub fn swe_bench_instance_id(&self) -> Option<String> {
         self.swe_bench_id.clone()
     }

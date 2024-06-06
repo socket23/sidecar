@@ -158,13 +158,14 @@ impl SymbolManager {
                     .await;
 
                 // Debug printing
-                println!("{:?}", &important_symbols);
+                println!("Important symbols: {:?}", &important_symbols);
 
                 let symbols = self
                     .tool_box
                     .important_symbols(important_symbols, user_context, &request_id)
                     .await
                     .map_err(|e| e.into())?;
+                println!("Symbols over here: {:?}", &symbols);
                 let request_id_ref = &request_id;
                 // This is where we are creating all the symbols
                 let _ = stream::iter(symbols)

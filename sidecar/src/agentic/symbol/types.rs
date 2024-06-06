@@ -1004,22 +1004,29 @@ impl Symbol {
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
         let request_id_ref = &request_id;
+        println!(
+            "symbol::edit_implementations::sub_symbols::({}).len({})",
+            self.symbol_name(),
+            sub_symbols_to_edit.len()
+        );
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
-            let context_for_editing = self
-                .grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
-                .await?;
+            let context_for_editing = dbg!(
+                self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                    .await
+            )?;
             // always return the original code which was present here in case of rollbacks
-            let edited_code = self
-                .edit_code(
+            let edited_code = dbg!(
+                self.edit_code(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),
                     &request_id,
                 )
-                .await?;
+                .await
+            )?;
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
             // debugging loop after this
@@ -1075,6 +1082,11 @@ impl Symbol {
             .map(|symbol_event| (symbol_event, self.clone()))
             .map(|(symbol_event, symbol)| async move {
                 let (event, request_id, sender) = symbol_event;
+                println!(
+                    "Symbol::receiver_stream::event::({})\n{:?}",
+                    symbol.symbol_name(),
+                    &event
+                );
                 let _ = symbol.ui_sender.send(UIEventWithID::from_symbol_event(
                     request_id.to_owned(),
                     SymbolEventRequest::new(symbol.symbol_identifier.clone(), event.clone()),
@@ -1104,7 +1116,8 @@ impl Symbol {
                                     uuid::Uuid::new_v4().to_string(),
                                     sender,
                                 ));
-                                let _response = receiver.await;
+                                let response = receiver.await;
+                                println!("Response from symbol.hub_sender: {:?}", &response);
                                 // ideally we want to give this resopnse back to the symbol
                                 // so it can keep track of everything that its doing, we will get to that
                                 let _ = request_sender.send(SymbolEventResponse::TaskDone(
@@ -1117,11 +1130,19 @@ impl Symbol {
                     }
                     SymbolEvent::Edit(edit_request) => {
                         // we refresh our state always
+                        println!(
+                            "symbol::types::symbol_event::edit::refresh_state({})",
+                            symbol.symbol_name()
+                        );
                         symbol.refresh_state(request_id.to_owned()).await;
                         // one of the primary goals here is that we can make edits
                         // everywhere at the same time unless its on the same file
                         // but for now, we are gonna pleb our way and make edits
                         // one by one
+                        println!(
+                            "symbol::types::symbol_event::edit::edit_implementations({})",
+                            symbol.symbol_name()
+                        );
                         symbol.edit_implementations(edit_request, request_id).await
                     }
                     SymbolEvent::AskQuestion(ask_question_request) => {

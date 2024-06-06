@@ -90,20 +90,17 @@ impl SymbolLocker {
         let request_id = request_event.1;
         let sender = request_event.2;
         let symbol_identifier = request.symbol().clone();
-        let mut does_exist = false;
-        {
-            if self.symbols.lock().await.get(&symbol_identifier).is_none() {
+        let does_exist = {
+            if self.symbols.lock().await.get(&symbol_identifier).is_some() {
                 // if symbol already exists then we can just forward it to the symbol
+                true
             } else {
-                does_exist = false;
                 // the symbol does not exist and we have to create it first and then send it over
+                false
             }
-        }
+        };
 
-        dbg!(format!(
-            "Symbol: {:?} is up? {}",
-            &symbol_identifier, does_exist
-        ));
+        println!("Symbol: {:?} is up? {}", &symbol_identifier, does_exist);
 
         if !does_exist {
             if let Some(fs_file_path) = symbol_identifier.fs_file_path() {

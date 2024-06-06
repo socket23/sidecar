@@ -87,9 +87,11 @@ impl SymbolManager {
             // TODO(skcd): Make this run in full parallelism in the future, for
             // now this is fine
             while let Some(event) = receiver.recv().await {
+                println!("symbol_manager::tokio::spawn::receiver_event");
                 // let _ = cloned_ui_sender.send(UIEvent::from(event.0.clone()));
                 let _ = cloned_symbol_locker.process_request(event).await;
             }
+            println!("symbol_manager::tokio::spawn::end");
         });
         Self {
             sender,

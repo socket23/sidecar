@@ -386,6 +386,63 @@ impl Reply {
             .collect();
         CodeSymbolImportantResponse::new(code_symbols_with_thinking, code_symbols_with_steps)
     }
+
+    fn unescape_xml(s: String) -> String {
+        quick_xml::escape::escape(&s).to_string()
+    }
+
+    // Welcome to the jungle and an important lesson on why xml sucks sometimes
+    // &, and < are invalid characters in xml, so we can't simply parse it using
+    // serde cause the xml parser will legit look at these symbols and fail
+    // hard, instead we have to escape these strings properly
+    // and not at everypace (see it gets weird)
+    // we only have to do this inside the <step>{content}</step> tags
+    // so lets get to it
+    // one good thing we know is that because we ask claude to follow this format
+    // it will always give a new line so we can just split into lines and then
+    // do the replacement
+    pub fn cleanup_string(response: &str) -> String {
+        let mut is_inside_step = false;
+        let mut new_lines = vec![];
+        for line in response.lines() {
+            if line == "<step>" {
+                is_inside_step = true;
+                new_lines.push("<step>".to_owned());
+                continue;
+            } else if line == "</step>" {
+                is_inside_step = false;
+                new_lines.push("</step>".to_owned());
+                continue;
+            }
+            if is_inside_step {
+                new_lines.push(Self::unescape_xml(line.to_owned()))
+            } else {
+                new_lines.push(line.to_owned());
+            }
+        }
+        new_lines.join("\n")
+    }
+
+    pub fn parse_response(response: &str) -> Result<Self, CodeSymbolError> {
+        let parsed_response = Self::cleanup_string(response);
+        // we want to grab the section between <reply> and </reply> tags
+        // and then we want to parse the response which is in the following format
+        let lines = parsed_response
+            .lines()
+            .skip_while(|line| !line.contains("<reply>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</reply>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        let reply = format!(
+            r#"<reply>
+{lines}
+</reply>"#
+        );
+        Ok(from_str::<Reply>(&reply)
+            .map(|reply| reply.fix_escaped_string())
+            .map_err(|e| CodeSymbolError::SerdeError(SerdeError::new(e, response.to_owned())))?)
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -5154,59 +5211,6 @@ We have to add the newly created endpoint in inline_completion to add support fo
             .to_string()
     }
 
-    // Welcome to the jungle and an important lesson on why xml sucks sometimes
-    // &, and < are invalid characters in xml, so we can't simply parse it using
-    // serde cause the xml parser will legit look at these symbols and fail
-    // hard, instead we have to escape these strings properly
-    // and not at everypace (see it gets weird)
-    // we only have to do this inside the <step>{content}</step> tags
-    // so lets get to it
-    // one good thing we know is that because we ask claude to follow this format
-    // it will always give a new line so we can just split into lines and then
-    // do the replacement
-    fn cleanup_string(response: &str) -> String {
-        let mut is_inside_step = false;
-        let mut new_lines = vec![];
-        for line in response.lines() {
-            if line == "<step>" {
-                is_inside_step = true;
-                new_lines.push("<step>".to_owned());
-                continue;
-            } else if line == "</step>" {
-                is_inside_step = false;
-                new_lines.push("</step>".to_owned());
-                continue;
-            }
-            if is_inside_step {
-                new_lines.push(Self::unescape_xml(line.to_owned()))
-            } else {
-                new_lines.push(line.to_owned());
-            }
-        }
-        new_lines.join("\n")
-    }
-
-    fn parse_response(response: &str) -> Result<Reply, CodeSymbolError> {
-        let parsed_response = Self::cleanup_string(response);
-        // we want to grab the section between <reply> and </reply> tags
-        // and then we want to parse the response which is in the following format
-        let lines = parsed_response
-            .lines()
-            .skip_while(|line| !line.contains("<reply>"))
-            .skip(1)
-            .take_while(|line| !line.contains("</reply>"))
-            .collect::<Vec<&str>>()
-            .join("\n");
-        let reply = format!(
-            r#"<reply>
-{lines}
-</reply>"#
-        );
-        Ok(from_str::<Reply>(&reply)
-            .map(|reply| reply.fix_escaped_string())
-            .map_err(|e| CodeSymbolError::SerdeError(SerdeError::new(e, response.to_owned())))?)
-    }
-
     async fn user_message_for_codebase_wide_search(
         &self,
         code_symbol_search_context_wide: CodeSymbolImportantWideSearch,
@@ -5511,7 +5515,10 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !code_symbols.model().is_gemini_model() {
+        if !(code_symbols.model().is_gemini_model()
+            || code_symbols.model().is_anthropic()
+            || code_symbols.model().is_openai())
+        {
             return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
         }
         let system_message = LLMClientMessage::system(self.system_message(&code_symbols));
@@ -5537,7 +5544,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             .await
             .map_err(|e| CodeSymbolError::LLMClientError(e))?;
 
-        Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
     }
 
     async fn context_wide_search(
@@ -5570,7 +5577,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 sender,
             )
             .await?;
-        Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
     }
 
     async fn gather_utility_symbols(
@@ -5608,7 +5615,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 sender,
             )
             .await?;
-        Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
     }
 
     // This replies back with more data about what questions to ask further
@@ -5928,7 +5935,7 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
                 sender,
             )
             .await?;
-        Self::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
     }
 }
 
@@ -5938,7 +5945,7 @@ mod tests {
     use serde_xml_rs::from_str;
 
     use crate::agentic::tool::code_symbol::models::anthropic::{
-        AskQuestionSymbolHint, CodeSymbolToAskQuestionsSymboList,
+        AskQuestionSymbolHint, CodeSymbolToAskQuestionsSymboList, Reply,
     };
 
     use super::{
@@ -6119,7 +6126,7 @@ pub async fn new(config: LLMBrokerConfiguration) -> Result<Self, LLMClientError>
 </step_by_step>
 </reply>"#;
 
-        let parsed_response = AnthropicCodeSymbolImportant::parse_response(reply);
+        let parsed_response = Reply::parse_response(reply);
         assert!(parsed_response.is_ok());
     }
 

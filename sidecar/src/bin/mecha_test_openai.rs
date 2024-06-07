@@ -55,6 +55,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
+        None,
     ));
     let llm_properties = LLMProperties::new(LLMType::Gpt4O, LLMProvider::OpenAI, api_key.clone());
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();

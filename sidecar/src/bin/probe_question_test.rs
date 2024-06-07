@@ -57,6 +57,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
+        None,
     ));
     let _gemini_llm_properties = LLMProperties::new(
         LLMType::GeminiProFlash,

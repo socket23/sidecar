@@ -4,7 +4,8 @@ use std::{collections::HashMap, sync::Arc};
 use llm_client::broker::LLMBroker;
 
 use crate::{
-    chunking::languages::TSLanguageParsing, inline_completion::symbols_tracker::SymbolTrackerInline,
+    agentic::symbol::identifier::LLMProperties, chunking::languages::TSLanguageParsing,
+    inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
 use super::{
@@ -34,6 +35,16 @@ use super::{
     rerank::base::ReRankBroker,
 };
 
+pub struct ToolBrokerConfiguration {
+    editor_agent: Option<LLMProperties>,
+}
+
+impl ToolBrokerConfiguration {
+    pub fn new(editor_agent: Option<LLMProperties>) -> Self {
+        Self { editor_agent }
+    }
+}
+
 // TODO(skcd): We want to use a different serializer and deserializer for this
 // since we are going to be storing an array of tools over here, we have to make
 // sure that we do not store everything about the tool but a representation of it
@@ -47,14 +58,20 @@ impl ToolBroker {
         code_edit_broker: Arc<CodeEditBroker>,
         symbol_tracking: Arc<SymbolTrackerInline>,
         language_broker: Arc<TSLanguageParsing>,
+        tool_broker_config: Option<ToolBrokerConfiguration>,
     ) -> Self {
         let mut tools: HashMap<ToolType, Box<dyn Tool + Send + Sync>> = Default::default();
         tools.insert(
             ToolType::CodeEditing,
-            Box::new(CodeEditingTool::new(
-                llm_client.clone(),
-                code_edit_broker.clone(),
-            )),
+            Box::new(
+                CodeEditingTool::new(llm_client.clone(), code_edit_broker.clone())
+                    .set_editor_config(
+                        tool_broker_config
+                            .map(|tool_broker_config| tool_broker_config.editor_agent)
+                            .clone()
+                            .flatten(),
+                    ),
+            ),
         );
         tools.insert(ToolType::LSPDiagnostics, Box::new(LSPDiagnostics::new()));
         tools.insert(

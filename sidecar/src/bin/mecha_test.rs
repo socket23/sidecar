@@ -58,6 +58,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
+        None,
     ));
     let llm_properties = LLMProperties::new(
         LLMType::ClaudeHaiku,

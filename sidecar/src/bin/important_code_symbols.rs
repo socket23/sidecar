@@ -50,6 +50,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
+        None,
     ));
     let code_wide_search = ToolInput::RequestImportantSybmolsCodeWide(
         CodeSymbolImportantWideSearch::new(

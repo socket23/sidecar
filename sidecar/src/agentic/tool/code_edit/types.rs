@@ -12,7 +12,10 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput};
+use crate::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput},
+};
 
 use super::models::broker::CodeEditBroker;
 
@@ -61,11 +64,25 @@ impl CodeEdit {
 pub struct CodeEditingTool {
     llm_client: Arc<LLMBroker>,
     broker: Arc<CodeEditBroker>,
+    editor_config: Option<LLMProperties>,
 }
 
 impl CodeEditingTool {
     pub fn new(llm_client: Arc<LLMBroker>, broker: Arc<CodeEditBroker>) -> Self {
-        Self { llm_client, broker }
+        Self {
+            llm_client,
+            broker,
+            editor_config: None,
+        }
+    }
+
+    pub fn set_editor_config(mut self, editor_config: Option<LLMProperties>) -> Self {
+        self.editor_config = editor_config;
+        self
+    }
+
+    pub fn get_llm_properties(&self) -> Option<&LLMProperties> {
+        self.editor_config.as_ref()
     }
 
     fn escape_str(line: String) -> String {
@@ -145,14 +162,28 @@ impl Tool for CodeEditingTool {
     // TODO(skcd): Figure out how we want to do streaming here in the future
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let code_edit_context = input.is_code_edit()?;
-        let llm_message = self.broker.format_prompt(&code_edit_context)?;
+        let mut llm_message = self.broker.format_prompt(&code_edit_context)?;
+        if let Some(llm_properties) = self.get_llm_properties() {
+            llm_message = llm_message.set_llm(llm_properties.llm().clone());
+        }
+        let (api_key, provider) = if let Some(llm_properties) = self.get_llm_properties() {
+            (
+                llm_properties.api_key().clone(),
+                llm_properties.provider().clone(),
+            )
+        } else {
+            (
+                code_edit_context.api_key.clone(),
+                code_edit_context.provider.clone(),
+            )
+        };
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let result = self
             .llm_client
             .stream_completion(
-                code_edit_context.api_key,
+                api_key,
                 llm_message,
-                code_edit_context.provider,
+                provider,
                 vec![("request".to_owned(), "code_edit_tool".to_owned())]
                     .into_iter()
                     .collect(),

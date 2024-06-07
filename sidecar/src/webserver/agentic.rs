@@ -51,6 +51,7 @@ pub async fn probe_request(
         Arc::new(CodeEditBroker::new()),
         app.symbol_tracker.clone(),
         app.language_parsing.clone(),
+        None,
     ));
     let provider_keys = model_config
         .provider_for_slow_model()
@@ -133,6 +134,7 @@ pub async fn swe_bench(
         Arc::new(CodeEditBroker::new()),
         app.symbol_tracker.clone(),
         app.language_parsing.clone(),
+        None,
     ));
     let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
     let model = LLMType::ClaudeSonnet;

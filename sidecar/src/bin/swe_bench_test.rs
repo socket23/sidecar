@@ -14,7 +14,10 @@ use sidecar::{
         symbol::{
             events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
         },
-        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
+        tool::{
+            broker::{ToolBroker, ToolBrokerConfiguration},
+            code_edit::models::broker::CodeEditBroker,
+        },
     },
     application::logging::tracing::tracing_subscribe_default,
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
@@ -33,14 +36,31 @@ fn default_index_dir() -> PathBuf {
 async fn main() {
     tracing_subscribe_default();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgt9NksEQHjdLP_iHg5v7d3EBOVhbGXO5wCCczFMd_YQQK0kQoSwHzdI91ySt2aXa1VwcwgmT5ex6xhxYxxoBSbo5kG7pAHsUqDQZdmkBjitAFx_aOy7YSpmJEvjB7lsrNBhxB-q1cGz5gahrcH1iUcIj4GfELPtRp_ixvcaCgYKAfESARESFQHGX2MiD6hvHJAmARsiG8-YqbliXg0178".to_owned(), "anton-390822".to_owned()));
+    let _gemini_llm_properties = LLMProperties::new(
+        LLMType::GeminiProFlash,
+        LLMProvider::GeminiPro,
+        gemini_pro_keys.clone(),
+    );
+    let anthropic_llm_properties = LLMProperties::new(
+        LLMType::ClaudeSonnet,
+        LLMProvider::Anthropic,
+        anthropic_api_keys.clone(),
+    );
+    let code_editing_properties = LLMProperties::new(
+        LLMType::ClaudeOpus,
+        LLMProvider::Anthropic,
+        anthropic_api_keys.clone(),
+    );
+    // this is the current running debuggable editor
     let user_context = UserContext::new(
         vec![],
         vec![],
         None,
         vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
-    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgt9NksEQHjdLP_iHg5v7d3EBOVhbGXO5wCCczFMd_YQQK0kQoSwHzdI91ySt2aXa1VwcwgmT5ex6xhxYxxoBSbo5kG7pAHsUqDQZdmkBjitAFx_aOy7YSpmJEvjB7lsrNBhxB-q1cGz5gahrcH1iUcIj4GfELPtRp_ixvcaCgYKAfESARESFQHGX2MiD6hvHJAmARsiG8-YqbliXg0178".to_owned(), "anton-390822".to_owned()));
-    // this is the current running debuggable editor
+
+    // editor running
     let editor_url = "http://localhost:6897".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
@@ -53,17 +73,8 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
+        Some(ToolBrokerConfiguration::new(Some(code_editing_properties))),
     ));
-    let _gemini_llm_properties = LLMProperties::new(
-        LLMType::GeminiProFlash,
-        LLMProvider::GeminiPro,
-        gemini_pro_keys.clone(),
-    );
-    let anthropic_llm_properties = LLMProperties::new(
-        LLMType::ClaudeSonnet,
-        LLMProvider::Anthropic,
-        anthropic_api_keys.clone(),
-    );
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let symbol_manager = SymbolManager::new(

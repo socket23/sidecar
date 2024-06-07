@@ -427,6 +427,11 @@ impl LLMClientCompletionRequest {
         }
     }
 
+    pub fn set_llm(mut self, llm: LLMType) -> Self {
+        self.model = llm;
+        self
+    }
+
     pub fn fix_message_structure(mut self: Self) -> Self {
         // fix here can mean many things, but here we are going to focus on
         // anthropic since there we need alternating human and assistant message

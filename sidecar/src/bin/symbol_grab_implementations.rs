@@ -51,6 +51,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
+        None,
     ));
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();

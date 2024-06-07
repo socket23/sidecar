@@ -877,7 +877,11 @@ impl Symbol {
             .tools
             .get_file_content(&subsymbol.fs_file_path())
             .await?;
-        let symbol_to_edit = self.tools.find_symbol_to_edit(subsymbol).await?;
+        let symbol_to_edit = self.tools.find_sub_symbol_to_edit(subsymbol).await?;
+        println!(
+            "symbol::grab_context_for_editing::symbol_to_edit\n{:?}",
+            &symbol_to_edit
+        );
         let selection_range = symbol_to_edit.range();
         let language = self
             .tools
@@ -970,7 +974,7 @@ impl Symbol {
             .tools
             .get_file_content(&sub_symbol.fs_file_path())
             .await?;
-        let symbol_to_edit = self.tools.find_symbol_to_edit(sub_symbol).await?;
+        let symbol_to_edit = self.tools.find_sub_symbol_to_edit(sub_symbol).await?;
         let content = symbol_to_edit.content().to_owned();
         let response = self
             .tools
@@ -1014,6 +1018,11 @@ impl Symbol {
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
+            println!(
+                "symbol::edit_implementation::sub_symbol_to_edit::({}):\n{:?}",
+                sub_symbol_to_edit.symbol_name(),
+                &sub_symbol_to_edit,
+            );
             let context_for_editing = dbg!(
                 self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
                     .await

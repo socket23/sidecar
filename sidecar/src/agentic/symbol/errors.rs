@@ -43,4 +43,7 @@ pub enum SymbolError {
 
     #[error("Symbol: {0} not found in the line content: {1}")]
     SymbolNotFoundInLine(String, String),
+
+    #[error("Outline node editing not supported")]
+    OutlineNodeEditingNotSupported,
 }

@@ -125,6 +125,8 @@ impl Tool for CodeEditingTool {
                 sender,
             )
             .await
+            // we need to do post-processing here to remove all the gunk
+            // which usually gets added when we are editing code
             .map(|result| ToolOutput::code_edit_output(result))
             .map_err(|e| ToolError::LLMClientError(e))
     }

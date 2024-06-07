@@ -123,6 +123,7 @@ impl SymbolLocker {
                         Some(snippet),
                         vec![],
                         self.user_context.clone(),
+                        self.tools.clone(),
                     );
                     // we create the symbol over here, but what about the context, I want
                     // to pass it to the symbol over here

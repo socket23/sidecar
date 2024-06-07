@@ -4,7 +4,8 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use futures::{future::Shared, lock::Mutex, stream, Future, StreamExt};
+use derivative::Derivative;
+use futures::{lock::Mutex, stream, StreamExt};
 use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
@@ -243,7 +244,8 @@ impl SnippetReRankInformation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct MechaCodeSymbolThinking {
     symbol_name: String,
     steps: Mutex<Vec<String>>,
@@ -256,6 +258,9 @@ pub struct MechaCodeSymbolThinking {
     // This can be updated on the fly when the user provides more context
     // We can think of this as a long term storage
     provided_user_context: UserContext,
+    // The tool box which contains all the tools necessary
+    #[derivative(Debug = "ignore")]
+    tool_box: Arc<ToolBox>,
 }
 
 impl MechaCodeSymbolThinking {
@@ -267,6 +272,7 @@ impl MechaCodeSymbolThinking {
         snippet: Option<Snippet>,
         implementations: Vec<Snippet>,
         provided_user_context: UserContext,
+        tool_box: Arc<ToolBox>,
     ) -> Self {
         Self {
             symbol_name,
@@ -276,6 +282,7 @@ impl MechaCodeSymbolThinking {
             snippet: Mutex::new(snippet),
             implementations: Mutex::new(implementations),
             provided_user_context,
+            tool_box,
         }
     }
 
@@ -305,6 +312,7 @@ impl MechaCodeSymbolThinking {
                 Some(snippet),
                 vec![],
                 provided_user_context,
+                tools,
             )),
             Err(_) => None,
         }
@@ -487,7 +495,8 @@ impl MechaCodeSymbolThinking {
                 "mecha_code_symbol_thinking::llm_request::start({})",
                 self.symbol_name()
             );
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request().await {
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
+            {
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us
                 println!(
@@ -603,7 +612,10 @@ Reason to edit:
     // to look at, the structure I can come up with is something like this:
     // idx -> (Range + FS_FILE_PATH + is_outline)
     // fin
-    pub async fn to_llm_request(&self) -> Option<(String, Vec<SnippetReRankInformation>)> {
+    pub async fn to_llm_request(
+        &self,
+        request_id: &str,
+    ) -> Option<(String, Vec<SnippetReRankInformation>)> {
         let snippet_maybe = {
             // take owernship of the snippet over here
             self.snippet
@@ -648,6 +660,17 @@ Reason to edit:
                 // block looks like with the functions removed, we can use huristics
                 // to fix it or expose it as part of the outline nodes
                 let implementations = self.get_implementations().await;
+                let snippets_ref = implementations.iter().collect::<Vec<_>>();
+                let mut outline_nodes = vec![];
+                for snippet in snippets_ref.iter() {
+                    let outline_node = self
+                        .tool_box
+                        .get_outline_node_from_snippet(snippet, request_id)
+                        .await;
+                    if let Ok(outline_node) = outline_node {
+                        outline_nodes.push(outline_node);
+                    }
+                }
                 // Snippets here for class hide the functions, so we want to get
                 // the outline node again over here and pass that back to the LLM
                 let class_implementations = implementations

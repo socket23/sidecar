@@ -2017,7 +2017,6 @@ Please handle these changes as required."#
             llm,
             provider,
             api_keys,
-            // TODO(skcd): fill in the language over here by using editor parsing
             language,
             query.to_owned(),
         ));

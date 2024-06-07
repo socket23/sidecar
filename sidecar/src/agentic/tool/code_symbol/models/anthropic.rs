@@ -85,7 +85,7 @@ pub struct SymbolList {
     symbol_list: Vec<Symbol>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "step_by_step")]
 pub struct StepList {
     #[serde(rename = "$value")]
@@ -97,6 +97,7 @@ pub struct StepList {
 pub struct Reply {
     symbol_list: SymbolList,
     // #[serde(rename = "step_by_step")]
+    #[serde(default)]
     step_by_step: StepList,
 }
 
@@ -4889,14 +4890,15 @@ We have to add the newly created endpoint in inline_completion to add support fo
             todo!("we need to figure it out")
         } else {
             format!(
-                r#"You are an expert software engineer who makes no mistakes while writing code
-- The user has selected some code, before you start making changes you select the most important symbols which you need to either change or follow along for the context.
-- Get more context about the different symbols such as classes, functions, enums, types (and more), this ensures that you are able to gather everything necessary before making the code edit and the code you write will not use any wrong code out of this selection.
-- Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_item> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
-- In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
+                r#"You are an expert software engineer who is responsible for gathering all the required context before going about making the change which the user has requested in <user_query>
+- You are working in an editor so you can go-to-definition on certain symbols, but you can only do that for code which is present in <code_selection> section.
+- The user has selected some code which is present in <code_selection> section, before you start making changes you select the most important symbols which you need to either change or follow along for the context.
+- You can get more context about the different symbols such as classes, functions, enums, types (and more) for only the code which is present ONLY in <code_selection> section, this ensures that you are able to gather everything necessary before making the code edit and the code you write will not use any wrong code out of this selection. Do not select code symbols outside of this section.
+- The code which is already present on the file will be also visible to you when making changes, so do not worry about the symbols which you can already see.
+- Make sure to select code symbols for which you will need to look deeper since you might end up using a function on some attribute from that symbol.
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
 
-For now let's focus on the first step, gathering all the required symbol definitions and types.
+Let's focus on the step which is, gathering all the required symbol definitions and types.
 
 As an example, given the following code selection:
 <code_selection>
@@ -4954,6 +4956,12 @@ I want to add support for the grok llm
 </user_query>
 
 Your reply should be, you should strictly follow this format:
+and the user query is:
+<user_query>
+I want to add support for the grok llm
+</user_query>
+
+Your reply should be, you should strictly follow this format:
 <reply>
 <symbol_list>
 <symbol>
@@ -4978,188 +4986,7 @@ src/fill_in_middle_broker.rs
 Other LLM's are implementing FillInMiddleFormatter trait, grok will also require support for this, so we need to check how to implement FillInMiddleFormatter trait
 </thinking>
 </symbol>
-<symbol>
-<name>
-new
-</name>
-<file_path>
-src/fill_in_middle_broker.rs
-</file_path>
-<thinking>
-We have to change the new function and add the grok llm after implementing the formatter for grok llm.
-</thinking>
-</symbol>
 </symbol_list>
-<step_by_step>
-<step_list>
-<name>
-LLMType
-</name>
-<file_path>
-src/fill_in_middle_broker.rs
-</file_path>
-<step>
-We will need to first check the LLMType if it has support for grok or we need to edit it first
-</step>
-</step_list>
-<step_list>
-<name>
-FillInMiddleFormatter
-</name>
-<file_path>
-src/fill_in_middle_broker.rs
-</file_path>
-<step>
-Check the definition of `FillInMiddleFormatter` to see how to implement it
-</step>
-</step_list>
-<step_list
-<name>
-CodeLlamaFillInMiddleFormatter
-</name>
-<file_path>
-src/fill_in_middle_broker.rs
-</file_path>
-<step>
-We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will also have to follow a similar pattern of making changes and adding it to the right places if there are more.
-</step>
-</step_list>
-<step_list>
-<name>
-GrokFillInMiddleFormatter
-</name>
-<file_path>
-src/fill_in_middle_broker.rs
-</file_path>
-<new>
-true
-</new>
-<step>
-Implement the GrokFillInMiddleFormatter following the similar pattern in `CodeLlamaFillInMiddleFormatter`
-</step>
-</step_list>
-</step_by_step>
-</reply>
-
-Another example:
-<code_selection>
-```rust
-// FILEPATH: src/bin/webserver.rs
-fn tree_sitter_router() -> Router {{
-    use axum::routing::*;
-    Router::new()
-        .route(
-            "/documentation_parsing",
-            post(sidecar::webserver::tree_sitter::extract_documentation_strings),
-        )
-        .route(
-            "/diagnostic_parsing",
-            post(sidecar::webserver::tree_sitter::extract_diagnostics_range),
-        )
-        .route(
-            "/tree_sitter_valid",
-            post(sidecar::webserver::tree_sitter::tree_sitter_node_check),
-        )
-}}
-
-fn file_operations_router() -> Router {{
-    use axum::routing::*;
-    Router::new().route("/edit_file", post(sidecar::webserver::file_edit::file_edit))
-}}
-
-fn inline_completion() -> Router {{
-    use axum::routing::*;
-    Router::new()
-        .route(
-            "/inline_completion",
-            post(sidecar::webserver::inline_completion::inline_completion),
-        )
-        .route(
-            "/cancel_inline_completion",
-            post(sidecar::webserver::inline_completion::cancel_inline_completion),
-        )
-        .route(
-            "/document_open",
-            post(sidecar::webserver::inline_completion::inline_document_open),
-        )
-        .route(
-            "/document_content_changed",
-            post(sidecar::webserver::inline_completion::inline_completion_file_content_change),
-        )
-        .route(
-            "/get_document_content",
-            post(sidecar::webserver::inline_completion::inline_completion_file_content),
-        )
-        .route(
-            "/get_identifier_nodes",
-            post(sidecar::webserver::inline_completion::get_identifier_nodes),
-        )
-        .route(
-            "/get_symbol_history",
-            post(sidecar::webserver::inline_completion::symbol_history),
-        )
-}}
-
-// TODO(skcd): Figure out why we are passing the context in the suffix and not the prefix
-
-```
-</code_selection>
-
-and the user query is:
-<user_query>
-I want to get the list of most important symbols in inline completions
-</user_query>
-
-Your reply should be:
-<reply>
-<symbol_list>
-<symbol>
-<name>
-inline_completion
-</name>
-<file_path>
-src/bin/webserver.rs
-</file_path>
-<thinking>
-inline_completion holds all the endpoints for symbols because it also has the `get_symbol_history` endpoint. We have to start adding the endpoint there
-</thinking>
-</symbol>
-<symbol>
-<name>
-symbol_history
-</name>
-<file_path>
-src/bin/webserver.rs
-</file_path>
-<thinking>
-I can find more information on how to write the code for the endpoint by following the symbol `symbol_history` in the line: `             post(sidecar::webserver::inline_completion::symbol_history),`
-<thinking>
-</symbol>
-</symbol_list>
-<step_by_step>
-<step_list>
-<name>
-symbol_history
-</name>
-<file_path>
-src/bin/webserver.rs
-</file_path>
-<thinking>
-We need to follow the symbol_history to check the pattern on how we are going to implement the very similar functionality
-</thinking>
-</step_list>
-<step_list>
-<name>
-inline_completion
-</name>
-<file_path>
-src/bin/webserver.rs
-</file_path>
-<thinking>
-We have to add the newly created endpoint in inline_completion to add support for the new endpoint which we want to create
-</thinking>
-</step_list>
-</step_by_step>
 </reply>"#
             )
         }

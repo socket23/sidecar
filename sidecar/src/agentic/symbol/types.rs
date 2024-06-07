@@ -27,7 +27,7 @@ use crate::{
             code_symbol::{
                 important::{
                     CodeSubSymbolProbingResult, CodeSymbolFollowAlongForProbing,
-                    CodeSymbolProbingSummarize,
+                    CodeSymbolProbingSummarize, CodeSymbolWithThinking,
                 },
                 models::anthropic::ProbeNextSymbol,
             },
@@ -801,7 +801,14 @@ impl Symbol {
                 .tools
                 .probing_results_summarize(request, request_id_ref)
                 .await;
-            let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(request_id_ref.to_owned(), self.symbol_identifier.clone(), result.as_ref().map(|s| s.to_owned()).unwrap_or("Error with probing answer".to_owned())));
+            let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
+                request_id_ref.to_owned(),
+                self.symbol_identifier.clone(),
+                result
+                    .as_ref()
+                    .map(|s| s.to_owned())
+                    .unwrap_or("Error with probing answer".to_owned()),
+            ));
             println!(
                 "Probing finished for {} with result: {:?}",
                 &self.mecha_code_symbol.symbol_name(),
@@ -906,33 +913,35 @@ impl Symbol {
                 request_id,
             )
             .await?;
-        let codebase_wide_search = self
-            .tools
-            .utlity_symbols_search(
-                &subsymbol.instructions().join("\n"),
-                interested_defintiions
-                    .iter()
-                    .filter_map(|interested_symbol| {
-                        if let Some((code_symbol, _)) = interested_symbol {
-                            Some(code_symbol)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-                &symbol_to_edit,
-                &file_content,
-                &subsymbol.fs_file_path(),
-                self.mecha_code_symbol.user_context(),
-                &language,
-                self.llm_properties.llm().clone(),
-                self.llm_properties.provider().clone(),
-                self.llm_properties.api_key().clone(),
-                self.hub_sender.clone(),
-                request_id,
-            )
-            .await?;
+        let codebase_wide_search: Vec<Option<(CodeSymbolWithThinking, String)>> = vec![];
+        // disabling this for now
+        // let codebase_wide_search = self
+        //     .tools
+        //     .utlity_symbols_search(
+        //         &subsymbol.instructions().join("\n"),
+        //         interested_defintiions
+        //             .iter()
+        //             .filter_map(|interested_symbol| {
+        //                 if let Some((code_symbol, _)) = interested_symbol {
+        //                     Some(code_symbol)
+        //                 } else {
+        //                     None
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>()
+        //             .as_slice(),
+        //         &symbol_to_edit,
+        //         &file_content,
+        //         &subsymbol.fs_file_path(),
+        //         self.mecha_code_symbol.user_context(),
+        //         &language,
+        //         self.llm_properties.llm().clone(),
+        //         self.llm_properties.provider().clone(),
+        //         self.llm_properties.api_key().clone(),
+        //         self.hub_sender.clone(),
+        //         request_id,
+        //     )
+        //     .await?;
 
         // cool now we have all the symbols which are necessary for making the edit
         // and more importantly we have all the context which is required
@@ -1029,14 +1038,13 @@ impl Symbol {
                     .await
             )?;
             // always return the original code which was present here in case of rollbacks
-            let edited_code = dbg!(
-                self.edit_code(
+            let edited_code = self
+                .edit_code(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),
                     &request_id,
                 )
-                .await
-            )?;
+                .await?;
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
             // debugging loop after this

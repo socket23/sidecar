@@ -244,7 +244,7 @@ impl TSLanguageConfig {
                                 ) = (function_range, function_name, function_name_range)
                                 {
                                     if let Some(function_class_name) = function_class_name {
-                                        let mut class_functions = independent_functions_for_class
+                                        let class_functions = independent_functions_for_class
                                             .entry(function_class_name)
                                             .or_insert_with(|| vec![]);
                                         class_functions.push(OutlineNodeContent::new(
@@ -254,13 +254,12 @@ impl TSLanguageConfig {
                                             get_string_from_bytes(
                                                 &source_code_vec,
                                                 function_range.start_byte(),
-                                                // -1 here is not perfect we should
-                                                // figure out this per language
-                                                child_range.start_byte() - 1,
+                                                child_range.end_byte(),
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range,
                                             child_range,
+                                            self.language_str.to_owned(),
                                         ));
                                     } else {
                                         children.push(OutlineNodeContent::new(
@@ -270,13 +269,12 @@ impl TSLanguageConfig {
                                             get_string_from_bytes(
                                                 &source_code_vec,
                                                 function_range.start_byte(),
-                                                // -1 here is not perfect we should
-                                                // figure out this per language
-                                                child_range.start_byte() - 1,
+                                                child_range.end_byte(),
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range,
                                             child_range,
+                                            self.language_str.to_owned(),
                                         ));
                                     }
                                 }
@@ -313,6 +311,7 @@ impl TSLanguageConfig {
                         class_name_range.expect("class name range to be present"),
                         // This is incorrect
                         outline_range,
+                        self.language_str.to_owned(),
                     );
                     compressed_outline.push(OutlineNode::new(
                         class_outline,
@@ -360,14 +359,12 @@ impl TSLanguageConfig {
                                         get_string_from_bytes(
                                             &source_code_vec,
                                             outline_range.start_byte(),
-                                            // -1 here is not perfect, this might
-                                            // not work for python for example, we should
-                                            // figure out how to handle this properly
-                                            child_range.start_byte() - 1,
+                                            child_range.end_byte(),
                                         ),
                                         fs_file_path.to_owned(),
                                         function_name_range.clone(),
                                         child_range,
+                                        self.language_str.to_owned(),
                                     ));
                                 } else {
                                     compressed_outline.push(OutlineNode::new(
@@ -387,6 +384,7 @@ impl TSLanguageConfig {
                                             fs_file_path.to_owned(),
                                             function_name_range.clone(),
                                             child_range,
+                                            self.language_str.to_owned(),
                                         ),
                                         vec![],
                                         self.language_str.to_owned(),
@@ -2959,5 +2957,40 @@ trait SomethingTrait {
 
         assert_eq!(outlines[0].children_len(), 1);
         assert_eq!(outlines.len(), 2);
+    }
+
+    #[test]
+    fn test_parsing_python_code_for_outline_nodes() {
+        let source_code = r#"
+class Something:
+    def __init__():
+        pass
+    
+    def something_else(self, blah, blah2):
+        print(blah)
+        print(blah2)
+        pass
+
+def something_else_function(self, a, b, c) -> sss:
+    print(a)
+    print(b)
+    pass
+        "#;
+        let language = "python";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("to be present");
+        let mut parser = Parser::new();
+        let grammar = ts_language_config.grammar;
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let outlines = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.py".to_owned(),
+        );
+        println!("{:?}", &outlines);
+        assert!(false);
     }
 }

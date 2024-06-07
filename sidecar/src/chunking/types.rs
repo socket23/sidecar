@@ -139,6 +139,7 @@ pub struct OutlineNodeContent {
     fs_file_path: String,
     identifier_range: Range,
     body_range: Range,
+    language: String,
 }
 
 impl OutlineNodeContent {
@@ -150,6 +151,7 @@ impl OutlineNodeContent {
         fs_file_path: String,
         identifier_range: Range,
         body_range: Range,
+        language: String,
     ) -> Self {
         Self {
             range,
@@ -159,6 +161,56 @@ impl OutlineNodeContent {
             fs_file_path,
             identifier_range,
             body_range,
+            language,
+        }
+    }
+
+    pub fn to_xml(&self) -> String {
+        let name = &self.name;
+        let file_path = &self.fs_file_path;
+        let start_line = self.range.start_line();
+        let end_line = self.range.end_line();
+        let content = &self.content;
+        let language = &self.language;
+        format!(
+            r#"<name>
+{name}
+</name>
+<file_path>
+{file_path}:{start_line}-{end_line}
+</file_path>
+<content>
+```{language}
+{content}
+```
+</content>"#
+        )
+        .to_owned()
+    }
+
+    // we try to get the non overlapping lines from our content
+    pub fn get_non_overlapping_content(&self, range: &[&Range]) -> Option<String> {
+        let lines = self
+            .content
+            .lines()
+            .into_iter()
+            .enumerate()
+            .map(|(idx, line)| (idx + self.range().start_line(), line.to_owned()))
+            .filter(|(idx, _)| !range.into_iter().any(|range| range.contains_line(*idx)))
+            .filter(|(_, line)| {
+                // we want to filter out the lines which are not part of
+                if line == "}" || line.is_empty() {
+                    false
+                } else {
+                    true
+                }
+            })
+            .map(|(_, line)| line)
+            .collect::<Vec<String>>();
+        if lines.is_empty() {
+            None
+        } else {
+            Some(lines.join("\n"))
         }
     }
 

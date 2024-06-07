@@ -342,6 +342,11 @@ impl Range {
             .map(|number| number.clone())
             .unwrap_or(i64::MAX)
     }
+
+    /// This only checks the line without the column for now
+    pub fn check_equality_without_byte(&self, other: &Range) -> bool {
+        self.start_line() == other.start_line() && self.end_line() == other.end_line()
+    }
 }
 
 #[derive(Debug, Clone)]

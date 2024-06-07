@@ -10,7 +10,6 @@ use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_edit::types::CodeEdit;
-use crate::agentic::tool::code_symbol;
 use crate::agentic::tool::code_symbol::correctness::{
     CodeCorrectnessAction, CodeCorrectnessRequest,
 };
@@ -62,7 +61,7 @@ use super::events::edit::SymbolToEdit;
 use super::events::probe::SymbolToProbeRequest;
 use super::identifier::MechaCodeSymbolThinking;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
-use super::ui_event::{UIEvent, UIEventWithID};
+use super::ui_event::UIEventWithID;
 
 #[derive(Clone)]
 pub struct ToolBox {
@@ -2545,6 +2544,8 @@ Please handle these changes as required."#
                         None,
                         vec![],
                         user_context.clone(),
+                        // say sike right now
+                        Arc::new(self.clone()),
                     ),
                 );
             } else {
@@ -2559,6 +2560,8 @@ Please handle these changes as required."#
                         None,
                         vec![],
                         user_context.clone(),
+                        // say sike right now
+                        Arc::new(self.clone()),
                     ),
                 );
             }
@@ -2872,5 +2875,61 @@ Please handle these changes as required."#
             })
             .flatten()
             .collect::<Vec<_>>()
+    }
+
+    /// The outline node contains details about the inner constructs which
+    /// might be present in the snippet
+    ///
+    /// Since a snippet should belong 1-1 with an outline node, we also do a
+    /// huristic check to figure out if the symbol name and the outline node
+    /// matches up and is the closest to the snippet we are looking at
+    pub async fn get_outline_node_from_snippet(
+        &self,
+        snippet: &Snippet,
+        request_id: &str,
+    ) -> Result<OutlineNode, SymbolError> {
+        let fs_file_path = snippet.file_path();
+        let file_open_request = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let _ = self
+            .force_add_document(
+                fs_file_path,
+                file_open_request.contents_ref(),
+                file_open_request.language(),
+            )
+            .await;
+        let symbols_outline = self
+            .symbol_broker
+            .get_symbols_outline(&fs_file_path)
+            .await
+            .ok_or(SymbolError::OutlineNodeNotFound(fs_file_path.to_owned()))?
+            .into_iter()
+            .filter(|outline_node| outline_node.name() == snippet.symbol_name())
+            .collect::<Vec<_>>();
+        // we want to find the closest outline node to this snippet over here
+        // since we can have multiple implementations with the same symbol name
+        let mut outline_nodes_with_distance = symbols_outline
+            .into_iter()
+            .map(|outline_node| {
+                let distance: i64 = if outline_node
+                    .range()
+                    .intersects_without_byte(snippet.range())
+                    || snippet
+                        .range()
+                        .intersects_without_byte(outline_node.range())
+                {
+                    0
+                } else {
+                    outline_node.range().minimal_line_distance(snippet.range())
+                };
+                (distance, outline_node)
+            })
+            .collect::<Vec<_>>();
+        // Now sort it based on the distance in ascending order
+        outline_nodes_with_distance.sort_by_key(|outline_node| outline_node.0);
+        if outline_nodes_with_distance.is_empty() {
+            Err(SymbolError::OutlineNodeNotFound(fs_file_path.to_owned()))
+        } else {
+            Ok(outline_nodes_with_distance.remove(0).1)
+        }
     }
 }

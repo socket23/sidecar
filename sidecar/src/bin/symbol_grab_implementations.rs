@@ -85,6 +85,7 @@ async fn main() {
         )),
         vec![],
         UserContext::new(vec![], vec![], None, vec![]),
+        tool_box.clone(),
     );
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();

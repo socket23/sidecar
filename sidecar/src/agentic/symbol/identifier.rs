@@ -319,6 +319,49 @@ impl MechaCodeSymbolThinking {
             .map(|snippet| snippet.clone())
     }
 
+    /// This finds the sub-symbol which we want to probe
+    /// The sub-symbol can be a function inside the class or a identifier in
+    /// the class if needs be
+    pub async fn find_sub_symbol_in_range(
+        &self,
+        range: &Range,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Result<String, SymbolError> {
+        let file_open_result = self
+            .tool_box
+            .file_open(fs_file_path.to_owned(), request_id)
+            .await?;
+        let _ = self
+            .tool_box
+            .force_add_document(
+                fs_file_path,
+                file_open_result.contents_ref(),
+                file_open_result.language(),
+            )
+            .await;
+        let outline_node = self
+            .tool_box
+            .get_outline_nodes_grouped(fs_file_path)
+            .await
+            .ok_or(SymbolError::OutlineNodeNotFound(fs_file_path.to_owned()))?
+            // Now we look inside the outline nodes and try to find the ones which contains this range
+            // and then we will look into the children of it
+            .into_iter()
+            .filter(|outline_node| outline_node.range().contains_check_line(range))
+            .next()
+            .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)?;
+        let possible_child_node = outline_node
+            .children()
+            .into_iter()
+            .find(|child_node| child_node.range().contains_check_line(range));
+        if let Some(child_node) = possible_child_node {
+            Ok(child_node.name().to_owned())
+        } else {
+            Ok(outline_node.name().to_owned())
+        }
+    }
+
     pub async fn find_symbol_in_range(&self, range: &Range, fs_file_path: &str) -> Option<String> {
         if let Some(snippet) = self.snippet.lock().await.as_ref() {
             if snippet.range.contains(range) && snippet.fs_file_path == fs_file_path {
@@ -438,6 +481,7 @@ impl MechaCodeSymbolThinking {
             "mecha_code_symbol_thinking::symbol_name({})",
             self.symbol_name()
         );
+        let request_id_ref = &request_id;
         // TODO(skcd): We need to generate the implementation always
         let steps = self.steps().await;
         println!(
@@ -531,9 +575,13 @@ Reason to edit:
                             });
                         match found_reason_to_edit {
                             Some(reason) => {
-                                let symbol_in_range =
-                                    self.find_symbol_in_range(range, fs_file_path).await;
-                                if let Some(symbol) = symbol_in_range {
+                                // TODO(skcd): We need to get the sub-symbol over
+                                // here instead of the original symbol name which
+                                // would not work
+                                let symbol_in_range = self
+                                    .find_sub_symbol_in_range(range, fs_file_path, request_id_ref)
+                                    .await;
+                                if let Ok(symbol) = symbol_in_range {
                                     Some(SymbolToEdit::new(
                                         symbol,
                                         range.clone(),

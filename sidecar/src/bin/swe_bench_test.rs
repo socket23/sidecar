@@ -118,7 +118,7 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
         Some("django__django-11179".to_owned()),
         Some(folder_path.to_owned()),
     );
-    let mut probe_task = Box::pin(symbol_manager.initial_request(initial_request));
+    let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
 
     loop {
         tokio::select! {
@@ -129,7 +129,7 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
                     break; // Receiver closed, exit the loop
                 }
             }
-            _ = &mut probe_task => {
+            _ = &mut initial_request_task => {
                 // probe_task completed, you can handle it here if needed
             }
         }

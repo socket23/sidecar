@@ -1203,7 +1203,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
             LLMClientMessage::user(user_query),
         ];
         let llm_request = LLMClientCompletionRequest::new(llm, messages, 0.1, None);
-        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_broker
             .stream_completion(

@@ -39,7 +39,7 @@ async fn main() {
         None,
         vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
-    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgtYJAls7jyT2_3957MqXJ67b0FhYppoR6I-skxKZtVhuxiW92NUoaZE-Vo2_H3T5dt_tclPUbuWsyaTB8mwkOGiNeSZwr76ngtsuGpO7s5RYmSseyupD6oRKzkAojupuoxdK9sVu9Y4EHa6Apws_I89H398SbfLbU3bmOGKaCgYKAc0SARESFQHGX2MihDTs-xEXRzLe4hhoOWChAg0179".to_owned(), "anton-390822".to_owned()));
+    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgvnwHSwFW72_9EeViQUrx4YA2cZfnRBxfGfO-A2h0XGlZVpylpgQGDM78DKkvWWLa6HOxz0T3mbF-3W9huuqCbpI-f1d3hJTyETU2F6TySZIZDmKwgRlyW2je2GeTaNkih_QjOAHM2pBXK3KSlbNr6Yh89KlK7LvEdS09t4aCgYKAa8SARESFQHGX2MiEESfxXebKLIBKyJ-YXN1Sw0179".to_owned(), "anton-390822".to_owned()));
     // this is the current running debuggable editor
     let editor_url = "http://localhost:6897".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
@@ -76,20 +76,6 @@ async fn main() {
         anthropic_llm_properties.clone(),
         user_context.clone(),
     );
-
-    // tokio::spawn(async move {
-    //     let mut child = Command::new("/Users/skcd/scratch/swe_bench/swe_bench/bin/python3")
-    //         .arg("/Users/skcd/scratch/swe_bench/run_editor_for_instance.py")
-    //         .arg("django__django-11179")
-    //         .arg("/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5")
-    //         .stdout(std::process::Stdio::piped())
-    //         .spawn()
-    //         .expect("to work");
-    //     // busy waiting on the child
-    //     let _ = child.wait().await;
-    //     let _ = child.kill().await;
-    //     drop(child);
-    // });
 
     let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5".to_owned();
     let repo_map_fs_path =

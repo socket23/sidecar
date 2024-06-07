@@ -54,6 +54,20 @@ impl UIEventWithID {
             event: UIEvent::SymbolEventSubStep(sub_symbol_request),
         }
     }
+
+    pub fn probe_answer_event(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        probe_answer: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::new(
+                symbol_identifier,
+                SymbolEventSubStep::Probe(SymbolEventProbeRequest::ProbeAnswer(probe_answer))
+            ))
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -81,6 +95,8 @@ impl From<ToolInput> for UIEvent {
 pub enum SymbolEventProbeRequest {
     SubSymbolSelection,
     ProbeDeeperSymbol,
+    /// The final answer for the probe is sent via this event
+    ProbeAnswer(String),
 }
 
 #[derive(Debug, serde::Serialize)]

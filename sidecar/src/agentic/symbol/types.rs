@@ -801,6 +801,7 @@ impl Symbol {
                 .tools
                 .probing_results_summarize(request, request_id_ref)
                 .await;
+            let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(request_id_ref.to_owned(), self.symbol_identifier.clone(), result.as_ref().map(|s| s.to_owned()).unwrap_or("Error with probing answer".to_owned())));
             println!(
                 "Probing finished for {} with result: {:?}",
                 &self.mecha_code_symbol.symbol_name(),

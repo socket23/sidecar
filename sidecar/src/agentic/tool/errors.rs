@@ -43,4 +43,7 @@ pub enum ToolError {
 
     #[error("Code to edit filtering error: {0}")]
     CodeToEditFiltering(CodeToEditFilteringError),
+
+    #[error("Code not formatted properly: {0}")]
+    CodeNotFormatted(String),
 }

@@ -62,6 +62,8 @@ pub struct Snippet {
     content: String,
     language: Option<String>,
     // this represents completely a snippet of code which is a logical symbol
+    // so a class here will have the complete node (along with all the function inside it),
+    // and if its a function then this will be the funciton by itself
     outline_node_content: OutlineNodeContent,
 }
 
@@ -254,13 +256,6 @@ pub struct MechaCodeSymbolThinking {
     // This can be updated on the fly when the user provides more context
     // We can think of this as a long term storage
     provided_user_context: UserContext,
-    // We store here some memory about what we have discovered and learnt from the exploration
-    // this is useful for answering questions to the user when required
-    memory: Mutex<Vec<String>>,
-    // We store here the pending requests and the result we are awaiting for it
-    // this allows de-duplication and caching of requests very easily and can be used
-    // as a way to save redundant calls
-    pending_probe_request: Mutex<Vec<(String, Shared<tokio::sync::oneshot::Receiver<String>>)>>,
 }
 
 impl MechaCodeSymbolThinking {
@@ -281,8 +276,6 @@ impl MechaCodeSymbolThinking {
             snippet: Mutex::new(snippet),
             implementations: Mutex::new(implementations),
             provided_user_context,
-            memory: Mutex::new(vec![]),
-            pending_probe_request: Mutex::new(vec![]),
         }
     }
 
@@ -501,6 +494,11 @@ impl MechaCodeSymbolThinking {
                     "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::start({})",
                     self.symbol_name(),
                 );
+                println!(
+                    "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::ranked_xml_list({})\n{}",
+                    self.symbol_name(),
+                    &ranked_xml_list,
+                );
                 let filtered_list = dbg!(
                     tool_box
                         .filter_code_snippets_in_symbol_for_editing(
@@ -646,10 +644,12 @@ Reason to edit:
                 // class implementations
                 // one of the problems we hvae have here is that we have to show
                 // the llm all these sections and then show the llm on how to edit them
-                // this is the ost interesting part since we do know what the implementation
+                // this is the most interesting part since we do know what the implementation
                 // block looks like with the functions removed, we can use huristics
                 // to fix it or expose it as part of the outline nodes
                 let implementations = self.get_implementations().await;
+                // Snippets here for class hide the functions, so we want to get
+                // the outline node again over here and pass that back to the LLM
                 let class_implementations = implementations
                     .iter()
                     .filter(|implementation| implementation.outline_node_content.is_class_type())
@@ -658,6 +658,12 @@ Reason to edit:
                     .iter()
                     .filter(|implemenation| implemenation.outline_node_content.is_function_type())
                     .collect::<Vec<_>>();
+                println!("mecha_code_symbol_thinking::to_llm_request::class_implementations::symbol({}):\n{:?}", &self.symbol_name(), &class_implementations);
+                println!(
+                    "mecha_code_symbol_thinking::to_llm_request::functions::symbol({}):\n{:?}",
+                    &self.symbol_name(),
+                    &functions
+                );
                 let mut covered_function_idx: HashSet<usize> = Default::default();
                 let class_covering_functions = class_implementations
                     .into_iter()

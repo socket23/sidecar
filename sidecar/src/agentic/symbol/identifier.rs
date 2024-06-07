@@ -120,32 +120,6 @@ impl Snippet {
         &self.content
     }
 
-    // we try to get the non overlapping lines from our content
-    pub fn get_non_overlapping_content(&self, range: &[&Range]) -> Option<String> {
-        let lines = self
-            .content
-            .lines()
-            .into_iter()
-            .enumerate()
-            .map(|(idx, line)| (idx + self.range().start_line(), line.to_owned()))
-            .filter(|(idx, _)| !range.into_iter().any(|range| range.contains_line(*idx)))
-            .filter(|(_, line)| {
-                // we want to filter out the lines which are not part of
-                if line == "}" || line.is_empty() {
-                    false
-                } else {
-                    true
-                }
-            })
-            .map(|(_, line)| line)
-            .collect::<Vec<String>>();
-        if lines.is_empty() {
-            None
-        } else {
-            Some(lines.join("\n"))
-        }
-    }
-
     pub fn to_xml(&self) -> String {
         let name = &self.symbol_name;
         let file_path = self.file_path();
@@ -430,12 +404,20 @@ impl MechaCodeSymbolThinking {
             .map(|snippet| snippet.clone())
             .collect::<Vec<_>>();
         println!(
-            "mecha_code_symbol_thinking::get_implementations::get_snippet({})",
-            &self.symbol_name()
+            "mecha_code_symbol_thinking::get_implementations::get_snippet({})::get_implementations_len({})",
+            &self.symbol_name(),
+            implementations.len(),
         );
         let self_implementation = self.get_snippet().await;
         if let Some(snippet) = self_implementation {
-            implementations.push(snippet);
+            if !implementations.iter().any(|implementation| {
+                implementation
+                    .range()
+                    .check_equality_without_byte(snippet.range())
+                    && &implementation.fs_file_path == &snippet.fs_file_path
+            }) {
+                implementations.push(snippet);
+            }
         }
         implementations
     }
@@ -661,6 +643,7 @@ Reason to edit:
                 // to fix it or expose it as part of the outline nodes
                 let implementations = self.get_implementations().await;
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
+                println!("mecha_code_symbol_thinking::to_llm_request::class_implementations::symbol({}):implementations_len({})", &self.symbol_name(), snippets_ref.len());
                 let mut outline_nodes = vec![];
                 for snippet in snippets_ref.iter() {
                     let outline_node = self
@@ -671,32 +654,41 @@ Reason to edit:
                         outline_nodes.push(outline_node);
                     }
                 }
+
+                let outline_nodes_vec = outline_nodes
+                    .into_iter()
+                    .map(|outline_node| outline_node.consume_all_outlines())
+                    .flatten()
+                    .collect::<Vec<_>>();
                 // Snippets here for class hide the functions, so we want to get
                 // the outline node again over here and pass that back to the LLM
-                let class_implementations = implementations
+                let class_implementations = outline_nodes_vec
                     .iter()
-                    .filter(|implementation| implementation.outline_node_content.is_class_type())
+                    .filter(|outline_node| outline_node.is_class_type())
                     .collect::<Vec<_>>();
-                let functions = implementations
+                let functions = outline_nodes_vec
                     .iter()
-                    .filter(|implemenation| implemenation.outline_node_content.is_function_type())
+                    .filter(|outline_node| outline_node.is_function_type())
                     .collect::<Vec<_>>();
-                println!("mecha_code_symbol_thinking::to_llm_request::class_implementations::symbol({}):\n{:?}", &self.symbol_name(), &class_implementations);
+                println!("mecha_code_symbol_thinking::to_llm_request::class_implementations::symbol({}):class_len({})", &self.symbol_name(), class_implementations.len());
                 println!(
-                    "mecha_code_symbol_thinking::to_llm_request::functions::symbol({}):\n{:?}",
+                    "mecha_code_symbol_thinking::to_llm_request::functions::symbol({})::function_len({})",
                     &self.symbol_name(),
-                    &functions
+                    functions.len(),
                 );
                 let mut covered_function_idx: HashSet<usize> = Default::default();
                 let class_covering_functions = class_implementations
                     .into_iter()
                     .map(|class_implementation| {
                         let class_range = class_implementation.range();
+                        let class_file_path = class_implementation.fs_file_path();
                         let filtered_functions = functions
                             .iter()
                             .enumerate()
                             .filter_map(|(idx, function)| {
-                                if class_range.contains(function.range()) {
+                                if class_range.contains(function.range())
+                                    && function.fs_file_path() == class_file_path
+                                {
                                     covered_function_idx.insert(idx);
                                     Some(function)
                                 } else {
@@ -713,7 +705,11 @@ Reason to edit:
                         );
                         (class_implementation, filtered_functions, class_non_overlap)
                     })
-                    .collect::<Vec<(&Snippet, Vec<&&Snippet>, Option<String>)>>();
+                    .collect::<Vec<(
+                        &OutlineNodeContent,
+                        Vec<&&OutlineNodeContent>,
+                        Option<String>,
+                    )>>();
 
                 // now we will generate the code snippets over here
                 // and give them a list
@@ -731,7 +727,7 @@ Reason to edit:
                     .into_iter()
                     .map(|(class_snippet, functions, non_overlap_prefix)| {
                         let formatted_snippet = class_snippet.to_xml();
-                        if class_snippet.outline_node_content.is_class_definition() {
+                        if class_snippet.is_class_definition() {
                             let definition = format!(
                                 r#"<rerank_entry>
 <id>
@@ -742,14 +738,14 @@ Reason to edit:
                             );
                             symbol_rerank_information.push(SnippetReRankInformation::new(
                                 symbol_index,
-                                class_snippet.range.clone(),
-                                class_snippet.fs_file_path.to_owned(),
+                                class_snippet.range().clone(),
+                                class_snippet.fs_file_path().to_owned(),
                             ));
                             symbol_index = symbol_index + 1;
                             definition
                         } else {
                             let overlap = if let Some(non_overlap_prefix) = non_overlap_prefix {
-                                let file_path = class_snippet.file_path();
+                                let file_path = class_snippet.fs_file_path();
                                 let overlapp_snippet = format!(
                                     r#"<rerank_entry>
 <id>
@@ -767,8 +763,8 @@ Reason to edit:
                                 symbol_rerank_information.push(
                                     SnippetReRankInformation::new(
                                         symbol_index,
-                                        class_snippet.range.clone(),
-                                        class_snippet.fs_file_path.to_owned(),
+                                        class_snippet.range().clone(),
+                                        class_snippet.fs_file_path().to_owned(),
                                     )
                                     .set_is_outline(),
                                 );
@@ -791,8 +787,8 @@ Reason to edit:
                                     );
                                     symbol_rerank_information.push(SnippetReRankInformation::new(
                                         symbol_index,
-                                        function.range.clone(),
-                                        function.fs_file_path.to_owned(),
+                                        function.range().clone(),
+                                        function.fs_file_path().to_owned(),
                                     ));
                                     symbol_index = symbol_index + 1;
                                     function_code_snippet
@@ -852,8 +848,8 @@ Reason to edit:
                         );
                         symbol_rerank_information.push(SnippetReRankInformation::new(
                             symbol_index,
-                            uncovered_function.range.clone(),
-                            uncovered_function.fs_file_path.to_owned(),
+                            uncovered_function.range().clone(),
+                            uncovered_function.fs_file_path().to_owned(),
                         ));
                         symbol_index = symbol_index + 1;
                         llm_snippet

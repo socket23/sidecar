@@ -81,6 +81,7 @@ async fn main() {
                 fs_file_path.to_owned(),
                 placeholder_range.clone(),
                 placeholder_range.clone(),
+                "rust".to_owned(),
             ),
         )),
         vec![],

@@ -39,7 +39,7 @@ async fn main() {
         None,
         vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
     );
-    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgvnwHSwFW72_9EeViQUrx4YA2cZfnRBxfGfO-A2h0XGlZVpylpgQGDM78DKkvWWLa6HOxz0T3mbF-3W9huuqCbpI-f1d3hJTyETU2F6TySZIZDmKwgRlyW2je2GeTaNkih_QjOAHM2pBXK3KSlbNr6Yh89KlK7LvEdS09t4aCgYKAa8SARESFQHGX2MiEESfxXebKLIBKyJ-YXN1Sw0179".to_owned(), "anton-390822".to_owned()));
+    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgt9NksEQHjdLP_iHg5v7d3EBOVhbGXO5wCCczFMd_YQQK0kQoSwHzdI91ySt2aXa1VwcwgmT5ex6xhxYxxoBSbo5kG7pAHsUqDQZdmkBjitAFx_aOy7YSpmJEvjB7lsrNBhxB-q1cGz5gahrcH1iUcIj4GfELPtRp_ixvcaCgYKAfESARESFQHGX2MiD6hvHJAmARsiG8-YqbliXg0178".to_owned(), "anton-390822".to_owned()));
     // this is the current running debuggable editor
     let editor_url = "http://localhost:6897".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
@@ -77,9 +77,10 @@ async fn main() {
         user_context.clone(),
     );
 
-    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5".to_owned();
+    // I should create symlinks for these so its easier to query as well :|
+    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp9khfwaj0".to_owned();
     let repo_map_fs_path =
-        "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpu88w4cw3".to_owned();
+        "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpb0s1ot0p".to_owned();
     let problem_statement = r#"delete() on instances of models without any dependencies doesn't clear PKs.
 
 Description
@@ -100,7 +101,7 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
         problem_statement,
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
-        Some("ya29.a0AXooCgtYJAls7jyT2_3957MqXJ67b0FhYppoR6I-skxKZtVhuxiW92NUoaZE-Vo2_H3T5dt_tclPUbuWsyaTB8mwkOGiNeSZwr76ngtsuGpO7s5RYmSseyupD6oRKzkAojupuoxdK9sVu9Y4EHa6Apws_I89H398SbfLbU3bmOGKaCgYKAc0SARESFQHGX2MihDTs-xEXRzLe4hhoOWChAg0179".to_owned()),
+        Some("ya29.a0AXooCgt9NksEQHjdLP_iHg5v7d3EBOVhbGXO5wCCczFMd_YQQK0kQoSwHzdI91ySt2aXa1VwcwgmT5ex6xhxYxxoBSbo5kG7pAHsUqDQZdmkBjitAFx_aOy7YSpmJEvjB7lsrNBhxB-q1cGz5gahrcH1iUcIj4GfELPtRp_ixvcaCgYKAfESARESFQHGX2MiD6hvHJAmARsiG8-YqbliXg0178".to_owned()),
         Some("django__django-11179".to_owned()),
         Some(folder_path.to_owned()),
     );

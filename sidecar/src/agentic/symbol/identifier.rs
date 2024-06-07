@@ -824,7 +824,7 @@ Reason to edit:
                     .iter()
                     .enumerate()
                     .filter_map(|(idx, snippet)| {
-                        if covered_function_idx.contains(&idx) {
+                        if !covered_function_idx.contains(&idx) {
                             Some(snippet)
                         } else {
                             None

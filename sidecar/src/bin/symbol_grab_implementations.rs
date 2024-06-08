@@ -14,6 +14,7 @@ use sidecar::{
         symbol::{
             identifier::{LLMProperties, MechaCodeSymbolThinking, Snippet, SymbolIdentifier},
             tool_box::ToolBox,
+            tool_properties::ToolProperties,
             types::Symbol,
         },
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
@@ -107,6 +108,7 @@ async fn main() {
         ),
         ui_sender,
         "".to_owned(),
+        ToolProperties::new(),
     )
     .await
     .expect("to work");

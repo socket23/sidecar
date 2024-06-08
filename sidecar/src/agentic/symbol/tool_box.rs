@@ -60,6 +60,7 @@ use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
 use super::events::probe::SymbolToProbeRequest;
 use super::identifier::MechaCodeSymbolThinking;
+use super::tool_properties::ToolProperties;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
 use super::ui_event::UIEventWithID;
 
@@ -693,6 +694,7 @@ We also believe this symbol needs to be probed because of:
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<Vec<Option<(CodeSymbolWithThinking, String)>>, SymbolError> {
         // we are going to use the long context search here to check if there are
         // other utility functions we can and should use for implementing this feature
@@ -841,10 +843,13 @@ We also believe this symbol needs to be probed because of:
                         let (sender, receiver) = tokio::sync::oneshot::channel();
                         // we have the possible file path over here
                         let _ = hub_sender.send((
-                            SymbolEventRequest::outline(SymbolIdentifier::with_file_path(
-                                symbol.code_symbol(),
-                                &definition_file_path,
-                            )),
+                            SymbolEventRequest::outline(
+                                SymbolIdentifier::with_file_path(
+                                    symbol.code_symbol(),
+                                    &definition_file_path,
+                                ),
+                                tool_properties.clone(),
+                            ),
                             uuid::Uuid::new_v4().to_string(),
                             sender,
                         ));
@@ -882,6 +887,7 @@ We also believe this symbol needs to be probed because of:
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         // followups here are made for checking the references or different symbols
         // or if something has changed
@@ -914,6 +920,7 @@ We also believe this symbol needs to be probed because of:
                     references,
                     hub_sender,
                     request_id,
+                    tool_properties,
                 )
                 .await;
         } else if symbol_to_edit.is_class_definition() {
@@ -932,6 +939,7 @@ We also believe this symbol needs to be probed because of:
                     api_keys,
                     hub_sender.clone(),
                     request_id,
+                    tool_properties,
                 )
                 .await;
             let references = self
@@ -949,6 +957,7 @@ We also believe this symbol needs to be probed because of:
                     references,
                     hub_sender,
                     request_id,
+                    tool_properties,
                 )
                 .await;
         } else {
@@ -973,6 +982,7 @@ We also believe this symbol needs to be probed because of:
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         // we need to first ask the LLM for the class properties if any we have
         // to followup on if they changed
@@ -1043,6 +1053,7 @@ We also believe this symbol needs to be probed because of:
                     edited_symbol,
                     hub_sender,
                     request_id,
+                    tool_properties,
                 )
                 .await;
         })
@@ -1073,6 +1084,7 @@ We also believe this symbol needs to be probed because of:
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         let references = self
             .go_to_references(fs_file_path, &position, request_id)
@@ -1165,6 +1177,7 @@ We also believe this symbol needs to be probed because of:
                 outline_nodes,
                 hub_sender,
                 request_id,
+                tool_properties,
             )
             .await
         })
@@ -1188,6 +1201,7 @@ We also believe this symbol needs to be probed because of:
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
             // we need to check if the outline node contains the range we are interested in
@@ -1283,6 +1297,7 @@ We also believe this symbol needs to be probed because of:
                                     outline_node.fs_file_path(),
                                 ),
                                 instruction_prompt,
+                                tool_properties.clone(),
                             ),
                             uuid::Uuid::new_v4().to_string(),
                             sender,
@@ -1347,6 +1362,7 @@ We also believe this symbol needs to be probed because of:
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         let reference_locations = references.locations();
         let file_paths = reference_locations
@@ -1422,6 +1438,7 @@ We also believe this symbol needs to be probed because of:
                 outline_nodes,
                 hub_sender,
                 request_id,
+                tool_properties,
             )
             .await
         })
@@ -1537,6 +1554,7 @@ Please handle these changes as required."#
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
             // we need to check if the outline node contains the range we are interested in
@@ -1630,6 +1648,7 @@ Please handle these changes as required."#
                                     outline_node.fs_file_path(),
                                 ),
                                 instruction_prompt,
+                                tool_properties.clone(),
                             ),
                             uuid::Uuid::new_v4().to_string(),
                             sender,
@@ -2001,6 +2020,7 @@ Please handle these changes as required."#
         // we get back here the defintion outline along with the reasoning on why
         // we need to look at the symbol
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<Vec<Option<(CodeSymbolWithThinking, String)>>, SymbolError> {
         let language = self
             .editor_parsing
@@ -2086,10 +2106,13 @@ Please handle these changes as required."#
                         let (sender, receiver) = tokio::sync::oneshot::channel();
                         // we have the possible file path over here
                         let _ = hub_sender.send((
-                            SymbolEventRequest::outline(SymbolIdentifier::with_file_path(
-                                symbol.code_symbol(),
-                                &definition_file_path,
-                            )),
+                            SymbolEventRequest::outline(
+                                SymbolIdentifier::with_file_path(
+                                    symbol.code_symbol(),
+                                    &definition_file_path,
+                                ),
+                                tool_properties.clone(),
+                            ),
                             uuid::Uuid::new_v4().to_string(),
                             sender,
                         ));
@@ -2254,13 +2277,14 @@ Please handle these changes as required."#
             SymbolEventRequest,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
+        tool_properties: &ToolProperties,
     ) -> Result<String, SymbolError> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let _ = hub_sender.send((
-            SymbolEventRequest::outline(SymbolIdentifier::with_file_path(
-                symbol_name,
-                fs_file_path,
-            )),
+            SymbolEventRequest::outline(
+                SymbolIdentifier::with_file_path(symbol_name, fs_file_path),
+                tool_properties.clone(),
+            ),
             sender,
         ));
         let response = receiver

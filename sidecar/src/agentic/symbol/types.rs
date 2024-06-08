@@ -47,6 +47,7 @@ use super::{
     helpers::split_file_content_into_parts,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
+    tool_properties::{self, ToolProperties},
     ui_event::UIEventWithID,
 };
 
@@ -76,6 +77,7 @@ impl SymbolLocation {
 pub struct SymbolEventRequest {
     symbol: SymbolIdentifier,
     event: SymbolEvent,
+    tool_properties: ToolProperties,
 }
 
 impl SymbolEventRequest {
@@ -90,31 +92,54 @@ impl SymbolEventRequest {
     pub fn remove_event(self) -> SymbolEvent {
         self.event
     }
+
+    pub fn get_tool_properties(&self) -> &ToolProperties {
+        &self.tool_properties
+    }
 }
 
 impl SymbolEventRequest {
-    pub fn new(symbol: SymbolIdentifier, event: SymbolEvent) -> Self {
-        Self { symbol, event }
+    pub fn new(
+        symbol: SymbolIdentifier,
+        event: SymbolEvent,
+        tool_properties: ToolProperties,
+    ) -> Self {
+        Self {
+            symbol,
+            event,
+            tool_properties,
+        }
     }
 
-    pub fn outline(symbol: SymbolIdentifier) -> Self {
+    pub fn outline(symbol: SymbolIdentifier, tool_properties: ToolProperties) -> Self {
         Self {
             symbol,
             event: SymbolEvent::Outline,
+            tool_properties,
         }
     }
 
-    pub fn ask_question(symbol: SymbolIdentifier, question: String) -> Self {
+    pub fn ask_question(
+        symbol: SymbolIdentifier,
+        question: String,
+        tool_properties: ToolProperties,
+    ) -> Self {
         Self {
             symbol,
             event: SymbolEvent::AskQuestion(AskQuestionRequest::new(question)),
+            tool_properties,
         }
     }
 
-    pub fn probe_request(symbol: SymbolIdentifier, request: SymbolToProbeRequest) -> Self {
+    pub fn probe_request(
+        symbol: SymbolIdentifier,
+        request: SymbolToProbeRequest,
+        tool_properties: ToolProperties,
+    ) -> Self {
         Self {
             symbol,
             event: SymbolEvent::Probe(request),
+            tool_properties,
         }
     }
 }
@@ -184,6 +209,10 @@ pub struct Symbol {
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
     ui_sender: UnboundedSender<UIEventWithID>,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    tool_properties: ToolProperties,
 }
 
 impl Symbol {
@@ -201,6 +230,7 @@ impl Symbol {
         llm_properties: LLMProperties,
         ui_sender: UnboundedSender<UIEventWithID>,
         request_id: String,
+        tool_properties: ToolProperties,
     ) -> Result<Self, SymbolError> {
         let symbol = Self {
             mecha_code_symbol: Arc::new(mecha_code_symbol),
@@ -209,6 +239,7 @@ impl Symbol {
             tools,
             llm_properties,
             ui_sender,
+            tool_properties,
         };
         // grab the implementations of the symbol
         // TODO(skcd): We also have to grab the diagnostics and auto-start any
@@ -420,6 +451,7 @@ impl Symbol {
         let history_ref = &history;
         let query = request.probe_request();
         let symbol_name = self.mecha_code_symbol.symbol_name();
+        let tool_properties_ref = &self.tool_properties;
 
         let snippets = self.mecha_code_symbol.get_implementations().await;
         info!(event_name = "refresh_state", symbol_name = symbol_name,);
@@ -736,6 +768,7 @@ impl Symbol {
                                     SymbolEventRequest::probe_request(
                                         symbol_identifier,
                                         symbol_to_probe_request,
+                                        tool_properties_ref.clone(),
                                     ),
                                     uuid::Uuid::new_v4().to_string(),
                                     sender,
@@ -856,6 +889,7 @@ impl Symbol {
                 original_request,
                 self.llm_properties.clone(),
                 request_id,
+                &self.tool_properties,
             )
             .await
     }
@@ -911,6 +945,7 @@ impl Symbol {
                 &subsymbol.instructions().join("\n"),
                 self.hub_sender.clone(),
                 request_id,
+                &self.tool_properties,
             )
             .await?;
         let codebase_wide_search: Vec<Option<(CodeSymbolWithThinking, String)>> = vec![];
@@ -1075,6 +1110,7 @@ impl Symbol {
                     self.llm_properties.api_key().clone(),
                     self.hub_sender.clone(),
                     request_id_ref,
+                    &self.tool_properties,
                 )
                 .await;
         }
@@ -1107,7 +1143,11 @@ impl Symbol {
                 );
                 let _ = symbol.ui_sender.send(UIEventWithID::from_symbol_event(
                     request_id.to_owned(),
-                    SymbolEventRequest::new(symbol.symbol_identifier.clone(), event.clone()),
+                    SymbolEventRequest::new(
+                        symbol.symbol_identifier.clone(),
+                        event.clone(),
+                        symbol.tool_properties.clone(),
+                    ),
                 ));
                 match event {
                     SymbolEvent::InitialRequest(initial_request) => {

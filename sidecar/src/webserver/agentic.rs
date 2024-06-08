@@ -10,6 +10,7 @@ use llm_client::{
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 
+use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::{
     agentic::{
         symbol::{
@@ -73,7 +74,8 @@ pub async fn probe_request(
         query.to_owned(),
         vec![],
     );
-    let probe_request = SymbolEventRequest::probe_request(symbol_identifier, probe_request);
+    let probe_request =
+        SymbolEventRequest::probe_request(symbol_identifier, probe_request, ToolProperties::new());
     // spawn a background thread to keep polling the probe_request future
     tokio::spawn(async move {
         let _ = symbol_manager.probe_request(probe_request).await;

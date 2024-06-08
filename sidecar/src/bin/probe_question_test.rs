@@ -14,6 +14,7 @@ use sidecar::{
             events::probe::SymbolToProbeRequest,
             identifier::{LLMProperties, SymbolIdentifier},
             manager::SymbolManager,
+            tool_properties::ToolProperties,
             types::SymbolEventRequest,
         },
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
@@ -108,8 +109,11 @@ async fn main() {
         webserver_request.to_owned(),
         vec![],
     );
-    let probe_request =
-        SymbolEventRequest::probe_request(webserver_symbol_identifier, probe_request);
+    let probe_request = SymbolEventRequest::probe_request(
+        webserver_symbol_identifier,
+        probe_request,
+        ToolProperties::new(),
+    );
     let mut probe_task = Box::pin(symbol_manager.probe_request(probe_request));
 
     loop {

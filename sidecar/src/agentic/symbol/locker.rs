@@ -12,13 +12,14 @@ use std::{collections::HashMap, sync::Arc};
 use futures::lock::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::user_context::types::UserContext;
+use crate::{agentic::symbol::tool_properties, user_context::types::UserContext};
 
 use super::{
     errors::SymbolError,
     events::types::SymbolEvent,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
+    tool_properties::ToolProperties,
     types::{Symbol, SymbolEventRequest, SymbolEventResponse},
     ui_event::UIEventWithID,
 };
@@ -87,6 +88,8 @@ impl SymbolLocker {
         ),
     ) {
         let request = request_event.0;
+        let tool_properties = request.get_tool_properties().clone();
+        let tool_properties_ref = &tool_properties;
         let request_id = request_event.1;
         let sender = request_event.2;
         let symbol_identifier = request.symbol().clone();
@@ -128,7 +131,11 @@ impl SymbolLocker {
                     // we create the symbol over here, but what about the context, I want
                     // to pass it to the symbol over here
                     let _ = self
-                        .create_symbol_agent(mecha_code_symbol_thinking, request_id.to_owned())
+                        .create_symbol_agent(
+                            mecha_code_symbol_thinking,
+                            request_id.to_owned(),
+                            tool_properties_ref.clone(),
+                        )
                         .await;
                 } else {
                     // we are fucked over here since we didn't find a snippet for the symbol
@@ -161,6 +168,7 @@ impl SymbolLocker {
         &self,
         request: MechaCodeSymbolThinking,
         request_id: String,
+        tool_properties: ToolProperties,
     ) -> Result<SymbolIdentifier, SymbolError> {
         // say we create the symbol agent, what happens next
         // the agent can have its own events which it might need to do, including the
@@ -194,6 +202,7 @@ impl SymbolLocker {
             self.llm_properties.clone(),
             self.ui_sender.clone(),
             request_id,
+            tool_properties,
         )
         .await;
 

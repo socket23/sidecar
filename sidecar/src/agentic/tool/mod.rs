@@ -26,3 +26,4 @@ pub mod input;
 pub mod lsp;
 pub mod output;
 pub mod rerank;
+pub mod swe_bench;

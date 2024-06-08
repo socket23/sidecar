@@ -46,4 +46,7 @@ pub enum ToolError {
 
     #[error("Code not formatted properly: {0}")]
     CodeNotFormatted(String),
+
+    #[error("Invoking SWE Bench test failed")]
+    SWEBenchTestEndpointError,
 }

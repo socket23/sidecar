@@ -48,6 +48,8 @@ pub enum ToolType {
     ProbeSummarizeAnswer,
     // Repo map Search
     RepoMapSearch,
+    // SWE Bench tool endpoint
+    SWEBenchToolEndpoint,
 }
 
 impl std::fmt::Display for ToolType {
@@ -83,6 +85,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ProbeFollowAlongSymbol => write!(f, "Probe Follow Along Symbol"),
             ToolType::ProbeSummarizeAnswer => write!(f, "Probe Summarize Answer"),
             ToolType::RepoMapSearch => write!(f, "Repo Map Search"),
+            ToolType::SWEBenchToolEndpoint => write!(f, "SWE Bench Tool Endpoint"),
         }
     }
 }

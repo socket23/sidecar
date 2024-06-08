@@ -33,6 +33,7 @@ use super::{
     },
     output::ToolOutput,
     rerank::base::ReRankBroker,
+    swe_bench::test_tool::SWEBenchTestTool,
 };
 
 pub struct ToolBrokerConfiguration {
@@ -159,6 +160,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::RepoMapSearch,
             Box::new(RepoMapSearchBroker::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::SWEBenchToolEndpoint,
+            Box::new(SWEBenchTestTool::new()),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

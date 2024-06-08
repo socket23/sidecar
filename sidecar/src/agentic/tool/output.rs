@@ -94,9 +94,15 @@ pub enum ToolOutput {
     ProbeSummarizationResult(String),
     // Repo map result
     RepoMapSearch(CodeSymbolImportantResponse),
+    // SWE Bench test output
+    SWEBenchTestOutput(String),
 }
 
 impl ToolOutput {
+    pub fn swe_bench_test_output(output: String) -> Self {
+        ToolOutput::SWEBenchTestOutput(output)
+    }
+
     pub fn probe_summarization_result(response: String) -> Self {
         ToolOutput::ProbeSummarizationResult(response)
     }

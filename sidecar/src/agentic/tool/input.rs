@@ -25,6 +25,7 @@ use super::{
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
     rerank::base::ReRankEntriesForBroker,
+    swe_bench::test_tool::SWEBenchTestRequest,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -57,6 +58,8 @@ pub enum ToolInput {
     ProbeSummarizeAnswerRequest(CodeSymbolProbingSummarize),
     // repo map query
     RepoMapSearch(RepoMapSearchQuery),
+    // SWE Bench tooling
+    SWEBenchTest(SWEBenchTestRequest),
 }
 
 impl ToolInput {
@@ -90,6 +93,7 @@ impl ToolInput {
             ToolInput::ProbeFollowAlongSymbol(_) => ToolType::ProbeFollowAlongSymbol,
             ToolInput::ProbeSummarizeAnswerRequest(_) => ToolType::ProbeSummarizeAnswer,
             ToolInput::RepoMapSearch(_) => ToolType::RepoMapSearch,
+            ToolInput::SWEBenchTest(_) => ToolType::SWEBenchToolEndpoint,
         }
     }
 
@@ -98,6 +102,14 @@ impl ToolInput {
             true
         } else {
             false
+        }
+    }
+
+    pub fn swe_bench_test(self) -> Result<SWEBenchTestRequest, ToolError> {
+        if let ToolInput::SWEBenchTest(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::SWEBenchToolEndpoint))
         }
     }
 

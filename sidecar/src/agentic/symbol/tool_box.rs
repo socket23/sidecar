@@ -1825,20 +1825,21 @@ Please handle these changes as required."#
             }
 
             // Now we get all the quick fixes which are available in the editor
-            let quick_fix_actions = self
-                .get_quick_fix_actions(
+            let quick_fix_actions = dbg!(
+                self.get_quick_fix_actions(
                     fs_file_path,
                     &edited_range,
                     lsp_request_id.to_owned(),
                     request_id,
                 )
-                .await?
-                .remove_options();
+                .await
+            )?
+            .remove_options();
 
             // now we can send over the request to the LLM to select the best tool
             // for editing the code out
-            let selected_action = self
-                .code_correctness_action_selection(
+            let selected_action = dbg!(
+                self.code_correctness_action_selection(
                     fs_file_path,
                     &fs_file_content,
                     &edited_range,
@@ -1852,7 +1853,8 @@ Please handle these changes as required."#
                     api_keys.clone(),
                     request_id,
                 )
-                .await?;
+                .await
+            )?;
 
             // Now that we have the selected action, we can chose what to do about it
             // there might be a case that we have to re-write the code completely, since
@@ -1863,8 +1865,8 @@ Please handle these changes as required."#
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
             if selected_action_index >= quick_fix_actions.len() as i64 {
-                let fixed_code = self
-                    .code_correctness_with_edits(
+                let fixed_code = dbg!(
+                    self.code_correctness_with_edits(
                         fs_file_path,
                         &fs_file_content,
                         symbol_to_edit.range(),
@@ -1877,7 +1879,8 @@ Please handle these changes as required."#
                         api_keys.clone(),
                         request_id,
                     )
-                    .await?;
+                    .await
+                )?;
 
                 // after this we have to apply the edits to the editor again and being
                 // the loop again

@@ -184,7 +184,7 @@ impl Tool for CodeEditingTool {
                 api_key,
                 llm_message,
                 provider,
-                vec![("request".to_owned(), "code_edit_tool".to_owned())]
+                vec![("event_type".to_owned(), "code_edit_tool".to_owned())]
                     .into_iter()
                     .collect(),
                 sender,

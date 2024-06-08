@@ -16,4 +16,8 @@ impl ToolProperties {
         self.swe_bench_test_endpoint = swe_bench_test_endpoint;
         self
     }
+
+    pub fn get_swe_bench_test_endpoint(&self) -> Option<String> {
+        self.swe_bench_test_endpoint.clone()
+    }
 }

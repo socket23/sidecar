@@ -10,6 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
 use crate::agentic::symbol::events::initial_request::InitialRequestData;
 use crate::agentic::symbol::events::types::SymbolEvent;
+use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::tool::base::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::user_context::types::UserContext;
@@ -131,6 +132,10 @@ impl SymbolManager {
         ));
         let swe_bench_id = input_event.swe_bench_instance_id();
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
+        let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
+        let tool_properties =
+            ToolProperties::new().set_swe_bench_endpoint(swe_bench_test_endpoint.clone());
+        let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
         println!("Tool input: {:?}", &tool_input);
@@ -189,7 +194,11 @@ impl SymbolManager {
                     .map(|symbol_request| async move {
                         let symbol_identifier = self
                             .symbol_locker
-                            .create_symbol_agent(symbol_request, request_id_ref.to_owned())
+                            .create_symbol_agent(
+                                symbol_request,
+                                request_id_ref.to_owned(),
+                                tool_properties_ref.clone(),
+                            )
                             .await;
                         symbol_identifier
                     })
@@ -214,6 +223,7 @@ impl SymbolManager {
                             SymbolEvent::InitialRequest(InitialRequestData::new(
                                 user_query.to_owned(),
                             )),
+                            tool_properties_ref.clone(),
                         ),
                     )
                 }))

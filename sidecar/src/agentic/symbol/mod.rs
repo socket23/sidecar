@@ -9,5 +9,6 @@ pub mod identifier;
 pub mod locker;
 pub mod manager;
 pub mod tool_box;
+pub mod tool_properties;
 pub mod types;
 pub mod ui_event;

@@ -67,6 +67,10 @@ impl SymbolInputEvent {
         self.swe_bench_git_dname.clone()
     }
 
+    pub fn get_swe_bench_test_endpoint(&self) -> Option<String> {
+        self.swe_bench_test_endpoint.clone()
+    }
+
     pub fn set_swe_bench_id(mut self, swe_bench_id: String) -> Self {
         self.swe_bench_id = Some(swe_bench_id);
         self

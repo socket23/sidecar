@@ -23,6 +23,7 @@ use super::{
         types::SymbolEvent,
     },
     tool_box::ToolBox,
+    tool_properties::ToolProperties,
     types::SymbolEventRequest,
 };
 
@@ -476,6 +477,7 @@ impl MechaCodeSymbolThinking {
         original_request: &str,
         llm_properties: LLMProperties,
         request_id: String,
+        tool_properties: &ToolProperties,
     ) -> Result<SymbolEventRequest, SymbolError> {
         println!(
             "mecha_code_symbol_thinking::symbol_name({})",
@@ -611,6 +613,7 @@ Reason to edit:
                         sub_symbols_to_edit,
                         self.to_symbol_identifier(),
                     )),
+                    tool_properties.clone(),
                 ))
             } else {
                 todo!("what do we do over here")

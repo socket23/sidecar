@@ -1718,6 +1718,7 @@ Please handle these changes as required."#
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
+        tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         // code correction looks like this:
         // - apply the edited code to the original selection
@@ -1756,6 +1757,13 @@ Please handle these changes as required."#
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?
                 .contents();
+
+            // In case we have swe-bench-tooling enabled over here we should run
+            // the tests first, since we get enough value out if to begin with
+            // TODO(skcd): Create a tool here which can run the tests by hitting
+            // the endpoint, after which we have to process the output of the
+            // test along with the LSP diagnostics to check what we should be
+            // doing next
 
             // Now we check for LSP diagnostics
             let lsp_diagnostics = self

@@ -1094,6 +1094,7 @@ impl Symbol {
                     self.llm_properties.provider().clone(),
                     self.llm_properties.api_key().clone(),
                     request_id_ref,
+                    &self.tool_properties,
                 )
                 .await;
 

@@ -97,15 +97,6 @@ pub fn is_multiline_completion(
     let prefix = &prefix_and_suffix.prefix;
     let suffix = &prefix_and_suffix.suffix;
     let ends_with_block_start = prefix.trim_end().ends_with(block_start);
-    let current_line_content = if suffix.trim().len() == 0 {
-        prefix.to_owned()
-    } else {
-        prefix.to_owned() + &suffix
-    };
-    let is_function_invocation = FUNCTION_KEYWORDS
-        .iter()
-        .any(|function_keyword| function_keyword == prefix.trim())
-        && FUNCTION_OR_METHOD_INVOCATION_REGEX.is_match(&current_line_content);
 
     let is_current_line_invocation = !prefix.trim().is_empty()
         && BLOCK_START.is_match(prefix.trim_end())

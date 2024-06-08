@@ -32,7 +32,7 @@ use super::{
 // This is the main communication manager between all the symbols
 // this of this as the central hub through which all the events go forward
 pub struct SymbolManager {
-    sender: UnboundedSender<(
+    _sender: UnboundedSender<(
         SymbolEventRequest,
         String,
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
@@ -42,11 +42,11 @@ pub struct SymbolManager {
     // each symbol has its own receiver which is being used
     symbol_locker: SymbolLocker,
     tools: Arc<ToolBroker>,
-    symbol_broker: Arc<SymbolTrackerInline>,
-    editor_parsing: Arc<EditorParsing>,
+    _symbol_broker: Arc<SymbolTrackerInline>,
+    _editor_parsing: Arc<EditorParsing>,
     tool_box: Arc<ToolBox>,
-    editor_url: String,
-    llm_properties: LLMProperties,
+    _editor_url: String,
+    _llm_properties: LLMProperties,
     ui_sender: UnboundedSender<UIEventWithID>,
     long_context_cache: LongContextSearchCache,
 }
@@ -83,7 +83,6 @@ impl SymbolManager {
             ui_sender.clone(),
         );
         let cloned_symbol_locker = symbol_locker.clone();
-        let cloned_ui_sender = ui_sender.clone();
         tokio::spawn(async move {
             // TODO(skcd): Make this run in full parallelism in the future, for
             // now this is fine
@@ -95,14 +94,14 @@ impl SymbolManager {
             println!("symbol_manager::tokio::spawn::end");
         });
         Self {
-            sender,
+            _sender: sender,
             symbol_locker,
-            editor_parsing,
+            _editor_parsing: editor_parsing,
             tools,
-            symbol_broker,
+            _symbol_broker: symbol_broker,
             tool_box,
-            editor_url,
-            llm_properties,
+            _editor_url: editor_url,
+            _llm_properties: llm_properties,
             ui_sender,
             long_context_cache: LongContextSearchCache::new(),
         }
@@ -149,7 +148,7 @@ impl SymbolManager {
             ));
             let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
                 let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
-                if let Some(git_dname) = swe_bench_git_dname {
+                if let Some(_git_dname) = swe_bench_git_dname {
                     match symbols {
                         Some(symbols) => Some(symbols),
                         None => None,

@@ -1,8 +1,7 @@
-use std::io::{Write, BufWriter};
+use std::io::{BufWriter, Write};
 use std::{
     collections::HashMap,
     env,
-    ffi::OsStr,
     fs::{read_dir, read_to_string, File},
     path::Path,
 };

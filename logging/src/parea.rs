@@ -58,33 +58,6 @@ impl PareaLogCompletion {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct PareaLogEvent {
-    metadata: HashMap<String, String>,
-    event_name: String,
-    parent_trace_id: String,
-    trace_id: String,
-    root_trace_id: String,
-}
-
-impl PareaLogEvent {
-    pub fn new(
-        event_name: String,
-        metadata: HashMap<String, String>,
-        trace_id: String,
-        parent_trace_id: String,
-        root_trace_id: String,
-    ) -> Self {
-        Self {
-            event_name,
-            metadata,
-            parent_trace_id,
-            trace_id,
-            root_trace_id,
-        }
-    }
-}
-
 impl PareaClient {
     pub fn new() -> Self {
         Self {

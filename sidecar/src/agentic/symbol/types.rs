@@ -47,7 +47,7 @@ use super::{
     helpers::split_file_content_into_parts,
     identifier::{LLMProperties, MechaCodeSymbolThinking, SymbolIdentifier},
     tool_box::ToolBox,
-    tool_properties::{self, ToolProperties},
+    tool_properties::ToolProperties,
     ui_event::UIEventWithID,
 };
 
@@ -723,7 +723,6 @@ impl Symbol {
         let probe_answers = stream::iter(probe_results)
             .map(|probe_result| async move {
                 let snippet = probe_result.0;
-                let symbol_name = snippet.symbol_name();
                 let snippet_file_path = snippet.file_path();
                 let snippet_content = snippet.content();
                 let probe_results = probe_result
@@ -898,7 +897,7 @@ impl Symbol {
     // to decide if it needs to collect more information or make changes, we need to carefully
     // figure that out over here
     // what tools do we provide to the symbol for this?
-    async fn answer_question(&self, question: &str) -> Result<SymbolEventRequest, SymbolError> {
+    async fn _answer_question(&self, _question: &str) -> Result<SymbolEventRequest, SymbolError> {
         // The idea here we want to do is:
         // - We first ask which symbols we want to go towards and also do a global search
         // - We then do a question for any followup changes which we need to do on these other symbols (ask them a query and wait for the result)
@@ -925,7 +924,7 @@ impl Symbol {
             &symbol_to_edit
         );
         let selection_range = symbol_to_edit.range();
-        let language = self
+        let _language = self
             .tools
             .detect_language(&subsymbol.fs_file_path())
             .unwrap_or("".to_owned());
@@ -1204,7 +1203,7 @@ impl Symbol {
                         );
                         symbol.edit_implementations(edit_request, request_id).await
                     }
-                    SymbolEvent::AskQuestion(ask_question_request) => {
+                    SymbolEvent::AskQuestion(_ask_question_request) => {
                         // we refresh our state always
                         symbol.refresh_state(request_id).await;
                         // we will the following in sequence:

@@ -255,7 +255,7 @@ impl SemanticClient {
     }
 }
 
-fn build_conditions<'a>(parsed_query: &'a str, reporef: &'a RepoRef) -> Vec<Condition> {
+fn build_conditions<'a>(_parsed_query: &'a str, reporef: &'a RepoRef) -> Vec<Condition> {
     vec![Filter {
         must: vec![make_kv_keyword_filter("repo_ref", &reporef.to_string()).into()],
         ..Default::default()

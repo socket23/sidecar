@@ -98,7 +98,7 @@ impl EditorParsing {
         tree_sitter_node: tree_sitter::Node<'a>,
         range: &'a Range,
         language_config: &'a TSLanguageConfig,
-        source_str: &str,
+        _source_str: &str,
     ) -> Option<tree_sitter::Node<'a>> {
         let mut nodes = vec![tree_sitter_node];
         let mut identifier_nodes: Vec<(tree_sitter::Node, f64)> = vec![];

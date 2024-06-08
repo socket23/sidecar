@@ -90,7 +90,7 @@ impl From<llm_funcs::llm::Message> for MessageType {
             llm_funcs::llm::Message::FunctionCall {
                 role,
                 function_call,
-                content,
+                ..
             } => MessageType {
                 id: Uuid::new_v4().to_string(),
                 role: role.into(),

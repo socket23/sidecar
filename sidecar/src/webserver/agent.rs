@@ -193,9 +193,6 @@ pub async fn explain(
     let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
-    let user_id = app.user_id.to_owned();
-    let posthog_client = app.posthog_client.clone();
-    let sql_db = app.sql.clone();
     let file_content = app
         .indexes
         .file

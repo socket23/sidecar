@@ -12,7 +12,6 @@ use llm_client::{
 };
 use llm_prompts::fim::types::FillInMiddleRequest;
 use llm_prompts::{answer_model::LLMAnswerModelBroker, fim::types::FillInMiddleBroker};
-use tree_sitter::TreeCursor;
 
 use crate::chunking::languages::TSLanguageConfig;
 use crate::chunking::text_document::Range;
@@ -296,7 +295,7 @@ impl FillInMiddleCompletionAgent {
         &self,
         completion_request: InlineCompletionRequest,
         abort_handle: AbortHandle,
-        request_start: Instant,
+        _request_start: Instant,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<InlineCompletionResponse, InLineCompletionError>> + Send>>,
         InLineCompletionError,
@@ -698,7 +697,7 @@ enum TerminationCondition {
 fn immediate_terminating_condition(
     inserted_text: String,
     inserted_text_delta: Option<String>,
-    inserted_range: &Range,
+    _inserted_range: &Range,
     context: Arc<FillInMiddleStreamContext>,
     fast_model: LLMType,
 ) -> TerminationCondition {

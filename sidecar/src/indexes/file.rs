@@ -18,7 +18,6 @@ use tracing::{debug, info, trace, warn};
 
 use crate::{
     application::background::SyncPipes,
-    chunking::text_document::Range,
     repo::{
         filesystem::{BranchFilter, FileWalker, GitWalker},
         iterator::RepoDirectoryEntry,
@@ -475,9 +474,9 @@ impl ContentDocument {
     pub fn build_document(
         repo_ref: &RepoRef,
         content: &[u8],
-        language: &str,
+        _language: &str,
         relative_path: &str,
-        language_parsing: Arc<TSLanguageParsing>,
+        _language_parsing: Arc<TSLanguageParsing>,
     ) -> Self {
         let relative_path_str = format!("{}", relative_path);
         #[cfg(windows)]

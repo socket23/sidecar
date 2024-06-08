@@ -748,7 +748,6 @@ impl DocumentEditLines {
         // is being edited, we kind of want to make sure that the last edit makes it
         // way here always, the rest can be fine even if they are not immediately acted
         // upon
-        let instant = std::time::Instant::now();
         self.set_tree();
         // dbg!("document_lines.set_tree", &instant.elapsed());
         // we need to create ths symbol map here for the file so we can lookup the symbols
@@ -832,7 +831,6 @@ impl DocumentEditLines {
         new_content: String,
         timestamp: i64,
     ) -> Vec<OutlineNode> {
-        let instant = std::time::Instant::now();
         // dbg!("content.change", &range, &new_content);
         self.remove_range(range);
         // dbg!("content.removed", &instant.elapsed());

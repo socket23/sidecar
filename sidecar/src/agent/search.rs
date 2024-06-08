@@ -37,7 +37,6 @@ use tracing::{debug, info, warn};
 
 use std::{
     collections::{HashMap, HashSet},
-    ops::Range,
     path::Path,
     sync::Arc,
 };
@@ -771,11 +770,7 @@ impl Agent {
         // fixing the message structure here is necessary for anthropic where we are
         // forced to have alternating human and assistant messages.
         .fix_message_structure();
-        let fixed_roles = request
-            .messages()
-            .iter()
-            .map(|message| message.role().clone())
-            .collect::<Vec<_>>();
+
         // dbg!("sidecar.generating_ansewr.fixed_roles", &fixed_roles);
         let (answer_sender, answer_receiver) = tokio::sync::mpsc::unbounded_channel();
         let answer_receiver = UnboundedReceiverStream::new(answer_receiver).map(either::Left);
@@ -1022,14 +1017,6 @@ impl Agent {
     }
 
     async fn dedup_code_spans(&mut self, aliases: &[usize]) -> anyhow::Result<Vec<CodeSpan>> {
-        /// The ratio of code tokens to context size.
-        ///
-        /// Making this closure to 1 means that more of the context is taken up by source code.
-        const CONTEXT_CODE_RATIO: f32 = 0.5;
-
-        let answer_model = self.chat_broker.get_answer_model(self.slow_llm_model())?;
-        let max_tokens = (answer_model.total_tokens as f32 * CONTEXT_CODE_RATIO) as usize;
-
         // Note: The end line number here is *not* inclusive.
         let mut spans_by_path = HashMap::<_, Vec<_>>::new();
         for code_span in self

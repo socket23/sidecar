@@ -94,7 +94,7 @@ async fn main() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let symbol = Symbol::new(
+    let _symbol = Symbol::new(
         SymbolIdentifier::with_file_path("Agent", &fs_file_path),
         mecha_code_symbol_thinking,
         sender,

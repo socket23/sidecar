@@ -12,7 +12,7 @@ use std::{collections::HashMap, sync::Arc};
 use futures::lock::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{agentic::symbol::tool_properties, user_context::types::UserContext};
+use crate::user_context::types::UserContext;
 
 use super::{
     errors::SymbolError,

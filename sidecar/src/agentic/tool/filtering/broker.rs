@@ -273,7 +273,7 @@ impl CodeToProbeSymbolResponse {
 #[derive(Debug, Clone)]
 pub struct CodeToProbeFilterResponse {
     snippets_to_probe_ordered: Vec<SnippetWithReason>,
-    snippets_to_not_probe: Vec<SnippetWithReason>,
+    _snippets_to_not_probe: Vec<SnippetWithReason>,
 }
 
 impl CodeToProbeFilterResponse {
@@ -282,7 +282,7 @@ impl CodeToProbeFilterResponse {
         snippets_to_not_probe: Vec<SnippetWithReason>,
     ) -> Self {
         Self {
-            snippets_to_not_probe,
+            _snippets_to_not_probe: snippets_to_not_probe,
             snippets_to_probe_ordered,
         }
     }
@@ -294,8 +294,8 @@ impl CodeToProbeFilterResponse {
 
 #[derive(Debug, Clone)]
 pub struct CodeToEditFilterResponse {
-    snippets_to_edit_ordered: Vec<SnippetWithReason>,
-    snippets_to_not_edit: Vec<SnippetWithReason>,
+    _snippets_to_edit_ordered: Vec<SnippetWithReason>,
+    _snippets_to_not_edit: Vec<SnippetWithReason>,
 }
 
 impl CodeToEditFilterResponse {
@@ -304,8 +304,8 @@ impl CodeToEditFilterResponse {
         snippets_to_not_edit: Vec<SnippetWithReason>,
     ) -> Self {
         Self {
-            snippets_to_edit_ordered: snippets_to_edit,
-            snippets_to_not_edit,
+            _snippets_to_edit_ordered: snippets_to_edit,
+            _snippets_to_not_edit: snippets_to_not_edit,
         }
     }
 }

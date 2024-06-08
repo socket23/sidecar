@@ -7,9 +7,8 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use tree_sitter::{InputEdit, Point};
 
-use crate::chunking::{editor_parsing::EditorParsing, text_document::Range};
+use crate::chunking::editor_parsing::EditorParsing;
 
 pub struct TreeSitterCache {
     pub cache: DashMap<String, tree_sitter::Tree>,

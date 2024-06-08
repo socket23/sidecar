@@ -1,7 +1,7 @@
 //! Client which can help us talk to openai
 
 use async_openai::{
-    config::{AzureConfig, OpenAIConfig},
+    config::OpenAIConfig,
     error::OpenAIError,
     types::{
         ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
@@ -27,7 +27,6 @@ struct PartialOpenAIResponse {
 }
 
 enum OpenAIClientType {
-    AzureClient(Client<AzureConfig>),
     OpenAIClient(Client<OpenAIConfig>),
 }
 
@@ -115,7 +114,7 @@ impl OpenAICompatibleClient {
     fn generate_openai_client(
         &self,
         api_key: LLMProviderAPIKeys,
-        llm_model: &LLMType,
+        _llm_model: &LLMType,
     ) -> Result<OpenAIClientType, LLMClientError> {
         match api_key {
             LLMProviderAPIKeys::OpenAICompatible(openai_compatible) => {
@@ -180,42 +179,42 @@ impl LLMClient for OpenAICompatibleClient {
         // TODO(skcd): Bad code :| we are repeating too many things but this
         // just works and we need it right now
         match client {
-            OpenAIClientType::AzureClient(client) => {
-                let stream_maybe = client.chat().create_stream(request).await;
-                if stream_maybe.is_err() {
-                    return Err(LLMClientError::OpenAPIError(stream_maybe.err().unwrap()));
-                } else {
-                    dbg!("no error here");
-                }
-                let mut stream = stream_maybe.unwrap();
-                while let Some(response) = stream.next().await {
-                    match response {
-                        Ok(response) => {
-                            let delta = response
-                                .choices
-                                .get(0)
-                                .map(|choice| choice.delta.content.to_owned())
-                                .flatten()
-                                .unwrap_or("".to_owned());
-                            let _value = response
-                                .choices
-                                .get(0)
-                                .map(|choice| choice.delta.content.as_ref())
-                                .flatten();
-                            buffer.push_str(&delta);
-                            let _ = sender.send(LLMClientCompletionResponse::new(
-                                buffer.to_owned(),
-                                Some(delta),
-                                model.to_owned(),
-                            ));
-                        }
-                        Err(err) => {
-                            dbg!(err);
-                            break;
-                        }
-                    }
-                }
-            }
+            // OpenAIClientType::AzureClient(client) => {
+            //     let stream_maybe = client.chat().create_stream(request).await;
+            //     if stream_maybe.is_err() {
+            //         return Err(LLMClientError::OpenAPIError(stream_maybe.err().unwrap()));
+            //     } else {
+            //         dbg!("no error here");
+            //     }
+            //     let mut stream = stream_maybe.unwrap();
+            //     while let Some(response) = stream.next().await {
+            //         match response {
+            //             Ok(response) => {
+            //                 let delta = response
+            //                     .choices
+            //                     .get(0)
+            //                     .map(|choice| choice.delta.content.to_owned())
+            //                     .flatten()
+            //                     .unwrap_or("".to_owned());
+            //                 let _value = response
+            //                     .choices
+            //                     .get(0)
+            //                     .map(|choice| choice.delta.content.as_ref())
+            //                     .flatten();
+            //                 buffer.push_str(&delta);
+            //                 let _ = sender.send(LLMClientCompletionResponse::new(
+            //                     buffer.to_owned(),
+            //                     Some(delta),
+            //                     model.to_owned(),
+            //                 ));
+            //             }
+            //             Err(err) => {
+            //                 dbg!(err);
+            //                 break;
+            //             }
+            //         }
+            //     }
+            // }
             OpenAIClientType::OpenAIClient(client) => {
                 let mut stream = client.chat().create_stream(request).await?;
                 while let Some(response) = stream.next().await {

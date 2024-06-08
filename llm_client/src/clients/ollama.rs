@@ -21,7 +21,6 @@ pub struct OllamaClient {
 struct OllamaResponse {
     model: String,
     response: String,
-    done: bool,
 }
 
 impl LLMType {
@@ -159,7 +158,7 @@ impl LLMClient for OllamaClient {
 
     async fn stream_prompt_completion(
         &self,
-        api_key: LLMProviderAPIKeys,
+        _api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionStringRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {

@@ -2,28 +2,22 @@ use std::collections::HashMap;
 
 use llm_client::clients::types::{LLMClientCompletionRequest, LLMType};
 
-use crate::agentic::tool::{
-    code_edit::{
-        find::{FindCodeSectionsToEdit, FindCodeSelectionInput},
-        types::CodeEdit,
-    },
-    errors::ToolError,
-};
+use crate::agentic::tool::{code_edit::types::CodeEdit, errors::ToolError};
 
 use super::anthropic::AnthropicCodeEditFromatter;
 
 pub struct CodeSnippet {
     snippet_content: String,
-    start_line: i64,
-    end_line: i64,
+    _start_line: i64,
+    _end_line: i64,
 }
 
 impl CodeSnippet {
     pub fn new(snippet_content: String, start_line: i64, end_line: i64) -> Self {
         Self {
             snippet_content,
-            start_line,
-            end_line,
+            _start_line: start_line,
+            _end_line: end_line,
         }
     }
 

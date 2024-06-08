@@ -44,7 +44,6 @@ impl VariableInformation {
     }
 
     pub fn to_xml(self) -> String {
-        let xml = "".to_owned();
         let variable_name = self.name;
         let location = format!(
             "{}:{}-{}",

@@ -63,7 +63,7 @@ impl FindInFile {
                         .as_slice()
                         .windows(symbol.chars().into_iter().collect::<Vec<_>>().len())
                         .enumerate()
-                        .find(|(idx, window)| {
+                        .find(|(_idx, window)| {
                             window
                                 .into_iter()
                                 .map(|c| c.to_string())

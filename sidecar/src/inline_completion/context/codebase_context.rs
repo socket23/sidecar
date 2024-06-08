@@ -87,7 +87,6 @@ impl CodeBaseContext {
         token_limit: usize,
         abort_handle: AbortHandle,
     ) -> Result<CodebaseContextString, InLineCompletionError> {
-        let instant = std::time::Instant::now();
         let language_config = self.editor_parsing.for_file_path(&self.file_path).ok_or(
             InLineCompletionError::LanguageNotSupported("not_supported".to_owned()),
         )?;

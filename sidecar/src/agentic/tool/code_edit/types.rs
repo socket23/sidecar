@@ -85,10 +85,6 @@ impl CodeEditingTool {
         self.editor_config.as_ref()
     }
 
-    fn escape_str(line: String) -> String {
-        quick_xml::escape::escape(&line).to_string()
-    }
-
     /// Code output from LLMs is of the following form:
     /// {garbage}
     /// <reply>

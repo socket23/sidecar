@@ -336,7 +336,7 @@ impl CodeSymbolInformation {
 
 async fn find_nearest_position_for_code_edit(
     file_content: &str,
-    file_path: &str,
+    _file_path: &str,
     new_content: &str,
     language: &str,
     language_parsing: Arc<TSLanguageParsing>,
@@ -1051,16 +1051,16 @@ pub enum LineContentType {
 async fn send_edit_events(
     file_lines: Vec<String>,
     file_content: String,
-    llm_content: String,
+    _llm_content: String,
     user_query: String,
-    language: String,
-    session_id: String,
-    llm_broker: Arc<LLMBroker>,
+    _language: String,
+    _session_id: String,
+    _llm_broker: Arc<LLMBroker>,
     language_parsing: Arc<TSLanguageParsing>,
     file_path: String,
-    nearest_range_symbols: Vec<(Option<Range>, CodeSymbolInformation)>,
-    code_block_index: usize,
-    model_config: LLMClientConfig,
+    _nearest_range_symbols: Vec<(Option<Range>, CodeSymbolInformation)>,
+    _code_block_index: usize,
+    _model_config: LLMClientConfig,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -1070,8 +1070,8 @@ async fn send_edit_events(
     // - If the file is less than 500 lines, then we can start editing the whole file
     // - If the file is more than 500 lines, then we use the reranking to select the most relevant parts of the file
     // - We then use the llm to generate the code in that section of the code snippet
-    let mut start_line = None;
-    let mut end_line = None;
+    // let mut start_line = None;
+    // let mut end_line: Option<u64>;
     if file_lines.len() >= 500 {
         let ts_language_parsing = language_parsing.clone();
         let snippets = ts_language_parsing
@@ -1112,26 +1112,26 @@ async fn send_edit_events(
                 // then we should merge them
                 if cs.code_span().intersects(snippet.code_span()) {
                     // then we update the start and end lines
-                    start_line = Some(
-                        cs.code_span()
-                            .start_line()
-                            .min(snippet.code_span().start_line()),
-                    );
-                    end_line = Some(
-                        cs.code_span()
-                            .end_line()
-                            .max(snippet.code_span().end_line()),
-                    );
+                    // start_line = Some(
+                    //     cs.code_span()
+                    //         .start_line()
+                    //         .min(snippet.code_span().start_line()),
+                    // );
+                    // end_line = Some(
+                    //     cs.code_span()
+                    //         .end_line()
+                    //         .max(snippet.code_span().end_line()),
+                    // );
                 }
             } else {
-                start_line = Some(snippet.code_span().start_line());
-                end_line = Some(snippet.code_span().end_line());
+                // start_line = Some(snippet.code_span().start_line());
+                // end_line = Some(snippet.code_span().end_line());
                 current_snippet = Some(snippet);
             }
         }
     } else {
-        start_line = Some(0);
-        end_line = Some((file_lines.len() - 1) as u64);
+        // start_line = Some(0);
+        // end_line = Some((file_lines.len() - 1) as u64);
     }
 
     // we now have the range where we have to make the edit, the next step is to have the llm generate the updates

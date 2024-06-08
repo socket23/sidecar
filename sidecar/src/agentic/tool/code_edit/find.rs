@@ -28,7 +28,7 @@ use super::models::broker::CodeEditBroker;
 // cause sweep and aider are using this approach) [not doing this]
 
 pub struct FindCodeSectionsToEdit {
-    symbol_tracking: Arc<SymbolTrackerInline>,
+    _symbol_tracking: Arc<SymbolTrackerInline>,
     ts_language_config: Arc<TSLanguageParsing>,
     code_broker: Arc<CodeEditBroker>,
     llm_client: Arc<LLMBroker>,
@@ -42,7 +42,7 @@ impl FindCodeSectionsToEdit {
         llm_client: Arc<LLMBroker>,
     ) -> Self {
         Self {
-            symbol_tracking,
+            _symbol_tracking: symbol_tracking,
             ts_language_config,
             code_broker,
             llm_client,

@@ -79,7 +79,7 @@ impl PosthogClient {
         Ok(())
     }
 
-    pub async fn capture_batch(&self, events: Vec<PosthogEvent>) -> Result<(), Error> {
+    pub async fn _capture_batch(&self, events: Vec<PosthogEvent>) -> Result<(), Error> {
         for event in events {
             self.capture(event).await?;
         }

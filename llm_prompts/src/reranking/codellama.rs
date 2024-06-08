@@ -11,12 +11,6 @@ use super::types::{
 pub struct CodeLLamaReRank {}
 
 impl CodeLLamaReRank {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-impl CodeLLamaReRank {
     pub fn pointwise_reranking(&self, request: ReRankCodeSpanRequest) -> ReRankCodeSpanResponse {
         let code_span_digests = CodeSpan::to_digests(request.code_spans().to_vec());
         // Now we query the LLM for the pointwise reranking here

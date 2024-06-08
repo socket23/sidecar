@@ -320,8 +320,8 @@ pub async fn get_identifier_nodes(
     Extension(app): Extension<Application>,
     Json(InLineCompletionIdentifierNodesRequest {
         file_path,
-        language,
-        file_content,
+        language: _language,
+        file_content: _file_content,
         cursor_line,
         cursor_column,
     }): Json<InLineCompletionIdentifierNodesRequest>,

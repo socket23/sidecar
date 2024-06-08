@@ -1,6 +1,5 @@
 use either::Either;
 use std::collections::VecDeque;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread;
@@ -326,7 +325,7 @@ impl BackgroundExecutor {
     }
 }
 
-enum ControlEvent {
+pub enum ControlEvent {
     /// Cancel whatever's happening, and return
     Cancel,
     /// Remove, is when the user has asked us to remove it for whatever reason
@@ -364,14 +363,14 @@ impl SyncPipes {
         });
     }
 
-    pub(crate) fn is_cancelled(&self) -> bool {
+    pub fn is_cancelled(&self) -> bool {
         matches!(
             self.event.read().unwrap().as_ref(),
             Some(ControlEvent::Cancel)
         )
     }
 
-    pub(crate) fn is_removed(&self) -> bool {
+    pub fn is_removed(&self) -> bool {
         matches!(
             self.event.read().unwrap().as_ref(),
             Some(ControlEvent::Remove)

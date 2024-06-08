@@ -22,7 +22,7 @@ impl TreeSitterParser {
         // In rustc 1.61+, we need to specify +whole-archive.
         // See https://github.com/rust-lang/rust/blob/1.61.0/RELEASES.md#compatibility-notes
         // and https://github.com/Wilfred/difftastic/issues/339.
-        let rustc_supports_whole_archive = !rustc::is_max_version("1.60.0").unwrap_or(false);
+        let _rustc_supports_whole_archive = !rustc::is_max_version("1.60.0").unwrap_or(false);
 
         let owned_src_dir = self.src_dir.to_owned();
         let dir_parts = owned_src_dir.split('/').into_iter().collect::<Vec<_>>();

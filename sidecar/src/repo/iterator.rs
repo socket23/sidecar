@@ -6,10 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    application::background::SyncPipes,
-    indexes::{caching::CacheKeys, schema::File},
-};
+use crate::application::background::SyncPipes;
 
 pub trait FileSource {
     fn len(&self) -> usize;

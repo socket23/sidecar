@@ -641,7 +641,7 @@ Your reply for the symbol list you are interested in should be strictly in the f
         )
     }
 
-    fn system_message_for_symbols_edit_operations(
+    fn _system_message_for_symbols_edit_operations(
         &self,
         symbol_name: &str,
         fs_file_path: &str,

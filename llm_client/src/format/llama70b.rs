@@ -3,14 +3,16 @@ use crate::clients::types::LLMClientMessage;
 use super::types::{LLMFormatting, TokenizerConfig, TokenizerError};
 
 pub struct CodeLLama70BInstructFormatting {
-    tokenizer_config: TokenizerConfig,
+    _tokenizer_config: TokenizerConfig,
 }
 
 impl CodeLLama70BInstructFormatting {
     pub fn new() -> Result<Self, TokenizerError> {
         let config = include_str!("tokenizer_config/codellama.json");
         let tokenizer_config = serde_json::from_str::<TokenizerConfig>(config)?;
-        Ok(Self { tokenizer_config })
+        Ok(Self {
+            _tokenizer_config: tokenizer_config,
+        })
     }
 }
 

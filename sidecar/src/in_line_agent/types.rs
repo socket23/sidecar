@@ -790,7 +790,7 @@ impl InLineAgent {
     async fn process_edit(
         &mut self,
         answer_sender: UnboundedSender<InLineAgentAnswer>,
-        model: &LLMType,
+        _model: &LLMType,
     ) -> anyhow::Result<()> {
         dbg!("sidecar.inline_completion.process_edit");
         // Here we will try to process the edits
@@ -1142,7 +1142,6 @@ impl InLineAgent {
     ) -> InLineEditRequest {
         let mut above_context = None;
         let mut below_context = None;
-        let mut in_range_context = None;
         let has_surrounding_context = selection_with_outline.selection_context.above.has_context()
             || selection_with_outline.selection_context.below.has_context()
             || !selection_with_outline.outline_above.is_empty()
@@ -1221,7 +1220,7 @@ impl InLineAgent {
             selection_prompt.push("// END".to_owned());
             selection_prompt.push("```".to_owned());
         }
-        in_range_context = Some(selection_prompt.join("\n"));
+        let in_range_context = Some(selection_prompt.join("\n"));
         InLineEditRequest::new(
             above_context,
             below_context,

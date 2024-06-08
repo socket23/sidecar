@@ -1422,7 +1422,7 @@ We also believe this symbol needs to be probed because of:
                         None
                     }
                 })
-                .map(|(fs_file_path, ranges, hub_sender, outline_nodes)| {
+                .map(|(_fs_file_path, ranges, hub_sender, outline_nodes)| {
                     ranges
                         .into_iter()
                         .map(|range| (range, hub_sender.clone(), outline_nodes.to_vec()))
@@ -1589,9 +1589,7 @@ Please handle these changes as required."#
                         request_id,
                     )
                     .await?;
-                if let Some(definition) = definitions.definitions().get(0) {
-                    let fs_file_path = definition.file_path();
-                    let symbol_name = outline_node.name();
+                if let Some(_definition) = definitions.definitions().get(0) {
                     if let Some(child_node) = child_node_possible {
                         // we need to get a few lines above and below the place where the defintion is present
                         // so we can show that to the LLM properly and ask it to make changes
@@ -1655,7 +1653,7 @@ Please handle these changes as required."#
                             sender,
                         ));
                         // Figure out what to do with the receiver over here
-                        let response = receiver.await;
+                        let _ = receiver.await;
                         // this also feels a bit iffy to me, since this will block
                         // the other requests from happening unless we do everything in parallel
                         Ok(())
@@ -1757,8 +1755,8 @@ Please handle these changes as required."#
             }
             tries = tries + 1;
 
-            let mut symbol_to_edit = self.find_sub_symbol_to_edit(symbol_edited).await?;
-            let mut fs_file_content = self
+            let symbol_to_edit = self.find_sub_symbol_to_edit(symbol_edited).await?;
+            let _fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?
                 .contents();
@@ -1766,7 +1764,7 @@ Please handle these changes as required."#
             let updated_code = edited_code.to_owned();
             let edited_range = symbol_to_edit.range().clone();
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
-            let editor_response = self
+            let _editor_response = self
                 .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
                 .await?;
 
@@ -2270,17 +2268,6 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    pub async fn filter_code_snippets_for_probing(
-        &self,
-        xml_string: String,
-        query: String,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_keys: LLMProviderAPIKeys,
-    ) -> Result<(), SymbolError> {
-        Ok(())
-    }
-
     pub async fn filter_code_snippets_in_symbol_for_editing(
         &self,
         xml_string: String,
@@ -2306,7 +2293,7 @@ Please handle these changes as required."#
     }
 
     /// We want to generate the outline for the symbol
-    async fn get_outline_for_symbol_identifier(
+    async fn _get_outline_for_symbol_identifier(
         &self,
         fs_file_path: &str,
         symbol_name: &str,
@@ -2673,47 +2660,47 @@ Please handle these changes as required."#
                     // so we first search the file for where the symbol is
                     // this will be another invocation to the tools
                     // and then we ask for the definition once we find it
-                    let file_data = self
-                        .file_open(code_snippet.fs_file_path().to_owned(), request_id)
-                        .await?;
-                    let file_content = file_data.contents();
-                    // now we parse it and grab the outline nodes
-                    let find_in_file = self
-                        .find_in_file(
-                            file_content,
-                            code_snippet.symbol_name().to_owned(),
-                            request_id,
-                        )
-                        .await
-                        .map(|find_in_file| find_in_file.get_position())
-                        .ok()
-                        .flatten();
-                    println!(
-                        "Find in file for symbol_name: {} is {:?}",
-                        code_snippet.symbol_name().to_owned(),
-                        &find_in_file
-                    );
-                    // now that we have a poition, we can ask for go-to-definition
-                    if let Some(file_position) = find_in_file {
-                        let definition = self
-                            .go_to_definition(
-                                &code_snippet.fs_file_path(),
-                                file_position,
-                                request_id,
-                            )
-                            .await?;
-                        dbg!("We have some definitions");
-                        // let definition_file_path = definition.file_path().to_owned();
-                        let snippet_node = self
-                            .grab_symbol_content_from_definition(
-                                &code_snippet.symbol_name(),
-                                definition,
-                                request_id,
-                            )
-                            .await?;
-                        dbg!("we have a snippet node for this");
-                        code_snippet.set_snippet(snippet_node).await;
-                    }
+                    // let file_data = self
+                    //     .file_open(code_snippet.fs_file_path().to_owned(), request_id)
+                    //     .await?;
+                    // let file_content = file_data.contents();
+                    // // now we parse it and grab the outline nodes
+                    // let find_in_file = self
+                    //     .find_in_file(
+                    //         file_content,
+                    //         code_snippet.symbol_name().to_owned(),
+                    //         request_id,
+                    //     )
+                    //     .await
+                    //     .map(|find_in_file| find_in_file.get_position())
+                    //     .ok()
+                    //     .flatten();
+                    // println!(
+                    //     "Find in file for symbol_name: {} is {:?}",
+                    //     code_snippet.symbol_name().to_owned(),
+                    //     &find_in_file
+                    // );
+                    // // now that we have a poition, we can ask for go-to-definition
+                    // if let Some(file_position) = find_in_file {
+                    //     let definition = self
+                    //         .go_to_definition(
+                    //             &code_snippet.fs_file_path(),
+                    //             file_position,
+                    //             request_id,
+                    //         )
+                    //         .await?;
+                    //     dbg!("We have some definitions");
+                    //     // let definition_file_path = definition.file_path().to_owned();
+                    //     let snippet_node = self
+                    //         .grab_symbol_content_from_definition(
+                    //             &code_snippet.symbol_name(),
+                    //             definition,
+                    //             request_id,
+                    //         )
+                    //         .await?;
+                    //     dbg!("we have a snippet node for this");
+                    //     code_snippet.set_snippet(snippet_node).await;
+                    // }
                 } else {
                     // if we have multiple outline nodes, then we need to select
                     // the best one, this will require another invocation from the LLM

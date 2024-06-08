@@ -200,7 +200,8 @@ impl TSLanguageConfig {
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
                         if !outline_range.contains(&child_range) {
-                            start_index = end_index;
+                            // This is not required as we are breaking the loop over here
+                            // start_index = end_index;
                             break;
                         }
                         match child_node_type {
@@ -466,10 +467,6 @@ impl TSLanguageConfig {
         let source_code_vec = source_code.to_vec();
         query_captures.into_iter().for_each(|capture| {
             capture.0.captures.into_iter().for_each(|capture| {
-                let capture_name = query
-                    .capture_names()
-                    .to_vec()
-                    .remove(capture.index.try_into().unwrap());
                 let range = Range::for_tree_node(&capture.node);
                 let node_name =
                     get_string_from_bytes(&source_code_vec, range.start_byte(), range.end_byte());
@@ -910,10 +907,6 @@ impl TSLanguageConfig {
                     .into_iter()
                     .for_each(|capture| {
                         capture.0.captures.into_iter().for_each(|capture| {
-                            let capture_name = query
-                                .capture_names()
-                                .to_vec()
-                                .remove(capture.index.try_into().unwrap());
                             let capture_range = Range::for_tree_node(&capture.node);
                             let node_name = get_string_from_bytes(
                                 &source_code_vec,
@@ -1188,7 +1181,7 @@ impl TSLanguageParsing {
     /// searching
     pub fn chunk_file(
         &self,
-        file_path: &str,
+        _file_path: &str,
         buffer: &str,
         file_extension: Option<&str>,
         file_language_id: Option<&str>,
@@ -1358,11 +1351,6 @@ impl TSLanguageParsing {
         // we are going to now check if the descendant node is important enough
         // for us to consider and fits in the size range we expect it to
         let descendant_node = descendant_node_maybe.expect("if let None to hold");
-        let mut cursor = descendant_node.walk();
-        let children: Vec<_> = descendant_node
-            .named_children(&mut cursor)
-            .into_iter()
-            .collect();
         let found_range = iterate_over_nodes_within_range(
             language,
             descendant_node,
@@ -1489,7 +1477,7 @@ fn iterate_over_nodes_within_range(
     language: &str,
     node: tree_sitter::Node<'_>,
     line_limit: usize,
-    range: &Range,
+    _range: &Range,
     should_go_inside: bool,
     language_config: &TSLanguageConfig,
 ) -> Range {
@@ -1519,7 +1507,7 @@ fn iterate_over_nodes_within_range(
         if let None = parent_node {
             found_range
         } else {
-            let mut parent = parent_node.expect("if let None to hold");
+            let parent = parent_node.expect("if let None to hold");
             // we iterate over the children of the parent
             iterate_over_nodes_within_range(
                 language,
@@ -1543,7 +1531,7 @@ fn iterate_over_nodes_within_range(
 }
 
 fn iterate_over_children(
-    language: &str,
+    _language: &str,
     children: Vec<tree_sitter::Node<'_>>,
     line_limit: usize,
     some_other_node_to_name: tree_sitter::Node<'_>,
@@ -1615,8 +1603,8 @@ fn keep_iterating<'a>(
     language_config: &'a TSLanguageConfig,
     should_go_inside: bool,
 ) -> Option<FilteredRanges<'a>> {
-    let mut filtered_children = vec![];
-    let mut index = None;
+    let mut filtered_children: Vec<tree_sitter::Node<'a>>;
+    let index: Option<usize>;
     if should_go_inside {
         filtered_children = children
             .into_iter()
@@ -1735,11 +1723,7 @@ impl Span {
     }
 }
 
-fn chunk_node(
-    mut node: tree_sitter::Node,
-    language: &TSLanguageConfig,
-    max_chars: usize,
-) -> Vec<Span> {
+fn chunk_node(node: tree_sitter::Node, language: &TSLanguageConfig, max_chars: usize) -> Vec<Span> {
     let mut chunks: Vec<Span> = vec![];
     let mut current_chunk = Span::new(
         node.start_byte(),

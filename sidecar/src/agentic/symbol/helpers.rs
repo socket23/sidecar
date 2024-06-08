@@ -14,14 +14,13 @@ pub fn split_file_content_into_parts(
 
     let start_line = selection_range.start_line() as i64;
     let end_line = selection_range.end_line() as i64;
-    let mut above = None;
-    let mut below = None;
+    let above: Option<String>;
     if start_line == 0 {
         above = None;
     } else {
         let above_lines = lines
             .iter()
-            .take_while(|(idx, line)| idx < &start_line)
+            .take_while(|(idx, _line)| idx < &start_line)
             .map(|(_, line)| line.to_owned())
             .collect::<Vec<_>>()
             .join("\n");
@@ -37,6 +36,7 @@ pub fn split_file_content_into_parts(
         .collect::<Vec<_>>()
         .join("\n");
 
+    let below: Option<String>;
     if end_line >= lines.len() as i64 {
         below = None;
     } else {

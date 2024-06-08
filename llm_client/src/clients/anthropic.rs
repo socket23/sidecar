@@ -29,25 +29,35 @@ use serde::Deserialize;
 #[serde(tag = "type")]
 enum AnthropicEvent {
     #[serde(rename = "message_start")]
-    MessageStart { message: MessageData },
+    MessageStart {
+        #[serde(rename = "message")]
+        _message: MessageData,
+    },
     #[serde(rename = "content_block_start")]
     ContentBlockStart {
-        index: u32,
+        #[serde(rename = "index")]
+        _index: u32,
         content_block: ContentBlock,
     },
     #[serde(rename = "ping")]
     Ping,
     #[serde(rename = "content_block_delta")]
     ContentBlockDelta {
-        index: u32,
+        #[serde(rename = "index")]
+        _index: u32,
         delta: ContentBlockDelta,
     },
     #[serde(rename = "content_block_stop")]
-    ContentBlockStop { index: u32 },
+    ContentBlockStop {
+        #[serde(rename = "index")]
+        _index: u32,
+    },
     #[serde(rename = "message_delta")]
     MessageDelta {
-        delta: MessageDeltaData,
-        usage: Usage,
+        #[serde(rename = "edit")]
+        _delta: MessageDeltaData,
+        #[serde(rename = "usage")]
+        _usage: Usage,
     },
     #[serde(rename = "message_stop")]
     MessageStop,
@@ -55,41 +65,41 @@ enum AnthropicEvent {
 
 #[derive(Debug, Deserialize)]
 struct MessageData {
-    id: String,
-    #[serde(rename = "type")]
-    message_type: String,
-    role: String,
-    content: Vec<String>,
-    model: String,
-    stop_reason: Option<String>,
-    stop_sequence: Option<String>,
-    usage: Usage,
+    // id: String,
+    // #[serde(rename = "type")]
+    // message_type: String,
+    // role: String,
+    // content: Vec<String>,
+    // model: String,
+    // stop_reason: Option<String>,
+    // stop_sequence: Option<String>,
+    // usage: Usage,
 }
 
 #[derive(Debug, Deserialize)]
 struct ContentBlock {
-    #[serde(rename = "type")]
-    content_block_type: String,
+    // #[serde(rename = "type")]
+    // content_block_type: String,
     text: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct ContentBlockDelta {
-    #[serde(rename = "type")]
-    delta_type: String,
+    // #[serde(rename = "type")]
+    // delta_type: String,
     text: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct MessageDeltaData {
-    stop_reason: String,
-    stop_sequence: Option<String>,
+    // stop_reason: String,
+    // stop_sequence: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Usage {
-    input_tokens: u32,
-    output_tokens: u32,
+    // input_tokens: u32,
+    // output_tokens: u32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

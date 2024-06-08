@@ -28,8 +28,8 @@ pub fn selection_type(identifier_node: &InLineDocRequest) -> String {
 }
 
 pub fn document_symbol_metadata(identifier_node: &InLineDocRequest) -> String {
-    let is_identifier = identifier_node.is_identifier_node();
-    let language = identifier_node.language();
+    let _is_identifier = identifier_node.is_identifier_node();
+    let _language = identifier_node.language();
     let comment_type = documentation_type(identifier_node);
     let identifier_node_str = identifier_node.identifier_node_str();
     match identifier_node_str {

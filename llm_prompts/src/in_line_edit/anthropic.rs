@@ -1,4 +1,4 @@
-use llm_client::clients::types::{LLMClient, LLMClientMessage};
+use llm_client::clients::types::{LLMClientMessage, LLMClientRole};
 
 use super::{
     openai::OpenAILineEditPrompt,
@@ -36,7 +36,7 @@ Follow the user's requirements carefully & to the letter.
         )
     }
 
-    fn system_message_fix(&self, language: &str) -> String {
+    fn _system_message_fix(&self, language: &str) -> String {
         format!(
             r#"You are an AI programming assistant.
 When asked for your name, you must respond with "Aide".
@@ -51,7 +51,7 @@ Follow the user's requirements carefully & to the letter.
         )
     }
 
-    fn documentation_system_prompt(&self, language: &str, is_identifier_node: bool) -> String {
+    fn _documentation_system_prompt(&self, language: &str, is_identifier_node: bool) -> String {
         if is_identifier_node {
             let system_prompt = format!(
                 r#"You are an AI programming assistant.
@@ -130,6 +130,7 @@ Follow the user's requirements carefully & to the letter.
         }
     }
 
+    #[allow(unused_assignments)]
     fn fix_inline_prompt_response(&self, response: InLinePromptResponse) -> InLinePromptResponse {
         match response {
             InLinePromptResponse::Completion(completion) => {
@@ -139,7 +140,7 @@ Follow the user's requirements carefully & to the letter.
                 let mut final_chat_messages = vec![];
                 // the limitation we have here is that we have to concatenate all the consecutive
                 // user and assistant messages together
-                let mut previous_role = None;
+                let mut previous_role: Option<LLMClientRole> = None;
                 let mut pending_message: Option<LLMClientMessage> = None;
                 for chat_message in chat_messages.into_iter() {
                     let role = chat_message.role().clone();

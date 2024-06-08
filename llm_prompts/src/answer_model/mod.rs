@@ -96,7 +96,7 @@ pub const GPT_4_TURBO_128K: AnswerModel = AnswerModel {
     inline_completion_tokens: None,
 };
 
-pub const GPT4_O_128k: AnswerModel = AnswerModel {
+pub const GPT4_O_128K: AnswerModel = AnswerModel {
     llm_type: LLMType::Gpt4O,
     answer_tokens: 1024 * 2,
     prompt_tokens_limit: 2500 * 8,
@@ -241,7 +241,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(GPT_4)
             .add_answer_model(GPT_4_32K)
             .add_answer_model(GPT_4_TURBO_128K)
-            .add_answer_model(GPT4_O_128k)
+            .add_answer_model(GPT4_O_128K)
             .add_answer_model(MISTRAL_INSTRUCT)
             .add_answer_model(MIXTRAL)
             .add_answer_model(CODE_LLAMA_13B)

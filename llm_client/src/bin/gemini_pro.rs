@@ -12,7 +12,7 @@ async fn main() {
         "ya29.a0AXooCgs8y42lwdXpYkBXCiReRXBjVnvfkdnGA3JadAVraH6sGw_hqyOPVy0R-eSsSElaPKAI9OjQGDG9S0i4fFfaUtKBaF9qXaRQbUTIwIwbJX0T2yciqEJTPHbV2YQe4jrZwLs2rifas3FsCu3eIW5wfMLKGiutdJA6QKVs7QaCgYKAccSARESFQHGX2MiGybA9H-ZXPMSK5Pvz3XuoA0177".to_owned(),
         "anton-390822".to_owned(),
     ));
-    let request = LLMClientCompletionRequest::from_messages(
+    let _request = LLMClientCompletionRequest::from_messages(
         vec![
             LLMClientMessage::system("You are an expert software engineer".to_owned()),
             LLMClientMessage::user(
@@ -28,7 +28,7 @@ Description
     
 Deleting any model with no dependencies not updates the PK on the model. It should be set to None after .delete() call.
 See Django.db.models.deletion:276-281. Should update the model line 280."#.to_owned();
-    let result = gemini_pro_clint
+    let _result = gemini_pro_clint
         .count_tokens(&context, "anton-390822", "ya29.a0AXooCgs8y42lwdXpYkBXCiReRXBjVnvfkdnGA3JadAVraH6sGw_hqyOPVy0R-eSsSElaPKAI9OjQGDG9S0i4fFfaUtKBaF9qXaRQbUTIwIwbJX0T2yciqEJTPHbV2YQe4jrZwLs2rifas3FsCu3eIW5wfMLKGiutdJA6QKVs7QaCgYKAccSARESFQHGX2MiGybA9H-ZXPMSK5Pvz3XuoA0177", "gemini-1.5-flash-001")
         .await;
 
@@ -315,7 +315,7 @@ We have to add the newly created endpoint in inline_completion to add support fo
         0.2,
         None,
     );
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = gemini_pro_clint
         .stream_completion(api_key, request, sender)
         .await;

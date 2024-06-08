@@ -2,7 +2,7 @@
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{AzureConfig, AzureOpenAIDeploymentId, LLMProvider, LLMProviderAPIKeys},
+    provider::{AzureOpenAIDeploymentId, LLMProvider, LLMProviderAPIKeys},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

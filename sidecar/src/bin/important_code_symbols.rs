@@ -8,12 +8,9 @@ use llm_client::{
 };
 use sidecar::agentic::tool::base::Tool;
 use sidecar::{
-    agentic::{
-        symbol::tool_box,
-        tool::{
-            broker::ToolBroker, code_edit::models::broker::CodeEditBroker,
-            code_symbol::important::CodeSymbolImportantWideSearch, input::ToolInput,
-        },
+    agentic::tool::{
+        broker::ToolBroker, code_edit::models::broker::CodeEditBroker,
+        code_symbol::important::CodeSymbolImportantWideSearch, input::ToolInput,
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
@@ -38,7 +35,7 @@ async fn main() {
         vec!["/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpyb7d6owx".to_owned()],
     );
     let user_query = "".to_owned();
-    let editor_url = "http://localhost:42423".to_owned();
+    let _editor_url = "http://localhost:42423".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(

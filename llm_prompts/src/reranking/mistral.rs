@@ -161,20 +161,20 @@ You have to order all the code snippets from the most relevant to the least rele
         ReRankCodeSpanResponse::listwise_completion(prompt, code_span_digests)
     }
 
+    /// The output is generally in the format of
+    /// <id>
+    /// {id}
+    /// </id>
+    /// ...
+    /// </reranking>
+    /// This is not guaranteed with mistral instruct (but always by mixtral)
+    /// so we split the string on \n and ignore the values which are <id> or
+    /// </id> and only parse until we get the </reranking> tag
     fn parse_listwise_output(
         &self,
         output: &str,
         code_span_digests: Vec<CodeSpanDigest>,
     ) -> Result<Vec<CodeSpanDigest>, ReRankCodeSpanError> {
-        /// The output is generally in the format of
-        /// <id>
-        /// {id}
-        /// </id>
-        /// ...
-        /// </reranking>
-        /// This is not guaranteed with mistral instruct (but always by mixtral)
-        /// so we split the string on \n and ignore the values which are <id> or
-        /// </id> and only parse until we get the </reranking> tag
         let mut output = output.split("\n");
         let mut code_span_digests_mapping: HashMap<String, CodeSpanDigest> = code_span_digests
             .into_iter()

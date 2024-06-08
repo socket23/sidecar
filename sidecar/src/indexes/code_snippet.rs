@@ -305,13 +305,13 @@ impl RepositoryFile {
     // Here we will return multiple documents all of which are the code snippets
     // we are interested in
     fn build_documents(
-        mut self,
+        self,
         schema: &CodeSnippet,
         workload: &Workload<'_>,
         cache_keys: &CodeSnippetCacheKeys,
         last_commit: i64,
         language_parsing: Arc<TSLanguageParsing>,
-        file_cache: &CodeSnippetCache,
+        _file_cache: &CodeSnippetCache,
     ) -> Vec<tantivy::schema::Document> {
         // Now we need to parse the content of the file and then get the documents
         // which will be generated

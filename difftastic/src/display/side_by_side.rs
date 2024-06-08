@@ -69,7 +69,7 @@ fn format_missing_line_num(
 }
 
 /// Display `src` in a single column (e.g. a file removal or addition).
-fn display_single_column(
+fn _display_single_column(
     display_path: &str,
     old_path: Option<&String>,
     file_format: &FileFormat,
@@ -210,12 +210,12 @@ impl LineInformation {
 fn display_line_nums_in_sidecar_format(
     lhs_line_num: Option<LineNumber>,
     rhs_line_num: Option<LineNumber>,
-    source_dims: &SourceDimensions,
-    display_options: &DisplayOptions,
+    _source_dims: &SourceDimensions,
+    _display_options: &DisplayOptions,
     lhs_has_novel: bool,
     rhs_has_novel: bool,
-    prev_lhs_line_num: Option<LineNumber>,
-    prev_rhs_line_num: Option<LineNumber>,
+    _prev_lhs_line_num: Option<LineNumber>,
+    _prev_rhs_line_num: Option<LineNumber>,
 ) -> (LineInformation, LineInformation) {
     let display_lhs_line_num: LineInformation = match lhs_line_num {
         Some(line_num) => {
@@ -658,10 +658,10 @@ pub fn print(
                     .into_iter()
                     .enumerate()
                 {
-                    let lhs_line =
+                    let _lhs_line =
                         lhs_line.unwrap_or_else(|| " ".repeat(source_dims.content_width));
-                    let rhs_line = rhs_line.unwrap_or_else(|| "".into());
-                    let lhs_num: String = if i == 0 {
+                    let _rhs_line = rhs_line.unwrap_or_else(|| "".into());
+                    let _lhs_num: String = if i == 0 {
                         left_line_information_vec.push(left_line_information.clone());
                         display_lhs_line_num.clone()
                     } else {
@@ -694,7 +694,7 @@ pub fn print(
                         }
                         s
                     };
-                    let rhs_num: String = if i == 0 {
+                    let _rhs_num: String = if i == 0 {
                         right_line_information_vec.push(right_line_information.clone());
                         display_rhs_line_num.clone()
                     } else {

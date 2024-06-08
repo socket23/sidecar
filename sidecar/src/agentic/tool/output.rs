@@ -23,6 +23,7 @@ use super::{
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
     rerank::base::ReRankEntriesForBroker,
+    swe_bench::test_tool::SWEBenchTestRepsonse,
 };
 
 #[derive(Debug)]
@@ -95,11 +96,11 @@ pub enum ToolOutput {
     // Repo map result
     RepoMapSearch(CodeSymbolImportantResponse),
     // SWE Bench test output
-    SWEBenchTestOutput(String),
+    SWEBenchTestOutput(SWEBenchTestRepsonse),
 }
 
 impl ToolOutput {
-    pub fn swe_bench_test_output(output: String) -> Self {
+    pub fn swe_bench_test_output(output: SWEBenchTestRepsonse) -> Self {
         ToolOutput::SWEBenchTestOutput(output)
     }
 
@@ -283,7 +284,7 @@ impl ToolOutput {
         }
     }
 
-    pub fn get_swe_bench_test_output(self) -> Option<String> {
+    pub fn get_swe_bench_test_output(self) -> Option<SWEBenchTestRepsonse> {
         match self {
             ToolOutput::SWEBenchTestOutput(output) => Some(output),
             _ => None,

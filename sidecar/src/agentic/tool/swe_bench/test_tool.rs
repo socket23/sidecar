@@ -18,7 +18,8 @@ impl SWEBenchTestRequest {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SWEBenchTestRepsonse {
-    test_output: String,
+    test_output: Option<String>,
+    passed: bool,
 }
 
 pub struct SWEBenchTestTool {
@@ -48,6 +49,6 @@ impl Tool for SWEBenchTestTool {
             .json()
             .await
             .map_err(|_e| ToolError::SerdeConversionFailed)?;
-        Ok(ToolOutput::swe_bench_test_output(response.test_output))
+        Ok(ToolOutput::swe_bench_test_output(response))
     }
 }

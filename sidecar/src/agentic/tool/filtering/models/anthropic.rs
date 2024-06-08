@@ -409,6 +409,7 @@ This code handles the checkout process. It receives the cart ID and payment info
 This code processes the actual payment by creating a Stripe charge. The payment info comes from the checkout process. If the payment fails, that could explain the checkout error, so this is important to investigate.
 </reason_to_edit>
 </code_to_edit>
+<code_to_edit>
 <id>
 8
 </id>
@@ -426,12 +427,14 @@ This defines the schema and model for orders. An order contains references to th
 This defines the schema and model for shopping carts. A cart contains references to the user and product items. It also has a virtual property to calculate the total price. It's used in the checkout process but probably not the source of the bug.
 </reason_to_not_edit>
 </code_to_not_edit>
+<code_to_not_edit>
 <id>
 5
 </di>
 <reason_to_not_edit>
 This is the main Express server file. It sets up MongoDB, middleware, routes, and error handling. While it's crucial for the app as a whole, it doesn't contain any checkout-specific logic.
 <<reason_to_not_edit>
+</code_to_not_edit>
 <code_to_not_edit>
 <id>
 0
@@ -935,22 +938,25 @@ Please provide the order along with the reason in 2 lists, one for code snippets
         let example_message = self.example_message();
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
+
 - If you want to edit the code section with id 0 then you must output in the following format:
 <code_to_edit>
 <id>
 0
 </id>
-<edit_reason>
+<reason_to_edit>
 {{your reason for editing}}
-</edit_reason>
+</reason_to_edit>
+</code_to_edit>
+
 - There will be code sections which you do not want to edit, let's say you do not want to edit section with id 1, you must provide the reason for not editing and then you must output in the following format:
 <code_to_not_edit>
 <id>
 0
 </id>
-<no_edit_reason>
+<reason_to_not_edit>
 {{your reason for not editing}}
-</no_edit_reason>
+</reason_to_not_edit>
 </code_to_not_edit>
 
 Here is an example contained in the <example> section.

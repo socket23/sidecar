@@ -47,6 +47,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse, QuickFixOption,
 };
+use crate::agentic::tool::swe_bench::test_tool::SWEBenchTestRequest;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
@@ -1706,6 +1707,25 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    async fn swe_bench_test_tool(
+        &self,
+        swe_bench_test_endpoint: &str,
+        request_id: &str,
+    ) -> Result<String, SymbolError> {
+        let tool_input =
+            ToolInput::SWEBenchTest(SWEBenchTestRequest::new(swe_bench_test_endpoint.to_owned()));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_swe_bench_test_output()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
     pub async fn check_code_correctness(
         &self,
         symbol_edited: &SymbolToEdit,
@@ -1760,10 +1780,19 @@ Please handle these changes as required."#
 
             // In case we have swe-bench-tooling enabled over here we should run
             // the tests first, since we get enough value out if to begin with
-            // TODO(skcd): Create a tool here which can run the tests by hitting
-            // the endpoint, after which we have to process the output of the
-            // test along with the LSP diagnostics to check what we should be
-            // doing next
+            // TODO(skcd): Use the test output for debugging over here
+            let _test_output = if let Some(swe_bench_test_endpoint) =
+                tool_properties.get_swe_bench_test_endpoint()
+            {
+                let swe_bench_test_output = self
+                    .swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
+                    .await?;
+                // Pass the test output through for checking the correctness of
+                // this code
+                Some(swe_bench_test_output)
+            } else {
+                None
+            };
 
             // Now we check for LSP diagnostics
             let lsp_diagnostics = self

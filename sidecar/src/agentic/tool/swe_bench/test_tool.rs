@@ -8,6 +8,14 @@ pub struct SWEBenchTestRequest {
     swe_bench_test_endpoint: String,
 }
 
+impl SWEBenchTestRequest {
+    pub fn new(swe_bench_test_endpoint: String) -> Self {
+        Self {
+            swe_bench_test_endpoint,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SWEBenchTestRepsonse {
     test_output: String,

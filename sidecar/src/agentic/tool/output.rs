@@ -283,6 +283,13 @@ impl ToolOutput {
         }
     }
 
+    pub fn get_swe_bench_test_output(self) -> Option<String> {
+        match self {
+            ToolOutput::SWEBenchTestOutput(output) => Some(output),
+            _ => None,
+        }
+    }
+
     pub fn class_symbols_to_followup(self) -> Option<ClassSymbolFollowupResponse> {
         match self {
             ToolOutput::ClassSymbolFollowupResponse(output) => Some(output),

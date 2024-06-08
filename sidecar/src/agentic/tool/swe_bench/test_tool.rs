@@ -22,6 +22,16 @@ pub struct SWEBenchTestRepsonse {
     passed: bool,
 }
 
+impl SWEBenchTestRepsonse {
+    pub fn passed(&self) -> bool {
+        self.passed
+    }
+
+    pub fn test_output(&self) -> Option<String> {
+        self.test_output.clone()
+    }
+}
+
 pub struct SWEBenchTestTool {
     client: reqwest::Client,
 }

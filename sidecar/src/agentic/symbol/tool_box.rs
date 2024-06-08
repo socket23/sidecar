@@ -1800,19 +1800,28 @@ Please handle these changes as required."#
             // In case we have swe-bench-tooling enabled over here we should run
             // the tests first, since we get enough value out if to begin with
             // TODO(skcd): Use the test output for debugging over here
-            let _test_output = if let Some(swe_bench_test_endpoint) =
+            let test_output = if let Some(swe_bench_test_endpoint) =
                 tool_properties.get_swe_bench_test_endpoint()
             {
                 let swe_bench_test_output = dbg!(
                     self.swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
                         .await
                 )?;
+
+                if swe_bench_test_output.passed() && swe_bench_test_output.test_output().is_none() {
+                    // We passed! we can keep going
+                    println!("tool_box::check_code_correctness::test_passed");
+                    return Ok(());
+                }
                 // Pass the test output through for checking the correctness of
                 // this code
                 Some(swe_bench_test_output)
             } else {
                 None
             };
+
+            // Check the action to take using the test output here or should
+            // we also combine the lsp diagnostics over here as well???
 
             // Now we check for LSP diagnostics
             let lsp_diagnostics = self
@@ -1823,6 +1832,10 @@ Please handle these changes as required."#
             if lsp_diagnostics.get_diagnostics().is_empty() {
                 break;
             }
+
+            // TODO(skcd): We should format the diagnostics properly over here
+            // with some highlight from the lines above and below so we can show
+            // a more detailed output to the model
 
             // Now we get all the quick fixes which are available in the editor
             let quick_fix_actions = dbg!(

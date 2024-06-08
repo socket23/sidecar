@@ -47,7 +47,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse, QuickFixOption,
 };
-use crate::agentic::tool::swe_bench::test_tool::SWEBenchTestRequest;
+use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
@@ -1709,7 +1709,7 @@ Please handle these changes as required."#
         &self,
         swe_bench_test_endpoint: &str,
         request_id: &str,
-    ) -> Result<String, SymbolError> {
+    ) -> Result<SWEBenchTestRepsonse, SymbolError> {
         let tool_input =
             ToolInput::SWEBenchTest(SWEBenchTestRequest::new(swe_bench_test_endpoint.to_owned()));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
@@ -1738,6 +1738,28 @@ Please handle these changes as required."#
         request_id: &str,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!("==========too_box::check_code_correctness==========");
+        println!(
+            "tool_box::check_code_correctness::symbol_edited:{:?}",
+            &symbol_edited
+        );
+        println!(
+            "tool_box::check_code_correctness::original_code:{}",
+            original_code
+        );
+        println!(
+            "tool_box::check_code_correctness::edited_code:{}",
+            edited_code
+        );
+        println!(
+            "tool_box::check_code_correctness::code_edit_extra_context:{}",
+            code_edit_extra_context
+        );
+        println!(
+            "tool_box::check_code_correctness::tool_properties:{:?}",
+            tool_properties
+        );
+        println!("====================");
         // code correction looks like this:
         // - apply the edited code to the original selection
         // - look at the code actions which are available
@@ -1756,21 +1778,20 @@ Please handle these changes as required."#
             tries = tries + 1;
 
             let symbol_to_edit = self.find_sub_symbol_to_edit(symbol_edited).await?;
-            let _fs_file_content = self
-                .file_open(fs_file_path.to_owned(), request_id)
-                .await?
-                .contents();
+            let _fs_file_content =
+                dbg!(self.file_open(fs_file_path.to_owned(), request_id).await)?.contents();
 
             let updated_code = edited_code.to_owned();
             let edited_range = symbol_to_edit.range().clone();
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
-            let _editor_response = self
-                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
-                .await?;
+            let _editor_response = dbg!(
+                self.apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
+                    .await
+            )?;
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
-            let symbol_to_edit = self.find_sub_symbol_to_edit(symbol_edited).await?;
+            let symbol_to_edit = dbg!(self.find_sub_symbol_to_edit(symbol_edited).await)?;
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?
@@ -1782,9 +1803,10 @@ Please handle these changes as required."#
             let _test_output = if let Some(swe_bench_test_endpoint) =
                 tool_properties.get_swe_bench_test_endpoint()
             {
-                let swe_bench_test_output = self
-                    .swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
-                    .await?;
+                let swe_bench_test_output = dbg!(
+                    self.swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
+                        .await
+                )?;
                 // Pass the test output through for checking the correctness of
                 // this code
                 Some(swe_bench_test_output)
@@ -1975,6 +1997,13 @@ Please handle these changes as required."#
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
     ) -> Result<String, SymbolError> {
+        println!("============tool_box::code_edit============");
+        println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
+        println!("tool_box::code_edit::file_content:{}", file_content);
+        println!("tool_box::code_edit::selection_range:{:?}", selection_range);
+        println!("tool_box::code_edit::extra_context:{}", &extra_context);
+        println!("tool_box::code_edit::instruction:{}", &instruction);
+        println!("============");
         // we need to get the range above and then below and then in the selection
         let language = self
             .editor_parsing

@@ -1943,6 +1943,7 @@ Please handle these changes as required."#
         Ok(())
     }
 
+    /// We are going to edit out the code depending on the test output
     async fn fix_tests_by_editing(
         &self,
         _fs_file_path: &str,

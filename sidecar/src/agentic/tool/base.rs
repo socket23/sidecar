@@ -50,6 +50,8 @@ pub enum ToolType {
     RepoMapSearch,
     // SWE Bench tool endpoint
     SWEBenchToolEndpoint,
+    // Test correction
+    TestCorrection,
 }
 
 impl std::fmt::Display for ToolType {
@@ -86,6 +88,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ProbeSummarizeAnswer => write!(f, "Probe Summarize Answer"),
             ToolType::RepoMapSearch => write!(f, "Repo Map Search"),
             ToolType::SWEBenchToolEndpoint => write!(f, "SWE Bench Tool Endpoint"),
+            ToolType::TestCorrection => write!(f, "Test Correction"),
         }
     }
 }

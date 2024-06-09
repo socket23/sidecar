@@ -1782,6 +1782,7 @@ Please handle these changes as required."#
                 dbg!(self.file_open(fs_file_path.to_owned(), request_id).await)?.contents();
 
             let updated_code = edited_code.to_owned();
+            // The range of the symbol before doing the edit
             let edited_range = symbol_to_edit.range().clone();
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
             let _editor_response = dbg!(
@@ -1797,6 +1798,8 @@ Please handle these changes as required."#
                 .await?
                 .contents();
 
+            // After applying the changes we get the new range for the symbol
+            let edited_range = symbol_to_edit.range().clone();
             // In case we have swe-bench-tooling enabled over here we should run
             // the tests first, since we get enough value out if to begin with
             // TODO(skcd): Use the test output for debugging over here
@@ -1828,6 +1831,22 @@ Please handle these changes as required."#
                 } else {
                     // we enter the debugging loop of asking the agent to edit
                     // the code to fix the tests
+                    // let _ = self
+                    //     .fix_tests_by_editing(fs_file_path, edited_range, test_output)
+                    //     .await;
+                    let _ = self
+                        .fix_tests_by_editing(
+                            fs_file_path,
+                            &fs_file_content,
+                            &edited_range,
+                            code_edit_extra_context,
+                            original_code,
+                            test_output_logs,
+                            llm.clone(),
+                            provider.clone(),
+                            api_keys.clone(),
+                        )
+                        .await;
                 }
             }
 
@@ -1922,6 +1941,21 @@ Please handle these changes as required."#
             }
         }
         Ok(())
+    }
+
+    async fn fix_tests_by_editing(
+        &self,
+        _fs_file_path: &str,
+        _fs_file_content: &str,
+        _symbol_to_edit_range: &Range,
+        _code_edit_extra_context: &str,
+        _original_code: &str,
+        _test_output: Option<String>,
+        _llm: LLMType,
+        _provider: LLMProvider,
+        _api_keys: LLMProviderAPIKeys,
+    ) -> Result<(), SymbolError> {
+        todo!("figure out how to implement this");
     }
 
     async fn code_correctness_with_edits(

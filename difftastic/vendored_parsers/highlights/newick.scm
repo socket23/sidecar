@@ -1,1 +1,0 @@
-../tree-sitter-newick/queries/highlights.scm

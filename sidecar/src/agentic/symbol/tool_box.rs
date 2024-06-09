@@ -1800,19 +1800,13 @@ Please handle these changes as required."#
             // In case we have swe-bench-tooling enabled over here we should run
             // the tests first, since we get enough value out if to begin with
             // TODO(skcd): Use the test output for debugging over here
-            let test_output = if let Some(swe_bench_test_endpoint) =
+            let test_output_maybe = if let Some(swe_bench_test_endpoint) =
                 tool_properties.get_swe_bench_test_endpoint()
             {
                 let swe_bench_test_output = dbg!(
                     self.swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
                         .await
                 )?;
-
-                if swe_bench_test_output.passed() && swe_bench_test_output.test_output().is_none() {
-                    // We passed! we can keep going
-                    println!("tool_box::check_code_correctness::test_passed");
-                    return Ok(());
-                }
                 // Pass the test output through for checking the correctness of
                 // this code
                 Some(swe_bench_test_output)
@@ -1820,8 +1814,22 @@ Please handle these changes as required."#
                 None
             };
 
-            // Check the action to take using the test output here or should
-            // we also combine the lsp diagnostics over here as well???
+            // TODO(skcd): Figure out what should we do over here for tracking
+            // the range of the symbol
+            if let Some(test_output) = test_output_maybe {
+                // Check the action to take using the test output here or should
+                // we also combine the lsp diagnostics over here as well???
+                let test_output_logs = test_output.test_output();
+                let tests_passed = test_output.passed();
+                if tests_passed && test_output_logs.is_none() {
+                    // We passed! we can keep going
+                    println!("tool_box::check_code_correctness::test_passed");
+                    return Ok(());
+                } else {
+                    // we enter the debugging loop of asking the agent to edit
+                    // the code to fix the tests
+                }
+            }
 
             // Now we check for LSP diagnostics
             let lsp_diagnostics = self

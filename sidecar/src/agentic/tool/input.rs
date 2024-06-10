@@ -1,6 +1,8 @@
 use super::{
     base::ToolType,
-    code_edit::{find::FindCodeSelectionInput, types::CodeEdit},
+    code_edit::{
+        find::FindCodeSelectionInput, test_correction::TestOutputCorrectionRequest, types::CodeEdit,
+    },
     code_symbol::{
         correctness::CodeCorrectnessRequest,
         error_fix::CodeEditingErrorRequest,
@@ -60,6 +62,8 @@ pub enum ToolInput {
     RepoMapSearch(RepoMapSearchQuery),
     // SWE Bench tooling
     SWEBenchTest(SWEBenchTestRequest),
+    // Test output correction
+    TestOutputCorrection(TestOutputCorrectionRequest),
 }
 
 impl ToolInput {
@@ -94,6 +98,15 @@ impl ToolInput {
             ToolInput::ProbeSummarizeAnswerRequest(_) => ToolType::ProbeSummarizeAnswer,
             ToolInput::RepoMapSearch(_) => ToolType::RepoMapSearch,
             ToolInput::SWEBenchTest(_) => ToolType::SWEBenchToolEndpoint,
+            ToolInput::TestOutputCorrection(_) => ToolType::TestCorrection,
+        }
+    }
+
+    pub fn is_test_output(self) -> Result<TestOutputCorrectionRequest, ToolError> {
+        if let ToolInput::TestOutputCorrection(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::TestCorrection))
         }
     }
 

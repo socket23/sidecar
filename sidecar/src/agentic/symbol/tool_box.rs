@@ -9,6 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::base::Tool;
+use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionRequest;
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::correctness::{
     CodeCorrectnessAction, CodeCorrectnessRequest,
@@ -1829,24 +1830,37 @@ Please handle these changes as required."#
                     println!("tool_box::check_code_correctness::test_passed");
                     return Ok(());
                 } else {
-                    // we enter the debugging loop of asking the agent to edit
-                    // the code to fix the tests
-                    // let _ = self
-                    //     .fix_tests_by_editing(fs_file_path, edited_range, test_output)
-                    //     .await;
-                    let _ = self
-                        .fix_tests_by_editing(
-                            fs_file_path,
-                            &fs_file_content,
-                            &edited_range,
-                            code_edit_extra_context,
-                            original_code,
-                            test_output_logs,
-                            llm.clone(),
-                            provider.clone(),
-                            api_keys.clone(),
-                        )
-                        .await;
+                    if let Some(test_output_logs) = test_output_logs {
+                        let corrected_code = self
+                            .fix_tests_by_editing(
+                                fs_file_path,
+                                &fs_file_content,
+                                &edited_range,
+                                instructions.to_owned(),
+                                code_edit_extra_context,
+                                original_code,
+                                self.detect_language(fs_file_path).unwrap_or("".to_owned()),
+                                test_output_logs,
+                                llm.clone(),
+                                provider.clone(),
+                                api_keys.clone(),
+                                request_id,
+                            )
+                            .await?;
+
+                        // Now that we have the corrected code, we should again apply
+                        // it to the file
+                        let _ = self
+                            .apply_edits_to_editor(
+                                fs_file_path,
+                                &edited_range,
+                                &corrected_code,
+                                request_id,
+                            )
+                            .await;
+
+                        // return over here since we are done with the code correction flow
+                    }
                 }
             }
 
@@ -1946,17 +1960,46 @@ Please handle these changes as required."#
     /// We are going to edit out the code depending on the test output
     async fn fix_tests_by_editing(
         &self,
-        _fs_file_path: &str,
-        _fs_file_content: &str,
-        _symbol_to_edit_range: &Range,
-        _code_edit_extra_context: &str,
-        _original_code: &str,
-        _test_output: Option<String>,
-        _llm: LLMType,
-        _provider: LLMProvider,
-        _api_keys: LLMProviderAPIKeys,
-    ) -> Result<(), SymbolError> {
-        todo!("figure out how to implement this");
+        fs_file_path: &str,
+        fs_file_content: &str,
+        symbol_to_edit_range: &Range,
+        user_instructions: String,
+        code_edit_extra_context: &str,
+        original_code: &str,
+        language: String,
+        test_output: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        request_id: &str,
+    ) -> Result<String, SymbolError> {
+        let (code_above, code_below, code_in_selection) =
+            split_file_content_into_parts(fs_file_content, symbol_to_edit_range);
+        let input = ToolInput::TestOutputCorrection(TestOutputCorrectionRequest::new(
+            fs_file_path.to_owned(),
+            fs_file_content.to_owned(),
+            user_instructions,
+            code_above,
+            code_below,
+            code_in_selection,
+            original_code.to_owned(),
+            language,
+            test_output,
+            llm,
+            provider,
+            api_keys,
+            code_edit_extra_context.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            input.clone(),
+        ));
+        self.tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_test_correction_output()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     async fn code_correctness_with_edits(

@@ -5804,16 +5804,9 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
 #[cfg(test)]
 mod tests {
 
-    use serde_xml_rs::from_str;
+    use crate::agentic::tool::code_symbol::models::anthropic::Reply;
 
-    use crate::agentic::tool::code_symbol::models::anthropic::{
-        AskQuestionSymbolHint, CodeSymbolToAskQuestionsSymboList, Reply,
-    };
-
-    use super::{
-        AnthropicCodeSymbolImportant, CodeSymbolShouldAskQuestionsResponse,
-        CodeSymbolToAskQuestionsResponse,
-    };
+    use super::{CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse};
 
     #[test]
     fn test_parsing_works_for_important_symbol() {

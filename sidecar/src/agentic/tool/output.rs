@@ -97,6 +97,8 @@ pub enum ToolOutput {
     RepoMapSearch(CodeSymbolImportantResponse),
     // SWE Bench test output
     SWEBenchTestOutput(SWEBenchTestRepsonse),
+    // Test correction output
+    TestCorrectionOutput(String),
 }
 
 impl ToolOutput {
@@ -252,6 +254,13 @@ impl ToolOutput {
     pub fn utility_code_search_response(self) -> Option<CodeSymbolImportantResponse> {
         match self {
             ToolOutput::UtilityCodeSearch(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_test_correction_output(self) -> Option<String> {
+        match self {
+            ToolOutput::TestCorrectionOutput(response) => Some(response),
             _ => None,
         }
     }

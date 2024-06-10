@@ -2,6 +2,8 @@
 //! and how its working
 
 use std::{path::PathBuf, sync::Arc};
+use tokio::io::AsyncReadExt;
+use tokio::process::Command;
 
 use llm_client::{
     broker::LLMBroker,
@@ -9,6 +11,7 @@ use llm_client::{
     config::LLMBrokerConfiguration,
     provider::{AnthropicAPIKey, GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
+use serde_json::json;
 use sidecar::{
     agentic::{
         symbol::{
@@ -32,9 +35,28 @@ fn default_index_dir() -> PathBuf {
     }
 }
 
+async fn get_diff_patch(git_dname: &str) -> String {
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(git_dname)
+        .arg("--no-pager") // Add this line to disable the pager
+        .arg("diff")
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("to work");
+    let _ = child.wait().await;
+    let mut stdout = child.stdout.take().expect("Failed to get stdout");
+    let mut output = Vec::new();
+    stdout.read_to_end(&mut output).await.expect("to work");
+
+    let output_string = String::from_utf8_lossy(&output);
+    output_string.to_string()
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscribe_default();
+    let instance_id = "django__django-11179".to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
     let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgv-mK2GN4l9juf15KrFrj0g9tMk5MKVHjfZXDH2moatzdQxF-zz7r7BwaOe9tROQRkzpgwOPZSAFHiW7x8orSnOudkUVZL7mdtbxSBmHQdJro34VDvbXhqpKGkh3QFHXnQ6QPPtxKiNYcHnpHzXMuJ2ryyJFCh_pR-5Rqe_aCgYKAdQSARESFQHGX2MiiLAlWY4UrQZxOivVcHNX8w0179".to_owned(), "anton-390822".to_owned()));
     let _gemini_llm_properties = LLMProperties::new(
@@ -116,7 +138,7 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
         Some("ya29.a0AXooCgv-mK2GN4l9juf15KrFrj0g9tMk5MKVHjfZXDH2moatzdQxF-zz7r7BwaOe9tROQRkzpgwOPZSAFHiW7x8orSnOudkUVZL7mdtbxSBmHQdJro34VDvbXhqpKGkh3QFHXnQ6QPPtxKiNYcHnpHzXMuJ2ryyJFCh_pR-5Rqe_aCgYKAdQSARESFQHGX2MiiLAlWY4UrQZxOivVcHNX8w0179".to_owned()),
-        Some("django__django-11179".to_owned()),
+        Some(instance_id.to_owned()),
         Some(folder_path.to_owned()),
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
@@ -135,4 +157,21 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
             }
         }
     }
+
+    // Over here we should write out the json file so we can run evaluation on it
+    let prediction_output = "/Users/skcd/scratch/swe_bench/predictions/full---gpt-4o/".to_owned()
+        + &instance_id
+        + ".jsonl";
+    // Now we write out the json object required for the predictions to work
+    let prediction_json = json!({
+        "instance_id": instance_id.to_owned(),
+        "model_name_or_path": "codestory-mixed".to_owned(),
+        "model_patch": get_diff_patch(&folder_path).await,
+    });
+
+    let _ = tokio::fs::write(
+        prediction_output,
+        serde_json::to_string(&prediction_json).expect("serde to not fail"),
+    )
+    .await;
 }

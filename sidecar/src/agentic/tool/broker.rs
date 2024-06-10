@@ -11,7 +11,8 @@ use crate::{
 use super::{
     base::{Tool, ToolType},
     code_edit::{
-        find::FindCodeSectionsToEdit, models::broker::CodeEditBroker, types::CodeEditingTool,
+        find::FindCodeSectionsToEdit, models::broker::CodeEditBroker,
+        test_correction::TestCorrection, types::CodeEditingTool,
     },
     code_symbol::{
         correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
@@ -164,6 +165,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::SWEBenchToolEndpoint,
             Box::new(SWEBenchTestTool::new()),
+        );
+        tools.insert(
+            ToolType::TestCorrection,
+            Box::new(TestCorrection::new(llm_client.clone())),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

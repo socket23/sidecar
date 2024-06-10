@@ -43,6 +43,10 @@ fn get_string_from_bytes(source_code: &Vec<u8>, start_byte: usize, end_byte: usi
     String::from_utf8(source_code[start_byte..end_byte].to_vec()).unwrap_or_default()
 }
 
+fn get_string_from_lines(lines: &[String], start_line: usize, end_line: usize) -> String {
+    lines[start_line..=end_line].join("\n")
+}
+
 /// We are going to use tree-sitter to parse the code and get the chunks for the
 /// code. we are going to use the algo sweep uses for tree-sitter
 ///
@@ -180,6 +184,13 @@ impl TSLanguageConfig {
 
         let mut start_index = 0;
         let source_code_vec = source_code.to_vec();
+        let lines: Vec<String> = String::from_utf8(source_code_vec.to_vec())
+            .expect("utf8-parsing to work")
+            .lines()
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>();
+        let lines_slice = lines.as_slice();
         let mut independent_functions_for_class: HashMap<String, Vec<OutlineNodeContent>> =
             Default::default();
         while start_index < outline_nodes.len() {
@@ -252,10 +263,13 @@ impl TSLanguageConfig {
                                             function_name,
                                             function_range,
                                             OutlineNodeType::Function,
-                                            get_string_from_bytes(
-                                                &source_code_vec,
-                                                function_range.start_byte(),
-                                                child_range.end_byte(),
+                                            // grab it using the lines since we want
+                                            // the proper prefix before the function start
+                                            // as indentation is important
+                                            get_string_from_lines(
+                                                lines_slice,
+                                                function_range.start_line(),
+                                                child_range.end_line(),
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range,
@@ -267,10 +281,10 @@ impl TSLanguageConfig {
                                             function_name,
                                             function_range,
                                             OutlineNodeType::Function,
-                                            get_string_from_bytes(
-                                                &source_code_vec,
-                                                function_range.start_byte(),
-                                                child_range.end_byte(),
+                                            get_string_from_lines(
+                                                lines_slice,
+                                                function_range.start_line(),
+                                                child_range.end_line(),
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range,
@@ -357,10 +371,13 @@ impl TSLanguageConfig {
                                         function_name.to_owned(),
                                         outline_range,
                                         OutlineNodeType::Function,
-                                        get_string_from_bytes(
-                                            &source_code_vec,
-                                            outline_range.start_byte(),
-                                            child_range.end_byte(),
+                                        // we get the string using lines since
+                                        // we also want the prefix on the line
+                                        // where the function is starting
+                                        get_string_from_lines(
+                                            lines_slice,
+                                            outline_range.start_line(),
+                                            child_range.end_line(),
                                         ),
                                         fs_file_path.to_owned(),
                                         function_name_range.clone(),
@@ -373,14 +390,17 @@ impl TSLanguageConfig {
                                             function_name.to_owned(),
                                             outline_range,
                                             OutlineNodeType::Function,
-                                            get_string_from_bytes(
-                                                &source_code_vec,
-                                                outline_range.start_byte(),
+                                            // we get the string using lines since
+                                            // we also want the prefix on the line
+                                            // where the function is starting
+                                            get_string_from_lines(
+                                                lines_slice,
+                                                outline_range.start_line(),
                                                 // since this is a function, we want
                                                 // the complete range of the function here
                                                 // and not just the child range end which would
                                                 // be the function body
-                                                outline_range.end_byte(),
+                                                outline_range.end_line(),
                                             ),
                                             fs_file_path.to_owned(),
                                             function_name_range.clone(),

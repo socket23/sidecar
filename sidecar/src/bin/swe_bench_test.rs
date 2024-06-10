@@ -36,7 +36,7 @@ fn default_index_dir() -> PathBuf {
 async fn main() {
     tracing_subscribe_default();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgt9NksEQHjdLP_iHg5v7d3EBOVhbGXO5wCCczFMd_YQQK0kQoSwHzdI91ySt2aXa1VwcwgmT5ex6xhxYxxoBSbo5kG7pAHsUqDQZdmkBjitAFx_aOy7YSpmJEvjB7lsrNBhxB-q1cGz5gahrcH1iUcIj4GfELPtRp_ixvcaCgYKAfESARESFQHGX2MiD6hvHJAmARsiG8-YqbliXg0178".to_owned(), "anton-390822".to_owned()));
+    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgv-mK2GN4l9juf15KrFrj0g9tMk5MKVHjfZXDH2moatzdQxF-zz7r7BwaOe9tROQRkzpgwOPZSAFHiW7x8orSnOudkUVZL7mdtbxSBmHQdJro34VDvbXhqpKGkh3QFHXnQ6QPPtxKiNYcHnpHzXMuJ2ryyJFCh_pR-5Rqe_aCgYKAdQSARESFQHGX2MiiLAlWY4UrQZxOivVcHNX8w0179".to_owned(), "anton-390822".to_owned()));
     let _gemini_llm_properties = LLMProperties::new(
         LLMType::GeminiProFlash,
         LLMProvider::GeminiPro,
@@ -89,9 +89,12 @@ async fn main() {
     );
 
     // I should create symlinks for these so its easier to query as well :|
-    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp9khfwaj0".to_owned();
+    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5".to_owned();
+    // let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp9khfwaj0".to_owned();
     let repo_map_fs_path =
-        "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpb0s1ot0p".to_owned();
+        "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpu88w4cw3".to_owned();
+    // let repo_map_fs_path =
+    //     "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpb0s1ot0p".to_owned();
     let problem_statement = r#"delete() on instances of models without any dependencies doesn't clear PKs.
 
 Description
@@ -112,7 +115,7 @@ See Django.db.models.deletion:276-281. Should update the model line 280."#.to_ow
         problem_statement,
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
-        Some("ya29.a0AXooCgt9NksEQHjdLP_iHg5v7d3EBOVhbGXO5wCCczFMd_YQQK0kQoSwHzdI91ySt2aXa1VwcwgmT5ex6xhxYxxoBSbo5kG7pAHsUqDQZdmkBjitAFx_aOy7YSpmJEvjB7lsrNBhxB-q1cGz5gahrcH1iUcIj4GfELPtRp_ixvcaCgYKAfESARESFQHGX2MiD6hvHJAmARsiG8-YqbliXg0178".to_owned()),
+        Some("ya29.a0AXooCgv-mK2GN4l9juf15KrFrj0g9tMk5MKVHjfZXDH2moatzdQxF-zz7r7BwaOe9tROQRkzpgwOPZSAFHiW7x8orSnOudkUVZL7mdtbxSBmHQdJro34VDvbXhqpKGkh3QFHXnQ6QPPtxKiNYcHnpHzXMuJ2ryyJFCh_pR-5Rqe_aCgYKAdQSARESFQHGX2MiiLAlWY4UrQZxOivVcHNX8w0179".to_owned()),
         Some("django__django-11179".to_owned()),
         Some(folder_path.to_owned()),
     );

@@ -119,7 +119,8 @@ impl TestCorrection {
 - The original code before any changes were made is present in <original_code> , this should help you understand how the junior engineer went about making changes.
 - You are also shown the whole file content in the <file> section, this will be useful for you to understand the overall context in which the change was made.
 - The user has also noticed some test failures with the modified code which is present in <code_in_selection> and the output of the test failures is given in <test_output> section.
-- You have to rewrite the code which is present only in <code_in_selection> making sure that the test failures which were present in <test_output> section no longer happen.
+- You have to rewrite the code which is present only in <code_in_selection> making sure that the test failures which were present in <test_output> section no longer happen because of the code which is present in <code_in_selection>
+- Even if the code outside the <code_in_selection> requires changes to fix the tests, you SHOULD NOT EDIT any code outside the <code_in_selection> section.
 - Your reply should be in 2 parts, one of them is the <thinking> section where you explain what changes you are going to make and then the <corrected_code> section where you write the corrected code.
 
 An example is shown below to you:
@@ -134,27 +135,28 @@ testing/maths.py
 </file_path>
 <code_above>
 ```python
-def add(a, b):
-    return a + b
+class Maths:
+    def add(a, b):
+        return a + b
 ```
 </code_above>
 <code_below>
 ```python
-def multiply(a, b):
-    return a * b
+    def multiply(a, b):
+        return a * b
 ```
 </code_below>
 <code_in_selection>
 ```python
-def subtract(a, b, c, d):
-    return a - b - c + d
+    def subtract(a, b, c, d):
+        return a - b - c + d
 </code_in_selection>
 </file>
 
 <original_code>
 ```python
-def subtract(a, b):
-    return a - b
+    def subtract(a, b):
+        return a - b
 ```
 </original_code>
 
@@ -169,8 +171,8 @@ The output for the test case subtract(1, 2, 3, 4) is wrong because we are not su
 </thinking>
 <corrected_code>
 ```python
-def subtract(a, b, c, d):
-    return a - b - c - d
+    def subtract(a, b, c, d):
+        return a - b - c - d
 ```
 </corrected_code>").to_owned()
     }

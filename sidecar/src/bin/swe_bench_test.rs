@@ -1,7 +1,7 @@
 //! Contains a script code which  can be used to test out swe bench
 //! and how its working
 
-use std::{path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf, process::Stdio, sync::Arc};
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
@@ -53,12 +53,34 @@ async fn get_diff_patch(git_dname: &str) -> String {
     output_string.to_string()
 }
 
+// Over here we are going to pass a json which has all the important information which we need
+// to solve a single swe-bench-test, passed via an env variable (cause I am lazy)
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SWEBenchInput {
+    instance_id: String,
+    gemini_api_key: String,
+    repo_map_fs_path: String,
+    repo_path: String,
+    problem_statement: String,
+}
+
 #[tokio::main]
 async fn main() {
+    let content = env::var("swe_bench_input_path").expect("to always be present");
+    let input: SWEBenchInput = serde_json::from_slice(
+        &tokio::fs::read(&content)
+            .await
+            .expect("file reading to always work"),
+    )
+    .expect("to work");
     tracing_subscribe_default();
-    let instance_id = "django__django-11179".to_owned();
+    let instance_id = input.instance_id.to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCgv-mK2GN4l9juf15KrFrj0g9tMk5MKVHjfZXDH2moatzdQxF-zz7r7BwaOe9tROQRkzpgwOPZSAFHiW7x8orSnOudkUVZL7mdtbxSBmHQdJro34VDvbXhqpKGkh3QFHXnQ6QPPtxKiNYcHnpHzXMuJ2ryyJFCh_pR-5Rqe_aCgYKAdQSARESFQHGX2MiiLAlWY4UrQZxOivVcHNX8w0179".to_owned(), "anton-390822".to_owned()));
+    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new(
+        input.gemini_api_key.to_owned(),
+        "anton-390822".to_owned(),
+    ));
     let _gemini_llm_properties = LLMProperties::new(
         LLMType::GeminiProFlash,
         LLMProvider::GeminiPro,
@@ -111,33 +133,21 @@ async fn main() {
     );
 
     // I should create symlinks for these so its easier to query as well :|
-    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp02jxzkk5".to_owned();
+    let folder_path = input.repo_path.to_owned();
     // let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp9khfwaj0".to_owned();
-    let repo_map_fs_path =
-        "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpu88w4cw3".to_owned();
+    let repo_map_fs_path = input.repo_map_fs_path.to_owned();
     // let repo_map_fs_path =
     //     "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpb0s1ot0p".to_owned();
-    let problem_statement = r#"delete() on instances of models without any dependencies doesn't clear PKs.
-
-Description
-
-Deleting any model with no dependencies not updates the PK on the model. It should be set to None after .delete() call.
-
-See Django.db.models.deletion:276-281. Should update the model line 280."#.to_owned();
+    let problem_statement = input.problem_statement.to_owned();
     let initial_request = SymbolInputEvent::new(
-        UserContext::new(
-            vec![],
-            vec![],
-            None,
-            vec![folder_path.to_owned()],
-        ),
+        UserContext::new(vec![], vec![], None, vec![folder_path.to_owned()]),
         LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,
         anthropic_api_keys,
         problem_statement,
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
-        Some("ya29.a0AXooCgv-mK2GN4l9juf15KrFrj0g9tMk5MKVHjfZXDH2moatzdQxF-zz7r7BwaOe9tROQRkzpgwOPZSAFHiW7x8orSnOudkUVZL7mdtbxSBmHQdJro34VDvbXhqpKGkh3QFHXnQ6QPPtxKiNYcHnpHzXMuJ2ryyJFCh_pR-5Rqe_aCgYKAdQSARESFQHGX2MiiLAlWY4UrQZxOivVcHNX8w0179".to_owned()),
+        Some(input.gemini_api_key.to_owned()),
         Some(instance_id.to_owned()),
         Some(folder_path.to_owned()),
     );

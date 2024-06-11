@@ -4,7 +4,7 @@
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -114,16 +114,26 @@ impl SymbolInputEvent {
                 Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
                     contents,
                     self.user_query.to_owned(),
-                    LLMType::GeminiProFlash,
-                    LLMProvider::GeminiPro,
-                    LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new(
-                        self.gcloud_access_token
-                            .expect("swe bench harness always sends this"),
-                        "anton-390822".to_owned(),
-                    )),
+                    LLMType::ClaudeOpus,
+                    LLMProvider::Anthropic,
+                    self.api_keys.clone(),
                 ))),
                 Err(_) => None,
             }
+            // match contents {
+            //     Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
+            //         contents,
+            //         self.user_query.to_owned(),
+            //         LLMType::GeminiPro,
+            //         LLMProvider::GeminiPro,
+            //         LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new(
+            //             self.gcloud_access_token
+            //                 .expect("swe bench harness always sends this"),
+            //             "anton-390822".to_owned(),
+            //         )),
+            //     ))),
+            //     Err(_) => None,
+            // }
         } else {
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(

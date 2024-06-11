@@ -34,7 +34,7 @@ impl GeminiProClient {
 
     fn model(&self, model: &LLMType) -> Option<String> {
         match model {
-            LLMType::GeminiPro => Some("gemini-pro".to_owned()),
+            LLMType::GeminiPro => Some("gemini-1.5-pro-001".to_owned()),
             LLMType::GeminiProFlash => Some("gemini-1.5-flash-001".to_owned()),
             _ => None,
         }

@@ -2629,8 +2629,6 @@ Please handle these changes as required."#
         // we grab the outlines over here
         let outline_nodes = self.symbol_broker.get_symbols_outline(fs_file_path).await;
 
-        println!("{:?}", outline_nodes.is_some());
-
         // We will either get an outline node or we will get None
         // for today, we will go with the following assumption
         // - if the document has already been open, then its good

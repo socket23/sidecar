@@ -5366,7 +5366,9 @@ We have to add the newly created endpoint in inline_completion to add support fo
 </code_selection>
 <user_query>
 {user_query}
-</user_query>"#
+</user_query>
+
+Remember your reply should always be contained in <reply> tags and follow the format which we have shown you before in the system message."#
         )
     }
 }

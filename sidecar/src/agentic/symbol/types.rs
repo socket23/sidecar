@@ -1016,15 +1016,29 @@ impl Symbol {
     ) -> Result<EditedCodeSymbol, SymbolError> {
         let file_content = self
             .tools
-            .get_file_content(&sub_symbol.fs_file_path())
+            .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
             .await?;
-        let symbol_to_edit = self.tools.find_sub_symbol_to_edit(sub_symbol).await?;
+        // force add the new content of the file over here
+        _ = self
+            .tools
+            .force_add_document(
+                sub_symbol.fs_file_path(),
+                file_content.contents_ref(),
+                file_content.language(),
+            )
+            .await?;
+        // TODO(skcd): This symbol could have moved after some other symbol
+        // was edited, so this function is not entirely correct over here
+        let symbol_to_edit = self
+            .tools
+            .find_sub_symbol_to_edit_with_name(self.symbol_name(), sub_symbol)
+            .await?;
         let content = symbol_to_edit.content().to_owned();
         let response = self
             .tools
             .code_edit(
                 sub_symbol.fs_file_path(),
-                &file_content,
+                file_content.contents_ref(),
                 symbol_to_edit.range(),
                 context.join("\n"),
                 sub_symbol.instructions().join("\n"),
@@ -1085,6 +1099,7 @@ impl Symbol {
             let _ = self
                 .tools
                 .check_code_correctness(
+                    self.symbol_name(),
                     &sub_symbol_to_edit,
                     original_code,
                     edited_code,

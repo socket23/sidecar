@@ -129,7 +129,7 @@ impl OutlineNodeType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, std::hash::Hash)]
 pub struct OutlineNodeContent {
     range: Range,
     name: String,

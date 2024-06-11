@@ -117,10 +117,6 @@ impl SymbolLocker {
                     )
                     .await;
                 if let Ok(snippet) = snippet {
-                    // TODO(skcd): the snippet here might belong to a class or it might be a global function
-                    // we want to grab the largest node containing the symbol here instead of using
-                    // the symbol directly since our algorithm would not work otherwise
-
                     // the symbol does not exist so we have to make sure that we can send it over somehow
                     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
                         symbol_identifier.symbol_name().to_owned(),

@@ -187,6 +187,12 @@ impl SymbolManager {
                     .await
                     .map_err(|e| e.into())?;
                 println!("Symbols over here: {:?}", &symbols);
+                // TODO(skcd): the symbol here might belong to a class or it might be a global function
+                // we want to grab the largest node containing the symbol here instead of using
+                // the symbol directly since our algorithm would not work otherwise
+                // we would also need to de-duplicate the symbols which we have to process right over here
+                // otherwise it might lead to errors
+
                 let request_id_ref = &request_id;
                 // This is where we are creating all the symbols
                 let symbol_identifiers = stream::iter(symbols)

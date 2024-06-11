@@ -909,7 +909,7 @@ impl Symbol {
     // TODO(skcd): Handle the cases where the outline is within a symbol and spread
     // across different lines (as is the case in typescript and python)
     // for now we are focussing on rust
-    async fn grab_context_for_editing(
+    pub async fn grab_context_for_editing(
         &self,
         subsymbol: &SymbolToEdit,
         request_id: &str,

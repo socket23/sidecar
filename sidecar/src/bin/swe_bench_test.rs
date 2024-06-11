@@ -9,7 +9,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{AnthropicAPIKey, GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use serde_json::json;
 use sidecar::{
@@ -96,6 +96,13 @@ async fn main() {
         LLMProvider::Anthropic,
         anthropic_api_keys.clone(),
     );
+    let gpt4o_config = LLMProperties::new(
+        LLMType::Gpt4O,
+        LLMProvider::OpenAI,
+        LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+            "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".to_owned(),
+        )),
+    );
     // this is the current running debuggable editor
     let user_context = UserContext::new(
         vec![],
@@ -150,6 +157,7 @@ async fn main() {
         Some(input.gemini_api_key.to_owned()),
         Some(instance_id.to_owned()),
         Some(folder_path.to_owned()),
+        Some(gpt4o_config),
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
 

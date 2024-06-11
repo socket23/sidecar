@@ -40,6 +40,8 @@ pub enum ToolType {
     CodeEditingForError,
     // Followup decision
     ClassSymbolFollowup,
+    // COT chains
+    CodeEditingCOT,
     // Probe operation
     ProbePossible,
     ProbeQuestion,
@@ -89,6 +91,7 @@ impl std::fmt::Display for ToolType {
             ToolType::RepoMapSearch => write!(f, "Repo Map Search"),
             ToolType::SWEBenchToolEndpoint => write!(f, "SWE Bench Tool Endpoint"),
             ToolType::TestCorrection => write!(f, "Test Correction"),
+            ToolType::CodeEditingCOT => write!(f, "Code editing COT"),
         }
     }
 }

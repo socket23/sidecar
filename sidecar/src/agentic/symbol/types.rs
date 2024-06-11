@@ -1034,6 +1034,12 @@ impl Symbol {
             .find_sub_symbol_to_edit_with_name(self.symbol_name(), sub_symbol)
             .await?;
         let content = symbol_to_edit.content().to_owned();
+        let (llm_properties, swe_bench_initial_edit) =
+            if let Some(llm_properties) = self.tool_properties.get_swe_bench_code_editing_llm() {
+                (llm_properties, true)
+            } else {
+                (self.llm_properties.clone(), false)
+            };
         let response = self
             .tools
             .code_edit(
@@ -1042,10 +1048,11 @@ impl Symbol {
                 symbol_to_edit.range(),
                 context.join("\n"),
                 sub_symbol.instructions().join("\n"),
-                self.llm_properties.llm().clone(),
-                self.llm_properties.provider().clone(),
-                self.llm_properties.api_key().clone(),
+                llm_properties.llm().clone(),
+                llm_properties.provider().clone(),
+                llm_properties.api_key().clone(),
                 request_id,
+                swe_bench_initial_edit,
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))
@@ -1073,6 +1080,7 @@ impl Symbol {
         );
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
+        // - do a COT to figure out how to go about making the changes
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {

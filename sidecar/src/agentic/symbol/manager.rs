@@ -132,8 +132,10 @@ impl SymbolManager {
         let swe_bench_id = input_event.swe_bench_instance_id();
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
-        let tool_properties =
-            ToolProperties::new().set_swe_bench_endpoint(swe_bench_test_endpoint.clone());
+        let swe_bench_code_editing_model = input_event.get_swe_bench_code_editing();
+        let tool_properties = ToolProperties::new()
+            .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
+            .set_swe_bench_code_editing_llm(swe_bench_code_editing_model);
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event.tool_use_on_initial_invocation().await;

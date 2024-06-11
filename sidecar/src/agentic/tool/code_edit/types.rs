@@ -31,6 +31,7 @@ pub struct CodeEdit {
     instruction: String,
     api_key: LLMProviderAPIKeys,
     provider: LLMProvider,
+    is_swe_bench_initial_edit: bool,
 }
 
 impl CodeEdit {
@@ -45,6 +46,7 @@ impl CodeEdit {
         model: LLMType,
         api_key: LLMProviderAPIKeys,
         provider: LLMProvider,
+        is_swe_bench_initial_edit: bool,
     ) -> Self {
         Self {
             code_above,
@@ -57,6 +59,7 @@ impl CodeEdit {
             instruction,
             api_key,
             provider,
+            is_swe_bench_initial_edit,
         }
     }
 }
@@ -162,17 +165,32 @@ impl Tool for CodeEditingTool {
         if let Some(llm_properties) = self.get_llm_properties() {
             llm_message = llm_message.set_llm(llm_properties.llm().clone());
         }
-        let (api_key, provider) = if let Some(llm_properties) = self.get_llm_properties() {
-            (
-                llm_properties.api_key().clone(),
-                llm_properties.provider().clone(),
-            )
+        // If this is not special swe bench initial edit then do the overrideas
+        // as before
+        let (llm, api_key, provider) = if !code_edit_context.is_swe_bench_initial_edit {
+            if let Some(llm_properties) = self.get_llm_properties() {
+                (
+                    llm_properties.llm().clone(),
+                    llm_properties.api_key().clone(),
+                    llm_properties.provider().clone(),
+                )
+            } else {
+                (
+                    code_edit_context.model.clone(),
+                    code_edit_context.api_key.clone(),
+                    code_edit_context.provider.clone(),
+                )
+            }
+        // if this is the special swe bench initial edit, then keep the llm properties
+        // as they are being sent from the invoker
         } else {
             (
+                code_edit_context.model.clone(),
                 code_edit_context.api_key.clone(),
                 code_edit_context.provider.clone(),
             )
         };
+        llm_message = llm_message.set_llm(llm);
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let result = self
             .llm_client

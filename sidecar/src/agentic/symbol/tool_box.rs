@@ -2149,6 +2149,7 @@ Please handle these changes as required."#
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
+        swe_bench_initial_edit: bool,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
         println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
@@ -2156,6 +2157,10 @@ Please handle these changes as required."#
         println!("tool_box::code_edit::selection_range:{:?}", selection_range);
         println!("tool_box::code_edit::extra_context:{}", &extra_context);
         println!("tool_box::code_edit::instruction:{}", &instruction);
+        println!(
+            "tool_box::code_edit::llm_properties: {:?}, {:?}, {:?}",
+            &llm, &api_keys, &provider
+        );
         println!("============");
         // we need to get the range above and then below and then in the selection
         let language = self
@@ -2177,6 +2182,7 @@ Please handle these changes as required."#
             llm,
             api_keys,
             provider,
+            swe_bench_initial_edit,
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),

@@ -174,6 +174,7 @@ pub async fn swe_bench(
                     Some(gcloud_access_token),
                     None,
                     None,
+                    None,
                 )
                 .set_swe_bench_id(swe_bench_id),
             )

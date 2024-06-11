@@ -8,11 +8,14 @@ use llm_client::{
 };
 
 use crate::{
-    agentic::tool::{
-        code_symbol::{
-            important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
+    agentic::{
+        symbol::identifier::LLMProperties,
+        tool::{
+            code_symbol::{
+                important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
+            },
+            input::ToolInput,
         },
-        input::ToolInput,
     },
     user_context::types::UserContext,
 };
@@ -30,6 +33,7 @@ pub struct SymbolInputEvent {
     gcloud_access_token: Option<String>,
     swe_bench_id: Option<String>,
     swe_bench_git_dname: Option<String>,
+    swe_bench_code_editing: Option<LLMProperties>,
 }
 
 impl SymbolInputEvent {
@@ -44,6 +48,7 @@ impl SymbolInputEvent {
         gcloud_access_token: Option<String>,
         swe_bench_id: Option<String>,
         swe_bench_git_dname: Option<String>,
+        swe_bench_code_editing: Option<LLMProperties>,
     ) -> Self {
         Self {
             context,
@@ -56,6 +61,7 @@ impl SymbolInputEvent {
             gcloud_access_token,
             swe_bench_id,
             swe_bench_git_dname,
+            swe_bench_code_editing,
         }
     }
 
@@ -86,6 +92,10 @@ impl SymbolInputEvent {
 
     pub fn has_repo_map(&self) -> bool {
         self.repo_map_fs_path.is_some()
+    }
+
+    pub fn get_swe_bench_code_editing(&self) -> Option<LLMProperties> {
+        self.swe_bench_code_editing.clone()
     }
 
     // here we can take an action based on the state we are in

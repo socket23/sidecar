@@ -659,16 +659,24 @@ We also believe this symbol needs to be probed because of:
         if symbol_to_edit.is_outline() {
             Err(SymbolError::OutlineNodeEditingNotSupported)
         } else {
-            outline_node
-                .children()
-                .into_iter()
-                .find(|child_node| {
-                    child_node
-                        .range()
-                        .contains_check_line(symbol_to_edit.range())
-                })
-                .map(|child_node| child_node.clone())
-                .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)
+            let child_node = outline_node.children().into_iter().find(|child_node| {
+                child_node
+                    .range()
+                    .contains_check_line(symbol_to_edit.range())
+            });
+            if let Some(child_node) = child_node {
+                Ok(child_node.clone())
+            } else {
+                if outline_node
+                    .content()
+                    .range()
+                    .contains_check_line(symbol_to_edit.range())
+                {
+                    Ok(outline_node.content().clone())
+                } else {
+                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
+                }
+            }
         }
     }
 

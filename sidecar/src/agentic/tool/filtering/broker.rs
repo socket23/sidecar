@@ -138,7 +138,7 @@ impl CodeToEditList {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "code_to_not_edit_list")]
 pub struct CodeToNotEditList {
-    #[serde(rename = "$value")]
+    #[serde(default, rename = "$value")]
     snippets: Vec<CodeToNotEditSnippet>,
 }
 

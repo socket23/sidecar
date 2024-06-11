@@ -485,7 +485,7 @@ impl MechaCodeSymbolThinking {
         );
         let request_id_ref = &request_id;
         // TODO(skcd): We need to generate the implementation always
-        let steps = self.steps().await;
+        // let steps = self.steps().await;
         println!(
             "mecha_code_symbol_thinking::steps_end({})",
             self.symbol_name()
@@ -540,7 +540,7 @@ impl MechaCodeSymbolThinking {
                     tool_box
                         .filter_code_snippets_in_symbol_for_editing(
                             ranked_xml_list,
-                            steps.join("\n"),
+                            original_request.to_owned(),
                             llm_properties.llm().clone(),
                             llm_properties.provider().clone(),
                             llm_properties.api_key().clone(),

@@ -21,7 +21,7 @@ use crate::agentic::tool::code_symbol::followup::{
 use crate::agentic::tool::code_symbol::important::{
     CodeSymbolFollowAlongForProbing, CodeSymbolImportantRequest, CodeSymbolImportantResponse,
     CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
-    CodeSymbolWithThinking,
+    CodeSymbolWithSteps, CodeSymbolWithThinking,
 };
 use crate::agentic::tool::code_symbol::models::anthropic::{
     CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
@@ -634,6 +634,41 @@ We also believe this symbol needs to be probed because of:
         } else {
             // we did not find anything here so skip this part
             Err(SymbolError::OutlineNodeNotFound(symbol_name.to_owned()))
+        }
+    }
+
+    /// The symbol can move because of some other edit so we have to map it
+    /// properly over here and find it using the name as that it is the best
+    /// way to achieve this right now
+    pub async fn find_sub_symbol_to_edit_with_name(
+        &self,
+        parent_symbol_name: &str,
+        symbol_to_edit: &SymbolToEdit,
+    ) -> Result<OutlineNodeContent, SymbolError> {
+        let outline_node = self
+            .get_outline_nodes_grouped(symbol_to_edit.fs_file_path())
+            .await
+            .ok_or(SymbolError::ExpectedFileToExist)?
+            .into_iter()
+            .find(|outline_node| outline_node.name() == parent_symbol_name)
+            .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)?;
+
+        if symbol_to_edit.is_outline() {
+            Err(SymbolError::OutlineNodeEditingNotSupported)
+        } else {
+            let child_node = outline_node
+                .children()
+                .into_iter()
+                .find(|child_node| child_node.name() == symbol_to_edit.symbol_name());
+            if let Some(child_node) = child_node {
+                Ok(child_node.clone())
+            } else {
+                if outline_node.name() == symbol_to_edit.symbol_name() {
+                    Ok(outline_node.content().clone())
+                } else {
+                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
+                }
+            }
         }
     }
 
@@ -1735,6 +1770,7 @@ Please handle these changes as required."#
 
     pub async fn check_code_correctness(
         &self,
+        parent_symbol_name: &str,
         symbol_edited: &SymbolToEdit,
         original_code: &str,
         edited_code: &str,
@@ -1786,7 +1822,9 @@ Please handle these changes as required."#
             }
             tries = tries + 1;
 
-            let symbol_to_edit = self.find_sub_symbol_to_edit(symbol_edited).await?;
+            let symbol_to_edit = self
+                .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited)
+                .await?;
             let _fs_file_content =
                 dbg!(self.file_open(fs_file_path.to_owned(), request_id).await)?.contents();
 
@@ -1801,7 +1839,10 @@ Please handle these changes as required."#
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
-            let symbol_to_edit = dbg!(self.find_sub_symbol_to_edit(symbol_edited).await)?;
+            let symbol_to_edit = dbg!(
+                self.find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited)
+                    .await
+            )?;
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?
@@ -1868,6 +1909,8 @@ Please handle these changes as required."#
                             .await;
 
                         // return over here since we are done with the code correction flow
+                        // since this only happens in case of swe-bench
+                        continue;
                     }
                 }
             }
@@ -2686,199 +2729,228 @@ Please handle these changes as required."#
         }
     }
 
-    // TODO(skcd): Improve this since we have code symbols which might be duplicated
-    // because there can be repetitions and we can'nt be sure where they exist
-    // one key hack here is that we can legit search for this symbol and get
-    // to the definition of this very easily
+    // TODO(skcd): We are not capturing the is_new symbols which might become
+    // necessary later on
     pub async fn important_symbols(
         &self,
         important_symbols: CodeSymbolImportantResponse,
         user_context: UserContext,
         request_id: &str,
     ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
-        let symbols = important_symbols.symbols();
+        // let symbols = important_symbols.symbols();
         let ordered_symbols = important_symbols.ordered_symbols();
         // there can be overlaps between these, but for now its fine
-        let mut new_symbols: HashSet<String> = Default::default();
-        let mut symbols_to_visit: HashSet<String> = Default::default();
-        let mut final_code_snippets: HashMap<String, MechaCodeSymbolThinking> = Default::default();
-        ordered_symbols.iter().for_each(|ordered_symbol| {
-            let code_symbol = ordered_symbol.code_symbol().to_owned();
-            if ordered_symbol.is_new() {
-                new_symbols.insert(code_symbol.to_owned());
-                final_code_snippets.insert(
-                    code_symbol.to_owned(),
-                    MechaCodeSymbolThinking::new(
-                        code_symbol,
-                        ordered_symbol.steps().to_owned(),
-                        true,
-                        ordered_symbol.file_path().to_owned(),
-                        None,
-                        vec![],
-                        user_context.clone(),
-                        // say sike right now
-                        Arc::new(self.clone()),
-                    ),
-                );
-            } else {
-                symbols_to_visit.insert(code_symbol.to_owned());
-                final_code_snippets.insert(
-                    code_symbol.to_owned(),
-                    MechaCodeSymbolThinking::new(
-                        code_symbol,
-                        ordered_symbol.steps().to_owned(),
-                        false,
-                        ordered_symbol.file_path().to_owned(),
-                        None,
-                        vec![],
-                        user_context.clone(),
-                        // say sike right now
-                        Arc::new(self.clone()),
-                    ),
-                );
-            }
-        });
-        for symbol in symbols.iter() {
-            if !new_symbols.contains(symbol.code_symbol()) {
-                symbols_to_visit.insert(symbol.code_symbol().to_owned());
-                if let Some(code_snippet) = final_code_snippets.get_mut(symbol.code_symbol()) {
-                    let _ = code_snippet.add_step(symbol.thinking()).await;
-                }
-            }
-        }
-
-        let mut mecha_symbols = vec![];
-
-        // TODO(skcd): Refactor the code below to be the same as find_snippet_for_symbol
-        // so we can contain the logic in a single place
-        for (_, code_snippet) in final_code_snippets.into_iter() {
-            // we always open the document before asking for an outline
-            let file_open_result = self
-                .file_open(code_snippet.fs_file_path().to_owned(), request_id)
-                .await?;
-            let language = file_open_result.language().to_owned();
-            // we add the document for parsing over here
-            self.symbol_broker
-                .add_document(
-                    file_open_result.fs_file_path().to_owned(),
-                    file_open_result.contents(),
-                    language,
-                )
-                .await;
-
-            // we grab the outlines over here
-            let outline_nodes = self
-                .symbol_broker
-                .get_symbols_outline(code_snippet.fs_file_path())
-                .await;
-
-            // We will either get an outline node or we will get None
-            // for today, we will go with the following assumption
-            // - if the document has already been open, then its good
-            // - otherwise we open the document and parse it again
-            if let Some(outline_nodes) = outline_nodes {
-                let mut outline_nodes =
-                    self.grab_symbols_from_outline(outline_nodes, code_snippet.symbol_name());
-
-                dbg!(
-                    "outline nodes: {} {}",
-                    outline_nodes.len(),
-                    code_snippet.symbol_name()
-                );
-
-                // if there are no outline nodes, then we have to skip this part
-                // and keep going
-                if outline_nodes.is_empty() {
-                    // Let's not do anything over here
-                    continue;
-                    // here we need to do go-to-definition
-                    // first we check where the symbol is present on the file
-                    // and we can use goto-definition
-                    // so we first search the file for where the symbol is
-                    // this will be another invocation to the tools
-                    // and then we ask for the definition once we find it
-                    // let file_data = self
-                    //     .file_open(code_snippet.fs_file_path().to_owned(), request_id)
-                    //     .await?;
-                    // let file_content = file_data.contents();
-                    // // now we parse it and grab the outline nodes
-                    // let find_in_file = self
-                    //     .find_in_file(
-                    //         file_content,
-                    //         code_snippet.symbol_name().to_owned(),
-                    //         request_id,
-                    //     )
-                    //     .await
-                    //     .map(|find_in_file| find_in_file.get_position())
-                    //     .ok()
-                    //     .flatten();
-                    // println!(
-                    //     "Find in file for symbol_name: {} is {:?}",
-                    //     code_snippet.symbol_name().to_owned(),
-                    //     &find_in_file
-                    // );
-                    // // now that we have a poition, we can ask for go-to-definition
-                    // if let Some(file_position) = find_in_file {
-                    //     let definition = self
-                    //         .go_to_definition(
-                    //             &code_snippet.fs_file_path(),
-                    //             file_position,
-                    //             request_id,
-                    //         )
-                    //         .await?;
-                    //     dbg!("We have some definitions");
-                    //     // let definition_file_path = definition.file_path().to_owned();
-                    //     let snippet_node = self
-                    //         .grab_symbol_content_from_definition(
-                    //             &code_snippet.symbol_name(),
-                    //             definition,
-                    //             request_id,
-                    //         )
-                    //         .await?;
-                    //     dbg!("we have a snippet node for this");
-                    //     code_snippet.set_snippet(snippet_node).await;
-                    // }
-                } else {
-                    // if we have multiple outline nodes, then we need to select
-                    // the best one, this will require another invocation from the LLM
-                    // we have the symbol, we can just use the outline nodes which is
-                    // the first
-                    let outline_node = outline_nodes.remove(0);
-                    code_snippet
-                        .set_snippet(Snippet::new(
-                            outline_node.name().to_owned(),
-                            outline_node.range().clone(),
-                            outline_node.fs_file_path().to_owned(),
-                            outline_node.content().to_owned(),
-                            outline_node,
-                        ))
-                        .await;
-                }
-            } else {
-                // if this is new, then we probably do not have a file path
-                // to write it to
-                if !code_snippet.is_new() {
-                    // its a symbol but we have nothing about it, so we log
-                    // this as error for now, but later we have to figure out
-                    // what to do about it
-                    println!(
-                        "this is pretty bad, read the comment above on what is happening {:?}",
-                        &code_snippet.symbol_name()
-                    );
-                }
-            }
-
-            mecha_symbols.push(code_snippet);
-        }
-        dbg!(
-            "Mecha symbols: {} {}",
-            mecha_symbols.len(),
-            mecha_symbols
+        // let mut new_symbols: HashSet<String> = Default::default();
+        // let mut symbols_to_visit: HashSet<String> = Default::default();
+        // let mut final_code_snippets: HashMap<String, MechaCodeSymbolThinking> = Default::default();
+        stream::iter(
+            ordered_symbols
                 .iter()
-                .map(|mecha_symbol| mecha_symbol.symbol_name().to_owned())
-                .collect::<Vec<_>>()
-        );
-        Ok(mecha_symbols)
+                .map(|ordered_symbol| ordered_symbol.file_path().to_owned()),
+        )
+        .for_each(|file_path| async move {
+            let file_open_response = self.file_open(file_path.to_owned(), request_id).await;
+            if let Ok(file_open_response) = file_open_response {
+                let _ = self
+                    .force_add_document(
+                        &file_path,
+                        file_open_response.contents_ref(),
+                        file_open_response.language(),
+                    )
+                    .await;
+            }
+        })
+        .await;
+
+        let mut bounding_symbol_to_instruction: HashMap<
+            OutlineNodeContent,
+            Vec<&CodeSymbolWithSteps>,
+        > = Default::default();
+        let mut unbounded_symbols: Vec<&CodeSymbolWithSteps> = Default::default();
+        for symbol in ordered_symbols.iter() {
+            let file_path = symbol.file_path();
+            let symbol_name = symbol.code_symbol();
+            let outline_nodes = self.symbol_broker.get_symbols_outline(file_path).await;
+            if let Some(outline_nodes) = outline_nodes {
+                let mut bounding_symbols =
+                    self.grab_bounding_symbol_for_symbol(outline_nodes, symbol_name);
+                if bounding_symbols.is_empty() {
+                    // well this is weird, we have not outline nodes here
+                    unbounded_symbols.push(symbol);
+                } else {
+                    let outline_node = bounding_symbols.remove(0);
+                    if bounding_symbol_to_instruction.contains_key(&outline_node) {
+                        let contained_sub_symbols = bounding_symbol_to_instruction
+                            .get_mut(&outline_node)
+                            .expect("contains_key to work");
+                        contained_sub_symbols.push(symbol);
+                    } else {
+                        bounding_symbol_to_instruction.insert(outline_node, vec![symbol]);
+                    }
+                }
+            }
+        }
+
+        // We have categorised the sub-symbols now to belong with their bounding symbols
+        // and for the sub-symbols which are unbounded, now we can create the final
+        // mecha_code_symbol_thinking
+        let mut mecha_code_symbols = vec![];
+        for (outline_node, _) in bounding_symbol_to_instruction.into_iter() {
+            // code_symbol_with_steps.into_iter().map(|code_symbol_with_step| {
+            //     let code_symbol = code_symbol_with_step.code_symbol().to_owned();
+            //     let instructions = code_symbol_with_step.steps().to_vec();
+            // }).collect::<Vec<_>>();
+            let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
+                outline_node.name().to_owned(),
+                vec![],
+                false,
+                outline_node.fs_file_path().to_owned(),
+                Some(Snippet::new(
+                    outline_node.name().to_owned(),
+                    outline_node.range().clone(),
+                    outline_node.fs_file_path().to_owned(),
+                    outline_node.content().to_owned(),
+                    outline_node.clone(),
+                )),
+                vec![],
+                user_context.clone(),
+                Arc::new(self.clone()),
+            );
+            mecha_code_symbols.push(mecha_code_symbol_thinking);
+        }
+        Ok(mecha_code_symbols)
+        // ordered_symbols.iter().for_each(|ordered_symbol| {
+        //     let code_symbol = ordered_symbol.code_symbol().to_owned();
+        //     if ordered_symbol.is_new() {
+        //         new_symbols.insert(code_symbol.to_owned());
+        //         final_code_snippets.insert(
+        //             code_symbol.to_owned(),
+        //             MechaCodeSymbolThinking::new(
+        //                 code_symbol,
+        //                 ordered_symbol.steps().to_owned(),
+        //                 true,
+        //                 ordered_symbol.file_path().to_owned(),
+        //                 None,
+        //                 vec![],
+        //                 user_context.clone(),
+        //                 // say sike right now
+        //                 Arc::new(self.clone()),
+        //             ),
+        //         );
+        //     } else {
+        //         symbols_to_visit.insert(code_symbol.to_owned());
+        //         final_code_snippets.insert(
+        //             code_symbol.to_owned(),
+        //             MechaCodeSymbolThinking::new(
+        //                 code_symbol,
+        //                 ordered_symbol.steps().to_owned(),
+        //                 false,
+        //                 ordered_symbol.file_path().to_owned(),
+        //                 None,
+        //                 vec![],
+        //                 user_context.clone(),
+        //                 // say sike right now
+        //                 Arc::new(self.clone()),
+        //             ),
+        //         );
+        //     }
+        // });
+        // for symbol in symbols.iter() {
+        //     if !new_symbols.contains(symbol.code_symbol()) {
+        //         symbols_to_visit.insert(symbol.code_symbol().to_owned());
+        //         if let Some(code_snippet) = final_code_snippets.get_mut(symbol.code_symbol()) {
+        //             let _ = code_snippet.add_step(symbol.thinking()).await;
+        //         }
+        //     }
+        // }
+
+        // let mut mecha_symbols = vec![];
+        // let mut bounding_symbols: HashMap<String, Vec<MechaCodeSymbolThinking>> =
+        //     Default::default();
+
+        // // TODO(skcd): Refactor the code below to be the same as find_snippet_for_symbol
+        // // so we can contain the logic in a single place
+        // for (_, code_snippet) in final_code_snippets.into_iter() {
+        //     // we always open the document before asking for an outline
+        //     let file_open_result = self
+        //         .file_open(code_snippet.fs_file_path().to_owned(), request_id)
+        //         .await?;
+        //     let language = file_open_result.language().to_owned();
+        //     // we add the document for parsing over here
+        //     self.symbol_broker
+        //         .add_document(
+        //             file_open_result.fs_file_path().to_owned(),
+        //             file_open_result.contents(),
+        //             language,
+        //         )
+        //         .await;
+
+        //     // we grab the outlines over here
+        //     let outline_nodes = self
+        //         .symbol_broker
+        //         .get_symbols_outline(code_snippet.fs_file_path())
+        //         .await;
+
+        //     // We will either get an outline node or we will get None
+        //     // for today, we will go with the following assumption
+        //     // - if the document has already been open, then its good
+        //     // - otherwise we open the document and parse it again
+        //     if let Some(outline_nodes) = outline_nodes {
+        //         let mut bounding_symbol_node =
+        //             self.grab_bounding_symbol_for_symbol(outline_nodes, code_snippet.symbol_name());
+
+        //         dbg!(
+        //             "outline nodes: {} {}",
+        //             bounding_symbol_node.len(),
+        //             code_snippet.symbol_name()
+        //         );
+
+        //         // if there are no outline nodes, then we have to skip this part
+        //         // and keep going
+        //         if bounding_symbol_node.is_empty() {
+        //             // Let's not do anything over here
+        //             continue;
+        //         } else {
+        //             // if we have multiple outline nodes, then we need to select
+        //             // the best one, this will require another invocation from the LLM
+        //             // we have the symbol, we can just use the outline nodes which is
+        //             // the first
+        //             let outline_node = bounding_symbol_node.remove(0);
+        //             code_snippet
+        //                 .set_snippet(Snippet::new(
+        //                     outline_node.name().to_owned(),
+        //                     outline_node.range().clone(),
+        //                     outline_node.fs_file_path().to_owned(),
+        //                     outline_node.content().to_owned(),
+        //                     outline_node,
+        //                 ))
+        //                 .await;
+        //         }
+        //     } else {
+        //         // if this is new, then we probably do not have a file path
+        //         // to write it to
+        //         if !code_snippet.is_new() {
+        //             // its a symbol but we have nothing about it, so we log
+        //             // this as error for now, but later we have to figure out
+        //             // what to do about it
+        //             println!(
+        //                 "this is pretty bad, read the comment above on what is happening {:?}",
+        //                 &code_snippet.symbol_name()
+        //             );
+        //         }
+        //     }
+
+        //     mecha_symbols.push(code_snippet);
+        // }
+        // dbg!(
+        //     "Mecha symbols: {} {}",
+        //     mecha_symbols.len(),
+        //     mecha_symbols
+        //         .iter()
+        //         .map(|mecha_symbol| mecha_symbol.symbol_name().to_owned())
+        //         .collect::<Vec<_>>()
+        // );
+        // Ok(mecha_symbols)
     }
 
     async fn go_to_implementations_exact(
@@ -3010,6 +3082,44 @@ Please handle these changes as required."#
                 symbol_name.to_owned(),
             )))
         }
+    }
+
+    /// Grabs the bounding symbol for a given sub-symbol or symbol
+    /// if we are looking for a function in a class, we get the class back
+    /// if its the class itself we get the class back
+    /// if its a function itself outside of the class, then we get that back
+    fn grab_bounding_symbol_for_symbol(
+        &self,
+        outline_nodes: Vec<OutlineNode>,
+        symbol_name: &str,
+    ) -> Vec<OutlineNodeContent> {
+        outline_nodes
+            .into_iter()
+            .filter_map(|node| {
+                if node.is_class() {
+                    if node.content().name() == symbol_name {
+                        Some(vec![node.content().clone()])
+                    } else {
+                        if node
+                            .children()
+                            .iter()
+                            .any(|node| node.name() == symbol_name)
+                        {
+                            Some(vec![node.content().clone()])
+                        } else {
+                            None
+                        }
+                    }
+                } else {
+                    if node.content().name() == symbol_name {
+                        Some(vec![node.content().clone()])
+                    } else {
+                        None
+                    }
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>()
     }
 
     fn grab_symbols_from_outline(

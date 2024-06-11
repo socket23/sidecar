@@ -225,7 +225,13 @@ impl TSLanguageConfig {
                                 class_name_range = Some(child_range);
                             }
                             OutlineNodeType::Function => {
-                                function_range = Some(child_range);
+                                if self.language_str == "python" && function_range.is_some() {
+                                    // do nothing in this case, since we have the decorator
+                                    // query over here which will also emit the same event for
+                                    // us
+                                } else {
+                                    function_range = Some(child_range);
+                                }
                             }
                             OutlineNodeType::FunctionName => {
                                 if function_range.is_some() {
@@ -2996,5 +3002,40 @@ def something_else_function(self, a, b, c) -> sss:
         );
         println!("{:?}", &outlines);
         assert!(false);
+    }
+
+    #[test]
+    fn test_parsing_python_functions_with_decorators() {
+        let source_code = r#"
+class Something:
+    def __init__():
+        pass
+    
+    @classmethod
+    def something_else(cls, blah, blah2):
+        print(blah)
+        print(blah2)
+        pass
+
+def something_else_function(self, a, b, c) -> sss:
+    print(a)
+    print(b)
+    pass
+        "#;
+        let language = "python";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("to be present");
+        let mut parser = Parser::new();
+        let grammar = ts_language_config.grammar;
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let _outlines = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.py".to_owned(),
+        );
+        assert!(true);
     }
 }

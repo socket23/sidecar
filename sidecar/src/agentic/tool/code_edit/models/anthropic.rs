@@ -33,22 +33,35 @@ We are also showing you an example:
 We want to print the parameters of the function
 </user_instruction>
 
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
 <code_to_edit>
 ```python
-def add(a, b):
-    return a + b
+    def add(a, b):
+        return a + b
 </code_to_edit>
 
 Your reply is:
 <reply>
 ```python
-def add(a, b):
-    print(a, b)
-    return a + b
+    def add(a, b):
+        print(a, b)
+        return a + b
 ```
 </reply>
 
-Notice how we rewrote the whole section of the code which needs to be changed again."#
+Notice how we rewrote the whole section of the code and only the portion which was in the selection which needs to be changed again with the right indentation."#
         )
     }
 

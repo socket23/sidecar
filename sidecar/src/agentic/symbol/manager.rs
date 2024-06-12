@@ -133,9 +133,11 @@ impl SymbolManager {
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
         let swe_bench_code_editing_model = input_event.get_swe_bench_code_editing();
+        let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
         let tool_properties = ToolProperties::new()
             .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
-            .set_swe_bench_code_editing_llm(swe_bench_code_editing_model);
+            .set_swe_bench_code_editing_llm(swe_bench_code_editing_model)
+            .set_swe_bench_reranking_llm(swe_bench_gemini_properties);
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
@@ -188,9 +190,9 @@ impl SymbolManager {
                 // Debug printing
                 println!("Important symbols: {:?}", &important_symbols);
 
-                let symbols = self
+                let mut symbols = self
                     .tool_box
-                    .important_symbols(important_symbols, user_context, &request_id)
+                    .important_symbols(important_symbols.clone(), user_context.clone(), &request_id)
                     .await
                     .map_err(|e| e.into())?;
                 // TODO(skcd): Another check over here is that we can search for the exact variable
@@ -201,6 +203,18 @@ impl SymbolManager {
                 // the symbol directly since our algorithm would not work otherwise
                 // we would also need to de-duplicate the symbols which we have to process right over here
                 // otherwise it might lead to errors
+                if symbols.is_empty() {
+                    println!("symbol_manager::grab_symbols_using_search");
+                    symbols = self
+                        .tool_box
+                        .grab_symbol_using_search(
+                            important_symbols,
+                            user_context.clone(),
+                            &request_id,
+                        )
+                        .await
+                        .map_err(|e| e.into())?;
+                }
 
                 let request_id_ref = &request_id;
                 // This is where we are creating all the symbols

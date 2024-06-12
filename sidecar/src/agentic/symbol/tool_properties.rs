@@ -6,6 +6,7 @@ use super::identifier::LLMProperties;
 pub struct ToolProperties {
     swe_bench_test_endpoint: Option<String>,
     swe_bench_code_editing_llm: Option<LLMProperties>,
+    swe_bench_reranking_llm: Option<LLMProperties>,
 }
 
 impl ToolProperties {
@@ -13,7 +14,20 @@ impl ToolProperties {
         Self {
             swe_bench_test_endpoint: None,
             swe_bench_code_editing_llm: None,
+            swe_bench_reranking_llm: None,
         }
+    }
+
+    pub fn set_swe_bench_reranking_llm(
+        mut self,
+        swe_bench_reranking_llm: Option<LLMProperties>,
+    ) -> Self {
+        self.swe_bench_reranking_llm = swe_bench_reranking_llm;
+        self
+    }
+
+    pub fn get_swe_bench_reranking_llm(&self) -> Option<LLMProperties> {
+        self.swe_bench_reranking_llm.clone()
     }
 
     pub fn set_swe_bench_code_editing_llm(

@@ -885,7 +885,6 @@ Please provide the order along with the reason in 2 lists, one for code snippets
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
 - First think step by step on how you want to go about selecting the code snippets which are relevant to the user query.
-
 - If you want to edit the code section with id 0 then you must output in the following format:
 <code_to_edit_list>
 <code_to_edit>
@@ -910,6 +909,8 @@ Please provide the order along with the reason in 2 lists, one for code snippets
 </code_to_edit>
 {{... more code sections here which you might want to select}}
 </code_to_edit_list>
+
+- The <id> section should ONLY contain an id from the listed code snippets.
 
 
 Here is an example contained in the <example> section.
@@ -1136,9 +1137,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
 {query}
 </user_query>
 
-<rerank_list>
-{xml_string}
-</rerank_list>"#
+{xml_string}"#
         );
         let system_message = self.system_message();
         let messages = vec![

@@ -765,7 +765,7 @@ impl CodeSymbolWithThinking {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolWithSteps {
     code_symbol: String,
     steps: Vec<String>,
@@ -822,7 +822,7 @@ impl CodeSymbolWithSteps {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolImportantResponse {
     symbols: Vec<CodeSymbolWithThinking>,
     ordered_symbols: Vec<CodeSymbolWithSteps>,

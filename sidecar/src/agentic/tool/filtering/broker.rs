@@ -490,15 +490,14 @@ impl Tool for CodeToEditFormatterBroker {
                     }
                 }
                 either::Right(context) => {
+                    let llm = context.llm.clone();
                     if let Some(llm) = self.llms.get(&context.llm) {
                         llm.filter_code_snippets_inside_symbol(context)
                             .await
                             .map_err(|e| ToolError::CodeToEditFiltering(e))
                             .map(|result| ToolOutput::CodeToEditSingleSymbolSnippets(result))
                     } else {
-                        Err(ToolError::WrongToolInput(
-                            ToolType::FilterCodeSnippetsSingleSymbolForEditing,
-                        ))
+                        Err(ToolError::NotSupportedLLM(llm))
                     }
                 }
             }
@@ -508,7 +507,7 @@ impl Tool for CodeToEditFormatterBroker {
 
 #[cfg(test)]
 mod tests {
-    use super::{AnthropicCodeToEditFormatter, CodeToEditSymbolResponse};
+    use super::CodeToEditSymbolResponse;
 
     #[test]
     fn test_code_to_edit_list_filtering() {

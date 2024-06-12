@@ -1,4 +1,4 @@
-use llm_client::clients::types::LLMClientError;
+use llm_client::clients::types::{LLMClientError, LLMType};
 use thiserror::Error;
 
 use super::{
@@ -49,4 +49,7 @@ pub enum ToolError {
 
     #[error("Invoking SWE Bench test failed")]
     SWEBenchTestEndpointError,
+
+    #[error("Not supported LLM: {0}")]
+    NotSupportedLLM(LLMType),
 }

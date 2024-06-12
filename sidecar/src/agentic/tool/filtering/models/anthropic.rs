@@ -391,6 +391,10 @@ res.status(500).json({{ message: 'Server error' }});
 
 Your reply should be:
 
+<thinking>
+We want to get the relevant code for handling the checkout process since that has the error. The checkout and the payment along with how the order schema is handled seems relevant to the user query.
+</thinking>
+
 <code_to_edit_list>
 <code_to_edit>
 <id>
@@ -418,64 +422,6 @@ This defines the schema and model for orders. An order contains references to th
 </reason_to_edit>
 <code_to_edit>
 </code_to_edit_list>
-<code_to_not_edit_list>
-<code_to_not_edit>
-<id>
-1
-</id>
-<reason_to_not_edit>
-This defines the schema and model for shopping carts. A cart contains references to the user and product items. It also has a virtual property to calculate the total price. It's used in the checkout process but probably not the source of the bug.
-</reason_to_not_edit>
-</code_to_not_edit>
-<code_to_not_edit>
-<id>
-5
-</di>
-<reason_to_not_edit>
-This is the main Express server file. It sets up MongoDB, middleware, routes, and error handling. While it's crucial for the app as a whole, it doesn't contain any checkout-specific logic.
-<<reason_to_not_edit>
-</code_to_not_edit>
-<code_to_not_edit>
-<id>
-0
-</id>
-<reason_to_not_edit>
-This code handles user registration and login. It's used to authenticate the user before checkout can occur. But since the error happens after entering payment info, authentication is likely not the problem.
-</reason_to_not_edit>
-</code_to_not_edit>
-<code_to_not_edit>
-<id>
-9
-</id>
-<reason_to_not_edit>
-This code handles adding items to the cart. It's used before the checkout process begins. While it's important for the overall shopping flow, it's unlikely to be directly related to a checkout bug.  
-</reason_to_not_edit>
-</code_to_not_edit>
-<code_to_not_edit>
-<id>
-2
-</id>
-<reason_to_not_edit>
-This code allows fetching the logged-in user's orders. It's used after the checkout process to display order history. It doesn't come into play until after checkout is complete.
-</reason_to_not_edit>
-</code_to_not_edit>
-<code_to_not_edit>
-<id>
-4
-</id>
-<reason_to_not_edit>
-This defines the schema and model for user accounts. A user has an email, password, name, address, phone number, and admin status. The user ID is referenced by the cart and order, but the user model itself is not used in the checkout.
-</reason_to_not_edit>
-</code_to_not_edit>
-<code_to_not_edit>
-<id>
-7
-</id>
-<reason_to_not_edit>
-This defines the schema and model for products. A product has a name, description, price, category, and stock quantity. It's referenced by the cart and order models but is not directly used in the checkout process.
-</reason_to_not_edit>
-</code_to_not_edit>
-</code_to_not_edit_list>
 </example>"#.to_owned()
     }
 
@@ -938,8 +884,10 @@ Please provide the order along with the reason in 2 lists, one for code snippets
         let example_message = self.example_message();
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
+- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query.
 
 - If you want to edit the code section with id 0 then you must output in the following format:
+<code_to_edit_list>
 <code_to_edit>
 <id>
 0
@@ -948,16 +896,21 @@ Please provide the order along with the reason in 2 lists, one for code snippets
 {{your reason for editing}}
 </reason_to_edit>
 </code_to_edit>
+</code_to_edit_list>
 
-- There will be code sections which you do not want to edit, let's say you do not want to edit section with id 1, you must provide the reason for not editing and then you must output in the following format:
-<code_to_not_edit>
+- If you want to edit more code sections follow the similar pattern as described above and as an example again:
+<code_to_edit_list>
+<code_to_edit>
 <id>
-0
+{{id of the code snippet you are interested in}}
 </id>
-<reason_to_not_edit>
-{{your reason for not editing}}
-</reason_to_not_edit>
-</code_to_not_edit>
+<reason_to_edit>
+{{your reason for editing}}
+</reason_to_edit>
+</code_to_edit>
+{{... more code sections here which you might want to select}}
+</code_to_edit_list>
+
 
 Here is an example contained in the <example> section.
 
@@ -1041,33 +994,17 @@ Code location: {code_location}:{start_line}-{end_line}
             .take_while(|line| !line.contains("</code_to_edit_list>"))
             .collect::<Vec<&str>>()
             .join("\n");
-        let mut code_to_not_edit_list = response
-            .lines()
-            .into_iter()
-            .skip_while(|line| !line.contains("<code_to_not_edit_list>"))
-            .skip(1)
-            .take_while(|line| !line.contains("</code_to_not_edit_list>"))
-            .collect::<Vec<&str>>()
-            .join("\n");
         code_to_edit_list = format!(
             "<code_to_edit_list>
 {code_to_edit_list}
 </code_to_edit_list>"
         );
-        code_to_not_edit_list = format!(
-            "<code_to_not_edit_list>
-{code_to_not_edit_list}
-</code_to_not_edit_list>"
-        );
         code_to_edit_list = self.parse_response_section(&code_to_edit_list);
-        code_to_not_edit_list = self.parse_response_section(&code_to_not_edit_list);
         let code_to_edit_list = from_str::<CodeToEditList>(&code_to_edit_list)
-            .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
-        let code_to_not_edit_list = from_str::<CodeToNotEditList>(&code_to_not_edit_list)
             .map_err(|e| CodeToEditFilteringError::SerdeError(e))?;
         Ok(CodeToEditSymbolResponse::new(
             code_to_edit_list,
-            code_to_not_edit_list,
+            CodeToNotEditList::new(),
         ))
     }
 

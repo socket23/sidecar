@@ -143,6 +143,10 @@ pub struct CodeToNotEditList {
 }
 
 impl CodeToNotEditList {
+    pub fn new() -> Self {
+        Self { snippets: vec![] }
+    }
+
     pub fn snippets(&self) -> &[CodeToNotEditSnippet] {
         self.snippets.as_slice()
     }

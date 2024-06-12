@@ -1324,6 +1324,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol_to_edit.symbol_name(),
                 &sub_symbol_to_edit,
             );
+            if sub_symbol_to_edit.is_outline() {
+                println!(
+                    "symbol::edit_implementation::sub_symbol_to_edit::({})::({})",
+                    self.symbol_name(),
+                    sub_symbol_to_edit.symbol_name()
+                );
+                continue;
+            }
             let context_for_editing = dbg!(
                 self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
                     .await

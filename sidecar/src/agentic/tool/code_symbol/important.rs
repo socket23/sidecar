@@ -747,6 +747,22 @@ impl CodeSymbolWithThinking {
     pub fn file_path(&self) -> &str {
         &self.file_path
     }
+
+    /// If the symbol name consists of a.b.c kind of format we want to grab
+    /// just the a instead of the whole string since we always work on the
+    /// top level symbol
+    pub fn fix_symbol_name(self) -> Self {
+        if self.code_symbol.contains(".") {
+            let mut code_symbol_parts = self.code_symbol.split('.').collect::<Vec<_>>();
+            Self {
+                code_symbol: code_symbol_parts.remove(0).to_string(),
+                thinking: self.thinking,
+                file_path: self.file_path,
+            }
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -787,6 +803,23 @@ impl CodeSymbolWithSteps {
     pub fn file_path(&self) -> &str {
         &self.file_path
     }
+
+    /// If the symbol name consists of a.b.c kind of format we want to grab
+    /// just the a instead of the whole string since we always work on the
+    /// top level symbol
+    pub fn fix_symbol_name(self) -> Self {
+        if self.code_symbol.contains(".") {
+            let mut code_symbol_parts = self.code_symbol.split('.').collect::<Vec<_>>();
+            Self {
+                code_symbol: code_symbol_parts.remove(0).to_string(),
+                steps: self.steps,
+                is_new: self.is_new,
+                file_path: self.file_path,
+            }
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -803,6 +836,25 @@ impl CodeSymbolImportantResponse {
         Self {
             symbols,
             ordered_symbols,
+        }
+    }
+
+    /// The fix for symbol name here is that we could have symbols come in
+    /// the form of a.b.c etc
+    /// so we want to parse them as just a instead of a.b.c
+    /// this way we can ensure that we find the right symbol always
+    pub fn fix_symbol_names(self) -> Self {
+        let symbols = self.symbols;
+        let ordered_symbols = self.ordered_symbols;
+        Self {
+            symbols: symbols
+                .into_iter()
+                .map(|symbol| symbol.fix_symbol_name())
+                .collect::<Vec<_>>(),
+            ordered_symbols: ordered_symbols
+                .into_iter()
+                .map(|symbol| symbol.fix_symbol_name())
+                .collect::<Vec<_>>(),
         }
     }
 

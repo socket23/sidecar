@@ -175,6 +175,11 @@ impl SymbolManager {
             if let ToolOutput::ImportantSymbols(important_symbols)
             | ToolOutput::RepoMapSearch(important_symbols) = tool_output
             {
+                // The fix symbol name here helps us get the top-level symbol name
+                // if the LLM decides to have fun and spit out a.b.c instead of a or b or c individually
+                // as it can with python where it will tell class.method_name instead of just class or just
+                // method_name
+                let important_symbols = important_symbols.fix_symbol_names();
                 // swe bench caching hit over here we just do it
                 self.long_context_cache
                     .update_cache(swe_bench_id, &important_symbols)

@@ -92,6 +92,11 @@ pub enum OutlineNodeType {
     FunctionParameterIdentifier,
     // The decorators which are present on top of functions/classes
     Decorator,
+    // Assignment definition for all the constants etc which are present globally
+    // but are relevant to the symbol
+    DefinitionAssignment,
+    // The identifier for the definition or the constant which we are interested in
+    DefinitionIdentifier,
 }
 
 impl OutlineNodeType {
@@ -124,6 +129,8 @@ impl OutlineNodeType {
             "class.function.name" => Some(Self::FunctionClassName),
             "parameter.identifier" => Some(Self::FunctionParameterIdentifier),
             "decorator" => Some(Self::Decorator),
+            "definition.assignment" => Some(Self::DefinitionAssignment),
+            "definition.identifier" => Some(Self::DefinitionIdentifier),
             _ => None,
         }
     }

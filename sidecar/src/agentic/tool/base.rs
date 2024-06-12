@@ -54,6 +54,8 @@ pub enum ToolType {
     SWEBenchToolEndpoint,
     // Test correction
     TestCorrection,
+    // Code symbols which we want to follow
+    CodeSymbolsToFollowInitialRequest,
 }
 
 impl std::fmt::Display for ToolType {
@@ -92,6 +94,9 @@ impl std::fmt::Display for ToolType {
             ToolType::SWEBenchToolEndpoint => write!(f, "SWE Bench Tool Endpoint"),
             ToolType::TestCorrection => write!(f, "Test Correction"),
             ToolType::CodeEditingCOT => write!(f, "Code editing COT"),
+            ToolType::CodeSymbolsToFollowInitialRequest => {
+                write!(f, "Code Symbols to follow initial request")
+            }
         }
     }
 }

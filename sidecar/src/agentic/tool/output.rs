@@ -5,6 +5,7 @@ use super::{
         correctness::CodeCorrectnessAction,
         followup::ClassSymbolFollowupResponse,
         important::CodeSymbolImportantResponse,
+        initial_request_follow::CodeSymbolFollowInitialResponse,
         models::anthropic::{
             CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
@@ -99,9 +100,15 @@ pub enum ToolOutput {
     SWEBenchTestOutput(SWEBenchTestRepsonse),
     // Test correction output
     TestCorrectionOutput(String),
+    // Code Symbol follow for initial request
+    CodeSymbolFollowForInitialRequest(CodeSymbolFollowInitialResponse),
 }
 
 impl ToolOutput {
+    pub fn code_symbol_follow_for_initial_request(output: CodeSymbolFollowInitialResponse) -> Self {
+        ToolOutput::CodeSymbolFollowForInitialRequest(output)
+    }
+
     pub fn swe_bench_test_output(output: SWEBenchTestRepsonse) -> Self {
         ToolOutput::SWEBenchTestOutput(output)
     }

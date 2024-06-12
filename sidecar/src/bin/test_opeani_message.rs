@@ -27,7 +27,7 @@ async fn main() {
     let llm_client = LLMBroker::new(LLMBrokerConfiguration::new(default_index_dir()))
         .await
         .expect("to work");
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let response = llm_client
         .stream_completion(
             gpt4o_config.api_key().clone(),

@@ -66,6 +66,29 @@ pub fn python_language_config() -> TSLanguageConfig {
             name: (identifier) @definition.class.name
         ) @definition.class
 
+        (assignment
+            left: [
+              (identifier) @definition.identifier
+              (attribute
+                (identifier)
+                (".")
+                (identifier)
+              ) @definition.identifier @reference.dependency
+              (attribute) @definition.identifier
+            ]
+            (
+              (":")
+              (type
+                [
+                  (identifier) @reference.identifier @reference.type
+                  (subscript .
+                    (identifier) @reference.identifier @reference.type
+                  )
+                ]
+              )
+            )?
+        ) @definition.assignment
+
         (decorated_definition
         	(decorator) @decorator
             (function_definition

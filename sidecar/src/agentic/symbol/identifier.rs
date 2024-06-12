@@ -471,6 +471,10 @@ impl MechaCodeSymbolThinking {
         *implementations = snippets;
     }
 
+    /// Initial request follows the following flow:
+    /// - COT + follow-along questions for any other symbols which might even lead to edits
+    /// - Reranking the snippets for the symbol
+    /// - Edit the current symbol
     pub async fn initial_request(
         &self,
         tool_box: Arc<ToolBox>,
@@ -484,13 +488,13 @@ impl MechaCodeSymbolThinking {
             self.symbol_name()
         );
         let request_id_ref = &request_id;
-        // TODO(skcd): We need to generate the implementation always
-        // let steps = self.steps().await;
         println!(
             "mecha_code_symbol_thinking::steps_end({})",
             self.symbol_name()
         );
         if self.is_snippet_present().await {
+            // COT + following other symbols if required
+
             // This is what we are trying to figure out
             // the idea representation here will be in the form of
             // now that we have added the snippets, we can ask the llm to rerank

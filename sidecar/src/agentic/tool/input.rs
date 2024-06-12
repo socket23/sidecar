@@ -12,6 +12,7 @@ use super::{
             CodeSymbolImportantWideSearch, CodeSymbolProbingSummarize,
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
+        initial_request_follow::CodeSymbolFollowInitialRequest,
         repo_map_search::RepoMapSearchQuery,
     },
     editor::apply::EditorApplyRequest,
@@ -64,6 +65,8 @@ pub enum ToolInput {
     SWEBenchTest(SWEBenchTestRequest),
     // Test output correction
     TestOutputCorrection(TestOutputCorrectionRequest),
+    // Code symbol follow initial request
+    CodeSymbolFollowInitialRequest(CodeSymbolFollowInitialRequest),
 }
 
 impl ToolInput {
@@ -99,6 +102,21 @@ impl ToolInput {
             ToolInput::RepoMapSearch(_) => ToolType::RepoMapSearch,
             ToolInput::SWEBenchTest(_) => ToolType::SWEBenchToolEndpoint,
             ToolInput::TestOutputCorrection(_) => ToolType::TestCorrection,
+            ToolInput::CodeSymbolFollowInitialRequest(_) => {
+                ToolType::CodeSymbolsToFollowInitialRequest
+            }
+        }
+    }
+
+    pub fn is_code_symbol_follow_initial_request(
+        self,
+    ) -> Result<CodeSymbolFollowInitialRequest, ToolError> {
+        if let ToolInput::CodeSymbolFollowInitialRequest(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::CodeSymbolsToFollowInitialRequest,
+            ))
         }
     }
 

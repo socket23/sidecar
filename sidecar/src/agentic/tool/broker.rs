@@ -17,6 +17,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
         followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
+        initial_request_follow::CodeSymbolFollowInitialRequestBroker,
         repo_map_search::RepoMapSearchBroker,
     },
     editor::apply::EditorApply,
@@ -169,6 +170,12 @@ impl ToolBroker {
         tools.insert(
             ToolType::TestCorrection,
             Box::new(TestCorrection::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::CodeSymbolsToFollowInitialRequest,
+            Box::new(CodeSymbolFollowInitialRequestBroker::new(
+                llm_client.clone(),
+            )),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

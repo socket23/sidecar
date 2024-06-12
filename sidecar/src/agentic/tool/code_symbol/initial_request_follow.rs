@@ -13,10 +13,7 @@ use crate::agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, outp
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolFollowInitialRequest {
-    fs_file_path: String,
-    code_selection: String,
-    code_symbol: String,
-    language: String,
+    code_symbol_content: Vec<String>,
     user_query: String,
     llm: LLMType,
     provider: LLMProvider,
@@ -25,20 +22,14 @@ pub struct CodeSymbolFollowInitialRequest {
 
 impl CodeSymbolFollowInitialRequest {
     pub fn new(
-        fs_file_path: String,
-        code_selection: String,
-        code_symbol: String,
-        language: String,
+        code_symbol_content: Vec<String>,
         user_query: String,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
     ) -> Self {
         Self {
-            fs_file_path,
-            code_selection,
-            code_symbol,
-            language,
+            code_symbol_content,
             user_query,
             llm,
             provider,
@@ -51,16 +42,39 @@ impl CodeSymbolFollowInitialRequest {
 pub struct CodeSymbolToFollow {
     symbol: String,
     line_content: String,
+    file_path: String,
     reason_for_selection: String,
 }
 
 impl CodeSymbolToFollow {
-    pub fn new(symbol: String, line_content: String, reason_for_selection: String) -> Self {
+    pub fn new(
+        symbol: String,
+        line_content: String,
+        file_path: String,
+        reason_for_selection: String,
+    ) -> Self {
         Self {
             symbol,
             line_content,
+            file_path,
             reason_for_selection,
         }
+    }
+
+    pub fn reason_for_selection(&self) -> &str {
+        &self.reason_for_selection
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
+
+    pub fn line_content(&self) -> &str {
+        &self.line_content
+    }
+
+    pub fn symbol(&self) -> &str {
+        &self.symbol
     }
 }
 
@@ -71,6 +85,10 @@ pub struct CodeSymbolFollowInitialResponse {
 }
 
 impl CodeSymbolFollowInitialResponse {
+    pub fn code_symbols_to_follow(&self) -> &[CodeSymbolToFollow] {
+        self.code_symbols_to_follow.as_slice()
+    }
+
     pub fn parse_response(response: &str) -> Result<Self, ToolError> {
         // we want to gather only the code symbols to follow, the rest is just
         // jank on top
@@ -85,7 +103,6 @@ impl CodeSymbolFollowInitialResponse {
             .take_while(|line| !line.contains("</code_symbols_to_follow>"))
             .collect::<Vec<_>>()
             .join("\n");
-        println!("{:?}", &code_symbols_response);
         // Now we will have sections of the reply in the following format:
         // <code_symbol>
         // <symbol_name>{}</symbol_name>
@@ -96,13 +113,13 @@ impl CodeSymbolFollowInitialResponse {
         let mut code_symbols: Vec<CodeSymbolToFollow> = vec![];
         let mut symbol_name = None;
         let mut line_content = None;
+        let mut file_path = None;
         let mut index = 0;
         let code_symbol_response_lines = code_symbols_response
             .lines()
             .into_iter()
             .collect::<Vec<_>>();
         while index < code_symbol_response_lines.len() {
-            println!("whats the index: {}", &index);
             if code_symbol_response_lines[index].contains("<code_symbol>") {
                 index = index + 1;
                 while index < code_symbol_response_lines.len() {
@@ -132,6 +149,19 @@ impl CodeSymbolFollowInitialResponse {
                         );
                         index = index + 1;
                         continue;
+                    } else if current_line.contains("<file_path>")
+                        && current_line.contains("</file_path>")
+                    {
+                        file_path = Some(
+                            current_line
+                                .strip_prefix("<file_path>")
+                                .expect("to work")
+                                .strip_suffix("</file_path>")
+                                .expect("to work")
+                                .to_owned(),
+                        );
+                        index = index + 1;
+                        continue;
                     } else if current_line.contains("<reason_for_selection>") {
                         // now we have the start line which has the reason for selection which we want to parse
                         index = index + 1;
@@ -146,12 +176,13 @@ impl CodeSymbolFollowInitialResponse {
                         if index < code_symbol_response_lines.len()
                             && code_symbol_response_lines[index] == "</reason_for_selection>"
                         {
-                            if let (Some(symbol_name), Some(line_content)) =
-                                (symbol_name, line_content)
+                            if let (Some(symbol_name), Some(line_content), Some(file_path)) =
+                                (symbol_name, line_content, file_path)
                             {
                                 code_symbols.push(CodeSymbolToFollow::new(
                                     symbol_name,
                                     line_content,
+                                    file_path,
                                     reason_for_selection.join("\n"),
                                 ));
                             } else {
@@ -162,6 +193,7 @@ impl CodeSymbolFollowInitialResponse {
                             // line content over here
                             symbol_name = None;
                             line_content = None;
+                            file_path = None;
                             index = index + 1;
                         } else {
                             index = index + 1;
@@ -215,6 +247,9 @@ Your format of reply is shown below
 <line_content>
 {{line containing the symbol}}
 </line_content>
+<file_path>
+{{file path containing the line content over here}}
+</file_path>
 <reason_for_selection>
 {{your reason for selecting this symbol}}
 </reason_for_selection>
@@ -228,18 +263,14 @@ In this format, the line content is super important and should contain the line 
 
     fn user_message(&self, request: CodeSymbolFollowInitialRequest) -> String {
         let user_query = request.user_query;
-        let fs_file_path = request.fs_file_path;
-        let symbol_content = request.code_symbol;
+        let code_symbol_content = request.code_symbol_content.join("\n");
         format!(
             r#"<user_query>
 {user_query}
 </user_query>
 
-<file_path>
-{fs_file_path}
-</file_path>
 <symbol_content>
-{symbol_content}
+{code_symbol_content}
 </symbol_content>"#
         )
     }
@@ -257,7 +288,7 @@ impl Tool for CodeSymbolFollowInitialRequestBroker {
         let request =
             LLMClientCompletionRequest::new(llm, vec![system_message, user_message], 0.2, None);
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let _response = self
+        let response = self
             .llm_client
             .stream_completion(
                 api_keys,
@@ -273,7 +304,8 @@ impl Tool for CodeSymbolFollowInitialRequestBroker {
             )
             .await
             .map_err(|e| ToolError::LLMClientError(e))?;
-        todo!("something over ehre")
+        CodeSymbolFollowInitialResponse::parse_response(&response)
+            .map(|output| ToolOutput::code_symbol_follow_for_initial_request(output))
     }
 }
 

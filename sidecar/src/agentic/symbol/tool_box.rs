@@ -23,6 +23,9 @@ use crate::agentic::tool::code_symbol::important::{
     CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
     CodeSymbolWithSteps, CodeSymbolWithThinking,
 };
+use crate::agentic::tool::code_symbol::initial_request_follow::{
+    CodeSymbolFollowInitialRequest, CodeSymbolFollowInitialResponse,
+};
 use crate::agentic::tool::code_symbol::models::anthropic::{
     CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
 };
@@ -61,6 +64,7 @@ use crate::{
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
 use super::events::probe::SymbolToProbeRequest;
+use super::helpers::find_needle_position;
 use super::identifier::MechaCodeSymbolThinking;
 use super::tool_properties::ToolProperties;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
@@ -90,6 +94,39 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// This generates additional requests from the initial query
+    /// which we can mark as initial query (for now, altho it should be
+    /// more of a ask question) but the goal is figure out if we need to make
+    /// changes elsewhere in the codebase by following a symbol
+    pub async fn follow_along_initial_query(
+        &self,
+        code_symbol_content: Vec<String>,
+        user_query: &str,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        request_id: &str,
+    ) -> Result<CodeSymbolFollowInitialResponse, SymbolError> {
+        let tool_input =
+            ToolInput::CodeSymbolFollowInitialRequest(CodeSymbolFollowInitialRequest::new(
+                code_symbol_content,
+                user_query.to_owned(),
+                llm,
+                provider,
+                api_keys,
+            ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_symbol_follow_for_initial_request()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// Sends the request to summarize the probing results
@@ -191,22 +228,6 @@ impl ToolBox {
         // Now take the first one
         let symbol_location =
             if let Some((line, line_index)) = containing_lines.first().map(|first| &first.1) {
-                // Find the symbol in the line now
-                // our home fed needle in haystack which works on character level instead
-                // of byte level
-                // This returns the last character position where the needle is contained in
-                // the haystack
-                fn find_needle_position(haystack: &str, needle: &str) -> Option<usize> {
-                    let haystack_char_indices: Vec<_> = haystack.char_indices().collect();
-                    haystack.rfind(needle).map(|byte_pos| {
-                        haystack_char_indices
-                            .iter()
-                            .position(|(b, _)| *b == byte_pos)
-                            .unwrap()
-                            + needle.chars().count()
-                            - 1
-                    })
-                }
                 let position = find_needle_position(line, symbol_to_search);
                 match position {
                     Some(position) => Ok(Position::new(
@@ -2631,7 +2652,7 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    async fn go_to_definition(
+    pub async fn go_to_definition(
         &self,
         fs_file_path: &str,
         position: Position,
@@ -3208,6 +3229,51 @@ Please handle these changes as required."#
                     0
                 } else {
                     outline_node.range().minimal_line_distance(snippet.range())
+                };
+                (distance, outline_node)
+            })
+            .collect::<Vec<_>>();
+        // Now sort it based on the distance in ascending order
+        outline_nodes_with_distance.sort_by_key(|outline_node| outline_node.0);
+        if outline_nodes_with_distance.is_empty() {
+            Err(SymbolError::OutlineNodeNotFound(fs_file_path.to_owned()))
+        } else {
+            Ok(outline_nodes_with_distance.remove(0).1)
+        }
+    }
+
+    /// Grabs the outline node which contains this range in the current file
+    pub async fn get_outline_node_for_range(
+        &self,
+        range: &Range,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Result<OutlineNode, SymbolError> {
+        let file_open_request = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let _ = self
+            .force_add_document(
+                fs_file_path,
+                file_open_request.contents_ref(),
+                file_open_request.language(),
+            )
+            .await;
+        let symbols_outline = self
+            .symbol_broker
+            .get_symbols_outline(fs_file_path)
+            .await
+            .ok_or(SymbolError::OutlineNodeNotFound(fs_file_path.to_owned()))?
+            .into_iter()
+            .filter(|outline_node| outline_node.range().contains_check_line(range))
+            .collect::<Vec<_>>();
+        let mut outline_nodes_with_distance = symbols_outline
+            .into_iter()
+            .map(|outline_node| {
+                let distance: i64 = if outline_node.range().intersects_without_byte(range)
+                    || range.intersects_without_byte(outline_node.range())
+                {
+                    0
+                } else {
+                    outline_node.range().minimal_line_distance(range)
                 };
                 (distance, outline_node)
             })

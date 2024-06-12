@@ -193,6 +193,8 @@ impl SymbolManager {
                     .important_symbols(important_symbols, user_context, &request_id)
                     .await
                     .map_err(|e| e.into())?;
+                // TODO(skcd): Another check over here is that we can search for the exact variable
+                // and then ask for the edit
                 println!("Symbols over here: {:?}", &symbols);
                 // TODO(skcd): the symbol here might belong to a class or it might be a global function
                 // we want to grab the largest node containing the symbol here instead of using

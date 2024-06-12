@@ -24,8 +24,8 @@ async fn get_diff_patch(git_dname: &str) -> String {
 
 #[tokio::main]
 async fn main() {
-    let instance_id = "sympy__sympy-11400".to_owned();
-    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpa39enj1a".to_owned();
+    let instance_id = "sympy__sympy-13647".to_owned();
+    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpa7i8tem9".to_owned();
     let git_diff = get_diff_patch(&folder_path).await;
     println!("Whats the git diff\n");
     println!("{}", git_diff);

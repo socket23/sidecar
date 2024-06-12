@@ -51,3 +51,20 @@ pub fn split_file_content_into_parts(
 
     (above, below, selection_range)
 }
+
+/// Find the symbol in the line now
+/// our home fed needle in haystack which works on character level instead
+/// of byte level
+/// This returns the last character position where the needle is contained in
+/// the haystack
+pub fn find_needle_position(haystack: &str, needle: &str) -> Option<usize> {
+    let haystack_char_indices: Vec<_> = haystack.char_indices().collect();
+    haystack.rfind(needle).map(|byte_pos| {
+        haystack_char_indices
+            .iter()
+            .position(|(b, _)| *b == byte_pos)
+            .unwrap()
+            + needle.chars().count()
+            - 1
+    })
+}

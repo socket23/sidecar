@@ -20,6 +20,7 @@ use crate::{
     agentic::{
         symbol::{
             events::edit::SymbolToEditRequest,
+            helpers::find_needle_position,
             identifier::Snippet,
             ui_event::{SymbolEventProbeRequest, SymbolEventSubStep, SymbolEventSubStepRequest},
         },
@@ -34,13 +35,17 @@ use crate::{
             lsp::open_file::OpenFileResponse,
         },
     },
-    chunking::{text_document::Range, types::OutlineNodeContent},
+    chunking::{
+        text_document::{Position, Range},
+        types::OutlineNodeContent,
+    },
 };
 
 use super::{
     errors::SymbolError,
     events::{
         edit::SymbolToEdit,
+        initial_request::InitialRequestData,
         probe::{SymbolToProbeHistory, SymbolToProbeRequest},
         types::{AskQuestionRequest, SymbolEvent},
     },
@@ -139,6 +144,18 @@ impl SymbolEventRequest {
         Self {
             symbol,
             event: SymbolEvent::Probe(request),
+            tool_properties,
+        }
+    }
+
+    pub fn initial_request(
+        symbol: SymbolIdentifier,
+        request: String,
+        tool_properties: ToolProperties,
+    ) -> Self {
+        Self {
+            symbol,
+            event: SymbolEvent::InitialRequest(InitialRequestData::new(request)),
             tool_properties,
         }
     }
@@ -875,11 +892,229 @@ impl Symbol {
         let _ = self.grab_implementations(&request_id).await;
     }
 
+    /// Sends additional requests to symbols which need changes or gathering more
+    /// information to understand how to solve a problem
+    async fn follow_along_requests(
+        &self,
+        request_id: &str,
+        original_request: &str,
+    ) -> Result<(), SymbolError> {
+        if self.mecha_code_symbol.is_snippet_present().await {
+            let symbol_content = self
+                .mecha_code_symbol
+                .get_symbol_content()
+                .await
+                .expect("snippet presence implies this would never fail");
+            let symbols_to_follow = self
+                .tools
+                .follow_along_initial_query(
+                    symbol_content,
+                    original_request,
+                    self.llm_properties.llm().clone(),
+                    self.llm_properties.provider().clone(),
+                    self.llm_properties.api_key().clone(),
+                    request_id,
+                )
+                .await?;
+
+            let mut pending_requests_to_hub: Vec<SymbolEventRequest> = vec![];
+
+            // Now that we have the symbols to follow over here, we invoke a go-to-definition
+            // for each of these symbols, if there are multiple matches we take the last one for
+            // now
+            for symbol_to_follow in symbols_to_follow.code_symbols_to_follow().into_iter() {
+                let fs_file_path = symbol_to_follow.file_path().to_owned();
+                let file_open_result = self
+                    .tools
+                    .file_open(fs_file_path.to_owned(), request_id)
+                    .await?;
+                let _ = self
+                    .tools
+                    .force_add_document(
+                        &fs_file_path,
+                        file_open_result.contents_ref(),
+                        file_open_result.language(),
+                    )
+                    .await?;
+                let symbol_to_follow_identifier = symbol_to_follow.symbol().to_owned();
+                // Now we try to find the line in the file which matches with the line
+                // content we are looking for and look for the symbol which contains it
+                // one trick over here is that we are working within the scope of the current
+                // symbol so we can filter out the content very easily and find the line we are
+                // interested in by restricting the search space to be inside the outline node
+                // content of the current symbol we are in
+                let outline_nodes_maybe = self.tools.get_outline_nodes_grouped(&fs_file_path).await;
+                if outline_nodes_maybe.is_none() {
+                    continue;
+                }
+                let outline_nodes = outline_nodes_maybe.expect("is_none to hold above");
+                // This should work for all identifiers and everything else
+                let matching_outline_node = outline_nodes
+                    .into_iter()
+                    .find(|outline_node| outline_node.name() == self.symbol_name());
+                if matching_outline_node.is_none() {
+                    println!(
+                        "symbol::follow_along_request::matching_outline_node::is_none({})::({})",
+                        self.symbol_name(),
+                        &symbol_to_follow_identifier,
+                    );
+                    continue;
+                }
+                let matching_outline_node = matching_outline_node.expect("is_none above to hold");
+                let start_line = matching_outline_node.range().start_line();
+                let line_containing_content = matching_outline_node
+                    .content()
+                    .content()
+                    .lines()
+                    .enumerate()
+                    .map(|(idx, line)| (idx + start_line, line.to_string()))
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .find(|(_, line)| line.contains(&symbol_to_follow.line_content()));
+                if line_containing_content.is_none() {
+                    println!(
+                        "symbol::follow_along_request::line_containing_content::is_none({})::({})",
+                        self.symbol_name(),
+                        &symbol_to_follow_identifier,
+                    );
+                    continue;
+                }
+                let line_containing_content =
+                    line_containing_content.expect("is_none to hold above");
+
+                // Now we need to find the position of the needle in the line
+                let column_position =
+                    find_needle_position(&line_containing_content.1, symbol_to_follow.symbol());
+                if column_position.is_none() {
+                    println!(
+                        "symbol::follow_along_request::find_needle_position::is_none({})::({})",
+                        self.symbol_name(),
+                        &symbol_to_follow_identifier,
+                    );
+                    continue;
+                }
+                let column_position = column_position.expect("is_none to hold above");
+
+                // Now that we have the line and column, we execute a go-to-definition on this and grab the symbol
+                // which it points to
+                let mut definitions = self
+                    .tools
+                    .go_to_definition(
+                        symbol_to_follow.file_path(),
+                        Position::new(line_containing_content.0, column_position, 0),
+                        request_id,
+                    )
+                    .await?
+                    .definitions();
+
+                // Now that we have the definition(s) for the symbol we can choose to send a request
+                // to the symbol asking for a change request, we pick the first one over here
+                // and then ask it the question along with the user query
+                if definitions.is_empty() {
+                    println!(
+                        "symbol::follow_along_request::definition::is_empty({})::({})",
+                        self.symbol_name(),
+                        &symbol_to_follow_identifier,
+                    );
+                    continue;
+                }
+                let definition = definitions.remove(0);
+                // check if definition belongs to one of the implementations we have
+                // for the current symbol, that way its not really necessary to follow
+                // along over here since we will handle it later on
+                let implementations = self.mecha_code_symbol.get_implementations().await;
+                if implementations.into_iter().any(|implementation| {
+                    let implementation_file_path = implementation.file_path();
+                    if definition.file_path() == implementation_file_path
+                        && implementation
+                            .range()
+                            .contains_check_line(definition.range())
+                    {
+                        true
+                    } else {
+                        false
+                    }
+                }) {
+                    println!(
+                        "symbol::follow_along_request::self_follow_along_found({})::({})",
+                        self.symbol_name(),
+                        &symbol_to_follow_identifier,
+                    );
+                    continue;
+                }
+                let outline_node = self
+                    .tools
+                    .get_outline_node_for_range(
+                        definition.range(),
+                        definition.file_path(),
+                        request_id,
+                    )
+                    .await?;
+
+                let current_symbol_name = self.symbol_name();
+                let thinking = symbol_to_follow.reason_for_selection();
+                let request = format!(
+                    r#"The user asked the following question:
+{original_request}
+
+We were initially at {current_symbol_name} and believe that to satisfy the user query we need to handle the following:
+
+{thinking}
+
+Satisfy the requirement either by making edits or gathering the required information so the user query can be handled at {current_symbol_name}"#
+                );
+
+                // Now that we have the outline node, we can create a request which we want to send
+                // over to this symbol to handle
+                pending_requests_to_hub.push(SymbolEventRequest::initial_request(
+                    SymbolIdentifier::with_file_path(
+                        outline_node.name(),
+                        outline_node.fs_file_path(),
+                    ),
+                    request,
+                    self.tool_properties.clone(),
+                ));
+            }
+
+            let pending_futures = pending_requests_to_hub
+                .into_iter()
+                .map(|pending_request| {
+                    let (sender, receiver) = tokio::sync::oneshot::channel();
+                    let _ = self
+                        .hub_sender
+                        .send((pending_request, request_id.to_owned(), sender));
+                    receiver
+                })
+                .collect::<Vec<_>>();
+
+            let _ = stream::iter(pending_futures)
+                .map(|pending_receiver| async move {
+                    let _ = pending_receiver.await;
+                })
+                .buffer_unordered(100)
+                .collect::<Vec<_>>()
+                .await;
+        }
+
+        Ok(())
+    }
+
+    /// Initial request follows the following flow:
+    /// - COT + follow-along questions for any other symbols which might even lead to edits
+    /// - Reranking the snippets for the symbol
+    /// - Edit the current symbol
     async fn generate_initial_request(
         &self,
         request_id: String,
         original_request: &str,
     ) -> Result<SymbolEventRequest, SymbolError> {
+        println!(
+            "symbol::generate_follow_along_requests::symbol_name({})",
+            self.symbol_name()
+        );
+        let _ = self
+            .follow_along_requests(&request_id, original_request)
+            .await;
         // this is a very big block because of the LLM request, but lets see how
         // this plays out in practice
         self.mecha_code_symbol

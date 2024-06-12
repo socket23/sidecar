@@ -182,15 +182,6 @@ impl TSLanguageConfig {
             });
         });
 
-        println!(
-            "what are the outline nodes: {:?}",
-            outline_nodes
-                .to_vec()
-                .into_iter()
-                .map(|outline_node| outline_node.0.clone())
-                .collect::<Vec<_>>()
-        );
-
         let mut start_index = 0;
         let source_code_vec = source_code.to_vec();
         let lines: Vec<String> = String::from_utf8(source_code_vec.to_vec())

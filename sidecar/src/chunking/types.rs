@@ -108,6 +108,10 @@ impl OutlineNodeType {
             || matches!(self, OutlineNodeType::FunctionParameterIdentifier)
     }
 
+    pub fn is_definition_assigument(&self) -> bool {
+        matches!(self, OutlineNodeType::DefinitionAssignment)
+    }
+
     pub fn is_class_definition(&self) -> bool {
         matches!(self, OutlineNodeType::ClassDefinition)
     }

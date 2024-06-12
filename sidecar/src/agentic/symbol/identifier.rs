@@ -493,8 +493,6 @@ impl MechaCodeSymbolThinking {
             self.symbol_name()
         );
         if self.is_snippet_present().await {
-            // COT + following other symbols if required
-
             // This is what we are trying to figure out
             // the idea representation here will be in the form of
             // now that we have added the snippets, we can ask the llm to rerank
@@ -632,6 +630,66 @@ Reason to edit:
         }
     }
 
+    // We return an Option here because the symbol might not be present over here
+    pub async fn get_symbol_content(&self) -> Option<Vec<String>> {
+        let snippet_maybe = {
+            self.snippet
+                .lock()
+                .await
+                .as_ref()
+                .map(|snippet| snippet.clone())
+        };
+        if let Some(snippet) = snippet_maybe {
+            println!(
+                "mecha_code_symbol_thinking::get_symbol_content::symbol_as_ref({})",
+                &self.symbol_name()
+            );
+            let is_function = snippet
+                .outline_node_content
+                .outline_node_type()
+                .is_function();
+            let is_definition_assignment = snippet
+                .outline_node_content
+                .outline_node_type()
+                .is_definition_assigument();
+            if is_function || is_definition_assignment {
+                let content = snippet.outline_node_content.content();
+                let file_path = snippet.outline_node_content.fs_file_path();
+                Some(vec![format!(
+                    r#"<file_path>
+{file_path}
+</file_path>
+<code_symbol>
+{content}
+</code_symbol>"#
+                )])
+            } else {
+                let implementations = self.get_implementations().await;
+                Some(
+                    implementations
+                        .into_iter()
+                        .map(|implementation| {
+                            let file_path = implementation.file_path();
+                            let content = implementation.content();
+                            format!(
+                                r#"<file_path>
+{file_path}
+</file_path>
+<code_symbol>
+{content}
+</code_symbol>"#
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                // This is a class, so over here we have to grab all the implementations
+                // as well as the current snippet and then send that over
+            }
+        } else {
+            None
+        }
+    }
+
     // To xml is a common way to say that the data object implements a way to be
     // written in a xml which is a standard way to represent it for a LLM
     // TODO(skcd): How do we get the symbols which need to be edited here
@@ -670,7 +728,11 @@ Reason to edit:
                 .outline_node_content
                 .outline_node_type()
                 .is_function();
-            if is_function {
+            let is_definition_assignment = snippet
+                .outline_node_content
+                .outline_node_type()
+                .is_definition_assigument();
+            if is_function || is_definition_assignment {
                 let function_body = snippet.to_xml();
                 Some((
                     format!(

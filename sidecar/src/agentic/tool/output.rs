@@ -348,4 +348,13 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_code_symbol_follow_for_initial_request(
+        self,
+    ) -> Option<CodeSymbolFollowInitialResponse> {
+        match self {
+            ToolOutput::CodeSymbolFollowForInitialRequest(response) => Some(response),
+            _ => None,
+        }
+    }
 }

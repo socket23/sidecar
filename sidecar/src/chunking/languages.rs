@@ -182,6 +182,15 @@ impl TSLanguageConfig {
             });
         });
 
+        println!(
+            "what are the outline nodes: {:?}",
+            outline_nodes
+                .to_vec()
+                .into_iter()
+                .map(|outline_node| outline_node.0.clone())
+                .collect::<Vec<_>>()
+        );
+
         let mut start_index = 0;
         let source_code_vec = source_code.to_vec();
         let lines: Vec<String> = String::from_utf8(source_code_vec.to_vec())
@@ -316,6 +325,13 @@ impl TSLanguageConfig {
                             OutlineNodeType::Decorator => {
                                 // if its a decorator we just skip for now
                             }
+                            OutlineNodeType::DefinitionAssignment => {
+                                // if this is a definition assignment we just skip for now
+                            }
+                            OutlineNodeType::DefinitionIdentifier => {
+                                // if this is a definition identifer we are not interested in this for
+                                // now so keep skipping
+                            }
                         }
                         end_index = end_index + 1;
                     }
@@ -350,6 +366,9 @@ impl TSLanguageConfig {
                     let mut function_class_name: Option<String> = None;
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
+                        if !outline_range.contains(&child_range) {
+                            break;
+                        }
                         if let OutlineNodeType::FunctionName = child_node_type {
                             function_name = Some(get_string_from_bytes(
                                 &source_code_vec,
@@ -422,6 +441,10 @@ impl TSLanguageConfig {
                         } else if let OutlineNodeType::FunctionParameterIdentifier = child_node_type
                         {
                             end_index = end_index + 1;
+                        } else if let OutlineNodeType::DefinitionAssignment = child_node_type {
+                            end_index = end_index + 1;
+                        } else if let OutlineNodeType::DefinitionIdentifier = child_node_type {
+                            end_index = end_index + 1;
                         } else {
                             break;
                         }
@@ -452,6 +475,47 @@ impl TSLanguageConfig {
                     start_index = start_index + 1;
                     // we are not going to track the decorators right now, we will figure out
                     // what to do about decorators in a bit
+                }
+                OutlineNodeType::DefinitionAssignment => {
+                    let end_index = start_index + 1;
+                    while end_index < outline_nodes.len() {
+                        let next_node = outline_nodes[end_index].clone();
+                        if next_node.0 == OutlineNodeType::DefinitionIdentifier {
+                            compressed_outline.push(OutlineNode::new(
+                                OutlineNodeContent::new(
+                                    get_string_from_bytes(
+                                        &source_code_vec,
+                                        next_node.1.start_byte(),
+                                        next_node.1.end_byte(),
+                                    ),
+                                    outline_nodes[start_index].1.clone(),
+                                    OutlineNodeType::DefinitionAssignment,
+                                    get_string_from_lines(
+                                        lines_slice,
+                                        outline_nodes[start_index].1.start_line(),
+                                        outline_nodes[start_index].1.end_line(),
+                                    ),
+                                    fs_file_path.to_owned(),
+                                    next_node.1.clone(),
+                                    outline_nodes[start_index].1.clone(),
+                                    self.language_str.to_owned(),
+                                ),
+                                vec![],
+                                self.language_str.to_owned(),
+                            ));
+                        }
+                        break;
+                    }
+                    start_index = end_index;
+                    // the immediate next node after this is a definition identifier which is inside
+                    // the definition assigment
+                    // we are not tracking the definition assignment right now, we will figure
+                    // out what to do about this in a bit
+                }
+                OutlineNodeType::DefinitionIdentifier => {
+                    start_index = start_index + 1;
+                    // we are not tracking the definition identifier globally for now, we will
+                    // figure out what to do about this in a bit
                 }
             }
         }
@@ -3009,18 +3073,30 @@ def something_else_function(self, a, b, c) -> sss:
         let source_code = r#"
 class Something:
     def __init__():
+        a = b
+        c = d
         pass
     
     @classmethod
     def something_else(cls, blah, blah2):
         print(blah)
         print(blah2)
+        e = f
+        g = h
         pass
 
 def something_else_function(self, a, b, c) -> sss:
     print(a)
     print(b)
+    blah = blah2
     pass
+
+something_else = interesting
+a.b.c = {
+    a: c,
+    d: e,
+    f: g,
+}
         "#;
         let language = "python";
         let tree_sitter_parsing = TSLanguageParsing::init();
@@ -3031,11 +3107,12 @@ def something_else_function(self, a, b, c) -> sss:
         let grammar = ts_language_config.grammar;
         parser.set_language(grammar()).unwrap();
         let tree = parser.parse(source_code.as_bytes(), None).unwrap();
-        let _outlines = ts_language_config.generate_outline(
+        let outlines = ts_language_config.generate_outline(
             source_code.as_bytes(),
             &tree,
             "/tmp/something.py".to_owned(),
         );
-        assert!(true);
+        // we are also including the identifier node over here
+        assert_eq!(outlines.len(), 4);
     }
 }

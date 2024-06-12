@@ -34,6 +34,7 @@ pub struct SymbolInputEvent {
     swe_bench_id: Option<String>,
     swe_bench_git_dname: Option<String>,
     swe_bench_code_editing: Option<LLMProperties>,
+    swe_bench_gemini_api_keys: Option<LLMProperties>,
 }
 
 impl SymbolInputEvent {
@@ -49,6 +50,7 @@ impl SymbolInputEvent {
         swe_bench_id: Option<String>,
         swe_bench_git_dname: Option<String>,
         swe_bench_code_editing: Option<LLMProperties>,
+        swe_bench_gemini_api_keys: Option<LLMProperties>,
     ) -> Self {
         Self {
             context,
@@ -62,6 +64,7 @@ impl SymbolInputEvent {
             swe_bench_id,
             swe_bench_git_dname,
             swe_bench_code_editing,
+            swe_bench_gemini_api_keys,
         }
     }
 
@@ -96,6 +99,10 @@ impl SymbolInputEvent {
 
     pub fn get_swe_bench_code_editing(&self) -> Option<LLMProperties> {
         self.swe_bench_code_editing.clone()
+    }
+
+    pub fn get_swe_bench_gemini_llm_properties(&self) -> Option<LLMProperties> {
+        self.swe_bench_gemini_api_keys.clone()
     }
 
     // here we can take an action based on the state we are in

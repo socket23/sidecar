@@ -527,6 +527,20 @@ impl MechaCodeSymbolThinking {
             );
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
             {
+                let is_too_long = if reverse_lookup.len() > 100 {
+                    true
+                } else {
+                    false
+                };
+                // if the input to search for is too long, we change dynamically
+                // to gemini-pro.1.5-flash
+                let llm_properties_for_filtering = if is_too_long {
+                    tool_properties
+                        .get_swe_bench_reranking_llm()
+                        .unwrap_or(llm_properties.clone())
+                } else {
+                    llm_properties
+                };
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us
                 println!(
@@ -543,9 +557,9 @@ impl MechaCodeSymbolThinking {
                         .filter_code_snippets_in_symbol_for_editing(
                             ranked_xml_list,
                             original_request.to_owned(),
-                            llm_properties.llm().clone(),
-                            llm_properties.provider().clone(),
-                            llm_properties.api_key().clone(),
+                            llm_properties_for_filtering.llm().clone(),
+                            llm_properties_for_filtering.provider().clone(),
+                            llm_properties_for_filtering.api_key().clone(),
                             &request_id,
                         )
                         .await

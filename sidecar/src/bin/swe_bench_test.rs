@@ -81,7 +81,7 @@ async fn main() {
         input.gemini_api_key.to_owned(),
         "anton-390822".to_owned(),
     ));
-    let _gemini_llm_properties = LLMProperties::new(
+    let gemini_llm_properties = LLMProperties::new(
         LLMType::GeminiProFlash,
         LLMProvider::GeminiPro,
         gemini_pro_keys.clone(),
@@ -158,6 +158,7 @@ async fn main() {
         Some(instance_id.to_owned()),
         Some(folder_path.to_owned()),
         Some(gpt4o_config),
+        Some(gemini_llm_properties),
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
 

@@ -175,6 +175,7 @@ pub async fn swe_bench(
                     None,
                     None,
                     None,
+                    None,
                 )
                 .set_swe_bench_id(swe_bench_id),
             )

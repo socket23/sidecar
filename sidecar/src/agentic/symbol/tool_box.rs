@@ -2756,6 +2756,68 @@ Please handle these changes as required."#
         }
     }
 
+    /// If we cannot find the symbol using normal mechanisms we just search
+    /// for the symbol by hand in the file and grab the outline node which contains
+    /// the symbols
+    pub async fn grab_symbol_using_search(
+        &self,
+        important_symbols: CodeSymbolImportantResponse,
+        user_context: UserContext,
+        request_id: &str,
+    ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
+        let ordered_symbols = important_symbols.ordered_symbols();
+        stream::iter(
+            ordered_symbols
+                .iter()
+                .map(|ordered_symbol| ordered_symbol.file_path().to_owned()),
+        )
+        .for_each(|file_path| async move {
+            let file_open_response = self.file_open(file_path.to_owned(), request_id).await;
+            if let Ok(file_open_response) = file_open_response {
+                let _ = self
+                    .force_add_document(
+                        &file_path,
+                        file_open_response.contents_ref(),
+                        file_open_response.language(),
+                    )
+                    .await;
+            }
+        })
+        .await;
+
+        let mut mecha_code_symbols: Vec<MechaCodeSymbolThinking> = vec![];
+        for symbol in ordered_symbols.into_iter() {
+            let file_path = symbol.file_path();
+            let symbol_name = symbol.code_symbol();
+            let outline_nodes = self.symbol_broker.get_symbols_outline(file_path).await;
+            if let Some(outline_nodes) = outline_nodes {
+                let possible_outline_nodes = outline_nodes
+                    .into_iter()
+                    .find(|outline_node| outline_node.content().content().contains(symbol_name));
+                if let Some(outline_node) = possible_outline_nodes {
+                    let outline_node_content = outline_node.content();
+                    mecha_code_symbols.push(MechaCodeSymbolThinking::new(
+                        outline_node.name().to_owned(),
+                        vec![],
+                        false,
+                        outline_node.fs_file_path().to_owned(),
+                        Some(Snippet::new(
+                            outline_node_content.name().to_owned(),
+                            outline_node_content.range().clone(),
+                            outline_node_content.fs_file_path().to_owned(),
+                            outline_node_content.content().to_owned(),
+                            outline_node_content.clone(),
+                        )),
+                        vec![],
+                        user_context.clone(),
+                        Arc::new(self.clone()),
+                    ));
+                }
+            }
+        }
+        Ok(mecha_code_symbols)
+    }
+
     // TODO(skcd): We are not capturing the is_new symbols which might become
     // necessary later on
     pub async fn important_symbols(

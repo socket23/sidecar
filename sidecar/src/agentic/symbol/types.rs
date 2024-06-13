@@ -582,6 +582,8 @@ impl Symbol {
             snippet_to_symbols_to_follow
         );
 
+        let symbol_identifier_ref = &self.symbol_identifier;
+
         // Now for each snippet we want to grab the definition of the symbol it belongs
         let snippet_to_follow_with_definitions =
             stream::iter(snippet_to_symbols_to_follow.into_iter().filter_map(
@@ -614,6 +616,16 @@ impl Symbol {
                                 request_id_ref,
                             )
                             .await;
+                        if let Ok(ref definitions_for_snippet) = &definitions_for_snippet {
+                            let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
+                                request_id_ref.to_owned(),
+                                SymbolEventSubStepRequest::go_to_definition_request(
+                                    symbol_identifier_ref.clone(),
+                                    symbol_to_follow.file_path().to_owned(),
+                                    definitions_for_snippet.1.clone(),
+                                ),
+                            ));
+                        }
                         (symbol_to_follow, definitions_for_snippet)
                     })
                     .buffer_unordered(BUFFER_LIMIT)
@@ -664,7 +676,7 @@ impl Symbol {
                 let probe_results = stream::iter(questions_with_definitions)
                     .map(|(_, definitions)| async move {
                         let next_symbol_link = definitions.0;
-                        let definitions = definitions.1;
+                        let definitions = definitions.2;
                         // we might also want to grab some kind of outline for the symbol hint we are gonig to be using
                         // we are missing the code above, code below and the in selection
                         // should we recosinder the snippet over here or maybe we just keep it as it is

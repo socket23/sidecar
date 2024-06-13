@@ -187,7 +187,15 @@ impl ToolBox {
         // we are returning the definition path and range along with the symbol where the go-to-definition belongs to
         // along with the outline of the symbol containing the go-to-definition
         request_id: &str,
-    ) -> Result<(String, Vec<(DefinitionPathAndRange, String, String)>), SymbolError> {
+    ) -> Result<
+        (
+            String,
+            // The position in the file where we are clicking
+            Range,
+            Vec<(DefinitionPathAndRange, String, String)>,
+        ),
+        SymbolError,
+    > {
         let line_content_to_track = line_content
             .lines()
             .find(|line| line.contains(symbol_to_search));
@@ -240,6 +248,17 @@ impl ToolBox {
             } else {
                 Err(SymbolError::NoOutlineNodeSatisfyPosition)
             }?;
+
+        let symbol_range = Range::new(
+            symbol_location.clone(),
+            symbol_location.clone().shift_column(
+                symbol_to_search
+                    .chars()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .len(),
+            ),
+        );
 
         // Grab the 4 lines before and 4 lines after from the file content and show that as the highlight
         let position_line_number = symbol_location.line() as i64;
@@ -366,7 +385,11 @@ impl ToolBox {
         // // Once we have the definition we can figure out the symbol which contains this
         // // Now we try to find the line which is closest the the snippet or contained
         // // within it for a lack of better word
-        Ok((symbol_link, definition_to_outline_node_name_and_definition))
+        Ok((
+            symbol_link,
+            symbol_range,
+            definition_to_outline_node_name_and_definition,
+        ))
     }
 
     pub async fn probe_deeper_in_symbol(

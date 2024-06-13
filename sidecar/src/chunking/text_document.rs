@@ -121,6 +121,20 @@ impl Position {
 
         Self::new(line, column, byte)
     }
+
+    pub fn shift_column(self, column_move: usize) -> Self {
+        Self {
+            line: self.line,
+            // if we are at index i and the symbol we are clicking on is called: "something"
+            // then we are clicking on the range:
+            // s  o  m  e  t  h  i  n  g
+            // i +1 +2 +3 +4 +5 +6 +7 +8
+            // something.len() == 9
+            // so i -> i + symbol_to_search.len() - 1
+            character: self.character + column_move - 1,
+            byte_offset: 0,
+        }
+    }
 }
 
 #[derive(

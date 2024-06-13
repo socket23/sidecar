@@ -2,7 +2,7 @@
 //! debugging and having better visibility to what ever is happening
 //! in the symbols
 
-use crate::agentic::tool::input::ToolInput;
+use crate::{agentic::tool::input::ToolInput, chunking::text_document::Range};
 
 use super::{
     events::input::SymbolInputEvent,
@@ -100,8 +100,24 @@ pub enum SymbolEventProbeRequest {
 }
 
 #[derive(Debug, serde::Serialize)]
+pub struct SymbolEventGoToDefinitionRequest {
+    fs_file_path: String,
+    range: Range,
+}
+
+impl SymbolEventGoToDefinitionRequest {
+    fn new(fs_file_path: String, range: Range) -> Self {
+        Self {
+            fs_file_path,
+            range,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
 pub enum SymbolEventSubStep {
     Probe(SymbolEventProbeRequest),
+    GoToDefinition(SymbolEventGoToDefinitionRequest),
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -122,6 +138,20 @@ impl SymbolEventSubStepRequest {
         Self {
             symbol_identifier,
             event: SymbolEventSubStep::Probe(SymbolEventProbeRequest::ProbeAnswer(answer)),
+        }
+    }
+
+    pub fn go_to_definition_request(
+        symbol_identifier: SymbolIdentifier,
+        fs_file_path: String,
+        range: Range,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::GoToDefinition(SymbolEventGoToDefinitionRequest::new(
+                fs_file_path,
+                range,
+            )),
         }
     }
 }

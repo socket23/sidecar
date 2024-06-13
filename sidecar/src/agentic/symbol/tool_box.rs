@@ -1794,6 +1794,7 @@ Please handle these changes as required."#
         parent_symbol_name: &str,
         symbol_edited: &SymbolToEdit,
         original_code: &str,
+        // This is the edited code we are applying to the editor
         edited_code: &str,
         // this is the context from the code edit which we want to keep using while
         // fixing
@@ -1834,6 +1835,7 @@ Please handle these changes as required."#
         let instructions = symbol_edited.instructions().join("\n");
         let fs_file_path = symbol_edited.fs_file_path();
         let symbol_name = symbol_edited.symbol_name();
+        let mut updated_code = edited_code.to_owned();
         let mut tries = 0;
         let max_tries = 5;
         loop {
@@ -1846,17 +1848,17 @@ Please handle these changes as required."#
             let symbol_to_edit = self
                 .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited)
                 .await?;
-            let _fs_file_content =
-                dbg!(self.file_open(fs_file_path.to_owned(), request_id).await)?.contents();
+            let _fs_file_content = self
+                .file_open(fs_file_path.to_owned(), request_id)
+                .await?
+                .contents();
 
-            let updated_code = edited_code.to_owned();
             // The range of the symbol before doing the edit
             let edited_range = symbol_to_edit.range().clone();
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
-            let _editor_response = dbg!(
-                self.apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
-                    .await
-            )?;
+            let _editor_response = self
+                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
+                .await?;
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
@@ -1916,7 +1918,15 @@ Please handle these changes as required."#
                                 api_keys.clone(),
                                 request_id,
                             )
-                            .await?;
+                            .await;
+
+                        if corrected_code.is_err() {
+                            println!("tool_box::check_code_correctness::missing_xml_tag");
+                            continue;
+                        }
+                        let corrected_code = corrected_code.expect("is_err above to hold");
+                        // update our edited code
+                        updated_code = corrected_code.to_owned();
 
                         // Now that we have the corrected code, we should again apply
                         // it to the file

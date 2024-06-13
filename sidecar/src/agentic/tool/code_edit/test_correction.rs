@@ -73,6 +73,17 @@ impl TestOuptutCorrectionResponse {
     fn parse_reponse(response: &str) -> Result<Self, ToolError> {
         // The output we get here has the thinking in <thinking> and then
         // the corrected code in <code_corrected> section.
+        // Another check here is to figure out if we have the <thinking> and the <code_corrected> tags
+        // all present
+        let tags_to_check = vec![
+            "<thinking>",
+            "</thinking>",
+            "<corrected_code>",
+            "</corrected_code>",
+        ];
+        if tags_to_check.into_iter().any(|tag| !response.contains(tag)) {
+            return Err(ToolError::MissingXMLTags);
+        }
         let thinking = response
             .lines()
             .into_iter()

@@ -52,4 +52,7 @@ pub enum ToolError {
 
     #[error("Not supported LLM: {0}")]
     NotSupportedLLM(LLMType),
+
+    #[error("Missing xml tags")]
+    MissingXMLTags,
 }

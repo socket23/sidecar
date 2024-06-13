@@ -96,6 +96,7 @@ impl PareaClient {
             "depth": 0,
             "execution_order": 0,
             "evaluation_metric_names": vec!["XML Checker"],
+            "fill_children": true,
         });
 
         let _ = self

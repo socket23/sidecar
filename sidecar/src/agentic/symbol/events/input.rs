@@ -27,6 +27,7 @@ pub struct SymbolInputEvent {
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
     user_query: String,
+    request_id: String,
     // Here we have properties for swe bench which we are sending for testing
     swe_bench_test_endpoint: Option<String>,
     repo_map_fs_path: Option<String>,
@@ -44,6 +45,7 @@ impl SymbolInputEvent {
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         user_query: String,
+        request_id: String,
         swe_bench_test_endpoint: Option<String>,
         repo_map_fs_path: Option<String>,
         gcloud_access_token: Option<String>,
@@ -57,6 +59,7 @@ impl SymbolInputEvent {
             llm,
             provider,
             api_keys,
+            request_id,
             user_query,
             swe_bench_test_endpoint,
             repo_map_fs_path,

@@ -157,6 +157,7 @@ pub async fn swe_bench(
                     provider_type,
                     anthropic_api_keys,
                     problem_statement,
+                    "web_server_input".to_owned(),
                     Some(test_endpoint),
                     repo_map_file,
                     Some(gcloud_access_token),

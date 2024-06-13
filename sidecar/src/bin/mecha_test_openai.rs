@@ -74,6 +74,7 @@ async fn main() {
         LLMProvider::GeminiPro,
         gemini_pro_api_key,
         current_query.to_owned(),
+        "mecha_test_openai".to_owned(),
         None,
         None,
         None,

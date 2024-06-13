@@ -152,6 +152,7 @@ async fn main() {
         LLMProvider::Anthropic,
         anthropic_api_keys,
         problem_statement,
+        instance_id.to_owned(),
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
         Some(input.gemini_api_key.to_owned()),
@@ -171,8 +172,18 @@ async fn main() {
                     break; // Receiver closed, exit the loop
                 }
             }
-            _ = &mut initial_request_task => {
-                // probe_task completed, you can handle it here if needed
+            result = &mut initial_request_task => {
+                match result {
+                    Ok(_) => {
+                        // The task completed successfully
+                        // Handle the result if needed
+                    }
+                    Err(e) => {
+                        // An error occurred while running the task
+                        eprintln!("Error in initial_request_task: {}", e);
+                        // Handle the error appropriately (e.g., log, retry, or exit)
+                    }
+                }
             }
         }
     }

@@ -858,7 +858,7 @@ there are some code sections which are present in <code_to_probe_list>
 <reason_to_probe>
 {{your reason for probing this code section}}
 </reason_to_probe>
-<code_to_probe>
+</code_to_probe>
 {{more code to probe list items...}}
 </code_to_probe_list>
 

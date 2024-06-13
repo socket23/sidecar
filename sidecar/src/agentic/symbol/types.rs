@@ -949,6 +949,8 @@ impl Symbol {
                 }
                 let outline_nodes = outline_nodes_maybe.expect("is_none to hold above");
                 // This should work for all identifiers and everything else
+                // TODO(skcd): This logic does not work when we are looking at functions
+                // inside the node
                 let matching_outline_node = outline_nodes
                     .into_iter()
                     .find(|outline_node| outline_node.name() == self.symbol_name());

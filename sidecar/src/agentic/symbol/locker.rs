@@ -183,7 +183,6 @@ impl SymbolLocker {
         )>();
         {
             println!("create_symbol_agent: {}", symbol_identifier.symbol_name());
-            println!("symbol_agent::snippet: {:?}", request.get_snippet().await);
             let mut symbols = self.symbols.lock().await;
             symbols.insert(symbol_identifier.clone(), sender);
             println!(

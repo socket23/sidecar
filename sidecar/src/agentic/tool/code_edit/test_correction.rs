@@ -128,6 +128,7 @@ impl TestCorrection {
 `- All the definitions of code symbols which you might require are also provided to you in <extra_data> section, these are important as they show which functions or parameters you can use on different classes.
 - The junior engineer has taken the instructions which were provided in <user_instructions> and made edits to the code which is now present in <code_in_selection> section.
 - The original code before any changes were made is present in <original_code> , this should help you understand how the junior engineer went about making changes.
+- Make sure that the indentation of the code is same the code which is in <code_in_selection> since we are working with langauges where indentation really matters, use spaces or tabs as required.
 - You are also shown the whole file content in the <file> section, this will be useful for you to understand the overall context in which the change was made.
 - The user has also noticed some test failures with the modified code which is present in <code_in_selection> and the output of the test failures is given in <test_output> section.
 - You have to rewrite the code which is present only in <code_in_selection> making sure that the test failures which were present in <test_output> section no longer happen because of the code which is present in <code_in_selection>

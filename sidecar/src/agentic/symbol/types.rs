@@ -1507,15 +1507,36 @@ Satisfy the requirement either by making edits or gathering the required informa
                         // we are still going to do the same things just
                         // that this one is for gathering answeres
                         let reply = symbol
-                            .probe_request(probe_request, symbol.hub_sender.clone(), request_id)
+                            .probe_request(
+                                probe_request,
+                                symbol.hub_sender.clone(),
+                                request_id.to_owned(),
+                            )
                             .await;
                         let _ = match reply {
-                            Ok(reply) => sender.send(SymbolEventResponse::TaskDone(reply)),
+                            Ok(reply) => {
+                                let _ = symbol.ui_sender.send(UIEventWithID::sub_symbol_step(
+                                    request_id,
+                                    SymbolEventSubStepRequest::probe_answer(
+                                        symbol.symbol_identifier.clone(),
+                                        reply.to_owned(),
+                                    ),
+                                ));
+                                let _ = sender.send(SymbolEventResponse::TaskDone(reply));
+                            }
                             Err(e) => {
                                 println!("Error when probing: {:?}", e);
-                                sender.send(SymbolEventResponse::TaskDone(
+                                let _ = symbol.ui_sender.send(UIEventWithID::sub_symbol_step(
+                                    request_id,
+                                    SymbolEventSubStepRequest::probe_answer(
+                                        symbol.symbol_identifier.clone(),
+                                        "failed to answer the user query because of external error"
+                                            .to_owned(),
+                                    ),
+                                ));
+                                let _ = sender.send(SymbolEventResponse::TaskDone(
                                     "failed to look depeer to answer user query".to_owned(),
-                                ))
+                                ));
                             }
                         };
                         Ok(())

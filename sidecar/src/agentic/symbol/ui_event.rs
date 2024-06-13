@@ -64,8 +64,8 @@ impl UIEventWithID {
             request_id,
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::new(
                 symbol_identifier,
-                SymbolEventSubStep::Probe(SymbolEventProbeRequest::ProbeAnswer(probe_answer))
-            ))
+                SymbolEventSubStep::Probe(SymbolEventProbeRequest::ProbeAnswer(probe_answer)),
+            )),
         }
     }
 }
@@ -115,6 +115,13 @@ impl SymbolEventSubStepRequest {
         Self {
             symbol_identifier,
             event,
+        }
+    }
+
+    pub fn probe_answer(symbol_identifier: SymbolIdentifier, answer: String) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Probe(SymbolEventProbeRequest::ProbeAnswer(answer)),
         }
     }
 }

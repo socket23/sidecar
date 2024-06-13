@@ -884,7 +884,7 @@ Please provide the order along with the reason in 2 lists, one for code snippets
         let example_message = self.example_message();
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
-- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query.
+- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words.
 - If you want to edit the code section with id 0 then you must output in the following format:
 <code_to_edit_list>
 <code_to_edit>
@@ -918,7 +918,7 @@ Here is an example contained in the <example> section.
 {example_message}
 
 This example is for reference. You must strictly follow the format show in the example when replying.
-Please provide the order along with the reason in 2 lists, one for the symbols which we should edit and the other for symbols we do not have to edit for the code snippets based on the user's query."#).to_owned()
+Please provide the list of symbols which you want to edit."#).to_owned()
     }
 
     fn unescape_xml(&self, s: String) -> String {

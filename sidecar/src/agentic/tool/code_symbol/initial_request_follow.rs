@@ -233,6 +233,7 @@ Follow these instructions to the letter:
 - These code symbols might be for understanding the problem a bit better or see code which is not present in the code snippet which has been provided to you in <symbol_content>
 - We will visit the code symbols you selected and then ask them, deeper questions and take a look at what they contain. This will be extremely useful for you to build understanding of the codebase before going about solving the user query.
 - Think step by step and write a brief summary of how you plan on selecting the code symbols and why and then list out the code symbols.
+- Never include code snippets which are present in comments, these can not be followed since the editor will not allow us to click on it.
 
 Your format of reply is shown below
 <reply>

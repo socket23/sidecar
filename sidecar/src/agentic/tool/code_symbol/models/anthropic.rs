@@ -5246,6 +5246,9 @@ Implement the GrokFillInMiddleFormatter following the similar pattern in `CodeLl
 </reply>
 
 Another example:
+<file_path>
+sidecar/bin/webserver.rs
+</file_path>
 <code_selection>
 ```rust
 fn tree_sitter_router() -> Router {{
@@ -5320,6 +5323,9 @@ Your reply should be:
 <name>
 inline_completion
 </name>
+<file_path>
+sidecar/bin/webserver.rs
+</file_path>
 <thinking>
 inline_completion holds all the endpoints for symbols because it also has the `get_symbol_history` endpoint. We have to start adding the endpoint there
 </thinking>
@@ -5328,6 +5334,9 @@ inline_completion holds all the endpoints for symbols because it also has the `g
 <name>
 symbol_history
 </name>
+<file_path>
+sidecar/bin/webserver.rs
+</file_path>
 <thinking>
 I can find more information on how to write the code for the endpoint by following the symbol `symbol_history` in the line: `             post(sidecar::webserver::inline_completion::symbol_history),`
 <thinking>
@@ -5338,6 +5347,9 @@ I can find more information on how to write the code for the endpoint by followi
 <name>
 symbol_history
 </name>
+<file_path>
+sidecar/bin/webserver.rs
+</file_path>
 <thinking>
 We need to follow the symbol_history to check the pattern on how we are going to implement the very similar functionality
 </thinking>
@@ -5346,6 +5358,9 @@ We need to follow the symbol_history to check the pattern on how we are going to
 <name>
 inline_completion
 </name>
+<file_path>
+sidecar/bin/webserver.rs
+</file_path>
 <thinking>
 We have to add the newly created endpoint in inline_completion to add support for the new endpoint which we want to create
 </thinking>
@@ -5368,7 +5383,8 @@ We have to add the newly created endpoint in inline_completion to add support fo
 {user_query}
 </user_query>
 
-Remember your reply should always be contained in <reply> tags and follow the format which we have shown you before in the system message."#
+Remember your reply should always be contained in <reply> tags and follow the format which we have shown you before in the system message.
+Do not forget to include the <file_path> in your reply"#
         )
     }
 }

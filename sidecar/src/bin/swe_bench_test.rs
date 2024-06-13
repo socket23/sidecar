@@ -82,7 +82,7 @@ async fn main() {
         "anton-390822".to_owned(),
     ));
     let gemini_llm_properties = LLMProperties::new(
-        LLMType::GeminiProFlash,
+        LLMType::GeminiPro,
         LLMProvider::GeminiPro,
         gemini_pro_keys.clone(),
     );

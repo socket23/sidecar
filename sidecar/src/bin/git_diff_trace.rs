@@ -1,4 +1,4 @@
-use std::process::Stdio;
+use std::{env, process::Stdio};
 
 use serde_json::json;
 use tokio::{io::AsyncReadExt, process::Command};
@@ -22,10 +22,27 @@ async fn get_diff_patch(git_dname: &str) -> String {
     output_string.to_string()
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SWEBenchInput {
+    instance_id: String,
+    gemini_api_key: String,
+    repo_map_fs_path: String,
+    repo_path: String,
+    problem_statement: String,
+}
+
 #[tokio::main]
 async fn main() {
-    let instance_id = "sympy__sympy-18057".to_owned();
-    let folder_path = "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmp_jx18bli".to_owned();
+    let instance_id = env::var("swe_bench_test_suite").expect("to always be present");
+    let path = format!("/Users/skcd/scratch/swe_bench/inputs/{}.json", instance_id);
+    let input: SWEBenchInput = serde_json::from_slice(
+        &tokio::fs::read(&path)
+            .await
+            .expect("file reading to always work"),
+    )
+    .expect("to work");
+    let instance_id = input.instance_id;
+    let folder_path = input.repo_path;
     let git_diff = get_diff_patch(&folder_path).await;
     println!("Whats the git diff\n");
     println!("{}", git_diff);

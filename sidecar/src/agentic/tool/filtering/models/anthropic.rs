@@ -12,14 +12,17 @@ use llm_client::{
 
 use crate::agentic::{
     symbol::identifier::Snippet,
-    tool::filtering::{
-        broker::{
-            CodeToEditFilterFormatter, CodeToEditFilterRequest, CodeToEditFilterResponse,
-            CodeToEditList, CodeToEditSymbolRequest, CodeToEditSymbolResponse, CodeToNotEditList,
-            CodeToProbeFilterResponse, CodeToProbeList, CodeToProbeSymbolResponse,
-            SnippetWithReason,
+    tool::{
+        filtering::{
+            broker::{
+                CodeToEditFilterFormatter, CodeToEditFilterRequest, CodeToEditFilterResponse,
+                CodeToEditList, CodeToEditSymbolRequest, CodeToEditSymbolResponse,
+                CodeToNotEditList, CodeToProbeFilterResponse, CodeToProbeList,
+                CodeToProbeSymbolResponse, SnippetWithReason,
+            },
+            errors::CodeToEditFilteringError,
         },
-        errors::CodeToEditFilteringError,
+        jitter::jitter_sleep,
     },
 };
 
@@ -792,7 +795,6 @@ Your reply should be:
 <reason_to_probe>
 This code handles the checkout process. It receives the cart ID and payment info from the request body. It finds the cart, creates a new order with the cart items and payment info, saves the order, deletes the cart, and returns the order ID. This is likely where the issue is occurring.
 </reason_to_probe>
-<id>
 </code_to_probe>
 <code_to_probe>
 <id>
@@ -1252,23 +1254,40 @@ Remember that your reply should be strictly in the following format:
         ];
         let llm_request =
             LLMClientCompletionRequest::new(request.llm().clone(), messages, 0.1, None);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_broker
-            .stream_completion(
-                request.api_key().clone(),
-                llm_request,
-                request.provider().clone(),
-                vec![(
-                    "event_type".to_owned(),
-                    "filter_code_snippet_for_probing".to_owned(),
-                )]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await
-            .map_err(|e| CodeToEditFilteringError::LLMClientError(e))?;
-        self.parse_reponse_for_probing(&response, request.get_snippets())
+        let mut retries = 0;
+        loop {
+            if retries > 3 {
+                return Err(CodeToEditFilteringError::RetriesExhausted);
+            }
+            retries = retries + 1;
+            if retries != 0 {
+                jitter_sleep(10.0, retries as f64).await;
+            }
+            retries = retries + 1;
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_broker
+                .stream_completion(
+                    request.api_key().clone(),
+                    llm_request.clone(),
+                    request.provider().clone(),
+                    vec![(
+                        "event_type".to_owned(),
+                        "filter_code_snippet_for_probing".to_owned(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| CodeToEditFilteringError::LLMClientError(e))?;
+            let result = self.parse_reponse_for_probing(&response, request.get_snippets());
+            match result {
+                Ok(_) => return result,
+                Err(_) => {
+                    continue;
+                }
+            };
+        }
     }
 }

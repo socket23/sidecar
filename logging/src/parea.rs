@@ -97,7 +97,7 @@ impl PareaClient {
 
         let body = serde_json::json!({
             "trace_id": event.trace_id,
-            "root_trace_id": event.trace_id,
+            "root_trace_id": event.parent_trace_id,
             "parent_trace_id": event.parent_trace_id,
             "trace_name": event.event_name,
             "project_name": "default",
@@ -113,7 +113,7 @@ impl PareaClient {
             "fill_children": true,
         });
 
-        let _ = self
+        let response = self
             .client
             .post(url)
             .header("Content-Type", "application/json")
@@ -124,6 +124,7 @@ impl PareaClient {
             .body(serde_json::to_string(&body).expect("conversion should never fail for logging"))
             .send()
             .await;
+        println!("{:?}", response.map(|response| response.status()));
     }
 
     pub async fn log_completion(&self, completion: PareaLogCompletion) {

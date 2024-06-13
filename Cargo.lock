@@ -4644,6 +4644,7 @@ dependencies = [
  "lazy_static",
  "llm_client",
  "llm_prompts",
+ "logging",
  "memchr",
  "ndarray",
  "nix",

@@ -48,4 +48,7 @@ pub enum CodeSymbolError {
 
     #[error("User context error: {0}")]
     UserContextError(#[from] UserContextError),
+
+    #[error("Exhausted retries")]
+    ExhaustedRetries,
 }

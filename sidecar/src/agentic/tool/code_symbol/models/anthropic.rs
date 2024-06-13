@@ -5596,21 +5596,35 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_probe_next_symbol(request));
         let messages =
             LLMClientCompletionRequest::new(llm, vec![system_message, user_messagee], 0.0, None);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_keys,
-                messages,
-                provider,
-                vec![("event_type".to_owned(), "probe_next_symbol".to_owned())]
-                    .into_iter()
-                    .collect(),
-                sender,
-            )
-            .await?;
-        // Now we want to parse this response properly
-        ProbeNextSymbol::parse_response(&response)
+        let mut retries = 0;
+        loop {
+            if retries > 3 {
+                return Err(CodeSymbolError::ExhaustedRetries);
+            }
+            retries = retries + 1;
+
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    api_keys.clone(),
+                    messages.clone(),
+                    provider.clone(),
+                    vec![("event_type".to_owned(), "probe_next_symbol".to_owned())]
+                        .into_iter()
+                        .collect(),
+                    sender,
+                )
+                .await?;
+            // Now we want to parse this response properly
+            let parsed_answer = ProbeNextSymbol::parse_response(&response);
+            match parsed_answer {
+                Ok(ProbeNextSymbol::Empty) | Err(_) => {
+                    continue;
+                }
+                _ => return parsed_answer,
+            }
+        }
     }
 
     async fn probe_summarize_answer(

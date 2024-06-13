@@ -23,6 +23,7 @@ pub mod errors;
 pub mod filtering;
 pub mod grep;
 pub mod input;
+pub mod jitter;
 pub mod lsp;
 pub mod output;
 pub mod rerank;

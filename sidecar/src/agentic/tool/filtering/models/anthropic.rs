@@ -1281,6 +1281,9 @@ Remember that your reply should be strictly in the following format:
                 )
                 .await
                 .map_err(|e| CodeToEditFilteringError::LLMClientError(e))?;
+            if response.is_empty() {
+                continue;
+            }
             let result = self.parse_reponse_for_probing(&response, request.get_snippets());
             match result {
                 Ok(_) => return result,

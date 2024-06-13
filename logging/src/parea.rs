@@ -30,6 +30,30 @@ pub struct PareaLogCompletion {
     trace_name: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct PareaLogEvent {
+    event_name: String,
+    parent_trace_id: String,
+    trace_id: String,
+    metadata: HashMap<String, String>,
+}
+
+impl PareaLogEvent {
+    pub fn new(
+        event_name: String,
+        parent_trace_id: String,
+        trace_id: String,
+        metadata: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            event_name,
+            parent_trace_id,
+            trace_id,
+            metadata,
+        }
+    }
+}
+
 impl PareaLogCompletion {
     pub fn new(
         messages: Vec<PareaLogMessage>,
@@ -63,6 +87,43 @@ impl PareaClient {
         Self {
             client: reqwest::Client::new(),
         }
+    }
+
+    pub async fn log_event(&self, event: PareaLogEvent) {
+        let url =
+            "https://parea-ai-backend-us-9ac16cdbc7a7b006.onporter.run/api/parea/v1/trace_log";
+
+        let metadata = event.metadata.clone();
+
+        let body = serde_json::json!({
+            "trace_id": event.trace_id,
+            "root_trace_id": event.trace_id,
+            "parent_trace_id": event.parent_trace_id,
+            "trace_name": event.event_name,
+            "project_name": "default",
+            "inputs": event.metadata,
+            "output": "logging".to_owned(),
+            "start_timestamp": chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            "end_timestamp": chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            "status": "success",
+            "metadata": metadata,
+            "depth": 0,
+            "execution_order": 0,
+            "evaluation_metric_names": vec!["XML Checker"],
+            "fill_children": true,
+        });
+
+        let _ = self
+            .client
+            .post(url)
+            .header("Content-Type", "application/json")
+            .header(
+                "x-api-key",
+                "pai-fadddd1b1f5ad7b39b082541ef715fb9b0017a77125b0225c3e778acfc43c206",
+            )
+            .body(serde_json::to_string(&body).expect("conversion should never fail for logging"))
+            .send()
+            .await;
     }
 
     pub async fn log_completion(&self, completion: PareaLogCompletion) {

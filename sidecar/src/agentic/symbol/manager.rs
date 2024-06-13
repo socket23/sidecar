@@ -9,9 +9,12 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
 use crate::agentic::symbol::events::initial_request::InitialRequestData;
+use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::tool::base::Tool;
+use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
+use crate::agentic::tool::input::ToolInput;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::user_context::types::UserContext;
 use crate::{
@@ -105,6 +108,129 @@ impl SymbolManager {
             ui_sender,
             long_context_cache: LongContextSearchCache::new(),
         }
+    }
+
+    pub async fn probe_request_from_user_context(
+        &self,
+        query: String,
+        user_context: UserContext,
+    ) -> Result<(), SymbolError> {
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let request_id_ref = &request_id;
+        let code_wide_search =
+            ToolInput::RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch::new(
+                user_context.clone(),
+                query.to_owned(),
+                self._llm_properties.llm().clone(),
+                self._llm_properties.provider().clone(),
+                self._llm_properties.api_key().clone(),
+            ));
+        // send the request on to the ui sender
+        let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
+            request_id_ref.to_owned(),
+            code_wide_search.clone(),
+        ));
+        let output = self
+            .tools
+            .invoke(code_wide_search)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?;
+        if let ToolOutput::ImportantSymbols(important_symbols)
+        | ToolOutput::RepoMapSearch(important_symbols) = output
+        {
+            // We have the important symbols here which we can then use to invoke the individual process request
+            let important_symbols = important_symbols.fix_symbol_names();
+
+            let mut symbols = self
+                .tool_box
+                .important_symbols(important_symbols.clone(), user_context.clone(), &request_id)
+                .await
+                .map_err(|e| e.into())?;
+            // TODO(skcd): Another check over here is that we can search for the exact variable
+            // and then ask for the edit
+            println!("Symbols over here: {:?}", &symbols);
+            // TODO(skcd): the symbol here might belong to a class or it might be a global function
+            // we want to grab the largest node containing the symbol here instead of using
+            // the symbol directly since our algorithm would not work otherwise
+            // we would also need to de-duplicate the symbols which we have to process right over here
+            // otherwise it might lead to errors
+            if symbols.is_empty() {
+                println!("symbol_manager::grab_symbols_using_search");
+                symbols = self
+                    .tool_box
+                    .grab_symbol_using_search(important_symbols, user_context.clone(), &request_id)
+                    .await
+                    .map_err(|e| e.into())?;
+            }
+
+            // Create all the symbol agents
+            let symbol_identifiers = stream::iter(symbols)
+                .map(|symbol_request| async move {
+                    let symbol_identifier = self
+                        .symbol_locker
+                        .create_symbol_agent(
+                            symbol_request,
+                            request_id_ref.to_owned(),
+                            ToolProperties::new(),
+                        )
+                        .await;
+                    symbol_identifier
+                })
+                .buffer_unordered(100)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .filter_map(|s| s.ok())
+                .collect::<Vec<_>>();
+
+            println!(
+                "symbol_manager::probe_request_from_user_context::len({})",
+                symbol_identifiers.len(),
+            );
+
+            let query_ref = &query;
+
+            // Now for all the symbol identifiers which we are getting we have to
+            // send a request to all of them with the probe query
+            let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
+                (
+                    symbol_identifier.clone(),
+                    request_id_ref.to_owned(),
+                    SymbolEventRequest::probe_request(
+                        symbol_identifier.clone(),
+                        SymbolToProbeRequest::new(
+                            symbol_identifier,
+                            query_ref.to_owned(),
+                            query_ref.to_owned(),
+                            vec![],
+                        ),
+                        ToolProperties::new(),
+                    ),
+                )
+            }))
+            .map(
+                |(symbol_identifier, request_id, symbol_event_request)| async move {
+                    let (sender, receiver) = tokio::sync::oneshot::channel();
+                    dbg!(
+                        "sending initial request to symbol: {:?}",
+                        &symbol_identifier
+                    );
+                    self.symbol_locker
+                        .process_request((symbol_event_request, request_id, sender))
+                        .await;
+                    let response = receiver.await;
+                    dbg!(
+                        "For symbol identifier: {:?} the response is {:?}",
+                        &symbol_identifier,
+                        &response
+                    );
+                },
+            )
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
+        }
+        Ok(())
     }
 
     // This is just for testing out the flow for single input events

@@ -137,20 +137,6 @@ impl SymbolInputEvent {
                 ))),
                 Err(_) => None,
             }
-            // match contents {
-            //     Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
-            //         contents,
-            //         self.user_query.to_owned(),
-            //         LLMType::GeminiPro,
-            //         LLMProvider::GeminiPro,
-            //         LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new(
-            //             self.gcloud_access_token
-            //                 .expect("swe bench harness always sends this"),
-            //             "anton-390822".to_owned(),
-            //         )),
-            //     ))),
-            //     Err(_) => None,
-            // }
         } else {
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(

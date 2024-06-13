@@ -25,6 +25,7 @@ use crate::agentic::tool::{
         repo_map_search::{RepoMapSearch, RepoMapSearchQuery},
         types::{CodeSymbolError, SerdeError},
     },
+    jitter::jitter_sleep,
     lsp::diagnostics::Diagnostic,
 };
 
@@ -5519,24 +5520,40 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_ask_question_symbols(request));
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_key,
-                messages,
-                provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "symbols_to_probe_questions".to_owned(),
-                )]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
-        // now we want to parse the reply here properly
-        CodeSymbolToAskQuestionsResponse::parse_response(response)
+        let mut retries = 0;
+        loop {
+            if retries > 3 {
+                return Err(CodeSymbolError::ExhaustedRetries);
+            }
+            if retries != 0 {
+                jitter_sleep(10.0, retries as f64).await;
+            }
+            retries = retries + 1;
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    api_key.clone(),
+                    messages.clone(),
+                    provider.clone(),
+                    vec![(
+                        "event_type".to_owned(),
+                        "symbols_to_probe_questions".to_owned(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await?;
+            // now we want to parse the reply here properly
+            let parsed_response = CodeSymbolToAskQuestionsResponse::parse_response(response);
+            match parsed_response {
+                Ok(_) => return parsed_response,
+                Err(_) => {
+                    continue;
+                }
+            }
+        }
     }
 
     async fn should_probe_question_request(
@@ -5600,6 +5617,9 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         loop {
             if retries > 3 {
                 return Err(CodeSymbolError::ExhaustedRetries);
+            }
+            if retries != 0 {
+                jitter_sleep(10.0, retries as f64).await;
             }
             retries = retries + 1;
 

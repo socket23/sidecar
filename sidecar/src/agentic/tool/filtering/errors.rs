@@ -11,4 +11,7 @@ pub enum CodeToEditFilteringError {
 
     #[error("invalid response")]
     InvalidResponse,
+
+    #[error("Exhausted retries")]
+    RetriesExhausted,
 }

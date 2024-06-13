@@ -10,14 +10,10 @@ use llm_client::{
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 
-use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::{
     agentic::{
         symbol::{
-            events::{input::SymbolInputEvent, probe::SymbolToProbeRequest},
-            identifier::{LLMProperties, SymbolIdentifier},
-            manager::SymbolManager,
-            types::SymbolEventRequest,
+            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
         },
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
@@ -32,7 +28,6 @@ pub struct ProbeRequest {
     editor_url: String,
     model_config: LLMClientConfig,
     user_context: UserContext,
-    symbol_identifier: SymbolIdentifier,
     query: String,
 }
 
@@ -42,7 +37,6 @@ pub async fn probe_request(
         editor_url,
         model_config,
         user_context,
-        symbol_identifier,
         query,
     }): Json<ProbeRequest>,
 ) -> Result<impl IntoResponse> {
@@ -66,19 +60,13 @@ pub async fn probe_request(
         editor_url.to_owned(),
         sender,
         LLMProperties::new(model_config.slow_model, provider_type, provider_keys),
-        user_context,
+        user_context.clone(),
     );
-    let probe_request = SymbolToProbeRequest::new(
-        symbol_identifier.clone(),
-        query.to_owned(),
-        query.to_owned(),
-        vec![],
-    );
-    let probe_request =
-        SymbolEventRequest::probe_request(symbol_identifier, probe_request, ToolProperties::new());
     // spawn a background thread to keep polling the probe_request future
     tokio::spawn(async move {
-        let _ = symbol_manager.probe_request(probe_request).await;
+        let _ = symbol_manager
+            .probe_request_from_user_context(query, user_context)
+            .await;
     });
 
     // Now we want to poll the future of the probe request we are sending

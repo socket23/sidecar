@@ -530,7 +530,7 @@ impl MechaCodeSymbolThinking {
                 let is_too_long = if reverse_lookup.len() > 100 {
                     true
                 } else {
-                    false
+                    true
                 };
                 // if the input to search for is too long, we change dynamically
                 // to gemini-pro.1.5-flash

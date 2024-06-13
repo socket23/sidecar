@@ -2184,14 +2184,14 @@ Please handle these changes as required."#
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
         println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
-        println!("tool_box::code_edit::file_content:{}", file_content);
+        // println!("tool_box::code_edit::file_content:{}", file_content);
         println!("tool_box::code_edit::selection_range:{:?}", selection_range);
-        println!("tool_box::code_edit::extra_context:{}", &extra_context);
-        println!("tool_box::code_edit::instruction:{}", &instruction);
-        println!(
-            "tool_box::code_edit::llm_properties: {:?}, {:?}, {:?}",
-            &llm, &api_keys, &provider
-        );
+        // println!("tool_box::code_edit::extra_context:{}", &extra_context);
+        // println!("tool_box::code_edit::instruction:{}", &instruction);
+        // println!(
+        //     "tool_box::code_edit::llm_properties: {:?}, {:?}, {:?}",
+        //     &llm, &api_keys, &provider
+        // );
         println!("============");
         // we need to get the range above and then below and then in the selection
         let language = self

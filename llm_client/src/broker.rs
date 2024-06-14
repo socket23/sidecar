@@ -17,6 +17,7 @@ use crate::{
         codestory::CodeStoryClient,
         fireworks::FireworksAIClient,
         gemini_pro::GeminiProClient,
+        google_ai::GoogleAIStdioClient,
         lmstudio::LMStudioClient,
         ollama::OllamaClient,
         openai::OpenAIClient,
@@ -76,7 +77,11 @@ impl LLMBroker {
             )
             .add_provider(LLMProvider::FireworksAI, Box::new(FireworksAIClient::new()))
             .add_provider(LLMProvider::Anthropic, Box::new(AnthropicClient::new()))
-            .add_provider(LLMProvider::GeminiPro, Box::new(GeminiProClient::new())))
+            .add_provider(LLMProvider::GeminiPro, Box::new(GeminiProClient::new()))
+            .add_provider(
+                LLMProvider::GoogleAIStudio,
+                Box::new(GoogleAIStdioClient::new()),
+            ))
     }
 
     pub fn add_provider(
@@ -122,6 +127,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
+            LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
         }
     }
 
@@ -150,6 +156,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
+            LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -419,6 +426,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
+            LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

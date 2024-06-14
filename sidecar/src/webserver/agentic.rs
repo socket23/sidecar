@@ -68,7 +68,7 @@ pub async fn probe_request(
         .provider_for_slow_model()
         .map(|provider| provider.clone())
         .ok_or(anyhow::anyhow!("missing provider for slow model"))?;
-    let provider_type = provider_keys.provider_type();
+    let _provider_type = provider_keys.provider_type();
     let symbol_manager = SymbolManager::new(
         tool_broker,
         app.symbol_tracker.clone(),

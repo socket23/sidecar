@@ -56,6 +56,8 @@ pub enum ToolType {
     TestCorrection,
     // Code symbols which we want to follow
     CodeSymbolsToFollowInitialRequest,
+    // Tool to use to generate the final probe answer
+    ProbeFinalAnswerSummary,
 }
 
 impl std::fmt::Display for ToolType {
@@ -97,6 +99,7 @@ impl std::fmt::Display for ToolType {
             ToolType::CodeSymbolsToFollowInitialRequest => {
                 write!(f, "Code Symbols to follow initial request")
             }
+            ToolType::ProbeFinalAnswerSummary => write!(f, "Probe final answer summary"),
         }
     }
 }

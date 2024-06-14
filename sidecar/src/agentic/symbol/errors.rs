@@ -46,4 +46,7 @@ pub enum SymbolError {
 
     #[error("Outline node editing not supported")]
     OutlineNodeEditingNotSupported,
+
+    #[error("Cached query failed")]
+    CachedQueryFailed,
 }

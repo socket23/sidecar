@@ -11,7 +11,7 @@ use std::{
 };
 
 use derivative::Derivative;
-use futures::{stream, StreamExt};
+use futures::{future::Shared, stream, FutureExt, StreamExt};
 use logging::parea::{PareaClient, PareaLogEvent};
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
@@ -242,6 +242,11 @@ pub struct Symbol {
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
     parea_client: PareaClient,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    probe_questions_handler:
+        Arc<Mutex<HashMap<String, Shared<tokio::sync::oneshot::Receiver<Option<String>>>>>>,
 }
 
 impl Symbol {
@@ -271,6 +276,7 @@ impl Symbol {
             tool_properties,
             probe_questions_asked: Arc::new(Mutex::new(vec![])),
             parea_client: PareaClient::new(),
+            probe_questions_handler: Arc::new(Mutex::new(HashMap::new())),
         };
         // grab the implementations of the symbol
         // TODO(skcd): We also have to grab the diagnostics and auto-start any
@@ -451,17 +457,70 @@ impl Symbol {
         Ok(())
     }
 
-    async fn _probe_request_handler(
+    async fn probe_request_handler(
         &self,
-        _request: SymbolToProbeRequest,
-        _hub_sender: UnboundedSender<(
+        request: SymbolToProbeRequest,
+        hub_sender: UnboundedSender<(
             SymbolEventRequest,
             String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
-        _request_id: String,
+        request_id: String,
     ) -> Result<String, SymbolError> {
-        unimplemented!();
+        let original_request_id = request.original_request_id().to_owned();
+        let receiver: Shared<tokio::sync::oneshot::Receiver<_>>;
+        let sender: Option<tokio::sync::oneshot::Sender<_>>;
+        {
+            let mut ongoing_probe_requests = self.probe_questions_handler.lock().await;
+            if let Some(receiver_present) = ongoing_probe_requests.get(&original_request_id) {
+                println!(
+                    "symbol::probe_request_handler::cache_hit::{}",
+                    self.symbol_name()
+                );
+                receiver = receiver_present.clone();
+                sender = None;
+            } else {
+                println!(
+                    "symbol::probe_request_handler::cache_not_present::{}",
+                    self.symbol_name(),
+                );
+                // then we want to call the the probe_request and put the receiver on our end
+                let (sender_present, receiver_present) = tokio::sync::oneshot::channel();
+                let shared_receiver = receiver_present.shared();
+                let _ = ongoing_probe_requests
+                    .insert(original_request_id.to_owned(), shared_receiver.clone());
+                sender = Some(sender_present);
+                receiver = shared_receiver;
+            }
+        }
+
+        // If we have the sender with us, then we need to really perform the probe work
+        // and then poll the receiver for the results
+        if let Some(sender) = sender {
+            println!(
+                "symbol::probe_request_handler::probe_request::({})",
+                self.symbol_name()
+            );
+            let result = self.probe_request(request, hub_sender, request_id).await;
+            match result {
+                Ok(result) => {
+                    let _ = sender.send(Some(result));
+                }
+                Err(e) => {
+                    let _ = sender.send(None);
+                    Err(e)?;
+                }
+            };
+        }
+        println!(
+            "symbol::probe_request_handler::probe_request::receiver_wait::({})",
+            self.symbol_name()
+        );
+        let result = receiver.await;
+        match result {
+            Ok(Some(result)) => Ok(result),
+            _ => Err(SymbolError::CachedQueryFailed),
+        }
     }
 
     // We are asked on the complete symbol a question
@@ -545,61 +604,28 @@ impl Symbol {
         ));
         println!("Sub symbol request: {:?}", &sub_symbol_request);
 
-        // - ask if we should probe the sub-symbols here
-        let filtering_response = stream::iter(
-            sub_symbol_request
-                .snippets_to_probe_ordered()
-                .into_iter()
-                .map(|snippet_with_reason| {
-                    let reason = snippet_with_reason.reason().to_owned();
-                    let snippet = snippet_with_reason.remove_snippet();
-                    (reason, snippet, self.llm_properties.clone())
-                }),
-        )
-        .map(|(reason, snippet, _llm_properties)| async move {
-            // TODO(skcd): This asking of question does not feel necessary
-            // since we are doing pre-filtering before
-            // Now depending on the response here we can exlcude/include
-            // the symbols which we want to follow and ask for more information
-            // let response = self
-            //     .tools
-            //     .should_follow_subsymbol_for_probing(
-            //         &snippet,
-            //         &reason,
-            //         history_ref,
-            //         query,
-            //         llm_properties.llm().clone(),
-            //         llm_properties.provider().clone(),
-            //         llm_properties.api_key().clone(),
-            //     )
-            //     .await;
-            // println!("Response: {:?}", &response);
-            // (reason, snippet, response)
-            (reason.to_owned(), snippet, reason)
-        })
-        .buffer_unordered(BUFFER_LIMIT)
-        .collect::<Vec<_>>()
-        .await;
+        let filtering_response =
+            stream::iter(
+                sub_symbol_request
+                    .snippets_to_probe_ordered()
+                    .into_iter()
+                    .map(|snippet_with_reason| {
+                        let reason = snippet_with_reason.reason().to_owned();
+                        let snippet = snippet_with_reason.remove_snippet();
+                        (reason, snippet, self.llm_properties.clone())
+                    }),
+            )
+            .map(|(reason, snippet, _llm_properties)| async move {
+                (reason.to_owned(), snippet, reason)
+            })
+            .buffer_unordered(BUFFER_LIMIT)
+            .collect::<Vec<_>>()
+            .await;
 
         println!("Sub symbol fetching: {:?}", &filtering_response);
 
         info!("sub symbol fetching done");
 
-        // println!("Snippet filtering response: {:?}", &filtering_response);
-
-        // let filtered_snippets = filtering_response
-        //     .into_iter()
-        //     .filter_map(|(reason, snippet, probe_deeper)| match probe_deeper {
-        //         Ok(probe_deeper) => {
-        //             if probe_deeper.should_follow() {
-        //                 Some((reason, snippet, probe_deeper.thinking().to_owned()))
-        //             } else {
-        //                 None
-        //             }
-        //         }
-        //         Err(_) => None,
-        //     })
-        //     .collect::<Vec<_>>();
         let filtered_snippets = filtering_response;
         let snippet_to_symbols_to_follow = stream::iter(filtered_snippets)
             .map(|(_, snippet, reason_to_follow)| async move {
@@ -1578,7 +1604,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                         // we are still going to do the same things just
                         // that this one is for gathering answeres
                         let reply = symbol
-                            .probe_request(
+                            .probe_request_handler(
                                 probe_request,
                                 symbol.hub_sender.clone(),
                                 request_id.to_owned(),

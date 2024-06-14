@@ -844,6 +844,12 @@ impl Symbol {
             .collect::<Vec<_>>();
 
         if sub_symbol_probe_result.is_empty() {
+            let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
+                request_id_ref.to_owned(),
+                self.symbol_identifier.clone(),
+                "No information found which could be relevant to the user query over here"
+                    .to_owned(),
+            ));
             Ok("no information found to reply to the user query".to_owned())
         } else {
             // summarize the results over here properly

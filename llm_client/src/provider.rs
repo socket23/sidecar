@@ -37,6 +37,7 @@ pub enum LLMProvider {
     Anthropic,
     FireworksAI,
     GeminiPro,
+    GoogleAIStudio,
 }
 
 impl std::fmt::Display for LLMProvider {
@@ -52,6 +53,7 @@ impl std::fmt::Display for LLMProvider {
             LLMProvider::Anthropic => write!(f, "Anthropic"),
             LLMProvider::FireworksAI => write!(f, "FireworksAI"),
             LLMProvider::GeminiPro => write!(f, "GeminiPro"),
+            LLMProvider::GoogleAIStudio => write!(f, "GoogleAIStudio"),
         }
     }
 }
@@ -78,6 +80,7 @@ pub enum LLMProviderAPIKeys {
     Anthropic(AnthropicAPIKey),
     FireworksAI(FireworksAPIKey),
     GeminiPro(GeminiProAPIKey),
+    GoogleAIStudio(GoogleAIStudioKey),
 }
 
 impl LLMProviderAPIKeys {
@@ -103,6 +106,7 @@ impl LLMProviderAPIKeys {
             LLMProviderAPIKeys::Anthropic(_) => LLMProvider::Anthropic,
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
+            LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
         }
     }
 
@@ -187,6 +191,13 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
+            LLMProvider::GoogleAIStudio => {
+                if let LLMProviderAPIKeys::GoogleAIStudio(api_key) = self {
+                    Some(LLMProviderAPIKeys::GoogleAIStudio(api_key.clone()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -208,6 +219,17 @@ pub struct TogetherAIProvider {
 }
 
 impl TogetherAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct GoogleAIStudioKey {
+    pub api_key: String,
+}
+
+impl GoogleAIStudioKey {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
     }

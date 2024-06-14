@@ -62,6 +62,11 @@ impl ToolBroker {
         symbol_tracking: Arc<SymbolTrackerInline>,
         language_broker: Arc<TSLanguageParsing>,
         tool_broker_config: Option<ToolBrokerConfiguration>,
+        // Use this if the llm we were talking to times out or does not produce
+        // outout which is coherent
+        // we should have finer control over the fail-over llm but for now
+        // a global setting like this is fine
+        _fail_over_llm: LLMProperties,
     ) -> Self {
         let mut tools: HashMap<ToolType, Box<dyn Tool + Send + Sync>> = Default::default();
         tools.insert(

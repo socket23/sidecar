@@ -4,9 +4,9 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{GeminiProAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
-use sidecar::agentic::tool::base::Tool;
+use sidecar::agentic::{symbol::identifier::LLMProperties, tool::base::Tool};
 use sidecar::{
     agentic::tool::{
         broker::ToolBroker, code_edit::models::broker::CodeEditBroker,
@@ -48,6 +48,13 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
         None,
+        LLMProperties::new(
+            LLMType::GeminiPro,
+            LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+        ),
     ));
     let code_wide_search = ToolInput::RequestImportantSybmolsCodeWide(
         CodeSymbolImportantWideSearch::new(

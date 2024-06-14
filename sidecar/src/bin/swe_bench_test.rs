@@ -9,7 +9,10 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{
+        AnthropicAPIKey, GeminiProAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
+        OpenAIProvider,
+    },
 };
 use serde_json::json;
 use sidecar::{
@@ -125,6 +128,13 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
         Some(ToolBrokerConfiguration::new(Some(code_editing_properties))),
+        LLMProperties::new(
+            LLMType::GeminiPro,
+            LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+        ),
     ));
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 

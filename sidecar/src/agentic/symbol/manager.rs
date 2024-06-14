@@ -237,7 +237,9 @@ impl SymbolManager {
                 .await;
 
             // send the response forward after combining all the answers using the LLM
+            println!("things are completed over here after probing");
         }
+        println!("things are more complete over here after probing");
         Ok(())
     }
 

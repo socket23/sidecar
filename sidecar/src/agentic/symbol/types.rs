@@ -12,7 +12,11 @@ use std::{
 
 use derivative::Derivative;
 use futures::{stream, StreamExt};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use logging::parea::{PareaClient, PareaLogEvent};
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::info;
 
@@ -230,6 +234,14 @@ pub struct Symbol {
     #[derivative(Hash = "ignore")]
     #[derivative(Debug = "ignore")]
     tool_properties: ToolProperties,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    probe_questions_asked: Arc<Mutex<Vec<String>>>,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    parea_client: PareaClient,
 }
 
 impl Symbol {
@@ -257,6 +269,8 @@ impl Symbol {
             llm_properties,
             ui_sender,
             tool_properties,
+            probe_questions_asked: Arc::new(Mutex::new(vec![])),
+            parea_client: PareaClient::new(),
         };
         // grab the implementations of the symbol
         // TODO(skcd): We also have to grab the diagnostics and auto-start any
@@ -437,6 +451,19 @@ impl Symbol {
         Ok(())
     }
 
+    async fn _probe_request_handler(
+        &self,
+        _request: SymbolToProbeRequest,
+        _hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            String,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+        _request_id: String,
+    ) -> Result<String, SymbolError> {
+        unimplemented!();
+    }
+
     // We are asked on the complete symbol a question
     // - we have to first find the sub-symbol we are interested in
     // - then ask it the probing question
@@ -456,6 +483,31 @@ impl Symbol {
         )>,
         request_id: String,
     ) -> Result<String, SymbolError> {
+        let original_request_id = request.original_request_id().to_owned();
+        let original_request_id_ref = &original_request_id;
+        // We want to keep track of all the probe requests which are going on for this symbol
+        // and make sure that we are not repeating work which has already been done or is ongoing.
+        let all_ongoing_probe_requests: Vec<String>;
+        {
+            let mut probe_requests = self.probe_questions_asked.lock().await;
+            probe_requests.push(request.probe_request().to_owned());
+            all_ongoing_probe_requests = probe_requests.clone();
+        }
+        let event_trace_id = uuid::Uuid::new_v4().to_string();
+        // log all the probe requests which might be going on or are done for a given symbol
+        let _ = self
+            .parea_client
+            .log_event(PareaLogEvent::new(
+                format!("probe_request::{}", self.symbol_name()),
+                event_trace_id.to_owned(),
+                event_trace_id.to_owned(),
+                all_ongoing_probe_requests
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, content)| (idx.to_string(), content))
+                    .collect(),
+            ))
+            .await;
         let request_id_ref = &request_id;
         // we can do a cache check here if we already have the answer or are working
         // on the similar request
@@ -785,6 +837,7 @@ impl Symbol {
                                     symbol_identifier.clone(),
                                     reason.to_owned(),
                                     original_request.to_owned(),
+                                    original_request_id_ref.to_owned(),
                                     history,
                                 );
                                 println!(

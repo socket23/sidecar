@@ -207,6 +207,7 @@ impl SymbolManager {
                             symbol_identifier,
                             query_ref.to_owned(),
                             query_ref.to_owned(),
+                            request_id_ref.to_owned(),
                             vec![],
                         ),
                         ToolProperties::new(),

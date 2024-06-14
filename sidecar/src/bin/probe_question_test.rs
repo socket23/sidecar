@@ -116,6 +116,7 @@ async fn main() {
         webserver_symbol_identifier.clone(),
         webserver_request.to_owned(),
         webserver_request.to_owned(),
+        "testing".to_owned(),
         vec![],
     );
     let probe_request = SymbolEventRequest::probe_request(

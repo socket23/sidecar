@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct PareaClient {
     client: reqwest::Client,
 }

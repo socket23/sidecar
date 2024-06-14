@@ -197,46 +197,74 @@ impl SymbolManager {
 
             // Now for all the symbol identifiers which we are getting we have to
             // send a request to all of them with the probe query
-            let _responses =
-                stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
-                    (
+            let responses = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
+                (
+                    symbol_identifier.clone(),
+                    request_id_ref.to_owned(),
+                    SymbolEventRequest::probe_request(
                         symbol_identifier.clone(),
-                        request_id_ref.to_owned(),
-                        SymbolEventRequest::probe_request(
-                            symbol_identifier.clone(),
-                            SymbolToProbeRequest::new(
-                                symbol_identifier,
-                                query_ref.to_owned(),
-                                query_ref.to_owned(),
-                                vec![],
-                            ),
-                            ToolProperties::new(),
+                        SymbolToProbeRequest::new(
+                            symbol_identifier,
+                            query_ref.to_owned(),
+                            query_ref.to_owned(),
+                            vec![],
                         ),
-                    )
-                }))
-                .map(
-                    |(symbol_identifier, request_id, symbol_event_request)| async move {
-                        let (sender, receiver) = tokio::sync::oneshot::channel();
-                        dbg!(
-                            "sending initial request to symbol: {:?}",
-                            &symbol_identifier
-                        );
-                        self.symbol_locker
-                            .process_request((symbol_event_request, request_id, sender))
-                            .await;
-                        let response = receiver.await;
-                        dbg!(
-                            "For symbol identifier: {:?} the response is {:?}",
-                            &symbol_identifier,
-                            &response
-                        );
-                    },
+                        ToolProperties::new(),
+                    ),
                 )
-                .buffer_unordered(100)
-                .collect::<Vec<_>>()
-                .await;
+            }))
+            .map(
+                |(symbol_identifier, request_id, symbol_event_request)| async move {
+                    let (sender, receiver) = tokio::sync::oneshot::channel();
+                    dbg!(
+                        "sending initial request to symbol: {:?}",
+                        &symbol_identifier
+                    );
+                    self.symbol_locker
+                        .process_request((symbol_event_request, request_id, sender))
+                        .await;
+                    let response = receiver.await;
+                    dbg!(
+                        "For symbol identifier: {:?} the response is {:?}",
+                        &symbol_identifier,
+                        &response
+                    );
+                    (response, symbol_identifier)
+                },
+            )
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
 
             // send the response forward after combining all the answers using the LLM
+            let final_responses = responses
+                .into_iter()
+                .filter_map(|(response, symbol_identifier)| match response {
+                    Ok(response) => Some((response, symbol_identifier)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let final_answer = final_responses
+                .into_iter()
+                .map(|(response, symbol_identifier)| {
+                    let symbol_name = symbol_identifier.symbol_name();
+                    let symbol_file_path = symbol_identifier
+                        .fs_file_path()
+                        .map(|fs_file_path| format!("at {}", fs_file_path))
+                        .unwrap_or("".to_owned());
+                    let response = response.to_string();
+                    let symbol_readable = format!("{symbol_name} {symbol_file_path}");
+                    format!(
+                        r#"{symbol_readable}
+{response}"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let _ = self.ui_sender.send(UIEventWithID::probing_finished_event(
+                request_id_ref.to_owned(),
+                final_answer,
+            ));
             println!("things are completed over here after probing");
         }
         println!("things are more complete over here after probing");

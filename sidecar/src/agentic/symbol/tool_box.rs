@@ -425,7 +425,7 @@ impl ToolBox {
                 r#"The user has asked the following query:
 {query}
 
-We also belive this symbol needs to be probed because of:
+We also believe this symbol needs to be probed because of:
 {reason}"#
             ),
         ));

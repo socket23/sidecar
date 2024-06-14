@@ -197,43 +197,46 @@ impl SymbolManager {
 
             // Now for all the symbol identifiers which we are getting we have to
             // send a request to all of them with the probe query
-            let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
-                (
-                    symbol_identifier.clone(),
-                    request_id_ref.to_owned(),
-                    SymbolEventRequest::probe_request(
+            let _responses =
+                stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
+                    (
                         symbol_identifier.clone(),
-                        SymbolToProbeRequest::new(
-                            symbol_identifier,
-                            query_ref.to_owned(),
-                            query_ref.to_owned(),
-                            vec![],
+                        request_id_ref.to_owned(),
+                        SymbolEventRequest::probe_request(
+                            symbol_identifier.clone(),
+                            SymbolToProbeRequest::new(
+                                symbol_identifier,
+                                query_ref.to_owned(),
+                                query_ref.to_owned(),
+                                vec![],
+                            ),
+                            ToolProperties::new(),
                         ),
-                        ToolProperties::new(),
-                    ),
+                    )
+                }))
+                .map(
+                    |(symbol_identifier, request_id, symbol_event_request)| async move {
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        dbg!(
+                            "sending initial request to symbol: {:?}",
+                            &symbol_identifier
+                        );
+                        self.symbol_locker
+                            .process_request((symbol_event_request, request_id, sender))
+                            .await;
+                        let response = receiver.await;
+                        dbg!(
+                            "For symbol identifier: {:?} the response is {:?}",
+                            &symbol_identifier,
+                            &response
+                        );
+                    },
                 )
-            }))
-            .map(
-                |(symbol_identifier, request_id, symbol_event_request)| async move {
-                    let (sender, receiver) = tokio::sync::oneshot::channel();
-                    dbg!(
-                        "sending initial request to symbol: {:?}",
-                        &symbol_identifier
-                    );
-                    self.symbol_locker
-                        .process_request((symbol_event_request, request_id, sender))
-                        .await;
-                    let response = receiver.await;
-                    dbg!(
-                        "For symbol identifier: {:?} the response is {:?}",
-                        &symbol_identifier,
-                        &response
-                    );
-                },
-            )
-            .buffer_unordered(100)
-            .collect::<Vec<_>>()
-            .await;
+                .buffer_unordered(100)
+                .collect::<Vec<_>>()
+                .await;
+
+            // send the response forward after combining all the answers using the LLM
         }
         Ok(())
     }

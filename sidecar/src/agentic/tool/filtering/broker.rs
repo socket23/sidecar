@@ -9,7 +9,7 @@ use llm_client::{
 };
 
 use crate::agentic::{
-    symbol::identifier::Snippet,
+    symbol::identifier::{LLMProperties, Snippet},
     tool::{
         base::{Tool, ToolType},
         errors::ToolError,
@@ -413,28 +413,40 @@ pub struct CodeToEditFormatterBroker {
 }
 
 impl CodeToEditFormatterBroker {
-    pub fn new(llm_broker: Arc<LLMBroker>) -> Self {
+    pub fn new(llm_broker: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         let mut llms: HashMap<LLMType, Box<dyn CodeToEditFilterFormatter + Send + Sync>> =
             Default::default();
         llms.insert(
             LLMType::ClaudeHaiku,
-            Box::new(AnthropicCodeToEditFormatter::new(llm_broker.clone())),
+            Box::new(AnthropicCodeToEditFormatter::new(
+                llm_broker.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::ClaudeSonnet,
-            Box::new(AnthropicCodeToEditFormatter::new(llm_broker.clone())),
+            Box::new(AnthropicCodeToEditFormatter::new(
+                llm_broker.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::ClaudeOpus,
-            Box::new(AnthropicCodeToEditFormatter::new(llm_broker.clone())),
+            Box::new(AnthropicCodeToEditFormatter::new(
+                llm_broker.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::GeminiPro,
-            Box::new(AnthropicCodeToEditFormatter::new(llm_broker.clone())),
+            Box::new(AnthropicCodeToEditFormatter::new(
+                llm_broker.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::GeminiProFlash,
-            Box::new(AnthropicCodeToEditFormatter::new(llm_broker)),
+            Box::new(AnthropicCodeToEditFormatter::new(llm_broker, fail_over_llm)),
         );
         Self { llms }
     }

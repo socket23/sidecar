@@ -8,12 +8,15 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::agentic::tool::{
-    base::{Tool, ToolType},
-    errors::ToolError,
-    input::ToolInput,
-    lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
-    output::ToolOutput,
+use crate::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::{
+        base::{Tool, ToolType},
+        errors::ToolError,
+        input::ToolInput,
+        lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
+        output::ToolOutput,
+    },
 };
 
 use super::{models::anthropic::AnthropicCodeSymbolImportant, types::CodeSymbolError};
@@ -150,27 +153,42 @@ pub struct CodeCorrectnessBroker {
 }
 
 impl CodeCorrectnessBroker {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
+    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         let mut llms: HashMap<LLMType, Box<dyn CodeCorrectness + Send + Sync>> = Default::default();
         llms.insert(
             LLMType::ClaudeHaiku,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::ClaudeSonnet,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::ClaudeOpus,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::Gpt4O,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::GeminiPro,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm,
+            )),
         );
         Self { llms }
     }

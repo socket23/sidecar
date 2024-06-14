@@ -8,34 +8,41 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
 };
 
-use crate::agentic::tool::{
-    code_symbol::{
-        correctness::{CodeCorrectness, CodeCorrectnessAction, CodeCorrectnessRequest},
-        error_fix::{CodeEditingErrorRequest, CodeSymbolErrorFix},
-        followup::{
-            ClassSymbolFollowup, ClassSymbolFollowupRequest, ClassSymbolFollowupResponse,
-            ClassSymbolMember,
+use crate::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::{
+        code_symbol::{
+            correctness::{CodeCorrectness, CodeCorrectnessAction, CodeCorrectnessRequest},
+            error_fix::{CodeEditingErrorRequest, CodeSymbolErrorFix},
+            followup::{
+                ClassSymbolFollowup, ClassSymbolFollowupRequest, ClassSymbolFollowupResponse,
+                ClassSymbolMember,
+            },
+            important::{
+                CodeSymbolFollowAlongForProbing, CodeSymbolImportant, CodeSymbolImportantRequest,
+                CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
+                CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest,
+                CodeSymbolUtilityRequest, CodeSymbolWithSteps, CodeSymbolWithThinking,
+            },
+            repo_map_search::{RepoMapSearch, RepoMapSearchQuery},
+            types::{CodeSymbolError, SerdeError},
         },
-        important::{
-            CodeSymbolFollowAlongForProbing, CodeSymbolImportant, CodeSymbolImportantRequest,
-            CodeSymbolImportantResponse, CodeSymbolImportantWideSearch, CodeSymbolProbingSummarize,
-            CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest, CodeSymbolWithSteps,
-            CodeSymbolWithThinking,
-        },
-        repo_map_search::{RepoMapSearch, RepoMapSearchQuery},
-        types::{CodeSymbolError, SerdeError},
+        jitter::jitter_sleep,
+        lsp::diagnostics::Diagnostic,
     },
-    jitter::jitter_sleep,
-    lsp::diagnostics::Diagnostic,
 };
 
 pub struct AnthropicCodeSymbolImportant {
     llm_client: Arc<LLMBroker>,
+    _fail_over_llm: LLMProperties,
 }
 
 impl AnthropicCodeSymbolImportant {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
-        Self { llm_client }
+    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+        Self {
+            llm_client,
+            _fail_over_llm: fail_over_llm,
+        }
     }
 
     fn is_model_supported(&self, llm_type: &LLMType) -> bool {

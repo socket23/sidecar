@@ -11,7 +11,7 @@ use llm_client::{
 };
 
 use crate::agentic::{
-    symbol::identifier::Snippet,
+    symbol::identifier::{LLMProperties, Snippet},
     tool::{
         filtering::{
             broker::{
@@ -28,11 +28,15 @@ use crate::agentic::{
 
 pub struct AnthropicCodeToEditFormatter {
     llm_broker: Arc<LLMBroker>,
+    fail_over_llm: LLMProperties,
 }
 
 impl AnthropicCodeToEditFormatter {
-    pub fn new(llm_broker: Arc<LLMBroker>) -> Self {
-        Self { llm_broker }
+    pub fn new(llm_broker: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+        Self {
+            llm_broker,
+            fail_over_llm,
+        }
     }
 
     fn example_message(&self) -> String {
@@ -1259,18 +1263,27 @@ Remember that your reply should be strictly in the following format:
             if retries > 3 {
                 return Err(CodeToEditFilteringError::RetriesExhausted);
             }
-            retries = retries + 1;
             if retries != 0 {
-                jitter_sleep(10.0, retries as f64).await;
+                jitter_sleep(5.0, retries as f64).await;
             }
-            retries = retries + 1;
+            // alternate between the fail-over llm and the normal one
+            let mut provider = request.provider().clone();
+            let mut api_key = request.api_key().clone();
+            let mut llm_request_cloned = llm_request.clone();
+            if retries % 2 == 0 {
+                llm_request_cloned = llm_request_cloned.set_llm(request.llm().clone());
+            } else {
+                llm_request_cloned = llm_request_cloned.set_llm(self.fail_over_llm.llm().clone());
+                provider = self.fail_over_llm.provider().clone();
+                api_key = self.fail_over_llm.api_key().clone();
+            }
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_broker
                 .stream_completion(
-                    request.api_key().clone(),
-                    llm_request.clone(),
-                    request.provider().clone(),
+                    api_key.clone(),
+                    llm_request_cloned.clone(),
+                    provider.clone(),
                     vec![(
                         "event_type".to_owned(),
                         "filter_code_snippet_for_probing".to_owned(),
@@ -1282,12 +1295,14 @@ Remember that your reply should be strictly in the following format:
                 .await
                 .map_err(|e| CodeToEditFilteringError::LLMClientError(e))?;
             if response.is_empty() {
+                retries = retries + 1;
                 continue;
             }
             let result = self.parse_reponse_for_probing(&response, request.get_snippets());
             match result {
                 Ok(_) => return result,
                 Err(_) => {
+                    retries = retries + 1;
                     continue;
                 }
             };

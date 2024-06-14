@@ -66,7 +66,7 @@ impl ToolBroker {
         // outout which is coherent
         // we should have finer control over the fail-over llm but for now
         // a global setting like this is fine
-        _fail_over_llm: LLMProperties,
+        fail_over_llm: LLMProperties,
     ) -> Self {
         let mut tools: HashMap<ToolType, Box<dyn Tool + Send + Sync>> = Default::default();
         tools.insert(
@@ -97,15 +97,24 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::RequestImportantSymbols,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::FindCodeSymbolsCodeBaseWide,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::UtilityCodeSymbolSearch,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::GoToDefinitions,
@@ -120,19 +129,31 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::FilterCodeSnippetsForEditing,
-            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
+            Box::new(CodeToEditFormatterBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::CodeCorrectnessActionSelection,
-            Box::new(CodeCorrectnessBroker::new(llm_client.clone())),
+            Box::new(CodeCorrectnessBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::CodeEditingForError,
-            Box::new(CodeSymbolErrorFixBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolErrorFixBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::FilterCodeSnippetsSingleSymbolForEditing,
-            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
+            Box::new(CodeToEditFormatterBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(ToolType::EditorApplyEdits, Box::new(EditorApply::new()));
         tools.insert(ToolType::GetQuickFix, Box::new(LSPQuickFixClient::new()));
@@ -142,31 +163,52 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::ClassSymbolFollowup,
-            Box::new(ClassSymbolFollowupBroker::new(llm_client.clone())),
+            Box::new(ClassSymbolFollowupBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::ProbePossible,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::ProbeQuestion,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::ProbeSubSymbol,
-            Box::new(CodeToEditFormatterBroker::new(llm_client.clone())),
+            Box::new(CodeToEditFormatterBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::ProbeFollowAlongSymbol,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::ProbeSummarizeAnswer,
-            Box::new(CodeSymbolImportantBroker::new(llm_client.clone())),
+            Box::new(CodeSymbolImportantBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::RepoMapSearch,
-            Box::new(RepoMapSearchBroker::new(llm_client.clone())),
+            Box::new(RepoMapSearchBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::SWEBenchToolEndpoint,

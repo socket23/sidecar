@@ -7,9 +7,12 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::agentic::tool::{
-    base::Tool, code_symbol::models::anthropic::AnthropicCodeSymbolImportant, errors::ToolError,
-    input::ToolInput, output::ToolOutput,
+use crate::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::{
+        base::Tool, code_symbol::models::anthropic::AnthropicCodeSymbolImportant,
+        errors::ToolError, input::ToolInput, output::ToolOutput,
+    },
 };
 
 use super::types::CodeSymbolError;
@@ -134,24 +137,36 @@ pub struct ClassSymbolFollowupBroker {
 }
 
 impl ClassSymbolFollowupBroker {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
+    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         let mut llms: HashMap<LLMType, Box<dyn ClassSymbolFollowup + Send + Sync>> =
             Default::default();
         llms.insert(
             LLMType::ClaudeHaiku,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::ClaudeSonnet,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::ClaudeOpus,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         llms.insert(
             LLMType::GeminiPro,
-            Box::new(AnthropicCodeSymbolImportant::new(llm_client.clone())),
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
+                fail_over_llm,
+            )),
         );
 
         Self { llms }

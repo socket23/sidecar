@@ -4,7 +4,7 @@ use axum::async_trait;
 
 use super::{errors::ToolError, input::ToolInput, output::ToolOutput};
 
-#[derive(Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ToolType {
     // AskDocumentation,
     // AskUser,

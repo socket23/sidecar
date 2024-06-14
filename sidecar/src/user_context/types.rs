@@ -125,6 +125,28 @@ pub struct FileContentValue {
     pub language: String,
 }
 
+impl FileContentValue {
+    pub fn to_xml(self) -> String {
+        let language = &self.language;
+        let content = &self.file_content;
+        let file_path = &self.file_path;
+        format!(
+            r#"<selection_item>
+<file>
+<file_path>
+{file_path}
+</file_path>
+<content>
+```{language}
+{content}
+```
+</content>
+</file>
+</selection_item>"#
+        )
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
 pub struct UserContext {
     pub variables: Vec<VariableInformation>,
@@ -150,6 +172,20 @@ impl UserContext {
         }
     }
 
+    pub fn update_file_content_map(
+        mut self,
+        file_path: String,
+        file_content: String,
+        language: String,
+    ) -> Self {
+        self.file_content_map.push(FileContentValue {
+            file_content,
+            file_path,
+            language,
+        });
+        self
+    }
+
     pub fn folder_paths(&self) -> Vec<String> {
         self.folder_paths.to_vec()
     }
@@ -167,6 +203,13 @@ impl UserContext {
             .variables
             .into_iter()
             .map(|variable| variable.to_xml())
+            .collect::<Vec<_>>()
+            .join("\n");
+        // read the file content as well from the file paths which were shared
+        let file_prompt = self
+            .file_content_map
+            .into_iter()
+            .map(|file_content| file_content.to_xml())
             .collect::<Vec<_>>()
             .join("\n");
         let folder_content = stream::iter(
@@ -188,6 +231,8 @@ impl UserContext {
         final_string.push_str(&variable_prompt);
         final_string.push_str("\n");
         final_string.push_str(&folder_content);
+        final_string.push_str("\n");
+        final_string.push_str(&file_prompt);
         final_string.push_str("\n</selection>");
         Ok(final_string)
     }

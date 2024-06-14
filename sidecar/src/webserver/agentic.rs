@@ -24,11 +24,19 @@ use crate::{
 use super::{model_selection::LLMClientConfig, types::Result};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProbeRequestActiveWindow {
+    file_path: String,
+    file_content: String,
+    language: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProbeRequest {
     editor_url: String,
     model_config: LLMClientConfig,
     user_context: UserContext,
     query: String,
+    active_window_data: Option<ProbeRequestActiveWindow>,
 }
 
 pub async fn probe_request(
@@ -36,8 +44,9 @@ pub async fn probe_request(
     Json(ProbeRequest {
         editor_url,
         model_config,
-        user_context,
+        mut user_context,
         query,
+        active_window_data,
     }): Json<ProbeRequest>,
 ) -> Result<impl IntoResponse> {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -48,6 +57,13 @@ pub async fn probe_request(
         app.language_parsing.clone(),
         None,
     ));
+    if let Some(active_window_data) = active_window_data {
+        user_context = user_context.update_file_content_map(
+            active_window_data.file_path,
+            active_window_data.file_content,
+            active_window_data.language,
+        );
+    }
     let provider_keys = model_config
         .provider_for_slow_model()
         .map(|provider| provider.clone())
@@ -59,7 +75,12 @@ pub async fn probe_request(
         app.editor_parsing.clone(),
         editor_url.to_owned(),
         sender,
-        LLMProperties::new(model_config.slow_model, provider_type, provider_keys),
+        LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        ),
+        // LLMProperties::new(model_config.slow_model, provider_type, provider_keys),
         user_context.clone(),
     );
     // spawn a background thread to keep polling the probe_request future

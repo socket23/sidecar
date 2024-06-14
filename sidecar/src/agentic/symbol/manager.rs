@@ -115,6 +115,7 @@ impl SymbolManager {
         query: String,
         user_context: UserContext,
     ) -> Result<(), SymbolError> {
+        println!("symbol_manager::probe_request_from_user_context::start");
         let request_id = uuid::Uuid::new_v4().to_string();
         let request_id_ref = &request_id;
         let code_wide_search =
@@ -130,11 +131,15 @@ impl SymbolManager {
             request_id_ref.to_owned(),
             code_wide_search.clone(),
         ));
-        let output = self
+        let output = dbg!(self
             .tools
             .invoke(code_wide_search)
             .await
-            .map_err(|e| SymbolError::ToolError(e))?;
+            .map_err(|e| SymbolError::ToolError(e)))?;
+        println!(
+            "symbol_manager::probe_request_from_user_context::output({:?})",
+            &output
+        );
         if let ToolOutput::ImportantSymbols(important_symbols)
         | ToolOutput::RepoMapSearch(important_symbols) = output
         {

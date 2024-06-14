@@ -3,6 +3,7 @@
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::StreamExt;
+use llm_client::provider::GoogleAIStudioKey;
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -56,6 +57,13 @@ pub async fn probe_request(
         app.symbol_tracker.clone(),
         app.language_parsing.clone(),
         None,
+        LLMProperties::new(
+            LLMType::GeminiPro,
+            LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+        ),
     ));
     if let Some(active_window_data) = active_window_data {
         user_context = user_context.update_file_content_map(
@@ -146,6 +154,13 @@ pub async fn swe_bench(
         app.symbol_tracker.clone(),
         app.language_parsing.clone(),
         None,
+        LLMProperties::new(
+            LLMType::GeminiPro,
+            LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+        ),
     ));
     let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
     let model = LLMType::ClaudeSonnet;

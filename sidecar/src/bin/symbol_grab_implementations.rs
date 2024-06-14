@@ -7,7 +7,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, LLMProvider},
+    provider::{AnthropicAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 use sidecar::{
     agentic::{
@@ -53,6 +53,13 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
         None,
+        LLMProperties::new(
+            LLMType::GeminiPro,
+            LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+        ),
     ));
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();

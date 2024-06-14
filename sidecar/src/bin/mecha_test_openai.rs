@@ -4,7 +4,9 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{GeminiProAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{
+        GeminiProAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider,
+    },
 };
 use sidecar::{
     agentic::{
@@ -56,6 +58,13 @@ async fn main() {
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
         None,
+        LLMProperties::new(
+            LLMType::GeminiPro,
+            LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+        ),
     ));
     let llm_properties = LLMProperties::new(LLMType::Gpt4O, LLMProvider::OpenAI, api_key.clone());
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();

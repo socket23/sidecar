@@ -27,6 +27,7 @@ pub struct SymbolToProbeRequest {
     symbol_identifier: SymbolIdentifier,
     probe_request: String,
     original_request: String,
+    original_request_id: String,
     history: Vec<SymbolToProbeHistory>,
 }
 
@@ -35,14 +36,20 @@ impl SymbolToProbeRequest {
         symbol_identifier: SymbolIdentifier,
         probe_request: String,
         original_request: String,
+        original_request_id: String,
         history: Vec<SymbolToProbeHistory>,
     ) -> Self {
         Self {
             symbol_identifier,
             probe_request,
             original_request,
+            original_request_id,
             history,
         }
+    }
+
+    pub fn original_request_id(&self) -> &str {
+        &self.original_request_id
     }
 
     pub fn original_request(&self) -> &str {

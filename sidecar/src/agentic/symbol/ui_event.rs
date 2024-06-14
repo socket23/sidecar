@@ -68,6 +68,22 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn probing_started_event(request_id: String) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::RequestEvent(RequestEvents::ProbingStart),
+        }
+    }
+
+    pub fn probing_finished_event(request_id: String, response: String) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::RequestEvent(RequestEvents::ProbeFinished(
+                RequestEventProbeFinished::new(response),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -77,6 +93,7 @@ pub enum UIEvent {
     CodebaseEvent(SymbolInputEvent),
     SymbolLoctationUpdate(SymbolLocation),
     SymbolEventSubStep(SymbolEventSubStepRequest),
+    RequestEvent(RequestEvents),
 }
 
 impl From<SymbolEventRequest> for UIEvent {
@@ -154,4 +171,21 @@ impl SymbolEventSubStepRequest {
             )),
         }
     }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct RequestEventProbeFinished {
+    reply: String,
+}
+
+impl RequestEventProbeFinished {
+    pub fn new(reply: String) -> Self {
+        Self { reply }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum RequestEvents {
+    ProbingStart,
+    ProbeFinished(RequestEventProbeFinished),
 }

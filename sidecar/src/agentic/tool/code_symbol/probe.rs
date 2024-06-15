@@ -33,10 +33,26 @@ pub struct ProbeDeeperSnippet {
     reason_to_probe: String,
 }
 
+impl ProbeDeeperSnippet {
+    pub fn id(&self) -> usize {
+        self.id.clone()
+    }
+
+    pub fn reason_to_probe(&self) -> &str {
+        &self.reason_to_probe
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProbeDeeperSnippetList {
     #[serde(rename = "$value")]
     snippets: Vec<ProbeDeeperSnippet>,
+}
+
+impl ProbeDeeperSnippetList {
+    pub fn get_snippets(&self) -> &[ProbeDeeperSnippet] {
+        self.snippets.as_slice()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

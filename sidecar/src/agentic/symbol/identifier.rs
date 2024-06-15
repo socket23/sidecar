@@ -21,7 +21,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::{SymbolToEdit, SymbolToEditRequest},
-        probe::SubSymbolToProbe,
+        probe::{ProbeEnoughOrDeeperResponseParsed, SubSymbolToProbe},
         types::SymbolEvent,
     },
     tool_box::ToolBox,
@@ -499,12 +499,12 @@ impl MechaCodeSymbolThinking {
         query: &str,
         llm_properties: LLMProperties,
         request_id: String,
-    ) -> Result<ProbeEnoughOrDeeperResponse, SymbolError> {
+    ) -> Result<ProbeEnoughOrDeeperResponseParsed, SymbolError> {
         let request_id_ref = &request_id;
         if self.is_snippet_present().await {
-            if let Some((ranked_xml_list, _reverse_lookup)) = self.to_llm_request(&request_id).await
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
             {
-                return self
+                let response = self
                     .tool_box
                     .probe_enough_or_deeper(
                         query.to_owned(),
@@ -514,6 +514,57 @@ impl MechaCodeSymbolThinking {
                         request_id_ref,
                     )
                     .await;
+                return match response {
+                    Ok(ProbeEnoughOrDeeperResponse::AnswerUserQuery(answer)) => {
+                        Ok(ProbeEnoughOrDeeperResponseParsed::AnswerUserQuery(answer))
+                    }
+                    Ok(ProbeEnoughOrDeeperResponse::ProbeDeeper(probe_deeper_list)) => {
+                        let probe_deeper_list_ref = probe_deeper_list.get_snippets();
+                        let sub_symbols_to_probe = stream::iter(reverse_lookup)
+                            .filter_map(|reverse_lookup| async move {
+                                let idx = reverse_lookup.idx();
+                                let range = reverse_lookup.range();
+                                let fs_file_path = reverse_lookup.fs_file_path();
+                                let outline = reverse_lookup.is_outline();
+                                let found_reason_to_edit = probe_deeper_list_ref
+                                    .into_iter()
+                                    .find(|snippet| snippet.id() == idx)
+                                    .map(|snippet| snippet.reason_to_probe().to_owned());
+                                match found_reason_to_edit {
+                                    Some(reason) => {
+                                        // TODO(skcd): We need to get the sub-symbol over
+                                        // here instead of the original symbol name which
+                                        // would not work
+                                        let symbol_in_range = self
+                                            .find_sub_symbol_in_range(
+                                                range,
+                                                fs_file_path,
+                                                request_id_ref,
+                                            )
+                                            .await;
+                                        if let Ok(symbol) = symbol_in_range {
+                                            Some(SubSymbolToProbe::new(
+                                                symbol,
+                                                range.clone(),
+                                                fs_file_path.to_owned(),
+                                                reason,
+                                                outline,
+                                            ))
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    None => None,
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .await;
+                        Ok(ProbeEnoughOrDeeperResponseParsed::ProbeDeeperInSubSymbols(
+                            sub_symbols_to_probe,
+                        ))
+                    }
+                    Err(e) => Err(e),
+                };
             }
         }
         return Err(SymbolError::ExpectedFileToExist);

@@ -52,19 +52,28 @@ pub fn split_file_content_into_parts(
     (above, below, selection_range)
 }
 
+fn search_haystack<T: PartialEq>(needle: &[T], haystack: &[T]) -> Option<usize> {
+    if needle.is_empty() {
+        // special case: `haystack.windows(0)` will panic, so this case
+        // needs to be handled separately in whatever way you feel is
+        // appropriate
+        return Some(0);
+    }
+
+    haystack
+        .windows(needle.len())
+        .rposition(|subslice| subslice == needle)
+        .map(|pos| pos - 1)
+}
+
 /// Find the symbol in the line now
 /// our home fed needle in haystack which works on character level instead
 /// of byte level
 /// This returns the last character position where the needle is contained in
 /// the haystack
 pub fn find_needle_position(haystack: &str, needle: &str) -> Option<usize> {
-    let haystack_char_indices: Vec<_> = haystack.char_indices().collect();
-    haystack.rfind(needle).map(|byte_pos| {
-        haystack_char_indices
-            .iter()
-            .position(|(b, _)| *b == byte_pos)
-            .unwrap()
-            + needle.chars().count()
-            - 1
-    })
+    search_haystack(
+        needle.chars().into_iter().collect::<Vec<_>>().as_slice(),
+        haystack.chars().into_iter().collect::<Vec<_>>().as_slice(),
+    )
 }

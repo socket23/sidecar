@@ -3,6 +3,21 @@
 
 use crate::{agentic::symbol::identifier::SymbolIdentifier, chunking::text_document::Range};
 
+#[derive(Debug, Clone)]
+pub enum ProbeEnoughOrDeeperResponseParsed {
+    AnswerUserQuery(String),
+    ProbeDeeperInSubSymbols(Vec<SubSymbolToProbe>),
+}
+
+impl ProbeEnoughOrDeeperResponseParsed {
+    pub fn answer_user_query(&self) -> Option<String> {
+        match self {
+            Self::AnswerUserQuery(response) => Some(response.to_owned()),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SubSymbolToProbe {
     symbol: String,

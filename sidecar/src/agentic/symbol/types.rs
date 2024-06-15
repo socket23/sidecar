@@ -593,14 +593,28 @@ impl Symbol {
         // TODO(skcd): We run both the queries in parallel:
         // - ask if the symbol can answer the question
         // - or we chose the sub-symbol which we want to focus on
-        let probe_sub_symbols = self
-            .mecha_code_symbol
-            .probe_sub_sybmols(
+        let (probe_sub_symbols, probe_deeper_or_enough) = tokio::join!(
+            self.mecha_code_symbol.probe_sub_sybmols(
                 query,
                 self.llm_properties.clone(),
-                request_id_ref.to_owned(),
-            )
-            .await?;
+                request_id_ref.to_owned()
+            ),
+            self.mecha_code_symbol.probe_deeper_or_answer(
+                query,
+                self.llm_properties.clone(),
+                request_id_ref.to_owned()
+            ),
+        );
+        if let Ok(probe_deeper_or_enough) = probe_deeper_or_enough {
+            if let Some(answer_user_query) = probe_deeper_or_enough.answer_user_query() {
+                // we found the answer very early, so lets just return over here
+                return Ok(answer_user_query);
+            }
+        }
+
+        // If we do not have the answer to the user query, just follow the rest of the logic
+        // which is probing into sub-symbols and following them.
+        let probe_sub_symbols = probe_sub_symbols?;
         let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
             request_id_ref.to_owned(),
             SymbolEventSubStepRequest::new(

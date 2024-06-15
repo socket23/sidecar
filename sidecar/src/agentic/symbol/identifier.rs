@@ -20,6 +20,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::{SymbolToEdit, SymbolToEditRequest},
+        probe::SubSymbolToProbe,
         types::SymbolEvent,
     },
     tool_box::ToolBox,
@@ -469,6 +470,78 @@ impl MechaCodeSymbolThinking {
     pub async fn set_implementations(&self, snippets: Vec<Snippet>) {
         let mut implementations = self.implementations.lock().await;
         *implementations = snippets;
+    }
+
+    /// Handles selecting the first sub-symbols in the main symbol which we should
+    /// follow or look more deeply into to answer the user query
+    pub async fn probe_sub_sybmols(
+        &self,
+        query: &str,
+        llm_properties: LLMProperties,
+        request_id: String,
+    ) -> Result<Vec<SubSymbolToProbe>, SymbolError> {
+        let request_id_ref = &request_id;
+        if self.is_snippet_present().await {
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
+            {
+                let filtered_list = dbg!(
+                    self.tool_box
+                        .filter_code_snippets_subsymbol_for_probing(
+                            ranked_xml_list,
+                            query.to_owned(),
+                            llm_properties.llm().clone(),
+                            llm_properties.provider().clone(),
+                            llm_properties.api_key().clone(),
+                            &request_id,
+                        )
+                        .await
+                )?;
+
+                let filtered_list_ref = &filtered_list;
+
+                let sub_symbols_to_edit = stream::iter(reverse_lookup)
+                    .filter_map(|reverse_lookup| async move {
+                        let idx = reverse_lookup.idx();
+                        let range = reverse_lookup.range();
+                        let fs_file_path = reverse_lookup.fs_file_path();
+                        let outline = reverse_lookup.is_outline();
+                        let found_reason_to_edit = filtered_list_ref
+                            .code_to_probe_list()
+                            .into_iter()
+                            .find(|snippet| snippet.id() == idx)
+                            .map(|snippet| snippet.reason_to_probe().to_owned());
+                        match found_reason_to_edit {
+                            Some(reason) => {
+                                // TODO(skcd): We need to get the sub-symbol over
+                                // here instead of the original symbol name which
+                                // would not work
+                                let symbol_in_range = self
+                                    .find_sub_symbol_in_range(range, fs_file_path, request_id_ref)
+                                    .await;
+                                if let Ok(symbol) = symbol_in_range {
+                                    Some(SubSymbolToProbe::new(
+                                        symbol,
+                                        range.clone(),
+                                        fs_file_path.to_owned(),
+                                        reason,
+                                        outline,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }
+                            None => None,
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .await;
+                Ok(sub_symbols_to_edit)
+            } else {
+                Err(SymbolError::ExpectedFileToExist)
+            }
+        } else {
+            Err(SymbolError::ExpectedFileToExist)
+        }
     }
 
     /// Initial request follows the following flow:

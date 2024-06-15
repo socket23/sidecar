@@ -17,7 +17,9 @@ use super::{
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
-    filtering::broker::{CodeToEditFilterRequest, CodeToEditSymbolRequest},
+    filtering::broker::{
+        CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToProbeSubSymbolRequest,
+    },
     grep::file::FindInFileRequest,
     lsp::{
         diagnostics::LSPDiagnosticsInput,
@@ -54,6 +56,7 @@ pub enum ToolInput {
     CodeEditingError(CodeEditingErrorRequest),
     ClassSymbolFollowup(ClassSymbolFollowupRequest),
     // probe request
+    ProbeFilterSnippetsSingleSymbol(CodeToProbeSubSymbolRequest),
     ProbeSubSymbol(CodeToEditFilterRequest),
     ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
     ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
@@ -105,6 +108,19 @@ impl ToolInput {
             ToolInput::CodeSymbolFollowInitialRequest(_) => {
                 ToolType::CodeSymbolsToFollowInitialRequest
             }
+            ToolInput::ProbeFilterSnippetsSingleSymbol(_) => ToolType::ProbeSubSymbolFiltering,
+        }
+    }
+
+    pub fn probe_filter_snippets_single_symbol(request: CodeToProbeSubSymbolRequest) -> Self {
+        ToolInput::ProbeFilterSnippetsSingleSymbol(request)
+    }
+
+    pub fn is_probe_filter_snippets_single_symbol(&self) -> bool {
+        if let ToolInput::ProbeFilterSnippetsSingleSymbol(_) = self {
+            true
+        } else {
+            false
         }
     }
 
@@ -149,6 +165,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::RepoMapSearch))
+        }
+    }
+
+    pub fn probe_sub_symbol_filtering(self) -> Result<CodeToProbeSubSymbolRequest, ToolError> {
+        if let ToolInput::ProbeFilterSnippetsSingleSymbol(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ProbeSubSymbolFiltering))
         }
     }
 

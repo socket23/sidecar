@@ -1,7 +1,34 @@
 //! We are going to send a probing request over here
 //! to ask for more questions
 
-use crate::agentic::symbol::identifier::SymbolIdentifier;
+use crate::{agentic::symbol::identifier::SymbolIdentifier, chunking::text_document::Range};
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SubSymbolToProbe {
+    symbol: String,
+    range: Range,
+    fs_file_path: String,
+    reason: String,
+    is_outline: bool,
+}
+
+impl SubSymbolToProbe {
+    pub fn new(
+        symbol: String,
+        range: Range,
+        fs_file_path: String,
+        reason: String,
+        is_outline: bool,
+    ) -> Self {
+        Self {
+            symbol,
+            range,
+            fs_file_path,
+            reason,
+            is_outline,
+        }
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToProbeHistory {

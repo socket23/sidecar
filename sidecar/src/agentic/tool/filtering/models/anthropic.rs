@@ -18,7 +18,8 @@ use crate::agentic::{
                 CodeToEditFilterFormatter, CodeToEditFilterRequest, CodeToEditFilterResponse,
                 CodeToEditList, CodeToEditSymbolRequest, CodeToEditSymbolResponse,
                 CodeToNotEditList, CodeToProbeFilterResponse, CodeToProbeList,
-                CodeToProbeSymbolResponse, SnippetWithReason,
+                CodeToProbeSubSymbolList, CodeToProbeSubSymbolRequest, CodeToProbeSymbolResponse,
+                SnippetWithReason,
             },
             errors::CodeToEditFilteringError,
         },
@@ -791,6 +792,10 @@ res.status(500).json({{ message: 'Server error' }});
 
 Your reply should be:
 
+<thinking>
+We want to get the relevant code for handling the checkout process since that has the error. The checkout and the payment along with how the order schema is handled seems relevant to the user query.
+</thinking>
+
 <code_to_probe_list>
 <code_to_probe>
 <id>
@@ -828,6 +833,43 @@ If there are no snippets which need to be probed then reply with an emply list o
 
     fn system_message_for_probing(&self) -> String {
         let example_message = self.example_message_for_probing();
+        let _ = format!(
+            r#"You are an expert software engineer who knows how to find the code snippets which are relevant or interesting to understand for the user query.
+- The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
+- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words.
+- The code snippet which you select will be passed to another software engineer who is going to use it and deeply understand it to help answer the user query.
+- The code snippet which you select might also have code symbols (variables, classes, function calls etc) inside it which we can click and follow to understand and gather more information, remember this when selecting the code snippets.
+- You have to order the code snippets in the order of important, and only include the sections which will be part of the additional understanding or contain the answer to the user query, pug these code symbols in the <code_to_probe_list>
+- If you want to deeply understand the section with id 0 then you must output in the following format:
+<code_to_probe>
+<id>
+0
+</id>
+<reason_to_probe>
+{{your reason for probing}}
+</reason_to_probe>
+</code_to_probe>
+
+- If you want to edit more code sections follow the similar pattern as described above and as an example again:
+<code_to_probe_list>
+<code_to_probe>
+<id>
+{{id of the code snippet you are interested in}}
+</id>
+<reason_to_probe>
+{{your reason for probing or understanding this section more deeply and the details on what you want to understand}}
+</reason_to_probe>
+</code_to_probe>
+{{... more code sections here which you might want to select}}
+</code_to_probe_list>
+
+- The <id> section should ONLY contain an id from the listed code snippets.
+
+{example_message}
+
+This example is for reference. You must strictly follow the format show in the example when replying.
+Please provide the list of symbols which you want to edit."#
+        );
         format!(
             r#"You are a powerful code filtering engine. You have to order the code snippets in the order in which you want to ask them more questions, you will only get to ask these code snippets deeper questions by following various code symbols to their definitions or references.
 - Probing a code snippet implies that you can follow the type of a symbol or function call or declaration if you think we should be following that symbol. 
@@ -1299,6 +1341,77 @@ Remember that your reply should be strictly in the following format:
                 continue;
             }
             let result = self.parse_reponse_for_probing(&response, request.get_snippets());
+            match result {
+                Ok(_) => return result,
+                Err(_) => {
+                    retries = retries + 1;
+                    continue;
+                }
+            };
+        }
+    }
+
+    async fn filter_code_snippets_probing_sub_symbols(
+        &self,
+        request: CodeToProbeSubSymbolRequest,
+    ) -> Result<CodeToProbeSubSymbolList, CodeToEditFilteringError> {
+        let query = request.query().to_owned();
+        let xml_string = request.xml_symbol();
+        let user_query = format!(
+            r#"<user_query>
+{query}
+</user_query>
+
+{xml_string}"#
+        );
+        let system_message = self.system_message_for_probing();
+        let messages = vec![
+            LLMClientMessage::system(system_message),
+            LLMClientMessage::user(user_query),
+        ];
+        let llm_request =
+            LLMClientCompletionRequest::new(request.llm().clone(), messages, 0.1, None);
+        let mut retries = 0;
+        loop {
+            if retries > 3 {
+                return Err(CodeToEditFilteringError::RetriesExhausted);
+            }
+            if retries != 0 {
+                jitter_sleep(5.0, retries as f64).await;
+            }
+            // alternate between the fail-over llm and the normal one
+            let mut provider = request.provider().clone();
+            let mut api_key = request.api_key().clone();
+            let mut llm_request_cloned = llm_request.clone();
+            if retries % 2 == 0 {
+                llm_request_cloned = llm_request_cloned.set_llm(request.llm().clone());
+            } else {
+                llm_request_cloned = llm_request_cloned.set_llm(self.fail_over_llm.llm().clone());
+                provider = self.fail_over_llm.provider().clone();
+                api_key = self.fail_over_llm.api_key().clone();
+            }
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_broker
+                .stream_completion(
+                    api_key.clone(),
+                    llm_request_cloned.clone(),
+                    provider.clone(),
+                    vec![(
+                        "event_type".to_owned(),
+                        "filter_code_snippet_sub_sybmol_probing".to_owned(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| CodeToEditFilteringError::LLMClientError(e))?;
+            if response.is_empty() {
+                retries = retries + 1;
+                continue;
+            }
+            let result = CodeToProbeSubSymbolList::from_string(&response);
             match result {
                 Ok(_) => return result,
                 Err(_) => {

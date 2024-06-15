@@ -224,6 +224,13 @@ impl ToolBroker {
                 llm_client.clone(),
             )),
         );
+        tools.insert(
+            ToolType::ProbeSubSymbolFiltering,
+            Box::new(CodeToEditFormatterBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

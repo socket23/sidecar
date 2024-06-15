@@ -590,6 +590,17 @@ impl Symbol {
         // for example: struct A { fn something(); fn something_else(); }
         // should break down into struct A {fn something(); }, struct A{ fn something_else(); }
         // instead of being struct A {fn something(); fn something_else(); }
+
+        // TODO(skcd): Pick it up from here so we use this instead of the call
+        // below
+        let _probe_sub_symbols = self
+            .mecha_code_symbol
+            .probe_sub_sybmols(
+                query,
+                self.llm_properties.clone(),
+                request_id_ref.to_owned(),
+            )
+            .await;
         let sub_symbol_request = self
             .tools
             .probe_sub_symbols(

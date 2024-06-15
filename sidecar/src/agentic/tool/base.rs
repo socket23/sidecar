@@ -43,6 +43,7 @@ pub enum ToolType {
     // COT chains
     CodeEditingCOT,
     // Probe operation
+    ProbeSubSymbolFiltering,
     ProbePossible,
     ProbeQuestion,
     ProbeSubSymbol,
@@ -100,6 +101,7 @@ impl std::fmt::Display for ToolType {
                 write!(f, "Code Symbols to follow initial request")
             }
             ToolType::ProbeFinalAnswerSummary => write!(f, "Probe final answer summary"),
+            ToolType::ProbeSubSymbolFiltering => write!(f, "Probe sub symbol filtering request"),
         }
     }
 }

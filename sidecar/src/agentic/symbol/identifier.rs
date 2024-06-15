@@ -12,6 +12,7 @@ use llm_client::{
 };
 
 use crate::{
+    agentic::tool::code_symbol::probe::ProbeEnoughOrDeeperResponse,
     chunking::{text_document::Range, types::OutlineNodeContent},
     user_context::types::UserContext,
 };
@@ -489,6 +490,33 @@ impl MechaCodeSymbolThinking {
             }
         }
         Ok(())
+    }
+
+    /// Handles if we have enough information to answer the user query or we need
+    /// to look deeper in the symbol
+    pub async fn probe_deeper_or_answer(
+        &self,
+        query: &str,
+        llm_properties: LLMProperties,
+        request_id: String,
+    ) -> Result<ProbeEnoughOrDeeperResponse, SymbolError> {
+        let request_id_ref = &request_id;
+        if self.is_snippet_present().await {
+            if let Some((ranked_xml_list, _reverse_lookup)) = self.to_llm_request(&request_id).await
+            {
+                return self
+                    .tool_box
+                    .probe_enough_or_deeper(
+                        query.to_owned(),
+                        ranked_xml_list,
+                        self.symbol_name().to_owned(),
+                        llm_properties.clone(),
+                        request_id_ref,
+                    )
+                    .await;
+            }
+        }
+        return Err(SymbolError::ExpectedFileToExist);
     }
 
     /// Handles selecting the first sub-symbols in the main symbol which we should

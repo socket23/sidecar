@@ -29,6 +29,9 @@ use crate::agentic::tool::code_symbol::initial_request_follow::{
 use crate::agentic::tool::code_symbol::models::anthropic::{
     CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
 };
+use crate::agentic::tool::code_symbol::probe::{
+    ProbeEnoughOrDeeperRequest, ProbeEnoughOrDeeperResponse,
+};
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
@@ -66,7 +69,7 @@ use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::find_needle_position;
-use super::identifier::MechaCodeSymbolThinking;
+use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
 use super::tool_properties::ToolProperties;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
 use super::ui_event::UIEventWithID;
@@ -95,6 +98,34 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// Checks if we have enough information to answer the user query
+    /// or do we need to probe deeper into some of the symbol
+    pub async fn probe_enough_or_deeper(
+        &self,
+        query: String,
+        xml_string: String,
+        symbol_name: String,
+        llm_properties: LLMProperties,
+        request_id: &str,
+    ) -> Result<ProbeEnoughOrDeeperResponse, SymbolError> {
+        let tool_input = ToolInput::ProbeEnoughOrDeeper(ProbeEnoughOrDeeperRequest::new(
+            symbol_name,
+            xml_string,
+            query,
+            llm_properties,
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_probe_enough_or_deeper()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// This takes the original symbol and the generated xml out of it

@@ -368,4 +368,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_probe_enough_or_deeper(self) -> Option<ProbeEnoughOrDeeperResponse> {
+        match self {
+            ToolOutput::ProbeEnoughOrDeeper(response) => Some(response),
+            _ => None,
+        }
+    }
 }

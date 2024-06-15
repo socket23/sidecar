@@ -313,12 +313,7 @@ impl CodeToProbeSubSymbolList {
         // <code_to_probe_list>
         // ... list in between
         // </code_to_probe_list>
-        let tags_to_check = vec![
-            "<thinking>",
-            "</thinking>",
-            "<code_to_probe_list>",
-            "</code_to_probe_list>",
-        ];
+        let tags_to_check = vec!["<code_to_probe_list>", "</code_to_probe_list>"];
         if tags_to_check.into_iter().any(|tag| !response.contains(tag)) {
             return Err(CodeToEditFilteringError::InvalidResponse);
         }
@@ -655,6 +650,7 @@ impl Tool for CodeToEditFormatterBroker {
 #[cfg(test)]
 mod tests {
     use super::CodeToEditSymbolResponse;
+    use super::CodeToProbeSubSymbolList;
 
     #[test]
     fn test_code_to_edit_list_filtering() {
@@ -678,5 +674,24 @@ This is the same code as the previous entry, so there's no need to edit it again
 </code_to_not_edit_list>"#).to_owned();
         let code_to_edit_formatter = CodeToEditSymbolResponse::parse_response(&response);
         assert!(code_to_edit_formatter.is_ok());
+    }
+
+    #[test]
+    fn test_code_to_probe_sub_symbol() {
+        let response = r#"<code_to_probe_list>
+        <code_to_probe>
+        <id>0</id>
+        <reason_to_probe>
+        This code defines the routes for the agent, including routes for search_agent, hybrid_search, explain, and followup_chat. These routes likely handle the communication between the agent and the LLM, so this code is relevant for understanding how the agent talks to the LLM.
+        </reason_to_probe>
+        </code_to_probe>
+        </code_to_probe_list>
+        
+        <symbols_not_to_probe>
+        There are no other code snippets provided, so there are no symbols that do not need to be probed.
+        </symbols_not_to_probe>"#.to_owned();
+        let code_to_probe_sub_symbol = CodeToProbeSubSymbolList::from_string(&response);
+        println!("{:?}", &code_to_probe_sub_symbol);
+        assert!(code_to_probe_sub_symbol.is_ok());
     }
 }

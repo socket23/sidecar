@@ -64,7 +64,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
-use super::events::probe::SymbolToProbeRequest;
+use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::find_needle_position;
 use super::identifier::MechaCodeSymbolThinking;
 use super::tool_properties::ToolProperties;
@@ -455,7 +455,7 @@ impl ToolBox {
                 r#"The user has asked the following query:
 {query}
 
-We also believe this symbol needs to be probed because of:
+We also believe this symbol needs to be looked at more closesly because:
 {reason}"#
             ),
         ));
@@ -708,6 +708,39 @@ We also believe this symbol needs to be probed because of:
         } else {
             // we did not find anything here so skip this part
             Err(SymbolError::OutlineNodeNotFound(symbol_name.to_owned()))
+        }
+    }
+
+    pub async fn find_sub_symbol_to_probe_with_name(
+        &self,
+        parent_symbol_name: &str,
+        sub_symbol_probe: &SubSymbolToProbe,
+    ) -> Result<OutlineNodeContent, SymbolError> {
+        let outline_node = self
+            .get_outline_nodes_grouped(sub_symbol_probe.fs_file_path())
+            .await
+            .ok_or(SymbolError::ExpectedFileToExist)?
+            .into_iter()
+            .find(|outline_node| outline_node.name() == parent_symbol_name)
+            .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)?;
+
+        if sub_symbol_probe.is_outline() {
+            // we can ignore this for now
+            Err(SymbolError::OutlineNodeEditingNotSupported)
+        } else {
+            let child_node = outline_node
+                .children()
+                .into_iter()
+                .find(|child_node| child_node.name() == sub_symbol_probe.symbol_name());
+            if let Some(child_node) = child_node {
+                Ok(child_node.clone())
+            } else {
+                if outline_node.name() == sub_symbol_probe.symbol_name() {
+                    Ok(outline_node.content().clone())
+                } else {
+                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
+                }
+            }
         }
     }
 

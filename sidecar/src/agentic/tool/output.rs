@@ -13,6 +13,7 @@ use super::{
     editor::apply::EditorApplyResponse,
     filtering::broker::{
         CodeToEditFilterResponse, CodeToEditSymbolResponse, CodeToProbeFilterResponse,
+        CodeToProbeSubSymbolList,
     },
     grep::file::FindInFileResponse,
     lsp::{
@@ -89,6 +90,7 @@ pub enum ToolOutput {
     CodeEditingForError(String),
     ClassSymbolFollowupResponse(ClassSymbolFollowupResponse),
     // Probe requests
+    ProbeSubSymbolFiltering(CodeToProbeSubSymbolList),
     ProbePossible(CodeSymbolShouldAskQuestionsResponse),
     ProbeQuestion(CodeSymbolToAskQuestionsResponse),
     ProbeSubSymbol(CodeToProbeFilterResponse),
@@ -354,6 +356,13 @@ impl ToolOutput {
     ) -> Option<CodeSymbolFollowInitialResponse> {
         match self {
             ToolOutput::CodeSymbolFollowForInitialRequest(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_code_to_probe_sub_symbol_list(self) -> Option<CodeToProbeSubSymbolList> {
+        match self {
+            ToolOutput::ProbeSubSymbolFiltering(response) => Some(response),
             _ => None,
         }
     }

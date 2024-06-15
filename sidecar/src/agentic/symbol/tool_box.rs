@@ -33,7 +33,8 @@ use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyRespons
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
     CodeToEditFilterRequest, CodeToEditFilterResponse, CodeToEditSymbolRequest,
-    CodeToEditSymbolResponse, CodeToProbeFilterResponse,
+    CodeToEditSymbolResponse, CodeToProbeFilterResponse, CodeToProbeSubSymbolList,
+    CodeToProbeSubSymbolRequest,
 };
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::diagnostics::{
@@ -94,6 +95,35 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// This takes the original symbol and the generated xml out of it
+    /// and gives back snippets which we should be probing into
+    ///
+    /// This is used to decide if the symbol is too long where all we want to
+    /// focus our efforts on
+    pub async fn filter_code_snippets_subsymbol_for_probing(
+        &self,
+        xml_string: String,
+        query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+        request_id: &str,
+    ) -> Result<CodeToProbeSubSymbolList, SymbolError> {
+        let tool_input = ToolInput::ProbeFilterSnippetsSingleSymbol(
+            CodeToProbeSubSymbolRequest::new(xml_string, query, llm, provider, api_key),
+        );
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_to_probe_sub_symbol_list()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// This generates additional requests from the initial query

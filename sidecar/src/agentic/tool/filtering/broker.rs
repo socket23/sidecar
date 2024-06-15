@@ -274,6 +274,77 @@ impl CodeToProbeSymbolResponse {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_probe")]
+pub struct CodeToProbeSubSymbolSnippet {
+    id: usize,
+    reason_to_probe: String,
+}
+
+impl CodeToProbeSubSymbolSnippet {
+    pub fn id(&self) -> usize {
+        self.id.clone()
+    }
+
+    pub fn reason_to_probe(&self) -> &str {
+        &self.reason_to_probe
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_probe_list")]
+pub struct CodeToProbeSubSymbolList {
+    #[serde(default, rename = "$value")]
+    code_to_probe_list: Vec<CodeToProbeSubSymbolSnippet>,
+}
+
+impl CodeToProbeSubSymbolList {
+    pub fn code_to_probe_list(&self) -> &[CodeToProbeSubSymbolSnippet] {
+        self.code_to_probe_list.as_slice()
+    }
+
+    pub fn from_string(
+        response: &str,
+    ) -> Result<CodeToProbeSubSymbolList, CodeToEditFilteringError> {
+        // Generally the response over here should be in the form of
+        // <thinking>
+        // ....
+        // </thinking>
+        // <code_to_probe_list>
+        // ... list in between
+        // </code_to_probe_list>
+        let tags_to_check = vec![
+            "<thinking>",
+            "</thinking>",
+            "<code_to_probe_list>",
+            "</code_to_probe_list>",
+        ];
+        if tags_to_check.into_iter().any(|tag| !response.contains(tag)) {
+            return Err(CodeToEditFilteringError::InvalidResponse);
+        }
+        // otherwise grab the lines which are between <code_to_probe_list> sections
+        let code_symbols_response = response
+            .lines()
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .skip_while(|line| !line.contains("<code_to_probe_list>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</code_to_probe_list>"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let formatted_response = format!(
+            r#"<code_to_probe_list>
+{code_symbols_response}
+</code_to_probe_list>"#
+        );
+        // parse it out over here
+        from_str::<CodeToProbeSubSymbolList>(&formatted_response)
+            .map_err(|e| CodeToEditFilteringError::SerdeError(e))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CodeToProbeFilterResponse {
     snippets_to_probe_ordered: Vec<SnippetWithReason>,
@@ -311,6 +382,53 @@ impl CodeToEditFilterResponse {
             _snippets_to_edit_ordered: snippets_to_edit,
             _snippets_to_not_edit: snippets_to_not_edit,
         }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CodeToProbeSubSymbolRequest {
+    xml_symbol: String,
+    query: String,
+    llm: LLMType,
+    provider: LLMProvider,
+    api_key: LLMProviderAPIKeys,
+}
+
+impl CodeToProbeSubSymbolRequest {
+    pub fn new(
+        xml_symbol: String,
+        query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_key: LLMProviderAPIKeys,
+    ) -> Self {
+        Self {
+            xml_symbol,
+            query,
+            llm,
+            provider,
+            api_key,
+        }
+    }
+
+    pub fn xml_symbol(&self) -> &str {
+        &self.xml_symbol
+    }
+
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    pub fn llm(&self) -> &LLMType {
+        &self.llm
+    }
+
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    pub fn api_key(&self) -> &LLMProviderAPIKeys {
+        &self.api_key
     }
 }
 
@@ -470,12 +588,29 @@ pub trait CodeToEditFilterFormatter {
         &self,
         request: CodeToEditFilterRequest,
     ) -> Result<CodeToProbeFilterResponse, CodeToEditFilteringError>;
+
+    // this request helps us select the sub-symobls which are important
+    // and probe them
+    async fn filter_code_snippets_probing_sub_symbols(
+        &self,
+        request: CodeToProbeSubSymbolRequest,
+    ) -> Result<CodeToProbeSubSymbolList, CodeToEditFilteringError>;
 }
 
 #[async_trait]
 impl Tool for CodeToEditFormatterBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
-        if input.is_probe_subsymbol() {
+        if input.is_probe_filter_snippets_single_symbol() {
+            let context = input.probe_sub_symbol_filtering()?;
+            if let Some(llm) = self.llms.get(context.llm()) {
+                llm.filter_code_snippets_probing_sub_symbols(context)
+                    .await
+                    .map_err(|e| ToolError::CodeToEditFiltering(e))
+                    .map(|response| ToolOutput::ProbeSubSymbolFiltering(response))
+            } else {
+                Err(ToolError::WrongToolInput(ToolType::ProbeSubSymbolFiltering))
+            }
+        } else if input.is_probe_subsymbol() {
             let context = input.probe_subsymbol()?;
             if let Some(llm) = self.llms.get(context.llm()) {
                 return llm

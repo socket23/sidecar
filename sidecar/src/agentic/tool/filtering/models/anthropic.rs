@@ -836,7 +836,7 @@ If there are no snippets which need to be probed then reply with an emply list o
         let _ = format!(
             r#"You are an expert software engineer who knows how to find the code snippets which are relevant or interesting to understand for the user query.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
-- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words.
+- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words in a xml section called <thinking>. Do this first and then continue with helping with the user query.
 - The code snippet which you select will be passed to another software engineer who is going to use it and deeply understand it to help answer the user query.
 - The code snippet which you select might also have code symbols (variables, classes, function calls etc) inside it which we can click and follow to understand and gather more information, remember this when selecting the code snippets.
 - You have to order the code snippets in the order of important, and only include the sections which will be part of the additional understanding or contain the answer to the user query, pug these code symbols in the <code_to_probe_list>

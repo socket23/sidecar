@@ -584,6 +584,12 @@ impl Symbol {
         let snippets = self.mecha_code_symbol.get_implementations().await;
         info!(event_name = "refresh_state", symbol_name = symbol_name,);
         // - sub-symbol selection for probing
+        // TODO(skcd): We are sending full blocks of implementations over here
+        // instead we should be splitting the outline node into parts and then
+        // asking which section we want to probe and show that to the LLM
+        // for example: struct A { fn something(); fn something_else(); }
+        // should break down into struct A {fn something(); }, struct A{ fn something_else(); }
+        // instead of being struct A {fn something(); fn something_else(); }
         let sub_symbol_request = self
             .tools
             .probe_sub_symbols(
@@ -631,6 +637,10 @@ impl Symbol {
             .map(|(_, snippet, reason_to_follow)| async move {
                 let response = self
                     .tools
+                    // TODO(skcd): This seems okay for now, given at the context
+                    // of sending the whole symbol before, instead of individual
+                    // chunks, so if we send individual snippets here instead
+                    // we could get rid of this LLM call over here
                     .probe_deeper_in_symbol(
                         &snippet,
                         &reason_to_follow,
@@ -788,6 +798,10 @@ impl Symbol {
                         );
                         let probe_result = self
                             .tools
+                            // TODO(skcd): This call is the one which is most frequent
+                            // and gives me the feeling that the model is just confused
+                            // at this point, because this is leading to self-loops
+                            // amongst other things ("probe_next_symbol") request type
                             .next_symbol_should_probe_request(request, request_id_ref)
                             .await;
                         // Now we get the response from here and we can decide what to do with it

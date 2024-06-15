@@ -28,6 +28,22 @@ impl SubSymbolToProbe {
             is_outline,
         }
     }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol
+    }
+
+    pub fn is_outline(&self) -> bool {
+        self.is_outline
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

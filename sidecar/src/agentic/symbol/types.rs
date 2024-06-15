@@ -581,7 +581,7 @@ impl Symbol {
         let symbol_name = self.mecha_code_symbol.symbol_name();
         let tool_properties_ref = &self.tool_properties;
 
-        let snippets = self.mecha_code_symbol.get_implementations().await;
+        let _snippets = self.mecha_code_symbol.get_implementations().await;
         info!(event_name = "refresh_state", symbol_name = symbol_name,);
         // - sub-symbol selection for probing
         // TODO(skcd): We are sending full blocks of implementations over here
@@ -593,23 +593,12 @@ impl Symbol {
 
         // TODO(skcd): Pick it up from here so we use this instead of the call
         // below
-        let _probe_sub_symbols = self
+        let probe_sub_symbols = self
             .mecha_code_symbol
             .probe_sub_sybmols(
                 query,
                 self.llm_properties.clone(),
                 request_id_ref.to_owned(),
-            )
-            .await;
-        let sub_symbol_request = self
-            .tools
-            .probe_sub_symbols(
-                snippets,
-                &request,
-                self.llm_properties.llm().clone(),
-                self.llm_properties.provider().clone(),
-                self.llm_properties.api_key().clone(),
-                request_id_ref,
             )
             .await?;
         let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
@@ -619,51 +608,46 @@ impl Symbol {
                 SymbolEventSubStep::Probe(SymbolEventProbeRequest::SubSymbolSelection),
             ),
         ));
-        println!("Sub symbol request: {:?}", &sub_symbol_request);
-
-        let filtering_response =
-            stream::iter(
-                sub_symbol_request
-                    .snippets_to_probe_ordered()
-                    .into_iter()
-                    .map(|snippet_with_reason| {
-                        let reason = snippet_with_reason.reason().to_owned();
-                        let snippet = snippet_with_reason.remove_snippet();
-                        (reason, snippet, self.llm_properties.clone())
-                    }),
-            )
-            .map(|(reason, snippet, _llm_properties)| async move {
-                (reason.to_owned(), snippet, reason)
-            })
-            .buffer_unordered(BUFFER_LIMIT)
-            .collect::<Vec<_>>()
-            .await;
-
-        println!("Sub symbol fetching: {:?}", &filtering_response);
+        println!("Sub symbol request: {:?}", &probe_sub_symbols);
 
         info!("sub symbol fetching done");
 
-        let filtered_snippets = filtering_response;
-        let snippet_to_symbols_to_follow = stream::iter(filtered_snippets)
-            .map(|(_, snippet, reason_to_follow)| async move {
-                let response = self
+        let snippet_to_symbols_to_follow = stream::iter(probe_sub_symbols)
+            .map(|probe_sub_symbol| async move {
+                let symbol_name = probe_sub_symbol.symbol_name();
+                let outline_node = self
                     .tools
-                    // TODO(skcd): This seems okay for now, given at the context
-                    // of sending the whole symbol before, instead of individual
-                    // chunks, so if we send individual snippets here instead
-                    // we could get rid of this LLM call over here
-                    .probe_deeper_in_symbol(
-                        &snippet,
-                        &reason_to_follow,
-                        history_ref,
-                        query,
-                        self.llm_properties.llm().clone(),
-                        self.llm_properties.provider().clone(),
-                        self.llm_properties.api_key().clone(),
-                        request_id_ref,
-                    )
+                    .find_sub_symbol_to_probe_with_name(symbol_name, &probe_sub_symbol)
                     .await;
-                (snippet, response)
+                if let Ok(outline_node) = outline_node {
+                    let snippet = Snippet::new(
+                        probe_sub_symbol.symbol_name().to_owned(),
+                        outline_node.range().clone(),
+                        probe_sub_symbol.fs_file_path().to_owned(),
+                        outline_node.content().to_owned(),
+                        outline_node.clone(),
+                    );
+                    let response = self
+                        .tools
+                        // TODO(skcd): This seems okay for now, given at the context
+                        // of sending the whole symbol before, instead of individual
+                        // chunks, so if we send individual snippets here instead
+                        // we could get rid of this LLM call over here
+                        .probe_deeper_in_symbol(
+                            &snippet,
+                            probe_sub_symbol.reason(),
+                            history_ref,
+                            query,
+                            self.llm_properties.llm().clone(),
+                            self.llm_properties.provider().clone(),
+                            self.llm_properties.api_key().clone(),
+                            request_id_ref,
+                        )
+                        .await;
+                    Some((snippet, response))
+                } else {
+                    None
+                }
             })
             .buffer_unordered(BUFFER_LIMIT)
             .collect::<Vec<_>>()
@@ -684,60 +668,61 @@ impl Symbol {
         let symbol_identifier_ref = &self.symbol_identifier;
 
         // Now for each snippet we want to grab the definition of the symbol it belongs
-        let snippet_to_follow_with_definitions =
-            stream::iter(snippet_to_symbols_to_follow.into_iter().filter_map(
-                |(snippet, response)| match response {
-                    Ok(response) => Some((snippet, response)),
-                    Err(_) => None,
-                },
-            ))
-            .map(|(snippet, response)| async move {
-                let referred_snippet = &snippet;
-                // we want to parse the reponse here properly and get back the
-                // snippets which are the most important by going to their definitions
-                let symbols_to_follow_list = response.symbol_list();
-                let definitions_to_follow = stream::iter(symbols_to_follow_list)
-                    .map(|symbol_to_follow| async move {
-                        println!(
-                            "Go to definition using symbol: {:?} {} {} {}",
+        let snippet_to_follow_with_definitions = stream::iter(
+            snippet_to_symbols_to_follow
+                .into_iter()
+                .filter_map(|something| match something {
+                    Some((snippet, Ok(response))) => Some((snippet, response)),
+                    _ => None,
+                }),
+        )
+        .map(|(snippet, response)| async move {
+            let referred_snippet = &snippet;
+            // we want to parse the reponse here properly and get back the
+            // snippets which are the most important by going to their definitions
+            let symbols_to_follow_list = response.symbol_list();
+            let definitions_to_follow = stream::iter(symbols_to_follow_list)
+                .map(|symbol_to_follow| async move {
+                    println!(
+                        "Go to definition using symbol: {:?} {} {} {}",
+                        referred_snippet.range(),
+                        symbol_to_follow.file_path(),
+                        symbol_to_follow.line_content(),
+                        symbol_to_follow.name()
+                    );
+                    let definitions_for_snippet = self
+                        .tools
+                        .go_to_definition_using_symbol(
                             referred_snippet.range(),
                             symbol_to_follow.file_path(),
                             symbol_to_follow.line_content(),
-                            symbol_to_follow.name()
-                        );
-                        let definitions_for_snippet = self
-                            .tools
-                            .go_to_definition_using_symbol(
-                                referred_snippet.range(),
-                                symbol_to_follow.file_path(),
-                                symbol_to_follow.line_content(),
-                                symbol_to_follow.name(),
-                                request_id_ref,
-                            )
-                            .await;
-                        if let Ok(ref definitions_for_snippet) = &definitions_for_snippet {
-                            let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
-                                request_id_ref.to_owned(),
-                                SymbolEventSubStepRequest::go_to_definition_request(
-                                    symbol_identifier_ref.clone(),
-                                    symbol_to_follow.file_path().to_owned(),
-                                    definitions_for_snippet.1.clone(),
-                                ),
-                            ));
-                        }
-                        (symbol_to_follow, definitions_for_snippet)
-                    })
-                    .buffer_unordered(BUFFER_LIMIT)
-                    .collect::<Vec<_>>()
-                    .await;
-                // Now that we have this, we can ask the LLM to generate the next set of probe-queries
-                // if required unless it already has the answer
-                (snippet, definitions_to_follow)
-            })
-            // we go through the snippets one by one
-            .buffered(1)
-            .collect::<Vec<_>>()
-            .await;
+                            symbol_to_follow.name(),
+                            request_id_ref,
+                        )
+                        .await;
+                    if let Ok(ref definitions_for_snippet) = &definitions_for_snippet {
+                        let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
+                            request_id_ref.to_owned(),
+                            SymbolEventSubStepRequest::go_to_definition_request(
+                                symbol_identifier_ref.clone(),
+                                symbol_to_follow.file_path().to_owned(),
+                                definitions_for_snippet.1.clone(),
+                            ),
+                        ));
+                    }
+                    (symbol_to_follow, definitions_for_snippet)
+                })
+                .buffer_unordered(BUFFER_LIMIT)
+                .collect::<Vec<_>>()
+                .await;
+            // Now that we have this, we can ask the LLM to generate the next set of probe-queries
+            // if required unless it already has the answer
+            (snippet, definitions_to_follow)
+        })
+        // we go through the snippets one by one
+        .buffered(1)
+        .collect::<Vec<_>>()
+        .await;
 
         println!(
             "Snippet to follow with definitions: {:?}",

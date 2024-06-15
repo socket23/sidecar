@@ -1,0 +1,286 @@
+//! Contains information if the current symbol has all the information or we
+//! need to go deeper into one of the sub-symbols
+
+use async_trait::async_trait;
+use serde_xml_rs::from_str;
+use std::sync::Arc;
+
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+};
+
+use crate::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::{
+        base::Tool, code_symbol::types::CodeSymbolError, errors::ToolError, input::ToolInput,
+        jitter::jitter_sleep, output::ToolOutput,
+    },
+};
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProbeEnoughOrDeeperRequest {
+    symbol_name: String,
+    xml_string: String,
+    query: String,
+    llm_properties: LLMProperties,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_snippet")]
+pub struct ProbeDeeperSnippet {
+    id: usize,
+    reason_to_probe: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProbeDeeperSnippetList {
+    #[serde(rename = "$value")]
+    snippets: Vec<ProbeDeeperSnippet>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "reply")]
+pub enum ProbeEnoughOrDeeperResponse {
+    #[serde(rename = "answer_user_query")]
+    AnswerUserQuery(String),
+    #[serde(rename = "probe_deeper")]
+    ProbeDeeper(ProbeDeeperSnippetList),
+}
+
+impl ProbeEnoughOrDeeperResponse {
+    fn from_string(response: &str) -> Result<ProbeEnoughOrDeeperResponse, ToolError> {
+        let tags_to_search = vec!["<reply>", "</reply>"];
+        if tags_to_search
+            .into_iter()
+            .any(|tag| !response.contains(&tag))
+        {
+            Err(ToolError::MissingXMLTags)
+        } else {
+            // we have to parse the sections behind the <reply> tags
+            let tool_use = response
+                .lines()
+                .into_iter()
+                .skip_while(|line| !line.contains("<reply>"))
+                .skip(1)
+                .take_while(|line| !line.contains("</reply>"))
+                .collect::<Vec<&str>>()
+                .join("\n");
+            from_str::<ProbeEnoughOrDeeperResponse>(&tool_use).map_err(|e| {
+                println!("{:?}", &e);
+                ToolError::SerdeConversionFailed
+            })
+        }
+    }
+}
+
+impl ProbeEnoughOrDeeperRequest {
+    pub fn new(
+        symbol_name: String,
+        xml_string: String,
+        query: String,
+        llm_properties: LLMProperties,
+    ) -> Self {
+        Self {
+            symbol_name,
+            xml_string,
+            query,
+            llm_properties,
+        }
+    }
+}
+
+pub struct ProbeEnoughOrDeeper {
+    llm_client: Arc<LLMBroker>,
+    fallback_llm: LLMProperties,
+}
+
+impl ProbeEnoughOrDeeper {
+    pub fn new(llm_client: Arc<LLMBroker>, fallback_llm: LLMProperties) -> Self {
+        Self {
+            llm_client,
+            fallback_llm,
+        }
+    }
+
+    fn example_message(&self) -> String {
+        format!(r#""#)
+    }
+
+    fn system_message(&self, symbol_name: &str) -> String {
+        let example_message = self.example_message();
+        format!(
+            r#"You are an expert software engineer. Another software engineer has reached to the current symbol following code in the editor. You have to decide if we have enough information to answer the user query or we need to spend more time looking at particular sections of the code.
+- We have reached {symbol_name} and you will be shown all the code snippets which belong to {symbol_name}.
+- The code snippets which belong to the {symbol_name} will be provided to you in <code_snippet> question.
+- Each <code_snippet> has an <id> which contains the id of the snippet and the <content> section which has the content for the snippet.
+- You have to choose one of the following 2 tools:
+<answer_user_query>
+<tool_data>
+- This allows you to answer the user query without going any deeper into the codebase
+- Using <answer_user_query> implies you have all the information required to answer the user query and can reply with the answer.
+- To use <answer_user_query> you have to output it in the following fashion:
+<reply>
+<answer_user_query>
+{{your answer over here}}
+</answer_user_query>
+</tool_data>
+The other tool which you have is:
+<probe_deeper>
+<too_data>
+- You choose this when you believe we need to more deeply understand a section of the code.
+- The code snippet which you select will be passed to another software engineer who is going to use it and deeply understand it to help answer the user query.
+- The code snippet which you select might also have code symbols (variables, classes, function calls etc) inside it which we can click and follow to understand and gather more information, remember this when selecting the code snippets.
+- You have to order the code snippets in the order of important, and only include the sections which will be part of the additional understanding or contain the answer to the user query, pug these code symbols in the <code_to_probe_list>
+- To use <probe_deeper> tool you need to reply in the following fashion:
+<code_to_probe>
+<id>
+0
+</id>
+<reason_to_probe>
+{{your reason for probing}}
+</reason_to_probe>
+</code_to_probe>
+- If you want to edit more code sections follow the similar pattern as described above and as an example again:
+<code_to_probe_list>
+<code_to_probe>
+<id>
+{{id of the code snippet you are interested in}}
+</id>
+<reason_to_probe>
+{{your reason for probing or understanding this section more deeply and the details on what you want to understand}}
+</reason_to_probe>
+</code_to_probe>
+{{... more code sections here which you might want to select}}
+</code_to_probe_list>
+- The <id> section should ONLY contain an id from the listed code snippets.
+</tool_data>
+
+We are showing you an example of how to answer given a certain condition:
+
+{example_message}
+
+This example is for reference. You must strictly follow the format shown for the tool usage and reply your too use contained in the <tool_use> section."#
+        )
+    }
+
+    fn user_message(&self, input: ProbeEnoughOrDeeperRequest) -> String {
+        let user_query = &input.query;
+        let xml_symbol = &input.xml_string;
+        let symbol_name = &input.symbol_name;
+        format!(
+            r#"<user_query>
+{user_query}
+</user_query>
+
+<symbol_name>
+{symbol_name}
+</symbol_name>
+<code_snippet>
+{xml_symbol}
+</code_snippet>"#
+        )
+    }
+}
+
+#[async_trait]
+impl Tool for ProbeEnoughOrDeeper {
+    async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
+        let context = input.get_probe_enough_or_deeper()?;
+        let symbol_name = context.symbol_name.to_owned();
+        let llm_properties = context.llm_properties.clone();
+        let llm_request = LLMClientCompletionRequest::new(
+            context.llm_properties.llm().clone(),
+            vec![
+                LLMClientMessage::system(self.system_message(&symbol_name)),
+                LLMClientMessage::user(self.user_message(context)),
+            ],
+            0.2,
+            None,
+        );
+        let mut retries = 0;
+        loop {
+            if retries > 3 {
+                return Err(ToolError::CodeSymbolError(
+                    CodeSymbolError::ExhaustedRetries,
+                ));
+            }
+            let mut provider = llm_properties.provider().clone();
+            let mut api_key = llm_properties.api_key().clone();
+            let mut llm_request_cloned = llm_request.clone();
+            if retries % 2 == 0 {
+                llm_request_cloned = llm_request_cloned.set_llm(llm_properties.llm().clone());
+            } else {
+                llm_request_cloned = llm_request_cloned.set_llm(self.fallback_llm.llm().clone());
+                provider = self.fallback_llm.provider().clone();
+                api_key = self.fallback_llm.api_key().clone();
+            }
+            if retries != 0 {
+                jitter_sleep(10.0, retries as f64).await;
+            }
+            retries = retries + 1;
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    api_key.clone(),
+                    llm_request_cloned.clone(),
+                    provider.clone(),
+                    vec![("event_type".to_owned(), "probe_enough_or_deeper".to_owned())]
+                        .into_iter()
+                        .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| ToolError::CodeSymbolError(CodeSymbolError::LLMClientError(e)))?;
+            let parsed_response = ProbeEnoughOrDeeperResponse::from_string(&response);
+            match parsed_response {
+                Ok(response) => return Ok(ToolOutput::ProbeEnoughOrDeeper(response)),
+                Err(_) => continue,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProbeEnoughOrDeeperResponse;
+
+    #[test]
+    fn test_parsing_answer_query() {
+        let response = r#"something something else blah blah
+<reply>
+<answer_user_query>
+Answer me something
+</answer_user_query>
+</reply>"#
+            .to_owned();
+        let output = ProbeEnoughOrDeeperResponse::from_string(&response);
+        assert!(output.is_ok());
+    }
+
+    #[test]
+    fn test_parsing_code_snippets_to_follow() {
+        let response = r#"something something else
+<reply>
+<probe_deeper>
+<code_snippet>
+<id>
+0
+</id>
+<reason_to_probe>
+something else over here
+</reason_to_probe>
+</code_snippet>
+<code_snippet>
+<id>
+1
+</id>
+<reason_to_probe>something else over here</reason_to_probe>
+</code_snippet>
+</probe_deeper>
+</reply>"#;
+        let output = ProbeEnoughOrDeeperResponse::from_string(&response);
+        assert!(output.is_ok());
+    }
+}

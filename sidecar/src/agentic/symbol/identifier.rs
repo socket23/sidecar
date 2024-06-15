@@ -472,6 +472,25 @@ impl MechaCodeSymbolThinking {
         *implementations = snippets;
     }
 
+    /// Figures out if we have enough information to answer the user query or we
+    /// need to look deeper into the symbol to answer it
+    pub async fn enough_information_to_answer_query(
+        &self,
+        _query: &str,
+        _llm_properties: LLMProperties,
+        request_id: &str,
+    ) -> Result<(), SymbolError> {
+        if self.is_snippet_present().await {
+            if let Some((_ranked_xml_list, _reverse_lookup)) =
+                self.to_llm_request(&request_id).await
+            {
+                // ask the LLM if we have enough information to answer the user query
+                // or we need to look and understand deeper into one of the sub-symbols
+            }
+        }
+        Ok(())
+    }
+
     /// Handles selecting the first sub-symbols in the main symbol which we should
     /// follow or look more deeply into to answer the user query
     pub async fn probe_sub_sybmols(

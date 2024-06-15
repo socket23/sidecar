@@ -9,6 +9,7 @@ use super::{
         models::anthropic::{
             CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
+        probe::ProbeEnoughOrDeeperResponse,
     },
     editor::apply::EditorApplyResponse,
     filtering::broker::{
@@ -90,6 +91,7 @@ pub enum ToolOutput {
     CodeEditingForError(String),
     ClassSymbolFollowupResponse(ClassSymbolFollowupResponse),
     // Probe requests
+    ProbeEnoughOrDeeper(ProbeEnoughOrDeeperResponse),
     ProbeSubSymbolFiltering(CodeToProbeSubSymbolList),
     ProbePossible(CodeSymbolShouldAskQuestionsResponse),
     ProbeQuestion(CodeSymbolToAskQuestionsResponse),

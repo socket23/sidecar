@@ -3922,7 +3922,7 @@ keep track of that
 </member>
 </members_to_follow>
 
-As you can observer, we do not just include the symbol but also the line containing the symbol and the partial line (see how for symbol the type is spread across lines but we are including just the first line), we also include the name of the symbol since that's really important for identifying it and the thinking process behind why the symbol should be followed."#.to_owned()
+As you can observe, we do not just include the symbol but also the line containing the symbol and the partial line (see how for symbol the type is spread across lines but we are including just the first line), we also include the name of the symbol since that's really important for identifying it and the thinking process behind why the symbol should be followed."#.to_owned()
     }
 
     fn user_message_for_class_symbol(&self, request: ClassSymbolFollowupRequest) -> String {

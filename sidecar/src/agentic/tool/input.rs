@@ -13,6 +13,7 @@ use super::{
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
         initial_request_follow::CodeSymbolFollowInitialRequest,
+        probe::ProbeEnoughOrDeeperRequest,
         repo_map_search::RepoMapSearchQuery,
     },
     editor::apply::EditorApplyRequest,
@@ -56,6 +57,7 @@ pub enum ToolInput {
     CodeEditingError(CodeEditingErrorRequest),
     ClassSymbolFollowup(ClassSymbolFollowupRequest),
     // probe request
+    ProbeEnoughOrDeeper(ProbeEnoughOrDeeperRequest),
     ProbeFilterSnippetsSingleSymbol(CodeToProbeSubSymbolRequest),
     ProbeSubSymbol(CodeToEditFilterRequest),
     ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
@@ -109,6 +111,19 @@ impl ToolInput {
                 ToolType::CodeSymbolsToFollowInitialRequest
             }
             ToolInput::ProbeFilterSnippetsSingleSymbol(_) => ToolType::ProbeSubSymbolFiltering,
+            ToolInput::ProbeEnoughOrDeeper(_) => ToolType::ProbeEnoughOrDeeper,
+        }
+    }
+
+    pub fn probe_enough_or_deeper(request: ProbeEnoughOrDeeperRequest) -> Self {
+        ToolInput::ProbeEnoughOrDeeper(request)
+    }
+
+    pub fn get_probe_enough_or_deeper(self) -> Result<ProbeEnoughOrDeeperRequest, ToolError> {
+        if let ToolInput::ProbeEnoughOrDeeper(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ProbeEnoughOrDeeper))
         }
     }
 

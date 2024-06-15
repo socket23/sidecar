@@ -523,15 +523,14 @@ impl Symbol {
         }
     }
 
-    // We are asked on the complete symbol a question
-    // - we have to first find the sub-symbol we are interested in
-    // - then ask it the probing question
-    // - once we have the probing question, we send over the request and wait for the response
-    // - and finally we stop doing this.
-    // TODO(skcd): We need to cache the results for each request here to the symbol
-    // and if there is an error, then we remove it from the cache and what if something
-    // is poll waiting on it, can we pass the progress made up-until now to the calling
-    // request, this way we can store the progress
+    /// Probing works in the following way:
+    /// - filter to the sub-symbols inside the symbol
+    /// - allow the LLM to do go-to-definitions within the sub-symbol
+    /// - For each sub-symbol figure out the next step to do here:
+    /// - - wrong path
+    /// - - answer question
+    /// - - follow the symbol to the sub-symbol [this generates a edge in the action
+    /// - - graph]
     async fn probe_request(
         &self,
         request: SymbolToProbeRequest,
@@ -591,8 +590,9 @@ impl Symbol {
         // should break down into struct A {fn something(); }, struct A{ fn something_else(); }
         // instead of being struct A {fn something(); fn something_else(); }
 
-        // TODO(skcd): Pick it up from here so we use this instead of the call
-        // below
+        // TODO(skcd): We run both the queries in parallel:
+        // - ask if the symbol can answer the question
+        // - or we chose the sub-symbol which we want to focus on
         let probe_sub_symbols = self
             .mecha_code_symbol
             .probe_sub_sybmols(
@@ -633,6 +633,7 @@ impl Symbol {
                         // of sending the whole symbol before, instead of individual
                         // chunks, so if we send individual snippets here instead
                         // we could get rid of this LLM call over here
+                        // [LLM:symbols_to_probe_questions]
                         .probe_deeper_in_symbol(
                             &snippet,
                             probe_sub_symbol.reason(),
@@ -667,7 +668,9 @@ impl Symbol {
 
         let symbol_identifier_ref = &self.symbol_identifier;
 
-        // Now for each snippet we want to grab the definition of the symbol it belongs
+        // Now for each snippet we want to grab the definition of the symbol it belongs to
+        // but why is this necessary since we are still in the symbol itself, so do
+        // we really need a LLM call over here?
         let snippet_to_follow_with_definitions = stream::iter(
             snippet_to_symbols_to_follow
                 .into_iter()
@@ -690,6 +693,9 @@ impl Symbol {
                         symbol_to_follow.line_content(),
                         symbol_to_follow.name()
                     );
+                    // the definitions over here might be just the symbols themselves
+                    // we have to make sure that there is no self-reference and the
+                    // LLM helps push the world model forward
                     let definitions_for_snippet = self
                         .tools
                         .go_to_definition_using_symbol(

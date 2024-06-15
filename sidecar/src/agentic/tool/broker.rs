@@ -17,7 +17,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
         followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
-        initial_request_follow::CodeSymbolFollowInitialRequestBroker,
+        initial_request_follow::CodeSymbolFollowInitialRequestBroker, probe::ProbeEnoughOrDeeper,
         repo_map_search::RepoMapSearchBroker,
     },
     editor::apply::EditorApply,
@@ -227,6 +227,13 @@ impl ToolBroker {
         tools.insert(
             ToolType::ProbeSubSymbolFiltering,
             Box::new(CodeToEditFormatterBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::ProbeEnoughOrDeeper,
+            Box::new(ProbeEnoughOrDeeper::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

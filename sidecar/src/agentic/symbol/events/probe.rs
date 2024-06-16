@@ -106,6 +106,10 @@ impl SymbolToProbeRequest {
         }
     }
 
+    pub fn symbol_identifier(&self) -> &SymbolIdentifier {
+        &self.symbol_identifier
+    }
+
     pub fn original_request_id(&self) -> &str {
         &self.original_request_id
     }

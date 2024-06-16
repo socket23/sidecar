@@ -63,7 +63,6 @@ fn search_haystack<T: PartialEq>(needle: &[T], haystack: &[T]) -> Option<usize> 
     haystack
         .windows(needle.len())
         .rposition(|subslice| subslice == needle)
-        .map(|pos| pos - 1)
 }
 
 /// Find the symbol in the line now
@@ -72,8 +71,12 @@ fn search_haystack<T: PartialEq>(needle: &[T], haystack: &[T]) -> Option<usize> 
 /// This returns the last character position where the needle is contained in
 /// the haystack
 pub fn find_needle_position(haystack: &str, needle: &str) -> Option<usize> {
-    search_haystack(
+    println!("find_needle_position::haystack::({:?})", haystack);
+    println!("find_needle_position::needle::({:?})", needle);
+    let result = search_haystack(
         needle.chars().into_iter().collect::<Vec<_>>().as_slice(),
         haystack.chars().into_iter().collect::<Vec<_>>().as_slice(),
-    )
+    );
+    println!("find_needle_position::find_needle_position::({:?})", result);
+    result
 }

@@ -136,7 +136,7 @@ pub struct Reply {
 // </symbol_list>
 // </reply>
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "symbol")]
 pub struct AskQuestionSymbolHint {
     name: String,

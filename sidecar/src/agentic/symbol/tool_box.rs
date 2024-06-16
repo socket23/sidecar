@@ -350,10 +350,11 @@ impl ToolBox {
 
         // Now we can invoke a go-to-definition on the symbol over here and get back
         // the containing symbol which has this symbol we are interested in visiting
-        let go_to_definition = self
-            .go_to_definition(fs_file_path, symbol_location, request_id)
-            .await?
-            .definitions();
+        let go_to_definition = dbg!(
+            self.go_to_definition(fs_file_path, symbol_location, request_id)
+                .await
+        )?
+        .definitions();
 
         // interested files
         let files_interested = go_to_definition

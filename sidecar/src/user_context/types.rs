@@ -43,6 +43,10 @@ impl VariableInformation {
         self.variable_type == VariableType::Selection
     }
 
+    pub fn is_code_symbol(&self) -> bool {
+        self.variable_type == VariableType::CodeSymbol
+    }
+
     pub fn to_xml(self) -> String {
         let variable_name = self.name;
         let location = format!(

@@ -118,6 +118,14 @@ impl SymbolManager {
         println!("symbol_manager::probe_request_from_user_context::start");
         let request_id = uuid::Uuid::new_v4().to_string();
         let request_id_ref = &request_id;
+        let variables = self
+            .tool_box
+            .grab_symbols_from_user_context(
+                query.to_owned(),
+                user_context.clone(),
+                request_id.to_owned(),
+            )
+            .await;
         let code_wide_search =
             ToolInput::RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch::new(
                 user_context.clone(),
@@ -131,11 +139,16 @@ impl SymbolManager {
             request_id_ref.to_owned(),
             code_wide_search.clone(),
         ));
-        let output = dbg!(self
-            .tools
-            .invoke(code_wide_search)
-            .await
-            .map_err(|e| SymbolError::ToolError(e)))?;
+        let output = {
+            match variables {
+                Ok(variables) => ToolOutput::ImportantSymbols(variables),
+                _ => self
+                    .tools
+                    .invoke(code_wide_search)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?,
+            }
+        };
         println!(
             "symbol_manager::probe_request_from_user_context::output({:?})",
             &output

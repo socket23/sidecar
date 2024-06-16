@@ -34,14 +34,14 @@ use crate::agentic::{
 
 pub struct AnthropicCodeSymbolImportant {
     llm_client: Arc<LLMBroker>,
-    _fail_over_llm: LLMProperties,
+    fail_over_llm: LLMProperties,
 }
 
 impl AnthropicCodeSymbolImportant {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         Self {
             llm_client,
-            _fail_over_llm: fail_over_llm,
+            fail_over_llm,
         }
     }
 
@@ -5531,8 +5531,8 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             return Err(CodeSymbolError::WrongLLM(request.model().clone()));
         }
         let model = request.model().clone();
-        let api_key = request.api_key().clone();
-        let provider = request.provider().clone();
+        let request_api_key = request.api_key().clone();
+        let request_provider = request.provider().clone();
         let system_message =
             LLMClientMessage::system(self.system_message_for_ask_question_symbols(
                 request.symbol_identifier(),
@@ -5542,21 +5542,29 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_ask_question_symbols(request));
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let mut retries = 0;
+        let mut retries = 1;
         loop {
-            if retries > 3 {
+            if retries > 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
             }
-            if retries != 0 {
+            if retries > 1 {
                 jitter_sleep(10.0, retries as f64).await;
             }
+            let mut cloned_messages = messages.clone();
+            // if its odd use fail over llm otherwise stick to the provided on
+            let (api_key, provider) = if retries % 2 == 1 {
+                cloned_messages = cloned_messages.set_llm(self.fail_over_llm.llm().clone());
+                (self.fail_over_llm.api_key(), self.fail_over_llm.provider())
+            } else {
+                (&request_api_key, &request_provider)
+            };
             retries = retries + 1;
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_client
                 .stream_completion(
                     api_key.clone(),
-                    messages.clone(),
+                    cloned_messages,
                     provider.clone(),
                     vec![(
                         "event_type".to_owned(),

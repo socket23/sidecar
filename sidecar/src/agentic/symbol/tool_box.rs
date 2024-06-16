@@ -3475,4 +3475,139 @@ Please handle these changes as required."#
             Ok(outline_nodes_with_distance.remove(0).1)
         }
     }
+
+    /// Generates the symbol identifiers from the user context if possible:
+    /// The generate goal here is be deterministic and quick (sub-millisecond
+    /// ttft )
+    /// If the user already knows and is smart to do the selection over complete
+    /// ranges of sub-symbol (we will also handle cases where its inside a particular
+    /// symbol or mentioned etc)
+    pub async fn grab_symbols_from_user_context(
+        &self,
+        query: String,
+        user_context: UserContext,
+        request_id: String,
+    ) -> Result<CodeSymbolImportantResponse, SymbolError> {
+        let request_id_ref = &request_id;
+        // we have 3 types of variables over here:
+        // class, selection and file
+        // file will be handled at the go-to-xml stage anyways
+        // class and selections are more interesting, we can try and detect
+        // smartly over here if the selection or the class is overlapping with
+        // some symbol and if it is contained in some symbol completely
+        // these are easy trigger points to start the agents
+        let symbols = user_context
+            .variables
+            .iter()
+            .filter(|variable| variable.is_code_symbol())
+            .collect::<Vec<_>>();
+        let selections = user_context
+            .variables
+            .iter()
+            .filter(|variable| variable.is_selection())
+            .collect::<Vec<_>>();
+        let _ = symbols
+            .iter()
+            .map(|symbol| symbol.fs_file_path.to_owned())
+            .chain(
+                selections
+                    .iter()
+                    .map(|symbol| symbol.fs_file_path.to_owned()),
+            )
+            .collect::<HashSet<_>>();
+
+        let mut outline_nodes_from_symbols = vec![];
+
+        for symbol in symbols.iter() {
+            let outline_node = self
+                .get_outline_node_for_range(
+                    &Range::new(symbol.start_position.clone(), symbol.end_position.clone()),
+                    &symbol.fs_file_path,
+                    request_id_ref,
+                )
+                .await;
+            if let Ok(outline_node) = outline_node {
+                outline_nodes_from_symbols.push(outline_node);
+            }
+        }
+        let mut outline_node_from_symbols = vec![];
+        for symbol in symbols.iter() {
+            let outline_node = self
+                .get_outline_node_for_range(
+                    &Range::new(symbol.start_position.clone(), symbol.end_position.clone()),
+                    &symbol.fs_file_path,
+                    request_id_ref,
+                )
+                .await;
+            if let Ok(outline_node) = outline_node {
+                outline_node_from_symbols.push(outline_node);
+            }
+        }
+
+        let mut outline_node_from_selections = vec![];
+
+        for selection in selections.iter() {
+            let outline_node = self
+                .get_outline_node_for_range(
+                    &Range::new(
+                        selection.start_position.clone(),
+                        selection.end_position.clone(),
+                    ),
+                    &selection.fs_file_path,
+                    request_id_ref,
+                )
+                .await;
+            if let Ok(outline_node) = outline_node {
+                outline_node_from_selections.push(outline_node);
+            }
+        }
+
+        // Now we de-duplicate the outline nodes using the symbol_name and fs_file_path
+        let symbol_identifiers = outline_node_from_symbols
+            .into_iter()
+            .chain(outline_node_from_selections)
+            .map(|outline_node| {
+                SymbolIdentifier::with_file_path(outline_node.name(), outline_node.fs_file_path())
+            })
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let symbols = symbol_identifiers
+            .iter()
+            .filter_map(|symbol_identifier| {
+                let symbol_name = symbol_identifier.symbol_name();
+                let fs_file_path = symbol_identifier.fs_file_path();
+                match fs_file_path {
+                    Some(fs_file_path) => Some(CodeSymbolWithThinking::new(
+                        symbol_name.to_owned(),
+                        query.to_owned(),
+                        fs_file_path,
+                    )),
+                    None => None,
+                }
+            })
+            .collect::<Vec<_>>();
+        let ordered_symbols = symbol_identifiers
+            .iter()
+            .filter_map(|symbol_identifier| {
+                let symbol_name = symbol_identifier.symbol_name();
+                let fs_file_path = symbol_identifier.fs_file_path();
+                match fs_file_path {
+                    Some(fs_file_path) => Some(CodeSymbolWithSteps::new(
+                        symbol_name.to_owned(),
+                        vec![query.to_owned()],
+                        false,
+                        fs_file_path,
+                    )),
+                    None => None,
+                }
+            })
+            .collect::<Vec<_>>();
+        if ordered_symbols.is_empty() {
+            Err(SymbolError::UserContextEmpty)
+        } else {
+            Ok(CodeSymbolImportantResponse::new(symbols, ordered_symbols))
+        }
+    }
 }

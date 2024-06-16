@@ -49,4 +49,7 @@ pub enum SymbolError {
 
     #[error("Cached query failed")]
     CachedQueryFailed,
+
+    #[error("User context empty")]
+    UserContextEmpty,
 }

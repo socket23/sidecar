@@ -740,7 +740,7 @@ impl Symbol {
             (snippet, definitions_to_follow)
         })
         // we go through the snippets one by one
-        .buffered(1)
+        .buffered(100)
         .collect::<Vec<_>>()
         .await;
 
@@ -752,6 +752,12 @@ impl Symbol {
         // - ask the followup question to the symbol containing the definition we are interested in
         // - we can concat the various questions about the symbols together and just ask the symbol
         // the question maybe?
+        // ***** THIS IS THE NEXT STEP TO DO ****** //
+        // TODO(skcd): We probably do not want to do this, since we want to the symbols
+        // to be followed naturally with a reason and just ask the symbol automagically
+        // with the request and hope that it all works out
+        // - Once we have done this, we can combine the answer from all of these, probes
+        // and join the response together
         let probe_results = stream::iter(snippet_to_follow_with_definitions)
             .map(|(snippet, ask_question_symbol_hint)| async move {
                 let questions_with_definitions = ask_question_symbol_hint

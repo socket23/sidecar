@@ -630,6 +630,10 @@ impl Symbol {
 
         info!("sub symbol fetching done");
 
+        // If we do end up doing this, we should just send the go-to-definition
+        // request over here properly and ask the LLM to follow the symbol
+        // the check at the start will stop the probe from going askew
+        // and the ones which are required will always work out
         let snippet_to_symbols_to_follow = stream::iter(probe_sub_symbols)
             .map(|probe_sub_symbol| async move {
                 let symbol_name = probe_sub_symbol.symbol_name();
@@ -686,9 +690,10 @@ impl Symbol {
 
         let symbol_identifier_ref = &self.symbol_identifier;
 
-        // Now for each snippet we want to grab the definition of the symbol it belongs to
-        // but why is this necessary since we are still in the symbol itself, so do
-        // we really need a LLM call over here?
+        // Now for each of the go-to-definition we have to find the snippet and
+        // the symbol it belongs to and send the request to the appropriate symbol
+        // and let it answer the user query followed by the question which the
+        // LLM itself will be asking
         let snippet_to_follow_with_definitions = stream::iter(
             snippet_to_symbols_to_follow
                 .into_iter()

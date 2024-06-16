@@ -285,10 +285,12 @@ impl LLMClient for GoogleAIStdioClient {
             if first_candidate.is_empty() {
                 Err(LLMClientError::FailedToGetResponse)
             } else {
-                first_candidate
+                let response = first_candidate
                     .remove(0)
                     .remove("text")
-                    .ok_or(LLMClientError::FailedToGetResponse)
+                    .ok_or(LLMClientError::FailedToGetResponse);
+                println!("{:?}", &response);
+                response
             }
         }
     }

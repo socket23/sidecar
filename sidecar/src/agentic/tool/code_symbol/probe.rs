@@ -2,7 +2,6 @@
 //! need to go deeper into one of the sub-symbols
 
 use async_trait::async_trait;
-use serde_xml_rs::from_str;
 use std::sync::Arc;
 
 use llm_client::{
@@ -34,6 +33,12 @@ pub struct ProbeDeeperSnippet {
 }
 
 impl ProbeDeeperSnippet {
+    pub fn new(id: usize, reason_to_probe: String) -> Self {
+        Self {
+            id,
+            reason_to_probe,
+        }
+    }
     pub fn id(&self) -> usize {
         self.id.clone()
     }
@@ -44,6 +49,7 @@ impl ProbeDeeperSnippet {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "code_to_probe_list")]
 pub struct ProbeDeeperSnippetList {
     #[serde(rename = "$value")]
     snippets: Vec<ProbeDeeperSnippet>,
@@ -56,7 +62,7 @@ impl ProbeDeeperSnippetList {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "reply")]
+#[serde(rename = "tool_use")]
 pub enum ProbeEnoughOrDeeperResponse {
     #[serde(rename = "answer_user_query")]
     AnswerUserQuery(String),
@@ -66,23 +72,23 @@ pub enum ProbeEnoughOrDeeperResponse {
 
 impl ProbeEnoughOrDeeperResponse {
     fn from_string(response: &str) -> Result<ProbeEnoughOrDeeperResponse, ToolError> {
-        let tags_to_search = vec!["<reply>", "</reply>"];
+        let tags_to_search = vec!["<tool_use>", "</tool_use>"];
         if tags_to_search
             .into_iter()
             .any(|tag| !response.contains(&tag))
         {
             Err(ToolError::MissingXMLTags)
         } else {
-            // we have to parse the sections behind the <reply> tags
+            // we have to parse the sections behind the <tool_use> tags
             let tool_use = response
                 .lines()
                 .into_iter()
-                .skip_while(|line| !line.contains("<reply>"))
+                .skip_while(|line| !line.contains("<tool_use>"))
                 .skip(1)
-                .take_while(|line| !line.contains("</reply>"))
+                .take_while(|line| !line.contains("</tool_use>"))
                 .collect::<Vec<&str>>()
                 .join("\n");
-            from_str::<ProbeEnoughOrDeeperResponse>(&tool_use).map_err(|e| {
+            quick_xml::de::from_str::<ProbeEnoughOrDeeperResponse>(&tool_use).map_err(|e| {
                 println!("{:?}", &e);
                 ToolError::SerdeConversionFailed
             })
@@ -120,7 +126,61 @@ impl ProbeEnoughOrDeeper {
     }
 
     fn example_message(&self) -> String {
-        format!(r#""#)
+        format!(
+            r#"Some possible formats for <tool_use> output are given below:
+- Example 1 : we can answer the user query
+<tool_use>
+<answer_user_query>
+{{Answering the user query with your own thoughts}}
+</answer_user_query>
+</too_use>
+
+- Example 2: We want to probe deeper into some symbols
+<tool_use>
+<probe_deeper>
+<code_to_probe>
+<id>0</id>
+<reason_to_probe>
+{{Your reason for deeply understanding and asking more questions to this code snippet}}
+</reason_to_probe>
+</code_to_probe>
+</probe_deeper>
+</tool_use>
+
+- Example 3: We want to probe deeper into 2 such code snippets
+<tool_use>
+<probe_deeper>
+<code_to_probe>
+<id>0</id>
+<reason_to_probe>
+{{Your reason for deeply understanding and asking more questions to this code snippet}}
+</reason_to_probe>
+</code_to_probe>
+<code_to_probe>
+<id>1</id>
+<reason_to_probe>
+{{Your reason for deeply understanding and asking more questions to this code snippet}}
+</reason_to_probe>
+</code_to_probe>
+</probe_deeper>
+</tool_use>
+
+Notice when using <probe_deeper> tool I always make sure to properly close the XML tags.
+
+- Wrong Example 4: An example of wrong format to use for using the <probe_deeper> tool
+<tool_use>
+<probe_deeper>
+<code_to_probe_list>
+<code_to_probe>
+<id>0</id>
+<reason_to_probe>
+{{Your reason for probing this}}
+</reason_to_probe>
+</code_to_probe_list>
+</probe_deeper>
+</tool_use>
+This is wrong because we are missing the </code_to_probe> ending tag, please be careful when replying in the XML format."#
+        )
     }
 
     fn system_message(&self, symbol_name: &str) -> String {
@@ -136,7 +196,7 @@ impl ProbeEnoughOrDeeper {
 - This allows you to answer the user query without going any deeper into the codebase
 - Using <answer_user_query> implies you have all the information required to answer the user query and can reply with the answer.
 - To use <answer_user_query> you have to output it in the following fashion:
-<reply>
+<tool_data>
 <answer_user_query>
 {{your answer over here}}
 </answer_user_query>
@@ -148,7 +208,8 @@ The other tool which you have is:
 - The code snippet which you select will be passed to another software engineer who is going to use it and deeply understand it to help answer the user query.
 - The code snippet which you select might also have code symbols (variables, classes, function calls etc) inside it which we can click and follow to understand and gather more information, remember this when selecting the code snippets.
 - You have to order the code snippets in the order of important, and only include the sections which will be part of the additional understanding or contain the answer to the user query, pug these code symbols in the <code_to_probe_list>
-- To use <probe_deeper> tool you need to reply in the following fashion:
+- To use <probe_deeper> tool you need to reply in the following fashion (assuming you are probing the code snippet with id 0):
+<code_to_probe_list>
 <code_to_probe>
 <id>
 0
@@ -157,8 +218,9 @@ The other tool which you have is:
 {{your reason for probing}}
 </reason_to_probe>
 </code_to_probe>
-- If you want to edit more code sections follow the similar pattern as described above and as an example again:
 <code_to_probe_list>
+
+- If you want to edit more code sections follow the similar pattern as described above and as an example again:
 <code_to_probe>
 <id>
 {{id of the code snippet you are interested in}}
@@ -168,7 +230,6 @@ The other tool which you have is:
 </reason_to_probe>
 </code_to_probe>
 {{... more code sections here which you might want to select}}
-</code_to_probe_list>
 - The <id> section should ONLY contain an id from the listed code snippets.
 </tool_data>
 
@@ -214,9 +275,10 @@ impl Tool for ProbeEnoughOrDeeper {
             0.2,
             None,
         );
-        let mut retries = 0;
+        // switches to gemini on odd
+        let mut retries = 1;
         loop {
-            if retries > 3 {
+            if retries > 4 {
                 return Err(ToolError::CodeSymbolError(
                     CodeSymbolError::ExhaustedRetries,
                 ));
@@ -260,16 +322,16 @@ impl Tool for ProbeEnoughOrDeeper {
 
 #[cfg(test)]
 mod tests {
-    use super::ProbeEnoughOrDeeperResponse;
+    use super::{ProbeDeeperSnippet, ProbeEnoughOrDeeperResponse};
 
     #[test]
     fn test_parsing_answer_query() {
         let response = r#"something something else blah blah
-<reply>
+<tool_use>
 <answer_user_query>
 Answer me something
 </answer_user_query>
-</reply>"#
+</tool_use>"#
             .to_owned();
         let output = ProbeEnoughOrDeeperResponse::from_string(&response);
         assert!(output.is_ok());
@@ -278,7 +340,7 @@ Answer me something
     #[test]
     fn test_parsing_code_snippets_to_follow() {
         let response = r#"something something else
-<reply>
+<tool_use>
 <probe_deeper>
 <code_snippet>
 <id>
@@ -295,7 +357,43 @@ something else over here
 <reason_to_probe>something else over here</reason_to_probe>
 </code_snippet>
 </probe_deeper>
-</reply>"#;
+</tool_use>"#;
+        let output = ProbeEnoughOrDeeperResponse::from_string(&response);
+        assert!(output.is_ok());
+    }
+
+    #[test]
+    fn test_parsing_code_snippets_to_follow_example() {
+        let response = r#"<tool_use>
+        <probe_deeper>
+        <code_to_probe>
+        <id>0</id>
+        <reason_to_probe>
+        The code snippet shows the routes defined for the agent, but does not provide any information on how the agent communicates with the LLM. To understand that, we likely need to look at the implementation details of the functions like search_agent, hybrid_search, explain, and followup_chat.
+        </reason_to_probe>
+        </code_to_probe>
+        </probe_deeper>
+        </tool_use>"#;
+        let output = ProbeEnoughOrDeeperResponse::from_string(&response);
+        assert!(output.is_ok())
+    }
+
+    #[test]
+    fn test_parsing_gemini_output_to_follow_example() {
+        let response = r#"
+        <tool_use>
+        <probe_deeper>
+        <code_to_probe>
+        <id>
+        0
+        </id>
+        <reason_to_probe>
+        The agent router defines routes for different agent functionalities, including `/search_agent`, `/hybrid_search`, `/explain`, and `/followup_chat`.  I need to understand what each of these routes does, specifically looking for any interaction with an LLM.  For example, does `sidecar::webserver::agent::search_agent` call an LLM?
+        </reason_to_probe>
+        </code_to_probe>
+        </probe_deeper>
+        </tool_use>
+        "#;
         let output = ProbeEnoughOrDeeperResponse::from_string(&response);
         assert!(output.is_ok());
     }

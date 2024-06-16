@@ -58,7 +58,7 @@ pub async fn probe_request(
         app.language_parsing.clone(),
         None,
         LLMProperties::new(
-            LLMType::GeminiPro,
+            LLMType::GeminiProFlash,
             LLMProvider::GoogleAIStudio,
             LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
                 "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),

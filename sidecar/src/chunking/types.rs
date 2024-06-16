@@ -263,7 +263,7 @@ impl OutlineNodeContent {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, std::hash::Hash, Eq)]
 pub struct OutlineNode {
     content: OutlineNodeContent,
     children: Vec<OutlineNodeContent>,

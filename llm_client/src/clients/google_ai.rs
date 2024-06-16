@@ -255,18 +255,18 @@ impl LLMClient for GoogleAIStdioClient {
         }
         let api_key = api_key.expect("to be present");
 
-        let count_tokens = self
-            .client
-            .post(self.count_tokens_endpoint(&model, &api_key))
-            .header("Content-Type", "application/json")
-            .json(&token_count_request)
-            .send()
-            .await?;
-        let count_tokens_result = count_tokens
-            .bytes()
-            .await
-            .map(|bytes| String::from_utf8(bytes.to_vec()));
-        println!("Gemini pro tokens: {:?}", count_tokens_result);
+        // let count_tokens = self
+        //     .client
+        //     .post(self.count_tokens_endpoint(&model, &api_key))
+        //     .header("Content-Type", "application/json")
+        //     .json(&token_count_request)
+        //     .send()
+        //     .await?;
+        // let count_tokens_result = count_tokens
+        //     .bytes()
+        //     .await
+        //     .map(|bytes| String::from_utf8(bytes.to_vec()));
+        // println!("Gemini pro tokens: {:?}", count_tokens_result);
         // now we need to send a request to the gemini pro api here
         let mut response = self
             .client

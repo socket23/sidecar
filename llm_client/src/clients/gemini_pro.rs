@@ -266,19 +266,19 @@ impl LLMClient for GeminiProClient {
             &self.get_api_endpoint(&api_base, &model)
         );
 
-        let count_tokens = self
-            .client
-            .post(self.count_tokens_endpoint(&api_base, &model))
-            .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
-            .json(&token_count_request)
-            .send()
-            .await?;
-        let count_tokens_result = count_tokens
-            .bytes()
-            .await
-            .map(|bytes| String::from_utf8(bytes.to_vec()));
-        println!("Gemini pro tokens: {:?}", count_tokens_result);
+        // let count_tokens = self
+        //     .client
+        //     .post(self.count_tokens_endpoint(&api_base, &model))
+        //     .header("Authorization", format!("Bearer {}", api_key))
+        //     .header("Content-Type", "application/json")
+        //     .json(&token_count_request)
+        //     .send()
+        //     .await?;
+        // let count_tokens_result = count_tokens
+        //     .bytes()
+        //     .await
+        //     .map(|bytes| String::from_utf8(bytes.to_vec()));
+        // println!("Gemini pro tokens: {:?}", count_tokens_result);
         // now we need to send a request to the gemini pro api here
         let response = self
             .client

@@ -593,6 +593,10 @@ impl Symbol {
         // TODO(skcd): We run both the queries in parallel:
         // - ask if the symbol can answer the question
         // - or we chose the sub-symbol which we want to focus on
+        println!(
+            "symbol::probe_request::parallel_requests_start::({})",
+            &self.symbol_name()
+        );
         let (probe_sub_symbols, probe_deeper_or_enough) = tokio::join!(
             self.mecha_code_symbol.probe_sub_sybmols(
                 query,

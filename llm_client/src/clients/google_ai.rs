@@ -244,7 +244,7 @@ impl LLMClient for GoogleAIStdioClient {
             "{}",
             serde_json::to_string(&request).expect("to always work")
         );
-        let token_count_request = GeminiProTokenCountRequestBody {
+        let _token_count_request = GeminiProTokenCountRequestBody {
             // system_instructions: system_message,
             contents: messages,
             // tools: vec![],

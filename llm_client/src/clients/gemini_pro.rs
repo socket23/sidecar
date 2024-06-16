@@ -249,7 +249,7 @@ impl LLMClient for GeminiProClient {
                 ),
             ],
         };
-        let token_count_request = GeminiProTokenCountRequestBody {
+        let _token_count_request = GeminiProTokenCountRequestBody {
             // system_instructions: system_message,
             contents: messages,
             // tools: vec![],

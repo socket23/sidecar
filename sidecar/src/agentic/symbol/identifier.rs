@@ -421,6 +421,15 @@ impl MechaCodeSymbolThinking {
         *snippet_inside = Some(snippet);
     }
 
+    async fn is_function(&self) -> Option<Snippet> {
+        let snippet = self.snippet.lock().await;
+        if let Some(ref snippet) = *snippet {
+            Some(snippet.clone())
+        } else {
+            None
+        }
+    }
+
     pub async fn is_snippet_present(&self) -> bool {
         self.snippet.lock().await.is_some()
     }
@@ -579,6 +588,16 @@ impl MechaCodeSymbolThinking {
         request_id: String,
     ) -> Result<Vec<SubSymbolToProbe>, SymbolError> {
         let request_id_ref = &request_id;
+        // early exit if this is a function
+        if let Some(snippet) = self.is_function().await {
+            return Ok(vec![SubSymbolToProbe::new(
+                self.symbol_name().to_owned(),
+                snippet.range().clone(),
+                snippet.fs_file_path.to_owned(),
+                query.to_owned(),
+                false,
+            )]);
+        }
         if self.is_snippet_present().await {
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
             {

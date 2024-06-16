@@ -714,17 +714,16 @@ impl Symbol {
                     // the definitions over here might be just the symbols themselves
                     // we have to make sure that there is no self-reference and the
                     // LLM helps push the world model forward
-                    let definitions_for_snippet = dbg!(
-                        self.tools
-                            .go_to_definition_using_symbol(
-                                referred_snippet.range(),
-                                symbol_to_follow.file_path(),
-                                symbol_to_follow.line_content(),
-                                symbol_to_follow.name(),
-                                request_id_ref,
-                            )
-                            .await
-                    );
+                    let definitions_for_snippet = self
+                        .tools
+                        .go_to_definition_using_symbol(
+                            referred_snippet.range(),
+                            symbol_to_follow.file_path(),
+                            symbol_to_follow.line_content(),
+                            symbol_to_follow.name(),
+                            request_id_ref,
+                        )
+                        .await;
                     if let Ok(ref definitions_for_snippet) = &definitions_for_snippet {
                         let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
                             request_id_ref.to_owned(),

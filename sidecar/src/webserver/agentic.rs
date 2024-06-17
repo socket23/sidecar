@@ -70,6 +70,25 @@ pub struct ProbeRequest {
     active_window_data: Option<ProbeRequestActiveWindow>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProbeStopRequest {
+    request_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProbeStopResponse {
+    done: bool,
+}
+
+pub async fn probe_request_stop(
+    Extension(app): Extension<Application>,
+    Json(ProbeStopRequest { request_id }): Json<ProbeStopRequest>,
+) -> Result<impl IntoResponse> {
+    let probe_request_tracker = app.probe_request_tracker.clone();
+    let _ = probe_request_tracker.cancel_request(&request_id).await;
+    Ok(Json(ProbeStopResponse { done: true }))
+}
+
 pub async fn probe_request(
     Extension(app): Extension<Application>,
     Json(ProbeRequest {

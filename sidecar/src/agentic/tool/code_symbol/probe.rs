@@ -167,7 +167,7 @@ impl ProbeEnoughOrDeeper {
 
 Notice when using <probe_deeper> tool I always make sure to properly close the XML tags.
 
-- Wrong Example 4: An example of wrong format to use for using the <probe_deeper> tool
+- WRONG Example 4 to AVOID: An example of WRONG format to use for using the <probe_deeper> tool
 <tool_use>
 <probe_deeper>
 <code_to_probe_list>
@@ -209,7 +209,6 @@ The other tool which you have is:
 - The code snippet which you select might also have code symbols (variables, classes, function calls etc) inside it which we can click and follow to understand and gather more information, remember this when selecting the code snippets.
 - You have to order the code snippets in the order of important, and only include the sections which will be part of the additional understanding or contain the answer to the user query, pug these code symbols in the <code_to_probe_list>
 - To use <probe_deeper> tool you need to reply in the following fashion (assuming you are probing the code snippet with id 0):
-<code_to_probe_list>
 <code_to_probe>
 <id>
 0
@@ -218,7 +217,6 @@ The other tool which you have is:
 {{your reason for probing}}
 </reason_to_probe>
 </code_to_probe>
-<code_to_probe_list>
 
 - If you want to edit more code sections follow the similar pattern as described above and as an example again:
 <code_to_probe>

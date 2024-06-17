@@ -2661,7 +2661,15 @@ Please handle these changes as required."#
         self.symbol_broker.get_symbols_outline(fs_file_path).await
     }
 
-    pub async fn get_outline_nodes(&self, fs_file_path: &str) -> Option<Vec<OutlineNodeContent>> {
+    pub async fn get_outline_nodes(
+        &self,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Option<Vec<OutlineNodeContent>> {
+        let file_open_result = self.file_open(fs_file_path.to_owned(), request_id).await;
+        if let Err(_) = file_open_result {
+            return None;
+        }
         self.symbol_broker
             .get_symbols_outline(&fs_file_path)
             .await
@@ -3387,6 +3395,10 @@ Please handle these changes as required."#
         snippet: &Snippet,
         request_id: &str,
     ) -> Result<OutlineNode, SymbolError> {
+        println!(
+            "tool_box::get_outline_node_from_snippet::snippet::({:?})",
+            snippet.range()
+        );
         let fs_file_path = snippet.file_path();
         let file_open_request = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let _ = self
@@ -3404,6 +3416,12 @@ Please handle these changes as required."#
             .into_iter()
             .filter(|outline_node| outline_node.name() == snippet.symbol_name())
             .collect::<Vec<_>>();
+        // we are just getting a single node over here for some reason????????
+        // we should be getting both the nodes for the LLMBroker
+        println!(
+            "tool_box::get_outline_node_from_snippet::symbols_outline::({:?})",
+            &symbols_outline
+        );
         // we want to find the closest outline node to this snippet over here
         // since we can have multiple implementations with the same symbol name
         let mut outline_nodes_with_distance = symbols_outline
@@ -3423,6 +3441,14 @@ Please handle these changes as required."#
                 (distance, outline_node)
             })
             .collect::<Vec<_>>();
+
+        println!(
+            "tool_box::get_outline_node_from_snippet::nodes({:?})",
+            outline_nodes_with_distance
+                .iter()
+                .map(|(distance, outline_node)| (distance, outline_node.range()))
+                .collect::<Vec<_>>()
+        );
         // Now sort it based on the distance in ascending order
         outline_nodes_with_distance.sort_by_key(|outline_node| outline_node.0);
         if outline_nodes_with_distance.is_empty() {

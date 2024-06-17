@@ -966,17 +966,18 @@ Reason to edit:
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
                 println!("mecha_code_symbol_thinking::to_llm_request::class_implementations::symbol({}):implementations_len({})", &self.symbol_name(), snippets_ref.len());
                 let mut outline_nodes = vec![];
-                for snippet in snippets_ref.iter() {
+                for implementation_snippet in snippets_ref.iter() {
+                    // TODO(skcd): we are not getting the correct outline node over here :|
                     let outline_node = self
                         .tool_box
-                        .get_outline_node_from_snippet(snippet, request_id)
+                        .get_outline_node_from_snippet(implementation_snippet, request_id)
                         .await;
                     if let Ok(outline_node) = outline_node {
                         outline_nodes.push(outline_node);
                     }
                 }
 
-                let outline_nodes_vec = outline_nodes
+                let outline_nodes_vec = dbg!(outline_nodes)
                     .into_iter()
                     .map(|outline_node| outline_node.consume_all_outlines())
                     .flatten()

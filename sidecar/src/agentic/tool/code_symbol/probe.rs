@@ -320,7 +320,7 @@ impl Tool for ProbeEnoughOrDeeper {
 
 #[cfg(test)]
 mod tests {
-    use super::{ProbeDeeperSnippet, ProbeEnoughOrDeeperResponse};
+    use super::ProbeEnoughOrDeeperResponse;
 
     #[test]
     fn test_parsing_answer_query() {

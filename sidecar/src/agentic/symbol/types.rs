@@ -917,6 +917,33 @@ impl Symbol {
             // {reason}
             // </observation_about_symbol>#"
             //             );
+            let mut history = history_slice.to_vec();
+            history.push(SymbolToProbeHistory::new(
+                self.symbol_name().to_owned(),
+                self.fs_file_path().to_owned(),
+                "".to_owned(),
+                query.to_owned(),
+            ));
+            let history_str = history
+                .to_vec()
+                .into_iter()
+                .map(|history| {
+                    let symbol_name = history.symbol().to_owned();
+                    let fs_file_path = history.fs_file_path().to_owned();
+                    let question = history.question().to_owned();
+                    format!(
+                        r#"<symbol_name>
+{symbol_name}
+</symbol_name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<question_asked>
+{question}
+</question_asked>"#
+                    )
+                })
+                .collect::<Vec<_>>();
             let request = self
                 .tools
                 .probe_query_generation_for_symbol(
@@ -924,22 +951,16 @@ impl Symbol {
                     outline_node.name(),
                     outline_node.fs_file_path(),
                     original_request,
+                    history_str,
                     linked_snippet_with_questions,
                     self.llm_properties.clone(),
                 )
                 .await;
-            let mut history = history_slice.to_vec();
             match request {
                 Ok(request) => {
                     // The history item is not formatted here properly
                     // we need to make sure that we are passing the highlights of the snippets
                     // from where we are asking the question
-                    history.push(SymbolToProbeHistory::new(
-                        self.symbol_name().to_owned(),
-                        self.fs_file_path().to_owned(),
-                        "".to_owned(),
-                        query.to_owned(),
-                    ));
                     Some(SymbolToProbeRequest::new(
                         symbol_identifier,
                         request,

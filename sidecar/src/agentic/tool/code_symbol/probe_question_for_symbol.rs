@@ -21,6 +21,7 @@ pub struct ProbeQuestionForSymbolRequest {
     symbol_name: String,
     next_symbol_name: String,
     next_symbol_file_path: String,
+    history: Vec<String>,
     // all the places we are linked with the current symbol
     hyperlinks: Vec<String>,
     original_user_query: String,
@@ -33,6 +34,7 @@ impl ProbeQuestionForSymbolRequest {
         next_symbol_name: String,
         next_symbol_file_path: String,
         hyperlinks: Vec<String>,
+        history: Vec<String>,
         original_user_query: String,
         llm_properties: LLMProperties,
     ) -> Self {
@@ -40,6 +42,7 @@ impl ProbeQuestionForSymbolRequest {
             symbol_name,
             next_symbol_file_path,
             next_symbol_name,
+            history,
             hyperlinks,
             original_user_query,
             llm_properties,
@@ -68,7 +71,8 @@ impl ProbeQuestionForSymbol {
 - We are also given the list of code snippets which lead us to the new symbol which we are going to ask the question to.
 - The position in the code which links the position we were on to the new symbol is given in the <hyperlink> section. The hyperlink section contains the code outline and the section of code which links to the <next_symbol_name> along with a thinking of why we want to go to <next_symbol_name>
 - You are also given the thought process on why we decided to follow the symbol in the <hyperlink> section and that is present in the <thinking> section.
-- We are also given the history of questions which has lead us here along with the original question which the user asked in <original_query>, we want to answer the user query, so coming up with a question which helps us answer it is very essential.
+- We are also given the history of questions in the <history_of_questions> section which has lead us here along with the original question which the user asked in <original_query>, we want to answer the user query, so coming up with a question which helps us answer it is very essential.
+- You are also given the history of all the question we have asked to various symbols so you can check the path the engineer has taken to reach this point.
 - Your task is to write a new question to ask toe the <next_symbol_name> given the context in the <hyperlink> section
 - A good question is one which helps uncover the maximum amount of details for the answer to the user query.
 - When replying with the question the output format which you should follow is strictly in this format:
@@ -85,6 +89,7 @@ impl ProbeQuestionForSymbol {
         let previous_symbol_name = request.symbol_name;
         let next_symbol_name = request.next_symbol_name;
         let fs_file_path = request.next_symbol_file_path;
+        let history = request.history.join("\n");
         format!(
             r#"<user_query>
 {original_user_query}
@@ -93,6 +98,10 @@ impl ProbeQuestionForSymbol {
 <symbol_name>
 {previous_symbol_name}
 </symbol_name>
+
+<history_of_questions>
+{history}
+</history_of_questions>
 
 <hyperlinks>
 {hyperlinks}

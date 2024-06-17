@@ -90,7 +90,6 @@ pub fn python_language_config() -> TSLanguageConfig {
         ) @definition.assignment
 
         (decorated_definition
-        	(decorator) @decorator
             (function_definition
             	name: (identifier) @function.name
                 body: (block) @function.body

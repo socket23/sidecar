@@ -193,6 +193,7 @@ impl TSLanguageConfig {
         let lines_slice = lines.as_slice();
         let mut independent_functions_for_class: HashMap<String, Vec<OutlineNodeContent>> =
             Default::default();
+        let mut decorator_range: Option<Range> = None;
         while start_index < outline_nodes.len() {
             // cheap clone so this is fine
             let (outline_node_type, outline_range) = outline_nodes[start_index].clone();
@@ -326,19 +327,32 @@ impl TSLanguageConfig {
                         }
                         end_index = end_index + 1;
                     }
+                    // if we have a decorator start the body from there
+                    // this allows us to capture decorations on to of the class
+                    // symbols
+                    let class_range = if let Some(decorator_range) = decorator_range {
+                        Range::new(
+                            decorator_range.start_position(),
+                            outline_range.end_position(),
+                        )
+                    } else {
+                        outline_range
+                    };
+                    // reset the decorator range
+                    decorator_range = None;
                     let class_outline = OutlineNodeContent::new(
                         class_name.expect("class name to be present"),
-                        outline_range,
+                        class_range,
                         outline_node_type,
                         get_string_from_bytes(
                             &source_code_vec,
-                            outline_range.start_byte(),
-                            outline_range.end_byte(),
+                            class_range.start_byte(),
+                            class_range.end_byte(),
                         ),
                         fs_file_path.to_owned(),
                         class_name_range.expect("class name range to be present"),
                         // This is incorrect
-                        outline_range,
+                        class_range,
                         self.language_str.to_owned(),
                     );
                     compressed_outline.push(OutlineNode::new(
@@ -463,6 +477,8 @@ impl TSLanguageConfig {
                     // we want to track this going on
                 }
                 OutlineNodeType::Decorator => {
+                    // Sets the decorator range over here
+                    decorator_range = Some(outline_range);
                     start_index = start_index + 1;
                     // we are not going to track the decorators right now, we will figure out
                     // what to do about decorators in a bit
@@ -3105,5 +3121,43 @@ a.b.c = {
         );
         // we are also including the identifier node over here
         assert_eq!(outlines.len(), 4);
+    }
+
+    #[test]
+    fn test_captures_rust_class_attribute_items() {
+        let source_code = r#"
+#[derive(Debug, Clone)]
+pub struct Something {{
+    a: String,
+}}
+
+#[derive(
+    Debug,
+    Clone,
+)]
+pub struct SomethingSplitLines {{
+    a: String,
+}}
+
+pub struct NormalBoringStruct {{
+    a: String,
+}}"#;
+        let language = "rust";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("to be present");
+        let mut parser = Parser::new();
+        let grammar = ts_language_config.grammar;
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let outlines = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        assert_eq!(outlines.len(), 3);
+        // the outline for this class starts at the #[derive(...)] position
+        assert_eq!(outlines[0].range().start_line(), 1);
     }
 }

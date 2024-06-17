@@ -646,10 +646,21 @@ impl Symbol {
         let snippet_to_symbols_to_follow = stream::iter(probe_sub_symbols)
             .map(|probe_sub_symbol| async move {
                 let symbol_name = probe_sub_symbol.symbol_name();
-                let outline_node = self
-                    .tools
-                    .find_sub_symbol_to_probe_with_name(symbol_name, &probe_sub_symbol)
-                    .await;
+                println!(
+                    "symbol::probe_request::probe_sub_symbols::({})({}@{})",
+                    self.symbol_name(),
+                    probe_sub_symbol.symbol_name(),
+                    probe_sub_symbol.fs_file_path(),
+                );
+                let outline_node = dbg!(
+                    self.tools
+                        .find_sub_symbol_to_probe_with_name(
+                            self.symbol_name(),
+                            &probe_sub_symbol,
+                            request_id_ref,
+                        )
+                        .await
+                );
                 if let Ok(outline_node) = outline_node {
                     let snippet = Snippet::new(
                         probe_sub_symbol.symbol_name().to_owned(),

@@ -78,6 +78,18 @@ impl SymbolToProbeHistory {
             question,
         }
     }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn symbol(&self) -> &str {
+        &self.symbol
+    }
+
+    pub fn question(&self) -> &str {
+        &self.question
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

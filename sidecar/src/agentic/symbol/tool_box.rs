@@ -110,6 +110,7 @@ impl ToolBox {
         next_symbol_name: &str,
         next_symbol_name_file_path: &str,
         original_query: &str,
+        history: Vec<String>,
         ask_question_with_snippet: Vec<(Snippet, AskQuestionSymbolHint)>,
         llm_properties: LLMProperties,
     ) -> Result<String, SymbolError> {
@@ -126,6 +127,7 @@ impl ToolBox {
                         generate_hyperlink_from_snippet(&snippet, ask_question)
                     })
                     .collect::<Vec<_>>(),
+                history,
                 original_query.to_owned(),
                 llm_properties,
             ));

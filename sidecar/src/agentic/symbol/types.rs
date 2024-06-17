@@ -866,76 +866,103 @@ impl Symbol {
 
         // Now we can create the probe next query for these outline nodes:
         let implementations = self.mecha_code_symbol.get_implementations().await;
-        let symbol_to_probe_request = outline_node_to_probe_question
-            .into_iter()
-            .filter_map(|(outline_node, questions)| {
-                // todo something else over here
-                // First we need to check if the outline node belongs to the current symbol
-                // in which case we need to do something special over here, to avoid having
-                // cyclic loops, for now we can even begin with logging them
-                let outline_node_range = outline_node.range();
-                let outline_node_fs_file_path = outline_node.fs_file_path();
-                if implementations.iter().any(|implementation| {
-                    implementation
-                        .range()
-                        .contains_check_line(&outline_node_range)
-                        && implementation.file_path() == outline_node_fs_file_path
-                }) {
-                    println!(
-                        "symbol::probe_request::same_symbol_probing::({})",
-                        self.symbol_name()
-                    );
-                    None
-                } else {
-                    Some((outline_node, questions))
-                }
-            })
-            .map(|(outline_node, linked_snippet_with_questions)| {
-                // over here we are going to send over a request to the outline nodes
-                // and ask them all the questions we have for them to answer
-                let symbol_identifier = SymbolIdentifier::with_file_path(
+        let symbol_to_probe_request = stream::iter(
+            outline_node_to_probe_question
+                .into_iter()
+                .filter_map(|(outline_node, questions)| {
+                    // todo something else over here
+                    // First we need to check if the outline node belongs to the current symbol
+                    // in which case we need to do something special over here, to avoid having
+                    // cyclic loops, for now we can even begin with logging them
+                    let outline_node_range = outline_node.range();
+                    let outline_node_fs_file_path = outline_node.fs_file_path();
+                    if implementations.iter().any(|implementation| {
+                        implementation
+                            .range()
+                            .contains_check_line(&outline_node_range)
+                            && implementation.file_path() == outline_node_fs_file_path
+                    }) {
+                        println!(
+                            "symbol::probe_request::same_symbol_probing::({})",
+                            self.symbol_name()
+                        );
+                        None
+                    } else {
+                        Some((outline_node, questions))
+                    }
+                }),
+        )
+        .map(|(outline_node, linked_snippet_with_questions)| async move {
+            // over here we are going to send over a request to the outline nodes
+            // and ask them all the questions we have for them to answer
+            let symbol_identifier =
+                SymbolIdentifier::with_file_path(outline_node.name(), outline_node.fs_file_path());
+
+            // TODO(skcd): Create a new question request here using the data
+            // from the previous queries
+            //             let questions = linked_snippet_with_questions
+            //                 .iter()
+            //                 .map(|(_, question)| question)
+            //                 .collect::<Vec<_>>();
+            //             let mut reason = questions
+            //                 .into_iter()
+            //                 .map(|question| question.thinking().to_owned())
+            //                 .collect::<Vec<_>>()
+            //                 .join("\n");
+            //             reason = format!(
+            //                 r"#<original_question>
+            // {query}
+            // </original_question>
+            // <observation_about_symbol>
+            // {reason}
+            // </observation_about_symbol>#"
+            //             );
+            let request = self
+                .tools
+                .probe_query_generation_for_symbol(
+                    self.symbol_name(),
                     outline_node.name(),
                     outline_node.fs_file_path(),
-                );
-
-                // TODO(skcd): Create a new question request here using the data
-                // from the previous queries
-                let questions = linked_snippet_with_questions
-                    .iter()
-                    .map(|(_, question)| question)
-                    .collect::<Vec<_>>();
-                let mut reason = questions
-                    .into_iter()
-                    .map(|question| question.thinking().to_owned())
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                reason = format!(
-                    r"#<original_question>
-{query}
-</original_question>
-<observation_about_symbol>
-{reason}
-</observation_about_symbol>#"
-                );
-                let mut history = history_slice.to_vec();
-                // The history item is not formatted here properly
-                // we need to make sure that we are passing the highlights of the snippets
-                // from where we are asking the question
-                history.push(SymbolToProbeHistory::new(
-                    self.symbol_name().to_owned(),
-                    self.fs_file_path().to_owned(),
-                    "".to_owned(),
-                    query.to_owned(),
-                ));
-                SymbolToProbeRequest::new(
-                    symbol_identifier,
-                    reason,
-                    original_request.to_owned(),
-                    original_request_id_ref.to_owned(),
-                    history,
+                    original_request,
+                    linked_snippet_with_questions,
+                    self.llm_properties.clone(),
                 )
-            })
-            .collect::<Vec<_>>();
+                .await;
+            let mut history = history_slice.to_vec();
+            match request {
+                Ok(request) => {
+                    // The history item is not formatted here properly
+                    // we need to make sure that we are passing the highlights of the snippets
+                    // from where we are asking the question
+                    history.push(SymbolToProbeHistory::new(
+                        self.symbol_name().to_owned(),
+                        self.fs_file_path().to_owned(),
+                        "".to_owned(),
+                        query.to_owned(),
+                    ));
+                    Some(SymbolToProbeRequest::new(
+                        symbol_identifier,
+                        request,
+                        original_request.to_owned(),
+                        original_request_id_ref.to_owned(),
+                        history,
+                    ))
+                }
+                Err(e) => {
+                    println!(
+                        "symbol::probe_request::probe_query_generation_for_symbol::({:?})",
+                        e
+                    );
+                    None
+                }
+            }
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .collect::<Vec<_>>();
 
         if symbol_to_probe_request.is_empty() {
             // TODO(skcd): if this is empty, then we should have our answer ready over here

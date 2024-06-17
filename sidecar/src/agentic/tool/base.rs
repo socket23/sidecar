@@ -105,6 +105,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ProbeFinalAnswerSummary => write!(f, "Probe final answer summary"),
             ToolType::ProbeSubSymbolFiltering => write!(f, "Probe sub symbol filtering request"),
             ToolType::ProbeEnoughOrDeeper => write!(f, "Probe enough information or go deeper"),
+            ToolType::ProbeCreateQuestionForSymbol => write!(f, "Probe create question for symbol"),
         }
     }
 }

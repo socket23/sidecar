@@ -611,8 +611,8 @@ impl Symbol {
             }
         }
 
-        // If we do not have the answer to the user query, just follow the rest of the logic
-        // which is probing into sub-symbols and following them.
+        // TODO(skcd): We are not getting the right question to ask to the sub-symbols
+        // this is more of an observation about the sub-symbol related to our question
         let probe_sub_symbols = probe_sub_symbols?;
         let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
             request_id_ref.to_owned(),
@@ -873,11 +873,19 @@ impl Symbol {
                 );
                 // TODO(skcd): Reason here need to be better formatted, otherwise
                 // its very lossy and will not work
-                let reason = questions
+                let mut reason = questions
                     .into_iter()
                     .map(|question| question.thinking().to_owned())
                     .collect::<Vec<_>>()
                     .join("\n");
+                reason = format!(
+                    r"#<original_question>
+{query}
+</original_question>
+<observation_about_symbol>
+{reason}
+</observation_about_symbol>#"
+                );
                 let mut history = history_slice.to_vec();
                 // The history item is not formatted here properly
                 // we need to make sure that we are passing the highlights of the snippets

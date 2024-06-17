@@ -20,6 +20,7 @@ use crate::{
     inline_completion::{state::FillInMiddleState, symbols_tracker::SymbolTrackerInline},
     reporting::posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
+    webserver::agentic::ProbeRequestTracker,
 };
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
@@ -57,6 +58,7 @@ pub struct Application {
     pub editor_parsing: Arc<EditorParsing>,
     pub fill_in_middle_state: Arc<FillInMiddleState>,
     pub symbol_tracker: Arc<SymbolTrackerInline>,
+    pub probe_request_tracker: Arc<ProbeRequestTracker>,
 }
 
 impl Application {
@@ -111,6 +113,7 @@ impl Application {
             editor_parsing,
             fill_in_middle_state,
             symbol_tracker,
+            probe_request_tracker: Arc::new(ProbeRequestTracker::new()),
         })
     }
 

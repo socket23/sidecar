@@ -5,5 +5,6 @@ pub mod important;
 pub mod initial_request_follow;
 pub mod models;
 pub mod probe;
+pub mod probe_question_for_symbol;
 pub mod repo_map_search;
 pub mod types;

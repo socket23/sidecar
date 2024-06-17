@@ -897,11 +897,9 @@ impl Symbol {
                     outline_node.name(),
                     outline_node.fs_file_path(),
                 );
-                // TODO(skcd): Reason here need to be better formatted, otherwise
-                // its very lossy and will not work
-                // we want to generate a better question over here which can
-                // combine the previous question which was asked and the current
-                // set of thinking process we have for probing into this symbol
+
+                // TODO(skcd): Create a new question request here using the data
+                // from the previous queries
                 let questions = linked_snippet_with_questions
                     .iter()
                     .map(|(_, question)| question)

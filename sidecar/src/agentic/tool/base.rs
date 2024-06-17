@@ -43,6 +43,7 @@ pub enum ToolType {
     // COT chains
     CodeEditingCOT,
     // Probe operation
+    ProbeCreateQuestionForSymbol,
     ProbeEnoughOrDeeper,
     ProbeSubSymbolFiltering,
     ProbePossible,

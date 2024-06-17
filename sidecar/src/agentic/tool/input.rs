@@ -14,6 +14,7 @@ use super::{
         },
         initial_request_follow::CodeSymbolFollowInitialRequest,
         probe::ProbeEnoughOrDeeperRequest,
+        probe_question_for_symbol::ProbeQuestionForSymbolRequest,
         repo_map_search::RepoMapSearchQuery,
     },
     editor::apply::EditorApplyRequest,
@@ -57,6 +58,7 @@ pub enum ToolInput {
     CodeEditingError(CodeEditingErrorRequest),
     ClassSymbolFollowup(ClassSymbolFollowupRequest),
     // probe request
+    ProbeCreateQuestionForSymbol(ProbeQuestionForSymbolRequest),
     ProbeEnoughOrDeeper(ProbeEnoughOrDeeperRequest),
     ProbeFilterSnippetsSingleSymbol(CodeToProbeSubSymbolRequest),
     ProbeSubSymbol(CodeToEditFilterRequest),
@@ -112,6 +114,23 @@ impl ToolInput {
             }
             ToolInput::ProbeFilterSnippetsSingleSymbol(_) => ToolType::ProbeSubSymbolFiltering,
             ToolInput::ProbeEnoughOrDeeper(_) => ToolType::ProbeEnoughOrDeeper,
+            ToolInput::ProbeCreateQuestionForSymbol(_) => ToolType::ProbeCreateQuestionForSymbol,
+        }
+    }
+
+    pub fn probe_create_question_for_symbol(request: ProbeQuestionForSymbolRequest) -> Self {
+        ToolInput::ProbeCreateQuestionForSymbol(request)
+    }
+
+    pub fn get_probe_create_question_for_symbol(
+        self,
+    ) -> Result<ProbeQuestionForSymbolRequest, ToolError> {
+        if let ToolInput::ProbeCreateQuestionForSymbol(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::ProbeCreateQuestionForSymbol,
+            ))
         }
     }
 

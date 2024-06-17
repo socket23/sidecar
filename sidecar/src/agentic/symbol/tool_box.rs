@@ -419,6 +419,103 @@ impl ToolBox {
             })
             .collect::<Vec<_>>();
 
+        // Take another pass here over the definitions with thier outline nodes
+        // to verify we are not pointing to an implementation but the actual
+        // definition (common case with rust where implementations are in different files)
+        let definitions_to_outline_node = stream::iter(dbg!(definitions_to_outline_node))
+            .map(|(definition, outline_node)| async move {
+                // Figure out what to do over here
+                let identifier_range = outline_node.identifier_range();
+                let fs_file_path = outline_node.fs_file_path().to_owned();
+                // we want to initiate another go-to-definition at this position
+                // and compare if it lands to the same location as the outline node
+                // if it does, then this is correct otherwise we have to change our
+                // outline node
+                let go_to_definition = self
+                    .go_to_definition(&fs_file_path, identifier_range.end_position(), request_id)
+                    .await;
+                match go_to_definition {
+                    Ok(go_to_definition) => {
+                        let definitions = go_to_definition.definitions();
+                        let points_to_same_symbol = definitions.iter().any(|definition| {
+                            let definition_range = definition.range();
+                            if identifier_range.contains_check_line(&definition_range) {
+                                true
+                            } else {
+                                false
+                            }
+                        });
+                        if points_to_same_symbol {
+                            Some((definition, outline_node))
+                        } else {
+                            // it does not point to the same outline node
+                            // which is common for languages like rust and typescript
+                            // so we try to find the symbol where we can follow this to
+                            if definitions.is_empty() {
+                                None
+                            } else {
+                                // Filter out the junk which we already know about
+                                // example: rustup files which are internal libraries
+                                let most_probable_definition = definitions
+                                    .into_iter()
+                                    .find(|definition| !definition.file_path().contains("rustup"));
+                                if most_probable_definition.is_none() {
+                                    None
+                                } else {
+                                    let most_probable_definition =
+                                        most_probable_definition.expect("is_none to hold");
+                                    let definition_file_path = most_probable_definition.file_path();
+                                    let file_open_response = self
+                                        .file_open(definition_file_path.to_owned(), request_id)
+                                        .await;
+                                    if file_open_response.is_err() {
+                                        return None;
+                                    }
+                                    let file_open_response =
+                                        file_open_response.expect("is_err to hold");
+                                    let _ = self
+                                        .force_add_document(
+                                            &definition_file_path,
+                                            file_open_response.contents_ref(),
+                                            file_open_response.language(),
+                                        )
+                                        .await;
+                                    // Now we want to grab the outline nodes from here
+                                    let outline_nodes = self
+                                        .symbol_broker
+                                        .get_symbols_outline(definition_file_path)
+                                        .await;
+                                    if outline_nodes.is_none() {
+                                        return None;
+                                    }
+                                    let outline_nodes = outline_nodes.expect("is_none to hold");
+                                    let possible_outline_node = outline_nodes.into_iter().find(|outline_node| {
+                                        // one of the problems we have over here is that the struct
+                                        // might be bigger than the parsing we have done because
+                                        // of decorators etc
+                                        outline_node
+                                            .range()
+                                            .contains_check_line_column(definition.range())
+                                            // I do not trust this check, it will probably come bite
+                                            // us in the ass later on
+                                            || definition.range().contains_check_line_column(outline_node.range()
+                                        )
+                                    });
+                                    possible_outline_node.map(|outline_node| (definition, outline_node))
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => Some((definition, outline_node)),
+                }
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|s| s)
+            .collect::<Vec<_>>();
+
         // // Now we want to go from the definitions we are interested in to the snippet
         // // where we will be asking the question and also get the outline(???) for it
         let definition_to_outline_node_name_and_definition =

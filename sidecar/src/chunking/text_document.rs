@@ -334,7 +334,7 @@ impl Range {
 
     pub fn minimal_line_distance(&self, other: &Range) -> i64 {
         let self_start_line: i64 = self.start_line().try_into().unwrap();
-        let self_end_line: i64 = other.start_line().try_into().unwrap();
+        let self_end_line: i64 = self.end_line().try_into().unwrap();
         let other_start_line: i64 = other.start_line().try_into().unwrap();
         let other_end_line: i64 = other.end_line().try_into().unwrap();
         let mut distances = vec![

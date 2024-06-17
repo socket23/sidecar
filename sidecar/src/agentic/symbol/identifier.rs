@@ -964,6 +964,13 @@ Reason to edit:
                 // to fix it or expose it as part of the outline nodes
                 let implementations = self.get_implementations().await;
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
+                println!(
+                    "mecha_code_symbol_thinking::to_llm_request::snippets_ref::({:?})",
+                    snippets_ref
+                        .iter()
+                        .map(|snippet| (snippet.fs_file_path.to_owned(), snippet.range.clone()))
+                        .collect::<Vec<_>>()
+                );
                 println!("mecha_code_symbol_thinking::to_llm_request::class_implementations::symbol({}):implementations_len({})", &self.symbol_name(), snippets_ref.len());
                 let mut outline_nodes = vec![];
                 for implementation_snippet in snippets_ref.iter() {

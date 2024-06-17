@@ -30,7 +30,10 @@ use crate::{
         },
         tool::{
             code_symbol::{
-                important::CodeSymbolWithThinking, models::anthropic::AskQuestionSymbolHint,
+                important::{
+                    CodeSubSymbolProbingResult, CodeSymbolProbingSummarize, CodeSymbolWithThinking,
+                },
+                models::anthropic::AskQuestionSymbolHint,
             },
             lsp::open_file::OpenFileResponse,
         },
@@ -961,12 +964,15 @@ impl Symbol {
                     // The history item is not formatted here properly
                     // we need to make sure that we are passing the highlights of the snippets
                     // from where we are asking the question
-                    Some(SymbolToProbeRequest::new(
-                        symbol_identifier,
-                        request,
-                        original_request.to_owned(),
-                        original_request_id_ref.to_owned(),
-                        history,
+                    Some((
+                        outline_node,
+                        SymbolToProbeRequest::new(
+                            symbol_identifier,
+                            request,
+                            original_request.to_owned(),
+                            original_request_id_ref.to_owned(),
+                            history,
+                        ),
                     ))
                 }
                 Err(e) => {
@@ -991,11 +997,11 @@ impl Symbol {
             // marking this as a TODO
             Ok("probe requests are empty, symbol not relevant for the user".to_owned())
         } else {
-            // TODO(skcd): send the requests over here to the symbol manager and then await
+            // send the requests over here to the symbol manager and then await
             // in parallel
             let hub_sender_ref = &hub_sender;
             let responses = stream::iter(symbol_to_probe_request)
-                .map(|symbol_to_probe_request| async move {
+                .map(|(outline_node, symbol_to_probe_request)| async move {
                     let symbol_identifier = symbol_to_probe_request.symbol_identifier().clone();
                     let (sender, receiver) = tokio::sync::oneshot::channel();
                     let _ = hub_sender_ref.clone().send((
@@ -1008,33 +1014,63 @@ impl Symbol {
                         sender,
                     ));
                     let response = receiver.await.map(|response| response.to_string());
-                    response
+                    match response {
+                        Ok(response) => {
+                            Some(CodeSubSymbolProbingResult::new(
+                                outline_node.name().to_owned(),
+                                outline_node.fs_file_path().to_owned(),
+                                vec![response],
+                                // Here we should have the outline and not the
+                                // complete symbol over here
+                                outline_node.content().content().to_owned(),
+                            ))
+                        }
+                        Err(e) => {
+                            println!(
+                                "symbol::probe_request::sub_symbol::probe_result::error({:?})",
+                                e
+                            );
+                            None
+                        }
+                    }
                 })
                 .buffer_unordered(100)
                 .collect::<Vec<_>>()
-                .await;
-
-            let final_answer = responses
+                .await
                 .into_iter()
-                .filter_map(|response| response.ok())
-                .collect::<Vec<_>>()
-                .join("\n");
-            // we were using a summarizer to generate the final answer
-            // to the user query over here, but for now we are skipping this part
-            // I know its pretty bad but we have to test things out end to end first
+                .filter_map(|s| s)
+                .collect::<Vec<_>>();
 
-            // send a UI event with the answer we are generating
+            // summarize the results over here properly
+            let request = CodeSymbolProbingSummarize::new(
+                query.to_owned(),
+                history.to_owned(),
+                self.mecha_code_symbol.symbol_name().to_owned(),
+                self.get_outline(request_id_ref.to_owned()).await?,
+                self.mecha_code_symbol.fs_file_path().to_owned(),
+                responses,
+                self.llm_properties.llm().clone(),
+                self.llm_properties.provider().clone(),
+                self.llm_properties.api_key().clone(),
+            );
+            let result = self
+                .tools
+                .probing_results_summarize(request, request_id_ref)
+                .await;
             let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
                 request_id_ref.to_owned(),
                 self.symbol_identifier.clone(),
-                final_answer.to_owned(),
+                result
+                    .as_ref()
+                    .map(|s| s.to_owned())
+                    .unwrap_or("Error with probing answer".to_owned()),
             ));
             println!(
                 "Probing finished for {} with result: {:?}",
                 &self.mecha_code_symbol.symbol_name(),
-                &final_answer
+                &result
             );
-            Ok(final_answer)
+            result
         }
 
         // =========================== UNDER REMOVAL ======================== //

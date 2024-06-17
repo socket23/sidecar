@@ -130,7 +130,7 @@ impl Tool for ProbeQuestionForSymbol {
             0.2,
             None,
         );
-        let mut retries = 1;
+        let mut retries = 0;
         loop {
             if retries > 4 {
                 return Err(ToolError::MissingXMLTags);

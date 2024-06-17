@@ -39,7 +39,7 @@ fn default_index_dir() -> PathBuf {
 #[tokio::main]
 async fn main() {
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs".to_owned();
-    let placeholder_range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
+    let placeholder_range = Range::new(Position::new(40, 0, 0), Position::new(45, 1, 0));
     let editor_url = "http://localhost:42424".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));

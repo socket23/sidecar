@@ -129,6 +129,7 @@ impl PareaClient {
     }
 
     pub async fn log_completion(&self, completion: PareaLogCompletion) {
+        println!("parea::log_completion::({})", &completion.trace_name);
         let url =
             "https://parea-ai-backend-us-9ac16cdbc7a7b006.onporter.run/api/parea/v1/trace_log";
 

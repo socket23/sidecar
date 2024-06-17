@@ -38,9 +38,9 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let fs_file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agent/types.rs".to_owned();
+    let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs".to_owned();
     let placeholder_range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
-    let editor_url = "http://localhost:42423".to_owned();
+    let editor_url = "http://localhost:42424".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -73,17 +73,17 @@ async fn main() {
     ));
 
     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
-        "Agent".to_owned(),
+        "LLMBroker".to_owned(),
         vec![],
         false,
         fs_file_path.to_owned(),
         Some(Snippet::new(
-            "Agent".to_owned(),
+            "LLMBroker".to_owned(),
             placeholder_range.clone(),
             fs_file_path.to_owned(),
             "".to_owned(),
             OutlineNodeContent::new(
-                "Agent".to_owned(),
+                "LLMBroker".to_owned(),
                 placeholder_range.clone(),
                 sidecar::chunking::types::OutlineNodeType::Class,
                 "".to_owned(),
@@ -101,8 +101,8 @@ async fn main() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let _symbol = Symbol::new(
-        SymbolIdentifier::with_file_path("Agent", &fs_file_path),
+    let symbol = Symbol::new(
+        SymbolIdentifier::with_file_path("LLMBroker", &fs_file_path),
         mecha_code_symbol_thinking,
         sender,
         tool_box,
@@ -119,4 +119,9 @@ async fn main() {
     )
     .await
     .expect("to work");
+
+    let implementations = symbol.grab_implementations("testing").await;
+    println!("implementations: {:?}", implementations);
+    let mecha_code_symbol = symbol.mecha_code_symbol();
+    dbg!(mecha_code_symbol.to_llm_request("testing").await);
 }

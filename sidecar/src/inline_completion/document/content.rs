@@ -942,7 +942,7 @@ mod tests {
         inline_completion::document::content::split_camel_case,
     };
 
-    use super::{split_into_words, DocumentEditLines};
+    use super::DocumentEditLines;
 
     #[test]
     fn test_document_lines_works() {

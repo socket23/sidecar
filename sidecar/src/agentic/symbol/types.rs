@@ -280,6 +280,10 @@ impl Symbol {
         Ok(symbol)
     }
 
+    pub fn mecha_code_symbol(&self) -> Arc<MechaCodeSymbolThinking> {
+        self.mecha_code_symbol.clone()
+    }
+
     fn fs_file_path(&self) -> &str {
         self.mecha_code_symbol.fs_file_path()
     }
@@ -311,7 +315,7 @@ impl Symbol {
             .await
     }
 
-    async fn grab_implementations(&self, request_id: &str) -> Result<(), SymbolError> {
+    pub async fn grab_implementations(&self, request_id: &str) -> Result<(), SymbolError> {
         let snippet_file_path: Option<String>;
         {
             snippet_file_path = self
@@ -382,7 +386,7 @@ impl Symbol {
                         // returning the node containing the full outline
                         // which wins over any other node, so this breaks the rest of the
                         // flow, what should we do here??
-                        tool_box.get_outline_nodes(&file_path).await,
+                        tool_box.get_outline_nodes(&file_path, request_id).await,
                     )
                 })
                 .buffer_unordered(1)
@@ -402,11 +406,12 @@ impl Symbol {
                 .filter_map(|implementation| {
                     let file_path = implementation.fs_file_path().to_owned();
                     let range = implementation.range();
+                    println!("symbol::grab_implementations::range::({:?})", &range);
                     // if file content is empty, then we do not add this to our
                     // implementations
                     let file_content = file_content_map.get(&file_path);
                     if let Some(Ok(ref file_content)) = file_content {
-                        let outline_nodes_for_range = outline_nodes
+                        let outline_node_for_range = outline_nodes
                             .get(&file_path)
                             .map(|outline_nodes| {
                                 if let Some(outline_nodes) = outline_nodes {
@@ -426,14 +431,14 @@ impl Symbol {
                             .flatten();
                         match (
                             file_content.content_in_range(&range),
-                            outline_nodes_for_range,
+                            outline_node_for_range,
                         ) {
-                            (Some(content), Some(outline_nodes)) => Some(Snippet::new(
+                            (Some(content), Some(outline_node)) => Some(Snippet::new(
                                 self.symbol_identifier.symbol_name().to_owned(),
                                 range.clone(),
                                 file_path,
                                 content,
-                                outline_nodes,
+                                outline_node,
                             )),
                             _ => None,
                         }

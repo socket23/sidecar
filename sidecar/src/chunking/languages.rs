@@ -218,12 +218,16 @@ impl TSLanguageConfig {
                         }
                         match child_node_type {
                             OutlineNodeType::ClassName => {
-                                class_name = Some(get_string_from_bytes(
-                                    &source_code_vec,
-                                    child_range.start_byte(),
-                                    child_range.end_byte(),
-                                ));
-                                class_name_range = Some(child_range);
+                                // we might have inner classes inside the same class
+                                // its best to avoid tracking them again
+                                if class_name.is_none() {
+                                    class_name = Some(get_string_from_bytes(
+                                        &source_code_vec,
+                                        child_range.start_byte(),
+                                        child_range.end_byte(),
+                                    ));
+                                    class_name_range = Some(child_range);
+                                }
                             }
                             OutlineNodeType::Function => {
                                 if self.language_str == "python" && function_range.is_some() {
@@ -3159,5 +3163,37 @@ pub struct NormalBoringStruct {{
         assert_eq!(outlines.len(), 3);
         // the outline for this class starts at the #[derive(...)] position
         assert_eq!(outlines[0].range().start_line(), 1);
+    }
+
+    #[test]
+    fn test_parse_struct_inside_function_rust() {
+        let source_code = r#"
+impl Something {{
+    fn new() {{
+        struct SomethingElse {{
+        }}
+    }}
+}}
+
+pub struct SomethingWorking {{
+
+}}
+        "#;
+        let language = "rust";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("to be present");
+        let mut parser = Parser::new();
+        let grammar = ts_language_config.grammar;
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let outlines = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        assert_eq!(outlines.len(), 2);
+        assert_eq!(outlines[0].name(), "Something");
     }
 }

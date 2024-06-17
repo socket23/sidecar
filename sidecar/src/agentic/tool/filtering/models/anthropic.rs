@@ -1355,6 +1355,7 @@ Remember that your reply should be strictly in the following format:
         &self,
         request: CodeToProbeSubSymbolRequest,
     ) -> Result<CodeToProbeSubSymbolList, CodeToEditFilteringError> {
+        println!("code_to_edit_filter_formatter::filter_code_snippets_probing_sub_symbols");
         let query = request.query().to_owned();
         let xml_string = request.xml_symbol();
         let user_query = format!(

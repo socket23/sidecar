@@ -424,7 +424,11 @@ impl MechaCodeSymbolThinking {
     async fn is_function(&self) -> Option<Snippet> {
         let snippet = self.snippet.lock().await;
         if let Some(ref snippet) = *snippet {
-            Some(snippet.clone())
+            if snippet.outline_node_content.is_function_type() {
+                Some(snippet.clone())
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -590,6 +594,10 @@ impl MechaCodeSymbolThinking {
         let request_id_ref = &request_id;
         // early exit if this is a function
         if let Some(snippet) = self.is_function().await {
+            println!(
+                "mecha_code_symbol_thinking::probe_sub_symbol::is_function::({})",
+                self.symbol_name()
+            );
             return Ok(vec![SubSymbolToProbe::new(
                 self.symbol_name().to_owned(),
                 snippet.range().clone(),
@@ -599,8 +607,13 @@ impl MechaCodeSymbolThinking {
             )]);
         }
         if self.is_snippet_present().await {
+            println!(
+                "mecha_code_symbol_thinking::probe_sub_symbol::is_snippet_present::({})",
+                self.symbol_name()
+            );
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
             {
+                println!("mecha_code_symbol_thinking::probe_sub_symbol::filter_code_snippets_subsymbol_for_probing::({})", self.symbol_name());
                 let filtered_list = dbg!(
                     self.tool_box
                         .filter_code_snippets_subsymbol_for_probing(
@@ -657,6 +670,10 @@ impl MechaCodeSymbolThinking {
                 Err(SymbolError::ExpectedFileToExist)
             }
         } else {
+            println!(
+                "mecha_code_symbol_thinking::probe_sub_symbols::empty::({})",
+                self.symbol_name()
+            );
             Err(SymbolError::ExpectedFileToExist)
         }
     }
@@ -964,13 +981,6 @@ Reason to edit:
                 // to fix it or expose it as part of the outline nodes
                 let implementations = self.get_implementations().await;
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
-                println!(
-                    "mecha_code_symbol_thinking::to_llm_request::snippets_ref::({:?})",
-                    snippets_ref
-                        .iter()
-                        .map(|snippet| (snippet.fs_file_path.to_owned(), snippet.range.clone()))
-                        .collect::<Vec<_>>()
-                );
                 println!("mecha_code_symbol_thinking::to_llm_request::class_implementations::symbol({}):implementations_len({})", &self.symbol_name(), snippets_ref.len());
                 let mut outline_nodes = vec![];
                 for implementation_snippet in snippets_ref.iter() {

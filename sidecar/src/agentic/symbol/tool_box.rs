@@ -844,7 +844,25 @@ We also believe this symbol needs to be probed because of:
         &self,
         parent_symbol_name: &str,
         sub_symbol_probe: &SubSymbolToProbe,
+        request_id: &str,
     ) -> Result<OutlineNodeContent, SymbolError> {
+        let file_open_response = self
+            .file_open(sub_symbol_probe.fs_file_path().to_owned(), request_id)
+            .await;
+        match file_open_response {
+            Ok(file_open_response) => {
+                let _ = self
+                    .force_add_document(
+                        sub_symbol_probe.fs_file_path(),
+                        file_open_response.contents_ref(),
+                        file_open_response.language(),
+                    )
+                    .await;
+            }
+            Err(e) => {
+                println!("tool_box::find_sub_symbol_to_probe_with_name::err({:?})", e);
+            }
+        }
         let outline_nodes = self
             .get_outline_nodes_grouped(sub_symbol_probe.fs_file_path())
             .await

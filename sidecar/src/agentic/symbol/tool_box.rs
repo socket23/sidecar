@@ -845,30 +845,31 @@ We also believe this symbol needs to be probed because of:
         parent_symbol_name: &str,
         sub_symbol_probe: &SubSymbolToProbe,
     ) -> Result<OutlineNodeContent, SymbolError> {
-        let outline_node = self
+        let outline_nodes = self
             .get_outline_nodes_grouped(sub_symbol_probe.fs_file_path())
             .await
             .ok_or(SymbolError::ExpectedFileToExist)?
             .into_iter()
-            .find(|outline_node| outline_node.name() == parent_symbol_name)
-            .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)?;
+            .filter(|outline_node| outline_node.name() == parent_symbol_name)
+            .collect::<Vec<_>>();
 
         if sub_symbol_probe.is_outline() {
             // we can ignore this for now
             Err(SymbolError::OutlineNodeEditingNotSupported)
         } else {
-            let child_node = outline_node
-                .children()
-                .into_iter()
+            let child_node = outline_nodes
+                .iter()
+                .map(|outline_node| outline_node.children())
+                .flatten()
                 .find(|child_node| child_node.name() == sub_symbol_probe.symbol_name());
             if let Some(child_node) = child_node {
                 Ok(child_node.clone())
             } else {
-                if outline_node.name() == sub_symbol_probe.symbol_name() {
-                    Ok(outline_node.content().clone())
-                } else {
-                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
-                }
+                outline_nodes
+                    .iter()
+                    .find(|outline_node| outline_node.name() == sub_symbol_probe.symbol_name())
+                    .map(|outline_node| outline_node.content().clone())
+                    .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)
             }
         }
     }

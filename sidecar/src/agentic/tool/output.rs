@@ -91,6 +91,7 @@ pub enum ToolOutput {
     CodeEditingForError(String),
     ClassSymbolFollowupResponse(ClassSymbolFollowupResponse),
     // Probe requests
+    ProbeCreateQuestionForSymbol(String),
     ProbeEnoughOrDeeper(ProbeEnoughOrDeeperResponse),
     ProbeSubSymbolFiltering(CodeToProbeSubSymbolList),
     ProbePossible(CodeSymbolShouldAskQuestionsResponse),
@@ -372,6 +373,13 @@ impl ToolOutput {
     pub fn get_probe_enough_or_deeper(self) -> Option<ProbeEnoughOrDeeperResponse> {
         match self {
             ToolOutput::ProbeEnoughOrDeeper(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_probe_create_question_for_symbol(self) -> Option<String> {
+        match self {
+            ToolOutput::ProbeCreateQuestionForSymbol(response) => Some(response),
             _ => None,
         }
     }

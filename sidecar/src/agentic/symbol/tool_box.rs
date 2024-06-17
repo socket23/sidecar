@@ -27,11 +27,13 @@ use crate::agentic::tool::code_symbol::initial_request_follow::{
     CodeSymbolFollowInitialRequest, CodeSymbolFollowInitialResponse,
 };
 use crate::agentic::tool::code_symbol::models::anthropic::{
-    CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
+    AskQuestionSymbolHint, CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
+    ProbeNextSymbol,
 };
 use crate::agentic::tool::code_symbol::probe::{
     ProbeEnoughOrDeeperRequest, ProbeEnoughOrDeeperResponse,
 };
+use crate::agentic::tool::code_symbol::probe_question_for_symbol::ProbeQuestionForSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
@@ -68,7 +70,7 @@ use crate::{
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
-use super::helpers::find_needle_position;
+use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
 use super::tool_properties::ToolProperties;
 use super::types::{SymbolEventRequest, SymbolEventResponse};
@@ -98,6 +100,41 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// We gather the snippets along with the questions we want to ask and
+    /// generate the final question which we want to send over to the next symbol
+    pub async fn probe_query_generation_for_symbol(
+        &self,
+        current_symbol_name: &str,
+        next_symbol_name: &str,
+        next_symbol_name_file_path: &str,
+        original_query: &str,
+        ask_question_with_snippet: Vec<(Snippet, AskQuestionSymbolHint)>,
+        llm_properties: LLMProperties,
+    ) -> Result<String, SymbolError> {
+        // generate the hyperlinks using the ask_question_with_snippet
+        // send these hyperlinks to the query
+        let tool_input =
+            ToolInput::ProbeCreateQuestionForSymbol(ProbeQuestionForSymbolRequest::new(
+                current_symbol_name.to_owned(),
+                next_symbol_name.to_owned(),
+                next_symbol_name_file_path.to_owned(),
+                ask_question_with_snippet
+                    .into_iter()
+                    .map(|(snippet, ask_question)| {
+                        generate_hyperlink_from_snippet(&snippet, ask_question)
+                    })
+                    .collect::<Vec<_>>(),
+                original_query.to_owned(),
+                llm_properties,
+            ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_probe_create_question_for_symbol()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// Checks if we have enough information to answer the user query

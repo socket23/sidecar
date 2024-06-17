@@ -1,4 +1,9 @@
-use crate::chunking::text_document::Range;
+use crate::{
+    agentic::tool::code_symbol::models::anthropic::AskQuestionSymbolHint,
+    chunking::text_document::Range,
+};
+
+use super::identifier::Snippet;
 
 /// Grab the file contents above, below and in the selection
 pub fn split_file_content_into_parts(
@@ -74,5 +79,54 @@ pub fn find_needle_position(haystack: &str, needle: &str) -> Option<usize> {
     search_haystack(
         needle.chars().into_iter().collect::<Vec<_>>().as_slice(),
         haystack.chars().into_iter().collect::<Vec<_>>().as_slice(),
+    )
+}
+
+/// Generates a hyperlink which contains information of where we found the hit
+/// for the question we want to ask
+pub fn generate_hyperlink_from_snippet(
+    snippet: &Snippet,
+    ask_question: AskQuestionSymbolHint,
+) -> String {
+    let thinking = ask_question.thinking();
+    let file_path = ask_question.file_path();
+    let snippet_start_line = snippet.range().start_line();
+    let snippet_lines = snippet
+        .content()
+        .lines()
+        .enumerate()
+        .map(|(idx, line)| (idx + snippet_start_line, line.to_owned()))
+        .collect::<Vec<_>>();
+    let possible_line_match = snippet_lines
+        .iter()
+        .find(|(_idx, line)| line == ask_question.line_content())
+        .map(|(idx, _)| idx.clone());
+    let hyperlink = snippet_lines
+        .into_iter()
+        .map(|(idx, line)| {
+            if Some(&idx) == possible_line_match.as_ref() {
+                format!(
+                    r#"<line_with_reference>
+{line}
+</line_with_reference>"#
+                )
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        r#"<hyperlink>
+<thinking>
+{thinking}
+</thinking>
+<code_snippet>
+<file_path>
+{file_path}
+</file_path>
+{hyperlink}
+</code_snippet>
+</hyperlink>"#
     )
 }

@@ -612,6 +612,10 @@ impl Symbol {
         if let Ok(probe_deeper_or_enough) = probe_deeper_or_enough {
             if let Some(answer_user_query) = probe_deeper_or_enough.answer_user_query() {
                 // we found the answer very early, so lets just return over here
+                println!(
+                    "symbol::probe_request::answer_user_query::({})",
+                    self.symbol_name()
+                );
                 return Ok(answer_user_query);
             }
         }
@@ -619,6 +623,11 @@ impl Symbol {
         // TODO(skcd): We are not getting the right question to ask to the sub-symbols
         // this is more of an observation about the sub-symbol related to our question
         let probe_sub_symbols = probe_sub_symbols?;
+        println!(
+            "symbol::probe_request::probe_sub_symbols::({})::len({})",
+            self.symbol_name(),
+            probe_sub_symbols.len()
+        );
         let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
             request_id_ref.to_owned(),
             SymbolEventSubStepRequest::new(

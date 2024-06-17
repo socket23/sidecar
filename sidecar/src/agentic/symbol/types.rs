@@ -615,6 +615,11 @@ impl Symbol {
         if let Ok(probe_deeper_or_enough) = probe_deeper_or_enough {
             if let Some(answer_user_query) = probe_deeper_or_enough.answer_user_query() {
                 // we found the answer very early, so lets just return over here
+                let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
+                    request_id_ref.to_owned(),
+                    self.symbol_identifier.clone(),
+                    answer_user_query.to_owned(),
+                ));
                 println!(
                     "symbol::probe_request::answer_user_query::({})",
                     self.symbol_name()
@@ -995,7 +1000,13 @@ impl Symbol {
             // TODO(skcd): if this is empty, then we should have our answer ready over here
             // we should probably ask the LLM to illcit an answer
             // marking this as a TODO
-            Ok("probe requests are empty, symbol not relevant for the user".to_owned())
+            let result = "probe requests are empty, symbol not relevant for the user".to_owned();
+            let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
+                request_id_ref.to_owned(),
+                self.symbol_identifier.clone(),
+                result.to_owned(),
+            ));
+            Ok(result)
         } else {
             // send the requests over here to the symbol manager and then await
             // in parallel

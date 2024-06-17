@@ -9,7 +9,10 @@ use llm_client::{
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 use serde_json::json;
+use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 use crate::{
     agentic::{
@@ -24,6 +27,32 @@ use crate::{
 
 use super::{model_selection::LLMClientConfig, types::Result};
 
+#[derive(Debug, Clone)]
+pub struct ProbeRequestTracker {
+    pub running_requests: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
+}
+
+impl ProbeRequestTracker {
+    pub fn new() -> Self {
+        Self {
+            running_requests: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    async fn track_new_request(&self, request_id: &str, join_handle: JoinHandle<()>) {
+        let mut running_requests = self.running_requests.lock().await;
+        running_requests.insert(request_id.to_owned(), join_handle);
+    }
+
+    async fn cancel_request(&self, request_id: &str) {
+        let mut running_requests = self.running_requests.lock().await;
+        if let Some(response) = running_requests.get_mut(request_id) {
+            // we abort the running requests
+            response.abort();
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProbeRequestActiveWindow {
     file_path: String,
@@ -33,6 +62,7 @@ pub struct ProbeRequestActiveWindow {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProbeRequest {
+    request_id: String,
     editor_url: String,
     model_config: LLMClientConfig,
     user_context: UserContext,
@@ -43,6 +73,7 @@ pub struct ProbeRequest {
 pub async fn probe_request(
     Extension(app): Extension<Application>,
     Json(ProbeRequest {
+        request_id,
         editor_url,
         model_config,
         mut user_context,
@@ -51,6 +82,7 @@ pub async fn probe_request(
     }): Json<ProbeRequest>,
 ) -> Result<impl IntoResponse> {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let probe_request_tracker = app.probe_request_tracker.clone();
     let tool_broker = Arc::new(ToolBroker::new(
         app.llm_broker.clone(),
         Arc::new(CodeEditBroker::new()),
@@ -92,11 +124,15 @@ pub async fn probe_request(
         user_context.clone(),
     );
     // spawn a background thread to keep polling the probe_request future
-    tokio::spawn(async move {
+    let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
             .probe_request_from_user_context(query, user_context)
             .await;
     });
+
+    let _ = probe_request_tracker
+        .track_new_request(&request_id, join_handle)
+        .await;
 
     // Now we want to poll the future of the probe request we are sending
     // along with the ui events so we can return the channel properly

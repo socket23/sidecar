@@ -524,13 +524,13 @@ impl Symbol {
     }
 
     /// Probing works in the following way:
-    /// - filter to the sub-symbols inside the symbol
-    /// - allow the LLM to do go-to-definitions within the sub-symbol
-    /// - For each sub-symbol figure out the next step to do here:
-    /// - - wrong path
-    /// - - answer question
-    /// - - follow the symbol to the sub-symbol [this generates a edge in the action
-    /// - - graph]
+    /// - We run 2 queries in parallel first:
+    /// - - check if we have enough to answer the user query
+    /// - - if we have to look deeper into certain sections of the code in the symbol
+    /// - If we have to look deeper into certain sections of the code, find the code snippets
+    /// where we have to cmd-click and grab them (these are the next probe symbols)
+    /// - shoot a request to these next probe symbols with all the questions we have
+    /// - wait in parallel and then merge the answer together to answer the user query
     async fn probe_request(
         &self,
         request: SymbolToProbeRequest,
@@ -651,15 +651,14 @@ impl Symbol {
                     probe_sub_symbol.symbol_name(),
                     probe_sub_symbol.fs_file_path(),
                 );
-                let outline_node = dbg!(
-                    self.tools
-                        .find_sub_symbol_to_probe_with_name(
-                            self.symbol_name(),
-                            &probe_sub_symbol,
-                            request_id_ref,
-                        )
-                        .await
-                );
+                let outline_node = self
+                    .tools
+                    .find_sub_symbol_to_probe_with_name(
+                        self.symbol_name(),
+                        &probe_sub_symbol,
+                        request_id_ref,
+                    )
+                    .await;
                 if let Ok(outline_node) = outline_node {
                     let snippet = Snippet::new(
                         probe_sub_symbol.symbol_name().to_owned(),
@@ -788,7 +787,7 @@ impl Symbol {
         // TODO(skcd): We should pass the history of the sub-symbol snippet of how we
         // are asking the question, since we are directly going for the go-to-definition
         let probe_results = stream::iter(snippet_to_follow_with_definitions.to_vec())
-            .map(|(_snippet, ask_question_symbol_hint)| async move {
+            .map(|(snippet, ask_question_symbol_hint)| async move {
                 // A single snippet can have multiple go-to-definition-requests
                 // Here we try to organise them in the form or outline node probe
                 // requests
@@ -836,7 +835,7 @@ impl Symbol {
                     if outline_nodes.is_empty() {
                         println!("symbol::probe_request::ask_question_hint::failed::no_outline_nodes::({})", self.symbol_name());
                     } else {
-                        question_to_outline_nodes.push((ask_question_hint, outline_nodes));
+                        question_to_outline_nodes.push((snippet.clone(), ask_question_hint, outline_nodes));
                     }
                 }
                 question_to_outline_nodes
@@ -846,21 +845,24 @@ impl Symbol {
             .await;
 
         // outline nodes to probe questions
-        let mut outline_node_to_probe_question: HashMap<OutlineNode, Vec<AskQuestionSymbolHint>> =
-            HashMap::new();
-        probe_results
-            .into_iter()
-            .flatten()
-            .for_each(|(ask_question_hint, outline_nodes)| {
+        let mut outline_node_to_probe_question: HashMap<
+            OutlineNode,
+            Vec<(Snippet, AskQuestionSymbolHint)>,
+        > = HashMap::new();
+        probe_results.into_iter().flatten().for_each(
+            |(snippet, ask_question_hint, outline_nodes)| {
                 for outline_node in outline_nodes {
                     if let Some(questions) = outline_node_to_probe_question.get_mut(&outline_node) {
-                        questions.push(ask_question_hint.clone());
+                        questions.push((snippet.clone(), ask_question_hint.clone()));
                     } else {
-                        outline_node_to_probe_question
-                            .insert(outline_node, vec![ask_question_hint.clone()]);
+                        outline_node_to_probe_question.insert(
+                            outline_node,
+                            vec![(snippet.clone(), ask_question_hint.clone())],
+                        );
                     }
                 }
-            });
+            },
+        );
 
         // Now we can create the probe next query for these outline nodes:
         let implementations = self.mecha_code_symbol.get_implementations().await;
@@ -888,7 +890,7 @@ impl Symbol {
                     Some((outline_node, questions))
                 }
             })
-            .map(|(outline_node, questions)| {
+            .map(|(outline_node, linked_snippet_with_questions)| {
                 // over here we are going to send over a request to the outline nodes
                 // and ask them all the questions we have for them to answer
                 let symbol_identifier = SymbolIdentifier::with_file_path(
@@ -897,6 +899,13 @@ impl Symbol {
                 );
                 // TODO(skcd): Reason here need to be better formatted, otherwise
                 // its very lossy and will not work
+                // we want to generate a better question over here which can
+                // combine the previous question which was asked and the current
+                // set of thinking process we have for probing into this symbol
+                let questions = linked_snippet_with_questions
+                    .iter()
+                    .map(|(_, question)| question)
+                    .collect::<Vec<_>>();
                 let mut reason = questions
                     .into_iter()
                     .map(|question| question.thinking().to_owned())

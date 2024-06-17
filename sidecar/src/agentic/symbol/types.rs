@@ -645,7 +645,6 @@ impl Symbol {
         // and the ones which are required will always work out
         let snippet_to_symbols_to_follow = stream::iter(probe_sub_symbols)
             .map(|probe_sub_symbol| async move {
-                let symbol_name = probe_sub_symbol.symbol_name();
                 println!(
                     "symbol::probe_request::probe_sub_symbols::({})({}@{})",
                     self.symbol_name(),

@@ -1045,6 +1045,28 @@ impl Symbol {
             // send the requests over here to the symbol manager and then await
             // in parallel
             let hub_sender_ref = &hub_sender;
+            // log all the symbols we are going to probe to parea
+            let _ = self
+                .parea_client
+                .log_event(PareaLogEvent::new(
+                    format!("probe_dependency_edges::{}", self.symbol_name()),
+                    request_id.to_owned(),
+                    request_id.to_owned(),
+                    vec![
+                        ("calling_node".to_owned(), self.symbol_name().to_owned()),
+                        (
+                            "edges".to_owned(),
+                            symbol_to_probe_request
+                                .iter()
+                                .map(|(outline_node, _)| outline_node.name())
+                                .collect::<Vec<_>>()
+                                .join(" ,"),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ))
+                .await;
             let responses = stream::iter(symbol_to_probe_request)
                 .map(|(outline_node, symbol_to_probe_request)| async move {
                     let symbol_identifier = symbol_to_probe_request.symbol_identifier().clone();

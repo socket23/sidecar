@@ -245,6 +245,10 @@ pub struct Symbol {
     #[derivative(Debug = "ignore")]
     probe_questions_handler:
         Arc<Mutex<HashMap<String, Shared<tokio::sync::oneshot::Receiver<Option<String>>>>>>,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(Debug = "ignore")]
+    probe_questions_answer: Arc<Mutex<HashMap<String, Option<String>>>>,
 }
 
 impl Symbol {
@@ -275,6 +279,7 @@ impl Symbol {
             probe_questions_asked: Arc::new(Mutex::new(vec![])),
             parea_client: PareaClient::new(),
             probe_questions_handler: Arc::new(Mutex::new(HashMap::new())),
+            probe_questions_answer: Arc::new(Mutex::new(HashMap::new())),
         };
         // grab the implementations of the symbol
         // TODO(skcd): We also have to grab the diagnostics and auto-start any
@@ -471,6 +476,17 @@ impl Symbol {
         request_id: String,
     ) -> Result<String, SymbolError> {
         let original_request_id = request.original_request_id().to_owned();
+        // First check the answer hashmap if we already have the answer, and take
+        // the answer from there if it already exists
+        {
+            let answered_questions = self.probe_questions_answer.lock().await;
+            if let Some(answer) = answered_questions.get(&original_request_id) {
+                return match answer {
+                    Some(answer) => Ok(answer.to_string()),
+                    None => Err(SymbolError::CachedQueryFailed),
+                };
+            }
+        }
         let receiver: Shared<tokio::sync::oneshot::Receiver<_>>;
         let sender: Option<tokio::sync::oneshot::Sender<_>>;
         {
@@ -505,6 +521,20 @@ impl Symbol {
                 self.symbol_name()
             );
             let result = self.probe_request(request, hub_sender, request_id).await;
+            // update our answer hashmap before sending it over
+            {
+                let mut answered_question = self.probe_questions_answer.lock().await;
+                match &result {
+                    Ok(result) => {
+                        answered_question
+                            .insert(original_request_id.to_owned(), Some(result.to_string()));
+                    }
+                    Err(e) => {
+                        println!("symbol::probe_request_handler::probe_request::answer::error::({})::({:?})", self.symbol_name(), e);
+                        answered_question.insert(original_request_id.to_owned(), None);
+                    }
+                }
+            }
             match result {
                 Ok(result) => {
                     let _ = sender.send(Some(result));
@@ -520,6 +550,10 @@ impl Symbol {
             self.symbol_name()
         );
         let result = receiver.await;
+        println!(
+            "symbol::probe_request_handler::probe_request::receiver_finished::({})",
+            self.symbol_name()
+        );
         match result {
             Ok(Some(result)) => Ok(result),
             _ => Err(SymbolError::CachedQueryFailed),

@@ -31,7 +31,7 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let editor_url = "http://localhost:6897".to_owned();
+    let editor_url = "http://localhost:42424".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -66,14 +66,14 @@ async fn main() {
     let important_symbols = CodeSymbolImportantResponse::new(
         vec![
             CodeSymbolWithThinking::new(
-                "CCodePrinter".to_owned(),
+                "agent_router".to_owned(),
                 "".to_owned(),
-                "sympy/printing/ccode.py".to_owned(),
+                "src/bin/webserver.rs".to_owned(),
             ),
             CodeSymbolWithThinking::new(
                 "_print_sinc".to_owned(),
                 "".to_owned(),
-                "sympy/printing/ccode.py".to_owned(),
+                "src/bin/webserver.rs".to_owned(),
             ),
         ],
         vec![

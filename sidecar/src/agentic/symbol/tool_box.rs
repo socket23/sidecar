@@ -3116,14 +3116,14 @@ Please handle these changes as required."#
         user_context: UserContext,
         request_id: &str,
     ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
-        // let symbols = important_symbols.symbols();
-        let ordered_symbols = important_symbols.ordered_symbols();
+        let symbols = important_symbols.symbols();
+        // let ordered_symbols = important_symbols.ordered_symbols();
         // there can be overlaps between these, but for now its fine
         // let mut new_symbols: HashSet<String> = Default::default();
         // let mut symbols_to_visit: HashSet<String> = Default::default();
         // let mut final_code_snippets: HashMap<String, MechaCodeSymbolThinking> = Default::default();
         stream::iter(
-            ordered_symbols
+            symbols
                 .iter()
                 .map(|ordered_symbol| ordered_symbol.file_path().to_owned()),
         )
@@ -3143,10 +3143,10 @@ Please handle these changes as required."#
 
         let mut bounding_symbol_to_instruction: HashMap<
             OutlineNodeContent,
-            Vec<&CodeSymbolWithSteps>,
+            Vec<&CodeSymbolWithThinking>,
         > = Default::default();
-        let mut unbounded_symbols: Vec<&CodeSymbolWithSteps> = Default::default();
-        for symbol in ordered_symbols.iter() {
+        let mut unbounded_symbols: Vec<&CodeSymbolWithThinking> = Default::default();
+        for symbol in symbols.iter() {
             let file_path = symbol.file_path();
             let symbol_name = symbol.code_symbol();
             let outline_nodes = self.symbol_broker.get_symbols_outline(file_path).await;

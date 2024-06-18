@@ -324,7 +324,10 @@ impl ToolBox {
                 let end_line = selection_range.end_line() as i64;
                 let minimum_distance =
                     std::cmp::min(i64::abs(start_line - index), i64::abs(end_line - index));
-                if line.contains(&line_content) {
+                // we also need to make sure that the selection we are making is in
+                // the range of the snippet we are selecting the symbols in
+                // LLMs have a trendency to go overboard with this
+                if line.contains(&line_content) && start_line <= index && index <= end_line {
                     Some((minimum_distance, (line.to_owned(), index)))
                 } else {
                     None

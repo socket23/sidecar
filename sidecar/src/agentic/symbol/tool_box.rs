@@ -389,11 +389,10 @@ impl ToolBox {
 
         // Now we can invoke a go-to-definition on the symbol over here and get back
         // the containing symbol which has this symbol we are interested in visiting
-        let go_to_definition = dbg!(
-            self.go_to_definition(fs_file_path, symbol_location, request_id)
-                .await
-        )?
-        .definitions();
+        let go_to_definition = self
+            .go_to_definition(fs_file_path, symbol_location, request_id)
+            .await?
+            .definitions();
 
         // interested files
         let files_interested = go_to_definition
@@ -461,7 +460,7 @@ impl ToolBox {
         // Take another pass here over the definitions with thier outline nodes
         // to verify we are not pointing to an implementation but the actual
         // definition (common case with rust where implementations are in different files)
-        let definitions_to_outline_node = stream::iter(dbg!(definitions_to_outline_node))
+        let definitions_to_outline_node = stream::iter(definitions_to_outline_node)
             .map(|(definition, outline_node)| async move {
                 // Figure out what to do over here
                 let identifier_range = outline_node.identifier_range();

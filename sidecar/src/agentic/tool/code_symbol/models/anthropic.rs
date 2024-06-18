@@ -4634,6 +4634,7 @@ You will be given context which the user has selected in <user_context> and you 
 - "code symbols" here referes to the different classes, functions, or constants which might be necessary to answer the user query.
 - Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_item> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
+- If we are using absolute paths, make sure to use absolute paths in your reply.
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
 
 Let's focus on getting the "code symbols" which are necessary to satisfy the user query.
@@ -4641,7 +4642,7 @@ Let's focus on getting the "code symbols" which are necessary to satisfy the use
 As an example, given the following code selection:
 <code_selection>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 ```rust
 pub struct FillInMiddleBroker {{
@@ -4703,7 +4704,7 @@ Your reply should be, you should strictly follow this format:
 LLMType
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 <thinking>
 We need to first check if grok is part of the LLMType enum, this will make sure that the code we produce is never wrong
@@ -4714,7 +4715,7 @@ We need to first check if grok is part of the LLMType enum, this will make sure 
 FillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 <thinking>
 Other LLM's are implementing FillInMiddleFormatter trait, grok will also require support for this, so we need to check how to implement FillInMiddleFormatter trait
@@ -4725,7 +4726,7 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
 new
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 <thinking>
 We have to change the new function and add the grok llm after implementing the formatter for grok llm.
@@ -4738,7 +4739,7 @@ We have to change the new function and add the grok llm after implementing the f
 LLMType
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 <step>
 We will need to first check the LLMType if it has support for grok or we need to edit it first
@@ -4749,7 +4750,7 @@ We will need to first check the LLMType if it has support for grok or we need to
 FillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 <step>
 Check the definition of `FillInMiddleFormatter` to see how to implement it
@@ -4760,7 +4761,7 @@ Check the definition of `FillInMiddleFormatter` to see how to implement it
 CodeLlamaFillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 <step>
 We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will also have to follow a similar pattern of making changes and adding it to the right places if there are more.
@@ -4771,7 +4772,7 @@ We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will
 GrokFillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+/broker/fill_in_middle.rs
 </file_path>
 <new>
 true
@@ -4785,7 +4786,7 @@ Implement the GrokFillInMiddleFormatter following the similar pattern in `CodeLl
 
 Another example:
 <file_path>
-src/bin/webserver.rs
+/src/bin/webserver.rs
 </file_path>
 <code_selection>
 ```rust
@@ -4862,7 +4863,7 @@ Your reply should be:
 inline_completion
 </name>
 <file_path>
-src/bin/webserver.rs
+/src/bin/webserver.rs
 </file_path>
 <thinking>
 inline_completion holds all the endpoints for symbols because it also has the `get_symbol_history` endpoint. We have to start adding the endpoint there
@@ -4873,7 +4874,7 @@ inline_completion holds all the endpoints for symbols because it also has the `g
 symbol_history
 </name>
 <file_path>
-src/bin/webserver.rs
+/src/bin/webserver.rs
 </file_path>
 <thinking>
 I can find more information on how to write the code for the endpoint by following the symbol `symbol_history` in the line: `             post(sidecar::webserver::inline_completion::symbol_history),`
@@ -4886,7 +4887,7 @@ I can find more information on how to write the code for the endpoint by followi
 symbol_history
 </name>
 <file_path>
-src/bin/webserver.rs
+/src/bin/webserver.rs
 </file_path>
 <thinking>
 We need to follow the symbol_history to check the pattern on how we are going to implement the very similar functionality
@@ -4897,7 +4898,7 @@ We need to follow the symbol_history to check the pattern on how we are going to
 inline_completion
 </name>
 <file_path>
-src/bin/webserver.rs
+/src/bin/webserver.rs
 </file_path>
 <thinking>
 We have to add the newly created endpoint in inline_completion to add support for the new endpoint which we want to create

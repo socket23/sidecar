@@ -120,13 +120,15 @@ pub enum SymbolEventProbeRequest {
 pub struct SymbolEventGoToDefinitionRequest {
     fs_file_path: String,
     range: Range,
+    thinking: String,
 }
 
 impl SymbolEventGoToDefinitionRequest {
-    fn new(fs_file_path: String, range: Range) -> Self {
+    fn new(fs_file_path: String, range: Range, thinking: String) -> Self {
         Self {
             fs_file_path,
             range,
+            thinking,
         }
     }
 }
@@ -162,12 +164,14 @@ impl SymbolEventSubStepRequest {
         symbol_identifier: SymbolIdentifier,
         fs_file_path: String,
         range: Range,
+        thinking: String,
     ) -> Self {
         Self {
             symbol_identifier,
             event: SymbolEventSubStep::GoToDefinition(SymbolEventGoToDefinitionRequest::new(
                 fs_file_path,
                 range,
+                thinking,
             )),
         }
     }

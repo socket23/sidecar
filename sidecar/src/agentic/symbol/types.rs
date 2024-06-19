@@ -790,12 +790,17 @@ impl Symbol {
                         )
                         .await;
                     if let Ok(ref definitions_for_snippet) = &definitions_for_snippet {
+                        println!(
+                            "symbol::probe_request::go_to_definition::ui_event::({})",
+                            self.symbol_name()
+                        );
                         let _ = self.ui_sender.send(UIEventWithID::sub_symbol_step(
                             request_id_ref.to_owned(),
                             SymbolEventSubStepRequest::go_to_definition_request(
                                 symbol_identifier_ref.clone(),
                                 symbol_to_follow.file_path().to_owned(),
                                 definitions_for_snippet.1.clone(),
+                                symbol_to_follow.thinking().to_owned(),
                             ),
                         ));
                     }

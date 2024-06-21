@@ -700,30 +700,6 @@ impl MechaCodeSymbolThinking {
             self.symbol_name()
         );
         if self.is_snippet_present().await {
-            // This is what we are trying to figure out
-            // the idea representation here will be in the form of
-            // now that we have added the snippets, we can ask the llm to rerank
-            // the implementation snippets and figure out which to edit
-            // once we have which to edit, we can then go to the references and keep
-            // going from there whichever the LLM thinks is important for maintaining
-            // the overall structure of the query
-            // we also insert our own snipet into this
-            // re-ranking for a complete symbol looks very different
-            // we have to carefully craft the prompt in such a way that all the important
-            // details are laid out properly
-            // if its a class we call it a class, and if there are functions inside
-            // it we call them out in a section, check how symbols are implemented
-            // for a given LLM somewhere in the code
-            // we have the text for all the snippets which are part of the class
-            // there will be some here which will be the class definition and some
-            // which are not part of it
-            // so we use the ones which are part of the class defintion and name it
-            // specially, so we can use it
-            // struct A {....} is a special symbol
-            // impl A {....} is also special and we show the symbols inside it one by
-            // one for each function and in the order of they occur in the file
-            // once we have the response we can set the agent to task on each of these snippets
-
             // TODO(skcd): We want to send this request for reranking
             // and get back the snippet indexes
             // and then we parse it back from here to get back to the symbol
@@ -771,6 +747,11 @@ impl MechaCodeSymbolThinking {
                         )
                         .await
                 )?;
+
+                // We should do a COT over here for each of the individual
+                // sub-symbols to check if we really want to edit the code
+                // or we want to signal some other symbol for change before
+                // making changes to ourselves
 
                 // now we take this filtered list and try to generate back and figure out
                 // the ranges which need to be edited

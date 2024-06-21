@@ -940,7 +940,18 @@ We also believe this symbol needs to be probed because of:
         &self,
         parent_symbol_name: &str,
         symbol_to_edit: &SymbolToEdit,
+        request_id: &str,
     ) -> Result<OutlineNodeContent, SymbolError> {
+        let file_open_response = self
+            .file_open(symbol_to_edit.fs_file_path().to_owned(), request_id)
+            .await?;
+        let _ = self
+            .force_add_document(
+                symbol_to_edit.fs_file_path(),
+                file_open_response.contents_ref(),
+                file_open_response.language(),
+            )
+            .await;
         let outline_node = self
             .get_outline_nodes_grouped(symbol_to_edit.fs_file_path())
             .await
@@ -2121,7 +2132,7 @@ Please handle these changes as required."#
             tries = tries + 1;
 
             let symbol_to_edit = self
-                .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited)
+                .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
                 .await?;
             let _fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
@@ -2138,8 +2149,12 @@ Please handle these changes as required."#
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
             let symbol_to_edit = dbg!(
-                self.find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited)
-                    .await
+                self.find_sub_symbol_to_edit_with_name(
+                    parent_symbol_name,
+                    symbol_edited,
+                    request_id
+                )
+                .await
             )?;
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
@@ -2202,13 +2217,22 @@ Please handle these changes as required."#
                         let corrected_code = corrected_code.expect("is_err above to hold");
                         // update our edited code
                         updated_code = corrected_code.to_owned();
+                        // grab the symbol again since the location might have
+                        // changed between invocations of the code
+                        let symbol_to_edit = self
+                            .find_sub_symbol_to_edit_with_name(
+                                parent_symbol_name,
+                                symbol_edited,
+                                request_id,
+                            )
+                            .await?;
 
                         // Now that we have the corrected code, we should again apply
                         // it to the file
                         let _ = self
                             .apply_edits_to_editor(
                                 fs_file_path,
-                                &edited_range,
+                                symbol_to_edit.range(),
                                 &corrected_code,
                                 request_id,
                             )

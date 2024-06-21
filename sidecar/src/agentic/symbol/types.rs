@@ -1144,251 +1144,6 @@ impl Symbol {
             );
             result
         }
-
-        // =========================== UNDER REMOVAL ======================== //
-        // TODO(skcd): We can remove this whole section of the code now
-        // but there are things we need to grab from here first:
-        // - final answer summarizer
-
-        // - ask the followup question to the symbol containing the definition we are interested in
-        // - we can concat the various questions about the symbols together and just ask the symbol
-        // the question maybe?
-        // ***** THIS IS THE NEXT STEP TO DO ****** //
-        // TODO(skcd): We probably do not want to do this, since we want to the symbols
-        // to be followed naturally with a reason and just ask the symbol automagically
-        // with the request and hope that it all works out
-        // - Once we have done this, we can combine the answer from all of these, probes
-        // and join the response together
-        // let probe_results = stream::iter(snippet_to_follow_with_definitions.to_vec())
-        //     .map(|(snippet, ask_question_symbol_hint)| async move {
-        //         let questions_with_definitions = ask_question_symbol_hint;
-
-        //         // What we want to create is this: CodeSymbolFollowAlongForProbing
-        //         let file_content = self
-        //             .tools
-        //             .file_open(snippet.file_path().to_owned(), request_id_ref)
-        //             .await;
-        //         if let Err(_) = file_content {
-        //             return Err(SymbolError::ExpectedFileToExist);
-        //         }
-        //         let snippet_range = snippet.range();
-        //         let file_content = file_content.expect("if let Err to work").contents();
-        //         let file_contents_ref = &file_content;
-        //         let probe_results = stream::iter(questions_with_definitions)
-        //             .map(|(_, definitions)| async move {
-        //                 let next_symbol_link = &definitions.0;
-        //                 let definitions = &definitions.2;
-        //                 // we might also want to grab some kind of outline for the symbol hint we are gonig to be using
-        //                 // we are missing the code above, code below and the in selection
-        //                 // should we recosinder the snippet over here or maybe we just keep it as it is
-        //                 let (code_above, code_below, code_in_selection) =
-        //                     split_file_content_into_parts(file_contents_ref, snippet_range);
-        //                 let definition_names = definitions
-        //                     .iter()
-        //                     .map(|definition| definition.1.to_owned())
-        //                     .collect::<Vec<_>>();
-        //                 let definition_outlines = definitions
-        //                     .into_iter()
-        //                     .map(|definition| definition.2.to_owned())
-        //                     .collect::<Vec<_>>();
-        //                 let request = CodeSymbolFollowAlongForProbing::new(
-        //                     history_ref.to_owned(),
-        //                     self.mecha_code_symbol.symbol_name().to_owned(),
-        //                     self.mecha_code_symbol.fs_file_path().to_owned(),
-        //                     self.tools
-        //                         .detect_language(self.mecha_code_symbol.fs_file_path())
-        //                         .unwrap_or("".to_owned()),
-        //                     definition_names,
-        //                     definition_outlines,
-        //                     code_above,
-        //                     code_below,
-        //                     code_in_selection,
-        //                     self.llm_properties.llm().clone(),
-        //                     self.llm_properties.provider().clone(),
-        //                     self.llm_properties.api_key().clone(),
-        //                     query.to_owned(),
-        //                     next_symbol_link.to_owned(),
-        //                 );
-        //                 let probe_result = self
-        //                     .tools
-        //                     // TODO(skcd): This call is the one which is most frequent
-        //                     // and gives me the feeling that the model is just confused
-        //                     // at this point, because this is leading to self-loops
-        //                     // amongst other things ("probe_next_symbol") request type
-        //                     .next_symbol_should_probe_request(request, request_id_ref)
-        //                     .await;
-        //                 // Now we get the response from here and we can decide what to do with it
-        //                 probe_result
-        //             })
-        //             .buffer_unordered(100)
-        //             .collect::<Vec<_>>()
-        //             .await;
-
-        //         Ok((snippet, probe_results))
-
-        //         // To be very honest here we can ask if we want to send one more probe
-        //         // message over here if this is useful to find the changes
-        //         // TODO(skcd): Pick this up from here for sending over a request to the LLM
-        //         // to figure out if:
-        //         // - A: we have all the information required to answer
-        //         // - B: if we need to go deeper into the symbol for looking into the information
-        //         // If this is not useful we can stop over here
-        //     })
-        //     .buffer_unordered(BUFFER_LIMIT)
-        //     .collect::<Vec<_>>()
-        //     .await;
-
-        // // - depending on the probe result we can either
-        // // - - send one more request at this point
-        // // - - or we have the answer to the user query
-        // // - questions: what if one of the probes here tells us that we have the answer already?
-        // let probe_results = probe_results
-        //     .into_iter()
-        //     .filter_map(|probe_result| match probe_result {
-        //         Ok(probe_result) => Some(probe_result),
-        //         Err(_) => None,
-        //     })
-        //     .collect::<Vec<_>>();
-
-        // println!("Probe results: {:?}", &probe_results);
-
-        // let hub_sender_ref = &hub_sender;
-
-        // let probe_answers = stream::iter(probe_results)
-        //     .map(|probe_result| async move {
-        //         let snippet = probe_result.0;
-        //         let snippet_file_path = snippet.file_path();
-        //         let snippet_content = snippet.content();
-        //         let probe_results = probe_result
-        //             .1
-        //             .into_iter()
-        //             .filter_map(|s| match s {
-        //                 Ok(s) => Some(s),
-        //                 Err(_) => None,
-        //             })
-        //             .collect::<Vec<_>>();
-        //         let probing_results = stream::iter(probe_results)
-        //             .map(|probe_result| async move {
-        //                 match probe_result {
-        //                     ProbeNextSymbol::AnswerUserQuery(answer) => Ok(answer),
-        //                     ProbeNextSymbol::Empty => Ok("".to_owned()),
-        //                     ProbeNextSymbol::ShouldFollow(should_follow_request) => {
-        //                         let file_path = should_follow_request.file_path();
-        //                         let symbol_name = should_follow_request.name();
-        //                         let reason = should_follow_request.reason();
-        //                         let symbol_identifier =
-        //                             SymbolIdentifier::with_file_path(symbol_name, file_path);
-        //                         let mut history = history_slice.to_vec();
-        //                         let new_history_element = SymbolToProbeHistory::new(
-        //                             symbol_name.to_owned(),
-        //                             snippet_file_path.to_owned(),
-        //                             snippet_content.to_owned(),
-        //                             query.to_owned(),
-        //                         );
-        //                         history.push(new_history_element);
-        //                         let symbol_to_probe_request = SymbolToProbeRequest::new(
-        //                             symbol_identifier.clone(),
-        //                             reason.to_owned(),
-        //                             original_request.to_owned(),
-        //                             original_request_id_ref.to_owned(),
-        //                             history,
-        //                         );
-        //                         println!(
-        //                             "Probing: {:?} with reason: {}",
-        //                             &symbol_identifier, reason
-        //                         );
-        //                         let (sender, receiver) = tokio::sync::oneshot::channel();
-        //                         let _ = hub_sender_ref.clone().send((
-        //                             SymbolEventRequest::probe_request(
-        //                                 symbol_identifier,
-        //                                 symbol_to_probe_request,
-        //                                 tool_properties_ref.clone(),
-        //                             ),
-        //                             uuid::Uuid::new_v4().to_string(),
-        //                             sender,
-        //                         ));
-        //                         let response = receiver.await.map(|response| response.to_string());
-        //                         response
-        //                     }
-        //                     ProbeNextSymbol::WrongPath(wrong_path) => Ok(wrong_path),
-        //                 }
-        //             })
-        //             .buffer_unordered(BUFFER_LIMIT)
-        //             .collect::<Vec<_>>()
-        //             .await;
-        //         (snippet, probing_results)
-        //     })
-        //     .buffer_unordered(BUFFER_LIMIT)
-        //     .collect::<Vec<_>>()
-        //     .await;
-
-        // // Lets be dumb over here and just paste the replies we are getting at this point with some hint about the symbol
-        // // this way we make it a problem for the LLM to answer it at the end
-        // let sub_symbol_probe_result = probe_answers
-        //     .into_iter()
-        //     .filter_map(|probing_result| {
-        //         let snippet = probing_result.0;
-        //         let answers = probing_result
-        //             .1
-        //             .into_iter()
-        //             .filter_map(|answer| match answer {
-        //                 Ok(answer) => Some(answer),
-        //                 Err(_) => None,
-        //             })
-        //             .collect::<Vec<_>>();
-        //         if answers.is_empty() {
-        //             None
-        //         } else {
-        //             Some(CodeSubSymbolProbingResult::new(
-        //                 snippet.symbol_name().to_owned(),
-        //                 snippet.file_path().to_owned(),
-        //                 answers,
-        //                 snippet.content().to_owned(),
-        //             ))
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
-
-        // if sub_symbol_probe_result.is_empty() {
-        //     let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
-        //         request_id_ref.to_owned(),
-        //         self.symbol_identifier.clone(),
-        //         "No information found which could be relevant to the user query over here"
-        //             .to_owned(),
-        //     ));
-        //     Ok("no information found to reply to the user query".to_owned())
-        // } else {
-        //     // summarize the results over here properly
-        //     let request = CodeSymbolProbingSummarize::new(
-        //         query.to_owned(),
-        //         history.to_owned(),
-        //         self.mecha_code_symbol.symbol_name().to_owned(),
-        //         self.get_outline(request_id_ref.to_owned()).await?,
-        //         self.mecha_code_symbol.fs_file_path().to_owned(),
-        //         sub_symbol_probe_result,
-        //         self.llm_properties.llm().clone(),
-        //         self.llm_properties.provider().clone(),
-        //         self.llm_properties.api_key().clone(),
-        //     );
-        //     let result = self
-        //         .tools
-        //         .probing_results_summarize(request, request_id_ref)
-        //         .await;
-        //     let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
-        //         request_id_ref.to_owned(),
-        //         self.symbol_identifier.clone(),
-        //         result
-        //             .as_ref()
-        //             .map(|s| s.to_owned())
-        //             .unwrap_or("Error with probing answer".to_owned()),
-        //     ));
-        //     println!(
-        //         "Probing finished for {} with result: {:?}",
-        //         &self.mecha_code_symbol.symbol_name(),
-        //         &result
-        //     );
-        //     result
-        // }
     }
 
     /// Refreshing the state here implies the following:
@@ -1775,24 +1530,9 @@ Satisfy the requirement either by making edits or gathering the required informa
         context: Vec<String>,
         request_id: &str,
     ) -> Result<EditedCodeSymbol, SymbolError> {
-        let file_content = self
-            .tools
-            .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
-            .await?;
-        // force add the new content of the file over here
-        _ = self
-            .tools
-            .force_add_document(
-                sub_symbol.fs_file_path(),
-                file_content.contents_ref(),
-                file_content.language(),
-            )
-            .await?;
-        // TODO(skcd): This symbol could have moved after some other symbol
-        // was edited, so this function is not entirely correct over here
         let symbol_to_edit = self
             .tools
-            .find_sub_symbol_to_edit_with_name(self.symbol_name(), sub_symbol)
+            .find_sub_symbol_to_edit_with_name(self.symbol_name(), sub_symbol, request_id)
             .await?;
         let content = symbol_to_edit.content().to_owned();
         let (llm_properties, swe_bench_initial_edit) =
@@ -1801,6 +1541,10 @@ Satisfy the requirement either by making edits or gathering the required informa
             } else {
                 (self.llm_properties.clone(), false)
             };
+        let file_content = self
+            .tools
+            .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
+            .await?;
         let response = self
             .tools
             .code_edit(
@@ -1862,6 +1606,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
                     .await
             )?;
+
+            // TODO(skcd): Here we want to first ask if the symbol wants any other symbol
+            // to change, if the answer is yes then we send edit requests to the other symbols
+            // and wait here, after which we can proceed with editing the symbol itself
+            // This is wrong, cause the contract here is that we know for sure that these
+            // symbols need to be edited, so something before has to tell us if the edit
+            // really needs to happen or not happen.
+
             // always return the original code which was present here in case of rollbacks
             let edited_code = self
                 .edit_code(

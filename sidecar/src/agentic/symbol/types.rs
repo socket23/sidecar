@@ -157,7 +157,7 @@ impl SymbolEventRequest {
     ) -> Self {
         Self {
             symbol,
-            event: SymbolEvent::InitialRequest(InitialRequestData::new(request)),
+            event: SymbolEvent::InitialRequest(InitialRequestData::new(request, None)),
             tool_properties,
         }
     }
@@ -1606,13 +1606,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
                     .await
             )?;
-
-            // TODO(skcd): Here we want to first ask if the symbol wants any other symbol
-            // to change, if the answer is yes then we send edit requests to the other symbols
-            // and wait here, after which we can proceed with editing the symbol itself
-            // This is wrong, cause the contract here is that we know for sure that these
-            // symbols need to be edited, so something before has to tell us if the edit
-            // really needs to happen or not happen.
 
             // always return the original code which was present here in case of rollbacks
             let edited_code = self

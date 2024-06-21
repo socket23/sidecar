@@ -10,12 +10,10 @@ use llm_client::{
 
 #[tokio::main]
 async fn main() {
-    // let codestory_client =
-    //     CodeStoryClient::new("https://codestory-provider-dot-anton-390822.ue.r.appspot.com");
     let codestory_client = CodeStoryClient::new("http://localhost:8080");
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let request = LLMClientCompletionRequest::new(
-        LLMType::Gpt4Turbo,
+        LLMType::GeminiPro,
         vec![
             LLMClientMessage::system("you are a python expert".to_owned()),
             LLMClientMessage::user("Can you write 1 to 300 in a new line for me".to_owned()),

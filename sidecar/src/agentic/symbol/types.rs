@@ -1387,12 +1387,13 @@ Satisfy the requirement either by making edits or gathering the required informa
     async fn generate_initial_request(
         &self,
         request_id: String,
-        original_request: &str,
+        request_data: InitialRequestData,
     ) -> Result<SymbolEventRequest, SymbolError> {
         println!(
             "symbol::generate_follow_along_requests::symbol_name({})",
             self.symbol_name()
         );
+        let original_request = request_data.get_original_question();
         let _ = self
             .follow_along_requests(&request_id, original_request)
             .await;
@@ -1401,7 +1402,7 @@ Satisfy the requirement either by making edits or gathering the required informa
         self.mecha_code_symbol
             .initial_request(
                 self.tools.clone(),
-                original_request,
+                &request_data,
                 self.llm_properties.clone(),
                 request_id,
                 &self.tool_properties,
@@ -1690,10 +1691,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     SymbolEvent::InitialRequest(initial_request) => {
                         println!("Symbol::inital_request: {}", symbol.symbol_name());
                         let initial_request = symbol
-                            .generate_initial_request(
-                                request_id.to_owned(),
-                                initial_request.get_original_question(),
-                            )
+                            .generate_initial_request(request_id.to_owned(), initial_request)
                             .await;
                         let request_sender = sender;
                         println!(

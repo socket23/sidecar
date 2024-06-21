@@ -21,6 +21,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::{SymbolToEdit, SymbolToEditRequest},
+        initial_request::InitialRequestData,
         probe::{ProbeEnoughOrDeeperResponseParsed, SubSymbolToProbe},
         types::SymbolEvent,
     },
@@ -685,7 +686,7 @@ impl MechaCodeSymbolThinking {
     pub async fn initial_request(
         &self,
         tool_box: Arc<ToolBox>,
-        original_request: &str,
+        original_request: &InitialRequestData,
         llm_properties: LLMProperties,
         request_id: String,
         tool_properties: &ToolProperties,
@@ -739,7 +740,7 @@ impl MechaCodeSymbolThinking {
                     tool_box
                         .filter_code_snippets_in_symbol_for_editing(
                             ranked_xml_list,
-                            original_request.to_owned(),
+                            original_request.get_original_question().to_owned(),
                             llm_properties_for_filtering.llm().clone(),
                             llm_properties_for_filtering.provider().clone(),
                             llm_properties_for_filtering.api_key().clone(),
@@ -759,6 +760,7 @@ impl MechaCodeSymbolThinking {
                 // we use this to map it back to the symbols which we should
                 // be editing and then send those are requests to the hub
                 // which will forward it to the right symbol
+                let original_request_ref = &original_request;
                 let sub_symbols_to_edit = stream::iter(reverse_lookup)
                     .filter_map(|reverse_lookup| async move {
                         let idx = reverse_lookup.idx();
@@ -770,10 +772,12 @@ impl MechaCodeSymbolThinking {
                             .into_iter()
                             .find(|snippet| snippet.id() == idx)
                             .map(|snippet| {
+                                let original_question =
+                                    original_request_ref.get_original_question();
                                 let reason_to_edit = snippet.reason_to_edit().to_owned();
                                 format!(
                                     r#"Original user query:
-{original_request}
+{original_question}
 
 Reason to edit:
 {reason_to_edit}"#

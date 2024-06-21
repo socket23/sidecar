@@ -174,6 +174,10 @@ impl CodeStoryClient {
         format!("{api_base}/claude-api")
     }
 
+    pub fn gemini_endpoint(&self, api_base: &str) -> String {
+        format!("{api_base}/google-ai")
+    }
+
     pub fn rerank_endpoint(&self) -> String {
         let api_base = &self.api_base;
         format!("{api_base}/rerank")
@@ -191,6 +195,8 @@ impl CodeStoryClient {
             }
             LLMType::ClaudeSonnet => Ok("claude-3-sonnet-20240229".to_owned()),
             LLMType::ClaudeHaiku => Ok("claude-3-haiku-20240307".to_owned()),
+            LLMType::GeminiPro => Ok("gemini-1.5-pro".to_owned()),
+            LLMType::GeminiProFlash => Ok("gemini-1.5-flash".to_owned()),
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }
@@ -205,6 +211,9 @@ impl CodeStoryClient {
             | LLMType::DeepSeekCoder33BInstruct => Ok(self.together_api_endpoint(&self.api_base)),
             LLMType::ClaudeSonnet | LLMType::ClaudeHaiku => {
                 Ok(self.anthropic_endpoint(&self.api_base))
+            }
+            LLMType::GeminiPro | LLMType::GeminiProFlash => {
+                Ok(self.gemini_endpoint(&self.api_base))
             }
             // we do not allow this to be overriden yet
             LLMType::CohereRerankV3 => Ok(self.rerank_endpoint()),

@@ -13,7 +13,7 @@ pub struct AzureOpenAIDeploymentId {
     pub deployment_id: String,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
 pub struct CodeStoryLLMTypes {
     // shoehorning the llm type here so we can provide the correct api keys
     pub llm_type: Option<LLMType>,

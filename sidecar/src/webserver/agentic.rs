@@ -110,10 +110,8 @@ pub async fn probe_request(
         None,
         LLMProperties::new(
             LLMType::GeminiProFlash,
-            LLMProvider::GoogleAIStudio,
-            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-            )),
+            LLMProvider::CodeStory(Default::default()),
+            LLMProviderAPIKeys::CodeStory,
         ),
     ));
     if let Some(active_window_data) = active_window_data {
@@ -136,8 +134,8 @@ pub async fn probe_request(
         sender,
         LLMProperties::new(
             LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            LLMProvider::CodeStory(Default::default()),
+            LLMProviderAPIKeys::CodeStory,
         ),
         // LLMProperties::new(model_config.slow_model, provider_type, provider_keys),
         user_context.clone(),

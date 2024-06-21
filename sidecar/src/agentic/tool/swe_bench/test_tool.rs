@@ -1,6 +1,6 @@
 //! Contains the test tool
 
-use crate::agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput};
+use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

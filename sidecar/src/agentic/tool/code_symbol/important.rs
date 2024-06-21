@@ -20,10 +20,10 @@ use crate::{
     agentic::{
         symbol::identifier::LLMProperties,
         tool::{
-            base::{Tool, ToolType},
             errors::ToolError,
             input::ToolInput,
             output::ToolOutput,
+            r#type::{Tool, ToolType},
         },
     },
     chunking::text_document::Range,

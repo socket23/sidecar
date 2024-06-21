@@ -685,8 +685,19 @@ impl MechaCodeSymbolThinking {
     /// so it does not immediately jump to edits, this is important kind of
     /// because thinking -> editing -> thinking -> editing is a constant loop
     /// we just have to make this explicit
-    pub async fn think_before_editing(&self) -> Result<(), SymbolError> {
+    pub async fn think_before_editing(
+        &self,
+        _original_request: &InitialRequestData,
+        _llm_properties: LLMProperties,
+        _request_id: &str,
+        _tool_properties: &ToolProperties,
+    ) -> Result<(), SymbolError> {
         println!("mecha_code_symbol_thinking::think_before_editing");
+        // The real implementation over here is:
+        // Ask the symbol if it believes that some symbol needs to change or it wants
+        // to understand more about it from the current prespective (this is a probing request)
+        // Once we have the probing result, we also want to make sure that we send edits where
+        // ever we want, this involves editing ourselves as well (this comes as default only if required, today we do re-ranking)
         Ok(())
     }
 
@@ -711,7 +722,14 @@ impl MechaCodeSymbolThinking {
             "mecha_code_symbol_thinking::thinking_start::symbol_name({})",
             self.symbol_name()
         );
-        let _ = self.think_before_editing().await;
+        let _ = self
+            .think_before_editing(
+                original_request,
+                llm_properties.clone(),
+                &request_id,
+                tool_properties,
+            )
+            .await;
         println!(
             "mecha_code_symbol_thinking::steps_after_thinking::symbol_name({})",
             self.symbol_name(),

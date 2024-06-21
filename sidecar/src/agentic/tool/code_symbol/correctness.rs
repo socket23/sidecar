@@ -11,11 +11,11 @@ use llm_client::{
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
-        base::{Tool, ToolType},
         errors::ToolError,
         input::ToolInput,
         lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
         output::ToolOutput,
+        r#type::{Tool, ToolType},
     },
 };
 

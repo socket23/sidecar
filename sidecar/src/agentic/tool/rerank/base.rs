@@ -17,7 +17,7 @@ use llm_client::{
 use thiserror::Error;
 
 use crate::{
-    agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput},
+    agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     chunking::text_document::Range,
 };
 

@@ -13,7 +13,7 @@ use llm_client::{
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
-    tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput},
+    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
 };
 
 #[derive(Debug, Clone, serde::Serialize)]

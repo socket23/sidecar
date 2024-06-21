@@ -162,7 +162,7 @@ impl SymbolManager {
 
             let mut symbols = self
                 .tool_box
-                .important_symbols(important_symbols.clone(), user_context.clone(), &request_id)
+                .important_symbols(&important_symbols, user_context.clone(), &request_id)
                 .await
                 .map_err(|e| e.into())?;
             // TODO(skcd): Another check over here is that we can search for the exact variable
@@ -371,7 +371,7 @@ impl SymbolManager {
 
                 let mut symbols = self
                     .tool_box
-                    .important_symbols(important_symbols.clone(), user_context.clone(), &request_id)
+                    .important_symbols(&important_symbols, user_context.clone(), &request_id)
                     .await
                     .map_err(|e| e.into())?;
                 // TODO(skcd): Another check over here is that we can search for the exact variable
@@ -429,6 +429,7 @@ impl SymbolManager {
                             symbol_identifier,
                             SymbolEvent::InitialRequest(InitialRequestData::new(
                                 user_query.to_owned(),
+                                None,
                             )),
                             tool_properties_ref.clone(),
                         ),

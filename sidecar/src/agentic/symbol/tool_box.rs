@@ -3139,7 +3139,7 @@ Please handle these changes as required."#
     // necessary later on
     pub async fn important_symbols(
         &self,
-        important_symbols: CodeSymbolImportantResponse,
+        important_symbols: &CodeSymbolImportantResponse,
         user_context: UserContext,
         request_id: &str,
     ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
@@ -3225,138 +3225,6 @@ Please handle these changes as required."#
             mecha_code_symbols.push(mecha_code_symbol_thinking);
         }
         Ok(mecha_code_symbols)
-        // ordered_symbols.iter().for_each(|ordered_symbol| {
-        //     let code_symbol = ordered_symbol.code_symbol().to_owned();
-        //     if ordered_symbol.is_new() {
-        //         new_symbols.insert(code_symbol.to_owned());
-        //         final_code_snippets.insert(
-        //             code_symbol.to_owned(),
-        //             MechaCodeSymbolThinking::new(
-        //                 code_symbol,
-        //                 ordered_symbol.steps().to_owned(),
-        //                 true,
-        //                 ordered_symbol.file_path().to_owned(),
-        //                 None,
-        //                 vec![],
-        //                 user_context.clone(),
-        //                 // say sike right now
-        //                 Arc::new(self.clone()),
-        //             ),
-        //         );
-        //     } else {
-        //         symbols_to_visit.insert(code_symbol.to_owned());
-        //         final_code_snippets.insert(
-        //             code_symbol.to_owned(),
-        //             MechaCodeSymbolThinking::new(
-        //                 code_symbol,
-        //                 ordered_symbol.steps().to_owned(),
-        //                 false,
-        //                 ordered_symbol.file_path().to_owned(),
-        //                 None,
-        //                 vec![],
-        //                 user_context.clone(),
-        //                 // say sike right now
-        //                 Arc::new(self.clone()),
-        //             ),
-        //         );
-        //     }
-        // });
-        // for symbol in symbols.iter() {
-        //     if !new_symbols.contains(symbol.code_symbol()) {
-        //         symbols_to_visit.insert(symbol.code_symbol().to_owned());
-        //         if let Some(code_snippet) = final_code_snippets.get_mut(symbol.code_symbol()) {
-        //             let _ = code_snippet.add_step(symbol.thinking()).await;
-        //         }
-        //     }
-        // }
-
-        // let mut mecha_symbols = vec![];
-        // let mut bounding_symbols: HashMap<String, Vec<MechaCodeSymbolThinking>> =
-        //     Default::default();
-
-        // // TODO(skcd): Refactor the code below to be the same as find_snippet_for_symbol
-        // // so we can contain the logic in a single place
-        // for (_, code_snippet) in final_code_snippets.into_iter() {
-        //     // we always open the document before asking for an outline
-        //     let file_open_result = self
-        //         .file_open(code_snippet.fs_file_path().to_owned(), request_id)
-        //         .await?;
-        //     let language = file_open_result.language().to_owned();
-        //     // we add the document for parsing over here
-        //     self.symbol_broker
-        //         .add_document(
-        //             file_open_result.fs_file_path().to_owned(),
-        //             file_open_result.contents(),
-        //             language,
-        //         )
-        //         .await;
-
-        //     // we grab the outlines over here
-        //     let outline_nodes = self
-        //         .symbol_broker
-        //         .get_symbols_outline(code_snippet.fs_file_path())
-        //         .await;
-
-        //     // We will either get an outline node or we will get None
-        //     // for today, we will go with the following assumption
-        //     // - if the document has already been open, then its good
-        //     // - otherwise we open the document and parse it again
-        //     if let Some(outline_nodes) = outline_nodes {
-        //         let mut bounding_symbol_node =
-        //             self.grab_bounding_symbol_for_symbol(outline_nodes, code_snippet.symbol_name());
-
-        //         dbg!(
-        //             "outline nodes: {} {}",
-        //             bounding_symbol_node.len(),
-        //             code_snippet.symbol_name()
-        //         );
-
-        //         // if there are no outline nodes, then we have to skip this part
-        //         // and keep going
-        //         if bounding_symbol_node.is_empty() {
-        //             // Let's not do anything over here
-        //             continue;
-        //         } else {
-        //             // if we have multiple outline nodes, then we need to select
-        //             // the best one, this will require another invocation from the LLM
-        //             // we have the symbol, we can just use the outline nodes which is
-        //             // the first
-        //             let outline_node = bounding_symbol_node.remove(0);
-        //             code_snippet
-        //                 .set_snippet(Snippet::new(
-        //                     outline_node.name().to_owned(),
-        //                     outline_node.range().clone(),
-        //                     outline_node.fs_file_path().to_owned(),
-        //                     outline_node.content().to_owned(),
-        //                     outline_node,
-        //                 ))
-        //                 .await;
-        //         }
-        //     } else {
-        //         // if this is new, then we probably do not have a file path
-        //         // to write it to
-        //         if !code_snippet.is_new() {
-        //             // its a symbol but we have nothing about it, so we log
-        //             // this as error for now, but later we have to figure out
-        //             // what to do about it
-        //             println!(
-        //                 "this is pretty bad, read the comment above on what is happening {:?}",
-        //                 &code_snippet.symbol_name()
-        //             );
-        //         }
-        //     }
-
-        //     mecha_symbols.push(code_snippet);
-        // }
-        // dbg!(
-        //     "Mecha symbols: {} {}",
-        //     mecha_symbols.len(),
-        //     mecha_symbols
-        //         .iter()
-        //         .map(|mecha_symbol| mecha_symbol.symbol_name().to_owned())
-        //         .collect::<Vec<_>>()
-        // );
-        // Ok(mecha_symbols)
     }
 
     async fn go_to_implementations_exact(

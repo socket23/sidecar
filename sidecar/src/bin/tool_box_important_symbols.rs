@@ -93,7 +93,7 @@ async fn main() {
     );
     let user_context = UserContext::new(vec![], vec![], None, vec![]);
     let response = tool_box
-        .important_symbols(important_symbols, user_context, "")
+        .important_symbols(&important_symbols, user_context, "")
         .await;
     println!("{:?}", response);
 }

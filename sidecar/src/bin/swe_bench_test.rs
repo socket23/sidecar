@@ -10,8 +10,7 @@ use llm_client::{
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
     provider::{
-        AnthropicAPIKey, GeminiProAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
-        OpenAIProvider,
+        AnthropicAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider,
     },
 };
 use serde_json::json;
@@ -80,14 +79,12 @@ async fn main() {
     tracing_subscribe_default();
     let instance_id = input.instance_id.to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-    let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new(
-        input.gemini_api_key.to_owned(),
-        "anton-390822".to_owned(),
-    ));
     let gemini_llm_properties = LLMProperties::new(
         LLMType::GeminiPro,
-        LLMProvider::GeminiPro,
-        gemini_pro_keys.clone(),
+        LLMProvider::GoogleAIStudio,
+        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+        )),
     );
     let anthropic_llm_properties = LLMProperties::new(
         LLMType::ClaudeSonnet,
@@ -95,7 +92,7 @@ async fn main() {
         anthropic_api_keys.clone(),
     );
     let code_editing_properties = LLMProperties::new(
-        LLMType::ClaudeOpus,
+        LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,
         anthropic_api_keys.clone(),
     );

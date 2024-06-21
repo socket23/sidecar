@@ -679,6 +679,17 @@ impl MechaCodeSymbolThinking {
         }
     }
 
+    /// Thinking before editing
+    /// We are going to let our agents think a bit before starting edting
+    /// This is literally increasing the search space for the agent
+    /// so it does not immediately jump to edits, this is important kind of
+    /// because thinking -> editing -> thinking -> editing is a constant loop
+    /// we just have to make this explicit
+    pub async fn think_before_editing(&self) -> Result<(), SymbolError> {
+        println!("mecha_code_symbol_thinking::think_before_editing");
+        Ok(())
+    }
+
     /// Initial request follows the following flow:
     /// - COT + follow-along questions for any other symbols which might even lead to edits
     /// - Reranking the snippets for the symbol
@@ -697,9 +708,17 @@ impl MechaCodeSymbolThinking {
         );
         let request_id_ref = &request_id;
         println!(
-            "mecha_code_symbol_thinking::steps_end({})",
+            "mecha_code_symbol_thinking::thinking_start::symbol_name({})",
             self.symbol_name()
         );
+        let _ = self.think_before_editing().await;
+        println!(
+            "mecha_code_symbol_thinking::steps_after_thinking::symbol_name({})",
+            self.symbol_name(),
+        );
+        // First we need to verify if we even have to enter the coding loop, often
+        // times thinking about this is better and solves generating a lot of code
+        // for no reason
         if self.is_snippet_present().await {
             // TODO(skcd): We want to send this request for reranking
             // and get back the snippet indexes

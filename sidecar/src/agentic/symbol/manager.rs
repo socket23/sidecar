@@ -12,9 +12,9 @@ use crate::agentic::symbol::events::initial_request::InitialRequestData;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
-use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
 use crate::agentic::tool::input::ToolInput;
+use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::user_context::types::UserContext;
 use crate::{

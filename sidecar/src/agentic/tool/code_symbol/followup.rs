@@ -10,8 +10,8 @@ use llm_client::{
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
-        base::Tool, code_symbol::models::anthropic::AnthropicCodeSymbolImportant,
-        errors::ToolError, input::ToolInput, output::ToolOutput,
+        code_symbol::models::anthropic::AnthropicCodeSymbolImportant, errors::ToolError,
+        input::ToolInput, output::ToolOutput, r#type::Tool,
     },
 };
 

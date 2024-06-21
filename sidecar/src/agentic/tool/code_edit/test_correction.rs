@@ -10,7 +10,7 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput};
+use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TestOutputCorrectionRequest {

@@ -1,5 +1,5 @@
 use crate::{
-    agentic::tool::{base::Tool, errors::ToolError, input::ToolInput, output::ToolOutput},
+    agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     chunking::text_document::{Position, Range},
 };
 use async_trait::async_trait;

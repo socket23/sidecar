@@ -9,7 +9,6 @@ use crate::{
 };
 
 use super::{
-    base::{Tool, ToolType},
     code_edit::{
         find::FindCodeSectionsToEdit, models::broker::CodeEditBroker,
         test_correction::TestCorrection, types::CodeEditingTool,
@@ -34,6 +33,7 @@ use super::{
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
     },
     output::ToolOutput,
+    r#type::{Tool, ToolType},
     rerank::base::ReRankBroker,
     swe_bench::test_tool::SWEBenchTestTool,
 };

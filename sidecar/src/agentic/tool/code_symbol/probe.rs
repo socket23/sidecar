@@ -12,8 +12,8 @@ use llm_client::{
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
-        base::Tool, code_symbol::types::CodeSymbolError, errors::ToolError, input::ToolInput,
-        jitter::jitter_sleep, output::ToolOutput,
+        code_symbol::types::CodeSymbolError, errors::ToolError, input::ToolInput,
+        jitter::jitter_sleep, output::ToolOutput, r#type::Tool,
     },
 };
 

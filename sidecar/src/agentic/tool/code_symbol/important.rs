@@ -907,6 +907,32 @@ impl CodeSymbolImportantResponse {
     pub fn ordered_symbols(&self) -> &[CodeSymbolWithSteps] {
         self.ordered_symbols.as_slice()
     }
+
+    pub fn ordered_symbols_to_plan(&self) -> String {
+        // We try to create a shallow plan here for our agents using the initial
+        // plan, this will help them stay in place and follow the initial logic
+        // which we have generated
+        self.ordered_symbols
+            .iter()
+            .enumerate()
+            .map(|(idx, ordered_symbol)| {
+                let idx = idx + 1;
+                let code_symbol = &ordered_symbol.code_symbol;
+                let fs_file_path = &ordered_symbol.file_path();
+                let thinking = ordered_symbol.steps().join("\n");
+                format!(
+                    "<step id = {idx}>
+<code_symbol>{code_symbol}</code_symbol>
+<file_path>{fs_file_path}</file_path>
+<high_level_plan>
+{thinking}
+</high_level_plan>
+</step>"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 #[async_trait]

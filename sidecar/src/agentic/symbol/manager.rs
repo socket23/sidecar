@@ -361,6 +361,8 @@ impl SymbolManager {
                 // as it can with python where it will tell class.method_name instead of just class or just
                 // method_name
                 let important_symbols = important_symbols.fix_symbol_names();
+                let high_level_plan = important_symbols.ordered_symbols_to_plan();
+                let high_level_plan_ref = &high_level_plan;
                 // swe bench caching hit over here we just do it
                 self.long_context_cache
                     .update_cache(swe_bench_id, &important_symbols)
@@ -429,7 +431,7 @@ impl SymbolManager {
                             symbol_identifier,
                             SymbolEvent::InitialRequest(InitialRequestData::new(
                                 user_query.to_owned(),
-                                None,
+                                Some(high_level_plan_ref.to_owned()),
                             )),
                             tool_properties_ref.clone(),
                         ),

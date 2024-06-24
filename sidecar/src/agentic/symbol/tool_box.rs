@@ -3454,7 +3454,11 @@ Please handle these changes as required."#
         // since its very much possible that we get multiple definitions over here
         // we have to figure out how to pick the best one over here
         // TODO(skcd): This will break if we are unable to get definitions properly
-        let definition = definition.definitions().remove(0);
+        let mut definitions = definition.definitions();
+        if definitions.is_empty() {
+            return Err(SymbolError::SymbolNotFound);
+        }
+        let definition = definitions.remove(0);
         let _ = self
             .file_open(definition.file_path().to_owned(), request_id)
             .await?;

@@ -9,6 +9,7 @@ use super::{
         models::anthropic::{
             CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
+        new_sub_symbol::NewSubSymbolRequiredResponse,
         planning_before_code_edit::PlanningBeforeCodeEditResponse,
         probe::ProbeEnoughOrDeeperResponse,
     },
@@ -109,9 +110,15 @@ pub enum ToolOutput {
     TestCorrectionOutput(String),
     // Code Symbol follow for initial request
     CodeSymbolFollowForInitialRequest(CodeSymbolFollowInitialResponse),
+    // New sub symbol creation
+    NewSubSymbolCreation(NewSubSymbolRequiredResponse),
 }
 
 impl ToolOutput {
+    pub fn new_sub_symbol_creation(output: NewSubSymbolRequiredResponse) -> Self {
+        ToolOutput::NewSubSymbolCreation(output)
+    }
+
     pub fn planning_before_code_editing(output: PlanningBeforeCodeEditResponse) -> Self {
         ToolOutput::PlanningBeforeCodeEditing(output)
     }

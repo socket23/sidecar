@@ -734,6 +734,11 @@ impl MechaCodeSymbolThinking {
             "mecha_code_symbol_thinking::steps_after_thinking::symbol_name({})",
             self.symbol_name(),
         );
+
+        // TODO(skcd) we also want to check if we need to generate a new symbol inside the current
+        // symbol and if yes, then we need to ask for the name of it and reason behind
+        // it, and it can only happen in a class:
+
         // First we need to verify if we even have to enter the coding loop, often
         // times thinking about this is better and solves generating a lot of code
         // for no reason

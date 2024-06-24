@@ -17,8 +17,9 @@ use super::{
         correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
         followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
         initial_request_follow::CodeSymbolFollowInitialRequestBroker,
-        planning_before_code_edit::PlanningBeforeCodeEdit, probe::ProbeEnoughOrDeeper,
-        probe_question_for_symbol::ProbeQuestionForSymbol, repo_map_search::RepoMapSearchBroker,
+        new_sub_symbol::NewSubSymbolRequired, planning_before_code_edit::PlanningBeforeCodeEdit,
+        probe::ProbeEnoughOrDeeper, probe_question_for_symbol::ProbeQuestionForSymbol,
+        repo_map_search::RepoMapSearchBroker,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -249,6 +250,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::PlanningBeforeCodeEdit,
             Box::new(PlanningBeforeCodeEdit::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::NewSubSymbolRequired,
+            Box::new(NewSubSymbolRequired::new(llm_client.clone())),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

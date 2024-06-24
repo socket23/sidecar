@@ -5434,22 +5434,42 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             0.0,
             None,
         );
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
-                code_symbols.api_key().clone(),
-                messages,
-                code_symbols.provider().clone(),
-                vec![("event_type".to_owned(), "important_symbols".to_owned())]
-                    .into_iter()
-                    .collect(),
-                sender,
-            )
-            .await
-            .map_err(|e| CodeSymbolError::LLMClientError(e))?;
 
-        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        // we should add retries over here
+        let mut retries = 0;
+        loop {
+            if retries >= 4 {
+                return Err(CodeSymbolError::ExhaustedRetries);
+            }
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    code_symbols.api_key().clone(),
+                    messages.clone(),
+                    code_symbols.provider().clone(),
+                    vec![("event_type".to_owned(), "important_symbols".to_owned())]
+                        .into_iter()
+                        .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| CodeSymbolError::LLMClientError(e));
+            match response {
+                Ok(response) => {
+                    if let Ok(parsed_response) = Reply::parse_response(&response)
+                        .map(|reply| reply.to_code_symbol_important_response())
+                    {
+                        return Ok(parsed_response);
+                    } else {
+                        retries = retries + 1;
+                    }
+                }
+                _ => {
+                    retries = retries + 1;
+                }
+            }
+        }
     }
 
     async fn context_wide_search(
@@ -5469,20 +5489,39 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         );
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_key,
-                messages,
-                provider,
-                vec![("event_type".to_owned(), "context_wide_search".to_owned())]
-                    .into_iter()
-                    .collect(),
-                sender,
-            )
-            .await?;
-        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        let mut retries = 0;
+        loop {
+            if retries >= 4 {
+                return Err(CodeSymbolError::ExhaustedRetries);
+            }
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    api_key.clone(),
+                    messages.clone(),
+                    provider.clone(),
+                    vec![("event_type".to_owned(), "context_wide_search".to_owned())]
+                        .into_iter()
+                        .collect(),
+                    sender,
+                )
+                .await;
+            match response {
+                Ok(response) => {
+                    if let Ok(parsed_response) = Reply::parse_response(&response)
+                        .map(|reply| reply.to_code_symbol_important_response())
+                    {
+                        return Ok(parsed_response);
+                    } else {
+                        retries = retries + 1;
+                    }
+                }
+                _ => {
+                    retries = retries + 1;
+                }
+            }
+        }
     }
 
     async fn gather_utility_symbols(

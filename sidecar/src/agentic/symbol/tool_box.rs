@@ -3254,10 +3254,10 @@ Please handle these changes as required."#
 
         let mut bounding_symbol_to_instruction: HashMap<
             OutlineNodeContent,
-            Vec<&CodeSymbolWithThinking>,
+            Vec<(usize, &CodeSymbolWithThinking)>,
         > = Default::default();
         let mut unbounded_symbols: Vec<&CodeSymbolWithThinking> = Default::default();
-        for symbol in symbols.iter() {
+        for (idx, symbol) in symbols.iter().enumerate() {
             let file_path = symbol.file_path();
             let symbol_name = symbol.code_symbol();
             let outline_nodes = self.symbol_broker.get_symbols_outline(file_path).await;
@@ -3273,9 +3273,9 @@ Please handle these changes as required."#
                         let contained_sub_symbols = bounding_symbol_to_instruction
                             .get_mut(&outline_node)
                             .expect("contains_key to work");
-                        contained_sub_symbols.push(symbol);
+                        contained_sub_symbols.push((idx, symbol));
                     } else {
-                        bounding_symbol_to_instruction.insert(outline_node, vec![symbol]);
+                        bounding_symbol_to_instruction.insert(outline_node, vec![(idx, symbol)]);
                     }
                 }
             }

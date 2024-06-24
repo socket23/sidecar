@@ -371,6 +371,19 @@ impl SymbolManager {
                 // Debug printing
                 println!("Important symbols: {:?}", &important_symbols);
 
+                println!("symbol_manager::planning_before_editing");
+                let important_symbols = self
+                    .tool_box
+                    .planning_before_code_editing(
+                        &important_symbols,
+                        &user_query,
+                        self._llm_properties.clone(),
+                        &request_id,
+                    )
+                    .await?
+                    .fix_symbol_names();
+                println!("symbol_manager::plan_finished_before_editing");
+
                 // Lets first start another round of COT over here to figure out
                 // how to go about making the changes, I know this is a bit orthodox
                 // and goes against our plans of making the agents better, but

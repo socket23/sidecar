@@ -389,4 +389,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_plan_before_code_editing(self) -> Option<PlanningBeforeCodeEditResponse> {
+        match self {
+            ToolOutput::PlanningBeforeCodeEditing(response) => Some(response),
+            _ => None,
+        }
+    }
 }

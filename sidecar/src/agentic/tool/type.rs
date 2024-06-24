@@ -8,6 +8,7 @@ use super::{errors::ToolError, input::ToolInput, output::ToolOutput};
 pub enum ToolType {
     // AskDocumentation,
     // AskUser,
+    PlanningBeforeCodeEdit,
     CodeEditing,
     OpenFile,
     // Search,
@@ -106,6 +107,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ProbeSubSymbolFiltering => write!(f, "Probe sub symbol filtering request"),
             ToolType::ProbeEnoughOrDeeper => write!(f, "Probe enough information or go deeper"),
             ToolType::ProbeCreateQuestionForSymbol => write!(f, "Probe create question for symbol"),
+            ToolType::PlanningBeforeCodeEdit => write!(f, "Planning before code edit"),
         }
     }
 }

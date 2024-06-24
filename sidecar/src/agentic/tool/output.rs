@@ -9,6 +9,7 @@ use super::{
         models::anthropic::{
             CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
+        planning_before_code_edit::PlanningBeforeCodeEditResponse,
         probe::ProbeEnoughOrDeeperResponse,
     },
     editor::apply::EditorApplyResponse,
@@ -71,6 +72,7 @@ impl CodeToEditToolOutput {
 
 #[derive(Debug)]
 pub enum ToolOutput {
+    PlanningBeforeCodeEditing(PlanningBeforeCodeEditResponse),
     CodeEditTool(String),
     LSPDiagnostics(LSPDiagnosticsOutput),
     CodeToEdit(CodeToEditToolOutput),
@@ -110,6 +112,10 @@ pub enum ToolOutput {
 }
 
 impl ToolOutput {
+    pub fn planning_before_code_editing(output: PlanningBeforeCodeEditResponse) -> Self {
+        ToolOutput::PlanningBeforeCodeEditing(output)
+    }
+
     pub fn code_symbol_follow_for_initial_request(output: CodeSymbolFollowInitialResponse) -> Self {
         ToolOutput::CodeSymbolFollowForInitialRequest(output)
     }

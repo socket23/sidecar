@@ -153,9 +153,11 @@ impl PlanningBeforeCodeEditResponse {
             if line == "<plan>" {
                 is_inside = true;
                 final_lines.push(line.to_owned());
+                continue;
             } else if line == "</plan>" {
                 is_inside = false;
                 final_lines.push(line.to_owned());
+                continue;
             }
             if is_inside {
                 final_lines.push(escape_xml(line.to_owned()));
@@ -220,7 +222,9 @@ is a code symbol since it represents a function in python.
 </symbol>
 {{more symbols here following the same format as above}}
 </symbol_list>
-</reply>"#.to_owned()
+</reply>
+
+Your reply should always be in <reply> tags in xml"#.to_owned()
     }
 
     fn user_query(&self, request: PlanningBeforeCodeEditRequest) -> String {
@@ -291,16 +295,18 @@ impl Tool for PlanningBeforeCodeEdit {
                 )
                 .await;
             if let Ok(response) = response {
-                if let Ok(parsed_response) =
-                    PlanningBeforeCodeEditResponse::parse_response(&response)
-                {
-                    println!("tool::planning_before_code_edit::parsed::success");
-                    // Now parse the response over here in the format we want it to be in
-                    // we need to take care of the xml tags like ususal over here.. sigh
-                    return Ok(ToolOutput::planning_before_code_editing(parsed_response));
-                } else {
-                    println!("tool::planning_before_code_edit::parsed::error");
-                    retries = retries + 1;
+                match PlanningBeforeCodeEditResponse::parse_response(&response) {
+                    Ok(parsed_response) => {
+                        println!("tool::planning_before_code_edit::parsed::success");
+                        // Now parse the response over here in the format we want it to be in
+                        // we need to take care of the xml tags like ususal over here.. sigh
+                        return Ok(ToolOutput::planning_before_code_editing(parsed_response));
+                    }
+                    Err(e) => {
+                        println!("tool::planning_before_code_edit::parsed::error");
+                        println!("{:?}", e);
+                        retries = retries + 1;
+                    }
                 }
             } else {
                 println!("tool::planning_before_code_edit::response::error");
@@ -319,52 +325,41 @@ mod tests {
         let response = r#"
         <reply>
         <thinking>
-        After analyzing the code and the original plan, I believe the plan is mostly correct but needs some adjustments and additional details:
+        After analyzing the code and the original plan, I believe some modifications and additions are necessary to properly address the issue:
         
-        1. The `eval_expr` function is indeed the right place to start, but we need to be more specific about how to check if the expression is safe to evaluate.
+        1. The root cause of the problem is in the `sympify` function, which attempts to evaluate unknown expressions. We need to modify this function to prevent unsafe evaluation.
         
-        2. The `parse_expr` function doesn't need to be modified as suggested. It already uses `stringify_expr` to transform the input before passing it to `eval_expr`. We should focus on making `stringify_expr` safer instead.
+        2. The `eval_expr` function is not the main issue here, as it's just evaluating the code that has already been processed by `stringify_expr`. The real problem occurs before this point.
         
-        3. The `sympify` function is a good place to add additional checks, but we need to be careful not to break existing functionality.
+        3. The `parse_expr` function doesn't need to be significantly changed, as it's not directly responsible for the unsafe evaluation.
         
-        4. The `__eq__` method in `Expr` class doesn't directly call `eval` or `sympify`, so it's not the root cause of the issue. However, it does use `sympify`, so it will benefit from the changes we make to `sympify`.
+        4. The `__eq__` method in `Expr` class is where the sympify is called, which leads to the unsafe evaluation. We need to modify this method to handle unknown objects safely.
         
-        5. We should add a new step to modify the `stringify_expr` function to make it safer.
+        5. We should add a new function to safely convert objects to SymPy expressions without using `eval`.
         
-        Let's revise the plan with these considerations in mind.
+        Based on these observations, I'll modify the plan to better address the issue.
         </thinking>
         
         <symbol_list>
         <symbol>
-        <name>eval_expr</name>
-        <file_path>sympy/parsing/sympy_parser.py</file_path>
-        <plan>
-        Modify eval_expr to use a safer evaluation method:
-        1. Instead of using Python's built-in eval, use ast.literal_eval which only evaluates literals.
-        2. If ast.literal_eval fails, fall back to a custom safe_eval function that only allows specific SymPy operations.
-        3. Wrap the evaluation in a try-except block to catch any potential security-related exceptions.
-        </plan>
-        </symbol>
-        
-        <symbol>
-        <name>stringify_expr</name>
-        <file_path>sympy/parsing/sympy_parser.py</file_path>
-        <plan>
-        Modify stringify_expr to add additional safety checks:
-        1. Add a whitelist of allowed SymPy functions and symbols.
-        2. Check each token against the whitelist before including it in the output.
-        3. If an unknown token is encountered, raise a SecurityError instead of including it in the output.
-        </plan>
-        </symbol>
-        
-        <symbol>
         <name>sympify</name>
         <file_path>sympy/core/sympify.py</file_path>
         <plan>
-        Update sympify to add more stringent checks:
-        1. If the input is already a SymPy type, return it immediately.
-        2. If the input is a string, check if it's a valid SymPy expression using a new is_valid_sympy_expr function before passing it to parse_expr.
-        3. If the input is neither a SymPy type nor a valid SymPy expression string, raise a SympifyError.
+        Modify the sympify function to:
+        1. Check if the input is already a SymPy type or a basic Python type that can be safely converted.
+        2. If not, instead of using eval, use a new safe_convert function to attempt conversion.
+        3. If safe conversion fails, raise a SympifyError instead of evaluating unknown expressions.
+        </plan>
+        </symbol>
+        
+        <symbol>
+        <name>safe_convert</name>
+        <file_path>sympy/core/sympify.py</file_path>
+        <plan>
+        Add a new function safe_convert that:
+        1. Attempts to convert known types to SymPy expressions without using eval.
+        2. Returns None if the conversion is not possible.
+        This function will be used by sympify to safely convert objects.
         </plan>
         </symbol>
         
@@ -372,9 +367,32 @@ mod tests {
         <name>__eq__</name>
         <file_path>sympy/core/expr.py</file_path>
         <plan>
-        The __eq__ method doesn't need to be modified directly, but we should add a test to ensure it behaves correctly with the new safety measures:
-        1. Add a test case that compares a SymPy expression with an object that has a potentially harmful __repr__ method.
-        2. Verify that the comparison raises a SympifyError instead of evaluating the repr.
+        Modify the __eq__ method in the Expr class to:
+        1. Use the modified sympify function to convert the other object.
+        2. If sympify raises a SympifyError, return False instead of raising an exception.
+        This will prevent unsafe evaluation of unknown objects during equality comparison.
+        </plan>
+        </symbol>
+        
+        <symbol>
+        <name>parse_expr</name>
+        <file_path>sympy/parsing/sympy_parser.py</file_path>
+        <plan>
+        Modify parse_expr to:
+        1. Use the safe_convert function first to attempt conversion without parsing.
+        2. Only proceed with parsing if safe_convert returns None.
+        3. Ensure that the resulting expression is a valid SymPy type before returning.
+        </plan>
+        </symbol>
+        
+        <symbol>
+        <name>eval_expr</name>
+        <file_path>sympy/parsing/sympy_parser.py</file_path>
+        <plan>
+        Modify eval_expr to:
+        1. Only accept pre-validated SymPy expressions or Python code generated by stringify_expr.
+        2. Raise an exception if an invalid input is provided.
+        This will add an extra layer of security, although the main fix will be in the sympify function.
         </plan>
         </symbol>
         </symbol_list>
@@ -387,69 +405,7 @@ mod tests {
 
     #[test]
     fn test_with_extra_data() {
-        let output = r#"
-        <reply>
-        <thinking>
-        After analyzing the code and the original plan, I believe some modifications and additions are necessary to properly address the issue:
-        
-        1. The `eval_expr` function is not the root cause of the problem. The issue stems from `sympify` attempting to parse unknown objects.
-        
-        2. We need to focus on `sympify` in sympy/core/sympify.py, as it's the function that handles conversion of objects to SymPy types.
-        
-        3. The `__eq__` method in sympy/core/expr.py calls `sympify`, so we don't need to modify it directly. The changes in `sympify` will propagate to `__eq__`.
-        
-        4. We should add a new function to safely convert objects to SymPy types without using `eval`.
-        
-        5. The `parse_expr` function should be modified to use this new safe conversion method.
-        
-        Here's the revised plan:
-        </thinking>
-        
-        <symbol_list>
-        <symbol>
-        <name>sympify</name>
-        <file_path>sympy/core/sympify.py</file_path>
-        <plan>
-        1. Modify `sympify` to check if the argument is already a SymPy type before attempting to convert it.
-        2. If the argument is not a SymPy type, use a new safe conversion method instead of `parse_expr`.
-        3. Raise a `SympifyError` if the safe conversion fails.
-        </plan>
-        </symbol>
-        
-        <symbol>
-        <name>safe_sympify</name>
-        <file_path>sympy/core/sympify.py</file_path>
-        <plan>
-        1. Implement a new function `safe_sympify` that safely converts objects to SymPy types.
-        2. This function should handle basic Python types (int, float, complex, str) and SymPy types.
-        3. For other types, it should return the object unchanged or raise a `SympifyError`.
-        </plan>
-        </symbol>
-        
-        <symbol>
-        <name>parse_expr</name>
-        <file_path>sympy/parsing/sympy_parser.py</file_path>
-        <plan>
-        1. Modify `parse_expr` to use the new `safe_sympify` function for initial conversion.
-        2. Only apply transformations and parsing if the input is a string.
-        3. Raise an error if an unknown object type is passed.
-        </plan>
-        </symbol>
-        
-        <symbol>
-        <name>__eq__</name>
-        <file_path>sympy/core/expr.py</file_path>
-        <plan>
-        No direct changes needed. The modifications to `sympify` will ensure that `__eq__` behaves safely when comparing with unknown objects.
-        </plan>
-        </symbol>
-        </symbol_list>
-        
-        <extra_data>
-        We should also consider adding or updating test cases in the appropriate test files to ensure the new behavior is correct and the security issue is resolved.
-        </extra_data>
-        </reply>
-        "#;
+        let output = "<reply>\n<thinking>\nAfter analyzing the code and the original plan, I believe some modifications and additions are necessary to properly address the issue:\n\n1. The root cause of the problem is in the `sympify` function, which attempts to evaluate unknown expressions. We need to modify this function to prevent unsafe evaluation.\n\n2. The `eval_expr` function is not the main issue here, as it's just evaluating the code that has already been processed by `stringify_expr`. The real problem occurs before this point.\n\n3. The `parse_expr` function doesn't need to be significantly changed, as it's not directly responsible for the unsafe evaluation.\n\n4. The `__eq__` method in `Expr` class is where the sympify is called, which leads to the unsafe evaluation. We need to modify this method to handle unknown objects safely.\n\n5. We should add a new function to safely convert objects to SymPy expressions without using `eval`.\n\nBased on these observations, I'll modify the plan to better address the issue.\n</thinking>\n\n<symbol_list>\n<symbol>\n<name>sympify</name>\n<file_path>sympy/core/sympify.py</file_path>\n<plan>\nModify the sympify function to:\n1. Check if the input is already a SymPy type or a basic Python type that can be safely converted.\n2. If not, instead of using eval, use a new safe_convert function to attempt conversion.\n3. If safe conversion fails, raise a SympifyError instead of evaluating unknown expressions.\n</plan>\n</symbol>\n\n<symbol>\n<name>safe_convert</name>\n<file_path>sympy/core/sympify.py</file_path>\n<plan>\nAdd a new function safe_convert that:\n1. Attempts to convert known types to SymPy expressions without using eval.\n2. Returns None if the conversion is not possible.\nThis function will be used by sympify to safely convert objects.\n</plan>\n</symbol>\n\n<symbol>\n<name>__eq__</name>\n<file_path>sympy/core/expr.py</file_path>\n<plan>\nModify the __eq__ method in the Expr class to:\n1. Use the modified sympify function to convert the other object.\n2. If sympify raises a SympifyError, return False instead of raising an exception.\nThis will prevent unsafe evaluation of unknown objects during equality comparison.\n</plan>\n</symbol>\n\n<symbol>\n<name>parse_expr</name>\n<file_path>sympy/parsing/sympy_parser.py</file_path>\n<plan>\nModify parse_expr to:\n1. Use the safe_convert function first to attempt conversion without parsing.\n2. Only proceed with parsing if safe_convert returns None.\n3. Ensure that the resulting expression is a valid SymPy type before returning.\n</plan>\n</symbol>\n\n<symbol>\n<name>eval_expr</name>\n<file_path>sympy/parsing/sympy_parser.py</file_path>\n<plan>\nModify eval_expr to:\n1. Only accept pre-validated SymPy expressions or Python code generated by stringify_expr.\n2. Raise an exception if an invalid input is provided.\nThis will add an extra layer of security, although the main fix will be in the sympify function.\n</plan>\n</symbol>\n</symbol_list>\n</reply>";
         let parsed_response = PlanningBeforeCodeEditResponse::parse_response(&output);
         println!("{:?}", &parsed_response);
         assert!(parsed_response.is_ok());

@@ -134,7 +134,7 @@ impl SymbolInputEvent {
                 Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
                     contents,
                     self.user_query.to_owned(),
-                    LLMType::ClaudeOpus,
+                    LLMType::ClaudeSonnet,
                     LLMProvider::Anthropic,
                     self.api_keys.clone(),
                 ))),

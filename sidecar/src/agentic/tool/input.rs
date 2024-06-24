@@ -13,6 +13,7 @@ use super::{
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
         initial_request_follow::CodeSymbolFollowInitialRequest,
+        planning_before_code_edit::PlanningBeforeCodeEditRequest,
         probe::ProbeEnoughOrDeeperRequest,
         probe_question_for_symbol::ProbeQuestionForSymbolRequest,
         repo_map_search::RepoMapSearchQuery,
@@ -74,6 +75,8 @@ pub enum ToolInput {
     TestOutputCorrection(TestOutputCorrectionRequest),
     // Code symbol follow initial request
     CodeSymbolFollowInitialRequest(CodeSymbolFollowInitialRequest),
+    // Plan before code editing
+    PlanningBeforeCodeEdit(PlanningBeforeCodeEditRequest),
 }
 
 impl ToolInput {
@@ -115,6 +118,7 @@ impl ToolInput {
             ToolInput::ProbeFilterSnippetsSingleSymbol(_) => ToolType::ProbeSubSymbolFiltering,
             ToolInput::ProbeEnoughOrDeeper(_) => ToolType::ProbeEnoughOrDeeper,
             ToolInput::ProbeCreateQuestionForSymbol(_) => ToolType::ProbeCreateQuestionForSymbol,
+            ToolInput::PlanningBeforeCodeEdit(_) => ToolType::PlanningBeforeCodeEdit,
         }
     }
 
@@ -482,6 +486,14 @@ impl ToolInput {
             Err(ToolError::WrongToolInput(
                 ToolType::FilterCodeSnippetsForEditing,
             ))
+        }
+    }
+
+    pub fn plan_before_code_editing(self) -> Result<PlanningBeforeCodeEditRequest, ToolError> {
+        if let ToolInput::PlanningBeforeCodeEdit(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::PlanningBeforeCodeEdit))
         }
     }
 }

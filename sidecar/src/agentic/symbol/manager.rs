@@ -369,6 +369,11 @@ impl SymbolManager {
                 // Debug printing
                 println!("Important symbols: {:?}", &important_symbols);
 
+                // Lets first start another round of COT over here to figure out
+                // how to go about making the changes, I know this is a bit orthodox
+                // and goes against our plans of making the agents better, but
+                // this feels useful to have, since the previous iteration
+                // does not even see the code and what changes need to be made
                 let mut symbols = self
                     .tool_box
                     .important_symbols(important_symbols.clone(), user_context.clone(), &request_id)

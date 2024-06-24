@@ -178,7 +178,7 @@ Your reply should be in the following format:
 <thinking>
 {{your thinking process before replying}}
 </thinking>
-<mew_methods>
+<new_methods>
 <method>
 <method_name>
 {{name of the method}}
@@ -188,7 +188,7 @@ Your reply should be in the following format:
 </reason_to_create>
 </method>
 {{... more methods which should belong in the list}}
-</mew_methods>
+</new_methods>
 </reply>
 
 Please make sure to keep your reply in the <reply> tag and the new methods which you need to generate properly in the format under <new_symbols> section."#.to_owned()
@@ -299,6 +299,13 @@ mod tests {
         </reply>
         "#;
 
+        let output = NewSubSymbolRequiredResponse::parse_response(&response);
+        assert!(output.is_ok());
+    }
+
+    #[test]
+    fn test_output_parsing() {
+        let response = "<reply>\n<thinking>\nLet's analyze the problem and the proposed solution:\n\n1. The issue is that the Identity matrix is being misinterpreted as the complex number 1j when using lambdify.\n\n2. The plan suggests modifying the NumPyPrinter class to handle the Identity matrix correctly.\n\n3. We need to add a specific method to print the Identity matrix using numpy.eye().\n\n4. The existing NumPyPrinter class already has methods for printing various matrix operations and functions.\n\n5. Adding a new method for printing the Identity matrix aligns with the existing structure of the class.\n\n6. We don't need to create entirely new methods, but rather add one specific method to handle the Identity matrix.\n\nBased on this analysis, we should add a new method to the NumPyPrinter class to handle the Identity matrix specifically.\n</thinking>\n\n<new_methods>\n<method>\n<method_name>_print_Identity</method_name>\n<reason_to_create>\nWe need to add a specific method to handle the printing of Identity matrices in NumPy format. This method will use numpy.eye() to create the correct representation of an identity matrix. This aligns with the existing structure of the NumPyPrinter class, which has specific methods for different matrix operations and functions.\n</reason_to_create>\n</method>\n</new_methods>\n</reply>";
         let output = NewSubSymbolRequiredResponse::parse_response(&response);
         assert!(output.is_ok());
     }

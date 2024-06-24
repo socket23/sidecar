@@ -12,9 +12,9 @@ use crate::agentic::symbol::events::initial_request::InitialRequestData;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
-use crate::agentic::tool::base::Tool;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
 use crate::agentic::tool::input::ToolInput;
+use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::user_context::types::UserContext;
 use crate::{
@@ -162,7 +162,7 @@ impl SymbolManager {
 
             let mut symbols = self
                 .tool_box
-                .important_symbols(important_symbols.clone(), user_context.clone(), &request_id)
+                .important_symbols(&important_symbols, user_context.clone(), &request_id)
                 .await
                 .map_err(|e| e.into())?;
             // TODO(skcd): Another check over here is that we can search for the exact variable
@@ -361,6 +361,8 @@ impl SymbolManager {
                 // as it can with python where it will tell class.method_name instead of just class or just
                 // method_name
                 let important_symbols = important_symbols.fix_symbol_names();
+                let high_level_plan = important_symbols.ordered_symbols_to_plan();
+                let high_level_plan_ref = &high_level_plan;
                 // swe bench caching hit over here we just do it
                 self.long_context_cache
                     .update_cache(swe_bench_id, &important_symbols)
@@ -376,7 +378,7 @@ impl SymbolManager {
                 // does not even see the code and what changes need to be made
                 let mut symbols = self
                     .tool_box
-                    .important_symbols(important_symbols.clone(), user_context.clone(), &request_id)
+                    .important_symbols(&important_symbols, user_context.clone(), &request_id)
                     .await
                     .map_err(|e| e.into())?;
                 // TODO(skcd): Another check over here is that we can search for the exact variable
@@ -434,6 +436,7 @@ impl SymbolManager {
                             symbol_identifier,
                             SymbolEvent::InitialRequest(InitialRequestData::new(
                                 user_query.to_owned(),
+                                Some(high_level_plan_ref.to_owned()),
                             )),
                             tool_properties_ref.clone(),
                         ),

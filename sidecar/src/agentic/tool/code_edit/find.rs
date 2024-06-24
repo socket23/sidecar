@@ -9,11 +9,11 @@ use llm_client::{
 
 use crate::{
     agentic::tool::{
-        base::Tool,
         code_edit::models::broker::{CodeSnippet, CodeSnippetForEditing},
         errors::ToolError,
         input::ToolInput,
         output::{CodeToEditToolOutput, ToolOutput},
+        r#type::Tool,
     },
     chunking::languages::TSLanguageParsing,
     inline_completion::symbols_tracker::SymbolTrackerInline,

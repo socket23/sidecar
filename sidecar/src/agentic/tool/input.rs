@@ -1,5 +1,4 @@
 use super::{
-    base::ToolType,
     code_edit::{
         find::FindCodeSelectionInput, test_correction::TestOutputCorrectionRequest, types::CodeEdit,
     },
@@ -32,6 +31,7 @@ use super::{
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
+    r#type::ToolType,
     rerank::base::ReRankEntriesForBroker,
     swe_bench::test_tool::SWEBenchTestRequest,
 };

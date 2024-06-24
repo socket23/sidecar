@@ -14,7 +14,7 @@
 //! Language server: Gets the diagnostics for the current file if required or over the workspace
 //! Terminal: Use the terminal to run operations or something
 
-pub mod base;
+pub mod r#type;
 pub mod broker;
 pub mod code_edit;
 pub mod code_symbol;

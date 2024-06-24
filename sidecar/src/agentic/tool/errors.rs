@@ -2,8 +2,8 @@ use llm_client::clients::types::{LLMClientError, LLMType};
 use thiserror::Error;
 
 use super::{
-    base::ToolType, code_symbol::types::CodeSymbolError,
-    filtering::errors::CodeToEditFilteringError, rerank::base::ReRankError,
+    code_symbol::types::CodeSymbolError, filtering::errors::CodeToEditFilteringError,
+    r#type::ToolType, rerank::base::ReRankError,
 };
 
 #[derive(Debug, Error)]

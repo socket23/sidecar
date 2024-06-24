@@ -6,7 +6,7 @@ use llm_client::{
     config::LLMBrokerConfiguration,
     provider::{GeminiProAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
-use sidecar::agentic::{symbol::identifier::LLMProperties, tool::base::Tool};
+use sidecar::agentic::{symbol::identifier::LLMProperties, tool::r#type::Tool};
 use sidecar::{
     agentic::tool::{
         broker::ToolBroker, code_edit::models::broker::CodeEditBroker,

@@ -21,6 +21,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::{SymbolToEdit, SymbolToEditRequest},
+        initial_request::InitialRequestData,
         probe::{ProbeEnoughOrDeeperResponseParsed, SubSymbolToProbe},
         types::SymbolEvent,
     },
@@ -678,6 +679,28 @@ impl MechaCodeSymbolThinking {
         }
     }
 
+    /// Thinking before editing
+    /// We are going to let our agents think a bit before starting edting
+    /// This is literally increasing the search space for the agent
+    /// so it does not immediately jump to edits, this is important kind of
+    /// because thinking -> editing -> thinking -> editing is a constant loop
+    /// we just have to make this explicit
+    pub async fn think_before_editing(
+        &self,
+        _original_request: &InitialRequestData,
+        _llm_properties: LLMProperties,
+        _request_id: &str,
+        _tool_properties: &ToolProperties,
+    ) -> Result<(), SymbolError> {
+        println!("mecha_code_symbol_thinking::think_before_editing");
+        // The real implementation over here is:
+        // Ask the symbol if it believes that some symbol needs to change or it wants
+        // to understand more about it from the current prespective (this is a probing request)
+        // Once we have the probing result, we also want to make sure that we send edits where
+        // ever we want, this involves editing ourselves as well (this comes as default only if required, today we do re-ranking)
+        Ok(())
+    }
+
     /// Initial request follows the following flow:
     /// - COT + follow-along questions for any other symbols which might even lead to edits
     /// - Reranking the snippets for the symbol
@@ -685,7 +708,7 @@ impl MechaCodeSymbolThinking {
     pub async fn initial_request(
         &self,
         tool_box: Arc<ToolBox>,
-        original_request: &str,
+        original_request: &InitialRequestData,
         llm_properties: LLMProperties,
         request_id: String,
         tool_properties: &ToolProperties,
@@ -696,9 +719,24 @@ impl MechaCodeSymbolThinking {
         );
         let request_id_ref = &request_id;
         println!(
-            "mecha_code_symbol_thinking::steps_end({})",
+            "mecha_code_symbol_thinking::thinking_start::symbol_name({})",
             self.symbol_name()
         );
+        let _ = self
+            .think_before_editing(
+                original_request,
+                llm_properties.clone(),
+                &request_id,
+                tool_properties,
+            )
+            .await;
+        println!(
+            "mecha_code_symbol_thinking::steps_after_thinking::symbol_name({})",
+            self.symbol_name(),
+        );
+        // First we need to verify if we even have to enter the coding loop, often
+        // times thinking about this is better and solves generating a lot of code
+        // for no reason
         if self.is_snippet_present().await {
             // TODO(skcd): We want to send this request for reranking
             // and get back the snippet indexes
@@ -739,7 +777,7 @@ impl MechaCodeSymbolThinking {
                     tool_box
                         .filter_code_snippets_in_symbol_for_editing(
                             ranked_xml_list,
-                            original_request.to_owned(),
+                            original_request.get_original_question().to_owned(),
                             llm_properties_for_filtering.llm().clone(),
                             llm_properties_for_filtering.provider().clone(),
                             llm_properties_for_filtering.api_key().clone(),
@@ -759,6 +797,7 @@ impl MechaCodeSymbolThinking {
                 // we use this to map it back to the symbols which we should
                 // be editing and then send those are requests to the hub
                 // which will forward it to the right symbol
+                let original_request_ref = &original_request;
                 let sub_symbols_to_edit = stream::iter(reverse_lookup)
                     .filter_map(|reverse_lookup| async move {
                         let idx = reverse_lookup.idx();
@@ -770,10 +809,12 @@ impl MechaCodeSymbolThinking {
                             .into_iter()
                             .find(|snippet| snippet.id() == idx)
                             .map(|snippet| {
+                                let original_question =
+                                    original_request_ref.get_original_question();
                                 let reason_to_edit = snippet.reason_to_edit().to_owned();
                                 format!(
                                     r#"Original user query:
-{original_request}
+{original_question}
 
 Reason to edit:
 {reason_to_edit}"#

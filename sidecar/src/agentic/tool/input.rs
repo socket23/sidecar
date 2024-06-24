@@ -12,6 +12,7 @@ use super::{
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
         initial_request_follow::CodeSymbolFollowInitialRequest,
+        new_sub_symbol::NewSubSymbolRequiredRequest,
         planning_before_code_edit::PlanningBeforeCodeEditRequest,
         probe::ProbeEnoughOrDeeperRequest,
         probe_question_for_symbol::ProbeQuestionForSymbolRequest,
@@ -77,6 +78,8 @@ pub enum ToolInput {
     CodeSymbolFollowInitialRequest(CodeSymbolFollowInitialRequest),
     // Plan before code editing
     PlanningBeforeCodeEdit(PlanningBeforeCodeEditRequest),
+    // New symbols required for code editing
+    NewSubSymbolForCodeEditing(NewSubSymbolRequiredRequest),
 }
 
 impl ToolInput {
@@ -119,6 +122,17 @@ impl ToolInput {
             ToolInput::ProbeEnoughOrDeeper(_) => ToolType::ProbeEnoughOrDeeper,
             ToolInput::ProbeCreateQuestionForSymbol(_) => ToolType::ProbeCreateQuestionForSymbol,
             ToolInput::PlanningBeforeCodeEdit(_) => ToolType::PlanningBeforeCodeEdit,
+            ToolInput::NewSubSymbolForCodeEditing(_) => ToolType::NewSubSymbolRequired,
+        }
+    }
+
+    pub fn get_new_sub_symbol_for_code_editing(
+        self,
+    ) -> Result<NewSubSymbolRequiredRequest, ToolError> {
+        if let ToolInput::NewSubSymbolForCodeEditing(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::NewSubSymbolRequired))
         }
     }
 

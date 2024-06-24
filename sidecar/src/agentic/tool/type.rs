@@ -62,6 +62,8 @@ pub enum ToolType {
     CodeSymbolsToFollowInitialRequest,
     // Tool to use to generate the final probe answer
     ProbeFinalAnswerSummary,
+    // New sub symbol in class for code editing
+    NewSubSymbolRequired,
 }
 
 impl std::fmt::Display for ToolType {
@@ -108,6 +110,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ProbeEnoughOrDeeper => write!(f, "Probe enough information or go deeper"),
             ToolType::ProbeCreateQuestionForSymbol => write!(f, "Probe create question for symbol"),
             ToolType::PlanningBeforeCodeEdit => write!(f, "Planning before code edit"),
+            ToolType::NewSubSymbolRequired => write!(f, "New sub symbol required for code editing"),
         }
     }
 }

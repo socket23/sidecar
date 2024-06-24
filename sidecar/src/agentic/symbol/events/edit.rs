@@ -7,6 +7,7 @@ pub struct SymbolToEdit {
     fs_file_path: String,
     symbol_name: String,
     instructions: Vec<String>,
+    is_new: bool,
 }
 
 impl SymbolToEdit {
@@ -16,6 +17,7 @@ impl SymbolToEdit {
         fs_file_path: String,
         instructions: Vec<String>,
         outline: bool,
+        is_new: bool,
     ) -> Self {
         Self {
             symbol_name,
@@ -23,6 +25,7 @@ impl SymbolToEdit {
             outline,
             fs_file_path,
             instructions,
+            is_new,
         }
     }
 

@@ -12,8 +12,11 @@ use llm_client::{
 };
 
 use crate::{
-    agentic::tool::code_symbol::probe::ProbeEnoughOrDeeperResponse,
-    chunking::{text_document::Range, types::OutlineNodeContent},
+    agentic::tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
+    chunking::{
+        text_document::{Position, Range},
+        types::OutlineNodeContent,
+    },
     user_context::types::UserContext,
 };
 
@@ -455,6 +458,8 @@ impl MechaCodeSymbolThinking {
         self.implementations.lock().await.push(implementation);
     }
 
+    /// Grabs all the implementations of this symbol, including the definition
+    /// snippet
     pub async fn get_implementations(&self) -> Vec<Snippet> {
         let mut implementations = self
             .implementations
@@ -701,6 +706,59 @@ impl MechaCodeSymbolThinking {
         Ok(())
     }
 
+    /// Grabs the list of new sub-symbols if any that we have to create
+    pub async fn decide_new_sub_symbols(
+        &self,
+        original_request: &InitialRequestData,
+        llm_properties: LLMProperties,
+        request_id: &str,
+    ) -> Result<Option<Vec<NewSymbol>>, SymbolError> {
+        if self.is_function().await.is_some() {
+            return Ok(None);
+        }
+        // otherwise its a class and we might have to create a new symbol over here
+        let all_contents = self
+            .get_implementations()
+            .await
+            .into_iter()
+            .map(|snippet| {
+                let file_path = snippet.file_path();
+                let content = snippet.content();
+                format!(
+                    r#"<file_path>
+{file_path}
+</file_path>
+<content>
+{content}
+</content>"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let response = self
+            .tool_box
+            .check_new_sub_symbols_required(
+                all_contents,
+                llm_properties,
+                original_request.get_original_question(),
+                original_request
+                    .get_plan()
+                    .unwrap_or("not yet planned".to_owned()),
+                request_id,
+            )
+            .await?;
+
+        // Now that we have output, if we do require a new symbol we will get
+        // the name and thinking reason behind it over here, we can send that over
+        // as an edit
+        let new_sub_symbols = response.symbols();
+        if new_sub_symbols.is_empty() {
+            return Ok(None);
+        } else {
+            return Ok(Some(new_sub_symbols));
+        }
+    }
+
     /// Initial request follows the following flow:
     /// - COT + follow-along questions for any other symbols which might even lead to edits
     /// - Reranking the snippets for the symbol
@@ -735,14 +793,67 @@ impl MechaCodeSymbolThinking {
             self.symbol_name(),
         );
 
-        // TODO(skcd) we also want to check if we need to generate a new symbol inside the current
-        // symbol and if yes, then we need to ask for the name of it and reason behind
-        // it, and it can only happen in a class:
-
         // First we need to verify if we even have to enter the coding loop, often
         // times thinking about this is better and solves generating a lot of code
         // for no reason
         if self.is_snippet_present().await {
+            // TODO(skcd) we also want to check if we need to generate a new symbol inside the current
+            // symbol and if yes, then we need to ask for the name of it and reason behind
+            // it, and it can only happen in a class:
+            println!("mecha_code_symbol_thinking::checking_new_sub_symbols_required");
+            let new_sub_symbols = self
+                .decide_new_sub_symbols(original_request, llm_properties.clone(), &request_id)
+                .await?;
+            println!(
+                "mecha_code_symbol_thinking::checking_new_sub_symbols_required::len({})",
+                new_sub_symbols
+                    .as_ref()
+                    .map(|symbols| symbols.len())
+                    .unwrap_or(0)
+            );
+
+            if let Some(new_sub_symbols) = new_sub_symbols {
+                // send over edit request for this
+                let snippet_file_path = self
+                    .snippet
+                    .lock()
+                    .await
+                    .as_ref()
+                    .expect("is_snippet_present to hold")
+                    .fs_file_path
+                    .to_owned();
+                return Ok(SymbolEventRequest::new(
+                    self.to_symbol_identifier(),
+                    SymbolEvent::Edit(SymbolToEditRequest::new(
+                        new_sub_symbols
+                            .into_iter()
+                            .map(|new_sub_symbol| {
+                                SymbolToEdit::new(
+                                    new_sub_symbol.symbol_name().to_owned(),
+                                    // The range here looks really fucked lol
+                                    Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                                    snippet_file_path.to_owned(),
+                                    match original_request.get_plan() {
+                                        Some(plan) => vec![
+                                            original_request.get_original_question().to_owned(),
+                                            plan,
+                                            new_sub_symbol.reason_to_create().to_owned(),
+                                        ],
+                                        None => vec![
+                                            original_request.get_original_question().to_owned(),
+                                            new_sub_symbol.reason_to_create().to_owned(),
+                                        ],
+                                    },
+                                    false,
+                                    true,
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                        self.to_symbol_identifier(),
+                    )),
+                    tool_properties.clone(),
+                ));
+            }
             // TODO(skcd): We want to send this request for reranking
             // and get back the snippet indexes
             // and then we parse it back from here to get back to the symbol
@@ -840,6 +951,7 @@ Reason to edit:
                                         fs_file_path.to_owned(),
                                         vec![reason],
                                         outline,
+                                        false,
                                     ))
                                 } else {
                                     None

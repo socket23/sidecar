@@ -132,6 +132,8 @@ impl TestCorrection {
 - You are also shown the whole file content in the <file> section, this will be useful for you to understand the overall context in which the change was made.
 - The user has also noticed some test failures with the modified code which is present in <code_in_selection> and the output of the test failures is given in <test_output> section.
 - You have to rewrite the code which is present only in <code_in_selection> making sure that the test failures which were present in <test_output> section no longer happen because of the code which is present in <code_in_selection>
+- Make sure to rewrite the whole code present in <code_in_selection> without leaving any comments or using place-holders.
+- The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
 - Even if the code outside the <code_in_selection> requires changes to fix the tests, you SHOULD NOT EDIT any code outside the <code_in_selection> section.
 - Your reply should be in 2 parts, one of them is the <thinking> section where you explain what changes you are going to make and then the <corrected_code> section where you write the corrected code.
 

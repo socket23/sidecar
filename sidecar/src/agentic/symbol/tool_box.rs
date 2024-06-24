@@ -29,6 +29,7 @@ use crate::agentic::tool::code_symbol::models::anthropic::{
     AskQuestionSymbolHint, CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
     ProbeNextSymbol,
 };
+use crate::agentic::tool::code_symbol::planning_before_code_edit::PlanningBeforeCodeEditRequest;
 use crate::agentic::tool::code_symbol::probe::{
     ProbeEnoughOrDeeperRequest, ProbeEnoughOrDeeperResponse,
 };
@@ -3133,6 +3134,89 @@ Please handle these changes as required."#
             }
         }
         Ok(mecha_code_symbols)
+    }
+
+    /// Does another COT pass after the original plan was generated but this
+    /// time the code is also visibile to the LLM
+    pub async fn planning_before_code_editing(
+        &self,
+        important_symbols: &CodeSymbolImportantResponse,
+        user_query: &str,
+        llm_properties: LLMProperties,
+        request_id: &str,
+    ) -> Result<CodeSymbolImportantResponse, SymbolError> {
+        let ordered_symbol_file_paths = important_symbols
+            .ordered_symbols()
+            .into_iter()
+            .map(|symbol| symbol.file_path().to_owned())
+            .collect::<Vec<_>>();
+        let symbol_file_path = important_symbols
+            .symbols()
+            .into_iter()
+            .map(|symbol| symbol.file_path().to_owned())
+            .collect::<Vec<_>>();
+        let final_paths = ordered_symbol_file_paths
+            .into_iter()
+            .chain(symbol_file_path.into_iter())
+            .collect::<HashSet<String>>();
+        let file_content_map = stream::iter(final_paths)
+            .map(|path| async move {
+                let file_open = self.file_open(path.to_owned(), request_id).await;
+                match file_open {
+                    Ok(file_open_response) => Some((path, file_open_response.contents())),
+                    Err(_) => None,
+                }
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|s| s)
+            .collect::<HashMap<String, String>>();
+        // create the original plan here
+        let original_plan = important_symbols.ordered_symbols_to_plan();
+        let request = ToolInput::PlanningBeforeCodeEdit(PlanningBeforeCodeEditRequest::new(
+            user_query.to_owned(),
+            file_content_map,
+            original_plan,
+            llm_properties,
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
+        let final_plan_list = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_plan_before_code_editing()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .final_plan_list();
+        let response = CodeSymbolImportantResponse::new(
+            final_plan_list
+                .iter()
+                .map(|plan_item| {
+                    CodeSymbolWithThinking::new(
+                        plan_item.symbol_name().to_owned(),
+                        plan_item.plan().to_owned(),
+                        plan_item.file_path().to_owned(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            final_plan_list
+                .iter()
+                .map(|plan_item| {
+                    CodeSymbolWithSteps::new(
+                        plan_item.symbol_name().to_owned(),
+                        vec![plan_item.plan().to_owned()],
+                        false,
+                        plan_item.file_path().to_owned(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
+        Ok(response)
     }
 
     // TODO(skcd): We are not capturing the is_new symbols which might become

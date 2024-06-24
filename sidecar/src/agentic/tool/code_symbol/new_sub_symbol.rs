@@ -43,11 +43,37 @@ pub struct NewSubSymbolRequiredRequest {
     llm_properties: LLMProperties,
 }
 
+impl NewSubSymbolRequiredRequest {
+    pub fn new(
+        user_query: String,
+        plan: String,
+        symbol_content: String,
+        llm_properties: LLMProperties,
+    ) -> Self {
+        Self {
+            user_query,
+            plan,
+            symbol_content,
+            llm_properties,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "symbol")]
 pub struct NewSymbol {
     symbol_name: String,
     reason_to_create: String,
+}
+
+impl NewSymbol {
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
+
+    pub fn reason_to_create(&self) -> &str {
+        &self.reason_to_create
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -58,6 +84,10 @@ pub struct NewSubSymbolRequiredResponse {
 }
 
 impl NewSubSymbolRequiredResponse {
+    pub fn symbols(self) -> Vec<NewSymbol> {
+        self.symbols
+    }
+
     fn unescape_thinking_string(self) -> Self {
         let fixed_symbols = self
             .symbols
@@ -140,6 +170,7 @@ impl NewSubSymbolRequired {
 - You will be provided the code symbol in <code_symbol> section.
 - The plan of edits which we want to do on this code symbol is also given in <plan> section.
 - You have to decide if we can make changes to the existing functions inside this code symbol or if we need to create new functions which will belong to this code symbol.
+- Creating a new symbol inside is hard, so only do it if its absolutely required and is said so in the plan.
 - Before replying, think step-by-step on what approach we want to take and put your thinking in <thinking> section.
 Your reply should be in the following format:
 <reply>

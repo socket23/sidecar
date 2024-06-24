@@ -403,4 +403,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_new_sub_symbol_required(self) -> Option<NewSubSymbolRequiredResponse> {
+        match self {
+            ToolOutput::NewSubSymbolCreation(response) => Some(response),
+            _ => None,
+        }
+    }
 }

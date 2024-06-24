@@ -68,6 +68,7 @@ async fn main() {
         file_path.to_owned(),
         vec![],
         false,
+        false,
     );
 
     let file_open_response = tool_box

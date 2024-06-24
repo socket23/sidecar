@@ -29,6 +29,9 @@ use crate::agentic::tool::code_symbol::models::anthropic::{
     AskQuestionSymbolHint, CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
     ProbeNextSymbol,
 };
+use crate::agentic::tool::code_symbol::new_sub_symbol::{
+    NewSubSymbolRequiredRequest, NewSubSymbolRequiredResponse,
+};
 use crate::agentic::tool::code_symbol::planning_before_code_edit::PlanningBeforeCodeEditRequest;
 use crate::agentic::tool::code_symbol::probe::{
     ProbeEnoughOrDeeperRequest, ProbeEnoughOrDeeperResponse,
@@ -101,6 +104,34 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// Helps us understand if we need to generate new symbols to satisfy
+    /// the user request
+    pub async fn check_new_sub_symbols_required(
+        &self,
+        symbol_content: String,
+        llm_properties: LLMProperties,
+        user_query: &str,
+        plan: String,
+        request_id: &str,
+    ) -> Result<NewSubSymbolRequiredResponse, SymbolError> {
+        let tool_input = ToolInput::NewSubSymbolForCodeEditing(NewSubSymbolRequiredRequest::new(
+            user_query.to_owned(),
+            plan.to_owned(),
+            symbol_content,
+            llm_properties,
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_new_sub_symbol_required()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// We gather the snippets along with the questions we want to ask and

@@ -60,8 +60,9 @@ impl NewSubSymbolRequiredRequest {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "symbol")]
+#[serde(rename = "method")]
 pub struct NewSymbol {
+    #[serde(rename = "method_name")]
     symbol_name: String,
     reason_to_create: String,
 }
@@ -77,9 +78,9 @@ impl NewSymbol {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "new_symbols")]
+#[serde(rename = "new_methods")]
 pub struct NewSubSymbolRequiredResponse {
-    #[serde(rename = "$value")]
+    #[serde(default, rename = "$value")]
     symbols: Vec<NewSymbol>,
 }
 
@@ -111,31 +112,31 @@ impl NewSubSymbolRequiredResponse {
         }
     }
     fn parse_response(response: &str) -> Result<Self, ToolError> {
-        let tags_to_exist = vec!["<reply>", "</reply>", "<new_symbols>", "</new_symbols>"];
+        let tags_to_exist = vec!["<reply>", "</reply>", "<new_methods>", "</new_methods>"];
         if tags_to_exist.into_iter().any(|tag| !response.contains(tag)) {
             return Err(ToolError::MissingXMLTags);
         }
         let lines = response
             .lines()
-            .skip_while(|line| !line.contains("<new_symbols>"))
+            .skip_while(|line| !line.contains("<new_methods>"))
             .skip(1)
-            .take_while(|line| !line.contains("</new_symbols>"))
+            .take_while(|line| !line.contains("</new_methods>"))
             .collect::<Vec<_>>()
             .join("\n");
         let lines = format!(
-            r#"<new_symbols>
+            r#"<new_methods>
 {lines}
-</new_symbols>"#
+</new_methods>"#
         );
 
         let mut final_lines = vec![];
         let mut is_inside = false;
         for line in lines.lines() {
-            if line == "<thinking>" {
+            if line == "<reason_to_create>" {
                 is_inside = true;
                 final_lines.push(line.to_owned());
                 continue;
-            } else if line == "</thinking>" {
+            } else if line == "</reason_to_create>" {
                 is_inside = false;
                 final_lines.push(line.to_owned());
                 continue;
@@ -165,32 +166,32 @@ impl NewSubSymbolRequired {
     }
 
     pub fn system_message(&self) -> String {
-        r#"You are an expert software engineer who is an expert at figuring out if we need to create new functions inside the code symbol or if existing functions can be edited to satify the user query.
+        r#"You are an expert software engineer who is an expert at figuring out if we need to create new methods inside a class or if existing methods can be edited to satify the user query.
 - You will be given the original user query in <user_query>
-- You will be provided the code symbol in <code_symbol> section.
-- The plan of edits which we want to do on this code symbol is also given in <plan> section.
-- You have to decide if we can make changes to the existing functions inside this code symbol or if we need to create new functions which will belong to this code symbol.
-- Creating a new symbol inside is hard, so only do it if its absolutely required and is said so in the plan.
+- You will be provided the class in <code_symbol> section.
+- The plan of edits which we want to do on this class is also given in <plan> section.
+- You have to decide if we can make changes to the existing methods inside this class or if we need to create new methods which will belong to this class.
+- Creating a new methods inside is hard, so only do it if its absolutely required and is said so in the plan.
 - Before replying, think step-by-step on what approach we want to take and put your thinking in <thinking> section.
 Your reply should be in the following format:
 <reply>
 <thinking>
 {{your thinking process before replying}}
 </thinking>
-<new_symbols>
-<symbol>
-<symbol_name>
-{{name of the symbol}}
-</symbol_name>
+<mew_methods>
+<method>
+<method_name>
+{{name of the method}}
+</method_name>
 <reason_to_create>
-{{your reason for creating this new symbol inside the main symbol}}
+{{your reason for creating this new method inside the class}}
 </reason_to_create>
-</symbol>
-{{... more symbols which should belong in the list}}
-</new_symbols>
+</method>
+{{... more methods which should belong in the list}}
+</mew_methods>
 </reply>
 
-Please make sure to keep your reply in the <reply> tag and the new symbols which you need to generate properly in the format under <new_symbols> section."#.to_owned()
+Please make sure to keep your reply in the <reply> tag and the new methods which you need to generate properly in the format under <new_symbols> section."#.to_owned()
     }
 
     pub fn user_message(&self, request: NewSubSymbolRequiredRequest) -> String {
@@ -264,5 +265,41 @@ impl Tool for NewSubSymbolRequired {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NewSubSymbolRequiredResponse;
+
+    #[test]
+    fn test_parsing_works() {
+        let response = r#"
+        <reply>
+        <thinking>
+        Let's analyze the problem and the proposed solution:
+        
+        1. The issue is that the Identity matrix is being misinterpreted as the complex number 1j when using lambdify.
+        
+        2. The plan suggests modifying the NumPyPrinter class to handle the Identity matrix correctly.
+        
+        3. We need to add a specific method to print the Identity matrix using numpy.eye().
+        
+        4. The existing NumPyPrinter class already has methods for printing various matrix operations and functions.
+        
+        5. Adding a new method to handle the Identity matrix seems to be the most appropriate solution, as it follows the existing pattern in the class.
+        
+        6. We don't need to create a new function or symbol, but rather add a new method to the existing NumPyPrinter class.
+        
+        Based on this analysis, we can conclude that we don't need to create any new symbols (functions) in this class. Instead, we should add a new method to handle the Identity matrix printing.
+        </thinking>
+        
+        <new_methods>
+        </new_methods>
+        </reply>
+        "#;
+
+        let output = NewSubSymbolRequiredResponse::parse_response(&response);
+        assert!(output.is_ok());
     }
 }

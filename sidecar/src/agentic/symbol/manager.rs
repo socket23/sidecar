@@ -429,6 +429,10 @@ impl SymbolManager {
                 }
 
                 let request_id_ref = &request_id;
+                let symbol_identifiers_to_query = symbols
+                    .iter()
+                    .map(|symbol| symbol.to_symbol_identifier())
+                    .collect::<Vec<_>>();
                 // This is where we are creating all the symbols
                 let symbol_identifiers = stream::iter(symbols)
                     .map(|symbol_request| async move {
@@ -456,7 +460,7 @@ impl SymbolManager {
                 dbg!("initial request");
                 // we can synchronize this a bit and let the symbols go out
                 // one after the other
-                for symbol_identifier in symbol_identifiers.into_iter() {
+                for symbol_identifier in symbol_identifiers_to_query.into_iter() {
                     let symbol_event_request = SymbolEventRequest::new(
                         symbol_identifier.clone(),
                         SymbolEvent::InitialRequest(InitialRequestData::new(

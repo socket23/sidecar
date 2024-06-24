@@ -361,27 +361,40 @@ impl SymbolManager {
                 // as it can with python where it will tell class.method_name instead of just class or just
                 // method_name
                 let important_symbols = important_symbols.fix_symbol_names();
-                let high_level_plan = important_symbols.ordered_symbols_to_plan();
-                let high_level_plan_ref = &high_level_plan;
                 // swe bench caching hit over here we just do it
                 self.long_context_cache
-                    .update_cache(swe_bench_id, &important_symbols)
+                    .update_cache(swe_bench_id.clone(), &important_symbols)
                     .await;
 
                 // Debug printing
                 println!("Important symbols: {:?}", &important_symbols);
 
                 println!("symbol_manager::planning_before_editing");
-                let important_symbols = self
-                    .tool_box
-                    .planning_before_code_editing(
-                        &important_symbols,
-                        &user_query,
-                        self._llm_properties.clone(),
-                        &request_id,
-                    )
-                    .await?
-                    .fix_symbol_names();
+                let important_symbols = match self
+                    .long_context_cache
+                    .check_cache_for_plan_before_editing(swe_bench_id.clone())
+                    .await
+                {
+                    Some(important_symbols) => important_symbols,
+                    None => {
+                        let important_symbols = self
+                            .tool_box
+                            .planning_before_code_editing(
+                                &important_symbols,
+                                &user_query,
+                                self._llm_properties.clone(),
+                                &request_id,
+                            )
+                            .await?
+                            .fix_symbol_names();
+                        self.long_context_cache
+                            .update_cache_for_plan_before_editing(swe_bench_id, &important_symbols)
+                            .await;
+                        important_symbols
+                    }
+                };
+                let high_level_plan = important_symbols.ordered_symbols_to_plan();
+                let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");
 
                 // Lets first start another round of COT over here to figure out
@@ -441,41 +454,67 @@ impl SymbolManager {
                 // which the user had and send it over and then we can await on all of them
                 // working at the same time.
                 dbg!("initial request");
-                let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
-                    (
+                // we can synchronize this a bit and let the symbols go out
+                // one after the other
+                for symbol_identifier in symbol_identifiers.into_iter() {
+                    let symbol_event_request = SymbolEventRequest::new(
                         symbol_identifier.clone(),
-                        request_id_ref.to_owned(),
-                        SymbolEventRequest::new(
-                            symbol_identifier,
-                            SymbolEvent::InitialRequest(InitialRequestData::new(
-                                user_query.to_owned(),
-                                Some(high_level_plan_ref.to_owned()),
-                            )),
-                            tool_properties_ref.clone(),
-                        ),
-                    )
-                }))
-                .map(
-                    |(symbol_identifier, request_id, symbol_event_request)| async move {
-                        let (sender, receiver) = tokio::sync::oneshot::channel();
-                        dbg!(
-                            "sending initial request to symbol: {:?}",
-                            &symbol_identifier
-                        );
-                        self.symbol_locker
-                            .process_request((symbol_event_request, request_id, sender))
-                            .await;
-                        let response = receiver.await;
-                        dbg!(
-                            "For symbol identifier: {:?} the response is {:?}",
-                            &symbol_identifier,
-                            &response
-                        );
-                    },
-                )
-                .buffer_unordered(100)
-                .collect::<Vec<_>>()
-                .await;
+                        SymbolEvent::InitialRequest(InitialRequestData::new(
+                            user_query.to_owned(),
+                            Some(high_level_plan_ref.to_owned()),
+                        )),
+                        tool_properties_ref.clone(),
+                    );
+                    let (sender, receiver) = tokio::sync::oneshot::channel();
+                    dbg!(
+                        "sending initial request to symbol: {:?}",
+                        &symbol_identifier
+                    );
+                    self.symbol_locker
+                        .process_request((symbol_event_request, request_id.to_owned(), sender))
+                        .await;
+                    let response = receiver.await;
+                    dbg!(
+                        "For symbol identifier: {:?} the response is {:?}",
+                        &symbol_identifier,
+                        &response
+                    );
+                }
+                // let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
+                //     (
+                //         symbol_identifier.clone(),
+                //         request_id_ref.to_owned(),
+                //         SymbolEventRequest::new(
+                //             symbol_identifier,
+                //             SymbolEvent::InitialRequest(InitialRequestData::new(
+                //                 user_query.to_owned(),
+                //                 Some(high_level_plan_ref.to_owned()),
+                //             )),
+                //             tool_properties_ref.clone(),
+                //         ),
+                //     )
+                // }))
+                // .map(
+                //     |(symbol_identifier, request_id, symbol_event_request)| async move {
+                //         let (sender, receiver) = tokio::sync::oneshot::channel();
+                //         dbg!(
+                //             "sending initial request to symbol: {:?}",
+                //             &symbol_identifier
+                //         );
+                //         self.symbol_locker
+                //             .process_request((symbol_event_request, request_id, sender))
+                //             .await;
+                //         let response = receiver.await;
+                //         dbg!(
+                //             "For symbol identifier: {:?} the response is {:?}",
+                //             &symbol_identifier,
+                //             &response
+                //         );
+                //     },
+                // )
+                // .buffer_unordered(100)
+                // .collect::<Vec<_>>()
+                // .await;
             }
         } else {
             // We are for some reason not even invoking the first passage which is

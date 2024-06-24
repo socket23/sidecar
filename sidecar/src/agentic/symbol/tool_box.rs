@@ -3285,7 +3285,7 @@ Please handle these changes as required."#
         // and for the sub-symbols which are unbounded, now we can create the final
         // mecha_code_symbol_thinking
         let mut mecha_code_symbols = vec![];
-        for (outline_node, _) in bounding_symbol_to_instruction.into_iter() {
+        for (outline_node, order_vec) in bounding_symbol_to_instruction.into_iter() {
             // code_symbol_with_steps.into_iter().map(|code_symbol_with_step| {
             //     let code_symbol = code_symbol_with_step.code_symbol().to_owned();
             //     let instructions = code_symbol_with_step.steps().to_vec();
@@ -3306,9 +3306,25 @@ Please handle these changes as required."#
                 user_context.clone(),
                 Arc::new(self.clone()),
             );
-            mecha_code_symbols.push(mecha_code_symbol_thinking);
+            let mut ordered_values = order_vec
+                .into_iter()
+                .map(|(idx, _)| idx)
+                .collect::<Vec<_>>();
+            // sort by the increasing values of orderes
+            ordered_values.sort();
+            if ordered_values.is_empty() {
+                continue;
+            } else {
+                mecha_code_symbols.push((ordered_values.remove(0), mecha_code_symbol_thinking));
+            }
         }
-        Ok(mecha_code_symbols)
+
+        // Now we iterate over all the values in the array and then sort them via the first key
+        mecha_code_symbols.sort_by_key(|(idx, _)| idx.clone());
+        Ok(mecha_code_symbols
+            .into_iter()
+            .map(|(_, symbol)| symbol)
+            .collect())
     }
 
     async fn go_to_implementations_exact(

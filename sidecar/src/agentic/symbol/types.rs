@@ -1525,6 +1525,50 @@ Satisfy the requirement either by making edits or gathering the required informa
         Ok(outlines)
     }
 
+    async fn add_subsymbol(
+        &self,
+        sub_symbol: &SymbolToEdit,
+        context: Vec<String>,
+        request_id: &str,
+    ) -> Result<EditedCodeSymbol, SymbolError> {
+        println!(
+            "symbol::add_subsymbol::sub_symbol_name({})",
+            sub_symbol.symbol_name()
+        );
+        // The trick we are going to use over here is the following:
+        // we want to add a new start line after the last node symbol
+        // present over here, and let it edit it out and format the function properly
+        let range_to_insert = sub_symbol.range().clone();
+        let content = "".to_owned();
+        let (llm_properties, swe_bench_initial_edit) =
+            if let Some(llm_properties) = self.tool_properties.get_swe_bench_code_editing_llm() {
+                (llm_properties, true)
+            } else {
+                (self.llm_properties.clone(), false)
+            };
+        let file_content = self
+            .tools
+            .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
+            .await?;
+        let response = self
+            .tools
+            .code_edit(
+                sub_symbol.fs_file_path(),
+                file_content.contents_ref(),
+                &range_to_insert,
+                context.join("\n"),
+                sub_symbol.instructions().join("\n"),
+                llm_properties.llm().clone(),
+                llm_properties.provider().clone(),
+                llm_properties.api_key().clone(),
+                request_id,
+                swe_bench_initial_edit,
+                Some(sub_symbol.symbol_name().to_owned()),
+            )
+            .await?;
+        Ok(EditedCodeSymbol::new(content, response))
+    }
+
     async fn edit_code(
         &self,
         sub_symbol: &SymbolToEdit,
@@ -1559,6 +1603,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 llm_properties.api_key().clone(),
                 request_id,
                 swe_bench_initial_edit,
+                None,
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))
@@ -1603,19 +1648,34 @@ Satisfy the requirement either by making edits or gathering the required informa
                 );
                 continue;
             }
-            let context_for_editing = dbg!(
-                self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
-                    .await
-            )?;
+            let context_for_editing = if sub_symbol_to_edit.is_new() {
+                vec![]
+            } else {
+                dbg!(
+                    self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                        .await
+                )?
+            };
 
-            // always return the original code which was present here in case of rollbacks
-            let edited_code = self
-                .edit_code(
+            // if this is a new sub-symbol we have to create we have to diverge the
+            // implementations a bit or figure out how to edit with a new line added
+            // to the end of the symbol
+            let edited_code = if sub_symbol_to_edit.is_new() {
+                self.add_subsymbol(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),
                     &request_id,
                 )
-                .await?;
+                .await?
+            } else {
+                // always return the original code which was present here in case of rollbacks
+                self.edit_code(
+                    &sub_symbol_to_edit,
+                    context_for_editing.to_owned(),
+                    &request_id,
+                )
+                .await?
+            };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
             // debugging loop after this

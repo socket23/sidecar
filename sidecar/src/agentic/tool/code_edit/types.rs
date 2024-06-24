@@ -32,6 +32,7 @@ pub struct CodeEdit {
     api_key: LLMProviderAPIKeys,
     provider: LLMProvider,
     is_swe_bench_initial_edit: bool,
+    is_new_symbol_request: Option<String>,
 }
 
 impl CodeEdit {
@@ -47,6 +48,7 @@ impl CodeEdit {
         api_key: LLMProviderAPIKeys,
         provider: LLMProvider,
         is_swe_bench_initial_edit: bool,
+        is_new_symbol_request: Option<String>,
     ) -> Self {
         Self {
             code_above,
@@ -60,6 +62,7 @@ impl CodeEdit {
             api_key,
             provider,
             is_swe_bench_initial_edit,
+            is_new_symbol_request,
         }
     }
 }
@@ -153,6 +156,10 @@ impl CodeEdit {
 
     pub fn model(&self) -> &LLMType {
         &self.model
+    }
+
+    pub fn is_new_sub_symbol(&self) -> Option<String> {
+        self.is_new_symbol_request.clone()
     }
 }
 

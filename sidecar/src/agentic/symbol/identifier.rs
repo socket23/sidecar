@@ -13,10 +13,7 @@ use llm_client::{
 
 use crate::{
     agentic::tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
-    chunking::{
-        text_document::{Position, Range},
-        types::OutlineNodeContent,
-    },
+    chunking::{text_document::Range, types::OutlineNodeContent},
     user_context::types::UserContext,
 };
 
@@ -822,6 +819,18 @@ impl MechaCodeSymbolThinking {
                     .expect("is_snippet_present to hold")
                     .fs_file_path
                     .to_owned();
+
+                // TODO(skcd): This is clown-town heavy, if we are going to create
+                // a new symbol, we need a better way to signal that
+                let end_position = self
+                    .snippet
+                    .lock()
+                    .await
+                    .as_ref()
+                    .expect("is_snippet_present to hold")
+                    .range()
+                    .end_position()
+                    .move_to_next_line();
                 return Ok(SymbolEventRequest::new(
                     self.to_symbol_identifier(),
                     SymbolEvent::Edit(SymbolToEditRequest::new(
@@ -831,7 +840,7 @@ impl MechaCodeSymbolThinking {
                                 SymbolToEdit::new(
                                     new_sub_symbol.symbol_name().to_owned(),
                                     // The range here looks really fucked lol
-                                    Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                                    Range::new(end_position.clone(), end_position.clone()),
                                     snippet_file_path.to_owned(),
                                     match original_request.get_plan() {
                                         Some(plan) => vec![

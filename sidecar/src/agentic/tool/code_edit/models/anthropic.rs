@@ -11,6 +11,69 @@ impl AnthropicCodeEditFromatter {
         Self {}
     }
 
+    fn system_message_for_code_insertion(
+        &self,
+        language: &str,
+        file_path: &str,
+        symbol_name: &str,
+    ) -> String {
+        format!(
+            r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
+Follow the user's requirements carefully and to the letter.
+- The user instructions are present in <user_instruction> tag.
+- Create new code for the method {symbol_name} as the user has asked, the code will be put in <code_to_edit> section.
+- The code present above the section you have to edit will be given in <code_above> section.
+- The code present below the section you have to edit will be given in <code_below> section.
+- The code you have to rewrite will be given to you in <code_to_edit> section.
+- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- The code you have to edit is in {file_path}
+- Output the edited code in a single code block.
+- Each code block starts with ```{language}.
+- You must always answer in {language} code.
+- Your reply should be contained in the <reply> tags.
+- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.
+- Make sure you follow the pattern specified for replying and make no mistakes while doing that.
+- Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
+- The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
+
+We are also showing you an example:
+
+<user_instruction>
+Add the function to divide 2 numbers
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+    def add(a, b):
+        return a + b
+</code_above>
+<code_below>
+</code_below>
+<code_to_edit>
+</code_to_edit>
+
+Your reply is:
+<reply>
+<thinking>
+The user has asked to me to add a function to divide 2 numbers
+</thinking>
+<code_edited>
+```python
+    def divide(a, b):
+        return a / b
+```
+</code_edited>
+</reply>
+
+Notice how the indentation is always correct and we are inserting the method at the end of the class, so remember that when presented with the user query."#
+        )
+    }
+
     fn system_message(&self, language: &str, file_path: &str) -> String {
         format!(
             r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
@@ -242,7 +305,11 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
         let in_range = self.selection_to_edit(context.code_to_edit());
         let language = context.language();
         let fs_file_path = context.fs_file_path();
-        let system_message = self.system_message(language, fs_file_path);
+        let system_message = if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
+            self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
+        } else {
+            self.system_message(language, fs_file_path)
+        };
         let mut messages = vec![];
 
         // add the system message

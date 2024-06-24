@@ -29,6 +29,10 @@ impl SymbolToEdit {
         }
     }
 
+    pub fn is_new(&self) -> bool {
+        self.is_new.clone()
+    }
+
     pub fn range(&self) -> &Range {
         &self.range
     }

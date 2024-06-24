@@ -135,6 +135,14 @@ impl Position {
             byte_offset: 0,
         }
     }
+
+    /// Moves the position to the end of the line
+    pub fn move_to_next_line(mut self) -> Self {
+        self.line = self.line + 1;
+        self.character = 0;
+        self.byte_offset = 0;
+        self
+    }
 }
 
 #[derive(

@@ -2163,16 +2163,20 @@ Please handle these changes as required."#
             }
             tries = tries + 1;
 
-            let symbol_to_edit = self
+            let symbol_to_edit_range = self
                 .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
-                .await?;
+                .await
+                .map(|outline_node| outline_node.range().clone())
+                // If its a new symbol we still do not have it in our outline yet, so
+                // we should grab it from the range position provided in the edit request
+                .unwrap_or(symbol_edited.range().clone());
             let _fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?
                 .contents();
 
             // The range of the symbol before doing the edit
-            let edited_range = symbol_to_edit.range().clone();
+            let edited_range = symbol_to_edit_range;
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
             let _editor_response = self
                 .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
@@ -2512,6 +2516,7 @@ Please handle these changes as required."#
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
         swe_bench_initial_edit: bool,
+        is_new_sub_symbol: Option<String>,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
         println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
@@ -2545,6 +2550,7 @@ Please handle these changes as required."#
             api_keys,
             provider,
             swe_bench_initial_edit,
+            is_new_sub_symbol,
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),

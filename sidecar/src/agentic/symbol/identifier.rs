@@ -878,12 +878,9 @@ impl MechaCodeSymbolThinking {
                 } else {
                     true
                 };
-                // if the input to search for is too long, we change dynamically
-                // to gemini-pro.1.5-flash
                 let llm_properties_for_filtering = if is_too_long {
-                    tool_properties
-                        .get_swe_bench_reranking_llm()
-                        .unwrap_or(llm_properties.clone())
+                    // keep using sonnet3.5 over here for now
+                    llm_properties
                 } else {
                     llm_properties
                 };

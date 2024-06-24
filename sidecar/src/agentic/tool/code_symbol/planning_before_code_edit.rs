@@ -224,7 +224,16 @@ is a code symbol since it represents a function in python.
 </symbol_list>
 </reply>
 
-Your reply should always be in <reply> tags in xml, if you start your reply without the <reply> tag it will fail to parse"#.to_owned()
+Your reply should always be in <reply> tags in xml, if you start your reply without the <reply> tag it will fail to parse.
+A correct example of reply coming from you always starts with the <reply> tag as an example again:
+<reply>
+<thinking>
+{{your thinking here}}
+</thinking>
+<symbol_list>
+{{the rest of the symbol list items here}}
+</symbol_list>
+</reply>"#.to_owned()
     }
 
     fn user_query(&self, request: PlanningBeforeCodeEditRequest) -> String {
@@ -258,7 +267,9 @@ Your reply should always be in <reply> tags in xml, if you start your reply with
 
 <original_plan>
 {original_plan}
-</original_plan>"#
+</original_plan>
+
+Start your reply with the <reply> tag"#
         )
     }
 }

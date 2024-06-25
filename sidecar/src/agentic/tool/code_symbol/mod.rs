@@ -8,5 +8,6 @@ pub mod new_sub_symbol;
 pub mod planning_before_code_edit;
 pub mod probe;
 pub mod probe_question_for_symbol;
+pub mod probe_try_hard_answer;
 pub mod repo_map_search;
 pub mod types;

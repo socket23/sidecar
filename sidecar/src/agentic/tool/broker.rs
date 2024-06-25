@@ -19,7 +19,7 @@ use super::{
         initial_request_follow::CodeSymbolFollowInitialRequestBroker,
         new_sub_symbol::NewSubSymbolRequired, planning_before_code_edit::PlanningBeforeCodeEdit,
         probe::ProbeEnoughOrDeeper, probe_question_for_symbol::ProbeQuestionForSymbol,
-        repo_map_search::RepoMapSearchBroker,
+        probe_try_hard_answer::ProbeTryHardAnswer, repo_map_search::RepoMapSearchBroker,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -254,6 +254,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::NewSubSymbolRequired,
             Box::new(NewSubSymbolRequired::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::ProbeTryHardAnswer,
+            Box::new(ProbeTryHardAnswer::new(llm_client.clone())),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

@@ -102,6 +102,7 @@ pub enum ToolOutput {
     ProbeSubSymbol(CodeToProbeFilterResponse),
     ProbeFollowAlongSymbol(ProbeNextSymbol),
     ProbeSummarizationResult(String),
+    ProbeTryHardAnswer(String),
     // Repo map result
     RepoMapSearch(CodeSymbolImportantResponse),
     // SWE Bench test output
@@ -407,6 +408,13 @@ impl ToolOutput {
     pub fn get_new_sub_symbol_required(self) -> Option<NewSubSymbolRequiredResponse> {
         match self {
             ToolOutput::NewSubSymbolCreation(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_probe_try_harder_answer(self) -> Option<String> {
+        match self {
+            ToolOutput::ProbeTryHardAnswer(response) => Some(response),
             _ => None,
         }
     }

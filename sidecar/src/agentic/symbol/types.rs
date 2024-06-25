@@ -1039,13 +1039,43 @@ impl Symbol {
             // TODO(skcd): if this is empty, then we should have our answer ready over here
             // we should probably ask the LLM to illcit an answer
             // marking this as a TODO
-            let result = "probe requests are empty, symbol not relevant for the user".to_owned();
+            // otherwise its a class and we might have to create a new symbol over here
+            let all_contents = self
+                .mecha_code_symbol
+                .get_implementations()
+                .await
+                .into_iter()
+                .map(|snippet| {
+                    let file_path = snippet.file_path();
+                    let content = snippet.content();
+                    format!(
+                        r#"<file_path>
+{file_path}
+</file_path>
+<content>
+{content}
+</content>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let response = self
+                .tools
+                .probe_try_hard_answer(
+                    all_contents,
+                    self.llm_properties.clone(),
+                    original_request,
+                    query,
+                    &request_id_ref,
+                )
+                .await
+                .unwrap_or("LLM error, please contact the developers".to_owned());
             let _ = self.ui_sender.send(UIEventWithID::probe_answer_event(
                 request_id_ref.to_owned(),
                 self.symbol_identifier.clone(),
-                result.to_owned(),
+                response.to_owned(),
             ));
-            Ok(result)
+            Ok(response.to_owned())
         } else {
             // send the requests over here to the symbol manager and then await
             // in parallel

@@ -52,6 +52,7 @@ pub enum ToolType {
     ProbeSubSymbol,
     ProbeFollowAlongSymbol,
     ProbeSummarizeAnswer,
+    ProbeTryHardAnswer,
     // Repo map Search
     RepoMapSearch,
     // SWE Bench tool endpoint
@@ -111,6 +112,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ProbeCreateQuestionForSymbol => write!(f, "Probe create question for symbol"),
             ToolType::PlanningBeforeCodeEdit => write!(f, "Planning before code edit"),
             ToolType::NewSubSymbolRequired => write!(f, "New sub symbol required for code editing"),
+            ToolType::ProbeTryHardAnswer => write!(f, "Probe try hard answer"),
         }
     }
 }

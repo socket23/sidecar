@@ -37,6 +37,7 @@ use crate::agentic::tool::code_symbol::probe::{
     ProbeEnoughOrDeeperRequest, ProbeEnoughOrDeeperResponse,
 };
 use crate::agentic::tool::code_symbol::probe_question_for_symbol::ProbeQuestionForSymbolRequest;
+use crate::agentic::tool::code_symbol::probe_try_hard_answer::ProbeTryHardAnswerSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
@@ -104,6 +105,34 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// Tries to answer the probe query if it can
+    pub async fn probe_try_hard_answer(
+        &self,
+        symbol_content: String,
+        llm_properties: LLMProperties,
+        user_query: &str,
+        probe_request: &str,
+        request_id: &str,
+    ) -> Result<String, SymbolError> {
+        let tool_input =
+            ToolInput::ProbeTryHardAnswerRequest(ProbeTryHardAnswerSymbolRequest::new(
+                user_query.to_owned(),
+                probe_request.to_owned(),
+                symbol_content,
+                llm_properties,
+            ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_probe_try_harder_answer()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// Helps us understand if we need to generate new symbols to satisfy

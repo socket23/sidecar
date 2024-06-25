@@ -16,6 +16,7 @@ use super::{
         planning_before_code_edit::PlanningBeforeCodeEditRequest,
         probe::ProbeEnoughOrDeeperRequest,
         probe_question_for_symbol::ProbeQuestionForSymbolRequest,
+        probe_try_hard_answer::ProbeTryHardAnswerSymbolRequest,
         repo_map_search::RepoMapSearchQuery,
     },
     editor::apply::EditorApplyRequest,
@@ -68,6 +69,7 @@ pub enum ToolInput {
     ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
     ProbeFollowAlongSymbol(CodeSymbolFollowAlongForProbing),
     ProbeSummarizeAnswerRequest(CodeSymbolProbingSummarize),
+    ProbeTryHardAnswerRequest(ProbeTryHardAnswerSymbolRequest),
     // repo map query
     RepoMapSearch(RepoMapSearchQuery),
     // SWE Bench tooling
@@ -123,7 +125,22 @@ impl ToolInput {
             ToolInput::ProbeCreateQuestionForSymbol(_) => ToolType::ProbeCreateQuestionForSymbol,
             ToolInput::PlanningBeforeCodeEdit(_) => ToolType::PlanningBeforeCodeEdit,
             ToolInput::NewSubSymbolForCodeEditing(_) => ToolType::NewSubSymbolRequired,
+            ToolInput::ProbeTryHardAnswerRequest(_) => ToolType::ProbeTryHardAnswer,
         }
+    }
+
+    pub fn get_probe_try_hard_answer_request(
+        self,
+    ) -> Result<ProbeTryHardAnswerSymbolRequest, ToolError> {
+        if let ToolInput::ProbeTryHardAnswerRequest(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ProbeTryHardAnswer))
+        }
+    }
+
+    pub fn probe_try_hard_answer(request: ProbeTryHardAnswerSymbolRequest) -> Self {
+        ToolInput::ProbeTryHardAnswerRequest(request)
     }
 
     pub fn get_new_sub_symbol_for_code_editing(

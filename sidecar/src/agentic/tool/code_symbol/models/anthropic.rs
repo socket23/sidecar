@@ -433,6 +433,9 @@ impl Reply {
     }
 
     pub fn parse_response(response: &str) -> Result<Self, CodeSymbolError> {
+        if response.is_empty() {
+            return Err(CodeSymbolError::EmptyResponse);
+        }
         let parsed_response = Self::cleanup_string(response);
         // we want to grab the section between <reply> and </reply> tags
         // and then we want to parse the response which is in the following format

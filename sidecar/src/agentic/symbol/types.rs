@@ -1406,6 +1406,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.llm_properties.clone(),
                 request_id,
                 &self.tool_properties,
+                self.hub_sender.clone(),
             )
             .await
     }

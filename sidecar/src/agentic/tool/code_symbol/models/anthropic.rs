@@ -5746,41 +5746,78 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::system(self.system_message_for_summarizing_probe_result());
         let user_message =
             LLMClientMessage::user(self.user_message_for_summarizing_probe_result(request));
-        let messages =
-            LLMClientCompletionRequest::new(llm, vec![system_message, user_message], 0.0, None);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_keys,
-                messages,
-                provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "probe_summarize_results".to_owned(),
-                )]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
-        // The response we get back here is just going to be inside <reply>{reply}</reply> tags, so we can parse it very easily
-        let response_lines = response.lines();
-        let mut final_answer = vec![];
-        let mut is_inside = false;
-        for line in response_lines {
-            if line.starts_with("<reply>") {
-                is_inside = true;
-                continue;
-            } else if line.starts_with("</reply>") {
-                is_inside = false;
-                continue;
+        let messages = LLMClientCompletionRequest::new(
+            llm.clone(),
+            vec![system_message, user_message],
+            0.0,
+            None,
+        );
+        let mut retries = 0;
+        loop {
+            if retries > 4 {
+                return Err(CodeSymbolError::ExhaustedRetries);
             }
-            if is_inside {
-                final_answer.push(line.to_owned());
+
+            let (llm, api_key, provider) = if retries % 2 == 0 {
+                (llm.clone(), api_keys.clone(), provider.clone())
+            } else {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            };
+
+            let cloned_message = messages.clone().set_llm(llm);
+
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    api_key,
+                    cloned_message,
+                    provider,
+                    vec![(
+                        "event_type".to_owned(),
+                        "probe_summarize_results".to_owned(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await;
+
+            match response {
+                Ok(response) => {
+                    if response.is_empty() {
+                        retries = retries + 1;
+                        continue;
+                    } else {
+                        // The response we get back here is just going to be inside <reply>{reply}</reply> tags, so we can parse it very easily
+                        let response_lines = response.lines();
+                        let mut final_answer = vec![];
+                        let mut is_inside = false;
+                        for line in response_lines {
+                            if line.starts_with("<reply>") {
+                                is_inside = true;
+                                continue;
+                            } else if line.starts_with("</reply>") {
+                                is_inside = false;
+                                continue;
+                            }
+                            if is_inside {
+                                final_answer.push(line.to_owned());
+                            }
+                        }
+                        return Ok(final_answer.join("\n"));
+                    }
+                }
+                Err(e) => {
+                    println!("tool::probe_summarize_answer::error({:?})", e);
+                    retries = retries + 1;
+                }
             }
         }
-        Ok(final_answer.join("\n"))
     }
 }
 

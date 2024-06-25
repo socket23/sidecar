@@ -1161,9 +1161,11 @@ impl Symbol {
                 self.get_outline(request_id_ref.to_owned()).await?,
                 self.mecha_code_symbol.fs_file_path().to_owned(),
                 responses,
-                self.llm_properties.llm().clone(),
-                self.llm_properties.provider().clone(),
-                self.llm_properties.api_key().clone(),
+                LLMType::GeminiPro,
+                LLMProvider::GoogleAIStudio,
+                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                )),
             );
             let result = self
                 .tools

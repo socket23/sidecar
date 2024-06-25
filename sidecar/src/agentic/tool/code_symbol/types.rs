@@ -51,4 +51,7 @@ pub enum CodeSymbolError {
 
     #[error("Exhausted retries")]
     ExhaustedRetries,
+
+    #[error("Empty response")]
+    EmptyResponse,
 }

@@ -10,6 +10,7 @@ use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
+use tokio::sync::{mpsc::UnboundedSender, oneshot::Sender};
 
 use crate::{
     agentic::tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
@@ -27,7 +28,7 @@ use super::{
     },
     tool_box::ToolBox,
     tool_properties::ToolProperties,
-    types::SymbolEventRequest,
+    types::{SymbolEventRequest, SymbolEventResponse},
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -767,6 +768,7 @@ impl MechaCodeSymbolThinking {
         llm_properties: LLMProperties,
         request_id: String,
         tool_properties: &ToolProperties,
+        hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
     ) -> Result<SymbolEventRequest, SymbolError> {
         println!(
             "mecha_code_symbol_thinking::symbol_name({})",
@@ -831,7 +833,7 @@ impl MechaCodeSymbolThinking {
                     .range()
                     .end_position()
                     .move_to_next_line();
-                return Ok(SymbolEventRequest::new(
+                let new_symbol_request = SymbolEventRequest::new(
                     self.to_symbol_identifier(),
                     SymbolEvent::Edit(SymbolToEditRequest::new(
                         new_sub_symbols
@@ -861,7 +863,10 @@ impl MechaCodeSymbolThinking {
                         self.to_symbol_identifier(),
                     )),
                     tool_properties.clone(),
-                ));
+                );
+                let (sender, receiver) = tokio::sync::oneshot::channel();
+                let _ = hub_sender.send((new_symbol_request, request_id.to_owned(), sender));
+                let _ = receiver.await;
             }
             // TODO(skcd): We want to send this request for reranking
             // and get back the snippet indexes

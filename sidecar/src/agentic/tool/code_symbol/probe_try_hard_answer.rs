@@ -37,11 +37,15 @@ impl ProbeTryHardAnswerSymbolRequest {
 
 pub struct ProbeTryHardAnswer {
     llm_client: Arc<LLMBroker>,
+    fallback_llm: LLMProperties,
 }
 
 impl ProbeTryHardAnswer {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
-        Self { llm_client }
+    pub fn new(llm_client: Arc<LLMBroker>, fallback_llm: LLMProperties) -> Self {
+        Self {
+            llm_client,
+            fallback_llm,
+        }
     }
 
     fn system_message(&self) -> String {
@@ -89,13 +93,27 @@ impl Tool for ProbeTryHardAnswer {
             if retries > 4 {
                 return Err(ToolError::MissingXMLTags);
             }
+            let (llm, api_key, provider) = if retries % 2 == 0 {
+                (
+                    llm_properties.llm().clone(),
+                    llm_properties.api_key().clone(),
+                    llm_properties.provider().clone(),
+                )
+            } else {
+                (
+                    self.fallback_llm.llm().clone(),
+                    self.fallback_llm.api_key().clone(),
+                    self.fallback_llm.provider().clone(),
+                )
+            };
+            let cloned_request = llm_request.clone().set_llm(llm);
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_client
                 .stream_completion(
-                    llm_properties.api_key().clone(),
-                    llm_request.clone(),
-                    llm_properties.provider().clone(),
+                    api_key,
+                    cloned_request,
+                    provider,
                     vec![(
                         "event_type".to_owned(),
                         "probe_try_hard_to_answer".to_owned(),

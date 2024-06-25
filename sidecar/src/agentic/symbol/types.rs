@@ -12,6 +12,10 @@ use std::{
 
 use derivative::Derivative;
 use futures::{future::Shared, stream, FutureExt, StreamExt};
+use llm_client::{
+    clients::types::LLMType,
+    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
+};
 use logging::parea::{PareaClient, PareaLogEvent};
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
@@ -1063,7 +1067,13 @@ impl Symbol {
                 .tools
                 .probe_try_hard_answer(
                     all_contents,
-                    self.llm_properties.clone(),
+                    LLMProperties::new(
+                        LLMType::GeminiPro,
+                        LLMProvider::GoogleAIStudio,
+                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                        )),
+                    ),
                     original_request,
                     query,
                     &request_id_ref,

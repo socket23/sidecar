@@ -101,6 +101,10 @@ impl CodeEditBroker {
         );
         models.insert(LLMType::Gpt4O, Box::new(AnthropicCodeEditFromatter::new()));
         models.insert(LLMType::Gpt4, Box::new(AnthropicCodeEditFromatter::new()));
+        models.insert(
+            LLMType::Gpt4_32k,
+            Box::new(AnthropicCodeEditFromatter::new()),
+        );
         Self { models }
     }
 

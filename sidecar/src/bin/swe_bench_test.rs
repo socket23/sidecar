@@ -103,6 +103,13 @@ async fn main() {
             "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".to_owned(),
         )),
     );
+    let long_code_editing_llm = LLMProperties::new(
+        LLMType::Gpt4_32k,
+        LLMProvider::OpenAI,
+        LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+            "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".to_owned(),
+        )),
+    );
     // this is the current running debuggable editor
     let user_context = UserContext::new(
         vec![],
@@ -167,6 +174,7 @@ async fn main() {
         Some(folder_path.to_owned()),
         Some(gpt4o_config),
         Some(gemini_llm_properties),
+        Some(long_code_editing_llm),
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
 

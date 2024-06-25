@@ -1582,7 +1582,19 @@ Satisfy the requirement either by making edits or gathering the required informa
         let content = symbol_to_edit.content().to_owned();
         let (llm_properties, swe_bench_initial_edit) =
             if let Some(llm_properties) = self.tool_properties.get_swe_bench_code_editing_llm() {
-                (llm_properties, true)
+                // if the symbol is extremely long which we want to edit, fallback
+                // to an llm with a bigger context window, in this case we use gpt4-32k
+                if symbol_to_edit.range().line_size() > 500 {
+                    if let Some(llm_properties_long_context) =
+                        self.tool_properties.get_long_context_editing_llm()
+                    {
+                        (llm_properties_long_context, true)
+                    } else {
+                        (llm_properties, true)
+                    }
+                } else {
+                    (llm_properties, true)
+                }
             } else {
                 (self.llm_properties.clone(), false)
             };

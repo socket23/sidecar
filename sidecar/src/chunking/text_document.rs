@@ -365,6 +365,10 @@ impl Range {
     pub fn check_equality_without_byte(&self, other: &Range) -> bool {
         self.start_line() == other.start_line() && self.end_line() == other.end_line()
     }
+
+    pub fn line_size(&self) -> i64 {
+        self.end_line() as i64 - (self.start_line() as i64)
+    }
 }
 
 #[derive(Debug, Clone)]

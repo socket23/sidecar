@@ -84,23 +84,43 @@ impl Tool for ProbeTryHardAnswer {
             0.2,
             None,
         );
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
-                llm_properties.api_key().clone(),
-                llm_request,
-                llm_properties.provider().clone(),
-                vec![(
-                    "event_type".to_owned(),
-                    "probe_try_hard_to_answer".to_owned(),
-                )]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await
-            .map_err(|e| ToolError::LLMClientError(e))?;
-        Ok(ToolOutput::ProbeTryHardAnswer(response))
+        let mut retries = 0;
+        loop {
+            if retries > 4 {
+                return Err(ToolError::MissingXMLTags);
+            }
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    llm_properties.api_key().clone(),
+                    llm_request.clone(),
+                    llm_properties.provider().clone(),
+                    vec![(
+                        "event_type".to_owned(),
+                        "probe_try_hard_to_answer".to_owned(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| ToolError::LLMClientError(e));
+            match response {
+                Ok(response) => {
+                    if response.is_empty() {
+                        retries = retries + 1;
+                        continue;
+                    } else {
+                        return Ok(ToolOutput::ProbeTryHardAnswer(response));
+                    }
+                }
+                Err(e) => {
+                    println!("tool::probe_try_hard_answer::invoke::error({:?})", e);
+                    retries = retries + 1;
+                    continue;
+                }
+            }
+        }
     }
 }

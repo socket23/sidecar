@@ -5,6 +5,8 @@
 use std::sync::Arc;
 
 use futures::{stream, StreamExt};
+use llm_client::clients::types::LLMType;
+use llm_client::provider::{GoogleAIStudioKey, LLMProvider};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
@@ -131,9 +133,12 @@ impl SymbolManager {
             ToolInput::RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch::new(
                 user_context.clone(),
                 query.to_owned(),
-                self._llm_properties.llm().clone(),
-                self._llm_properties.provider().clone(),
-                self._llm_properties.api_key().clone(),
+                // Hardcoding here, but we can remove this later
+                LLMType::GeminiPro,
+                LLMProvider::GoogleAIStudio,
+                llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                )),
             ));
         // send the request on to the ui sender
         let _ = self.ui_sender.send(UIEventWithID::from_tool_event(

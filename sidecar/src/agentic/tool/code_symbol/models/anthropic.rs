@@ -2235,7 +2235,6 @@ Does the language type expose any prettier settings, because we want to get it s
 - The other engineers have all looked at various portions of the code and tried to answer the user query you can see what they found in <sub_symbol_probing> section.
 - You have to answer the <user_query> after understanding the questions and the responses we got from following the other symbols which the other engineers have already done.
 - When summarising the information make sure that if you think some symbol is important you keep track of the file name and the name of the symbol as well, this is extremely important.
-- Your summary should be short, at the most 50 words and convery the important information which we can gather from all the answers. Its extremely important that you are not verbose in your summarisation.
 
 Below we are showing you an example of how the input will look like:
 <user_query>

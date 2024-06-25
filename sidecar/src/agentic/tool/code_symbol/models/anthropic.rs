@@ -5444,13 +5444,27 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             if retries >= 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
             }
+            let (llm, api_key, provider) = if retries % 2 == 1 {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            } else {
+                (
+                    code_symbols.model().clone(),
+                    code_symbols.api_key().clone(),
+                    code_symbols.provider().clone(),
+                )
+            };
+            let cloned_message = messages.clone().set_llm(llm);
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_client
                 .stream_completion(
-                    code_symbols.api_key().clone(),
-                    messages.clone(),
-                    code_symbols.provider().clone(),
+                    api_key,
+                    cloned_message,
+                    provider,
                     vec![("event_type".to_owned(), "important_symbols".to_owned())]
                         .into_iter()
                         .collect(),

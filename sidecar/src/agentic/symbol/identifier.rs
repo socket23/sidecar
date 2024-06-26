@@ -779,6 +779,9 @@ impl MechaCodeSymbolThinking {
             "mecha_code_symbol_thinking::thinking_start::symbol_name({})",
             self.symbol_name()
         );
+        // TODO(skcd): We want to invoke this not for all symbols, but only
+        // for those which are very large, a hand-wavy measure of large over
+        // here is >= 500 lines of code
         let _ = self
             .think_before_editing(
                 original_request,

@@ -145,13 +145,17 @@ impl SymbolLocker {
                         symbol_identifier.symbol_name(),
                         fs_file_path
                     );
-                    todo!("no snippet found for the snippet, we are screwed over here, look at the comment above, for symbol");
+                    println!("no snippet found for the snippet, we are screwed over here, look at the comment above, for symbol");
+                    return;
+                    // todo!("no snippet found for the snippet, we are screwed over here, look at the comment above, for symbol");
                 }
             } else {
                 // well this kind of sucks, cause we do not know where the symbol is anymore
                 // worst case this means that we have to create a new symbol somehow
                 // best case this could mean that we fucked up majorly somewhere... what should we do???
-                todo!("we are mostly fucked if this is the case, we have to figure out how to handle the request coming in but not having the file path later on")
+                println!("we are mostly fucked if this is the case, we have to figure out how to handle the request coming in but not having the file path later on");
+                return;
+                // todo!("we are mostly fucked if this is the case, we have to figure out how to handle the request coming in but not having the file path later on")
             }
         }
 
@@ -220,8 +224,9 @@ impl SymbolLocker {
         // now we let it rip, we give the symbol the receiver and ask it
         // to go crazy with it
         let _symbol_run_handle = tokio::spawn(async move {
-            println!("spawning symbol: {:?}.run()", symbol_identifier);
+            println!("spawning symbol: {:?}.run()", &symbol_identifier);
             let response = symbol.run(receiver).await;
+            println!("symbol stopped: {:?}.stop()", symbol_identifier);
             println!("{:?}", response.is_err());
         });
         // fin

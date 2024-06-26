@@ -1805,6 +1805,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 match event {
                     SymbolEvent::InitialRequest(initial_request) => {
                         println!("Symbol::inital_request: {}", symbol.symbol_name());
+                        symbol.refresh_state(request_id.to_owned()).await;
                         let initial_request = symbol
                             .generate_initial_request(request_id.to_owned(), initial_request)
                             .await;

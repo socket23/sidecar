@@ -326,7 +326,7 @@ impl MechaCodeSymbolThinking {
 
     /// This finds the sub-symbol which we want to probe
     /// The sub-symbol can be a function inside the class or a identifier in
-    /// the class if needs be
+    /// the class if needs be or just the class/function itself
     pub async fn find_sub_symbol_in_range(
         &self,
         range: &Range,
@@ -889,6 +889,10 @@ impl MechaCodeSymbolThinking {
                 } else {
                     llm_properties
                 };
+                println!(
+                    "mecha_code_symbol_thinking::reverse_lookup_list::({:?})",
+                    &reverse_lookup
+                );
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us
                 println!(
@@ -921,6 +925,21 @@ impl MechaCodeSymbolThinking {
                 // now we take this filtered list and try to generate back and figure out
                 // the ranges which need to be edited
                 let code_to_edit_list = filtered_list.code_to_edit_list();
+                println!(
+                    "mecha_code_symbol_thinking::code_to_edit_list::({:?})",
+                    code_to_edit_list
+                        .snippets()
+                        .into_iter()
+                        .map(|snippet| snippet.id())
+                        .collect::<Vec<_>>()
+                );
+                println!(
+                    "mecha_code_symbol_thinking::reverse_lookup_ids::({:?})",
+                    reverse_lookup
+                        .iter()
+                        .map(|reverse_lookup| reverse_lookup.idx())
+                        .collect::<Vec<_>>()
+                );
                 // we use this to map it back to the symbols which we should
                 // be editing and then send those are requests to the hub
                 // which will forward it to the right symbol

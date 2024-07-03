@@ -150,6 +150,10 @@ fn agentic_router() -> Router {
             "/probe_request_stop",
             post(sidecar::webserver::agentic::probe_request_stop),
         )
+        .route(
+            "/code_editing",
+            post(sidecar::webserver::agentic::code_editing),
+        )
         .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))
 }
 

@@ -281,3 +281,100 @@ pub async fn swe_bench(
             ),
     ))
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticCodeEditing {
+    git_dname: String,
+    user_query: String,
+    editor_url: String,
+    request_id: String,
+}
+
+pub async fn code_editing(
+    axumQuery(AgenticCodeEditing {
+        git_dname,
+        user_query,
+        editor_url,
+        request_id,
+    }): axumQuery<AgenticCodeEditing>,
+    Extension(app): Extension<Application>,
+) -> Result<impl IntoResponse> {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let tool_broker = Arc::new(ToolBroker::new(
+        app.llm_broker.clone(),
+        Arc::new(CodeEditBroker::new()),
+        app.symbol_tracker.clone(),
+        app.language_parsing.clone(),
+        None,
+        LLMProperties::new(
+            LLMType::GeminiPro,
+            LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+        ),
+    ));
+    // TODO(skcd): Figure out if the complete git repo is necessary to be processed???
+    let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
+    let model = LLMType::ClaudeSonnet;
+    let provider_type = LLMProvider::Anthropic;
+    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    let symbol_manager = SymbolManager::new(
+        tool_broker,
+        app.symbol_tracker.clone(),
+        app.editor_parsing.clone(),
+        editor_url.to_owned(),
+        sender,
+        LLMProperties::new(
+            model.clone(),
+            provider_type.clone(),
+            anthropic_api_keys.clone(),
+        ),
+        user_context.clone(),
+    );
+
+    println!("we are getting a hit at this endpoint");
+
+    // Now we send the original request over here and then await on the sender like
+    // before
+    tokio::spawn(async move {
+        let _ = symbol_manager
+            .initial_request(SymbolInputEvent::new(
+                user_context,
+                model,
+                provider_type,
+                anthropic_api_keys,
+                user_query,
+                request_id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ))
+            .await;
+    });
+    let event_stream = Sse::new(
+        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
+            sse::Event::default()
+                .json_data(event)
+                .map_err(anyhow::Error::new)
+        }),
+    );
+
+    // return the stream as a SSE event stream over here
+    Ok(event_stream.keep_alive(
+        sse::KeepAlive::new()
+            .interval(Duration::from_secs(3))
+            .event(
+                sse::Event::default()
+                    .json_data(json!({
+                        "keep_alive": "alive"
+                    }))
+                    .expect("json to not fail in keep alive"),
+            ),
+    ))
+}

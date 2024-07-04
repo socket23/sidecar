@@ -5597,8 +5597,12 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             ));
         let user_message =
             LLMClientMessage::user(self.user_message_for_ask_question_symbols(request));
-        let messages =
-            LLMClientCompletionRequest::new(model.clone(), vec![system_message, user_message], 0.0, None);
+        let messages = LLMClientCompletionRequest::new(
+            model.clone(),
+            vec![system_message, user_message],
+            0.0,
+            None,
+        );
         let mut retries = 0;
         loop {
             if retries > 4 {

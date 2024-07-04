@@ -52,4 +52,7 @@ pub enum SymbolError {
 
     #[error("User context empty")]
     UserContextEmpty,
+
+    #[error("File type not supported: {0}")]
+    FileTypeNotSupported(String),
 }

@@ -1,6 +1,12 @@
 use crate::in_line_edit::doc_helpers::selection_type;
 
-use super::{types::{InLineEditPrompt, InLineDocRequest, InLinePromptResponse, InLineEditRequest, InLineFixRequest}, doc_helpers::documentation_type};
+use super::{
+    doc_helpers::documentation_type,
+    types::{
+        InLineDocRequest, InLineEditPrompt, InLineEditRequest, InLineFixRequest,
+        InLinePromptResponse,
+    },
+};
 
 pub struct DeepSeekCoderLinEditPrompt {
     system_message: String,
@@ -71,11 +77,13 @@ impl InLineEditPrompt for DeepSeekCoderLinEditPrompt {
 {in_range}
 
 Add {comment_type} and generate the selected code, do not forget the // END marker");
-        let response = format!(r#"### Response:
+        let response = format!(
+            r#"### Response:
 ```{language}
 // FILEPATH: {file_path}
 // BEGIN: ed8c6549bwf9
-"#);
+"#
+        );
         let system_message = self.system_message.to_owned();
         let instruction = format!("### Instruction:\n{}\n", instruction);
         let prompt = format!("{system_message}{instruction}{response}");
@@ -124,7 +132,6 @@ Code you have to edit:
         let response = format!("### Response:\n{}", response);
         let prompt = format!("{system_message}{instruction}{response}");
         InLinePromptResponse::Completion(prompt)
-
     }
 
     fn inline_fix(&self, request: InLineFixRequest) -> InLinePromptResponse {

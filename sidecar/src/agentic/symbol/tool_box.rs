@@ -373,6 +373,7 @@ impl ToolBox {
             .file_open(fs_file_path.to_owned(), request_id)
             .await?
             .contents();
+        let hoverable_ranges = self.get_hoverable_nodes(file_contents.as_str(), fs_file_path)?;
         let selection_range = snippet_range;
         let file_with_lines = file_contents.lines().enumerate().collect::<Vec<_>>();
         let mut containing_lines = file_contents
@@ -397,21 +398,38 @@ impl ToolBox {
             .collect::<Vec<_>>();
         // sort it by the smallest distance from the range we are interested in first
         containing_lines.sort_by(|a, b| a.0.cmp(&b.0));
-        // Now take the first one
-        let symbol_location =
-            if let Some((line, line_index)) = containing_lines.first().map(|first| &first.1) {
-                let position = find_needle_position(line, symbol_to_search);
-                match position {
-                    Some(position) => Ok(Position::new(
-                        (*line_index).try_into().expect("i64 to usize to work"),
-                        position,
+        // Now iterate over all the lines containing this symbol and find the one which we can hover over
+        // and select the first one possible here
+        let mut symbol_locations = containing_lines
+            .into_iter()
+            .filter_map(|containing_line| {
+                let (line, line_index) = containing_line.1;
+                let position = find_needle_position(&line, symbol_to_search).map(|column| {
+                    Position::new(
+                        (line_index).try_into().expect("i64 to usize to work"),
+                        column,
                         0,
-                    )),
-                    None => Err(SymbolError::SymbolNotFound),
+                    )
+                });
+                match position {
+                    Some(position) => {
+                        if hoverable_ranges
+                            .iter()
+                            .any(|hoverable_range| hoverable_range.contains_position(&position))
+                        {
+                            Some(position)
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
                 }
-            } else {
-                Err(SymbolError::NoOutlineNodeSatisfyPosition)
-            }?;
+            })
+            .collect::<Vec<Position>>();
+        if symbol_locations.is_empty() {
+            return Err(SymbolError::NoOutlineNodeSatisfyPosition);
+        }
+        let symbol_location = symbol_locations.remove(0);
 
         let symbol_range = Range::new(
             symbol_location.clone(),
@@ -3855,5 +3873,20 @@ Please handle these changes as required."#
         } else {
             Ok(CodeSymbolImportantResponse::new(symbols, ordered_symbols))
         }
+    }
+
+    /// Grabs the hoverable nodes which are present in the file, especially useful
+    /// when figuring out which node to use for cmd+click
+    fn get_hoverable_nodes(
+        &self,
+        source_code: &str,
+        file_path: &str,
+    ) -> Result<Vec<Range>, SymbolError> {
+        let language_parsing = self.editor_parsing.for_file_path(file_path);
+        if let None = language_parsing {
+            return Err(SymbolError::FileTypeNotSupported(file_path.to_owned()));
+        }
+        let language_parsing = language_parsing.expect("if let None to hold");
+        Ok(language_parsing.hoverable_nodes(source_code.as_bytes()))
     }
 }

@@ -3196,4 +3196,48 @@ pub struct SomethingWorking {{
         assert_eq!(outlines.len(), 2);
         assert_eq!(outlines[0].name(), "Something");
     }
+
+    #[test]
+    fn test_formatting_outline_nodes() {
+        let source_code = r#"
+impl Something {
+    fn new() {
+        // random content over here
+        // more random content over here
+        // something else
+    }
+
+    #[derive(Debug, blah)]
+    fn something_interesting() {
+        // random content over here
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SomethingInteresting {
+    a: String,
+    b: String,
+    c: String,
+}
+        "#;
+        let language = "rust";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(&language)
+            .expect("to be present");
+        let mut parser = Parser::new();
+        let grammar = ts_language_config.grammar;
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code.as_bytes(), None).unwrap();
+        let outlines = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        outlines.into_iter().for_each(|outline| {
+            let content_for_prompt = outline.get_outline_for_prompt();
+            // check that none of the content is empty over here
+            assert!(!content_for_prompt.is_empty());
+        });
+    }
 }

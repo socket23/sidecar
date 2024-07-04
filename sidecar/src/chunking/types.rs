@@ -342,6 +342,120 @@ impl OutlineNode {
         matches!(self.content.r#type, OutlineNodeType::Function)
     }
 
+    /// Grabs the outline of this node similar to how we are showing things
+    /// in the repo map
+    /// extremely useful for just giving an overview to the AI to start selecting
+    /// symbols to start with
+    pub fn get_outline_for_prompt(&self) -> String {
+        match &self.content.r#type {
+            OutlineNodeType::Class | OutlineNodeType::ClassDefinition => {
+                let start_line = self.range().start_line();
+                let end_line = self.range().end_line();
+                let mut line_numbers_included = (start_line..=end_line)
+                    .map(|line_number| (line_number, true))
+                    .collect::<HashMap<usize, bool>>();
+                // mark all the lines covered by functions as not included so we can
+                // generate a better outline
+                self.children.iter().for_each(|children| {
+                    let child_range = children.range();
+                    let start_line = child_range.start_line();
+                    let end_line = child_range.end_line();
+                    (start_line..=end_line).into_iter().for_each(|line_number| {
+                        if let Some(line_content) = line_numbers_included.get_mut(&line_number) {
+                            *line_content = false;
+                        }
+                    });
+                });
+                self.children.iter().for_each(|children| {
+                    println!("{:?}", children.name());
+                    println!("{:?}", &children.body_range);
+                    println!("{:?}", &children.range);
+                    // we have the body range for the children
+                    // but we are missing the range for the
+
+                    // the body range is from where the body of the function starts
+                    // and the complete range also includes the prefix with the comments
+                    // or any decorator which is present on the function
+                    // so we start at the start of the complete range but stop at the
+                    // start line of the body range
+                    // body range is always included in the compelete range
+                    let body_range = children.body_range;
+                    let complete_range = children.range();
+                    let start_line = complete_range.start_line();
+                    // this is not exactly correct but I think it should work out
+                    let end_line = body_range.start_line();
+                    (start_line..=end_line).into_iter().for_each(|line_number| {
+                        if let Some(line_content) = line_numbers_included.get_mut(&line_number) {
+                            *line_content = true;
+                        }
+                    })
+                });
+
+                // Now just grab the lines which have true
+                let node_start_line = self.range().start_line();
+                let content_lines = self
+                    .content()
+                    .content()
+                    .lines()
+                    .enumerate()
+                    .into_iter()
+                    .map(|(idx, line)| (idx + node_start_line, line.to_string()))
+                    .filter_map(|(idx, line)| {
+                        if let Some(include_line) = line_numbers_included.get(&idx) {
+                            if *include_line {
+                                Some(line)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                content_lines
+            }
+            OutlineNodeType::Function => {
+                let complete_range = self.content.range();
+                let body_range = &self.content.body_range;
+                let start_line = complete_range.start_line();
+                let end_line = body_range.start_line();
+                let mut line_numbers_included = (complete_range.start_line()
+                    ..=complete_range.end_line())
+                    .into_iter()
+                    .map(|line_number| (line_number, true))
+                    .collect::<HashMap<usize, bool>>();
+                (start_line..=end_line).into_iter().for_each(|line_number| {
+                    if let Some(line_content) = line_numbers_included.get_mut(&line_number) {
+                        *line_content = true;
+                    }
+                });
+                let content_lines = self
+                    .content()
+                    .content()
+                    .lines()
+                    .enumerate()
+                    .into_iter()
+                    .map(|(idx, line)| (idx + complete_range.start_line(), line.to_string()))
+                    .filter_map(|(idx, line)| {
+                        if let Some(include_line) = line_numbers_included.get(&idx) {
+                            if *include_line {
+                                Some(line)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                content_lines
+            }
+            _ => "".to_owned(),
+        }
+    }
+
     pub fn get_outline_short(&self) -> String {
         // we have to carefully construct this over here, but for now we just return
         // the content
@@ -379,7 +493,10 @@ impl OutlineNode {
                 // TODO(skcd): Pick this up from here and complete getting the outline for the functions
                 // as well and constructing a correct outline for the symbol
             }
-            OutlineNodeType::Function => {}
+            OutlineNodeType::Function => {
+                // if this is a function we want to get the outline over here and just keep that
+                // the outline here involves getting the function defintion and the return type mostly
+            }
             _ => {}
         }
         self.content.content.to_owned()

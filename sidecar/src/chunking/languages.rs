@@ -144,6 +144,29 @@ impl TSLanguageConfig {
             .any(|file_path_part| file_path.contains(file_path_part))
     }
 
+    /// We return a range here for all the nodes which we can hover on and do editor
+    /// operations
+    pub fn hoverable_nodes(&self, source_code: &[u8]) -> Vec<Range> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let hoverable_query = self.hoverable_query.to_owned();
+        let tree = parser.parse(source_code, None).unwrap();
+        let query = tree_sitter::Query::new(grammar(), &hoverable_query).expect("to work");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let query_captures = cursor.captures(&query, tree.root_node(), source_code);
+        let mut hoverable_nodes: HashSet<Range> = Default::default();
+        query_captures.into_iter().for_each(|capture| {
+            capture.0.captures.into_iter().for_each(|capture| {
+                let hover_range = Range::for_tree_node(&capture.node);
+                if !hoverable_nodes.contains(&hover_range) {
+                    hoverable_nodes.insert(hover_range);
+                }
+            })
+        });
+        hoverable_nodes.into_iter().collect::<Vec<_>>()
+    }
+
     pub fn generate_outline(
         &self,
         source_code: &[u8],
@@ -3239,5 +3262,36 @@ struct SomethingInteresting {
             // check that none of the content is empty over here
             assert!(!content_for_prompt.is_empty());
         });
+    }
+
+    #[test]
+    fn test_hover_query_rust() {
+        let source_code = r#"
+fn agent_router() -> Router {
+    use axum::routing::*;
+    Router::new()
+        .route(
+            "/search_agent",
+            get(sidecar::webserver::agent::search_agent),
+        )
+        .route(
+            "/hybrid_search",
+            get(sidecar::webserver::agent::hybrid_search),
+        )
+        .route("/explain", get(sidecar::webserver::agent::explain))
+        .route(
+            "/followup_chat",
+            post(sidecar::webserver::agent::followup_chat),
+        )
+}
+        "#;
+        let language = "rust";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing.for_lang(&language).expect("to be present");
+        let mut parser = Parser::new();
+        let grammar = ts_language_config.grammar;
+        parser.set_language(grammar()).unwrap();
+        let hoverable_ranges = ts_language_config.hoverable_nodes(source_code.as_bytes());
+        assert!(!hoverable_ranges.is_empty());
     }
 }

@@ -3287,7 +3287,9 @@ fn agent_router() -> Router {
         "#;
         let language = "rust";
         let tree_sitter_parsing = TSLanguageParsing::init();
-        let ts_language_config = tree_sitter_parsing.for_lang(&language).expect("to be present");
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(&language)
+            .expect("to be present");
         let mut parser = Parser::new();
         let grammar = ts_language_config.grammar;
         parser.set_language(grammar()).unwrap();

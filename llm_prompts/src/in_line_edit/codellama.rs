@@ -150,9 +150,9 @@ Add {comment_type} and generate the selected code, do not for the // END marker 
 #[cfg(test)]
 mod tests {
 
+    use super::CodeLlamaLineEditPrompt;
     use super::InLineEditPrompt;
     use super::InLineEditRequest;
-    use super::CodeLlamaLineEditPrompt;
 
     #[test]
     fn test_inline_edit_prompt() {

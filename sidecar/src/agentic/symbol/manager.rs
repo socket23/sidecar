@@ -51,7 +51,7 @@ pub struct SymbolManager {
     _editor_parsing: Arc<EditorParsing>,
     tool_box: Arc<ToolBox>,
     _editor_url: String,
-    _llm_properties: LLMProperties,
+    llm_properties: LLMProperties,
     ui_sender: UnboundedSender<UIEventWithID>,
     long_context_cache: LongContextSearchCache,
 }
@@ -106,7 +106,7 @@ impl SymbolManager {
             _symbol_broker: symbol_broker,
             tool_box,
             _editor_url: editor_url,
-            _llm_properties: llm_properties,
+            llm_properties,
             ui_sender,
             long_context_cache: LongContextSearchCache::new(),
         }
@@ -389,7 +389,7 @@ impl SymbolManager {
                             .planning_before_code_editing(
                                 &important_symbols,
                                 &user_query,
-                                self._llm_properties.clone(),
+                                self.llm_properties.clone(),
                                 &request_id,
                             )
                             .await?

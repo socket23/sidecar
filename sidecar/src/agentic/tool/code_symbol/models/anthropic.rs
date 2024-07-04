@@ -5599,13 +5599,10 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             LLMClientMessage::user(self.user_message_for_ask_question_symbols(request));
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
-        let mut retries = 1;
+        let mut retries = 0;
         loop {
             if retries > 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
-            }
-            if retries > 1 {
-                jitter_sleep(10.0, retries as f64).await;
             }
             let mut cloned_messages = messages.clone();
             // if its odd use fail over llm otherwise stick to the provided on

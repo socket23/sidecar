@@ -96,11 +96,14 @@ impl Position {
     }
 
     pub fn before_other(&self, other: &Position) -> bool {
-        self.line < other.line || (self.line == other.line && self.character < other.character)
+        // <= comparison over here, because even if the characters start at the same position, thats fine
+        self.line < other.line || (self.line == other.line && self.character <= other.character)
     }
 
     pub fn after_other(&self, other: &Position) -> bool {
-        self.line > other.line || (self.line == other.line && self.character > other.character)
+        // >= comparsion over here, because even if the character starts after or at the same position
+        // thats fine
+        self.line > other.line || (self.line == other.line && self.character >= other.character)
     }
 
     pub fn set_byte_offset(&mut self, byte_offset: usize) {

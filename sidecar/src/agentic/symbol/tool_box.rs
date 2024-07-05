@@ -357,18 +357,18 @@ impl ToolBox {
         ),
         SymbolError,
     > {
-        let line_content_to_track = line_content
+        // TODO(skcd): This is wrong, becausae both the lines can contain the symbol we want
+        // to search for
+        let line_content_contains_symbol = line_content
             .lines()
-            .find(|line| line.contains(symbol_to_search));
-        if let None = line_content_to_track {
+            .any(|line| line.contains(symbol_to_search));
+        // If none of them contain it, then we need to return the error over here ASAP
+        if !line_content_contains_symbol {
             return Err(SymbolError::SymbolNotFoundInLine(
                 symbol_to_search.to_owned(),
                 line_content.to_owned(),
             ));
         }
-        let line_content = line_content_to_track
-            .expect("if let None to hold")
-            .to_owned();
         let file_contents = self
             .file_open(fs_file_path.to_owned(), request_id)
             .await?
@@ -389,7 +389,8 @@ impl ToolBox {
                 // we also need to make sure that the selection we are making is in
                 // the range of the snippet we are selecting the symbols in
                 // LLMs have a trendency to go overboard with this
-                if line.contains(&line_content) && start_line <= index && index <= end_line {
+                dbg!(&line, line.contains(&line_content));
+                if line_content.lines().any(|line_content_to_search| line.contains(line_content_to_search)) && start_line <= index && index <= end_line {
                     Some((minimum_distance, (line.to_owned(), index)))
                 } else {
                     None
@@ -400,7 +401,7 @@ impl ToolBox {
         containing_lines.sort_by(|a, b| a.0.cmp(&b.0));
         // Now iterate over all the lines containing this symbol and find the one which we can hover over
         // and select the first one possible here
-        let mut symbol_locations = containing_lines
+        let mut symbol_locations = dbg!(containing_lines)
             .into_iter()
             .filter_map(|containing_line| {
                 let (line, line_index) = containing_line.1;

@@ -20,6 +20,7 @@ use crate::{
         google_ai::GoogleAIStdioClient,
         lmstudio::LMStudioClient,
         ollama::OllamaClient,
+        open_router::OpenRouterClient,
         openai::OpenAIClient,
         openai_compatible::OpenAICompatibleClient,
         togetherai::TogetherAIClient,
@@ -78,6 +79,7 @@ impl LLMBroker {
             .add_provider(LLMProvider::FireworksAI, Box::new(FireworksAIClient::new()))
             .add_provider(LLMProvider::Anthropic, Box::new(AnthropicClient::new()))
             .add_provider(LLMProvider::GeminiPro, Box::new(GeminiProClient::new()))
+            .add_provider(LLMProvider::OpenRouter, Box::new(OpenRouterClient::new()))
             .add_provider(
                 LLMProvider::GoogleAIStudio,
                 Box::new(GoogleAIStdioClient::new()),
@@ -128,6 +130,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
         }
     }
 
@@ -157,6 +160,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -427,6 +431,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

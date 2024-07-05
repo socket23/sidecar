@@ -38,6 +38,7 @@ pub enum LLMProvider {
     FireworksAI,
     GeminiPro,
     GoogleAIStudio,
+    OpenRouter,
 }
 
 impl std::fmt::Display for LLMProvider {
@@ -54,6 +55,7 @@ impl std::fmt::Display for LLMProvider {
             LLMProvider::FireworksAI => write!(f, "FireworksAI"),
             LLMProvider::GeminiPro => write!(f, "GeminiPro"),
             LLMProvider::GoogleAIStudio => write!(f, "GoogleAIStudio"),
+            LLMProvider::OpenRouter => write!(f, "OpenRouter"),
         }
     }
 }
@@ -81,6 +83,7 @@ pub enum LLMProviderAPIKeys {
     FireworksAI(FireworksAPIKey),
     GeminiPro(GeminiProAPIKey),
     GoogleAIStudio(GoogleAIStudioKey),
+    OpenRouter(OpenRouterAPIKey),
 }
 
 impl LLMProviderAPIKeys {
@@ -107,6 +110,7 @@ impl LLMProviderAPIKeys {
             LLMProviderAPIKeys::FireworksAI(_) => LLMProvider::FireworksAI,
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
+            LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
         }
     }
 
@@ -198,6 +202,13 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
+            LLMProvider::OpenRouter => {
+                if let LLMProviderAPIKeys::OpenRouter(api_key) = self {
+                    Some(LLMProviderAPIKeys::OpenRouter(api_key.clone()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -219,6 +230,17 @@ pub struct TogetherAIProvider {
 }
 
 impl TogetherAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OpenRouterAPIKey {
+    pub api_key: String,
+}
+
+impl OpenRouterAPIKey {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
     }

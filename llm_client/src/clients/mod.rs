@@ -10,6 +10,7 @@ pub mod google_ai;
 pub mod groq;
 pub mod lmstudio;
 pub mod ollama;
+pub mod open_router;
 pub mod openai;
 pub mod openai_compatible;
 pub mod togetherai;

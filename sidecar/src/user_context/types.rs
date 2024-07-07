@@ -130,6 +130,14 @@ pub struct FileContentValue {
 }
 
 impl FileContentValue {
+    pub fn new(file_path: String, file_content: String, language: String) -> Self {
+        Self {
+            file_content,
+            file_path,
+            language,
+        }
+    }
+
     pub fn to_xml(self) -> String {
         let language = &self.language;
         let content = &self.file_content;

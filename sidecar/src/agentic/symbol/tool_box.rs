@@ -2815,7 +2815,7 @@ Please handle these changes as required."#
         Ok(symbol_to_definition)
     }
 
-    async fn get_quick_fix_actions(
+    pub async fn get_quick_fix_actions(
         &self,
         fs_file_path: &str,
         range: &Range,

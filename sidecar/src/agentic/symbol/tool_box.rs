@@ -390,7 +390,12 @@ impl ToolBox {
                 // the range of the snippet we are selecting the symbols in
                 // LLMs have a trendency to go overboard with this
                 dbg!(&line, line.contains(&line_content));
-                if line_content.lines().any(|line_content_to_search| line.contains(line_content_to_search)) && start_line <= index && index <= end_line {
+                if line_content
+                    .lines()
+                    .any(|line_content_to_search| line.contains(line_content_to_search))
+                    && start_line <= index
+                    && index <= end_line
+                {
                     Some((minimum_distance, (line.to_owned(), index)))
                 } else {
                     None
@@ -1062,12 +1067,23 @@ We also believe this symbol needs to be probed because of:
                 // if no children match, then we have to find out which symbol we want to select
                 // and use those, this one will be the closest one to the range we are interested
                 // in
-                let mut outline_nodes_with_distance = outline_nodes.into_iter().filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name()).map(|outline_node| (outline_node.range().minimal_line_distance(symbol_to_edit.range()), outline_node)).collect::<Vec<_>>();
+                let mut outline_nodes_with_distance = outline_nodes
+                    .into_iter()
+                    .filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name())
+                    .map(|outline_node| {
+                        (
+                            outline_node
+                                .range()
+                                .minimal_line_distance(symbol_to_edit.range()),
+                            outline_node,
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 outline_nodes_with_distance.sort_by_key(|(distance, _)| *distance);
                 if outline_nodes_with_distance.is_empty() {
                     Err(SymbolError::NoOutlineNodeSatisfyPosition)
                 } else {
-                    return Ok(outline_nodes_with_distance.remove(0).1.content().clone())
+                    return Ok(outline_nodes_with_distance.remove(0).1.content().clone());
                 }
             }
         }

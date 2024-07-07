@@ -1016,6 +1016,9 @@ We also believe this symbol needs to be probed because of:
     /// The symbol can move because of some other edit so we have to map it
     /// properly over here and find it using the name as that it is the best
     /// way to achieve this right now
+    /// There might be multiple outline nodes with the same name (rust) supports this
+    /// so we need to find the outline node either closest to the range we are interested
+    /// in or we found a child node
     pub async fn find_sub_symbol_to_edit_with_name(
         &self,
         parent_symbol_name: &str,
@@ -1032,28 +1035,39 @@ We also believe this symbol needs to be probed because of:
                 file_open_response.language(),
             )
             .await;
-        let outline_node = self
+        let outline_nodes = self
             .get_outline_nodes_grouped(symbol_to_edit.fs_file_path())
             .await
             .ok_or(SymbolError::ExpectedFileToExist)?
             .into_iter()
-            .find(|outline_node| outline_node.name() == parent_symbol_name)
-            .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)?;
+            .filter(|outline_node| outline_node.name() == parent_symbol_name)
+            .collect::<Vec<_>>();
+
+        if outline_nodes.is_empty() {
+            return Err(SymbolError::NoOutlineNodeSatisfyPosition);
+        }
 
         if symbol_to_edit.is_outline() {
             Err(SymbolError::OutlineNodeEditingNotSupported)
         } else {
-            let child_node = outline_node
-                .children()
+            let child_node = outline_nodes
+                .iter()
+                .map(|outline_node| outline_node.children())
+                .flatten()
                 .into_iter()
                 .find(|child_node| child_node.name() == symbol_to_edit.symbol_name());
             if let Some(child_node) = child_node {
                 Ok(child_node.clone())
             } else {
-                if outline_node.name() == symbol_to_edit.symbol_name() {
-                    Ok(outline_node.content().clone())
-                } else {
+                // if no children match, then we have to find out which symbol we want to select
+                // and use those, this one will be the closest one to the range we are interested
+                // in
+                let mut outline_nodes_with_distance = outline_nodes.into_iter().filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name()).map(|outline_node| (outline_node.range().minimal_line_distance(symbol_to_edit.range()), outline_node)).collect::<Vec<_>>();
+                outline_nodes_with_distance.sort_by_key(|(distance, _)| *distance);
+                if outline_nodes_with_distance.is_empty() {
                     Err(SymbolError::NoOutlineNodeSatisfyPosition)
+                } else {
+                    return Ok(outline_nodes_with_distance.remove(0).1.content().clone())
                 }
             }
         }

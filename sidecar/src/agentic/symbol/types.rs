@@ -1723,13 +1723,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                 )
                 .await?
             } else {
+                println!("we are going to start editing now");
                 // always return the original code which was present here in case of rollbacks
-                self.edit_code(
+                dbg!(self.edit_code(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),
                     &request_id,
                 )
-                .await?
+                .await)?
             };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;

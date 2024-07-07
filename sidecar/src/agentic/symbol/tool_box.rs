@@ -2203,19 +2203,19 @@ Please handle these changes as required."#
     ) -> Result<(), SymbolError> {
         println!("==========too_box::check_code_correctness==========");
         println!(
-            "tool_box::check_code_correctness::symbol_edited:{:?}",
+            "tool_box::check_code_correctness::symbol_edited:\n{:?}",
             &symbol_edited
         );
         println!(
-            "tool_box::check_code_correctness::original_code:{}",
+            "tool_box::check_code_correctness::original_code:\n{}",
             original_code
         );
         println!(
-            "tool_box::check_code_correctness::edited_code:{}",
+            "tool_box::check_code_correctness::edited_code:\n{}",
             edited_code
         );
         println!(
-            "tool_box::check_code_correctness::code_edit_extra_context:{}",
+            "tool_box::check_code_correctness::code_edit_extra_context:\n{}",
             code_edit_extra_context
         );
         println!(
@@ -2360,9 +2360,10 @@ Please handle these changes as required."#
             }
 
             // Now we check for LSP diagnostics
-            let lsp_diagnostics = self
-                .get_lsp_diagnostics(fs_file_path, &edited_range, request_id)
-                .await?;
+            let lsp_diagnostics = dbg!(
+                self.get_lsp_diagnostics(fs_file_path, &edited_range, request_id)
+                    .await
+            )?;
 
             // We also give it the option to edit the code as required
             if lsp_diagnostics.get_diagnostics().is_empty() {
@@ -2831,7 +2832,7 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    async fn get_lsp_diagnostics(
+    pub async fn get_lsp_diagnostics(
         &self,
         fs_file_path: &str,
         range: &Range,

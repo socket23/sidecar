@@ -856,7 +856,8 @@ impl CodeSymbolWithSteps {
                 let mut code_symbol_parts = self.code_symbol.split('.').collect::<Vec<_>>();
                 Self {
                     code_symbol: code_symbol_parts.remove(0).to_string(),
-                    thinking: self.thinking,
+                    steps: self.steps,
+                    is_new: self.is_new,
                     file_path: self.file_path,
                 }
             } else {
@@ -874,7 +875,8 @@ impl CodeSymbolWithSteps {
                     // we should be able to get the exact symbol somehow, maybe we should have a heirarchy
                     // somehow?
                     code_symbol: code_symbol_parts.remove(0).to_string(),
-                    thinking: self.thinking,
+                    steps: self.steps,
+                    is_new: self.is_new,
                     file_path: self.file_path,
                 }
             } else {

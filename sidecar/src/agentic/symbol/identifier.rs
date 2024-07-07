@@ -928,21 +928,6 @@ impl MechaCodeSymbolThinking {
                 // now we take this filtered list and try to generate back and figure out
                 // the ranges which need to be edited
                 let code_to_edit_list = filtered_list.code_to_edit_list();
-                println!(
-                    "mecha_code_symbol_thinking::code_to_edit_list::({:?})",
-                    code_to_edit_list
-                        .snippets()
-                        .into_iter()
-                        .map(|snippet| snippet.id())
-                        .collect::<Vec<_>>()
-                );
-                println!(
-                    "mecha_code_symbol_thinking::reverse_lookup_ids::({:?})",
-                    reverse_lookup
-                        .iter()
-                        .map(|reverse_lookup| reverse_lookup.idx())
-                        .collect::<Vec<_>>()
-                );
                 // we use this to map it back to the symbols which we should
                 // be editing and then send those are requests to the hub
                 // which will forward it to the right symbol

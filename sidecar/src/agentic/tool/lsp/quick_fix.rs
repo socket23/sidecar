@@ -27,7 +27,7 @@ impl GetQuickFixRequest {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QuickFixOption {
     label: String,
-    number: i64,
+    index: i64,
 }
 
 impl QuickFixOption {
@@ -36,7 +36,7 @@ impl QuickFixOption {
     }
 
     pub fn index(&self) -> i64 {
-        self.number
+        self.index
     }
 }
 

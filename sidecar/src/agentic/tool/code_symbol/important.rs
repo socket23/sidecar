@@ -773,12 +773,34 @@ impl CodeSymbolWithThinking {
     /// just the a instead of the whole string since we always work on the
     /// top level symbol
     pub fn fix_symbol_name(self) -> Self {
-        if self.code_symbol.contains(".") {
-            let mut code_symbol_parts = self.code_symbol.split('.').collect::<Vec<_>>();
-            Self {
-                code_symbol: code_symbol_parts.remove(0).to_string(),
-                thinking: self.thinking,
-                file_path: self.file_path,
+        if self.file_path().ends_with("py") {
+            if self.code_symbol.contains(".") {
+                let mut code_symbol_parts = self.code_symbol.split('.').collect::<Vec<_>>();
+                Self {
+                    code_symbol: code_symbol_parts.remove(0).to_string(),
+                    thinking: self.thinking,
+                    file_path: self.file_path,
+                }
+            } else {
+                self
+            }
+        }
+        else if self.file_path().ends_with("rs") {
+            // we get inputs in the format: "struct::function_inside_struct"
+            // we obviously know at this point that the symbol we are referring to is "function_inside_struct" in
+            // "struct"
+            if self.code_symbol.contains("::") {
+                let mut code_symbol_parts = self.code_symbol.split("::").collect::<Vec<_>>();
+                Self {
+                    // We are just getting the top level symbol here which might be incorrect
+                    // we should be able to get the exact symbol somehow, maybe we should have a heirarchy
+                    // somehow?
+                    code_symbol: code_symbol_parts.remove(0).to_string(),
+                    thinking: self.thinking,
+                    file_path: self.file_path,
+                }
+            } else {
+                self
             }
         } else {
             self

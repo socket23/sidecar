@@ -2256,9 +2256,10 @@ Please handle these changes as required."#
             // The range of the symbol before doing the edit
             let edited_range = symbol_to_edit_range;
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
-            let _editor_response = self
-                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
-                .await?;
+            let _editor_response = dbg!(
+                self.apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
+                    .await
+            )?;
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
@@ -2434,14 +2435,21 @@ Please handle these changes as required."#
 
                 // after this we have to apply the edits to the editor again and being
                 // the loop again
-                let _ = self
-                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code, request_id)
-                    .await?;
+                let _ = dbg!(
+                    self.apply_edits_to_editor(
+                        fs_file_path,
+                        &edited_range,
+                        &fixed_code,
+                        request_id
+                    )
+                    .await
+                )?;
             } else {
-                // invoke the code action over here with the ap
-                let response = self
-                    .invoke_quick_action(selected_action_index, &lsp_request_id, request_id)
-                    .await?;
+                // invoke the code action over here with the editor
+                let response = dbg!(
+                    self.invoke_quick_action(selected_action_index, &lsp_request_id, request_id)
+                        .await
+                )?;
                 if response.is_success() {
                     // great we have a W
                 } else {

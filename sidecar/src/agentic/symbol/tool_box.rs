@@ -2376,16 +2376,15 @@ Please handle these changes as required."#
             // a more detailed output to the model
 
             // Now we get all the quick fixes which are available in the editor
-            let quick_fix_actions = dbg!(
-                self.get_quick_fix_actions(
+            let quick_fix_actions = self
+                .get_quick_fix_actions(
                     fs_file_path,
                     &edited_range,
                     lsp_request_id.to_owned(),
                     request_id,
                 )
-                .await
-            )?
-            .remove_options();
+                .await?
+                .remove_options();
 
             // now we can send over the request to the LLM to select the best tool
             // for editing the code out
@@ -2412,10 +2411,12 @@ Please handle these changes as required."#
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
             let selected_action_index = selected_action.index();
 
+            // TODO(skcd): This needs to change because we will now have 2 actions which can
+            // happen
             // code edit is a special operation which is not present in the quick-fix
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
-            if selected_action_index >= quick_fix_actions.len() as i64 {
+            if selected_action_index == quick_fix_actions.len() as i64 {
                 let fixed_code = dbg!(
                     self.code_correctness_with_edits(
                         fs_file_path,
@@ -2444,6 +2445,11 @@ Please handle these changes as required."#
                     )
                     .await
                 )?;
+            } else if selected_action_index > quick_fix_actions.len() as i64 {
+                // over here we want to ping the other symbols and send them requests, there is a search
+                // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
+                // or maybe we should keep it separate
+                // TODO(skcd): Figure this part out
             } else {
                 // invoke the code action over here with the editor
                 let response = dbg!(

@@ -31,6 +31,7 @@ use super::{
         gotodefintion::LSPGoToDefinition,
         gotoimplementations::LSPGoToImplementation,
         gotoreferences::LSPGoToReferences,
+        grep_symbol::GrepSymbolInCodebase,
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
     },
@@ -261,6 +262,10 @@ impl ToolBroker {
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),
+        );
+        tools.insert(
+            ToolType::GrepSymbolInCodebase,
+            Box::new(GrepSymbolInCodebase::new()),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

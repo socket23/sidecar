@@ -909,7 +909,7 @@ impl CodeSymbolImportantResponse {
     /// the form of a.b.c etc
     /// so we want to parse them as just a instead of a.b.c
     /// this way we can ensure that we find the right symbol always
-    pub fn fix_symbol_names(self) -> Self {
+    pub fn fix_symbol_names(self, ts_parsing: &Arc<TSLanguageParsing>) -> Self {
         let symbols = self.symbols;
         let ordered_symbols = self.ordered_symbols;
         Self {

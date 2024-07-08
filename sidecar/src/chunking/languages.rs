@@ -3355,9 +3355,6 @@ fn agent_router() -> Router {
             ),
         ];
         for (language, source_code, expected_qualifier) in cases {
-            println!("language: {language}");
-            println!("source_code: {source_code}");
-            println!("expected_qualifier: {expected_qualifier}");
             let tree_sitter_parsing = TSLanguageParsing::init();
             let ts_language_config = tree_sitter_parsing
                 .for_lang(language)

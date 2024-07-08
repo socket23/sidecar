@@ -1706,16 +1706,15 @@ Satisfy the requirement either by making edits or gathering the required informa
             let context_for_editing = if sub_symbol_to_edit.is_new() {
                 vec![]
             } else {
-                dbg!(
-                    self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
-                        .await
-                )?
+                self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                    .await?
             };
 
             // if this is a new sub-symbol we have to create we have to diverge the
             // implementations a bit or figure out how to edit with a new line added
             // to the end of the symbol
             let edited_code = if sub_symbol_to_edit.is_new() {
+                // what do we send over here????
                 self.add_subsymbol(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),

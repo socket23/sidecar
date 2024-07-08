@@ -111,6 +111,11 @@ pub fn python_language_config() -> TSLanguageConfig {
         ),
         excluded_file_paths: vec![],
         language_str: "python".to_owned(),
-        object_qualifier: None,
+        object_qualifier: Some(
+            "(call
+              function: (attribute
+                object: (identifier) @path))"
+                .to_owned(),
+        ),
     }
 }

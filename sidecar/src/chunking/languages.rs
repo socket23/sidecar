@@ -122,7 +122,7 @@ pub struct TSLanguageConfig {
     pub language_str: String,
 
     /// Used to specify which object a method or property belongs to.
-    pub object_qualifier: Option<String>,
+    pub object_qualifier: String,
 }
 
 impl TSLanguageConfig {
@@ -1283,7 +1283,7 @@ impl TSLanguageConfig {
         let grammar = self.grammar;
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(grammar()).unwrap();
-        let object_qualifier_query = self.object_qualifier.as_ref().unwrap().to_owned();
+        let object_qualifier_query = self.object_qualifier.to_owned();
         let tree = parser.parse(source_code, None).unwrap();
 
         let query = tree_sitter::Query::new(grammar(), &object_qualifier_query).expect("to work");
@@ -3348,6 +3348,13 @@ fn agent_router() -> Router {
             ),
             (
                 "python",
+                r#"
+            hotel.method()
+            "#,
+                "hotel",
+            ),
+            (
+                "go",
                 r#"
             hotel.method()
             "#,

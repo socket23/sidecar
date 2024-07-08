@@ -186,10 +186,9 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         ),
         excluded_file_paths: vec![],
         language_str: "javascript".to_owned(),
-        object_qualifier: Some(
-            "(call_expression
+        object_qualifier: "(call_expression
           function: (member_expression
-            object: (identifier) @path))".to_owned(),
-        ),
+            object: (identifier) @path))"
+            .to_owned(),
     }
 }

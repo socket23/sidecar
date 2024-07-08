@@ -134,9 +134,48 @@ impl SymbolEventGoToDefinitionRequest {
 }
 
 #[derive(Debug, serde::Serialize)]
+pub struct RangeSelectionForEditRequest {
+    range: Range,
+    fs_file_path: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct InsertCodeForEditRequest {
+    range: Range,
+    fs_file_path: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct EditedCodeForEditRequest {
+    range: Range,
+    fs_file_path: String,
+    new_code: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct CodeCorrectionToolSelection {
+    range: Range,
+    fs_file_path: String,
+    tool_use: String,
+}
+
+/// We have range selection and then the edited code, we should also show the
+/// events which the AI is using for the tool correction and whats it is planning
+/// on doing for that
+#[derive(Debug, serde::Serialize)]
+pub enum SymbolEventEditRequest {
+    RangeSelectionForEdit(RangeSelectionForEditRequest),
+    /// We might be inserting code at a line which is a new symbol by itself
+    InsertCode(InsertCodeForEditRequest),
+    EditCode(EditedCodeForEditRequest),
+    CodeCorrectionTool(CodeCorrectionToolSelection),
+}
+
+#[derive(Debug, serde::Serialize)]
 pub enum SymbolEventSubStep {
     Probe(SymbolEventProbeRequest),
     GoToDefinition(SymbolEventGoToDefinitionRequest),
+    Edit(SymbolEventEditRequest),
 }
 
 #[derive(Debug, serde::Serialize)]

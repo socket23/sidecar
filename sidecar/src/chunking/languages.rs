@@ -3335,7 +3335,9 @@ fn agent_router() -> Router {
             .expect("Rust language config to be present");
 
         let object_qualifier = ts_language_config.generate_object_qualifier(source_code.as_bytes());
-        dbg!(&object_qualifier);
-        assert!(object_qualifier.is_some());
+        let range = object_qualifier.unwrap();
+        let extracted_text = &source_code[range.start_byte()..range.end_byte()];
+        dbg!(&extracted_text);
+        assert_eq!(extracted_text, "Self");
     }
 }

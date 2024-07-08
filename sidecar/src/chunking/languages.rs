@@ -1278,6 +1278,28 @@ impl TSLanguageConfig {
             })
             .collect()
     }
+
+    pub fn generate_object_qualifier(&self, source_code: &[u8]) -> Option<Range> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let object_qualifier_query = self.object_qualifier.as_ref().unwrap().to_owned();
+        let tree = parser.parse(source_code, None).unwrap();
+
+        let query = tree_sitter::Query::new(grammar(), &object_qualifier_query).expect("to work");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let query_captures = cursor.captures(&query, tree.root_node(), source_code);
+        let mut object_qualifier = None;
+        query_captures.into_iter().for_each(|capture| {
+            capture.0.captures.into_iter().for_each(|capture| {
+                let hover_range = Range::for_tree_node(&capture.node);
+                if object_qualifier.is_none() {
+                    object_qualifier = Some(hover_range);
+                }
+            })
+        });
+        object_qualifier
+    }
 }
 
 #[derive(Clone)]
@@ -3298,5 +3320,22 @@ fn agent_router() -> Router {
         parser.set_language(grammar()).unwrap();
         let hoverable_ranges = ts_language_config.hoverable_nodes(source_code.as_bytes());
         assert!(!hoverable_ranges.is_empty());
+    }
+
+    #[test]
+    fn test_object_qualifier() {
+        let source_code = r#"
+        Self::go();
+        "#;
+
+        let language = "rust";
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang(language)
+            .expect("Rust language config to be present");
+
+        let object_qualifier = ts_language_config.generate_object_qualifier(source_code.as_bytes());
+        dbg!(&object_qualifier);
+        assert!(object_qualifier.is_some());
     }
 }

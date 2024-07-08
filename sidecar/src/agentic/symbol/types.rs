@@ -1758,6 +1758,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 .check_code_correctness(
                     self.symbol_name(),
                     &sub_symbol_to_edit,
+                    self.symbol_identifier.clone(),
                     original_code,
                     edited_code,
                     &context_for_editing.join("\n"),

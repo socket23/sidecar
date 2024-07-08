@@ -2189,6 +2189,7 @@ Please handle these changes as required."#
         &self,
         parent_symbol_name: &str,
         symbol_edited: &SymbolToEdit,
+        symbol_identifier: SymbolIdentifier,
         original_code: &str,
         // This is the edited code we are applying to the editor
         edited_code: &str,
@@ -2410,6 +2411,14 @@ Please handle these changes as required."#
             // there might be a case that we have to re-write the code completely, since
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
             let selected_action_index = selected_action.index();
+            let tool_use_thinking = selected_action.thinking();
+            let _ = self.ui_events.send(UIEventWithID::code_correctness_action(
+                request_id.to_owned(),
+                symbol_identifier.clone(),
+                edited_range.clone(),
+                fs_file_path.to_owned(),
+                tool_use_thinking.to_owned(),
+            ));
 
             // TODO(skcd): This needs to change because we will now have 2 actions which can
             // happen
@@ -2433,6 +2442,14 @@ Please handle these changes as required."#
                     )
                     .await
                 )?;
+
+                let _ = self.ui_events.send(UIEventWithID::edited_code(
+                    request_id.to_owned(),
+                    symbol_identifier.clone(),
+                    edited_range.clone(),
+                    fs_file_path.to_owned(),
+                    fixed_code.to_owned(),
+                ));
 
                 // after this we have to apply the edits to the editor again and being
                 // the loop again

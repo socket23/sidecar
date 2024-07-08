@@ -120,6 +120,24 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn code_correctness_action(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+        tool_use_thinking: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::code_correctness_action(
+                symbol_identifier,
+                range,
+                fs_file_path,
+                tool_use_thinking,
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -211,7 +229,17 @@ impl EditedCodeForEditRequest {
 pub struct CodeCorrectionToolSelection {
     range: Range,
     fs_file_path: String,
-    tool_use: String,
+    tool_use_thinking: String,
+}
+
+impl CodeCorrectionToolSelection {
+    pub fn new(range: Range, fs_file_path: String, tool_use_thinking: String) -> Self {
+        Self {
+            range,
+            fs_file_path,
+            tool_use_thinking,
+        }
+    }
 }
 
 /// We have range selection and then the edited code, we should also show the
@@ -293,6 +321,20 @@ impl SymbolEventSubStepRequest {
             symbol_identifier,
             event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCode(
                 EditedCodeForEditRequest::new(range, fs_file_path, edited_code),
+            )),
+        }
+    }
+
+    pub fn code_correctness_action(
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+        tool_use_thinking: String,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::CodeCorrectionTool(
+                CodeCorrectionToolSelection::new(range, fs_file_path, tool_use_thinking),
             )),
         }
     }

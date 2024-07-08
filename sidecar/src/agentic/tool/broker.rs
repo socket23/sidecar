@@ -15,8 +15,9 @@ use super::{
     },
     code_symbol::{
         correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
-        find_file_for_new_symbol::FindFileForNewSymbol, followup::ClassSymbolFollowupBroker,
-        important::CodeSymbolImportantBroker,
+        find_file_for_new_symbol::FindFileForNewSymbol,
+        find_symbols_to_edit_in_context::FindSymbolsToEditInContext,
+        followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
         initial_request_follow::CodeSymbolFollowInitialRequestBroker,
         new_sub_symbol::NewSubSymbolRequired, planning_before_code_edit::PlanningBeforeCodeEdit,
         probe::ProbeEnoughOrDeeper, probe_question_for_symbol::ProbeQuestionForSymbol,
@@ -271,6 +272,13 @@ impl ToolBroker {
         tools.insert(
             ToolType::FindFileForNewSymbol,
             Box::new(FindFileForNewSymbol::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::FindSymbolsToEditInContext,
+            Box::new(FindSymbolsToEditInContext::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

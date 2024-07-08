@@ -1,6 +1,7 @@
 pub mod correctness;
 pub mod error_fix;
 pub mod find_file_for_new_symbol;
+pub mod find_symbols_to_edit_in_context;
 pub mod followup;
 pub mod important;
 pub mod initial_request_follow;

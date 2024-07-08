@@ -33,6 +33,8 @@ pub struct SymbolLocker {
                 // cause we can have multiple symbols which share the same name
                 // this probably would not happen today but would be good to figure
                 // out at some point
+                // we need a human agent over here somehow, but where does it go?
+                // do we make it a symbol itself or keep it somewhere else
                 SymbolIdentifier,
                 // this is the channel which we use to talk to this particular symbol
                 // and everything related to it

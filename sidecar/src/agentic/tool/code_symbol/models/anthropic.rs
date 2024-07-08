@@ -6227,4 +6227,53 @@ This struct represents the response of the hybrid search. We should inspect its 
         let output = CodeSymbolShouldAskQuestionsResponse::parse_response(response.to_owned());
         assert!(output.is_ok());
     }
+
+    /// TODO:(Zi) welp this sucks
+    #[test]
+    fn test_parsing_windows_like_path() {
+        let response = r#"
+<reply>
+<symbol_list>
+<symbol>
+<name>
+server.listen
+</name>
+<file_path>
+c:\Users\Nicolas\Documents\2.0\gpt-pilot\workspace\RedesingMarket\server\index.js
+</file_path>
+<thinking>
+The server is listening on a specific port defined by the PORT environment variable or 3002 if not provided.
+</thinking>
+</symbol>
+<symbol>
+<name>
+app.use
+</name>
+<file_path>
+c:\Users\Nicolas\Documents\2.0\gpt-pilot\workspace\RedesingMarket\server\index.js
+</file_path>
+<thinking>
+Defines middleware functions and routes for the Express application.
+</thinking>
+</symbol>
+<symbol>
+<name>
+connectDB
+</name>
+<file_path>
+c:\Users\Nicolas\Documents\2.0\gpt-pilot\workspace\RedesingMarket\server\index.js
+</file_path>
+<thinking>
+Establishes a connection to the MongoDB database.
+</thinking>
+</symbol>
+</symbol_list>
+<step_by_step>
+</step_by_step>
+</reply>
+        "#;
+        let parsed_reply = Reply::parse_response(response);
+        println!("{:?}", &parsed_reply);
+        assert!(parsed_reply.is_ok());
+    }
 }

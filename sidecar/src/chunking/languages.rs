@@ -120,6 +120,9 @@ pub struct TSLanguageConfig {
 
     /// The language string which can be used as an identifier for this language
     pub language_str: String,
+
+    /// Used to specify which object a method or property belongs to.
+    pub object_qualifier: Option<String>,
 }
 
 impl TSLanguageConfig {

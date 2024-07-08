@@ -164,5 +164,6 @@ pub fn go_language_config() -> TSLanguageConfig {
         ),
         excluded_file_paths: vec![],
         language_str: "go".to_owned(),
+        object_qualifier: None,
     }
 }

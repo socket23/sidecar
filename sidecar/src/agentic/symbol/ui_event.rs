@@ -84,6 +84,42 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn range_selection_for_edit(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(
+                SymbolEventSubStepRequest::range_selection_for_edit(
+                    symbol_identifier,
+                    fs_file_path,
+                    range,
+                ),
+            ),
+        }
+    }
+
+    pub fn edited_code(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+        edited_code: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::edited_code(
+                symbol_identifier,
+                range,
+                fs_file_path,
+                edited_code,
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -139,6 +175,15 @@ pub struct RangeSelectionForEditRequest {
     fs_file_path: String,
 }
 
+impl RangeSelectionForEditRequest {
+    pub fn new(range: Range, fs_file_path: String) -> Self {
+        Self {
+            range,
+            fs_file_path,
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct InsertCodeForEditRequest {
     range: Range,
@@ -150,6 +195,16 @@ pub struct EditedCodeForEditRequest {
     range: Range,
     fs_file_path: String,
     new_code: String,
+}
+
+impl EditedCodeForEditRequest {
+    pub fn new(range: Range, fs_file_path: String, new_code: String) -> Self {
+        Self {
+            range,
+            fs_file_path,
+            new_code,
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -211,6 +266,33 @@ impl SymbolEventSubStepRequest {
                 fs_file_path,
                 range,
                 thinking,
+            )),
+        }
+    }
+
+    pub fn range_selection_for_edit(
+        symbol_identifier: SymbolIdentifier,
+        fs_file_path: String,
+        range: Range,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::RangeSelectionForEdit(
+                RangeSelectionForEditRequest::new(range, fs_file_path),
+            )),
+        }
+    }
+
+    pub fn edited_code(
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+        edited_code: String,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCode(
+                EditedCodeForEditRequest::new(range, fs_file_path, edited_code),
             )),
         }
     }

@@ -3324,18 +3324,44 @@ fn agent_router() -> Router {
 
     #[test]
     fn test_object_qualifier() {
-        let cases = vec![(
-            "rust",
-            r#"
+        let cases = vec![
+            (
+                "rust",
+                r#"
             Self::go();
             "#,
-            "Self",
-        )];
+                "Self",
+            ),
+            (
+                "javascript",
+                r#"
+            hotel.method()
+            "#,
+                "hotel",
+            ),
+            // (
+            //     "typescript",
+            //     r#"
+            //     hotel.method()
+            // "#,
+            //     "hotel",
+            // ),
+            (
+                "python",
+                r#"
+            hotel.method()
+            "#,
+                "hotel",
+            ),
+        ];
         for (language, source_code, expected_qualifier) in cases {
+            println!("language: {language}");
+            println!("source_code: {source_code}");
+            println!("expected_qualifier: {expected_qualifier}");
             let tree_sitter_parsing = TSLanguageParsing::init();
             let ts_language_config = tree_sitter_parsing
                 .for_lang(language)
-                .expect("Rust language config to be present");
+                .expect("language config to be present");
             let object_qualifier =
                 ts_language_config.generate_object_qualifier(source_code.as_bytes());
             assert!(object_qualifier.is_some());

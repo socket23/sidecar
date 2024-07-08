@@ -12,7 +12,7 @@ use crate::agentic::{
     tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct FindFileForSymbolRequest {
     fs_file_path: String,
     symbol_name: String,

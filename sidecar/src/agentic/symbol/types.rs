@@ -1714,7 +1714,12 @@ Satisfy the requirement either by making edits or gathering the required informa
             // implementations a bit or figure out how to edit with a new line added
             // to the end of the symbol
             let edited_code = if sub_symbol_to_edit.is_new() {
-                // what do we send over here????
+                let _ = self.ui_sender.send(UIEventWithID::range_selection_for_edit(
+                    request_id_ref.to_owned(),
+                    self.symbol_identifier.clone(),
+                    sub_symbol_to_edit.range().to_owned(),
+                    sub_symbol_to_edit.fs_file_path().to_owned(),
+                ));
                 self.add_subsymbol(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),
@@ -1724,6 +1729,12 @@ Satisfy the requirement either by making edits or gathering the required informa
             } else {
                 println!("we are going to start editing now");
                 // always return the original code which was present here in case of rollbacks
+                let _ = self.ui_sender.send(UIEventWithID::range_selection_for_edit(
+                    request_id_ref.to_owned(),
+                    self.symbol_identifier.clone(),
+                    sub_symbol_to_edit.range().clone(),
+                    sub_symbol_to_edit.fs_file_path().to_owned(),
+                ));
                 self.edit_code(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),
@@ -1733,6 +1744,14 @@ Satisfy the requirement either by making edits or gathering the required informa
             };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
+            // send over edited code request
+            let _ = self.ui_sender.send(UIEventWithID::edited_code(
+                request_id.to_owned(),
+                self.symbol_identifier.clone(),
+                sub_symbol_to_edit.range().clone(),
+                sub_symbol_to_edit.fs_file_path().to_owned(),
+                edited_code.to_owned(),
+            ));
             // debugging loop after this
             let _ = self
                 .tools

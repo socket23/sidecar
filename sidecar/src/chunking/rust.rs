@@ -143,5 +143,11 @@ pub fn rust_language_config() -> TSLanguageConfig {
         ),
         excluded_file_paths: vec![".rustup".to_owned()],
         language_str: "rust".to_owned(),
+        object_qualifier: Some(
+            "(call_expression
+            function: (scoped_identifier
+              path: (identifier) @path))"
+                .to_owned(),
+        ),
     }
 }

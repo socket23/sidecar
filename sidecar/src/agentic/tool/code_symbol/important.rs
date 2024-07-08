@@ -38,6 +38,8 @@ use super::{
     types::CodeSymbolError,
 };
 
+use crate::chunking::languages::TSLanguageParsing;
+
 pub struct CodeSymbolImportantBroker {
     llms: HashMap<LLMType, Box<dyn CodeSymbolImportant + Send + Sync>>,
 }
@@ -772,32 +774,50 @@ impl CodeSymbolWithThinking {
     /// If the symbol name consists of a.b.c kind of format we want to grab
     /// just the a instead of the whole string since we always work on the
     /// top level symbol
-    pub fn fix_symbol_name(self) -> Self {
+    pub fn fix_symbol_name(self, ts_parsing: &Arc<TSLanguageParsing>) -> Self {
         if self.file_path().ends_with("py") {
             if self.code_symbol.contains(".") {
-                let mut code_symbol_parts = self.code_symbol.split('.').collect::<Vec<_>>();
-                Self {
-                    code_symbol: code_symbol_parts.remove(0).to_string(),
-                    thinking: self.thinking,
-                    file_path: self.file_path,
+                let language = "python";
+                let ts_language_config = ts_parsing
+                    .for_lang(language)
+                    .expect("language config to be present");
+
+                if let Some(range) =
+                    ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
+                {
+                    let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
+                    Self {
+                        code_symbol: object_qualifier.to_string(),
+                        thinking: self.thinking,
+                        file_path: self.file_path,
+                    }
+                } else {
+                    self
                 }
             } else {
                 self
             }
-        }
-        else if self.file_path().ends_with("rs") {
+        } else if self.file_path().ends_with("rs") {
             // we get inputs in the format: "struct::function_inside_struct"
             // we obviously know at this point that the symbol we are referring to is "function_inside_struct" in
             // "struct"
             if self.code_symbol.contains("::") {
-                let mut code_symbol_parts = self.code_symbol.split("::").collect::<Vec<_>>();
-                Self {
-                    // We are just getting the top level symbol here which might be incorrect
-                    // we should be able to get the exact symbol somehow, maybe we should have a heirarchy
-                    // somehow?
-                    code_symbol: code_symbol_parts.remove(0).to_string(),
-                    thinking: self.thinking,
-                    file_path: self.file_path,
+                let language = "rust";
+                let ts_language_config = ts_parsing
+                    .for_lang(language)
+                    .expect("language config to be present");
+
+                if let Some(range) =
+                    ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
+                {
+                    let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
+                    Self {
+                        code_symbol: object_qualifier.to_string(),
+                        thinking: self.thinking,
+                        file_path: self.file_path,
+                    }
+                } else {
+                    self
                 }
             } else {
                 self
@@ -850,34 +870,48 @@ impl CodeSymbolWithSteps {
     /// If the symbol name consists of a.b.c kind of format we want to grab
     /// just the a instead of the whole string since we always work on the
     /// top level symbol
-    pub fn fix_symbol_name(self) -> Self {
+    pub fn fix_symbol_name(self, ts_parsing: &Arc<TSLanguageParsing>) -> Self {
         if self.file_path().ends_with("py") {
-            if self.code_symbol.contains(".") {
-                let mut code_symbol_parts = self.code_symbol.split('.').collect::<Vec<_>>();
+            let language = "python";
+            let ts_language_config = ts_parsing
+                .for_lang(language)
+                .expect("language config to be present");
+
+            if let Some(range) =
+                ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
+            {
+                let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
                 Self {
-                    code_symbol: code_symbol_parts.remove(0).to_string(),
+                    code_symbol: object_qualifier.to_string(),
+                    file_path: self.file_path,
                     steps: self.steps,
                     is_new: self.is_new,
-                    file_path: self.file_path,
                 }
             } else {
                 self
             }
-        }
-        else if self.file_path().ends_with("rs") {
+        } else if self.file_path().ends_with("rs") {
             // we get inputs in the format: "struct::function_inside_struct"
             // we obviously know at this point that the symbol we are referring to is "function_inside_struct" in
             // "struct"
             if self.code_symbol.contains("::") {
-                let mut code_symbol_parts = self.code_symbol.split("::").collect::<Vec<_>>();
-                Self {
-                    // We are just getting the top level symbol here which might be incorrect
-                    // we should be able to get the exact symbol somehow, maybe we should have a heirarchy
-                    // somehow?
-                    code_symbol: code_symbol_parts.remove(0).to_string(),
-                    steps: self.steps,
-                    is_new: self.is_new,
-                    file_path: self.file_path,
+                let language = "rust";
+                let ts_language_config = ts_parsing
+                    .for_lang(language)
+                    .expect("language config to be present");
+
+                if let Some(range) =
+                    ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
+                {
+                    let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
+                    Self {
+                        code_symbol: object_qualifier.to_string(),
+                        steps: self.steps,
+                        is_new: self.is_new,
+                        file_path: self.file_path,
+                    }
+                } else {
+                    self
                 }
             } else {
                 self
@@ -909,17 +943,17 @@ impl CodeSymbolImportantResponse {
     /// the form of a.b.c etc
     /// so we want to parse them as just a instead of a.b.c
     /// this way we can ensure that we find the right symbol always
-    pub fn fix_symbol_names(self) -> Self {
+    pub fn fix_symbol_names(self, ts_parsing: &Arc<TSLanguageParsing>) -> Self {
         let symbols = self.symbols;
         let ordered_symbols = self.ordered_symbols;
         Self {
             symbols: symbols
                 .into_iter()
-                .map(|symbol| symbol.fix_symbol_name())
+                .map(|symbol| symbol.fix_symbol_name(ts_parsing))
                 .collect::<Vec<_>>(),
             ordered_symbols: ordered_symbols
                 .into_iter()
-                .map(|symbol| symbol.fix_symbol_name())
+                .map(|symbol| symbol.fix_symbol_name(ts_parsing))
                 .collect::<Vec<_>>(),
         }
     }

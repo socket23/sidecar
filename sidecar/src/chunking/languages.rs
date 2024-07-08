@@ -3324,20 +3324,24 @@ fn agent_router() -> Router {
 
     #[test]
     fn test_object_qualifier() {
-        let source_code = r#"
-        Self::go();
-        "#;
-
-        let language = "rust";
-        let tree_sitter_parsing = TSLanguageParsing::init();
-        let ts_language_config = tree_sitter_parsing
-            .for_lang(language)
-            .expect("Rust language config to be present");
-
-        let object_qualifier = ts_language_config.generate_object_qualifier(source_code.as_bytes());
-        let range = object_qualifier.unwrap();
-        let extracted_text = &source_code[range.start_byte()..range.end_byte()];
-        dbg!(&extracted_text);
-        assert_eq!(extracted_text, "Self");
+        let cases = vec![(
+            "rust",
+            r#"
+            Self::go();
+            "#,
+            "Self",
+        )];
+        for (language, source_code, expected_qualifier) in cases {
+            let tree_sitter_parsing = TSLanguageParsing::init();
+            let ts_language_config = tree_sitter_parsing
+                .for_lang(language)
+                .expect("Rust language config to be present");
+            let object_qualifier =
+                ts_language_config.generate_object_qualifier(source_code.as_bytes());
+            assert!(object_qualifier.is_some());
+            let range = object_qualifier.unwrap();
+            let extracted_text = &source_code[range.start_byte()..range.end_byte()];
+            assert_eq!(extracted_text, expected_qualifier);
+        }
     }
 }

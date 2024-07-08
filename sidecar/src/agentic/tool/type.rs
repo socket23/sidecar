@@ -67,6 +67,8 @@ pub enum ToolType {
     NewSubSymbolRequired,
     // Find symbol in the codebase using the vscode api
     GrepSymbolInCodebase,
+    // Find new symbol file location
+    FindFileForNewSymbol,
 }
 
 impl std::fmt::Display for ToolType {
@@ -116,6 +118,7 @@ impl std::fmt::Display for ToolType {
             ToolType::NewSubSymbolRequired => write!(f, "New sub symbol required for code editing"),
             ToolType::ProbeTryHardAnswer => write!(f, "Probe try hard answer"),
             ToolType::GrepSymbolInCodebase => write!(f, "Grep symbol in the codebase"),
+            ToolType::FindFileForNewSymbol => write!(f, "Find file for new symbol"),
         }
     }
 }

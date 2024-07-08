@@ -3339,13 +3339,13 @@ fn agent_router() -> Router {
             "#,
                 "hotel",
             ),
-            // (
-            //     "typescript",
-            //     r#"
-            //     hotel.method()
-            // "#,
-            //     "hotel",
-            // ),
+            (
+                "typescript",
+                r#"
+                hotel.method()
+            "#,
+                "hotel",
+            ),
             (
                 "python",
                 r#"

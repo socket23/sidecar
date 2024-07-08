@@ -18,6 +18,7 @@ use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
+use crate::chunking::languages::TSLanguageParsing;
 use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
@@ -49,6 +50,7 @@ pub struct SymbolManager {
     tools: Arc<ToolBroker>,
     _symbol_broker: Arc<SymbolTrackerInline>,
     _editor_parsing: Arc<EditorParsing>,
+    ts_parsing: Arc<TSLanguageParsing>,
     tool_box: Arc<ToolBox>,
     _editor_url: String,
     llm_properties: LLMProperties,
@@ -98,10 +100,12 @@ impl SymbolManager {
             }
             println!("symbol_manager::tokio::spawn::end");
         });
+        let ts_parsing = Arc::new(TSLanguageParsing::init());
         Self {
             _sender: sender,
             symbol_locker,
             _editor_parsing: editor_parsing,
+            ts_parsing,
             tools,
             _symbol_broker: symbol_broker,
             tool_box,
@@ -163,7 +167,7 @@ impl SymbolManager {
         | ToolOutput::RepoMapSearch(important_symbols) = output
         {
             // We have the important symbols here which we can then use to invoke the individual process request
-            let important_symbols = important_symbols.fix_symbol_names();
+            let important_symbols = important_symbols.fix_symbol_names(&self.ts_parsing);
 
             let mut symbols = self
                 .tool_box
@@ -367,7 +371,9 @@ impl SymbolManager {
                 // if the LLM decides to have fun and spit out a.b.c instead of a or b or c individually
                 // as it can with python where it will tell class.method_name instead of just class or just
                 // method_name
-                let important_symbols = important_symbols.fix_symbol_names();
+
+                // should pass self.editorparsing <tsconfigs>
+                let important_symbols = important_symbols.fix_symbol_names(&self.ts_parsing);
                 // swe bench caching hit over here we just do it
                 self.long_context_cache
                     .update_cache(swe_bench_id.clone(), &important_symbols)
@@ -393,7 +399,7 @@ impl SymbolManager {
                                 &request_id,
                             )
                             .await?
-                            .fix_symbol_names();
+                            .fix_symbol_names(&self.ts_parsing);
                         self.long_context_cache
                             .update_cache_for_plan_before_editing(swe_bench_id, &important_symbols)
                             .await;

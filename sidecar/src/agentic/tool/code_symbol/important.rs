@@ -802,14 +802,22 @@ impl CodeSymbolWithThinking {
             // we obviously know at this point that the symbol we are referring to is "function_inside_struct" in
             // "struct"
             if self.code_symbol.contains("::") {
-                let mut code_symbol_parts = self.code_symbol.split("::").collect::<Vec<_>>();
-                Self {
-                    // We are just getting the top level symbol here which might be incorrect
-                    // we should be able to get the exact symbol somehow, maybe we should have a heirarchy
-                    // somehow?
-                    code_symbol: code_symbol_parts.remove(0).to_string(),
-                    thinking: self.thinking,
-                    file_path: self.file_path,
+                let language = "rust";
+                let ts_language_config = ts_parsing
+                    .for_lang(language)
+                    .expect("language config to be present");
+
+                if let Some(range) =
+                    ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
+                {
+                    let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
+                    Self {
+                        code_symbol: object_qualifier.to_string(),
+                        thinking: self.thinking,
+                        file_path: self.file_path,
+                    }
+                } else {
+                    self
                 }
             } else {
                 self
@@ -887,15 +895,23 @@ impl CodeSymbolWithSteps {
             // we obviously know at this point that the symbol we are referring to is "function_inside_struct" in
             // "struct"
             if self.code_symbol.contains("::") {
-                let mut code_symbol_parts = self.code_symbol.split("::").collect::<Vec<_>>();
-                Self {
-                    // We are just getting the top level symbol here which might be incorrect
-                    // we should be able to get the exact symbol somehow, maybe we should have a heirarchy
-                    // somehow?
-                    code_symbol: code_symbol_parts.remove(0).to_string(),
-                    steps: self.steps,
-                    is_new: self.is_new,
-                    file_path: self.file_path,
+                let language = "rust";
+                let ts_language_config = ts_parsing
+                    .for_lang(language)
+                    .expect("language config to be present");
+
+                if let Some(range) =
+                    ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
+                {
+                    let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
+                    Self {
+                        code_symbol: object_qualifier.to_string(),
+                        steps: self.steps,
+                        is_new: self.is_new,
+                        file_path: self.file_path,
+                    }
+                } else {
+                    self
                 }
             } else {
                 self

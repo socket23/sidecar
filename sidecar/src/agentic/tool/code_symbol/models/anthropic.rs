@@ -4158,7 +4158,7 @@ def subtract(a: str, b: str):
 Your reply should be:
 <code_action>
 <thinking>
-We need to change the type sfor a and b to int
+We need to change the types for a and b to int
 </thinking>
 <index>
 0

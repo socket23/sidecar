@@ -24,6 +24,7 @@ use super::{
         gotodefintion::GoToDefinitionResponse,
         gotoimplementations::GoToImplementationResponse,
         gotoreferences::GoToReferencesResponse,
+        grep_symbol::LSPGrepSymbolInCodebaseResponse,
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
@@ -113,9 +114,15 @@ pub enum ToolOutput {
     CodeSymbolFollowForInitialRequest(CodeSymbolFollowInitialResponse),
     // New sub symbol creation
     NewSubSymbolCreation(NewSubSymbolRequiredResponse),
+    // LSP symbol search information
+    LSPSymbolSearchInformation(LSPGrepSymbolInCodebaseResponse),
 }
 
 impl ToolOutput {
+    pub fn lsp_symbol_search_information(output: LSPGrepSymbolInCodebaseResponse) -> Self {
+        ToolOutput::LSPSymbolSearchInformation(output)
+    }
+
     pub fn new_sub_symbol_creation(output: NewSubSymbolRequiredResponse) -> Self {
         ToolOutput::NewSubSymbolCreation(output)
     }

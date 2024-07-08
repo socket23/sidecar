@@ -30,6 +30,7 @@ use super::{
         gotodefintion::GoToDefinitionRequest,
         gotoimplementations::GoToImplementationRequest,
         gotoreferences::GoToReferencesRequest,
+        grep_symbol::LSPGrepSymbolInCodebaseRequest,
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
@@ -82,6 +83,9 @@ pub enum ToolInput {
     PlanningBeforeCodeEdit(PlanningBeforeCodeEditRequest),
     // New symbols required for code editing
     NewSubSymbolForCodeEditing(NewSubSymbolRequiredRequest),
+    // Find the symbol in the codebase which we want to select, this only
+    // takes a string as input
+    GrepSymbolInCodebase(LSPGrepSymbolInCodebaseRequest),
 }
 
 impl ToolInput {
@@ -126,6 +130,15 @@ impl ToolInput {
             ToolInput::PlanningBeforeCodeEdit(_) => ToolType::PlanningBeforeCodeEdit,
             ToolInput::NewSubSymbolForCodeEditing(_) => ToolType::NewSubSymbolRequired,
             ToolInput::ProbeTryHardAnswerRequest(_) => ToolType::ProbeTryHardAnswer,
+            ToolInput::GrepSymbolInCodebase(_) => ToolType::GrepSymbolInCodebase,
+        }
+    }
+
+    pub fn grep_symbol_in_codebase(self) -> Result<LSPGrepSymbolInCodebaseRequest, ToolError> {
+        if let ToolInput::GrepSymbolInCodebase(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::GrepSymbolInCodebase))
         }
     }
 

@@ -3,6 +3,7 @@
 use super::{
     code_symbol::{
         correctness::CodeCorrectnessAction,
+        find_file_for_new_symbol::FindFileForSymbolResponse,
         followup::ClassSymbolFollowupResponse,
         important::CodeSymbolImportantResponse,
         initial_request_follow::CodeSymbolFollowInitialResponse,
@@ -116,9 +117,15 @@ pub enum ToolOutput {
     NewSubSymbolCreation(NewSubSymbolRequiredResponse),
     // LSP symbol search information
     LSPSymbolSearchInformation(LSPGrepSymbolInCodebaseResponse),
+    // Find the file for the symbol
+    FindFileForNewSymbol(FindFileForSymbolResponse),
 }
 
 impl ToolOutput {
+    pub fn find_file_for_new_symbol(output: FindFileForSymbolResponse) -> Self {
+        ToolOutput::FindFileForNewSymbol(output)
+    }
+
     pub fn lsp_symbol_search_information(output: LSPGrepSymbolInCodebaseResponse) -> Self {
         ToolOutput::LSPSymbolSearchInformation(output)
     }

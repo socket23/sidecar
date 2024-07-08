@@ -5,6 +5,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessRequest,
         error_fix::CodeEditingErrorRequest,
+        find_file_for_new_symbol::FindFileForSymbolRequest,
         followup::ClassSymbolFollowupRequest,
         important::{
             CodeSymbolFollowAlongForProbing, CodeSymbolImportantRequest,
@@ -86,6 +87,8 @@ pub enum ToolInput {
     // Find the symbol in the codebase which we want to select, this only
     // takes a string as input
     GrepSymbolInCodebase(LSPGrepSymbolInCodebaseRequest),
+    // Find file location for the new symbol
+    FindFileForNewSymbol(FindFileForSymbolRequest),
 }
 
 impl ToolInput {
@@ -131,6 +134,15 @@ impl ToolInput {
             ToolInput::NewSubSymbolForCodeEditing(_) => ToolType::NewSubSymbolRequired,
             ToolInput::ProbeTryHardAnswerRequest(_) => ToolType::ProbeTryHardAnswer,
             ToolInput::GrepSymbolInCodebase(_) => ToolType::GrepSymbolInCodebase,
+            ToolInput::FindFileForNewSymbol(_) => ToolType::FindFileForNewSymbol,
+        }
+    }
+
+    pub fn find_file_for_new_symbol(self) -> Result<FindFileForSymbolRequest, ToolError> {
+        if let ToolInput::FindFileForNewSymbol(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::FindFileForNewSymbol))
         }
     }
 

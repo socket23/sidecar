@@ -69,6 +69,8 @@ pub enum ToolType {
     GrepSymbolInCodebase,
     // Find new symbol file location
     FindFileForNewSymbol,
+    // Find symbol to edit in user context
+    FindSymbolsToEditInContext,
 }
 
 impl std::fmt::Display for ToolType {
@@ -119,6 +121,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ProbeTryHardAnswer => write!(f, "Probe try hard answer"),
             ToolType::GrepSymbolInCodebase => write!(f, "Grep symbol in the codebase"),
             ToolType::FindFileForNewSymbol => write!(f, "Find file for new symbol"),
+            ToolType::FindSymbolsToEditInContext => write!(f, "Find Symbols to edit in context"),
         }
     }
 }

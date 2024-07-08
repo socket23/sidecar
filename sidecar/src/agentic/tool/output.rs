@@ -4,6 +4,7 @@ use super::{
     code_symbol::{
         correctness::CodeCorrectnessAction,
         find_file_for_new_symbol::FindFileForSymbolResponse,
+        find_symbols_to_edit_in_context::FindSymbolsToEditInContextResponse,
         followup::ClassSymbolFollowupResponse,
         important::CodeSymbolImportantResponse,
         initial_request_follow::CodeSymbolFollowInitialResponse,
@@ -119,9 +120,15 @@ pub enum ToolOutput {
     LSPSymbolSearchInformation(LSPGrepSymbolInCodebaseResponse),
     // Find the file for the symbol
     FindFileForNewSymbol(FindFileForSymbolResponse),
+    // Find symbols to edit in the user context
+    FindSymbolsToEditInContext(FindSymbolsToEditInContextResponse),
 }
 
 impl ToolOutput {
+    pub fn find_symbols_to_edit_in_context(output: FindSymbolsToEditInContextResponse) -> Self {
+        ToolOutput::FindSymbolsToEditInContext(output)
+    }
+
     pub fn find_file_for_new_symbol(output: FindFileForSymbolResponse) -> Self {
         ToolOutput::FindFileForNewSymbol(output)
     }

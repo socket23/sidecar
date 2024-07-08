@@ -6,6 +6,7 @@ use super::{
         correctness::CodeCorrectnessRequest,
         error_fix::CodeEditingErrorRequest,
         find_file_for_new_symbol::FindFileForSymbolRequest,
+        find_symbols_to_edit_in_context::FindSymbolsToEditInContextRequest,
         followup::ClassSymbolFollowupRequest,
         important::{
             CodeSymbolFollowAlongForProbing, CodeSymbolImportantRequest,
@@ -89,6 +90,8 @@ pub enum ToolInput {
     GrepSymbolInCodebase(LSPGrepSymbolInCodebaseRequest),
     // Find file location for the new symbol
     FindFileForNewSymbol(FindFileForSymbolRequest),
+    // Find symbol to edit in user context
+    FindSymbolsToEditInContext(FindSymbolsToEditInContextRequest),
 }
 
 impl ToolInput {
@@ -135,6 +138,19 @@ impl ToolInput {
             ToolInput::ProbeTryHardAnswerRequest(_) => ToolType::ProbeTryHardAnswer,
             ToolInput::GrepSymbolInCodebase(_) => ToolType::GrepSymbolInCodebase,
             ToolInput::FindFileForNewSymbol(_) => ToolType::FindFileForNewSymbol,
+            ToolInput::FindSymbolsToEditInContext(_) => ToolType::FindSymbolsToEditInContext,
+        }
+    }
+
+    pub fn find_symbols_to_edit_in_context(
+        self,
+    ) -> Result<FindSymbolsToEditInContextRequest, ToolError> {
+        if let ToolInput::FindSymbolsToEditInContext(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::FindSymbolsToEditInContext,
+            ))
         }
     }
 

@@ -120,6 +120,9 @@ pub struct TSLanguageConfig {
 
     /// The language string which can be used as an identifier for this language
     pub language_str: String,
+
+    /// Used to specify which object a method or property belongs to.
+    pub object_qualifier: String,
 }
 
 impl TSLanguageConfig {
@@ -1274,6 +1277,28 @@ impl TSLanguageConfig {
                 Some(function_node.clone())
             })
             .collect()
+    }
+
+    pub fn generate_object_qualifier(&self, source_code: &[u8]) -> Option<Range> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let object_qualifier_query = self.object_qualifier.to_owned();
+        let tree = parser.parse(source_code, None).unwrap();
+
+        let query = tree_sitter::Query::new(grammar(), &object_qualifier_query).expect("to work");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let query_captures = cursor.captures(&query, tree.root_node(), source_code);
+        let mut object_qualifier = None;
+        query_captures.into_iter().for_each(|capture| {
+            capture.0.captures.into_iter().for_each(|capture| {
+                let hover_range = Range::for_tree_node(&capture.node);
+                if object_qualifier.is_none() {
+                    object_qualifier = Some(hover_range);
+                }
+            })
+        });
+        object_qualifier
     }
 }
 
@@ -3295,5 +3320,58 @@ fn agent_router() -> Router {
         parser.set_language(grammar()).unwrap();
         let hoverable_ranges = ts_language_config.hoverable_nodes(source_code.as_bytes());
         assert!(!hoverable_ranges.is_empty());
+    }
+
+    #[test]
+    fn test_object_qualifier() {
+        let cases = vec![
+            (
+                "rust",
+                r#"
+            Self::go();
+            "#,
+                "Self",
+            ),
+            (
+                "javascript",
+                r#"
+            hotel.method()
+            "#,
+                "hotel",
+            ),
+            (
+                "typescript",
+                r#"
+                hotel.method()
+            "#,
+                "hotel",
+            ),
+            (
+                "python",
+                r#"
+            hotel.method()
+            "#,
+                "hotel",
+            ),
+            (
+                "go",
+                r#"
+            hotel.method()
+            "#,
+                "hotel",
+            ),
+        ];
+        for (language, source_code, expected_qualifier) in cases {
+            let tree_sitter_parsing = TSLanguageParsing::init();
+            let ts_language_config = tree_sitter_parsing
+                .for_lang(language)
+                .expect("language config to be present");
+            let object_qualifier =
+                ts_language_config.generate_object_qualifier(source_code.as_bytes());
+            assert!(object_qualifier.is_some());
+            let range = object_qualifier.unwrap();
+            let extracted_text = &source_code[range.start_byte()..range.end_byte()];
+            assert_eq!(extracted_text, expected_qualifier);
+        }
     }
 }

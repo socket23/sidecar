@@ -1602,6 +1602,10 @@ Satisfy the requirement either by making edits or gathering the required informa
         );
         // The trick we are going to use over here is the following:
         // we want to add a new start line after the last node symbol
+        // TODO(skcd): Figure out the position using all the impl blocks and understanding
+        // where we should be placing it, its a hack but it will work
+        // we might need to create a new impl block for rust if required, but thats
+        // fine
         // present over here, and let it edit it out and format the function properly
         let range_to_insert = sub_symbol.range().clone();
         let content = "".to_owned();

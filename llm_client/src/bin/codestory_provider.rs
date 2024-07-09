@@ -7,6 +7,7 @@ use llm_client::{
     },
     provider::LLMProviderAPIKeys,
 };
+use tracing::info;
 
 #[tokio::main]
 async fn main() {

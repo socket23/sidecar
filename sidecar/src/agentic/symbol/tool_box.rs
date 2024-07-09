@@ -3983,12 +3983,7 @@ instruction:
             .into_iter()
             .filter(|outline_node| outline_node.name() == snippet.symbol_name())
             .collect::<Vec<_>>();
-        // we are just getting a single node over here for some reason????????
-        // we should be getting both the nodes for the LLMBroker
-        println!(
-            "tool_box::get_outline_node_from_snippet::symbols_outline::({:?})",
-            &symbols_outline
-        );
+
         // we want to find the closest outline node to this snippet over here
         // since we can have multiple implementations with the same symbol name
         let mut outline_nodes_with_distance = symbols_outline

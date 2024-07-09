@@ -459,10 +459,32 @@ impl Symbol {
                     }
                 })
                 .collect::<Vec<_>>();
+
+            // We are de-duplicating the ranges over here since in rust, the derive
+            // macros end up pointing to the same outline node over and over again
+            let mut outline_ranges_accounted_for: HashSet<Range> = Default::default();
+            let filtered_outline_nodes = implementation_content
+                .into_iter()
+                .filter_map(|snippet| {
+                    if outline_ranges_accounted_for.contains(snippet.outline_node_content().range())
+                    {
+                        None
+                    } else {
+                        outline_ranges_accounted_for
+                            .insert(snippet.outline_node_content().range().clone());
+                        Some(snippet)
+                    }
+                })
+                .collect::<Vec<_>>();
+            println!(
+                "symbol::grab_implementations::({:?})",
+                &filtered_outline_nodes
+            );
+            dbg!(&filtered_outline_nodes);
             // we update the snippets we have stored here into the symbol itself
             {
                 self.mecha_code_symbol
-                    .set_implementations(implementation_content)
+                    .set_implementations(filtered_outline_nodes)
                     .await;
             }
         }

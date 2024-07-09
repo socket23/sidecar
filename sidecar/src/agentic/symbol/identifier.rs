@@ -60,7 +60,7 @@ impl LLMProperties {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, std::hash::Hash, serde::Serialize)]
 pub struct Snippet {
     range: Range,
     symbol_name: String,
@@ -119,6 +119,10 @@ impl Snippet {
 
     pub fn range(&self) -> &Range {
         &self.range
+    }
+
+    pub fn outline_node_content(&self) -> &OutlineNodeContent {
+        &self.outline_node_content
     }
 
     pub fn content(&self) -> &str {

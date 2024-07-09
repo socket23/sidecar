@@ -17,6 +17,12 @@ pub struct FindSymbolsToEditInContextRequest {
     context: String,
 }
 
+impl FindSymbolsToEditInContextRequest {
+    pub fn new(context: String) -> Self {
+        Self { context }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct FindSymbolsToEditInContextSymbolList {
     #[serde(rename = "symbol")]
@@ -27,6 +33,12 @@ struct FindSymbolsToEditInContextSymbolList {
 pub struct FindSymbolsToEditInContextResponse {
     thinking: String,
     symbol_list: FindSymbolsToEditInContextSymbolList,
+}
+
+impl FindSymbolsToEditInContextResponse {
+    pub fn symbol_list(&self) -> &[String] {
+        self.symbol_list.symbols.as_slice()
+    }
 }
 
 /// Find symbols to edit in a context

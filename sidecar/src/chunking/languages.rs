@@ -576,6 +576,18 @@ impl TSLanguageConfig {
             .collect::<Vec<_>>()
     }
 
+    /// This function generates the tree by parsing the source code and can be
+    /// used when we do not have the tree sitter tree already created
+    pub fn generate_import_identifiers_fresh(&self, source_code: &[u8]) -> Vec<(String, Range)> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(grammar())
+            .expect("for lanaguage parser from tree_sitter should not fail");
+        let tree = parser.parse(source_code, None).unwrap();
+        self.generate_import_identifier_nodes(source_code, &tree)
+    }
+
     pub fn generate_import_identifier_nodes(
         &self,
         source_code: &[u8],

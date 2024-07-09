@@ -8,11 +8,14 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager},
+        symbol::{
+            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
+        },
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
-    inline_completion::symbols_tracker::SymbolTrackerInline, user_context::types::{FileContentValue, UserContext},
+    inline_completion::symbols_tracker::SymbolTrackerInline,
+    user_context::types::{FileContentValue, UserContext},
 };
 
 fn default_index_dir() -> PathBuf {
@@ -55,11 +58,16 @@ async fn main() {
     let file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs";
 
     // read the file contents
-    let file_contents = String::from_utf8(tokio::fs::read(file_path).await.expect("to work")).expect("to work");
+    let file_contents =
+        String::from_utf8(tokio::fs::read(file_path).await.expect("to work")).expect("to work");
 
     let user_context = UserContext::new(
         vec![],
-        vec![FileContentValue::new(file_path.to_owned(), file_contents, "rust".to_owned())],
+        vec![FileContentValue::new(
+            file_path.to_owned(),
+            file_contents,
+            "rust".to_owned(),
+        )],
         None,
         vec![],
     );

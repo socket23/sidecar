@@ -15,11 +15,15 @@ use crate::agentic::{
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct FindSymbolsToEditInContextRequest {
     context: String,
+    llm_properties: LLMProperties,
 }
 
 impl FindSymbolsToEditInContextRequest {
-    pub fn new(context: String) -> Self {
-        Self { context }
+    pub fn new(context: String, llm_properties: LLMProperties) -> Self {
+        Self {
+            context,
+            llm_properties,
+        }
     }
 }
 
@@ -44,14 +48,14 @@ impl FindSymbolsToEditInContextResponse {
 /// Find symbols to edit in a context
 pub struct FindSymbolsToEditInContext {
     llm_client: Arc<LLMBroker>,
-    gemini_llm_properties: LLMProperties,
+    _gemini_llm_properties: LLMProperties,
 }
 
 impl FindSymbolsToEditInContext {
     pub fn new(llm_client: Arc<LLMBroker>, gemini_llm_properties: LLMProperties) -> Self {
         Self {
             llm_client,
-            gemini_llm_properties,
+            _gemini_llm_properties: gemini_llm_properties,
         }
     }
 
@@ -61,18 +65,34 @@ impl FindSymbolsToEditInContext {
 - If the code symbol is referring to a function in the struct, for example: in rust `SomeClass::function` we want to only get back `SomeClass`, in case of python or typescript if we have `SomeClass.function` we should only get back `SomeClass`
 - Make sure to include all the code symbols which are present in the provided user context.
 - Only include the symbols which require editing, adding or removing
+- Do not assume or make up any of the code symbols and only include the ones which are being talked about in the user context
 
 Your reply should be in the following format:
 <reply>
 <thinking>
+{your thoughts over here for why we are selecting the symbols to edit}
 </thinking>
 <symbol_list>
 <symbol>
-{name of the symbol}
+{symbol name over here}
 </symbol>
 ... { more symbols over here}
 </symbol_list>
-</reply>"#.to_owned()
+</reply>
+
+An example is provided below to you:
+<reply>
+<thinking>
+We should edit Movies class and also the Action class
+</thinking>
+<symbol_list>
+<symbol>
+Movies
+</symbol>
+<symbol>
+Action
+</symbol>
+</symbol_list>"#.to_owned()
     }
 
     fn user_message(&self, request: FindSymbolsToEditInContextRequest) -> String {
@@ -89,10 +109,11 @@ Your reply should be in the following format:
 impl Tool for FindSymbolsToEditInContext {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.find_symbols_to_edit_in_context()?;
+        let llm_properties = context.llm_properties.clone();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
         let message_request = LLMClientCompletionRequest::new(
-            self.gemini_llm_properties.llm().clone(),
+            llm_properties.llm().clone(),
             vec![system_message, user_message],
             0.2,
             None,
@@ -101,9 +122,9 @@ impl Tool for FindSymbolsToEditInContext {
         let response = self
             .llm_client
             .stream_completion(
-                self.gemini_llm_properties.api_key().clone(),
+                llm_properties.api_key().clone(),
                 message_request,
-                self.gemini_llm_properties.provider().clone(),
+                llm_properties.provider().clone(),
                 vec![(
                     "event_type".to_owned(),
                     "find_symbols_to_edit_in_context".to_owned(),

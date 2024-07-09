@@ -120,10 +120,11 @@ impl ToolBox {
     pub async fn find_symbols_to_edit_from_context(
         &self,
         context: &str,
+        llm_properties: LLMProperties,
         request_id: &str,
     ) -> Result<FindSymbolsToEditInContextResponse, SymbolError> {
         let tool_input = ToolInput::FindSymbolsToEditInContext(
-            FindSymbolsToEditInContextRequest::new(context.to_owned()),
+            FindSymbolsToEditInContextRequest::new(context.to_owned(), llm_properties),
         );
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -2374,6 +2375,7 @@ Please handle these changes as required."#
         thinking: &str,
         request_id: &str,
         tool_properties: &ToolProperties,
+        llm_properties: LLMProperties,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
             String,
@@ -2389,7 +2391,7 @@ Please handle these changes as required."#
         // 3. If the symbol does not exist, then we need to go through the creation loop
         // where should that happen?
         let symbols_to_edit = self
-            .find_symbols_to_edit_from_context(thinking, request_id)
+            .find_symbols_to_edit_from_context(thinking, llm_properties.clone(), request_id)
             .await?;
 
         let symbols_to_edit_list = symbols_to_edit.symbol_list();
@@ -2425,7 +2427,7 @@ instruction:
                 // since the code correction call will be blocked anyways on this
             }
         }
-        todo!("Figure out what to do over here")
+        Ok(())
     }
 
     pub async fn check_code_correctness(
@@ -2728,6 +2730,7 @@ instruction:
                         &tool_use_thinking,
                         request_id,
                         tool_properties,
+                        LLMProperties::new(llm.clone(), provider.clone(), api_keys.clone()),
                         hub_sender.clone(),
                     )
                     .await;

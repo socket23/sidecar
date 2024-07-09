@@ -792,7 +792,16 @@ impl CodeSymbolWithThinking {
                         file_path: self.file_path,
                     }
                 } else {
-                    self
+                    let mut code_symbol_parts = self.code_symbol.split(".").collect::<Vec<_>>();
+                    if code_symbol_parts.is_empty() {
+                        self
+                    } else {
+                        Self {
+                            code_symbol: code_symbol_parts.remove(0).to_owned(),
+                            thinking: self.thinking,
+                            file_path: self.file_path,
+                        }
+                    }
                 }
             } else {
                 self
@@ -817,7 +826,16 @@ impl CodeSymbolWithThinking {
                         file_path: self.file_path,
                     }
                 } else {
-                    self
+                    let mut code_symbol_parts = self.code_symbol.split("::").collect::<Vec<_>>();
+                    if code_symbol_parts.is_empty() {
+                        self
+                    } else {
+                        Self {
+                            code_symbol: code_symbol_parts.remove(0).to_owned(),
+                            thinking: self.thinking,
+                            file_path: self.file_path,
+                        }
+                    }
                 }
             } else {
                 self
@@ -888,7 +906,17 @@ impl CodeSymbolWithSteps {
                     is_new: self.is_new,
                 }
             } else {
-                self
+                let mut code_symbol_parts = self.code_symbol.split(".").collect::<Vec<_>>();
+                if code_symbol_parts.is_empty() {
+                    self
+                } else {
+                    Self {
+                        code_symbol: code_symbol_parts.remove(0).to_owned(),
+                        steps: self.steps,
+                        is_new: self.is_new,
+                        file_path: self.file_path,
+                    }
+                }
             }
         } else if self.file_path().ends_with("rs") {
             // we get inputs in the format: "struct::function_inside_struct"
@@ -911,7 +939,17 @@ impl CodeSymbolWithSteps {
                         file_path: self.file_path,
                     }
                 } else {
-                    self
+                    let mut code_symbol_parts = self.code_symbol.split("::").collect::<Vec<_>>();
+                    if code_symbol_parts.is_empty() {
+                        self
+                    } else {
+                        Self {
+                            code_symbol: code_symbol_parts.remove(0).to_owned(),
+                            steps: self.steps,
+                            is_new: self.is_new,
+                            file_path: self.file_path,
+                        }
+                    }
                 }
             } else {
                 self
@@ -1062,3 +1100,26 @@ pub trait CodeSymbolImportant {
 // we have to implement a wider search over here and grab all the symbols and
 // then further refine it and set out agents to work on them
 // let's see how that works out (would be interesting)
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::chunking::languages::TSLanguageParsing;
+
+    use super::{CodeSymbolImportantResponse, CodeSymbolWithThinking};
+
+    #[test]
+    fn fixing_code_symbols_work() {
+        let mut response = CodeSymbolImportantResponse::new(
+            vec![CodeSymbolWithThinking::new(
+                "LLMBroker::new".to_owned(),
+                "".to_owned(),
+                "/tmp/something.rs".to_owned(),
+            )],
+            vec![],
+        );
+        response = response.fix_symbol_names(Arc::new(TSLanguageParsing::init()));
+        assert_eq!(response.symbols.remove(0).code_symbol, "LLMBroker");
+    }
+}

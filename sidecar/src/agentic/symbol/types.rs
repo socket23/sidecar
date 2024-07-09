@@ -1590,6 +1590,24 @@ Satisfy the requirement either by making edits or gathering the required informa
         Ok(outlines)
     }
 
+    /// Helps find the sub-symbol location or creates a new location for it
+    /// if we do not have any sub-symbol matching this one
+    async fn find_sub_symbol_location(
+        &self,
+        sub_symbol: SymbolToEdit,
+    ) -> Result<SymbolToEdit, SymbolError> {
+        // Grabs the implementation of the symbols over here
+        let implementation_blocks = self.mecha_code_symbol.get_implementations().await;
+        // in languages like typescript and python we have a single implementation block
+        // of if its a new sub-symbol then we return it accordingly as the line just after
+        // the last symbol
+        // in case of rust, we have scoped implementation like: trait implementations, struct
+        // and then impl blocks, for now we will find the first impl block which is not a trait
+        // implementation and place the sub-symbol over there
+        // we do need this data about the code symbol from the chunker
+        todo!("")
+    }
+
     async fn add_subsymbol(
         &self,
         sub_symbol: &SymbolToEdit,

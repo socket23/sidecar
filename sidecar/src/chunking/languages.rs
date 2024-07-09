@@ -234,6 +234,7 @@ impl TSLanguageConfig {
                     let mut function_name = None;
                     let mut function_name_range = None;
                     let mut function_class_name = None;
+                    let mut class_implementation_trait = None;
                     let mut children = vec![];
                     while end_index < outline_nodes.len() {
                         let (child_node_type, child_range) = outline_nodes[end_index].clone();
@@ -243,6 +244,15 @@ impl TSLanguageConfig {
                             break;
                         }
                         match child_node_type {
+                            OutlineNodeType::ClassTrait => {
+                                if class_implementation_trait.is_none() {
+                                    class_implementation_trait = Some(get_string_from_bytes(
+                                        &source_code_vec,
+                                        child_range.start_byte(),
+                                        child_range.end_byte(),
+                                    ));
+                                }
+                            }
                             OutlineNodeType::ClassName => {
                                 // we might have inner classes inside the same class
                                 // its best to avoid tracking them again
@@ -312,6 +322,7 @@ impl TSLanguageConfig {
                                             function_name_range,
                                             child_range,
                                             self.language_str.to_owned(),
+                                            None,
                                         ));
                                     } else {
                                         children.push(OutlineNodeContent::new(
@@ -327,6 +338,7 @@ impl TSLanguageConfig {
                                             function_name_range,
                                             child_range,
                                             self.language_str.to_owned(),
+                                            None,
                                         ));
                                     }
                                 }
@@ -384,6 +396,7 @@ impl TSLanguageConfig {
                         // This is incorrect
                         class_range,
                         self.language_str.to_owned(),
+                        class_implementation_trait.clone(),
                     );
                     compressed_outline.push(OutlineNode::new(
                         class_outline,
@@ -443,6 +456,7 @@ impl TSLanguageConfig {
                                         function_name_range.clone(),
                                         child_range,
                                         self.language_str.to_owned(),
+                                        None,
                                     ));
                                 } else {
                                     compressed_outline.push(OutlineNode::new(
@@ -466,6 +480,7 @@ impl TSLanguageConfig {
                                             function_name_range.clone(),
                                             child_range,
                                             self.language_str.to_owned(),
+                                            None,
                                         ),
                                         vec![],
                                         self.language_str.to_owned(),
@@ -536,6 +551,7 @@ impl TSLanguageConfig {
                                     next_node.1.clone(),
                                     outline_nodes[start_index].1.clone(),
                                     self.language_str.to_owned(),
+                                    None,
                                 ),
                                 vec![],
                                 self.language_str.to_owned(),
@@ -553,6 +569,9 @@ impl TSLanguageConfig {
                     start_index = start_index + 1;
                     // we are not tracking the definition identifier globally for now, we will
                     // figure out what to do about this in a bit
+                }
+                OutlineNodeType::ClassTrait => {
+                    start_index = start_index + 1;
                 }
             }
         }
@@ -3384,6 +3403,44 @@ fn agent_router() -> Router {
             let extracted_text = &source_code[range.start_byte()..range.end_byte()];
             assert_eq!(extracted_text, expected_qualifier);
         }
+    }
+
+    #[test]
+    fn test_trait_implementation_tracking() {
+        let source_code = r#"
+impl TraitSomething for Something {
+}
+
+struct SomethingElse {
+}
+
+struct Something {
+}
+
+enum SomethingElse {
+}
+        "#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("rust")
+            .expect("language config to be present");
+        let grammar = ts_language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code, None).unwrap();
+        let outline_nodes = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        assert_eq!(outline_nodes.len(), 4);
+        assert_eq!(
+            outline_nodes[0].content().has_trait_implementation(),
+            Some("TraitSomething".to_owned())
+        );
+        assert_eq!(outline_nodes[1].content().has_trait_implementation(), None,);
+        assert_eq!(outline_nodes[2].content().has_trait_implementation(), None,);
+        assert_eq!(outline_nodes[3].content().has_trait_implementation(), None,);
     }
 
     /// This is a failing test case, we want to track this in the code

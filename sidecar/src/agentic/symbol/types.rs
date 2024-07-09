@@ -1695,19 +1695,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol_to_edit.symbol_name(),
                 &sub_symbol_to_edit,
             );
-            // if its an outline node editing and its not rust, then we need to figure out
-            // a better way to do outline node editing
-            // for rust right now, outline node editing works since the struct definitions and
-            // enum definitions are in their own scope
-            if sub_symbol_to_edit.is_outline() && !sub_symbol_to_edit.fs_file_path().contains(".rs")
-            {
-                println!(
-                    "symbol::edit_implementation::sub_symbol_to_edit::outline::({})::({})",
-                    self.symbol_name(),
-                    sub_symbol_to_edit.symbol_name()
-                );
-                continue;
-            }
             let context_for_editing = if sub_symbol_to_edit.is_new() {
                 vec![]
             } else {

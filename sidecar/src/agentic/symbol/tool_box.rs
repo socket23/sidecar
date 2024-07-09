@@ -2362,6 +2362,72 @@ Please handle these changes as required."#
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    /// We can make edits to a different part of the codebase when
+    /// doing code correction
+    /// NOTE: Not running in full parallelism yet, we will enable that
+    /// and missing creating new files etc
+    pub async fn code_correctness_changes_to_codebase(
+        &self,
+        _fs_file_path: &str,
+        _edited_range: &Range,
+        _edited_code: &str,
+        thinking: &str,
+        request_id: &str,
+        tool_properties: &ToolProperties,
+        hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            String,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
+    ) -> Result<(), SymbolError> {
+        // over here we want to ping the other symbols and send them requests, there is a search
+        // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
+        // or maybe we should keep it separate
+        // TODO(skcd): Figure this part out
+        // 1. First we figure out if the code symbol exists in the codebase
+        // 2. If it does exist then we know the action we want to  invoke on it
+        // 3. If the symbol does not exist, then we need to go through the creation loop
+        // where should that happen?
+        let symbols_to_edit = self
+            .find_symbols_to_edit_from_context(thinking, request_id)
+            .await?;
+
+        let symbols_to_edit_list = symbols_to_edit.symbol_list();
+
+        // TODO(skcd+zi): Can we run this in full parallelism??
+        for symbol_to_edit in symbols_to_edit_list.into_iter() {
+            let symbol_to_find = symbol_to_edit.to_owned();
+            let symbol_locations = self
+                .grep_symbols_in_ide(&symbol_to_find, request_id)
+                .await?;
+            let found_symbol = symbol_locations
+                .locations()
+                .into_iter()
+                .find(|location| location.name() == symbol_to_edit);
+            if let Some(symbol_to_edit) = found_symbol {
+                let symbol_file_path = symbol_to_edit.fs_file_path();
+                let symbol_name = symbol_to_edit.name();
+                let (sender, receiver) = tokio::sync::oneshot::channel();
+                let _ = hub_sender.send(
+                    (SymbolEventRequest::initial_request(
+                        SymbolIdentifier::with_file_path(symbol_name, symbol_file_path),
+                        format!(r#"The instruction contains information about multiple symbols, but we are going to focus only on {symbol_name}
+instruction:
+{thinking}"#),
+                        tool_properties.clone(),
+                    ), request_id.to_owned(), sender),
+                );
+                // we should pass back this response to the caller for sure??
+                let _ = receiver.await;
+            } else {
+                // no matching symbols, F in the chat for the LLM
+                // TODO(skcd): Figure out how to handle this properly, for now we can just skip on this
+                // since the code correction call will be blocked anyways on this
+            }
+        }
+        todo!("Figure out what to do over here")
+    }
+
     pub async fn check_code_correctness(
         &self,
         parent_symbol_name: &str,
@@ -2378,7 +2444,7 @@ Please handle these changes as required."#
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
         tool_properties: &ToolProperties,
-        _hub_sender: UnboundedSender<(
+        hub_sender: UnboundedSender<(
             SymbolEventRequest,
             String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
@@ -2653,6 +2719,18 @@ Please handle these changes as required."#
                 // 2. If it does exist then we know the action we want to  invoke on it
                 // 3. If the symbol does not exist, then we need to go through the creation loop
                 // where should that happen?
+                println!("tool_box::check_code_correctness::changes_to_codebase");
+                let _ = self
+                    .code_correctness_changes_to_codebase(
+                        fs_file_path,
+                        &edited_range,
+                        &updated_code,
+                        &tool_use_thinking,
+                        request_id,
+                        tool_properties,
+                        hub_sender.clone(),
+                    )
+                    .await;
             } else {
                 // invoke the code action over here with the editor
                 let response = dbg!(

@@ -17,6 +17,16 @@ pub struct LocationInformation {
     fs_file_path: String,
 }
 
+impl LocationInformation {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LSPGrepSymbolInCodebaseResponse {
     locations: Vec<LocationInformation>,

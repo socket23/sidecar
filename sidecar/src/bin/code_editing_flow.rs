@@ -55,7 +55,7 @@ async fn main() {
         ),
     ));
 
-    let file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs";
+    let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
 
     // read the file contents
     let file_contents =
@@ -84,7 +84,7 @@ async fn main() {
         user_context.clone(),
     );
 
-    let problem_statement = "can you add another provider for grok for me".to_owned();
+    let problem_statement = "can you add another provider for grok for me?".to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

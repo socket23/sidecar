@@ -957,9 +957,15 @@ Reason to edit:
                                 // TODO(skcd): We need to get the sub-symbol over
                                 // here instead of the original symbol name which
                                 // would not work
-                                let symbol_in_range = self
-                                    .find_sub_symbol_in_range(range, fs_file_path, request_id_ref)
-                                    .await;
+                                println!("mecha_code_symbol_thinking::initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
+                                let symbol_in_range = dbg!(
+                                    self.find_sub_symbol_in_range(
+                                        range,
+                                        fs_file_path,
+                                        request_id_ref
+                                    )
+                                    .await
+                                );
                                 if let Ok(symbol) = symbol_in_range {
                                     Some(SymbolToEdit::new(
                                         symbol,
@@ -970,6 +976,7 @@ Reason to edit:
                                         false,
                                     ))
                                 } else {
+                                    println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);
                                     None
                                 }
                             }

@@ -2467,6 +2467,10 @@ Please handle these changes as required."#
                 // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
                 // or maybe we should keep it separate
                 // TODO(skcd): Figure this part out
+                // 1. First we figure out if the code symbol exists in the codebase
+                // 2. If it does exist then we know the action we want to  invoke on it
+                // 3. If the symbol does not exist, then we need to go through the creation loop
+                // where should that happen?
             } else {
                 // invoke the code action over here with the editor
                 let response = dbg!(

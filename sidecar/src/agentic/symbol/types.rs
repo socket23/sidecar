@@ -1720,8 +1720,10 @@ Satisfy the requirement either by making edits or gathering the required informa
             let context_for_editing = if sub_symbol_to_edit.is_new() {
                 vec![]
             } else {
-                self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
-                    .await?
+                dbg!(
+                    self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                        .await
+                )?
             };
 
             // if this is a new sub-symbol we have to create we have to diverge the
@@ -1749,12 +1751,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                     sub_symbol_to_edit.range().clone(),
                     sub_symbol_to_edit.fs_file_path().to_owned(),
                 ));
-                self.edit_code(
-                    &sub_symbol_to_edit,
-                    context_for_editing.to_owned(),
-                    &request_id,
-                )
-                .await?
+                dbg!(
+                    self.edit_code(
+                        &sub_symbol_to_edit,
+                        context_for_editing.to_owned(),
+                        &request_id,
+                    )
+                    .await
+                )?
             };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
@@ -1869,7 +1873,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                                 ));
                                 Ok(())
                             }
-                            Err(e) => Err(e),
+                            Err(e) => {
+                                println!("symbol::run::initial_request::({:?})", &e);
+                                Err(e)
+                            }
                         }
                     }
                     SymbolEvent::Edit(edit_request) => {

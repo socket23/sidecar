@@ -1230,39 +1230,35 @@ We also believe this symbol needs to be probed because of:
             return Err(SymbolError::NoOutlineNodeSatisfyPosition);
         }
 
-        if symbol_to_edit.is_outline() {
-            Err(SymbolError::OutlineNodeEditingNotSupported)
+        let child_node = outline_nodes
+            .iter()
+            .map(|outline_node| outline_node.children())
+            .flatten()
+            .into_iter()
+            .find(|child_node| child_node.name() == symbol_to_edit.symbol_name());
+        if let Some(child_node) = child_node {
+            Ok(child_node.clone())
         } else {
-            let child_node = outline_nodes
-                .iter()
-                .map(|outline_node| outline_node.children())
-                .flatten()
+            // if no children match, then we have to find out which symbol we want to select
+            // and use those, this one will be the closest one to the range we are interested
+            // in
+            let mut outline_nodes_with_distance = outline_nodes
                 .into_iter()
-                .find(|child_node| child_node.name() == symbol_to_edit.symbol_name());
-            if let Some(child_node) = child_node {
-                Ok(child_node.clone())
+                .filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name())
+                .map(|outline_node| {
+                    (
+                        outline_node
+                            .range()
+                            .minimal_line_distance(symbol_to_edit.range()),
+                        outline_node,
+                    )
+                })
+                .collect::<Vec<_>>();
+            outline_nodes_with_distance.sort_by_key(|(distance, _)| *distance);
+            if outline_nodes_with_distance.is_empty() {
+                Err(SymbolError::NoOutlineNodeSatisfyPosition)
             } else {
-                // if no children match, then we have to find out which symbol we want to select
-                // and use those, this one will be the closest one to the range we are interested
-                // in
-                let mut outline_nodes_with_distance = outline_nodes
-                    .into_iter()
-                    .filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name())
-                    .map(|outline_node| {
-                        (
-                            outline_node
-                                .range()
-                                .minimal_line_distance(symbol_to_edit.range()),
-                            outline_node,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                outline_nodes_with_distance.sort_by_key(|(distance, _)| *distance);
-                if outline_nodes_with_distance.is_empty() {
-                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
-                } else {
-                    return Ok(outline_nodes_with_distance.remove(0).1.content().clone());
-                }
+                return Ok(outline_nodes_with_distance.remove(0).1.content().clone());
             }
         }
     }
@@ -1286,26 +1282,24 @@ We also believe this symbol needs to be probed because of:
         // Now the symbol to edit might be an outline or it might not be an
         // outline and point to a particular symbol inside the range, in both
         // of these cases we have to handle it differently
-        if symbol_to_edit.is_outline() {
-            Err(SymbolError::OutlineNodeEditingNotSupported)
+        // we were previously checking for outline nodes over here, but now
+        // we do not care about it and are going rouge
+        let child_node = outline_node.children().into_iter().find(|child_node| {
+            child_node
+                .range()
+                .contains_check_line(symbol_to_edit.range())
+        });
+        if let Some(child_node) = child_node {
+            Ok(child_node.clone())
         } else {
-            let child_node = outline_node.children().into_iter().find(|child_node| {
-                child_node
-                    .range()
-                    .contains_check_line(symbol_to_edit.range())
-            });
-            if let Some(child_node) = child_node {
-                Ok(child_node.clone())
+            if outline_node
+                .content()
+                .range()
+                .contains_check_line(symbol_to_edit.range())
+            {
+                Ok(outline_node.content().clone())
             } else {
-                if outline_node
-                    .content()
-                    .range()
-                    .contains_check_line(symbol_to_edit.range())
-                {
-                    Ok(outline_node.content().clone())
-                } else {
-                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
-                }
+                Err(SymbolError::NoOutlineNodeSatisfyPosition)
             }
         }
     }

@@ -643,7 +643,7 @@ impl TSLanguageConfig {
             // Now we need to find the identifier nodes in this part of the function and then grab them
             // and return them, this function might need to be enclosed in either a class or can be independent
             // so we will have to check for both
-            let function_body = possible_function.content(source_code);
+            let _function_body = possible_function.content(source_code);
             Default::default()
         } else {
             Default::default()

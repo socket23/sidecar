@@ -115,6 +115,10 @@ pub fn rust_language_config() -> TSLanguageConfig {
                       
               (type_item
                   name: (type_identifier) @definition.class.name) @definition.class
+
+              (impl_item
+				          trait: (type_identifier) @definition.class.trait
+                  type: (type_identifier) @definition.class.name) @definition.class
               
               (impl_item
                   type: (type_identifier) @definition.class.name) @definition.class

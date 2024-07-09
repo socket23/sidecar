@@ -73,6 +73,10 @@ impl FunctionNodeInformation {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
 pub enum OutlineNodeType {
+    // the trait of the class if present, this represents the trait implementation which
+    // might be part of the symbol, its not necessarily always present in every language
+    // but it is a part of rust
+    ClassTrait,
     // the defintion of the class if the language supports it (like rust, golang) struct A {...}
     // otherwise its inside the class struct (in languages like js, ts) class A {something: string; something_else: string}
     ClassDefinition,
@@ -124,6 +128,7 @@ impl OutlineNodeType {
 impl OutlineNodeType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
+            "definition.class.trait" => Some(Self::ClassTrait),
             "definition.class.declaration" => Some(Self::ClassDefinition),
             "definition.class" => Some(Self::Class),
             "definition.class.name" => Some(Self::ClassName),
@@ -151,6 +156,7 @@ pub struct OutlineNodeContent {
     identifier_range: Range,
     body_range: Range,
     language: String,
+    trait_implementation: Option<String>,
 }
 
 impl OutlineNodeContent {
@@ -163,6 +169,7 @@ impl OutlineNodeContent {
         identifier_range: Range,
         body_range: Range,
         language: String,
+        trait_implementation: Option<String>,
     ) -> Self {
         Self {
             range,
@@ -173,6 +180,7 @@ impl OutlineNodeContent {
             identifier_range,
             body_range,
             language,
+            trait_implementation,
         }
     }
 
@@ -260,6 +268,10 @@ impl OutlineNodeContent {
 
     pub fn identifier_range(&self) -> &Range {
         &self.identifier_range
+    }
+
+    pub fn has_trait_implementation(&self) -> Option<String> {
+        self.trait_implementation.clone()
     }
 }
 

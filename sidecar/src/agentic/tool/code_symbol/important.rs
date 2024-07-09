@@ -774,7 +774,7 @@ impl CodeSymbolWithThinking {
     /// If the symbol name consists of a.b.c kind of format we want to grab
     /// just the a instead of the whole string since we always work on the
     /// top level symbol
-    pub fn fix_symbol_name(self, ts_parsing: &Arc<TSLanguageParsing>) -> Self {
+    pub fn fix_symbol_name(self, ts_parsing: Arc<TSLanguageParsing>) -> Self {
         if self.file_path().ends_with("py") {
             if self.code_symbol.contains(".") {
                 let language = "python";
@@ -870,7 +870,7 @@ impl CodeSymbolWithSteps {
     /// If the symbol name consists of a.b.c kind of format we want to grab
     /// just the a instead of the whole string since we always work on the
     /// top level symbol
-    pub fn fix_symbol_name(self, ts_parsing: &Arc<TSLanguageParsing>) -> Self {
+    pub fn fix_symbol_name(self, ts_parsing: Arc<TSLanguageParsing>) -> Self {
         if self.file_path().ends_with("py") {
             let language = "python";
             let ts_language_config = ts_parsing
@@ -943,17 +943,17 @@ impl CodeSymbolImportantResponse {
     /// the form of a.b.c etc
     /// so we want to parse them as just a instead of a.b.c
     /// this way we can ensure that we find the right symbol always
-    pub fn fix_symbol_names(self, ts_parsing: &Arc<TSLanguageParsing>) -> Self {
+    pub fn fix_symbol_names(self, ts_parsing: Arc<TSLanguageParsing>) -> Self {
         let symbols = self.symbols;
         let ordered_symbols = self.ordered_symbols;
         Self {
             symbols: symbols
                 .into_iter()
-                .map(|symbol| symbol.fix_symbol_name(ts_parsing))
+                .map(|symbol| symbol.fix_symbol_name(ts_parsing.clone()))
                 .collect::<Vec<_>>(),
             ordered_symbols: ordered_symbols
                 .into_iter()
-                .map(|symbol| symbol.fix_symbol_name(ts_parsing))
+                .map(|symbol| symbol.fix_symbol_name(ts_parsing.clone()))
                 .collect::<Vec<_>>(),
         }
     }

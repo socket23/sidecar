@@ -52,6 +52,26 @@ impl AnthropicCodeSymbolImportant {
             false
         }
     }
+
+    fn parse_code_edit_reply(response: &str) -> Result<String, CodeSymbolError> {
+        let lines = response
+            .lines()
+            .skip_while(|line| !line.contains("<reply>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</reply>"))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .skip_while(|line| !line.contains("```"))
+            .skip(1)
+            .take_while(|line| !line.contains("```"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if lines == "" {
+            Err(CodeSymbolError::WrongFormat(response.to_owned()))
+        } else {
+            Ok(lines)
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -5925,7 +5945,9 @@ impl CodeSymbolErrorFix for AnthropicCodeSymbolImportant {
                 sender,
             )
             .await?;
-        Ok(response)
+        // We want to parse the response here since it should be within the
+        // <reply> tags and then have the ``` backticks as well
+        Self::parse_code_edit_reply(&response)
     }
 }
 

@@ -54,4 +54,7 @@ pub enum CodeSymbolError {
 
     #[error("Empty response")]
     EmptyResponse,
+
+    #[error("Wrong format: {0}")]
+    WrongFormat(String),
 }

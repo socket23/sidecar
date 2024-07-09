@@ -18,9 +18,15 @@ pub struct FindSymbolsToEditInContextRequest {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct FindSymbolsToEditInContextSymbolList {
+    #[serde(rename = "symbol")]
+    symbols: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FindSymbolsToEditInContextResponse {
     thinking: String,
-    symbol_list: Vec<String>,
+    symbol_list: FindSymbolsToEditInContextSymbolList,
 }
 
 /// Find symbols to edit in a context

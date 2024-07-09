@@ -439,4 +439,27 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_find_file_for_symbol_response(self) -> Option<FindFileForSymbolResponse> {
+        match self {
+            ToolOutput::FindFileForNewSymbol(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_lsp_grep_symbols_in_codebase_response(
+        self,
+    ) -> Option<LSPGrepSymbolInCodebaseResponse> {
+        match self {
+            ToolOutput::LSPSymbolSearchInformation(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_code_symbols_to_edit_in_context(self) -> Option<FindSymbolsToEditInContextResponse> {
+        match self {
+            ToolOutput::FindSymbolsToEditInContext(response) => Some(response),
+            _ => None,
+        }
+    }
 }

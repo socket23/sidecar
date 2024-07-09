@@ -14,6 +14,12 @@ use crate::agentic::tool::code_symbol::correctness::{
     CodeCorrectnessAction, CodeCorrectnessRequest,
 };
 use crate::agentic::tool::code_symbol::error_fix::CodeEditingErrorRequest;
+use crate::agentic::tool::code_symbol::find_file_for_new_symbol::{
+    FindFileForSymbolRequest, FindFileForSymbolResponse,
+};
+use crate::agentic::tool::code_symbol::find_symbols_to_edit_in_context::{
+    FindSymbolsToEditInContextRequest, FindSymbolsToEditInContextResponse,
+};
 use crate::agentic::tool::code_symbol::followup::{
     ClassSymbolFollowupRequest, ClassSymbolFollowupResponse, ClassSymbolMember,
 };
@@ -56,6 +62,9 @@ use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
 use crate::agentic::tool::lsp::gotoreferences::{GoToReferencesRequest, GoToReferencesResponse};
+use crate::agentic::tool::lsp::grep_symbol::{
+    LSPGrepSymbolInCodebaseRequest, LSPGrepSymbolInCodebaseResponse,
+};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
@@ -105,6 +114,174 @@ impl ToolBox {
             editor_url,
             ui_events,
         }
+    }
+
+    /// Finds the symbols which need to be edited from the user context
+    pub async fn find_symbols_to_edit_from_context(
+        &self,
+        context: &str,
+        request_id: &str,
+    ) -> Result<FindSymbolsToEditInContextResponse, SymbolError> {
+        let tool_input = ToolInput::FindSymbolsToEditInContext(
+            FindSymbolsToEditInContextRequest::new(context.to_owned()),
+        );
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_symbols_to_edit_in_context()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn grep_symbols_in_ide(
+        &self,
+        symbol_name: &str,
+        request_id: &str,
+    ) -> Result<LSPGrepSymbolInCodebaseResponse, SymbolError> {
+        let tool_input = ToolInput::GrepSymbolInCodebase(LSPGrepSymbolInCodebaseRequest::new(
+            self.editor_url.to_owned(),
+            symbol_name.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_lsp_grep_symbols_in_codebase_response()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn find_file_location_for_new_symbol(
+        &self,
+        symbol_name: &str,
+        fs_file_path: &str,
+        code_location: &Range,
+        user_query: &str,
+        request_id: &str,
+    ) -> Result<FindFileForSymbolResponse, SymbolError> {
+        // Here there are multiple steps which we need to take to answer this:
+        // - Get all the imports in the file which we are interested in
+        // - Get the location of the imports which are present in the file (just the file paths)
+        let language_config = self
+            .editor_parsing
+            .for_file_path(fs_file_path)
+            .ok_or(SymbolError::FileTypeNotSupported(fs_file_path.to_owned()))?;
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let source_code = file_contents.contents_ref().as_bytes();
+        let hoverable_nodes = language_config.hoverable_nodes(source_code);
+        let import_identifiers = language_config.generate_import_identifiers_fresh(source_code);
+        // Now we do the dance where we go over the hoverable nodes and only look at the ranges which overlap
+        // with the import identifiers
+        let clickable_imports = import_identifiers
+            .into_iter()
+            .filter(|(_, import_range)| {
+                hoverable_nodes
+                    .iter()
+                    .any(|hoverable_range| hoverable_range.contains(import_range))
+            })
+            .collect::<Vec<_>>();
+        // grab the lines which contain the imports, this will be unordered
+        let mut import_line_numbers = clickable_imports
+            .iter()
+            .map(|(_, range)| (range.start_line()..=range.end_line()))
+            .flatten()
+            .collect::<HashSet<usize>>()
+            .into_iter()
+            .collect::<Vec<usize>>();
+        // sort the line numbers in increasing order
+        import_line_numbers.sort();
+
+        // grab the lines from the file which fall in the import line range
+        let import_lines = file_contents
+            .contents_ref()
+            .lines()
+            .enumerate()
+            .filter_map(|(line_number, content)| {
+                if import_line_numbers
+                    .iter()
+                    .any(|import_line_number| import_line_number == &line_number)
+                {
+                    Some(content)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Get all the file locations which are imported by this file, we use
+        // this as a hint to figure out the file where we should be adding the code to
+        // TODO(skcd+zi): We should show a bit more data over here for the file, maybe
+        // the hotspots in the file which the user has scrolled over and a preview
+        // of the file
+        let import_file_locations = stream::iter(clickable_imports)
+            .map(|(_, clickable_import_range)| {
+                self.go_to_definition(
+                    fs_file_path,
+                    clickable_import_range.end_position(),
+                    request_id,
+                )
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|go_to_definition_output| match go_to_definition_output {
+                Ok(go_to_definition) => Some(
+                    go_to_definition
+                        .definitions()
+                        .into_iter()
+                        .map(|go_to_definition| go_to_definition.file_path().to_owned())
+                        .collect::<Vec<_>>(),
+                ),
+                Err(_e) => None,
+            })
+            .flatten()
+            .collect::<HashSet<String>>()
+            .into_iter()
+            .collect::<Vec<String>>();
+
+        let code_content_in_range = file_contents
+            .contents_ref()
+            .lines()
+            .enumerate()
+            .filter_map(|(line_number, content)| {
+                if code_location.start_line() <= line_number
+                    && line_number <= code_location.end_line()
+                {
+                    Some(content)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let tool_input = ToolInput::FindFileForNewSymbol(FindFileForSymbolRequest::new(
+            fs_file_path.to_owned(),
+            symbol_name.to_owned(),
+            import_lines,
+            import_file_locations,
+            user_query.to_owned(),
+            code_content_in_range,
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        self.tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_find_file_for_symbol_response()
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     /// Tries to answer the probe query if it can

@@ -62,7 +62,8 @@ async fn main() {
 
     let snippet_range = Range::new(Position::new(151, 0, 0), Position::new(167, 1, 0));
     let fs_file_path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs";
-    let line_content = "\"/hybrid_search\",\n            get(sidecar::webserver::agent::hybrid_search),";
+    let line_content =
+        "\"/hybrid_search\",\n            get(sidecar::webserver::agent::hybrid_search),";
     let symbol_to_search = "hybrid_search";
     let request_id = "testing";
 

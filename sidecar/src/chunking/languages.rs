@@ -644,7 +644,6 @@ impl TSLanguageConfig {
             // and return them, this function might need to be enclosed in either a class or can be independent
             // so we will have to check for both
             let function_body = possible_function.content(source_code);
-            dbg!("function_body", &function_body);
             Default::default()
         } else {
             Default::default()
@@ -3340,7 +3339,7 @@ fn agent_router() -> Router {
             (
                 "rust",
                 r#"
-            Self::go();
+            Self::go()
             "#,
                 "Self",
             ),
@@ -3384,6 +3383,21 @@ fn agent_router() -> Router {
             let range = object_qualifier.unwrap();
             let extracted_text = &source_code[range.start_byte()..range.end_byte()];
             assert_eq!(extracted_text, expected_qualifier);
+        }
+    }
+
+    /// This is a failing test case, we want to track this in the code
+    #[test]
+    fn failing_object_qualifier_test_case() {
+        let cases = vec![("rust", "Self::go_do_something", "Self")];
+        for (language, source_code, _expected_qualifier) in cases.into_iter() {
+            let tree_sitter_parsing = TSLanguageParsing::init();
+            let ts_language_config = tree_sitter_parsing
+                .for_lang(language)
+                .expect("language config to be present");
+            let object_qualifier =
+                ts_language_config.generate_object_qualifier(source_code.as_bytes());
+            assert!(object_qualifier.is_none());
         }
     }
 }

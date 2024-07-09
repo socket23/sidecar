@@ -29,6 +29,14 @@ impl SymbolToEdit {
         }
     }
 
+    pub fn set_fs_file_path(&mut self, fs_file_path: String) {
+        self.fs_file_path = fs_file_path;
+    }
+
+    pub fn set_range(&mut self, range: Range) {
+        self.range = range;
+    }
+
     pub fn is_new(&self) -> bool {
         self.is_new.clone()
     }

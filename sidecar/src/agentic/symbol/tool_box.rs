@@ -116,6 +116,73 @@ impl ToolBox {
         }
     }
 
+    pub async fn find_implementation_block_for_sub_symbol(
+        &self,
+        mut sub_symbol_to_edit: SymbolToEdit,
+        implementations: &[Snippet],
+    ) -> Result<SymbolToEdit, SymbolError> {
+        // Find the right implementation where we want to insert this sub-symbol
+        let language_config = self
+            .editor_parsing
+            .for_file_path(sub_symbol_to_edit.fs_file_path());
+        if let None = language_config {
+            return Err(SymbolError::FileTypeNotSupported(
+                sub_symbol_to_edit.fs_file_path().to_owned(),
+            ));
+        }
+        let language_config = language_config.expect("if let None to hold");
+        if language_config.language_str == "rust" {
+            let valid_position: Option<(String, Position)> = implementations
+                .into_iter()
+                .filter(|implementation| {
+                    // only those implementations which are of class type and
+                    // are not part of the trait implementation yet, we have to figure
+                    // out the trait implementation logic afterwards, for now
+                    // we assume its free of the trait implementation, but this will break
+                    // for sure cause we have no guarding logic aginst the success case
+                    implementation.outline_node_content().is_class_type()
+                        && implementation
+                            .outline_node_content()
+                            .has_trait_implementation()
+                            .is_none()
+                })
+                .filter_map(|implementation| {
+                    // check if the implementation config contains `impl ` just this
+                    // in the content, this is a big big hack but this will work
+                    if implementation
+                        .outline_node_content()
+                        .content()
+                        .contains("impl ")
+                    {
+                        Some((
+                            implementation
+                                .outline_node_content()
+                                .fs_file_path()
+                                .to_owned(),
+                            implementation.outline_node_content().range().end_position(),
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .next();
+            match valid_position {
+                Some((fs_file_path, end_position)) => {
+                    sub_symbol_to_edit.set_fs_file_path(fs_file_path);
+                    sub_symbol_to_edit
+                        .set_range(Range::new(end_position.clone(), end_position.clone()));
+                }
+                None => {
+                    // TODO(codestory): Handle the none case here when we do not find
+                    // any implementation block and have to create one
+                }
+            };
+            Ok(sub_symbol_to_edit)
+        } else {
+            Ok(sub_symbol_to_edit)
+        }
+    }
+
     /// Finds the symbols which need to be edited from the user context
     pub async fn find_symbols_to_edit_from_context(
         &self,

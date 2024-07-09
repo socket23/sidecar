@@ -907,18 +907,16 @@ impl MechaCodeSymbolThinking {
                     self.symbol_name(),
                     &ranked_xml_list,
                 );
-                let filtered_list = dbg!(
-                    tool_box
-                        .filter_code_snippets_in_symbol_for_editing(
-                            ranked_xml_list,
-                            original_request.get_original_question().to_owned(),
-                            llm_properties_for_filtering.llm().clone(),
-                            llm_properties_for_filtering.provider().clone(),
-                            llm_properties_for_filtering.api_key().clone(),
-                            &request_id,
-                        )
-                        .await
-                )?;
+                let filtered_list = tool_box
+                    .filter_code_snippets_in_symbol_for_editing(
+                        ranked_xml_list,
+                        original_request.get_original_question().to_owned(),
+                        llm_properties_for_filtering.llm().clone(),
+                        llm_properties_for_filtering.provider().clone(),
+                        llm_properties_for_filtering.api_key().clone(),
+                        &request_id,
+                    )
+                    .await?;
 
                 // We should do a COT over here for each of the individual
                 // sub-symbols to check if we really want to edit the code

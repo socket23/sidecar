@@ -167,7 +167,7 @@ impl SymbolManager {
         | ToolOutput::RepoMapSearch(important_symbols) = output
         {
             // We have the important symbols here which we can then use to invoke the individual process request
-            let important_symbols = important_symbols.fix_symbol_names(&self.ts_parsing);
+            let important_symbols = important_symbols.fix_symbol_names(self.ts_parsing.clone());
 
             let mut symbols = self
                 .tool_box
@@ -373,7 +373,7 @@ impl SymbolManager {
                 // method_name
 
                 // should pass self.editorparsing <tsconfigs>
-                let important_symbols = important_symbols.fix_symbol_names(&self.ts_parsing);
+                let important_symbols = important_symbols.fix_symbol_names(self.ts_parsing.clone());
                 // swe bench caching hit over here we just do it
                 self.long_context_cache
                     .update_cache(swe_bench_id.clone(), &important_symbols)
@@ -399,7 +399,7 @@ impl SymbolManager {
                                 &request_id,
                             )
                             .await?
-                            .fix_symbol_names(&self.ts_parsing);
+                            .fix_symbol_names(self.ts_parsing.clone());
                         self.long_context_cache
                             .update_cache_for_plan_before_editing(swe_bench_id, &important_symbols)
                             .await;

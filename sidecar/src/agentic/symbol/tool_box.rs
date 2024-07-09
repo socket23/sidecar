@@ -2378,6 +2378,11 @@ Please handle these changes as required."#
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
         tool_properties: &ToolProperties,
+        _hub_sender: UnboundedSender<(
+            SymbolEventRequest,
+            String,
+            tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        )>,
     ) -> Result<(), SymbolError> {
         println!("==========too_box::check_code_correctness==========");
         println!(

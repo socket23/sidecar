@@ -1767,6 +1767,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     self.llm_properties.api_key().clone(),
                     request_id_ref,
                     &self.tool_properties,
+                    self.hub_sender.clone(),
                 )
                 .await;
 

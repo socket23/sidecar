@@ -260,6 +260,9 @@ impl LLMClient for CodeStoryClient {
         let mut response_stream = self
             .client
             .post(endpoint)
+            .header(
+                "X-Accel-Buffering", "no"
+            )
             .json(&request)
             .send()
             .await?

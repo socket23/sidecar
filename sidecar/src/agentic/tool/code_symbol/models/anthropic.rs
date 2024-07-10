@@ -4965,15 +4965,15 @@ As an example, given the following code selection:
 <code_selection>
 ```rust
 // FILEPATH: src/fill_in_middle_broker.rs
-pub struct FillInMiddleBroker {
+pub struct FillInMiddleBroker {{
     providers: HashMap<LLMType, Box<dyn FillInMiddleFormatter + Send + Sync>>,
-}
+}}
 
-impl FillInMiddleBroker {
-    pub fn new() -> Self {
-        let broker = Self {
+impl FillInMiddleBroker {{
+    pub fn new() -> Self {{
+        let broker = Self {{
             providers: HashMap::new(),
-        };
+        }};
         broker
             .add_llm(
                 LLMType::CodeLlama13BInstruct,
@@ -5007,7 +5007,7 @@ impl FillInMiddleBroker {
                 LLMType::ClaudeSonnet,
                 Box::new(ClaudeFillInMiddleFormatter::new()),
             )
-    }
+    }}
 ```
 </code_selection>
 

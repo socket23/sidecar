@@ -1411,14 +1411,30 @@ Satisfy the requirement either by making edits or gathering the required informa
 
                 // Now that we have the outline node, we can create a request which we want to send
                 // over to this symbol to handle
-                pending_requests_to_hub.push(SymbolEventRequest::initial_request(
-                    SymbolIdentifier::with_file_path(
-                        outline_node.name(),
-                        outline_node.fs_file_path(),
+                // probing ???
+                let symbol_identifier = SymbolIdentifier::with_file_path(
+                    outline_node.name(),
+                    outline_node.fs_file_path(),
+                );
+                pending_requests_to_hub.push(SymbolEventRequest::probe_request(
+                    symbol_identifier.clone(),
+                    SymbolToProbeRequest::new(
+                        symbol_identifier,
+                        request.to_owned(),
+                        request,
+                        request_id.to_owned(),
+                        vec![],
                     ),
-                    request,
                     self.tool_properties.clone(),
                 ));
+                // pending_requests_to_hub.push(SymbolEventRequest::initial_request(
+                //     SymbolIdentifier::with_file_path(
+                //         outline_node.name(),
+                //         outline_node.fs_file_path(),
+                //     ),
+                //     request,
+                //     self.tool_properties.clone(),
+                // ));
             }
 
             let pending_futures = pending_requests_to_hub
@@ -1432,13 +1448,22 @@ Satisfy the requirement either by making edits or gathering the required informa
                 })
                 .collect::<Vec<_>>();
 
-            let _ = stream::iter(pending_futures)
+            let responses = stream::iter(pending_futures)
                 .map(|pending_receiver| async move {
-                    let _ = pending_receiver.await;
+                    let response = pending_receiver.await;
+                    if let Ok(response) = response {
+                        Some(response.to_string())
+                    } else {
+                        None
+                    }
                 })
                 .buffer_unordered(100)
                 .collect::<Vec<_>>()
-                .await;
+                .await
+                .into_iter()
+                .filter_map(|s| s)
+                .collect::<Vec<_>>();
+            println!("{:?}", &responses);
         }
 
         Ok(())
@@ -1452,7 +1477,8 @@ Satisfy the requirement either by making edits or gathering the required informa
         &self,
         request_id: String,
         request_data: InitialRequestData,
-    ) -> Result<SymbolEventRequest, SymbolError> {
+        // TODO(codestory): This is a bit wrong, we will figure this out in due time
+    ) -> Result<Option<SymbolEventRequest>, SymbolError> {
         println!(
             "symbol::generate_follow_along_requests::symbol_name({})",
             self.symbol_name()
@@ -1461,18 +1487,41 @@ Satisfy the requirement either by making edits or gathering the required informa
         let _ = self
             .follow_along_requests(&request_id, original_request)
             .await;
-        // this is a very big block because of the LLM request, but lets see how
-        // this plays out in practice
-        self.mecha_code_symbol
-            .initial_request(
-                self.tools.clone(),
-                &request_data,
-                self.llm_properties.clone(),
-                request_id,
-                &self.tool_properties,
-                self.hub_sender.clone(),
-            )
-            .await
+        if self.mecha_code_symbol.is_snippet_present().await {
+            // this is a very big block because of the LLM request, but lets see how
+            // this plays out in practice
+            let request = self
+                .mecha_code_symbol
+                .initial_request(
+                    self.tools.clone(),
+                    &request_data,
+                    self.llm_properties.clone(),
+                    request_id,
+                    &self.tool_properties,
+                    self.hub_sender.clone(),
+                )
+                .await?;
+            Ok(Some(request))
+        } else {
+            // we just edit over here
+            // adding the symbol at the end over here
+            let edit_position = self
+                .tools
+                .get_last_position_in_file(self.fs_file_path(), &request_id)
+                .await?;
+            let sub_symbol_to_edit = SymbolToEdit::new(
+                self.symbol_name().to_owned(),
+                Range::new(edit_position.clone(), edit_position),
+                self.fs_file_path().to_owned(),
+                vec![request_data.get_original_question().to_owned()],
+                false,
+                true,
+            );
+            let _ = self
+                .edit_code(&sub_symbol_to_edit, vec![], &request_id)
+                .await;
+            Ok(None)
+        }
     }
 
     // The protocol here is that the questions are just plain text, its on the symbol
@@ -1878,7 +1927,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                             initial_request.is_ok(),
                         );
                         match initial_request {
-                            Ok(initial_request) => {
+                            Ok(Some(initial_request)) => {
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
                                 let _ = symbol.hub_sender.send((
                                     initial_request,
@@ -1894,6 +1943,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                                 let _ = request_sender.send(SymbolEventResponse::TaskDone(
                                     "initial request done".to_owned(),
                                 ));
+                                Ok(())
+                            }
+                            Ok(None) => {
+                                println!("symbol::run::initial_request::empy_response");
                                 Ok(())
                             }
                             Err(e) => {

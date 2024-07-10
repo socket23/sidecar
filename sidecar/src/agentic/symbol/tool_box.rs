@@ -116,6 +116,21 @@ impl ToolBox {
         }
     }
 
+    pub async fn get_last_position_in_file(
+        &self,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Result<Position, SymbolError> {
+        let file_content = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let file_lines = file_content
+            .contents_ref()
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .len();
+        Ok(Position::new(file_lines - 1, 0, 0))
+    }
+
     pub async fn find_implementation_block_for_sub_symbol(
         &self,
         mut sub_symbol_to_edit: SymbolToEdit,
@@ -2430,7 +2445,7 @@ Please handle these changes as required."#
     /// and missing creating new files etc
     pub async fn code_correctness_changes_to_codebase(
         &self,
-        _fs_file_path: &str,
+        fs_file_path: &str,
         _edited_range: &Range,
         _edited_code: &str,
         thinking: &str,
@@ -2467,25 +2482,45 @@ Please handle these changes as required."#
                 .locations()
                 .into_iter()
                 .find(|location| location.name() == symbol_to_edit);
+            let request = format!(
+                r#"The instruction contains information about multiple symbols, but we are going to focus only on {symbol_to_edit}
+instruction:
+{thinking}"#
+            );
             if let Some(symbol_to_edit) = found_symbol {
                 let symbol_file_path = symbol_to_edit.fs_file_path();
                 let symbol_name = symbol_to_edit.name();
                 let (sender, receiver) = tokio::sync::oneshot::channel();
-                let _ = hub_sender.send(
-                    (SymbolEventRequest::initial_request(
+                let _ = hub_sender.send((
+                    SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_name, symbol_file_path),
-                        format!(r#"The instruction contains information about multiple symbols, but we are going to focus only on {symbol_name}
-instruction:
-{thinking}"#),
+                        request.to_owned(),
                         tool_properties.clone(),
-                    ), request_id.to_owned(), sender),
-                );
+                    ),
+                    request_id.to_owned(),
+                    sender,
+                ));
                 // we should pass back this response to the caller for sure??
                 let _ = receiver.await;
             } else {
                 // no matching symbols, F in the chat for the LLM
                 // TODO(skcd): Figure out how to handle this properly, for now we can just skip on this
                 // since the code correction call will be blocked anyways on this
+                // hack we are taking: we are putting the symbol at the end of the file
+                // it breaks: code organisation and semantic location (we can fix it??)
+                // we are going for end to end loop
+                println!("tool_box::code_correctness_changes_to_codebase::new_symbol");
+                let (sender, receiver) = tokio::sync::oneshot::channel();
+                let _ = hub_sender.send((
+                    SymbolEventRequest::initial_request(
+                        SymbolIdentifier::with_file_path(symbol_to_edit, fs_file_path),
+                        request.to_owned(),
+                        tool_properties.clone(),
+                    ),
+                    request_id.to_owned(),
+                    sender,
+                ));
+                let _ = receiver.await;
             }
         }
         Ok(())
@@ -2731,7 +2766,7 @@ instruction:
                 tool_use_thinking.to_owned(),
             ));
 
-            // TODO(skcd): This needs to change because we will now have 2 actions which can
+            // TODO(skcd): This needs to change because we will now have 3 actions which can
             // happen
             // code edit is a special operation which is not present in the quick-fix
             // but is provided by us, the way to check this is by looking at the index and seeing
@@ -2773,7 +2808,7 @@ instruction:
                     )
                     .await
                 )?;
-            } else if selected_action_index > quick_fix_actions.len() as i64 {
+            } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
                 // over here we want to ping the other symbols and send them requests, there is a search
                 // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
                 // or maybe we should keep it separate
@@ -2795,6 +2830,9 @@ instruction:
                         hub_sender.clone(),
                     )
                     .await;
+            } else if selected_action_index == quick_fix_actions.len() as i64 + 2 {
+                println!("tool_box::check_code_correctness::no_changes_required");
+                break;
             } else {
                 // invoke the code action over here with the editor
                 let response = dbg!(

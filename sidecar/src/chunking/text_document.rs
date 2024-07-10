@@ -372,6 +372,16 @@ impl Range {
     pub fn line_size(&self) -> i64 {
         self.end_line() as i64 - (self.start_line() as i64)
     }
+
+    pub fn reshape_for_selection(self, edited_code: &str) -> Self {
+        let start_position = self.start_position();
+        let start_line = start_position.line;
+        let end_line = start_line + edited_code.lines().into_iter().collect::<Vec<_>>().len();
+        Self {
+            start_position,
+            end_position: Position::new(end_line, 0, 0),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

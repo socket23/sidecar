@@ -1838,7 +1838,13 @@ Satisfy the requirement either by making edits or gathering the required informa
             let _ = self.ui_sender.send(UIEventWithID::edited_code(
                 request_id.to_owned(),
                 self.symbol_identifier.clone(),
-                sub_symbol_to_edit.range().clone(),
+                // we need to reshape our range here for the edited
+                // code so we just make sure that the end line is properly
+                // moved
+                sub_symbol_to_edit
+                    .range()
+                    .clone()
+                    .reshape_for_selection(&edited_code),
                 sub_symbol_to_edit.fs_file_path().to_owned(),
                 edited_code.to_owned(),
             ));

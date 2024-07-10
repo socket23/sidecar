@@ -4950,7 +4950,8 @@ We have to add the newly created endpoint in inline_completion to add support fo
             todo!("we need to figure it out")
         } else {
             format!(
-                r#"You are an expert software engineer who is responsible for gathering all the required context before going about making the change which the user has requested in <user_query>
+                r#"You are responsible context to plan for a change requested in <user_query>. Your job is to select the most important symbols that you must explore in order to gather necessary context to execute the change. Do not suggest the change itself.
+
 - You are working in an editor so you can go-to-definition on certain symbols, but you can only do that for code which is present in <code_selection> section.
 - The user has selected some code which is present in <code_selection> section, before you start making changes you select the most important symbols which you need to either change or follow along for the context.
 - You can get more context about the different symbols such as classes, functions, enums, types (and more) for only the code which is present ONLY in <code_selection> section, this ensures that you are able to gather everything necessary before making the code edit and the code you write will not use any wrong code out of this selection. Do not select code symbols outside of this section.
@@ -4964,15 +4965,15 @@ As an example, given the following code selection:
 <code_selection>
 ```rust
 // FILEPATH: src/fill_in_middle_broker.rs
-pub struct FillInMiddleBroker {{
+pub struct FillInMiddleBroker {
     providers: HashMap<LLMType, Box<dyn FillInMiddleFormatter + Send + Sync>>,
-}}
+}
 
-impl FillInMiddleBroker {{
-    pub fn new() -> Self {{
-        let broker = Self {{
+impl FillInMiddleBroker {
+    pub fn new() -> Self {
+        let broker = Self {
             providers: HashMap::new(),
-        }};
+        };
         broker
             .add_llm(
                 LLMType::CodeLlama13BInstruct,
@@ -5006,7 +5007,7 @@ impl FillInMiddleBroker {{
                 LLMType::ClaudeSonnet,
                 Box::new(ClaudeFillInMiddleFormatter::new()),
             )
-    }}
+    }
 ```
 </code_selection>
 

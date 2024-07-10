@@ -284,20 +284,22 @@ pub async fn swe_bench(
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticCodeEditing {
-    git_dname: String,
     user_query: String,
     editor_url: String,
     request_id: String,
+    user_context: UserContext,
+    active_window_data: Option<ProbeRequestActiveWindow>,
 }
 
 pub async fn code_editing(
-    axumQuery(AgenticCodeEditing {
-        git_dname,
+    Extension(app): Extension<Application>,
+    Json(AgenticCodeEditing {
         user_query,
         editor_url,
         request_id,
-    }): axumQuery<AgenticCodeEditing>,
-    Extension(app): Extension<Application>,
+        mut user_context,
+        active_window_data,
+    }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let tool_broker = Arc::new(ToolBroker::new(
@@ -314,8 +316,14 @@ pub async fn code_editing(
             )),
         ),
     ));
-    // TODO(skcd): Figure out if the complete git repo is necessary to be processed???
-    let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
+    if let Some(active_window_data) = active_window_data {
+        user_context = user_context.update_file_content_map(
+            active_window_data.file_path,
+            active_window_data.file_content,
+            active_window_data.language,
+        );
+    }
+
     let model = LLMType::ClaudeSonnet;
     let provider_type = LLMProvider::Anthropic;
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));

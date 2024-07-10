@@ -147,8 +147,24 @@ impl SymbolLocker {
                         symbol_identifier.symbol_name(),
                         fs_file_path
                     );
+                    let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
+                        symbol_identifier.symbol_name().to_owned(),
+                        vec![],
+                        false,
+                        symbol_identifier.fs_file_path().expect("to present"),
+                        None,
+                        vec![],
+                        self.user_context.clone(),
+                        self.tools.clone(),
+                    );
+                    let _ = self
+                        .create_symbol_agent(
+                            mecha_code_symbol_thinking,
+                            request_id.to_owned(),
+                            tool_properties_ref.clone(),
+                        )
+                        .await;
                     println!("no snippet found for the snippet, we are screwed over here, look at the comment above, for symbol");
-                    return;
                     // todo!("no snippet found for the snippet, we are screwed over here, look at the comment above, for symbol");
                 }
             } else {

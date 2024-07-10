@@ -4118,9 +4118,10 @@ def subtract(a, b, c, d):
 - The various errors which are present in the edited code are shown to you as <diagnostic_list>
 - The actions you can take to fix the errors present in <diagnostic_list> is shown in <action_list>
 - You have to only select a single action, even if multiple actions will be required for making the fix.
-- You also get access to 2 special actions:
+- You also get access to 3 special actions:
 - "edit code in selection" which allows you to edit the code currently selected and is present in <re_written_code>
 - "edit code in other places" which allows you to make edits in places other than the currently selected code.
+- "no action required" which allows you to not take any actions as the code you have written in <re_written_code> is correct.
 
 An example is shown below to you:
 <query>
@@ -4288,7 +4289,7 @@ edit code in selection
 </intent>
 </action>"#
         ));
-        let actions_until_now_for_codebase_wide_edit = quick_actions.len() + 1;
+        let actions_until_now_for_codebase_wide_edit = quick_actions.len();
         quick_actions.push(format!(
             r#"<action>
 <index>
@@ -4296,6 +4297,17 @@ edit code in selection
 </index>
 <intent>
 edit code in other places
+</intent>
+</action>"#
+        ));
+        let action_index_for_no_action = quick_actions.len();
+        quick_actions.push(format!(
+            r#"<action>
+<index>
+{action_index_for_no_action}
+</index>
+<intent>
+no action required
 </intent>
 </action>"#
         ));

@@ -94,18 +94,23 @@ impl CodeEditingTool {
     /// Code output from LLMs is of the following form:
     /// {garbage}
     /// <reply>
+    /// <thinking>
+    /// thinking inside....
+    /// </thinking>
+    /// <code_edited>
     /// ```{language}
     /// {content}
     /// ```
+    /// </code_edited>
     /// </reply>
     /// {garbage}
     /// So we find this pattern and trim it out if we can
     fn edit_code(code: &str) -> Result<String, ToolError> {
         let lines = code
             .lines()
-            .skip_while(|line| !line.contains("<reply>"))
+            .skip_while(|line| !line.contains("<code_edited>"))
             .skip(1)
-            .take_while(|line| !line.contains("</reply>"))
+            .take_while(|line| !line.contains("</code_edited>"))
             .collect::<Vec<_>>()
             .into_iter()
             .skip_while(|line| !line.contains("```"))

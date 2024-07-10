@@ -312,13 +312,13 @@ impl SymbolManager {
     // mode once, we have the symbols from it we can use them to spin up sub-symbols as well
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
         let user_context = input_event.provided_context().clone();
-        let request_id = uuid::Uuid::new_v4().to_string();
+        let request_id = input_event.request_id().to_owned();
         let _ = self.ui_sender.send(UIEventWithID::for_codebase_event(
             request_id.to_owned(),
             input_event.clone(),
         ));
         let swe_bench_id = input_event.swe_bench_instance_id();
-        let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
+        let _swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
         let swe_bench_code_editing_model = input_event.get_swe_bench_code_editing();
         let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
@@ -340,16 +340,22 @@ impl SymbolManager {
                 request_id.to_owned(),
                 tool_input.clone(),
             ));
-            let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
-                let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
-                if let Some(_git_dname) = swe_bench_git_dname {
-                    match symbols {
-                        Some(symbols) => Some(symbols),
-                        None => None,
-                    }
-                } else {
-                    symbols
-                }
+            // let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
+            //     let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
+            //     if let Some(_git_dname) = swe_bench_git_dname {
+            //         match symbols {
+            //             Some(symbols) => Some(symbols),
+            //             None => None,
+            //         }
+            //     } else {
+            //         symbols
+            //     }
+            // } else {
+            //     None
+            // };
+
+            let important_symbols = if request_id == "testing_code_editing_flow" {
+                self.long_context_cache.check_cache(&request_id).await
             } else {
                 None
             };
@@ -378,6 +384,13 @@ impl SymbolManager {
                 self.long_context_cache
                     .update_cache(swe_bench_id.clone(), &important_symbols)
                     .await;
+                // TODO(codestory): Remove this after testing
+                if request_id == "testing_code_editing_flow" {
+                    let _ = self
+                        .long_context_cache
+                        .update_cache(Some(request_id.to_owned()), &important_symbols)
+                        .await;
+                }
 
                 // Debug printing
                 println!("Important symbols: {:?}", &important_symbols);
@@ -385,7 +398,11 @@ impl SymbolManager {
                 println!("symbol_manager::planning_before_editing");
                 let important_symbols = match self
                     .long_context_cache
-                    .check_cache_for_plan_before_editing(swe_bench_id.clone())
+                    .check_cache_for_plan_before_editing(
+                        swe_bench_id
+                            .clone()
+                            .map(|_swe_bench_id| request_id.to_owned()),
+                    )
                     .await
                 {
                     Some(important_symbols) => important_symbols,
@@ -401,7 +418,10 @@ impl SymbolManager {
                             .await?
                             .fix_symbol_names(self.ts_parsing.clone());
                         self.long_context_cache
-                            .update_cache_for_plan_before_editing(swe_bench_id, &important_symbols)
+                            .update_cache_for_plan_before_editing(
+                                swe_bench_id.map(|_swe_bench_id| request_id.to_owned()),
+                                &important_symbols,
+                            )
                             .await;
                         important_symbols
                     }

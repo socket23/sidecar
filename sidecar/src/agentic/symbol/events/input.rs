@@ -115,6 +115,10 @@ impl SymbolInputEvent {
         self.swe_bench_long_context_editing.clone()
     }
 
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
+
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball

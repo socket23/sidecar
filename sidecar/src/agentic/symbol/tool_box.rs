@@ -2527,9 +2527,15 @@ instruction:
                 // if the reference is to some part of the symbol itself
                 // that's already covered in the plans, so we can choose to
                 // not make an initial request at this point
+                // this check is very very weak, we need to do better over here
+                // TODO(skcd): This check does not take into consideration the changes
+                // we have made across the codebase, we need to have a better way to
+                // handle this
                 if symbol_name == parent_symbol_name {
                     println!("tool_box::code_correctness_changes_to_codebase::skipping::self_symbol::({})", &parent_symbol_name);
                     continue;
+                } else {
+                    println!("tool_box::code_correctness_chagnes_to_codebase::following_along::self_symbol({})::symbol_to_edit({})", &parent_symbol_name, symbol_name);
                 }
                 let (sender, receiver) = tokio::sync::oneshot::channel();
                 let _ = hub_sender.send((

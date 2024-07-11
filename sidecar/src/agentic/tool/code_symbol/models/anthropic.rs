@@ -5511,7 +5511,10 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     cloned_message,
                     provider,
                     vec![
-                        ("event_type".to_owned(), "important_symbols".to_owned()),
+                        (
+                            "event_type".to_owned(),
+                            "grab_definitions_for_symbol_editing".to_owned(),
+                        ),
                         (
                             "root_id".to_owned(),
                             code_symbols.root_request_id().to_owned(),

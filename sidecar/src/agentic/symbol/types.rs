@@ -1417,25 +1417,22 @@ Satisfy the requirement either by making edits or gathering the required informa
                     outline_node.name(),
                     outline_node.fs_file_path(),
                 );
-                pending_requests_to_hub.push(SymbolEventRequest::probe_request(
-                    symbol_identifier.clone(),
-                    SymbolToProbeRequest::new(
-                        symbol_identifier,
-                        request.to_owned(),
-                        request,
-                        request_id.to_owned(),
-                        vec![],
-                    ),
-                    self.tool_properties.clone(),
-                ));
-                // pending_requests_to_hub.push(SymbolEventRequest::initial_request(
-                //     SymbolIdentifier::with_file_path(
-                //         outline_node.name(),
-                //         outline_node.fs_file_path(),
-                //     ),
-                //     request,
-                //     self.tool_properties.clone(),
-                // ));
+
+                // TODO(skcd): we want to avoid following ourselves, we should guard against
+                // that over here
+                if symbol_identifier != self.symbol_identifier {
+                    pending_requests_to_hub.push(SymbolEventRequest::probe_request(
+                        symbol_identifier.clone(),
+                        SymbolToProbeRequest::new(
+                            symbol_identifier,
+                            request.to_owned(),
+                            request,
+                            request_id.to_owned(),
+                            vec![],
+                        ),
+                        self.tool_properties.clone(),
+                    ));
+                }
             }
 
             let pending_futures = pending_requests_to_hub

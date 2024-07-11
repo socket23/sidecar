@@ -221,6 +221,7 @@ Please make sure to keep your reply in the <reply> tag and the new methods which
 impl Tool for NewSubSymbolRequired {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.get_new_sub_symbol_for_code_editing()?;
+        let root_request_id = context.root_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
@@ -242,10 +243,13 @@ impl Tool for NewSubSymbolRequired {
                     llm_properties.api_key().clone(),
                     llm_request.clone(),
                     llm_properties.provider().clone(),
-                    vec![(
-                        "event_type".to_owned(),
-                        "new_sub_sybmol_required".to_owned(),
-                    )]
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "new_sub_sybmol_required".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id.to_owned()),
+                    ]
                     .into_iter()
                     .collect(),
                     sender,

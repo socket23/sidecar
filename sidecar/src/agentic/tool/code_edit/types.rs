@@ -176,6 +176,7 @@ impl Tool for CodeEditingTool {
     // TODO(skcd): Figure out how we want to do streaming here in the future
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let code_edit_context = input.is_code_edit()?;
+        let root_id = code_edit_context.root_request_id.to_owned();
         let mut llm_message = self.broker.format_prompt(&code_edit_context)?;
         if let Some(llm_properties) = self.get_llm_properties() {
             llm_message = llm_message.set_llm(llm_properties.llm().clone());
@@ -213,9 +214,12 @@ impl Tool for CodeEditingTool {
                 api_key,
                 llm_message,
                 provider,
-                vec![("event_type".to_owned(), "code_edit_tool".to_owned())]
-                    .into_iter()
-                    .collect(),
+                vec![
+                    ("event_type".to_owned(), "code_edit_tool".to_owned()),
+                    ("root_id".to_owned(), root_id.to_owned()),
+                ]
+                .into_iter()
+                .collect(),
                 sender,
             )
             .await

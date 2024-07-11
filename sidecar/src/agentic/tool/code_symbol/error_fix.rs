@@ -66,6 +66,10 @@ impl CodeEditingErrorRequest {
         }
     }
 
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn llm(&self) -> &LLMType {
         &self.llm
     }

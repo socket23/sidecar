@@ -90,6 +90,11 @@ impl CodeCorrectnessRequest {
             root_request_id,
         }
     }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn file_content(&self) -> &str {
         &self.fs_file_contents
     }

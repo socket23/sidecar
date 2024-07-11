@@ -111,6 +111,7 @@ Action
 impl Tool for FindSymbolsToEditInContext {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.find_symbols_to_edit_in_context()?;
+        let root_request_id = context.root_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
@@ -127,10 +128,13 @@ impl Tool for FindSymbolsToEditInContext {
                 llm_properties.api_key().clone(),
                 message_request,
                 llm_properties.provider().clone(),
-                vec![(
-                    "event_type".to_owned(),
-                    "find_symbols_to_edit_in_context".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "find_symbols_to_edit_in_context".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
                 .collect(),
                 sender,

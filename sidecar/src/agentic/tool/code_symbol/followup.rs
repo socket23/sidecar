@@ -54,6 +54,10 @@ impl ClassSymbolFollowupRequest {
             root_request_id,
         }
     }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

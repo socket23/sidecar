@@ -82,6 +82,7 @@ impl ProbeTryHardAnswer {
 impl Tool for ProbeTryHardAnswer {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.get_probe_try_hard_answer_request()?;
+        let root_request_id = context.root_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
@@ -117,10 +118,13 @@ impl Tool for ProbeTryHardAnswer {
                     api_key,
                     cloned_request,
                     provider,
-                    vec![(
-                        "event_type".to_owned(),
-                        "probe_try_hard_to_answer".to_owned(),
-                    )]
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "probe_try_hard_to_answer".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id.to_owned()),
+                    ]
                     .into_iter()
                     .collect(),
                     sender,

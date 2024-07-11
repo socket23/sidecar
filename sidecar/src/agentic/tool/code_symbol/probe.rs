@@ -265,6 +265,7 @@ This example is for reference. You must strictly follow the format shown for the
 impl Tool for ProbeEnoughOrDeeper {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.get_probe_enough_or_deeper()?;
+        let root_request_id = context.root_request_id.to_owned();
         let symbol_name = context.symbol_name.to_owned();
         let llm_properties = context.llm_properties.clone();
         let llm_request = LLMClientCompletionRequest::new(
@@ -305,9 +306,12 @@ impl Tool for ProbeEnoughOrDeeper {
                     api_key.clone(),
                     llm_request_cloned.clone(),
                     provider.clone(),
-                    vec![("event_type".to_owned(), "probe_enough_or_deeper".to_owned())]
-                        .into_iter()
-                        .collect(),
+                    vec![
+                        ("event_type".to_owned(), "probe_enough_or_deeper".to_owned()),
+                        ("root_id".to_owned(), root_request_id.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
                     sender,
                 )
                 .await

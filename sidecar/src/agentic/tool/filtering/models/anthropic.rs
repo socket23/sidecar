@@ -1175,6 +1175,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
     ) -> Result<CodeToEditSymbolResponse, CodeToEditFilteringError> {
         // Here the only difference is that we are asking
         // for the sections to edit in a single symbol
+        let root_request_id = request.root_request_id().to_owned();
         let query = request.query().to_owned();
         let llm = request.llm().clone();
         let provider = request.provider().clone();
@@ -1200,10 +1201,13 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
                 api_key,
                 llm_request,
                 provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "code_snippet_to_edit_for_symbol".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "code_snippet_to_edit_for_symbol".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
                 .collect(),
                 sender,
@@ -1219,6 +1223,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
     ) -> Result<CodeToEditFilterResponse, CodeToEditFilteringError> {
         // okay now we have the request, send it to the moon and figure out what to
         // do next with it
+        let root_request_id = request.root_request_id().to_owned();
         let query = request.query();
         let input_list_for_entries = request
             .get_snippets()
@@ -1250,9 +1255,12 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
                 request.api_key().clone(),
                 llm_request,
                 request.provider().clone(),
-                vec![("event_type".to_owned(), "code_snippets_to_edit".to_owned())]
-                    .into_iter()
-                    .collect(),
+                vec![
+                    ("event_type".to_owned(), "code_snippets_to_edit".to_owned()),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
+                .into_iter()
+                .collect(),
                 sender,
             )
             .await
@@ -1271,6 +1279,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
         &self,
         request: CodeToEditFilterRequest,
     ) -> Result<CodeToProbeFilterResponse, CodeToEditFilteringError> {
+        let root_request_id = request.root_request_id().to_owned();
         let query = request.query().to_owned();
         let input_list_for_entries = request
             .get_snippets()
@@ -1301,6 +1310,7 @@ Remember that your reply should be strictly in the following format:
         let llm_request =
             LLMClientCompletionRequest::new(request.llm().clone(), messages, 0.1, None);
         let mut retries = 0;
+        let root_request_id_ref = &root_request_id;
         loop {
             if retries > 3 {
                 return Err(CodeToEditFilteringError::RetriesExhausted);
@@ -1326,10 +1336,13 @@ Remember that your reply should be strictly in the following format:
                     api_key.clone(),
                     llm_request_cloned.clone(),
                     provider.clone(),
-                    vec![(
-                        "event_type".to_owned(),
-                        "filter_code_snippet_for_probing".to_owned(),
-                    )]
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "filter_code_snippet_for_probing".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id_ref.to_string()),
+                    ]
                     .into_iter()
                     .collect(),
                     sender,
@@ -1356,6 +1369,7 @@ Remember that your reply should be strictly in the following format:
         request: CodeToProbeSubSymbolRequest,
     ) -> Result<CodeToProbeSubSymbolList, CodeToEditFilteringError> {
         println!("code_to_edit_filter_formatter::filter_code_snippets_probing_sub_symbols");
+        let root_request_id = request.root_request_id().to_owned();
         let query = request.query().to_owned();
         let xml_string = request.xml_symbol();
         let user_query = format!(
@@ -1373,6 +1387,7 @@ Remember that your reply should be strictly in the following format:
         let llm_request =
             LLMClientCompletionRequest::new(request.llm().clone(), messages, 0.1, None);
         let mut retries = 0;
+        let root_request_id_ref = &root_request_id;
         loop {
             if retries > 3 {
                 return Err(CodeToEditFilteringError::RetriesExhausted);
@@ -1398,10 +1413,13 @@ Remember that your reply should be strictly in the following format:
                     api_key.clone(),
                     llm_request_cloned.clone(),
                     provider.clone(),
-                    vec![(
-                        "event_type".to_owned(),
-                        "filter_code_snippet_sub_sybmol_probing".to_owned(),
-                    )]
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "filter_code_snippet_sub_sybmol_probing".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id_ref.to_owned()),
+                    ]
                     .into_iter()
                     .collect(),
                     sender,

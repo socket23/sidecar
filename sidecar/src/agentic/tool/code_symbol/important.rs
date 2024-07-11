@@ -202,6 +202,10 @@ impl CodeSymbolImportantWideSearch {
         }
     }
 
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn set_file_extension_fitler(mut self, file_extension: String) -> Self {
         self.file_extension_filters.insert(file_extension);
         self
@@ -278,6 +282,10 @@ impl CodeSymbolUtilityRequest {
             user_context,
             root_request_id,
         }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
     }
 
     pub fn definitions(&self) -> &[String] {
@@ -414,6 +422,10 @@ impl CodeSymbolProbingSummarize {
         }
     }
 
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn symbol_probing_results(&self) -> String {
         self.probing_results
             .iter()
@@ -517,6 +529,10 @@ impl CodeSymbolFollowAlongForProbing {
             next_symbol_link,
             root_request_id,
         }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
     }
 
     pub fn next_symbol_link(&self) -> &str {
@@ -625,6 +641,10 @@ impl CodeSymbolToAskQuestionsRequest {
         }
     }
 
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn api_key(&self) -> &LLMProviderAPIKeys {
         &self.api_key
     }
@@ -717,6 +737,10 @@ impl CodeSymbolImportantRequest {
             language,
             root_request_id,
         }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
     }
 
     pub fn symbol_identifier(&self) -> Option<&str> {

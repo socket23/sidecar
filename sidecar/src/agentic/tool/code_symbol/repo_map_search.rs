@@ -50,6 +50,10 @@ impl RepoMapSearchQuery {
         }
     }
 
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn repo_map(&self) -> &str {
         &self.repo_map
     }

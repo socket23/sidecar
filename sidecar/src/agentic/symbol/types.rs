@@ -1560,7 +1560,10 @@ Satisfy the requirement either by making edits or gathering the required informa
             .tools
             .get_file_content(&subsymbol.fs_file_path())
             .await?;
-        let symbol_to_edit = self.tools.find_sub_symbol_to_edit(subsymbol).await?;
+        let symbol_to_edit = self
+            .tools
+            .find_sub_symbol_to_edit_with_name(self.symbol_name(), subsymbol, request_id)
+            .await?;
         println!(
             "symbol::grab_context_for_editing::symbol_to_edit\n{:?}",
             &symbol_to_edit

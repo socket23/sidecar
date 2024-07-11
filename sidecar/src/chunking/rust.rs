@@ -119,7 +119,11 @@ pub fn rust_language_config() -> TSLanguageConfig {
               (impl_item
 				          trait: (type_identifier) @definition.class.trait
                   type: (type_identifier) @definition.class.name) @definition.class
-              
+
+              (impl_item
+				          trait: (scoped_type_identifier) @definition.class.trait
+                  type: (type_identifier) @definition.class.name) @definition.class
+
               (impl_item
                   type: (type_identifier) @definition.class.name) @definition.class
                       

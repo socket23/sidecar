@@ -1801,6 +1801,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                 &sub_symbol_to_edit,
             );
             let context_for_editing = if sub_symbol_to_edit.is_new() {
+                // TODO(skcd): This is wrong, because we want to still grab context over here
+                // even if its a new symbol
                 vec![]
             } else {
                 dbg!(

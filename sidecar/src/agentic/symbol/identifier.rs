@@ -830,7 +830,8 @@ impl MechaCodeSymbolThinking {
                     .to_owned();
 
                 // TODO(skcd): This is clown-town heavy, if we are going to create
-                // a new symbol, we need a better way to signal that
+                // a new symbol, we need a better way to signal that, this is totally
+                // wrong right now
                 let end_position = self
                     .snippet
                     .lock()

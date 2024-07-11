@@ -1368,47 +1368,6 @@ We also believe this symbol needs to be probed because of:
         }
     }
 
-    pub async fn find_sub_symbol_to_edit(
-        &self,
-        symbol_to_edit: &SymbolToEdit,
-    ) -> Result<OutlineNodeContent, SymbolError> {
-        let outline_node = self
-            .get_outline_nodes_grouped(symbol_to_edit.fs_file_path())
-            .await
-            .ok_or(SymbolError::ExpectedFileToExist)?
-            .into_iter()
-            .find(|outline_node| {
-                outline_node
-                    .range()
-                    .contains_check_line(symbol_to_edit.range())
-            })
-            .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)?;
-
-        // Now the symbol to edit might be an outline or it might not be an
-        // outline and point to a particular symbol inside the range, in both
-        // of these cases we have to handle it differently
-        // we were previously checking for outline nodes over here, but now
-        // we do not care about it and are going rouge
-        let child_node = outline_node.children().into_iter().find(|child_node| {
-            child_node
-                .range()
-                .contains_check_line(symbol_to_edit.range())
-        });
-        if let Some(child_node) = child_node {
-            Ok(child_node.clone())
-        } else {
-            if outline_node
-                .content()
-                .range()
-                .contains_check_line(symbol_to_edit.range())
-            {
-                Ok(outline_node.content().clone())
-            } else {
-                Err(SymbolError::NoOutlineNodeSatisfyPosition)
-            }
-        }
-    }
-
     pub fn detect_language(&self, fs_file_path: &str) -> Option<String> {
         self.editor_parsing
             .for_file_path(fs_file_path)

@@ -1543,6 +1543,19 @@ Satisfy the requirement either by making edits or gathering the required informa
         subsymbol: &SymbolToEdit,
         request_id: &str,
     ) -> Result<Vec<String>, SymbolError> {
+        // force add the file again because the content might have changed
+        let file_contents = self
+            .tools
+            .file_open(subsymbol.fs_file_path().to_owned(), request_id)
+            .await?;
+        let _ = self
+            .tools
+            .force_add_document(
+                subsymbol.fs_file_path(),
+                file_contents.contents_ref(),
+                file_contents.language(),
+            )
+            .await;
         let file_content = self
             .tools
             .get_file_content(&subsymbol.fs_file_path())

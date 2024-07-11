@@ -11,11 +11,7 @@ use sidecar::{
         symbol::{identifier::LLMProperties, tool_box::ToolBox},
         tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
     },
-    chunking::{
-        editor_parsing::EditorParsing,
-        languages::TSLanguageParsing,
-        text_document::{Position, Range},
-    },
+    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 

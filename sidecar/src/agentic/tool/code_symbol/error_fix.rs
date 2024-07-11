@@ -32,6 +32,7 @@ pub struct CodeEditingErrorRequest {
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 impl CodeEditingErrorRequest {
@@ -47,6 +48,7 @@ impl CodeEditingErrorRequest {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -60,6 +62,7 @@ impl CodeEditingErrorRequest {
             llm,
             provider,
             api_keys,
+            root_request_id,
         }
     }
 

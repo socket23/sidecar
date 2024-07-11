@@ -179,6 +179,7 @@ pub struct CodeSymbolImportantWideSearch {
     llm_provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
     file_extension_filters: HashSet<String>,
+    root_request_id: String,
 }
 
 impl CodeSymbolImportantWideSearch {
@@ -188,6 +189,7 @@ impl CodeSymbolImportantWideSearch {
         llm_type: LLMType,
         llm_provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             user_context,
@@ -196,6 +198,7 @@ impl CodeSymbolImportantWideSearch {
             llm_provider,
             api_key,
             file_extension_filters: Default::default(),
+            root_request_id,
         }
     }
 
@@ -245,6 +248,7 @@ pub struct CodeSymbolUtilityRequest {
     llm_provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
     user_context: UserContext,
+    root_request_id: String,
 }
 
 impl CodeSymbolUtilityRequest {
@@ -259,6 +263,7 @@ impl CodeSymbolUtilityRequest {
         llm_provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
         user_context: UserContext,
+        root_request_id: String,
     ) -> Self {
         Self {
             user_query,
@@ -271,6 +276,7 @@ impl CodeSymbolUtilityRequest {
             llm_type,
             api_key,
             user_context,
+            root_request_id,
         }
     }
 
@@ -378,6 +384,7 @@ pub struct CodeSymbolProbingSummarize {
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 impl CodeSymbolProbingSummarize {
@@ -391,6 +398,7 @@ impl CodeSymbolProbingSummarize {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             query,
@@ -402,6 +410,7 @@ impl CodeSymbolProbingSummarize {
             llm,
             provider,
             api_keys,
+            root_request_id,
         }
     }
 
@@ -470,6 +479,7 @@ pub struct CodeSymbolFollowAlongForProbing {
     api_key: LLMProviderAPIKeys,
     query: String,
     next_symbol_link: String,
+    root_request_id: String,
 }
 
 impl CodeSymbolFollowAlongForProbing {
@@ -488,6 +498,7 @@ impl CodeSymbolFollowAlongForProbing {
         api_key: LLMProviderAPIKeys,
         query: String,
         next_symbol_link: String,
+        root_request_id: String,
     ) -> Self {
         Self {
             history,
@@ -504,6 +515,7 @@ impl CodeSymbolFollowAlongForProbing {
             api_key,
             query,
             next_symbol_link,
+            root_request_id,
         }
     }
 
@@ -577,6 +589,7 @@ pub struct CodeSymbolToAskQuestionsRequest {
     provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
     query: String,
+    root_request_id: String,
 }
 
 impl CodeSymbolToAskQuestionsRequest {
@@ -593,6 +606,7 @@ impl CodeSymbolToAskQuestionsRequest {
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
         query: String,
+        root_request_id: String,
     ) -> Self {
         Self {
             history,
@@ -607,6 +621,7 @@ impl CodeSymbolToAskQuestionsRequest {
             provider,
             api_key,
             query,
+            root_request_id,
         }
     }
 
@@ -672,6 +687,7 @@ pub struct CodeSymbolImportantRequest {
     api_key: LLMProviderAPIKeys,
     // this at the start will be the user query
     query: String,
+    root_request_id: String,
 }
 
 impl CodeSymbolImportantRequest {
@@ -686,6 +702,7 @@ impl CodeSymbolImportantRequest {
         api_key: LLMProviderAPIKeys,
         language: String,
         query: String,
+        root_request_id: String,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -698,6 +715,7 @@ impl CodeSymbolImportantRequest {
             api_key,
             query,
             language,
+            root_request_id,
         }
     }
 

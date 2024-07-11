@@ -56,6 +56,7 @@ pub struct SymbolManager {
     llm_properties: LLMProperties,
     ui_sender: UnboundedSender<UIEventWithID>,
     long_context_cache: LongContextSearchCache,
+    root_request_id: String,
 }
 
 impl SymbolManager {
@@ -69,6 +70,7 @@ impl SymbolManager {
         // This is a hack and not a proper one at that, we obviously want to
         // do better over here
         user_context: UserContext,
+        request_id: String,
     ) -> Self {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
             SymbolEventRequest,
@@ -81,6 +83,7 @@ impl SymbolManager {
             editor_parsing.clone(),
             editor_url.to_owned(),
             ui_sender.clone(),
+            request_id.to_owned(),
         ));
         let symbol_locker = SymbolLocker::new(
             sender.clone(),
@@ -113,6 +116,7 @@ impl SymbolManager {
             llm_properties,
             ui_sender,
             long_context_cache: LongContextSearchCache::new(),
+            root_request_id: request_id.to_owned(),
         }
     }
 
@@ -143,6 +147,7 @@ impl SymbolManager {
                 llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
                     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                 )),
+                self.root_request_id.to_owned(),
             ));
         // send the request on to the ui sender
         let _ = self.ui_sender.send(UIEventWithID::from_tool_event(

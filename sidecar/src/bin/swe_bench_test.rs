@@ -151,6 +151,7 @@ async fn main() {
         // This is where we are setting the LLM properties
         anthropic_llm_properties.clone(),
         user_context.clone(),
+        instance_id.to_owned(),
     );
 
     // I should create symlinks for these so its easier to query as well :|

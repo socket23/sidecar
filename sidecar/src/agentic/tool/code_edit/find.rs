@@ -60,6 +60,7 @@ pub struct FindCodeSelectionInput {
     llm_type: LLMType,
     api_key: LLMProviderAPIKeys,
     provider: LLMProvider,
+    root_request_id: String,
 }
 
 impl FindCodeSelectionInput {

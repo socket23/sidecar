@@ -18,6 +18,7 @@ pub struct CodeSymbolFollowInitialRequest {
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 impl CodeSymbolFollowInitialRequest {
@@ -27,6 +28,7 @@ impl CodeSymbolFollowInitialRequest {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             code_symbol_content,
@@ -34,6 +36,7 @@ impl CodeSymbolFollowInitialRequest {
             llm,
             provider,
             api_keys,
+            root_request_id,
         }
     }
 }

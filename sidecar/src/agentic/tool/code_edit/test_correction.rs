@@ -27,6 +27,7 @@ pub struct TestOutputCorrectionRequest {
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
     extra_code_context: String,
+    root_request_id: String,
 }
 
 impl TestOutputCorrectionRequest {
@@ -44,6 +45,7 @@ impl TestOutputCorrectionRequest {
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         extra_code_context: String,
+        root_request_id: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -59,6 +61,7 @@ impl TestOutputCorrectionRequest {
             provider,
             api_keys,
             extra_code_context,
+            root_request_id,
         }
     }
 }

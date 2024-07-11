@@ -28,6 +28,7 @@ pub struct RepoMapSearchQuery {
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 impl RepoMapSearchQuery {
@@ -37,6 +38,7 @@ impl RepoMapSearchQuery {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             repo_map,
@@ -44,6 +46,7 @@ impl RepoMapSearchQuery {
             llm,
             provider,
             api_keys,
+            root_request_id,
         }
     }
 

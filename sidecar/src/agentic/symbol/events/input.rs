@@ -148,6 +148,7 @@ impl SymbolInputEvent {
                     LLMType::ClaudeSonnet,
                     LLMProvider::Anthropic,
                     self.api_keys.clone(),
+                    self.request_id.to_string(),
                 ))),
                 Err(_) => None,
             }
@@ -159,6 +160,7 @@ impl SymbolInputEvent {
                     final_model,
                     self.provider,
                     self.api_keys,
+                    self.request_id.to_string(),
                 );
             // Now we try to generate the tool input for this
             Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search))

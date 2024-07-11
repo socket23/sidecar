@@ -63,6 +63,7 @@ async fn main() {
             LLMType::GeminiProFlash,
             LLMProvider::GeminiPro,
             gemini_pro_api_key,
+            "".to_owned(),
         )
         .set_file_extension_fitler("py".to_owned()),
     );

@@ -45,6 +45,7 @@ pub struct PlanningBeforeCodeEditRequest {
     files_with_content: HashMap<String, String>,
     original_plan: String,
     llm_properties: LLMProperties,
+    root_request_id: String,
 }
 
 impl PlanningBeforeCodeEditRequest {
@@ -53,12 +54,14 @@ impl PlanningBeforeCodeEditRequest {
         files_with_content: HashMap<String, String>,
         original_plan: String,
         llm_properties: LLMProperties,
+        root_request_id: String,
     ) -> Self {
         Self {
             user_query,
             files_with_content,
             original_plan,
             llm_properties,
+            root_request_id,
         }
     }
 }

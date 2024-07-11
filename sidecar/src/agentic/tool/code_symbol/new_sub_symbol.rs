@@ -41,6 +41,7 @@ pub struct NewSubSymbolRequiredRequest {
     plan: String,
     symbol_content: String,
     llm_properties: LLMProperties,
+    root_request_id: String,
 }
 
 impl NewSubSymbolRequiredRequest {
@@ -49,12 +50,14 @@ impl NewSubSymbolRequiredRequest {
         plan: String,
         symbol_content: String,
         llm_properties: LLMProperties,
+        root_request_id: String,
     ) -> Self {
         Self {
             user_query,
             plan,
             symbol_content,
             llm_properties,
+            root_request_id,
         }
     }
 }

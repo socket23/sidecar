@@ -58,6 +58,7 @@ async fn main() {
         editor_parsing,
         editor_url,
         sender,
+        "".to_owned(),
     ));
 
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs".to_owned();

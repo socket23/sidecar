@@ -27,6 +27,7 @@ pub struct ClassSymbolFollowupRequest {
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 impl ClassSymbolFollowupRequest {
@@ -39,6 +40,7 @@ impl ClassSymbolFollowupRequest {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -49,6 +51,7 @@ impl ClassSymbolFollowupRequest {
             llm,
             provider,
             api_keys,
+            root_request_id,
         }
     }
 }

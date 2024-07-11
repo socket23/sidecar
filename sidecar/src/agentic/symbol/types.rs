@@ -1188,6 +1188,7 @@ impl Symbol {
                 LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
                     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                 )),
+                request_id.to_owned(),
             );
             let result = self
                 .tools

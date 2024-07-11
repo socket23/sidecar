@@ -2471,6 +2471,7 @@ Please handle these changes as required."#
     /// and missing creating new files etc
     pub async fn code_correctness_changes_to_codebase(
         &self,
+        parent_symbol_name: &str,
         fs_file_path: &str,
         _edited_range: &Range,
         _edited_code: &str,
@@ -2503,6 +2504,7 @@ Please handle these changes as required."#
         }
 
         // TODO(skcd+zi): Can we run this in full parallelism??
+        // answer: yes we can, but lets get it to crawl before it runs
         for symbol_to_edit in symbols_to_edit_list.into_iter() {
             let symbol_to_find = symbol_to_edit.to_owned();
             let symbol_locations = self
@@ -2520,6 +2522,13 @@ instruction:
             if let Some(symbol_to_edit) = found_symbol {
                 let symbol_file_path = symbol_to_edit.fs_file_path();
                 let symbol_name = symbol_to_edit.name();
+                // if the reference is to some part of the symbol itself
+                // that's already covered in the plans, so we can choose to
+                // not make an initial request at this point
+                if symbol_name == parent_symbol_name {
+                    println!("tool_box::code_correctness_changes_to_codebase::skipping::self_symbol::({})", &parent_symbol_name);
+                    continue;
+                }
                 let (sender, receiver) = tokio::sync::oneshot::channel();
                 let _ = hub_sender.send((
                     SymbolEventRequest::initial_request(
@@ -2850,6 +2859,7 @@ instruction:
                 println!("tool_box::check_code_correctness::changes_to_codebase");
                 let edit_request_sent = self
                     .code_correctness_changes_to_codebase(
+                        parent_symbol_name,
                         fs_file_path,
                         &edited_range,
                         &updated_code,

@@ -1886,19 +1886,21 @@ Satisfy the requirement either by making edits or gathering the required informa
             // once we have successfully changed the implementation over here
             // we have to start looking for followups over here
             // F in the chat for error handling :')
-            let _ = self
-                .tools
-                .check_for_followups(
-                    &sub_symbol_to_edit,
-                    &original_code,
-                    self.llm_properties.llm().clone(),
-                    self.llm_properties.provider().clone(),
-                    self.llm_properties.api_key().clone(),
-                    self.hub_sender.clone(),
-                    request_id_ref,
-                    &self.tool_properties,
-                )
-                .await;
+            let _ = dbg!(
+                self.tools
+                    .check_for_followups(
+                        self.symbol_name(),
+                        &sub_symbol_to_edit,
+                        &original_code,
+                        self.llm_properties.llm().clone(),
+                        self.llm_properties.provider().clone(),
+                        self.llm_properties.api_key().clone(),
+                        self.hub_sender.clone(),
+                        request_id_ref,
+                        &self.tool_properties,
+                    )
+                    .await
+            );
         }
         Ok(())
     }

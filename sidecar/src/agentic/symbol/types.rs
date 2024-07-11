@@ -1959,7 +1959,11 @@ Satisfy the requirement either by making edits or gathering the required informa
                                     sender,
                                 ));
                                 let response = receiver.await;
-                                println!("Response from symbol.hub_sender: {:?}", &response);
+                                println!(
+                                    "Response from symbol.hub_sender::({}): {:?}",
+                                    symbol.symbol_name(),
+                                    &response,
+                                );
                                 // ideally we want to give this resopnse back to the symbol
                                 // so it can keep track of everything that its doing, we will get to that
                                 let _ = request_sender.send(SymbolEventResponse::TaskDone(

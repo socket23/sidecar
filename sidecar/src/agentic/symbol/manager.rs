@@ -318,7 +318,7 @@ impl SymbolManager {
             input_event.clone(),
         ));
         let swe_bench_id = input_event.swe_bench_instance_id();
-        let _swe_bench_git_dname = input_event.get_swe_bench_git_dname();
+        let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
         let swe_bench_code_editing_model = input_event.get_swe_bench_code_editing();
         let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
@@ -340,24 +340,22 @@ impl SymbolManager {
                 request_id.to_owned(),
                 tool_input.clone(),
             ));
-            // let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
-            //     let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
-            //     if let Some(_git_dname) = swe_bench_git_dname {
-            //         match symbols {
-            //             Some(symbols) => Some(symbols),
-            //             None => None,
-            //         }
-            //     } else {
-            //         symbols
-            //     }
-            // } else {
-            //     None
-            // };
-
-            let important_symbols = if request_id == "testing_code_editing_flow" {
-                self.long_context_cache.check_cache(&request_id).await
+            let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
+                let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
+                if let Some(_git_dname) = swe_bench_git_dname {
+                    match symbols {
+                        Some(symbols) => Some(symbols),
+                        None => None,
+                    }
+                } else {
+                    symbols
+                }
             } else {
-                None
+                if request_id == "testing_code_editing_flow" {
+                    self.long_context_cache.check_cache(&request_id).await
+                } else {
+                    None
+                }
             };
 
             println!("Important symbols {:?}", &important_symbols);

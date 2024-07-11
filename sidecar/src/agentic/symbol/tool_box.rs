@@ -2463,7 +2463,8 @@ Please handle these changes as required."#
     }
 
     /// We can make edits to a different part of the codebase when
-    /// doing code correction
+    /// doing code correction, returns if any edits were done to the codebase
+    /// outside of the selected range (true or false accordingly)
     /// NOTE: Not running in full parallelism yet, we will enable that
     /// and missing creating new files etc
     pub async fn code_correctness_changes_to_codebase(
@@ -2480,7 +2481,7 @@ Please handle these changes as required."#
             String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<bool, SymbolError> {
         // over here we want to ping the other symbols and send them requests, there is a search
         // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
         // or maybe we should keep it separate
@@ -2494,6 +2495,10 @@ Please handle these changes as required."#
             .await?;
 
         let symbols_to_edit_list = symbols_to_edit.symbol_list();
+
+        if symbols_to_edit_list.is_empty() {
+            return Ok(false);
+        }
 
         // TODO(skcd+zi): Can we run this in full parallelism??
         for symbol_to_edit in symbols_to_edit_list.into_iter() {
@@ -2546,7 +2551,7 @@ instruction:
                 let _ = receiver.await;
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     pub async fn check_code_correctness(
@@ -2841,7 +2846,7 @@ instruction:
                 // 3. If the symbol does not exist, then we need to go through the creation loop
                 // where should that happen?
                 println!("tool_box::check_code_correctness::changes_to_codebase");
-                let _ = self
+                let edit_request_sent = self
                     .code_correctness_changes_to_codebase(
                         fs_file_path,
                         &edited_range,
@@ -2853,6 +2858,11 @@ instruction:
                         hub_sender.clone(),
                     )
                     .await;
+                // if no edits were done to the codebase, then we can break from the
+                // code correction loop and move forward as there is no more action to take
+                if let Ok(false) = edit_request_sent {
+                    break;
+                }
             } else if selected_action_index == quick_fix_actions.len() as i64 + 2 {
                 println!("tool_box::check_code_correctness::no_changes_required");
                 break;

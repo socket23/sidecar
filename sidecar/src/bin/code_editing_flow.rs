@@ -27,6 +27,8 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
+    let request_id = uuid::Uuid::new_v4();
+    println!("===========================================\nRequest ID: {}\n===========================================", request_id.to_string());
     let editor_url = "http://localhost:42450".to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
     let anthropic_llm_properties = LLMProperties::new(
@@ -82,7 +84,7 @@ async fn main() {
         sender,
         anthropic_llm_properties.clone(),
         user_context.clone(),
-        "testing_code_editing_flow".to_owned(),
+        request_id.to_string(),
     );
 
     let problem_statement = "can you add another provider for grok for me?".to_owned();
@@ -92,7 +94,7 @@ async fn main() {
         LLMProvider::Anthropic,
         anthropic_api_keys,
         problem_statement,
-        "testing_code_editing_flow".to_owned(),
+        request_id.to_string(),
         None,
         None,
         None,

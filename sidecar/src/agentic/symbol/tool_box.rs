@@ -97,6 +97,7 @@ pub struct ToolBox {
     editor_parsing: Arc<EditorParsing>,
     editor_url: String,
     ui_events: UnboundedSender<UIEventWithID>,
+    root_request_id: String,
 }
 
 impl ToolBox {
@@ -106,6 +107,7 @@ impl ToolBox {
         editor_parsing: Arc<EditorParsing>,
         editor_url: String,
         ui_events: UnboundedSender<UIEventWithID>,
+        root_request_id: String,
     ) -> Self {
         Self {
             tools,
@@ -113,6 +115,7 @@ impl ToolBox {
             editor_parsing,
             editor_url,
             ui_events,
+            root_request_id,
         }
     }
 
@@ -205,9 +208,12 @@ impl ToolBox {
         llm_properties: LLMProperties,
         request_id: &str,
     ) -> Result<FindSymbolsToEditInContextResponse, SymbolError> {
-        let tool_input = ToolInput::FindSymbolsToEditInContext(
-            FindSymbolsToEditInContextRequest::new(context.to_owned(), llm_properties),
-        );
+        let tool_input =
+            ToolInput::FindSymbolsToEditInContext(FindSymbolsToEditInContextRequest::new(
+                context.to_owned(),
+                llm_properties,
+                self.root_request_id.to_owned(),
+            ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
             tool_input.clone(),
@@ -354,6 +360,7 @@ impl ToolBox {
             import_file_locations,
             user_query.to_owned(),
             code_content_in_range,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -382,6 +389,7 @@ impl ToolBox {
                 probe_request.to_owned(),
                 symbol_content,
                 llm_properties,
+                self.root_request_id.to_owned(),
             ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -410,6 +418,7 @@ impl ToolBox {
             plan.to_owned(),
             symbol_content,
             llm_properties,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -451,6 +460,7 @@ impl ToolBox {
                 history,
                 original_query.to_owned(),
                 llm_properties,
+                self.root_request_id.to_owned(),
             ));
         self.tools
             .invoke(tool_input)
@@ -475,6 +485,7 @@ impl ToolBox {
             xml_string,
             query,
             llm_properties,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -502,9 +513,15 @@ impl ToolBox {
         api_key: LLMProviderAPIKeys,
         request_id: &str,
     ) -> Result<CodeToProbeSubSymbolList, SymbolError> {
-        let tool_input = ToolInput::ProbeFilterSnippetsSingleSymbol(
-            CodeToProbeSubSymbolRequest::new(xml_string, query, llm, provider, api_key),
-        );
+        let tool_input =
+            ToolInput::ProbeFilterSnippetsSingleSymbol(CodeToProbeSubSymbolRequest::new(
+                xml_string,
+                query,
+                llm,
+                provider,
+                api_key,
+                self.root_request_id.to_owned(),
+            ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
             tool_input.clone(),
@@ -537,6 +554,7 @@ impl ToolBox {
                 llm,
                 provider,
                 api_keys,
+                self.root_request_id.to_owned(),
             ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -973,6 +991,7 @@ impl ToolBox {
 We also believe this symbol needs to be looked at more closesly because:
 {reason}"#
             ),
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -1025,6 +1044,7 @@ We also believe this symbol needs to be looked at more closesly because:
 We also believe this symbol needs to be probed because of:
 {reason}#"
             ),
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -1054,6 +1074,7 @@ We also believe this symbol needs to be probed because of:
             llm,
             provider,
             api_key,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -1449,6 +1470,7 @@ We also believe this symbol needs to be probed because of:
             provider,
             api_keys,
             user_context.clone(),
+            self.root_request_id.to_owned(),
         );
         let tool_input = ToolInput::CodeSymbolUtilitySearch(request);
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
@@ -1711,6 +1733,7 @@ We also believe this symbol needs to be probed because of:
             llm,
             provider,
             api_key,
+            self.root_request_id.to_owned(),
         );
         let fs_file_path = edited_symbol.fs_file_path().to_owned();
         let start_line = edited_symbol.range().start_line();
@@ -2882,6 +2905,7 @@ instruction:
             provider,
             api_keys,
             code_edit_extra_context.to_owned(),
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -2923,6 +2947,7 @@ instruction:
             llm,
             provider,
             api_keys,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -2967,6 +2992,7 @@ instruction:
             llm,
             provider,
             api_keys,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -3027,6 +3053,7 @@ instruction:
             provider,
             swe_bench_initial_edit,
             is_new_sub_symbol,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -3106,6 +3133,7 @@ instruction:
             api_keys,
             language,
             query.to_owned(),
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -3309,9 +3337,15 @@ instruction:
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
     ) -> Result<CodeToEditSymbolResponse, SymbolError> {
-        let request = ToolInput::FilterCodeSnippetsForEditingSingleSymbols(
-            CodeToEditSymbolRequest::new(xml_string, query, llm, provider, api_keys),
-        );
+        let request =
+            ToolInput::FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest::new(
+                xml_string,
+                query,
+                llm,
+                provider,
+                api_keys,
+                self.root_request_id.to_owned(),
+            ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
             request.clone(),
@@ -3412,7 +3446,12 @@ instruction:
         request_id: &str,
     ) -> Result<CodeToEditFilterResponse, SymbolError> {
         let request = ToolInput::FilterCodeSnippetsForEditing(CodeToEditFilterRequest::new(
-            snippets, query, llm, provider, api_key,
+            snippets,
+            query,
+            llm,
+            provider,
+            api_key,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),
@@ -3693,6 +3732,7 @@ instruction:
             file_content_map,
             original_plan,
             llm_properties,
+            self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),

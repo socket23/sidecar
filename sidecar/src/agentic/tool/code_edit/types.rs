@@ -33,6 +33,7 @@ pub struct CodeEdit {
     provider: LLMProvider,
     is_swe_bench_initial_edit: bool,
     is_new_symbol_request: Option<String>,
+    root_request_id: String,
 }
 
 impl CodeEdit {
@@ -49,6 +50,7 @@ impl CodeEdit {
         provider: LLMProvider,
         is_swe_bench_initial_edit: bool,
         is_new_symbol_request: Option<String>,
+        root_request_id: String,
     ) -> Self {
         Self {
             code_above,
@@ -63,6 +65,7 @@ impl CodeEdit {
             provider,
             is_swe_bench_initial_edit,
             is_new_symbol_request,
+            root_request_id,
         }
     }
 }

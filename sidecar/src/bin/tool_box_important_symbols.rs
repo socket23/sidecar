@@ -61,6 +61,7 @@ async fn main() {
         editor_parsing,
         editor_url,
         sender,
+        "".to_owned(),
     ));
 
     let important_symbols = CodeSymbolImportantResponse::new(

@@ -16,13 +16,15 @@ use crate::agentic::{
 pub struct FindSymbolsToEditInContextRequest {
     context: String,
     llm_properties: LLMProperties,
+    root_request_id: String,
 }
 
 impl FindSymbolsToEditInContextRequest {
-    pub fn new(context: String, llm_properties: LLMProperties) -> Self {
+    pub fn new(context: String, llm_properties: LLMProperties, root_request_id: String) -> Self {
         Self {
             context,
             llm_properties,
+            root_request_id,
         }
     }
 }

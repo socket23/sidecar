@@ -26,6 +26,7 @@ pub struct ProbeQuestionForSymbolRequest {
     hyperlinks: Vec<String>,
     original_user_query: String,
     llm_properties: LLMProperties,
+    root_request_id: String,
 }
 
 impl ProbeQuestionForSymbolRequest {
@@ -37,6 +38,7 @@ impl ProbeQuestionForSymbolRequest {
         history: Vec<String>,
         original_user_query: String,
         llm_properties: LLMProperties,
+        root_request_id: String,
     ) -> Self {
         Self {
             symbol_name,
@@ -46,6 +48,7 @@ impl ProbeQuestionForSymbolRequest {
             hyperlinks,
             original_user_query,
             llm_properties,
+            root_request_id,
         }
     }
 }

@@ -23,6 +23,7 @@ pub struct ProbeEnoughOrDeeperRequest {
     xml_string: String,
     query: String,
     llm_properties: LLMProperties,
+    root_request_id: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -102,12 +103,14 @@ impl ProbeEnoughOrDeeperRequest {
         xml_string: String,
         query: String,
         llm_properties: LLMProperties,
+        root_request_id: String,
     ) -> Self {
         Self {
             symbol_name,
             xml_string,
             query,
             llm_properties,
+            root_request_id,
         }
     }
 }

@@ -76,6 +76,7 @@ async fn main() {
         sender,
         llm_properties,
         user_context.clone(),
+        "".to_owned(),
     );
     let symbol_input = SymbolInputEvent::new(
         user_context,

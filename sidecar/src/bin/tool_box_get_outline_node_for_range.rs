@@ -60,6 +60,7 @@ async fn main() {
         editor_parsing,
         editor_url,
         sender,
+        "".to_owned(),
     ));
 
     // our outline node fetching is going wonky because of the decorators

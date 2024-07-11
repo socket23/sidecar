@@ -17,6 +17,7 @@ pub struct ProbeTryHardAnswerSymbolRequest {
     probe_request: String,
     symbol_content: String,
     llm_properties: LLMProperties,
+    root_request_id: String,
 }
 
 impl ProbeTryHardAnswerSymbolRequest {
@@ -25,12 +26,14 @@ impl ProbeTryHardAnswerSymbolRequest {
         probe_request: String,
         symbol_content: String,
         llm_properties: LLMProperties,
+        root_request_id: String,
     ) -> Self {
         Self {
             original_request,
             probe_request,
             symbol_content,
             llm_properties,
+            root_request_id,
         }
     }
 }

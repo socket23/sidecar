@@ -139,6 +139,7 @@ pub async fn probe_request(
         ),
         // LLMProperties::new(model_config.slow_model, provider_type, provider_keys),
         user_context.clone(),
+        request_id.to_owned(),
     );
     // spawn a background thread to keep polling the probe_request future
     let join_handle = tokio::spawn(async move {
@@ -231,6 +232,7 @@ pub async fn swe_bench(
             anthropic_api_keys.clone(),
         ),
         user_context.clone(),
+        swe_bench_id.to_owned(),
     );
 
     println!("we are getting a hit at this endpoint");
@@ -339,6 +341,7 @@ pub async fn code_editing(
             anthropic_api_keys.clone(),
         ),
         user_context.clone(),
+        request_id.to_owned(),
     );
 
     println!("we are getting a hit at this endpoint");

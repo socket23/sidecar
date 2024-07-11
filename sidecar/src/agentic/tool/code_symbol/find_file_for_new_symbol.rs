@@ -20,6 +20,7 @@ pub struct FindFileForSymbolRequest {
     import_file_locations: Vec<String>,
     user_query: String,
     code_content: String,
+    root_request_id: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -42,6 +43,7 @@ impl FindFileForSymbolRequest {
         import_file_locations: Vec<String>,
         user_query: String,
         code_content: String,
+        root_request_id: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -50,6 +52,7 @@ impl FindFileForSymbolRequest {
             import_file_locations,
             user_query,
             code_content,
+            root_request_id,
         }
     }
 }

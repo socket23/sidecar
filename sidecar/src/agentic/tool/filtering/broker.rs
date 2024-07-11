@@ -387,6 +387,7 @@ pub struct CodeToProbeSubSymbolRequest {
     llm: LLMType,
     provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 impl CodeToProbeSubSymbolRequest {
@@ -396,6 +397,7 @@ impl CodeToProbeSubSymbolRequest {
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             xml_symbol,
@@ -403,6 +405,7 @@ impl CodeToProbeSubSymbolRequest {
             llm,
             provider,
             api_key,
+            root_request_id,
         }
     }
 
@@ -434,6 +437,7 @@ pub struct CodeToEditFilterRequest {
     llm: LLMType,
     provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -443,6 +447,7 @@ pub struct CodeToEditSymbolRequest {
     llm: LLMType,
     provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
+    root_request_id: String,
 }
 
 impl CodeToEditSymbolRequest {
@@ -452,6 +457,7 @@ impl CodeToEditSymbolRequest {
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             xml_symbol,
@@ -459,6 +465,7 @@ impl CodeToEditSymbolRequest {
             llm,
             api_key,
             provider,
+            root_request_id,
         }
     }
 
@@ -490,6 +497,7 @@ impl CodeToEditFilterRequest {
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
+        root_request_id: String,
     ) -> Self {
         Self {
             snippets,
@@ -497,6 +505,7 @@ impl CodeToEditFilterRequest {
             llm,
             provider,
             api_key,
+            root_request_id,
         }
     }
 

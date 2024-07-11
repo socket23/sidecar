@@ -70,6 +70,7 @@ async fn main() {
         editor_parsing,
         editor_url,
         sender,
+        "".to_owned(),
     ));
 
     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(

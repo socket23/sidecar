@@ -64,6 +64,10 @@ impl TestOutputCorrectionRequest {
             root_request_id,
         }
     }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -248,6 +252,7 @@ The output for the test case subtract(1, 2, 3, 4) is wrong because we are not su
 impl Tool for TestCorrection {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.is_test_output()?;
+        let root_id = context.root_request_id().to_owned();
         let llm = context.llm.clone();
         let provider = context.provider.clone();
         let api_keys = context.api_keys.clone();
@@ -262,9 +267,12 @@ impl Tool for TestCorrection {
                 api_keys,
                 request,
                 provider,
-                vec![("event_type".to_owned(), "tool_correction".to_owned())]
-                    .into_iter()
-                    .collect(),
+                vec![
+                    ("event_type".to_owned(), "tool_correction".to_owned()),
+                    ("root_id".to_owned(), root_id.to_owned()),
+                ]
+                .into_iter()
+                .collect(),
                 sender,
             )
             .await

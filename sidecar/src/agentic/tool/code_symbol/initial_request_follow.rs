@@ -284,6 +284,7 @@ In this format, the line content is super important and should contain the line 
 impl Tool for CodeSymbolFollowInitialRequestBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.is_code_symbol_follow_initial_request()?;
+        let root_request_id = context.root_request_id.to_owned();
         let llm = context.llm.clone();
         let provider = context.provider.clone();
         let api_keys = context.api_keys.clone();
@@ -298,10 +299,13 @@ impl Tool for CodeSymbolFollowInitialRequestBroker {
                 api_keys,
                 request,
                 provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "code_symbol_follow_initial_request_broker".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "code_symbol_follow_initial_request_broker".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
                 .collect(),
                 sender,

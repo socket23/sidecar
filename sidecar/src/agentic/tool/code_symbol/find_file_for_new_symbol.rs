@@ -146,6 +146,7 @@ Please follow the format given below strictly:
 impl Tool for FindFileForNewSymbol {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.find_file_for_new_symbol()?;
+        let root_request_id = context.root_request_id.to_owned();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
         let message_request = LLMClientCompletionRequest::new(
@@ -161,10 +162,13 @@ impl Tool for FindFileForNewSymbol {
                 self.gemini_llm_properties.api_key().clone(),
                 message_request,
                 self.gemini_llm_properties.provider().clone(),
-                vec![(
-                    "event_type".to_owned(),
-                    "find_file_for_new_symbol".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "find_file_for_new_symbol".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
                 .collect(),
                 sender,

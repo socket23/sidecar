@@ -124,6 +124,7 @@ impl ProbeQuestionForSymbol {
 impl Tool for ProbeQuestionForSymbol {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.get_probe_create_question_for_symbol()?;
+        let root_request_id = context.root_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
@@ -152,10 +153,13 @@ impl Tool for ProbeQuestionForSymbol {
                     llm_properties.api_key().clone(),
                     cloned_request,
                     llm_properties.provider().clone(),
-                    vec![(
-                        "event_type".to_owned(),
-                        "probe_question_generation_for_symbol".to_owned(),
-                    )]
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "probe_question_generation_for_symbol".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id.to_owned()),
+                    ]
                     .into_iter()
                     .collect(),
                     sender,

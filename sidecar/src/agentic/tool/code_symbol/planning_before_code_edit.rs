@@ -281,6 +281,7 @@ Start your reply with the <reply> tag"#
 impl Tool for PlanningBeforeCodeEdit {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.plan_before_code_editing()?;
+        let root_request_id = context.root_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_query(context));
@@ -302,9 +303,12 @@ impl Tool for PlanningBeforeCodeEdit {
                     llm_properties.api_key().clone(),
                     message_request.clone(),
                     llm_properties.provider().clone(),
-                    vec![("event_type".to_owned(), "plan_before_code_edit".to_owned())]
-                        .into_iter()
-                        .collect(),
+                    vec![
+                        ("event_type".to_owned(), "plan_before_code_edit".to_owned()),
+                        ("root_id".to_owned(), root_request_id.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
                     sender,
                 )
                 .await;

@@ -409,6 +409,10 @@ impl CodeToProbeSubSymbolRequest {
         }
     }
 
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn xml_symbol(&self) -> &str {
         &self.xml_symbol
     }
@@ -469,6 +473,10 @@ impl CodeToEditSymbolRequest {
         }
     }
 
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
     pub fn xml_string(self) -> String {
         self.xml_symbol
     }
@@ -507,6 +515,10 @@ impl CodeToEditFilterRequest {
             api_key,
             root_request_id,
         }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
     }
 
     pub fn get_snippets(&self) -> &[Snippet] {

@@ -5510,9 +5510,15 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     api_key,
                     cloned_message,
                     provider,
-                    vec![("event_type".to_owned(), "important_symbols".to_owned())]
-                        .into_iter()
-                        .collect(),
+                    vec![
+                        ("event_type".to_owned(), "important_symbols".to_owned()),
+                        (
+                            "root_id".to_owned(),
+                            code_symbols.root_request_id().to_owned(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
                     sender,
                 )
                 .await
@@ -5544,6 +5550,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let api_key = code_symbols.api_key();
         let provider = code_symbols.llm_provider();
         let model = code_symbols.model().clone();
+        let root_request_id = code_symbols.root_request_id().to_owned();
         let system_message = LLMClientMessage::system(self.system_message_context_wide());
         let user_message = LLMClientMessage::user(
             self.user_message_for_codebase_wide_search(code_symbols)
@@ -5552,6 +5559,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
         let mut retries = 0;
+        let root_request_id_ref = &root_request_id;
         loop {
             if retries >= 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
@@ -5563,9 +5571,12 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     api_key.clone(),
                     messages.clone(),
                     provider.clone(),
-                    vec![("event_type".to_owned(), "context_wide_search".to_owned())]
-                        .into_iter()
-                        .collect(),
+                    vec![
+                        ("event_type".to_owned(), "context_wide_search".to_owned()),
+                        ("root_id".to_owned(), root_request_id_ref.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
                     sender,
                 )
                 .await;
@@ -5598,6 +5609,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let api_key = utility_symbol_request.api_key();
         let provider = utility_symbol_request.provider();
         let model = utility_symbol_request.model();
+        let root_request_id = utility_symbol_request.root_request_id().to_owned();
         let system_message = LLMClientMessage::system(self.system_message_for_utility_function());
         let user_message = LLMClientMessage::user(
             self.user_message_for_utility_symbols(utility_symbol_request)
@@ -5612,10 +5624,13 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 api_key,
                 messages,
                 provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "utility_function_search".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "utility_function_search".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
                 .collect(),
                 sender,
@@ -5633,6 +5648,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         if !(self.is_model_supported(&request.model())) {
             return Err(CodeSymbolError::WrongLLM(request.model().clone()));
         }
+        let root_request_id = request.root_request_id().to_owned();
         let model = request.model().clone();
         let request_api_key = request.api_key().clone();
         let request_provider = request.provider().clone();
@@ -5650,6 +5666,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             None,
         );
         let mut retries = 0;
+        let root_request_id_ref = &root_request_id;
         loop {
             if retries > 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
@@ -5671,10 +5688,13 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     api_key.clone(),
                     cloned_messages,
                     provider.clone(),
-                    vec![(
-                        "event_type".to_owned(),
-                        "symbols_to_probe_questions".to_owned(),
-                    )]
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "symbols_to_probe_questions".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id_ref.to_owned()),
+                    ]
                     .into_iter()
                     .collect(),
                     sender,
@@ -5695,6 +5715,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<CodeSymbolShouldAskQuestionsResponse, CodeSymbolError> {
+        let root_request_id = request.root_request_id().to_owned();
         let model = request.model().clone();
         let api_key = request.api_key().clone();
         let provider = request.provider().clone();
@@ -5718,10 +5739,13 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 api_key,
                 messages,
                 provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "should_probe_question_request".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "should_probe_question_request".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
                 .collect(),
                 sender,
@@ -5740,6 +5764,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         request: CodeSymbolFollowAlongForProbing,
     ) -> Result<ProbeNextSymbol, CodeSymbolError> {
+        let root_request_id = request.root_request_id().to_owned();
         let llm = request.llm().clone();
         let provider = request.llm_provider().clone();
         let api_keys = request.api_keys().clone();
@@ -5749,6 +5774,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let messages =
             LLMClientCompletionRequest::new(llm, vec![system_message, user_messagee], 0.0, None);
         let mut retries = 0;
+        let root_request_id_ref = &root_request_id;
         loop {
             if retries > 3 {
                 return Err(CodeSymbolError::ExhaustedRetries);
@@ -5765,9 +5791,12 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     api_keys.clone(),
                     messages.clone(),
                     provider.clone(),
-                    vec![("event_type".to_owned(), "probe_next_symbol".to_owned())]
-                        .into_iter()
-                        .collect(),
+                    vec![
+                        ("event_type".to_owned(), "probe_next_symbol".to_owned()),
+                        ("root_id".to_owned(), root_request_id_ref.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
                     sender,
                 )
                 .await?;
@@ -5786,6 +5815,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         request: CodeSymbolProbingSummarize,
     ) -> Result<String, CodeSymbolError> {
+        let root_request_id = request.root_request_id().to_owned();
         let llm = request.llm().clone();
         let provider = request.provider().clone();
         let api_keys = request.api_keys().clone();
@@ -5800,6 +5830,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             None,
         );
         let mut retries = 0;
+        let root_request_id_ref = &root_request_id;
         loop {
             if retries > 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
@@ -5824,10 +5855,13 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     api_key,
                     cloned_message,
                     provider,
-                    vec![(
-                        "event_type".to_owned(),
-                        "probe_summarize_results".to_owned(),
-                    )]
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "probe_summarize_results".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id_ref.to_string()),
+                    ]
                     .into_iter()
                     .collect(),
                     sender,
@@ -5874,6 +5908,7 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
         &self,
         code_correctness_request: CodeCorrectnessRequest,
     ) -> Result<CodeCorrectnessAction, CodeSymbolError> {
+        let root_request_id = code_correctness_request.root_request_id().to_owned();
         let llm = code_correctness_request.llm().clone();
         let provider = code_correctness_request.llm_provider().clone();
         let api_keys = code_correctness_request.llm_api_keys().clone();
@@ -5889,10 +5924,13 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
                 api_keys,
                 messages,
                 provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "code_correctness_tool_use".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "code_correctness_tool_use".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id),
+                ]
                 .into_iter()
                 .collect(),
                 sender,
@@ -5935,6 +5973,7 @@ impl CodeSymbolErrorFix for AnthropicCodeSymbolImportant {
         &self,
         code_fix: CodeEditingErrorRequest,
     ) -> Result<String, CodeSymbolError> {
+        let root_request_id = code_fix.root_request_id().to_owned();
         let model = code_fix.llm().clone();
         let provider = code_fix.llm_provider().clone();
         let api_keys = code_fix.llm_api_keys().clone();
@@ -5949,10 +5988,13 @@ impl CodeSymbolErrorFix for AnthropicCodeSymbolImportant {
                 api_keys,
                 messages,
                 provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "fix_code_symbol_code_editing".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "fix_code_symbol_code_editing".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
                 .collect(),
                 sender,
@@ -5970,6 +6012,7 @@ impl ClassSymbolFollowup for AnthropicCodeSymbolImportant {
         &self,
         request: ClassSymbolFollowupRequest,
     ) -> Result<ClassSymbolFollowupResponse, CodeSymbolError> {
+        let root_request_id = request.root_request_id().to_owned();
         let model = request.llm().clone();
         let provider = request.provider().clone();
         let api_keys = request.api_keys().clone();
@@ -5984,10 +6027,13 @@ impl ClassSymbolFollowup for AnthropicCodeSymbolImportant {
                 api_keys,
                 messages,
                 provider,
-                vec![(
-                    "event_type".to_owned(),
-                    "class_symbols_to_follow".to_owned(),
-                )]
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "class_symbols_to_follow".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id),
+                ]
                 .into_iter()
                 .collect(),
                 sender,
@@ -6003,6 +6049,7 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         &self,
         request: RepoMapSearchQuery,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
+        let root_request_id = request.root_request_id().to_owned();
         let model = request.llm().clone();
         let provider = request.provider().clone();
         let api_keys = request.api_keys().clone();
@@ -6017,9 +6064,12 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
                 api_keys,
                 messages,
                 provider,
-                vec![("event_type".to_owned(), "repo_map_search".to_owned())]
-                    .into_iter()
-                    .collect(),
+                vec![
+                    ("event_type".to_owned(), "repo_map_search".to_owned()),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
+                .into_iter()
+                .collect(),
                 sender,
             )
             .await?;

@@ -1682,15 +1682,16 @@ We also believe this symbol needs to be probed because of:
                     tool_properties,
                 )
                 .await;
-            let references = self
-                .go_to_references(
+            let references = dbg!(
+                self.go_to_references(
                     symbol_edited.fs_file_path(),
                     &symbol_edited.range().start_position(),
                     request_id,
                 )
-                .await?;
-            let _ = self
-                .invoke_followup_on_references(
+                .await
+            )?;
+            let _ = dbg!(
+                self.invoke_followup_on_references(
                     symbol_edited,
                     original_code,
                     &symbol_to_edit,
@@ -1699,7 +1700,8 @@ We also believe this symbol needs to be probed because of:
                     request_id,
                     tool_properties,
                 )
-                .await;
+                .await
+            );
         } else {
             // something else over here, wonder what it could be
             return Err(SymbolError::NoContainingSymbolFound);

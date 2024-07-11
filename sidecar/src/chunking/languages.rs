@@ -3408,6 +3408,9 @@ fn agent_router() -> Router {
     #[test]
     fn test_trait_implementation_tracking() {
         let source_code = r#"
+impl Something::interesting for SomethingElse {
+
+}
 impl TraitSomething for Something {
 }
 
@@ -3433,14 +3436,18 @@ enum SomethingElse {
             &tree,
             "/tmp/something.rs".to_owned(),
         );
-        assert_eq!(outline_nodes.len(), 4);
+        assert_eq!(outline_nodes.len(), 5);
         assert_eq!(
             outline_nodes[0].content().has_trait_implementation(),
+            Some("Something::interesting".to_owned())
+        );
+        assert_eq!(
+            outline_nodes[1].content().has_trait_implementation(),
             Some("TraitSomething".to_owned())
         );
-        assert_eq!(outline_nodes[1].content().has_trait_implementation(), None,);
         assert_eq!(outline_nodes[2].content().has_trait_implementation(), None,);
         assert_eq!(outline_nodes[3].content().has_trait_implementation(), None,);
+        assert_eq!(outline_nodes[4].content().has_trait_implementation(), None,);
     }
 
     /// This is a failing test case, we want to track this in the code

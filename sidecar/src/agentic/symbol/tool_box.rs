@@ -134,6 +134,8 @@ impl ToolBox {
         Ok(Position::new(file_lines - 1, 0, 0))
     }
 
+    // TODO(codestory): This needs more love, the position we are getting back
+    // is completely broken in this case
     pub async fn find_implementation_block_for_sub_symbol(
         &self,
         mut sub_symbol_to_edit: SymbolToEdit,
@@ -3409,6 +3411,10 @@ instruction:
         if let Err(_) = file_open_result {
             return None;
         }
+        let file_open = file_open_result.expect("if let Err to hold");
+        let _ = self
+            .force_add_document(fs_file_path, file_open.contents_ref(), file_open.language())
+            .await;
         self.symbol_broker
             .get_symbols_outline(&fs_file_path)
             .await

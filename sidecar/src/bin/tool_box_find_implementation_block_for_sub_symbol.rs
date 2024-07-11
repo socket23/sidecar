@@ -61,13 +61,35 @@ async fn main() {
         "".to_owned(),
     ));
 
-    let _ = Range::new(Position::new(139, 0, 0), Position::new(157, 0, 0));
     let fs_file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs".to_owned();
-    let _ = "post(sidecar::webserver::agent::followup_chat),".to_owned();
-    let symbol_to_search = "LLMProvider".to_owned();
-    // This is what I have to debug
-    let snippet = tool_box
-        .find_snippet_for_symbol(&fs_file_path, &symbol_to_search, "")
+    let file_open_request = tool_box
+        .file_open(fs_file_path.to_owned(), "")
+        .await
+        .expect("to work");
+    let _ = tool_box
+        .force_add_document(
+            &fs_file_path,
+            file_open_request.contents_ref(),
+            file_open_request.language(),
+        )
         .await;
-    println!("{:?}", &snippet);
+    let outline_nodes = tool_box
+        .get_outline_nodes_grouped(&fs_file_path)
+        .await
+        .expect("to work");
+
+    outline_nodes.into_iter().for_each(|outline_node| {
+        let outline_node_name = outline_node.name();
+        let trait_implementation = outline_node.content().has_trait_implementation();
+        println!("{}::{:?}", outline_node_name, trait_implementation);
+    });
+
+    // let _ = Range::new(Position::new(139, 0, 0), Position::new(157, 0, 0));
+    // let _ = "post(sidecar::webserver::agent::followup_chat),".to_owned();
+    // let symbol_to_search = "LLMProvider".to_owned();
+    // // This is what I have to debug
+    // let snippet = tool_box
+    //     .find_snippet_for_symbol(&fs_file_path, &symbol_to_search, "")
+    //     .await;
+    // println!("{:?}", &snippet);
 }

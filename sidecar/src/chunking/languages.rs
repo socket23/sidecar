@@ -1611,8 +1611,10 @@ impl TSLanguageParsing {
 
         if lang.is_none() {
             println!("Language not detected");
-            return Some(vec![]);
+            return None;
         }
+
+        return None;
     }
 }
 

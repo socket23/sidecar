@@ -7,8 +7,6 @@ use tree_sitter::Tree;
 
 use crate::chunking::types::FunctionNodeInformation;
 
-use crate::repomap::types::Tag;
-
 use super::{
     go::go_language_config,
     javascript::javascript_language_config,

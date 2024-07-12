@@ -11,6 +11,7 @@ pub struct RepoMap {
     // tags_cache: HashMap<PathBuf, CachedTags>,
     // verbose: bool,
     queries_cache: HashMap<String, String>,
+    package_path: String,
 }
 
 impl RepoMap {
@@ -23,26 +24,30 @@ impl RepoMap {
             // tags_cache: HashMap::new(),
             // verbose,
             queries_cache: HashMap::new(),
+            package_path: env!("CARGO_MANIFEST_DIR").to_string(),
         }
     }
 
     pub fn get_query(&mut self, lang: &str) -> String {
         let query_key = format!("tree-sitter-{}-tags", lang);
 
-        self.queries_cache
-            .entry(query_key.clone())
-            .or_insert_with(|| {
-                let package_path = env!("CARGO_MANIFEST_DIR");
-                let path = PathBuf::from(package_path)
-                    .join("src")
-                    .join("repomap")
-                    .join("queries")
-                    .join(format!("tree-sitter-{}-tags.scm", lang));
+        if !self.queries_cache.contains_key(&query_key) {
+            let path = self.construct_path_from_string(format!(
+                "src/repomap/queries/tree-sitter-{}-tags.scm",
+                lang
+            ));
+            let query = read_to_string(path).expect("Should have been able to read the file");
+            self.queries_cache.insert(query_key.clone(), query);
+        }
 
-                read_to_string(path).expect("Should have been able to read the file")
-            })
-            .clone()
+        self.queries_cache.get(&query_key).unwrap().clone()
     }
+
+    fn construct_path_from_string(&self, path: String) -> PathBuf {
+        PathBuf::from(&self.package_path).join(path)
+    }
+
+    // pub fn get_code(path: PathBuf) -> String {}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

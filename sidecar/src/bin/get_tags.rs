@@ -7,6 +7,11 @@ fn main() {
 
     let lang = ts_language_parsing.detect_lang(&test_file_path);
 
-    println!("{:?}", lang);
+    if lang.is_none() {
+        println!("Language not detected");
+        return;
+    }
+
+    println!("Language: {:?}", lang.unwrap());
 }
 

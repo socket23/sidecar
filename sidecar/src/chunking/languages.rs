@@ -7,6 +7,8 @@ use tree_sitter::Tree;
 
 use crate::chunking::types::FunctionNodeInformation;
 
+use crate::repomap::types::Tag;
+
 use super::{
     go::go_language_config,
     javascript::javascript_language_config,
@@ -1602,6 +1604,15 @@ impl TSLanguageParsing {
             .map(|extension| extension.to_str())
             .flatten()
             .map(|ext| ext.to_string())
+    }
+
+    pub fn get_tags_raw(&self, file_path: &str) -> Option<Vec<Tag>> {
+        let lang = self.detect_lang(file_path);
+
+        if lang.is_none() {
+            println!("Language not detected");
+            return Some(vec![]);
+        }
     }
 }
 

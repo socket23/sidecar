@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::fs::read_to_string;
-use std::io::Result;
 use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::chunking::languages::TSLanguageParsing;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoMap {
@@ -29,43 +30,19 @@ impl RepoMap {
         }
     }
 
-    pub fn get_query(&mut self, lang: &str) -> String {
-        let query_key = format!("tree-sitter-{}-tags", lang);
+    pub fn try_parsing(fname: &str, ts_parsing: Arc<TSLanguageParsing>) {
+        let lang = ts_parsing.detect_lang(fname);
 
-        if let Some(query) = self.queries_cache.get(&query_key) {
-            return query.clone();
-        }
+        println!("Lang: {:?}", lang);
 
-        let path = self.construct_path_from_string(&format!(
-            "src/repomap/queries/tree-sitter-{}-tags.scm",
-            lang
-        ));
+        let config = ts_parsing
+            .for_lang(lang)
+            .expect("language config to be present");
 
-        let query = read_to_string(path).expect("Should have been able to read the file");
+        let content = std::fs::read_to_string(fname).unwrap();
 
-        self.queries_cache.insert(query_key, query.clone());
-
-        query
-    }
-
-    fn construct_path_from_string(&self, path: &str) -> PathBuf {
-        PathBuf::from(&self.package_path).join(path)
-    }
-
-    fn get_code(path: &PathBuf) -> Result<String> {
-        read_to_string(path)
-    }
-
-    pub fn parse_tree(&mut self, lang: &str, fname: &str) {
-        let query = self.get_query(lang);
-        println!("Query: {}", query);
-        let code_path = self.construct_path_from_string(fname);
-        let code = RepoMap::get_code(&code_path);
-
-        match code {
-            Ok(content) => println!("Code: {}", content),
-            Err(e) => println!("Error reading file: {}", e),
-        }
+        let outline_string = config.generate_file_outline_str(content.as_bytes());
+        println!("Outline: {:?}", outline_string);
     }
 }
 

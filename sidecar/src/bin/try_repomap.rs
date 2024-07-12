@@ -1,8 +1,9 @@
-use sidecar::repomap::types::RepoMap;
-use std::path::PathBuf;
-
+use sidecar::{chunking::languages::TSLanguageParsing, repomap::types::RepoMap};
+use std::{path::PathBuf, sync::Arc};
 fn main() {
-    let mut repomap = RepoMap::new(PathBuf::new());
+    // let mut repomap = RepoMap::new(PathBuf::new());
 
-    let res = repomap.parse_tree("python", "src/repomap/types.rs");
+    let ts_parsing = Arc::new(TSLanguageParsing::init());
+
+    RepoMap::try_parsing("src/repomap/types.rs", ts_parsing);
 }

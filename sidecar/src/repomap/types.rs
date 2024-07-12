@@ -39,20 +39,25 @@ impl RepoMap {
             return;
         }
 
-        if let Some(config) = ts_parsing.for_file_path(fname) {
-            let content = match read_to_string(&path) {
-                Ok(content) => content,
-                Err(e) => {
-                    eprintln!("Error reading file {}: {}", path.display(), e);
-                    return;
-                }
-            };
+        let config = match ts_parsing.for_file_path(fname) {
+            Some(config) => config,
+            None => {
+                eprintln!("Error: Language configuration not found for: {}", fname);
+                return;
+            }
+        };
 
-            let outline_string = config.generate_file_outline_str(content.as_bytes());
-            println!("Outline: {:?}", outline_string);
-        } else {
-            eprintln!("Error: Language configuration not found for: {}", fname);
-        }
+        let content = match read_to_string(&path) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error reading file {}: {}", path.display(), e);
+                return;
+            }
+        };
+
+        let outline_string = config.generate_file_outline_str(content.as_bytes());
+
+        println!("Outline: {:?}", outline_string);
     }
 }
 

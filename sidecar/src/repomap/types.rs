@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 
+use sqlx::query;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoMap {
     root: PathBuf,
@@ -31,16 +33,20 @@ impl RepoMap {
     pub fn get_query(&mut self, lang: &str) -> String {
         let query_key = format!("tree-sitter-{}-tags", lang);
 
-        if !self.queries_cache.contains_key(&query_key) {
-            let path = self.construct_path_from_string(format!(
-                "src/repomap/queries/tree-sitter-{}-tags.scm",
-                lang
-            ));
-            let query = read_to_string(path).expect("Should have been able to read the file");
-            self.queries_cache.insert(query_key.clone(), query);
+        if let Some(query) = self.queries_cache.get(&query_key) {
+            return query.clone();
         }
 
-        self.queries_cache.get(&query_key).unwrap().clone()
+        let path = self.construct_path_from_string(format!(
+            "src/repomap/queries/tree-sitter-{}-tags.scm",
+            lang
+        ));
+
+        let query = read_to_string(path).expect("Should have been able to read the file");
+
+        self.queries_cache.insert(query_key, query.clone());
+
+        query
     }
 
     fn construct_path_from_string(&self, path: String) -> PathBuf {

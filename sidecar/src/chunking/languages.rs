@@ -1605,17 +1605,6 @@ impl TSLanguageParsing {
             .flatten()
             .map(|ext| ext.to_string())
     }
-
-    pub fn get_tags_raw(&self, file_path: &str) -> Option<Vec<Tag>> {
-        let lang = self.detect_lang(file_path)?;
-
-        let query_file = format!("repomap/queries/tree-sitter-{}-tags.scm", lang);
-        let query = std::fs::read_to_string(&query_file).unwrap();
-
-        println!("Query: {:?}", query);
-
-        return None;
-    }
 }
 
 fn find_node_to_use(

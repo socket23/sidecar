@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fs::read_to_string;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::chunking::languages::TSLanguageParsing;
@@ -30,15 +31,28 @@ impl RepoMap {
         }
     }
 
-    pub fn try_parsing(fname: &str, ts_parsing: Arc<TSLanguageParsing>) {
-        let config = ts_parsing
-            .for_file_path(fname)
-            .expect(&format!("language config to be present for {}", fname));
+    pub fn try_parsing(&self, fname: &str, ts_parsing: Arc<TSLanguageParsing>) {
+        let path = PathBuf::from(&self.package_path).join(fname);
 
-        let content = std::fs::read_to_string(fname).unwrap();
+        if !path.exists() {
+            eprintln!("Error: File not found: {}", path.display());
+            return;
+        }
 
-        let outline_string = config.generate_file_outline_str(content.as_bytes());
-        println!("Outline: {:?}", outline_string);
+        if let Some(config) = ts_parsing.for_file_path(fname) {
+            let content = match read_to_string(&path) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!("Error reading file {}: {}", path.display(), e);
+                    return;
+                }
+            };
+
+            let outline_string = config.generate_file_outline_str(content.as_bytes());
+            println!("Outline: {:?}", outline_string);
+        } else {
+            eprintln!("Error: Language configuration not found for: {}", fname);
+        }
     }
 }
 

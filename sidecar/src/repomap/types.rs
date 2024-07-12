@@ -32,7 +32,13 @@ impl RepoMap {
         self.queries_cache
             .entry(query_key.clone())
             .or_insert_with(|| {
-                let path = PathBuf::from(format!("queries/{}.scq", query_key));
+                let package_path = env!("CARGO_MANIFEST_DIR");
+                let path = PathBuf::from(package_path)
+                    .join("src")
+                    .join("repomap")
+                    .join("queries")
+                    .join(format!("tree-sitter-{}-tags.scm", lang));
+
                 read_to_string(path).expect("Should have been able to read the file")
             })
             .clone()

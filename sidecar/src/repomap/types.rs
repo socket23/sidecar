@@ -31,13 +31,9 @@ impl RepoMap {
     }
 
     pub fn try_parsing(fname: &str, ts_parsing: Arc<TSLanguageParsing>) {
-        let lang = ts_parsing.detect_lang(fname);
-
-        println!("Lang: {:?}", lang);
-
         let config = ts_parsing
-            .for_lang(lang)
-            .expect("language config to be present");
+            .for_file_path(fname)
+            .expect(&format!("language config to be present for {}", fname));
 
         let content = std::fs::read_to_string(fname).unwrap();
 

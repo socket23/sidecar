@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use tree_sitter::Tree;
@@ -1354,6 +1354,22 @@ impl TSLanguageParsing {
         self.configs
             .iter()
             .find(|config| config.language_ids.contains(&language))
+    }
+
+    pub fn for_file_path(&self, file_path: &str) -> Option<&TSLanguageConfig> {
+        let file_path = PathBuf::from(file_path);
+        let file_extension = file_path
+            .extension()
+            .map(|extension| extension.to_str())
+            .map(|extension| extension.to_owned())
+            .flatten();
+        match file_extension {
+            Some(extension) => self
+                .configs
+                .iter()
+                .find(|config| config.file_extensions.contains(&extension)),
+            None => None,
+        }
     }
 
     /// We will use this to chunk the file to pieces which can be used for

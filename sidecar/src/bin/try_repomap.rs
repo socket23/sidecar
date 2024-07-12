@@ -4,6 +4,5 @@ use std::path::PathBuf;
 fn main() {
     let mut repomap = RepoMap::new(PathBuf::new());
 
-    let query = repomap.get_query("python");
-    println!("Query: {}", query);
+    let res = repomap.parse_tree("python", "src/repomap/types.rs");
 }

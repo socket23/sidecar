@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::fs::read_to_string;
+use std::io::Result;
 use std::path::PathBuf;
-
-use sqlx::query;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoMap {
@@ -37,7 +36,7 @@ impl RepoMap {
             return query.clone();
         }
 
-        let path = self.construct_path_from_string(format!(
+        let path = self.construct_path_from_string(&format!(
             "src/repomap/queries/tree-sitter-{}-tags.scm",
             lang
         ));
@@ -49,11 +48,25 @@ impl RepoMap {
         query
     }
 
-    fn construct_path_from_string(&self, path: String) -> PathBuf {
+    fn construct_path_from_string(&self, path: &str) -> PathBuf {
         PathBuf::from(&self.package_path).join(path)
     }
 
-    // pub fn get_code(path: PathBuf) -> String {}
+    fn get_code(path: &PathBuf) -> Result<String> {
+        read_to_string(path)
+    }
+
+    pub fn parse_tree(&mut self, lang: &str, fname: &str) {
+        let query = self.get_query(lang);
+        println!("Query: {}", query);
+        let code_path = self.construct_path_from_string(fname);
+        let code = RepoMap::get_code(&code_path);
+
+        match code {
+            Ok(content) => println!("Code: {}", content),
+            Err(e) => println!("Error reading file: {}", e),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

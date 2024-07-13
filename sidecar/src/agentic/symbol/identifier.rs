@@ -911,8 +911,9 @@ impl MechaCodeSymbolThinking {
                     llm_properties
                 };
                 println!(
-                    "mecha_code_symbol_thinking::reverse_lookup_list::({:?})",
-                    &reverse_lookup
+                    "mecha_code_symbol_thinking::reverse_lookup_list::({})::len({})",
+                    self.symbol_name(),
+                    reverse_lookup.len(),
                 );
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us

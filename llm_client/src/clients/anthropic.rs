@@ -320,8 +320,6 @@ impl LLMClient for AnthropicClient {
             }
         }
 
-        println!("{:?}", &buffered_string);
-
         Ok(buffered_string)
     }
 

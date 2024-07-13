@@ -420,7 +420,6 @@ impl Symbol {
                 .filter_map(|implementation| {
                     let file_path = implementation.fs_file_path().to_owned();
                     let range = implementation.range();
-                    println!("symbol::grab_implementations::range::({:?})", &range);
                     // if file content is empty, then we do not add this to our
                     // implementations
                     let file_content = file_content_map.get(&file_path);

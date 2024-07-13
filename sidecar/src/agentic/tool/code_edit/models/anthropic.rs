@@ -270,7 +270,7 @@ Notice how we rewrote the whole section of the code and only the portion which w
         if let Some(above) = above {
             user_message = user_message + &above + "\n";
         }
-        let in_range = self.selection_to_edit(context.code_to_edit());
+        let in_range = context.code_to_edit();
         user_message = user_message
             + &format!(
                 r#"<code_to_add>

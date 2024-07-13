@@ -108,7 +108,11 @@ impl CodeEditingTool {
     /// </reply>
     /// {garbage}
     /// So we find this pattern and trim it out if we can
-    fn edit_code(code: &str, new_sub_symbol: bool) -> Result<String, ToolError> {
+    fn edit_code(
+        code: &str,
+        new_sub_symbol: bool,
+        section_to_edit: &str,
+    ) -> Result<String, ToolError> {
         let tag_to_search = if new_sub_symbol {
             "code_to_add"
         } else {
@@ -129,7 +133,11 @@ impl CodeEditingTool {
         if lines == "" {
             Err(ToolError::CodeNotFormatted(code.to_owned()))
         } else {
-            Ok(lines)
+            if new_sub_symbol {
+                Ok(lines + "\n" + section_to_edit + "\n")
+            } else {
+                Ok(lines)
+            }
         }
     }
 }
@@ -229,10 +237,14 @@ impl Tool for CodeEditingTool {
             )
             .await
             .map_err(|e| ToolError::LLMClientError(e))?;
-        let edited_code = Self::edit_code(&result, code_edit_context.is_new_sub_symbol().is_some())
-            // we need to do post-processing here to remove all the gunk
-            // which usually gets added when we are editing code
-            .map(|result| ToolOutput::code_edit_output(result))?;
+        let edited_code = Self::edit_code(
+            &result,
+            code_edit_context.is_new_sub_symbol().is_some(),
+            code_edit_context.code_to_edit(),
+        )
+        // we need to do post-processing here to remove all the gunk
+        // which usually gets added when we are editing code
+        .map(|result| ToolOutput::code_edit_output(result))?;
         Ok(edited_code)
     }
 }
@@ -325,7 +337,7 @@ for model, instances in self.data.items():
 ```
 
 This ensures that the primary key of the deleted instances is cleared after the deletion process is complete."#.to_owned();
-        let edit_code = CodeEditingTool::edit_code(&code, false).expect("to work");
+        let edit_code = CodeEditingTool::edit_code(&code, false, "").expect("to work");
         let better_data = r#"    def delete(self):
         # sort instance collections
         for model, instances in self.data.items():

@@ -1605,22 +1605,20 @@ We also believe this symbol needs to be probed because of:
             .for_file_path(symbol_edited.fs_file_path())
             .map(|language_config| language_config.language_str.to_owned())
             .unwrap_or("".to_owned());
-        let symbol_to_edit = dbg!(
-            self.find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
-                .await
-        )?;
+        let symbol_to_edit = self
+            .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
+            .await?;
         // over here we have to check if its a function or a class
         if symbol_to_edit.is_function_type() {
             // we do need to get the references over here for the function and
             // send them over as followups to check wherever they are being used
-            let references = dbg!(
-                self.go_to_references(
+            let references = self
+                .go_to_references(
                     symbol_edited.fs_file_path(),
                     &symbol_edited.range().start_position(),
                     request_id,
                 )
-                .await
-            )?;
+                .await?;
             let _ = self
                 .invoke_followup_on_references(
                     symbol_edited,

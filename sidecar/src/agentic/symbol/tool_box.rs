@@ -4120,10 +4120,6 @@ instruction:
         snippet: &Snippet,
         request_id: &str,
     ) -> Result<OutlineNode, SymbolError> {
-        println!(
-            "tool_box::get_outline_node_from_snippet::snippet::({:?})",
-            snippet.range()
-        );
         let fs_file_path = snippet.file_path();
         let file_open_request = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let _ = self
@@ -4162,13 +4158,6 @@ instruction:
             })
             .collect::<Vec<_>>();
 
-        println!(
-            "tool_box::get_outline_node_from_snippet::nodes({:?})",
-            outline_nodes_with_distance
-                .iter()
-                .map(|(distance, outline_node)| (distance, outline_node.range()))
-                .collect::<Vec<_>>()
-        );
         // Now sort it based on the distance in ascending order
         outline_nodes_with_distance.sort_by_key(|outline_node| outline_node.0);
         if outline_nodes_with_distance.is_empty() {

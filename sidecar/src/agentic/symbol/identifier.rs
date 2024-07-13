@@ -1174,7 +1174,7 @@ Reason to edit:
                     }
                 }
 
-                let outline_nodes_vec = dbg!(outline_nodes)
+                let outline_nodes_vec = outline_nodes
                     .into_iter()
                     .map(|outline_node| outline_node.consume_all_outlines())
                     .flatten()

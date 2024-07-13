@@ -2640,14 +2640,9 @@ instruction:
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
-            let symbol_to_edit = dbg!(
-                self.find_sub_symbol_to_edit_with_name(
-                    parent_symbol_name,
-                    symbol_edited,
-                    request_id
-                )
-                .await
-            )?;
+            let symbol_to_edit = self
+                .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
+                .await?;
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?

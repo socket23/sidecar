@@ -52,7 +52,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::SymbolToEdit,
-        initial_request::InitialRequestData,
+        initial_request::{InitialRequestData, SymbolRequestHistoryItem},
         probe::{SymbolToProbeHistory, SymbolToProbeRequest},
         types::{AskQuestionRequest, SymbolEvent},
     },
@@ -157,11 +157,13 @@ impl SymbolEventRequest {
     pub fn initial_request(
         symbol: SymbolIdentifier,
         request: String,
+        // passing history to the symbols so we do not end up doing repeated work
+        history: Vec<SymbolRequestHistoryItem>,
         tool_properties: ToolProperties,
     ) -> Self {
         Self {
             symbol,
-            event: SymbolEvent::InitialRequest(InitialRequestData::new(request, None)),
+            event: SymbolEvent::InitialRequest(InitialRequestData::new(request, None, history)),
             tool_properties,
         }
     }
@@ -1792,6 +1794,10 @@ Satisfy the requirement either by making edits or gathering the required informa
             self.symbol_name(),
             sub_symbols_to_edit.len()
         );
+
+        // NOTE: we do not add an entry to the history here because the initial
+        // request already adds the entry before sending over the edit
+        let history = edit_request.history().to_vec();
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
         // - do a COT to figure out how to go about making the changes
@@ -1879,6 +1885,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     self.llm_properties.api_key().clone(),
                     request_id_ref,
                     &self.tool_properties,
+                    history.to_vec(),
                     self.hub_sender.clone(),
                 )
                 .await;

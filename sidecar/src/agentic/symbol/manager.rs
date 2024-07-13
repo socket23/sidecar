@@ -502,6 +502,9 @@ impl SymbolManager {
                         SymbolEvent::InitialRequest(InitialRequestData::new(
                             user_query.to_owned(),
                             Some(high_level_plan_ref.to_owned()),
+                            // empty history when symbol manager sends the initial
+                            // request
+                            vec![],
                         )),
                         tool_properties_ref.clone(),
                     );
@@ -520,41 +523,6 @@ impl SymbolManager {
                         &response
                     );
                 }
-                // let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
-                //     (
-                //         symbol_identifier.clone(),
-                //         request_id_ref.to_owned(),
-                //         SymbolEventRequest::new(
-                //             symbol_identifier,
-                //             SymbolEvent::InitialRequest(InitialRequestData::new(
-                //                 user_query.to_owned(),
-                //                 Some(high_level_plan_ref.to_owned()),
-                //             )),
-                //             tool_properties_ref.clone(),
-                //         ),
-                //     )
-                // }))
-                // .map(
-                //     |(symbol_identifier, request_id, symbol_event_request)| async move {
-                //         let (sender, receiver) = tokio::sync::oneshot::channel();
-                //         dbg!(
-                //             "sending initial request to symbol: {:?}",
-                //             &symbol_identifier
-                //         );
-                //         self.symbol_locker
-                //             .process_request((symbol_event_request, request_id, sender))
-                //             .await;
-                //         let response = receiver.await;
-                //         dbg!(
-                //             "For symbol identifier: {:?} the response is {:?}",
-                //             &symbol_identifier,
-                //             &response
-                //         );
-                //     },
-                // )
-                // .buffer_unordered(100)
-                // .collect::<Vec<_>>()
-                // .await;
             }
         } else {
             // We are for some reason not even invoking the first passage which is

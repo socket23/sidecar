@@ -3,11 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use tree_sitter::Tree;
+use gix::{bstr::ByteSlice, config::source};
+use tree_sitter::{QueryCaptures, Tree};
 
 use crate::chunking::types::FunctionNodeInformation;
-
-use core::ops::Range as CoreRange;
 
 use super::{
     go::go_language_config,
@@ -47,10 +46,6 @@ fn get_string_from_bytes(source_code: &Vec<u8>, start_byte: usize, end_byte: usi
 
 fn get_string_from_lines(lines: &[String], start_line: usize, end_line: usize) -> String {
     lines[start_line..=end_line].join("\n")
-}
-
-fn get_string_from_byte_range(source_code: &Vec<u8>, range: CoreRange<usize>) -> String {
-    get_string_from_bytes(source_code, range.start, range.end)
 }
 
 /// We are going to use tree-sitter to parse the code and get the chunks for the
@@ -1277,17 +1272,28 @@ impl TSLanguageConfig {
             .expect("file definitions queries to be well formed");
 
         let mut cursor = tree_sitter::QueryCursor::new();
+
         let captures = cursor.captures(&query, root_node, source_code);
 
-        println!("{:?}", query.capture_names());
-
         for capture in captures {
-            for capture in capture.0.captures {
-                println!("Kind: {:?}", capture.node.kind());
+            println!("==============================");
+            let capture_index = capture.1;
+            println!("Capture index {:?}", capture_index);
+            println!("captures len: {}", capture.0.captures.len());
 
-                let range = capture.node.byte_range();
-                let label = get_string_from_byte_range(&source_code.to_vec(), range);
-                println!("Label: {:?}", label);
+            for (index, capture) in capture.0.captures.iter().enumerate() {
+                if index != capture_index {
+                    continue;
+                }
+
+                let node = capture.node;
+                let kind = node.kind();
+                let range = node.range();
+                let content =
+                    get_string_from_bytes(&source_code.to_vec(), range.start_byte, range.end_byte);
+
+                println!("Kind: {:?}", &kind);
+                println!("Content: {:?}", &content);
             }
             println!("==============================");
         }

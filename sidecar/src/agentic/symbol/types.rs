@@ -1659,7 +1659,9 @@ Satisfy the requirement either by making edits or gathering the required informa
     async fn find_sub_symbol_location(
         &self,
         mut sub_symbol: SymbolToEdit,
+        request_id: &str,
     ) -> Result<SymbolToEdit, SymbolError> {
+        self.refresh_state(request_id.to_owned()).await;
         // Grabs the implementation of the symbols over here
         let implementation_blocks = self.mecha_code_symbol.get_implementations().await;
         // in languages like typescript and python we have a single implementation block
@@ -1833,7 +1835,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 );
                 // Find the location for the sub-symbol
                 sub_symbol_to_edit = self
-                    .find_sub_symbol_location(sub_symbol_to_edit.clone())
+                    .find_sub_symbol_location(sub_symbol_to_edit.clone(), request_id_ref)
                     .await?;
                 self.add_subsymbol(
                     &sub_symbol_to_edit,

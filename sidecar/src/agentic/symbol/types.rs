@@ -1689,7 +1689,6 @@ Satisfy the requirement either by making edits or gathering the required informa
         );
         // update the sub-symbol location to the most appropriate place
         // TODO(codestory): Might need some debug logging on this section
-        let sub_symbol = self.find_sub_symbol_location(sub_symbol.clone()).await?;
         let range_to_insert = sub_symbol.range().clone();
         let content = "".to_owned();
         let (llm_properties, swe_bench_initial_edit) =
@@ -1784,25 +1783,25 @@ Satisfy the requirement either by making edits or gathering the required informa
         edit_request: SymbolToEditRequest,
         request_id: String,
     ) -> Result<(), SymbolError> {
+        let request_id_ref = &request_id;
+
+        // NOTE: we do not add an entry to the history here because the initial
+        // request already adds the entry before sending over the edit
+        let history = edit_request.history().to_vec();
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
-        let request_id_ref = &request_id;
         println!(
             "symbol::edit_implementations::sub_symbols::({}).len({})",
             self.symbol_name(),
             sub_symbols_to_edit.len()
         );
-
-        // NOTE: we do not add an entry to the history here because the initial
-        // request already adds the entry before sending over the edit
-        let history = edit_request.history().to_vec();
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
         // - do a COT to figure out how to go about making the changes
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
-        for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
+        for mut sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
             println!(
                 "symbol::edit_implementation::sub_symbol_to_edit::({})::is_new({:?})",
                 sub_symbol_to_edit.symbol_name(),
@@ -1832,14 +1831,16 @@ Satisfy the requirement either by making edits or gathering the required informa
                     self.symbol_name(),
                     sub_symbol_to_edit.symbol_name()
                 );
-                dbg!(
-                    self.add_subsymbol(
-                        &sub_symbol_to_edit,
-                        context_for_editing.to_owned(),
-                        &request_id,
-                    )
-                    .await
-                )?
+                // Find the location for the sub-symbol
+                sub_symbol_to_edit = self
+                    .find_sub_symbol_location(sub_symbol_to_edit.clone())
+                    .await?;
+                self.add_subsymbol(
+                    &sub_symbol_to_edit,
+                    context_for_editing.to_owned(),
+                    &request_id,
+                )
+                .await?
             } else {
                 println!("we are going to start editing now");
                 // always return the original code which was present here in case of rollbacks

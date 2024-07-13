@@ -84,8 +84,8 @@ impl SymbolToEditRequest {
         }
     }
 
-    pub fn symbols(&self) -> &[SymbolToEdit] {
-        self.symbols.as_slice()
+    pub fn symbols(self) -> Vec<SymbolToEdit> {
+        self.symbols
     }
 
     pub fn symbol_identifier(&self) -> &SymbolIdentifier {

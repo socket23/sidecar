@@ -479,10 +479,10 @@ impl Symbol {
                 })
                 .collect::<Vec<_>>();
             println!(
-                "symbol::grab_implementations::({:?})",
-                &filtered_outline_nodes
+                "symbol::grab_implementations::({})::len({})",
+                self.symbol_name(),
+                filtered_outline_nodes.len(),
             );
-            dbg!(&filtered_outline_nodes);
             // we update the snippets we have stored here into the symbol itself
             {
                 self.mecha_code_symbol

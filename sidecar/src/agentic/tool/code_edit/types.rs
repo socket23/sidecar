@@ -108,12 +108,17 @@ impl CodeEditingTool {
     /// </reply>
     /// {garbage}
     /// So we find this pattern and trim it out if we can
-    fn edit_code(code: &str) -> Result<String, ToolError> {
+    fn edit_code(code: &str, new_sub_symbol: bool) -> Result<String, ToolError> {
+        let tag_to_search = if new_sub_symbol {
+            "code_to_add"
+        } else {
+            "code_edited"
+        };
         let lines = code
             .lines()
-            .skip_while(|line| !line.contains("<code_edited>"))
+            .skip_while(|line| !line.contains(&format!("<{tag_to_search}>")))
             .skip(1)
-            .take_while(|line| !line.contains("</code_edited>"))
+            .take_while(|line| !line.contains(&format!("</{tag_to_search}>")))
             .collect::<Vec<_>>()
             .into_iter()
             .skip_while(|line| !line.contains("```"))
@@ -224,7 +229,7 @@ impl Tool for CodeEditingTool {
             )
             .await
             .map_err(|e| ToolError::LLMClientError(e))?;
-        let edited_code = Self::edit_code(&result)
+        let edited_code = Self::edit_code(&result, code_edit_context.is_new_sub_symbol().is_some())
             // we need to do post-processing here to remove all the gunk
             // which usually gets added when we are editing code
             .map(|result| ToolOutput::code_edit_output(result))?;
@@ -320,7 +325,7 @@ for model, instances in self.data.items():
 ```
 
 This ensures that the primary key of the deleted instances is cleared after the deletion process is complete."#.to_owned();
-        let edit_code = CodeEditingTool::edit_code(&code).expect("to work");
+        let edit_code = CodeEditingTool::edit_code(&code, false).expect("to work");
         let better_data = r#"    def delete(self):
         # sort instance collections
         for model, instances in self.data.items():

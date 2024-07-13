@@ -92,7 +92,10 @@ async fn main() {
     );
 
     let problem_statement =
-        "can you add another provider for grok for me we just need an api_key?".to_owned();
+        "can you add a new method to CodeStoryLLMTypes for setting the llm type?".to_owned();
+
+    // let problem_statement =
+    // "can you add another provider for grok for me we just need an api_key?".to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

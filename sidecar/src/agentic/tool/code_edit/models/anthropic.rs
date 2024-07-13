@@ -264,20 +264,24 @@ Notice how we rewrote the whole section of the code and only the portion which w
     fn user_message_for_code_addition(&self, context: &CodeEdit) -> String {
         let extra_data = self.extra_data(context.extra_content());
         let above = self.above_selection(context.above_context());
-        let below = self.below_selection(context.below_context());
+        // let below = self.below_selection(context.below_context());
         let mut user_message = "".to_owned();
         user_message = user_message + &extra_data + "\n";
         if let Some(above) = above {
             user_message = user_message + &above + "\n";
         }
+        let in_range = self.selection_to_edit(context.code_to_edit());
         user_message = user_message
-            + r#"<code_to_add>
+            + &format!(
+                r#"<code_to_add>
 {{you need to add code just here}}
 </code_to_add>
-"#;
-        if let Some(below) = below {
-            user_message = user_message + &below + "\n";
-        }
+{in_range}
+"#
+            );
+        // if let Some(below) = below {
+        //     user_message = user_message + &below + "\n";
+        // }
 
         let user_instructions = context.instruction();
         user_message = user_message

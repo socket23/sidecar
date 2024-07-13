@@ -58,6 +58,15 @@ impl RepoMap {
         let outline_string = config.generate_file_outline_str(content.as_bytes());
 
         println!("Outline: {:?}", outline_string);
+
+        let tree = config.get_tree_sitter_tree(content.as_bytes());
+
+        if let Some(tree) = tree {
+            let root = tree.root_node();
+            println!("Root: {:?}", root);
+        }
+
+        // let definitions
     }
 }
 

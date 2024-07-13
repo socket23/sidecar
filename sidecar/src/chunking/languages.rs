@@ -123,6 +123,8 @@ pub struct TSLanguageConfig {
 
     /// Used to specify which object a method or property belongs to.
     pub object_qualifier: String,
+
+    pub file_definitions_query: String,
 }
 
 impl TSLanguageConfig {

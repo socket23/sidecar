@@ -975,14 +975,13 @@ Reason to edit:
                                 // here instead of the original symbol name which
                                 // would not work
                                 println!("mecha_code_symbol_thinking::initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
-                                let symbol_in_range = dbg!(
+                                let symbol_in_range = 
                                     self.find_sub_symbol_in_range(
                                         range,
                                         fs_file_path,
                                         request_id_ref
                                     )
-                                    .await
-                                );
+                                    .await;
                                 if let Ok(symbol) = symbol_in_range {
                                     Some(SymbolToEdit::new(
                                         symbol,

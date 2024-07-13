@@ -1827,12 +1827,19 @@ Satisfy the requirement either by making edits or gathering the required informa
                     sub_symbol_to_edit.range().to_owned(),
                     sub_symbol_to_edit.fs_file_path().to_owned(),
                 ));
-                self.add_subsymbol(
-                    &sub_symbol_to_edit,
-                    context_for_editing.to_owned(),
-                    &request_id,
-                )
-                .await?
+                println!(
+                    "symbol::edit_implementation::add_subsymbol::({})::({})",
+                    self.symbol_name(),
+                    sub_symbol_to_edit.symbol_name()
+                );
+                dbg!(
+                    self.add_subsymbol(
+                        &sub_symbol_to_edit,
+                        context_for_editing.to_owned(),
+                        &request_id,
+                    )
+                    .await
+                )?
             } else {
                 println!("we are going to start editing now");
                 // always return the original code which was present here in case of rollbacks
@@ -1867,6 +1874,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol_to_edit.fs_file_path().to_owned(),
                 edited_code.to_owned(),
             ));
+            println!(
+                "symbol::edit_implementation::check_code_correctness::({})",
+                self.symbol_name()
+            );
             // debugging loop after this
             let _ = self
                 .tools

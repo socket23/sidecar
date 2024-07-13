@@ -83,6 +83,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
+use super::events::initial_request::SymbolRequestHistoryItem;
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
@@ -2450,6 +2451,7 @@ Please handle these changes as required."#
         request_id: &str,
         tool_properties: &ToolProperties,
         llm_properties: LLMProperties,
+        history: Vec<SymbolRequestHistoryItem>,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
             String,
@@ -2511,6 +2513,7 @@ instruction:
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_name, symbol_file_path),
                         request.to_owned(),
+                        history.to_vec(),
                         tool_properties.clone(),
                     ),
                     request_id.to_owned(),
@@ -2531,6 +2534,7 @@ instruction:
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_to_edit, fs_file_path),
                         request.to_owned(),
+                        history.to_vec(),
                         tool_properties.clone(),
                     ),
                     request_id.to_owned(),
@@ -2558,6 +2562,7 @@ instruction:
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
         tool_properties: &ToolProperties,
+        history: Vec<SymbolRequestHistoryItem>,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
             String,
@@ -2844,6 +2849,7 @@ instruction:
                         request_id,
                         tool_properties,
                         LLMProperties::new(llm.clone(), provider.clone(), api_keys.clone()),
+                        history.to_vec(),
                         hub_sender.clone(),
                     )
                     .await;
@@ -2974,6 +2980,8 @@ instruction:
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
+        // TODO(skcd): a history parameter and play with the prompt over here so
+        // the LLM does not over index on the history of the symbols which were edited
     ) -> Result<CodeCorrectnessAction, SymbolError> {
         let (code_above, code_below, code_in_selection) =
             split_file_content_into_parts(fs_file_content, edited_range);

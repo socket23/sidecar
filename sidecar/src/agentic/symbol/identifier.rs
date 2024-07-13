@@ -13,7 +13,10 @@ use llm_client::{
 use tokio::sync::{mpsc::UnboundedSender, oneshot::Sender};
 
 use crate::{
-    agentic::tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
+    agentic::{
+        symbol::events::initial_request::SymbolRequestHistoryItem,
+        tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
+    },
     chunking::{text_document::Range, types::OutlineNodeContent},
     user_context::types::UserContext,
 };
@@ -799,6 +802,15 @@ impl MechaCodeSymbolThinking {
             self.symbol_name(),
         );
 
+        // This history of the paths we have taken upto this point
+        let mut history = original_request.history().to_vec();
+        // add the current symbol in the history list
+        history.push(SymbolRequestHistoryItem::new(
+            self.symbol_name().to_owned(),
+            self.fs_file_path().to_owned(),
+            original_request.get_original_question().to_owned(),
+        ));
+
         // First we need to verify if we even have to enter the coding loop, often
         // times thinking about this is better and solves generating a lot of code
         // for no reason
@@ -869,6 +881,7 @@ impl MechaCodeSymbolThinking {
                             })
                             .collect::<Vec<_>>(),
                         self.to_symbol_identifier(),
+                        history.to_vec(),
                     )),
                     tool_properties.clone(),
                 );
@@ -1002,6 +1015,7 @@ Reason to edit:
                     SymbolEvent::Edit(SymbolToEditRequest::new(
                         sub_symbols_to_edit,
                         self.to_symbol_identifier(),
+                        history,
                     )),
                     tool_properties.clone(),
                 ))

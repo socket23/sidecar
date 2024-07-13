@@ -115,5 +115,21 @@ pub fn python_language_config() -> TSLanguageConfig {
               function: (attribute
                 object: (identifier) @path))"
             .to_owned(),
+        file_definitions_query: r#"
+        (class_definition
+          name: (identifier) @name.definition.class) @definition.class
+        
+        (function_definition
+          name: (identifier) @name.definition.function) @definition.function
+        
+        (call
+          function: [
+              (identifier) @name.reference.call
+              (attribute
+                attribute: (identifier) @name.reference.call)
+          ]) @reference.call
+        
+        "#
+        .to_owned(),
     }
 }

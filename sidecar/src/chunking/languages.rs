@@ -7,6 +7,8 @@ use tree_sitter::Tree;
 
 use crate::chunking::types::FunctionNodeInformation;
 
+use core::ops::Range as CoreRange;
+
 use super::{
     go::go_language_config,
     javascript::javascript_language_config,
@@ -45,6 +47,10 @@ fn get_string_from_bytes(source_code: &Vec<u8>, start_byte: usize, end_byte: usi
 
 fn get_string_from_lines(lines: &[String], start_line: usize, end_line: usize) -> String {
     lines[start_line..=end_line].join("\n")
+}
+
+fn get_string_from_byte_range(source_code: &Vec<u8>, range: CoreRange<usize>) -> String {
+    get_string_from_bytes(source_code, range.start, range.end)
 }
 
 /// We are going to use tree-sitter to parse the code and get the chunks for the
@@ -124,6 +130,7 @@ pub struct TSLanguageConfig {
     /// Used to specify which object a method or property belongs to.
     pub object_qualifier: String,
 
+    /// Used to get the definitions for the file
     pub file_definitions_query: String,
 }
 
@@ -1261,6 +1268,29 @@ impl TSLanguageConfig {
         parser.set_language(grammar()).unwrap();
         let parsed_data = parser.parse(source_code, None).unwrap();
         self.capture_function_data_with_tree(source_code, &parsed_data, false)
+    }
+
+    pub fn capture_defs_and_refs(&self, source_code: &[u8], tree: &Tree) {
+        let root_node = tree.root_node();
+        let grammar = self.grammar;
+        let query = tree_sitter::Query::new(grammar(), &self.file_definitions_query)
+            .expect("file definitions queries to be well formed");
+
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let captures = cursor.captures(&query, root_node, source_code);
+
+        println!("{:?}", query.capture_names());
+
+        for capture in captures {
+            for capture in capture.0.captures {
+                println!("Kind: {:?}", capture.node.kind());
+
+                let range = capture.node.byte_range();
+                let label = get_string_from_byte_range(&source_code.to_vec(), range);
+                println!("Label: {:?}", label);
+            }
+            println!("==============================");
+        }
     }
 
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {

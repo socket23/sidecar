@@ -64,8 +64,9 @@ impl RepoMap {
         if let Some(tree) = tree {
             let root = tree.root_node();
             println!("Root: {:?}", root);
-        }
 
+            let captures = config.capture_defs_and_refs(content.as_bytes(), &tree);
+        }
         // let definitions
     }
 }

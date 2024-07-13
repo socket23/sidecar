@@ -1814,10 +1814,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                 // even if its a new symbol
                 vec![]
             } else {
-                dbg!(
-                    self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
-                        .await
-                )?
+                self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                    .await?
             };
 
             // if this is a new sub-symbol we have to create we have to diverge the

@@ -336,7 +336,6 @@ impl SymbolManager {
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
-        println!("Tool input: {:?}", &tool_input);
         if let Some(tool_input) = tool_input {
             // send the tool input to the ui sender
             // we need some kind of cache here so we do not invoke the expensive
@@ -363,7 +362,6 @@ impl SymbolManager {
                 }
             };
 
-            println!("Important symbols {:?}", &important_symbols);
             let tool_output = match important_symbols {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
                 None => self

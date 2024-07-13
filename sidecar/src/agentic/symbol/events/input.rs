@@ -133,14 +133,11 @@ impl SymbolInputEvent {
             self.llm.clone()
         };
         // TODO(skcd): Toggle the request here depending on if we have the repo map
-        println!("Figure out the repo map over here");
-        println!("has_repo_map::({})", self.has_repo_map());
         if self.has_repo_map() {
             let contents = tokio::fs::read_to_string(
                 self.repo_map_fs_path.expect("has_repo_map to not break"),
             )
             .await;
-            println!("repo_map_contents: {}", contents.is_ok());
             match contents {
                 Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
                     contents,

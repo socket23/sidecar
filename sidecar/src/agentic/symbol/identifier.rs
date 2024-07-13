@@ -625,18 +625,17 @@ impl MechaCodeSymbolThinking {
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
             {
                 println!("mecha_code_symbol_thinking::probe_sub_symbol::filter_code_snippets_subsymbol_for_probing::({})", self.symbol_name());
-                let filtered_list = dbg!(
-                    self.tool_box
-                        .filter_code_snippets_subsymbol_for_probing(
-                            ranked_xml_list,
-                            query.to_owned(),
-                            llm_properties.llm().clone(),
-                            llm_properties.provider().clone(),
-                            llm_properties.api_key().clone(),
-                            &request_id,
-                        )
-                        .await
-                )?;
+                let filtered_list = self
+                    .tool_box
+                    .filter_code_snippets_subsymbol_for_probing(
+                        ranked_xml_list,
+                        query.to_owned(),
+                        llm_properties.llm().clone(),
+                        llm_properties.provider().clone(),
+                        llm_properties.api_key().clone(),
+                        &request_id,
+                    )
+                    .await?;
 
                 let filtered_list_ref = &filtered_list;
 
@@ -922,9 +921,8 @@ impl MechaCodeSymbolThinking {
                     self.symbol_name(),
                 );
                 println!(
-                    "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::ranked_xml_list({})\n{}",
+                    "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::ranked_xml_list({})",
                     self.symbol_name(),
-                    &ranked_xml_list,
                 );
                 let filtered_list = tool_box
                     .filter_code_snippets_in_symbol_for_editing(

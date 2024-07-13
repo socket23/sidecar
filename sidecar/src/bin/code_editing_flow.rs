@@ -91,7 +91,8 @@ async fn main() {
         request_id.to_string(),
     );
 
-    let problem_statement = "can you add another provider for grok for me?".to_owned();
+    let problem_statement =
+        "can you add another provider for grok for me we just need an api_key?".to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

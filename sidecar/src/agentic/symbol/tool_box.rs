@@ -2508,6 +2508,17 @@ instruction:
                 } else {
                     println!("tool_box::code_correctness_chagnes_to_codebase::following_along::self_symbol({})::symbol_to_edit({})", &parent_symbol_name, symbol_name);
                 }
+
+                // skip sending the request here if we have already done the work
+                // in history (ideally we use an LLM but right now we just guard
+                // easily)
+                if history.iter().any(|history| {
+                    history.symbol_name() == symbol_name
+                        && history.fs_file_path() == symbol_file_path
+                }) {
+                    println!("tool_box::code_correctness_changes_to_codebase::skipping::symbol_in_history::({})", symbol_name);
+                    continue;
+                }
                 let (sender, receiver) = tokio::sync::oneshot::channel();
                 let _ = hub_sender.send((
                     SymbolEventRequest::initial_request(
@@ -2729,10 +2740,9 @@ instruction:
             }
 
             // Now we check for LSP diagnostics
-            let lsp_diagnostics = dbg!(
-                self.get_lsp_diagnostics(fs_file_path, &edited_range, request_id)
-                    .await
-            )?;
+            let lsp_diagnostics = self
+                .get_lsp_diagnostics(fs_file_path, &edited_range, request_id)
+                .await?;
 
             // We also give it the option to edit the code as required
             if lsp_diagnostics.get_diagnostics().is_empty() {

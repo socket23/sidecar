@@ -13,6 +13,14 @@ impl SymbolRequestHistoryItem {
             request,
         }
     }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

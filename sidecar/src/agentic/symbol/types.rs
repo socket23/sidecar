@@ -1804,9 +1804,9 @@ Satisfy the requirement either by making edits or gathering the required informa
         // - following the changed symbol to check on the references and wherever its being used
         for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
             println!(
-                "symbol::edit_implementation::sub_symbol_to_edit::({})::\n{:?}",
+                "symbol::edit_implementation::sub_symbol_to_edit::({})::is_new({:?})",
                 sub_symbol_to_edit.symbol_name(),
-                &sub_symbol_to_edit,
+                sub_symbol_to_edit.is_new(),
             );
             let context_for_editing = if sub_symbol_to_edit.is_new() {
                 // TODO(skcd): This is wrong, because we want to still grab context over here
@@ -2001,7 +2001,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                             "symbol::types::symbol_event::edit::edit_implementations({})",
                             symbol.symbol_name()
                         );
-                        dbg!(symbol.edit_implementations(edit_request, request_id).await)
+                        symbol.edit_implementations(edit_request, request_id).await
                     }
                     SymbolEvent::AskQuestion(_ask_question_request) => {
                         // we refresh our state always

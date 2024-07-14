@@ -5,5 +5,5 @@ fn main() {
 
     let ts_parsing = Arc::new(TSLanguageParsing::init());
 
-    repomap.try_parsing("src/repomap/types.rs", ts_parsing);
+    repomap.try_repomap("src/repomap/types.rs", ts_parsing);
 }

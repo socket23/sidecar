@@ -1269,6 +1269,8 @@ impl TSLanguageConfig {
         self.capture_function_data_with_tree(source_code, &parsed_data, false)
     }
 
+    // TODO: get_tags cache
+
     // get tags for a given file
     pub fn get_tags(
         &self,

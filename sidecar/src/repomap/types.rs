@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -31,7 +31,7 @@ impl RepoMap {
         }
     }
 
-    pub fn try_parsing(&self, fname: &str, ts_parsing: Arc<TSLanguageParsing>) {
+    pub fn try_repomap(&self, fname: &str, ts_parsing: Arc<TSLanguageParsing>) {
         let path = PathBuf::from(&self.package_path).join(fname);
 
         if !path.exists() {
@@ -55,18 +55,55 @@ impl RepoMap {
             }
         };
 
-        let tree = config.get_tree_sitter_tree(content.as_bytes());
+        let tree = match config.get_tree_sitter_tree(content.as_bytes()) {
+            Some(tree) => tree,
+            None => {
+                eprintln!(
+                    "Error: Failed to get tree-sitter tree for: {}",
+                    path.display()
+                );
+                return;
+            }
+        };
 
-        if let Some(tree) = tree {
-            // let root = tree.root_node();
+        let mut defines: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut references: HashMap<String, Vec<String>> = HashMap::new();
+        let mut definitions: HashMap<(String, String), HashSet<Tag>> = HashMap::new();
+        let mut personalization: HashMap<String, f64> = HashMap::new();
 
-            let tags = config.get_tags(content.as_bytes(), &tree, fname, fname);
+        let tags = config.get_tags(content.as_bytes(), &tree, fname, fname);
 
-            for tag in tags {
-                println!("======\n{:?}\n======", tag);
+        for tag in tags {
+            println!("======\n{:?}\n======", tag);
+
+            match tag.kind {
+                TagKind::Definition => {
+                    defines
+                        .entry(tag.name.clone())
+                        .or_default()
+                        .insert(rel_fname.clone());
+                    definitions
+                        .entry((rel_fname.clone(), tag.name.clone()))
+                        .or_default()
+                        .insert(tag);
+                }
+                TagKind::Reference => {
+                    references
+                        .entry(tag.name.clone())
+                        .or_default()
+                        .push(rel_fname.clone());
+                }
             }
         }
-        // let definitions
+
+        // for tag in tags:
+        // if tag.kind == "def":
+        //     defines[tag.name].add(rel_fname)
+        //     key = (rel_fname, tag.name)
+        //     definitions[key].add(tag)
+
+        // if tag.kind == "ref":
+        //     references[tag.name].append(rel_fname)
     }
 }
 

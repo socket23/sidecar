@@ -38,98 +38,85 @@ impl RepoMap {
             .to_path_buf()
     }
 
-    pub fn try_repomap(&self, fname: &PathBuf, ts_parsing: Arc<TSLanguageParsing>) {
-        let path = PathBuf::from(&self.package_path).join(fname);
-
-        println!("path: {:?}", path);
-
-        if !path.exists() {
-            eprintln!("Error: File not found: {}", path.display());
-            return;
-        }
-
-        let config = match ts_parsing.for_file_path(fname.to_str().unwrap()) {
-            Some(config) => config,
-            None => {
-                eprintln!(
-                    "Error: Language configuration not found for: {}",
-                    fname.display()
-                );
-                return;
-            }
-        };
-
-        let content = match read_to_string(&path) {
-            Ok(content) => content,
-            Err(e) => {
-                eprintln!("Error reading file {}: {}", path.display(), e);
-                return;
-            }
-        };
-
-        let tree = match config.get_tree_sitter_tree(content.as_bytes()) {
-            Some(tree) => tree,
-            None => {
-                eprintln!(
-                    "Error: Failed to get tree-sitter tree for: {}",
-                    path.display()
-                );
-                return;
-            }
-        };
-
-        let rel_path = self.get_rel_fname(fname);
-
+    pub fn get_ranked_tags(
+        &self,
+        chat_fnames: &[PathBuf],
+        other_fnames: &[PathBuf],
+        ts_parsing: Arc<TSLanguageParsing>,
+    ) {
         // set of file paths where the tag is defined
         // good for question "In which files is tag X defined?"
-        let mut defines: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut defines: HashMap<String, HashSet<PathBuf>> = HashMap::new();
 
         // allows duplicates to accommodate multiple references to the same definition
-        let mut references: HashMap<String, Vec<String>> = HashMap::new();
+        let mut references: HashMap<String, Vec<PathBuf>> = HashMap::new();
 
         // map of (file path, tag name) to tag
         // good for question "What are the details of tag X in file Y?"
-        let mut definitions: HashMap<(String, String), HashSet<Tag>> = HashMap::new();
+        let mut definitions: HashMap<(PathBuf, String), HashSet<Tag>> = HashMap::new();
+
+        // TODO: implement personalization
         let mut personalization: HashMap<String, f64> = HashMap::new();
 
-        let tags = config.get_tags(content.as_bytes(), &tree, fname, fname);
+        let mut fnames: HashSet<PathBuf> = chat_fnames.iter().cloned().collect();
+        fnames.extend(other_fnames.iter().cloned());
 
-        for tag in tags {
-            println!("======\n{:?}\n======", tag);
+        let fnames: Vec<PathBuf> = fnames.into_iter().collect();
 
-            let rel_path = rel_path.to_str().unwrap().to_string();
-            match tag.kind {
-                TagKind::Definition => {
-                    defines
-                        .entry(tag.name.clone())
-                        .or_default()
-                        .insert(rel_path.clone()); // adds file path
-                    definitions
-                        .entry((rel_path.clone(), tag.name.clone()))
-                        .or_default()
-                        .insert(tag); // adds tag
+        for fname in &fnames {
+            if !fname.exists() {
+                eprintln!("Error: File not found: {}", fname.display());
+                continue;
+            }
+
+            let rel_path = self.get_rel_fname(&fname);
+
+            let config = match ts_parsing.for_file_path(fname.to_str().unwrap()) {
+                Some(config) => config,
+                None => {
+                    eprintln!(
+                        "Error: Language configuration not found for: {}",
+                        fname.display()
+                    );
+                    continue;
                 }
-                TagKind::Reference => {
-                    references
-                        .entry(tag.name.clone())
-                        .or_default()
-                        .push(rel_path.clone());
+            };
+
+            let tags = config.get_tags(fname, &rel_path);
+
+            for tag in tags {
+                match tag.kind {
+                    TagKind::Definition => {
+                        defines
+                            .entry(tag.name.clone())
+                            .or_default()
+                            .insert(rel_path.clone());
+                        definitions
+                            .entry((rel_path.clone(), tag.name.clone()))
+                            .or_default()
+                            .insert(tag);
+                    }
+                    TagKind::Reference => {
+                        references
+                            .entry(tag.name.clone())
+                            .or_default()
+                            .push(rel_path.clone());
+                    }
                 }
             }
+        }
+
+        // if references are empty, use defines as references
+        if references.is_empty() {
+            references = defines
+                .iter()
+                .map(|(k, v)| (k.clone(), v.iter().cloned().collect::<Vec<PathBuf>>()))
+                .collect();
         }
 
         println!("defines: {:?}", defines);
         println!("references: {:?}", references);
         println!("definitions: {:?}", definitions);
-
-        // for tag in tags:
-        // if tag.kind == "def":
-        //     defines[tag.name].add(rel_fname)
-        //     key = (rel_fname, tag.name)
-        //     definitions[key].add(tag)
-
-        // if tag.kind == "ref":
-        //     references[tag.name].append(rel_fname)
     }
 }
 

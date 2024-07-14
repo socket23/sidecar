@@ -7,5 +7,5 @@ fn main() {
 
     let fname_path = PathBuf::from("src/repomap/types.rs");
 
-    repomap.try_repomap(&fname_path, ts_parsing);
+    repomap.get_ranked_tags(&fname_path, ts_parsing);
 }

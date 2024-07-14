@@ -1917,6 +1917,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                 )
                 .await;
         }
+        println!(
+            "symbol::edit_implementation::finish::({})",
+            self.symbol_name()
+        );
         Ok(())
     }
 
@@ -1969,13 +1973,20 @@ Satisfy the requirement either by making edits or gathering the required informa
                             Ok(Some(initial_request)) => {
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
                                 let _ = symbol.hub_sender.send((
-                                    initial_request,
+                                    initial_request.clone(),
                                     // since this is the initial request, we will end up generating
                                     // a new request id for this
                                     uuid::Uuid::new_v4().to_string(),
                                     sender,
                                 ));
                                 let response = receiver.await;
+                                if response.is_err() {
+                                    println!(
+                                        "symbol.hub_sender::({})::initial_request({:?})",
+                                        symbol.symbol_name(),
+                                        &initial_request,
+                                    );
+                                }
                                 println!(
                                     "Response from symbol.hub_sender::({}): {:?}",
                                     symbol.symbol_name(),

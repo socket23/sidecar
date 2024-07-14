@@ -1604,9 +1604,19 @@ We also believe this symbol needs to be probed because of:
             .for_file_path(symbol_edited.fs_file_path())
             .map(|language_config| language_config.language_str.to_owned())
             .unwrap_or("".to_owned());
+        println!(
+            "tool_box::check_for_followups::find_sub_symbol_edited::({})::({})",
+            parent_symbol_name,
+            symbol_edited.symbol_name()
+        );
         let symbol_to_edit = self
             .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
             .await?;
+        println!(
+            "tool_box::check_for_followups::found_sub_symbol_edited::({})::({})",
+            parent_symbol_name,
+            symbol_edited.symbol_name(),
+        );
         // over here we have to check if its a function or a class
         if symbol_to_edit.is_function_type() {
             // we do need to get the references over here for the function and

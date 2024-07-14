@@ -5,5 +5,7 @@ fn main() {
 
     let ts_parsing = Arc::new(TSLanguageParsing::init());
 
-    repomap.try_repomap("src/repomap/types.rs", ts_parsing);
+    let fname_path = PathBuf::from("src/repomap/types.rs");
+
+    repomap.try_repomap(&fname_path, ts_parsing);
 }

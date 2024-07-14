@@ -1276,8 +1276,8 @@ impl TSLanguageConfig {
         &self,
         source_code: &[u8],
         tree: &Tree,
-        fname: &str,
-        rel_fname: &str,
+        fname: &PathBuf,
+        rel_fname: &PathBuf,
     ) -> Vec<Tag> {
         let root_node = tree.root_node();
         let grammar = self.grammar;
@@ -1298,15 +1298,15 @@ impl TSLanguageConfig {
                 let line = node.start_position().row;
                 match tag_name {
                     name if name.starts_with("name.definition.") => Some(Tag::new(
-                        String::from(rel_fname),
-                        String::from(fname),
+                        rel_fname.clone(),
+                        fname.clone(),
                         line,
                         String::from(tag_name),
                         TagKind::Definition,
                     )),
                     name if name.starts_with("name.reference.") => Some(Tag::new(
-                        String::from(rel_fname),
-                        String::from(fname),
+                        rel_fname.clone(),
+                        fname.clone(),
                         line,
                         String::from(tag_name),
                         TagKind::Reference,

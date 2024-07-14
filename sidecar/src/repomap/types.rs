@@ -31,18 +31,30 @@ impl RepoMap {
         }
     }
 
-    pub fn try_repomap(&self, fname: &str, ts_parsing: Arc<TSLanguageParsing>) {
+    fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {
+        fname
+            .strip_prefix(&self.root)
+            .unwrap_or(fname)
+            .to_path_buf()
+    }
+
+    pub fn try_repomap(&self, fname: &PathBuf, ts_parsing: Arc<TSLanguageParsing>) {
         let path = PathBuf::from(&self.package_path).join(fname);
+
+        println!("path: {:?}", path);
 
         if !path.exists() {
             eprintln!("Error: File not found: {}", path.display());
             return;
         }
 
-        let config = match ts_parsing.for_file_path(fname) {
+        let config = match ts_parsing.for_file_path(fname.to_str().unwrap()) {
             Some(config) => config,
             None => {
-                eprintln!("Error: Language configuration not found for: {}", fname);
+                eprintln!(
+                    "Error: Language configuration not found for: {}",
+                    fname.display()
+                );
                 return;
             }
         };
@@ -66,6 +78,8 @@ impl RepoMap {
             }
         };
 
+        let rel_path = self.get_rel_fname(fname);
+
         let mut defines: HashMap<String, HashSet<String>> = HashMap::new();
         let mut references: HashMap<String, Vec<String>> = HashMap::new();
         let mut definitions: HashMap<(String, String), HashSet<Tag>> = HashMap::new();
@@ -76,14 +90,15 @@ impl RepoMap {
         for tag in tags {
             println!("======\n{:?}\n======", tag);
 
+            let rel_path = rel_path.to_str().unwrap().to_string();
             match tag.kind {
                 TagKind::Definition => {
                     defines
                         .entry(tag.name.clone())
                         .or_default()
-                        .insert(rel_fname.clone());
+                        .insert(rel_path.clone());
                     definitions
-                        .entry((rel_fname.clone(), tag.name.clone()))
+                        .entry((rel_path.clone(), tag.name.clone()))
                         .or_default()
                         .insert(tag);
                 }
@@ -91,10 +106,14 @@ impl RepoMap {
                     references
                         .entry(tag.name.clone())
                         .or_default()
-                        .push(rel_fname.clone());
+                        .push(rel_path.clone());
                 }
             }
         }
+
+        println!("defines: {:?}", defines);
+        println!("references: {:?}", references);
+        println!("definitions: {:?}", definitions);
 
         // for tag in tags:
         // if tag.kind == "def":
@@ -115,15 +134,21 @@ struct CachedTags {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Tag {
-    pub rel_fname: String,
-    pub fname: String,
+    pub rel_fname: PathBuf,
+    pub fname: PathBuf,
     pub line: usize,
     pub name: String,
     pub kind: TagKind,
 }
 
 impl Tag {
-    pub fn new(rel_fname: String, fname: String, line: usize, name: String, kind: TagKind) -> Self {
+    pub fn new(
+        rel_fname: PathBuf,
+        fname: PathBuf,
+        line: usize,
+        name: String,
+        kind: TagKind,
+    ) -> Self {
         Self {
             rel_fname,
             fname,

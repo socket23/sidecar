@@ -669,8 +669,7 @@ impl ToolBox {
                     std::cmp::min(i64::abs(start_line - index), i64::abs(end_line - index));
                 // we also need to make sure that the selection we are making is in
                 // the range of the snippet we are selecting the symbols in
-                // LLMs have a trendency to go overboard with this
-                dbg!(&line, line.contains(&line_content));
+                // LLMs have a trendency to go overboard with this;
                 if line_content
                     .lines()
                     .any(|line_content_to_search| line.contains(line_content_to_search))
@@ -687,7 +686,7 @@ impl ToolBox {
         containing_lines.sort_by(|a, b| a.0.cmp(&b.0));
         // Now iterate over all the lines containing this symbol and find the one which we can hover over
         // and select the first one possible here
-        let mut symbol_locations = dbg!(containing_lines)
+        let mut symbol_locations = containing_lines
             .into_iter()
             .filter_map(|containing_line| {
                 let (line, line_index) = containing_line.1;
@@ -1635,8 +1634,8 @@ We also believe this symbol needs to be probed because of:
             // code and the changed node and ask it for the symbols which we should go
             // to references for, that way we are able to do the finer garained changes
             // as and when required
-            let _ = dbg!(
-                self.invoke_references_check_for_class_definition(
+            let _ = self
+                .invoke_references_check_for_class_definition(
                     symbol_edited,
                     original_code,
                     &symbol_to_edit,
@@ -1648,18 +1647,16 @@ We also believe this symbol needs to be probed because of:
                     request_id,
                     tool_properties,
                 )
-                .await
-            );
-            let references = dbg!(
-                self.go_to_references(
+                .await;
+            let references = self
+                .go_to_references(
                     symbol_edited.fs_file_path(),
                     &symbol_edited.range().start_position(),
                     request_id,
                 )
-                .await
-            )?;
-            let _ = dbg!(
-                self.invoke_followup_on_references(
+                .await?;
+            let _ = self
+                .invoke_followup_on_references(
                     symbol_edited,
                     original_code,
                     &symbol_to_edit,
@@ -1668,8 +1665,7 @@ We also believe this symbol needs to be probed because of:
                     request_id,
                     tool_properties,
                 )
-                .await
-            );
+                .await;
         } else {
             // something else over here, wonder what it could be
             return Err(SymbolError::NoContainingSymbolFound);
@@ -2611,10 +2607,9 @@ instruction:
             // The range of the symbol before doing the edit
             let edited_range = symbol_to_edit_range;
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
-            let _editor_response = dbg!(
-                self.apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
-                    .await
-            )?;
+            let _editor_response = self
+                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
+                .await?;
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
@@ -2634,10 +2629,9 @@ instruction:
             let test_output_maybe = if let Some(swe_bench_test_endpoint) =
                 tool_properties.get_swe_bench_test_endpoint()
             {
-                let swe_bench_test_output = dbg!(
-                    self.swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
-                        .await
-                )?;
+                let swe_bench_test_output = self
+                    .swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
+                    .await?;
                 // Pass the test output through for checking the correctness of
                 // this code
                 Some(swe_bench_test_output)
@@ -2774,8 +2768,8 @@ instruction:
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
             if selected_action_index == quick_fix_actions.len() as i64 {
-                let fixed_code = dbg!(
-                    self.code_correctness_with_edits(
+                let fixed_code = self
+                    .code_correctness_with_edits(
                         fs_file_path,
                         &fs_file_content,
                         symbol_to_edit.range(),
@@ -2788,8 +2782,7 @@ instruction:
                         api_keys.clone(),
                         request_id,
                     )
-                    .await
-                )?;
+                    .await?;
 
                 let _ = self.ui_events.send(UIEventWithID::edited_code(
                     request_id.to_owned(),
@@ -2801,15 +2794,9 @@ instruction:
 
                 // after this we have to apply the edits to the editor again and being
                 // the loop again
-                let _ = dbg!(
-                    self.apply_edits_to_editor(
-                        fs_file_path,
-                        &edited_range,
-                        &fixed_code,
-                        request_id
-                    )
-                    .await
-                )?;
+                let _ = self
+                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code, request_id)
+                    .await?;
             } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
                 // over here we want to ping the other symbols and send them requests, there is a search
                 // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
@@ -2844,10 +2831,9 @@ instruction:
                 break;
             } else {
                 // invoke the code action over here with the editor
-                let response = dbg!(
-                    self.invoke_quick_action(selected_action_index, &lsp_request_id, request_id)
-                        .await
-                )?;
+                let response = self
+                    .invoke_quick_action(selected_action_index, &lsp_request_id, request_id)
+                    .await?;
                 if response.is_success() {
                     // great we have a W
                 } else {

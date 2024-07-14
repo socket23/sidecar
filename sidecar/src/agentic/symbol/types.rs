@@ -1852,14 +1852,12 @@ Satisfy the requirement either by making edits or gathering the required informa
                     sub_symbol_to_edit.range().clone(),
                     sub_symbol_to_edit.fs_file_path().to_owned(),
                 ));
-                dbg!(
-                    self.edit_code(
-                        &sub_symbol_to_edit,
-                        context_for_editing.to_owned(),
-                        &request_id,
-                    )
-                    .await
-                )?
+                self.edit_code(
+                    &sub_symbol_to_edit,
+                    context_for_editing.to_owned(),
+                    &request_id,
+                )
+                .await?
             };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;

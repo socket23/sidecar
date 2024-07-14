@@ -1278,8 +1278,9 @@ impl TSLanguageConfig {
         for capture in captures {
             println!("==============================");
             let capture_index = capture.1;
-            println!("Capture index {:?}", capture_index);
-            println!("captures len: {}", capture.0.captures.len());
+
+            let tag_name = &query.capture_names()[capture_index];
+            println!("Tag name: {:?}", tag_name);
 
             for (index, capture) in capture.0.captures.iter().enumerate() {
                 if index != capture_index {

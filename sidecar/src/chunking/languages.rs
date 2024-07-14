@@ -1,12 +1,16 @@
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use gix::{bstr::ByteSlice, config::source};
 use tree_sitter::{QueryCaptures, QueryMatch, Tree};
 
-use crate::chunking::types::FunctionNodeInformation;
+use crate::{
+    chunking::types::FunctionNodeInformation,
+    repomap::types::{Tag, TagKind},
+};
 
 use super::{
     go::go_language_config,
@@ -1265,7 +1269,14 @@ impl TSLanguageConfig {
         self.capture_function_data_with_tree(source_code, &parsed_data, false)
     }
 
-    pub fn capture_defs_and_refs(&self, source_code: &[u8], tree: &Tree) {
+    // get tags for a given file
+    pub fn get_tags(
+        &self,
+        source_code: &[u8],
+        tree: &Tree,
+        fname: &str,
+        rel_fname: &str,
+    ) -> Vec<Tag> {
         let root_node = tree.root_node();
         let grammar = self.grammar;
         let query = tree_sitter::Query::new(grammar(), &self.file_definitions_query)
@@ -1275,24 +1286,40 @@ impl TSLanguageConfig {
 
         let captures = cursor.captures(&query, root_node, source_code);
 
-        let filtered_captures = captures.into_iter().filter(|capture| {
-            let index = capture.1;
-            let tag_name = &query.capture_names()[index];
-            println!("Tag name: {:?}", tag_name);
+        // let mut seen_kinds = HashSet::new();
 
-            if tag_name.starts_with("name.definition") {
-                true
-            } else {
-                false
-            }
-        });
+        // go through each capture and populate seen_kinds;
 
-        // print filtered captures
-        for capture in filtered_captures {
-            println!("==============================");
-            println!("Capture: {:?}", capture);
-            println!("==============================");
-        }
+        // filter out captures that are not def / ref
+        captures
+            .filter_map(|(match_, capture_index)| {
+                let capture = &match_.captures[capture_index]; // the specific capture we're interested in, as opposed to other captures in the match
+
+                // A 'match' represents a successful pattern match from our query, potentially containing multiple captures
+                let tag_name = &query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                let line = node.start_position().row;
+
+                println!("Capture index: {}, Tag name: {}", capture.index, tag_name);
+                match tag_name {
+                    name if name.starts_with("name.definition.") => Some(Tag::new(
+                        String::from(rel_fname),
+                        String::from(fname),
+                        line,
+                        String::from(tag_name),
+                        TagKind::Definition,
+                    )),
+                    name if name.starts_with("name.reference.") => Some(Tag::new(
+                        String::from(rel_fname),
+                        String::from(fname),
+                        line,
+                        String::from(tag_name),
+                        TagKind::Reference,
+                    )),
+                    _ => None,
+                }
+            })
+            .collect()
     }
 
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {

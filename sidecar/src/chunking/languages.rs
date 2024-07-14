@@ -4,7 +4,7 @@ use std::{
 };
 
 use gix::{bstr::ByteSlice, config::source};
-use tree_sitter::{QueryCaptures, Tree};
+use tree_sitter::{QueryCaptures, QueryMatch, Tree};
 
 use crate::chunking::types::FunctionNodeInformation;
 
@@ -1275,27 +1275,22 @@ impl TSLanguageConfig {
 
         let captures = cursor.captures(&query, root_node, source_code);
 
-        for capture in captures {
-            println!("==============================");
-            let capture_index = capture.1;
-
-            let tag_name = &query.capture_names()[capture_index];
+        let filtered_captures = captures.into_iter().filter(|capture| {
+            let index = capture.1;
+            let tag_name = &query.capture_names()[index];
             println!("Tag name: {:?}", tag_name);
 
-            for (index, capture) in capture.0.captures.iter().enumerate() {
-                if index != capture_index {
-                    continue;
-                }
-
-                let node = capture.node;
-                let kind = node.kind();
-                let range = node.range();
-                let content =
-                    get_string_from_bytes(&source_code.to_vec(), range.start_byte, range.end_byte);
-
-                println!("Kind: {:?}", &kind);
-                println!("Content: {:?}", &content);
+            if tag_name.starts_with("name.definition") {
+                true
+            } else {
+                false
             }
+        });
+
+        // print filtered captures
+        for capture in filtered_captures {
+            println!("==============================");
+            println!("Capture: {:?}", capture);
             println!("==============================");
         }
     }

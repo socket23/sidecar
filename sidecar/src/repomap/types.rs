@@ -80,8 +80,15 @@ impl RepoMap {
 
         let rel_path = self.get_rel_fname(fname);
 
+        // set of file paths where the tag is defined
+        // good for question "In which files is tag X defined?"
         let mut defines: HashMap<String, HashSet<String>> = HashMap::new();
+
+        // allows duplicates to accommodate multiple references to the same definition
         let mut references: HashMap<String, Vec<String>> = HashMap::new();
+
+        // map of (file path, tag name) to tag
+        // good for question "What are the details of tag X in file Y?"
         let mut definitions: HashMap<(String, String), HashSet<Tag>> = HashMap::new();
         let mut personalization: HashMap<String, f64> = HashMap::new();
 
@@ -96,11 +103,11 @@ impl RepoMap {
                     defines
                         .entry(tag.name.clone())
                         .or_default()
-                        .insert(rel_path.clone());
+                        .insert(rel_path.clone()); // adds file path
                     definitions
                         .entry((rel_path.clone(), tag.name.clone()))
                         .or_default()
-                        .insert(tag);
+                        .insert(tag); // adds tag
                 }
                 TagKind::Reference => {
                     references

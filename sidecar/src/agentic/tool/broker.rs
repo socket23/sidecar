@@ -295,11 +295,9 @@ impl Tool for ToolBroker {
         let time_start = std::time::Instant::now();
         if let Some(tool) = self.tools.get(&tool_type) {
             let result = tool.invoke(input).await;
-            println!("Tool(OK): time taken: {:?}", time_start.elapsed());
             result
         } else {
             let result = Err(ToolError::MissingTool);
-            println!("Tool(Err): time taken: {:?}", time_start.elapsed());
             result
         }
     }

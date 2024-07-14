@@ -2578,28 +2578,6 @@ instruction:
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
     ) -> Result<(), SymbolError> {
-        println!("==========too_box::check_code_correctness==========");
-        println!(
-            "tool_box::check_code_correctness::symbol_edited:\n{:?}",
-            &symbol_edited
-        );
-        println!(
-            "tool_box::check_code_correctness::original_code:\n{}",
-            original_code
-        );
-        println!(
-            "tool_box::check_code_correctness::edited_code:\n{}",
-            edited_code
-        );
-        println!(
-            "tool_box::check_code_correctness::code_edit_extra_context:\n{}",
-            code_edit_extra_context
-        );
-        println!(
-            "tool_box::check_code_correctness::tool_properties:{:?}",
-            tool_properties
-        );
-        println!("====================");
         // code correction looks like this:
         // - apply the edited code to the original selection
         // - look at the code actions which are available

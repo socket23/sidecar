@@ -1286,11 +1286,6 @@ impl TSLanguageConfig {
 
         let captures = cursor.captures(&query, root_node, source_code);
 
-        // let mut seen_kinds = HashSet::new();
-
-        // go through each capture and populate seen_kinds;
-
-        // filter out captures that are not def / ref
         captures
             .filter_map(|(match_, capture_index)| {
                 let capture = &match_.captures[capture_index]; // the specific capture we're interested in, as opposed to other captures in the match
@@ -1299,8 +1294,6 @@ impl TSLanguageConfig {
                 let tag_name = &query.capture_names()[capture.index as usize];
                 let node = capture.node;
                 let line = node.start_position().row;
-
-                println!("Capture index: {}, Tag name: {}", capture.index, tag_name);
                 match tag_name {
                     name if name.starts_with("name.definition.") => Some(Tag::new(
                         String::from(rel_fname),

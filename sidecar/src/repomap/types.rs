@@ -69,6 +69,11 @@ impl RepoMap {
                 continue;
             }
 
+            println!(
+                "===============\nFile: {}\n================",
+                fname.display()
+            );
+
             let rel_path = self.get_rel_fname(&fname);
 
             let config = match ts_parsing.for_file_path(fname.to_str().unwrap()) {
@@ -115,19 +120,29 @@ impl RepoMap {
         }
 
         println!("==========Defines==========");
-        for (key, set) in &defines {
+        defines.iter().for_each(|(key, set)| {
             println!("Key {}, Set: {:?}", key, set);
-        }
+        });
 
         println!("==========Definitions==========");
-        for ((pathbuf, tag_name), set) in &definitions {
+        definitions.iter().for_each(|((pathbuf, tag_name), set)| {
             println!("Key {:?}, Set: {:?}", (pathbuf, tag_name), set);
-        }
+        });
 
         println!("==========References==========");
-        for (tag_name, paths) in references {
+        references.iter().for_each(|(tag_name, paths)| {
             println!("Tag: {}, Paths: {:?}", tag_name, paths);
-        }
+        });
+
+        let common_tags: HashSet<&String> = defines
+            .keys()
+            .filter(|&key| references.contains_key(key))
+            .collect();
+
+        println!("==========Common Tags==========");
+        common_tags.iter().for_each(|&tag| {
+            println!("Common Tag: {}", tag);
+        });
     }
 }
 

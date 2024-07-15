@@ -341,6 +341,10 @@ impl LLMClient for AnthropicClient {
                 "x-api-key".to_owned(),
                 self.generate_api_bearer_key(api_key)?,
             )
+            .header(
+                "anthropic-beta".to_owned(),
+                "max-tokens-3-5-sonnet-2024-07-15".to_owned(),
+            )
             .header("anthropic-version".to_owned(), "2023-06-01".to_owned())
             .header("content-type".to_owned(), "application/json".to_owned())
             .json(&anthropic_request)

@@ -1311,19 +1311,20 @@ impl TSLanguageConfig {
                 let tag_name = &query.capture_names()[capture.index as usize];
                 let node = capture.node;
                 let line = node.start_position().row;
+                let symbol_name = &content[node.start_byte()..node.end_byte()];
                 match tag_name {
                     name if name.starts_with("name.definition.") => Some(Tag::new(
                         rel_fname.clone(),
                         fname.clone(),
                         line,
-                        String::from(tag_name),
+                        String::from(symbol_name),
                         TagKind::Definition,
                     )),
                     name if name.starts_with("name.reference.") => Some(Tag::new(
                         rel_fname.clone(),
                         fname.clone(),
                         line,
-                        String::from(tag_name),
+                        String::from(symbol_name),
                         TagKind::Reference,
                     )),
                     _ => None,

@@ -920,10 +920,6 @@ impl MechaCodeSymbolThinking {
                     "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::start({})",
                     self.symbol_name(),
                 );
-                println!(
-                    "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::ranked_xml_list({})",
-                    self.symbol_name(),
-                );
                 let filtered_list = tool_box
                     .filter_code_snippets_in_symbol_for_editing(
                         ranked_xml_list,
@@ -1278,16 +1274,22 @@ Reason to edit:
 </rerank_entry>"#
                                 )
                                 .to_owned();
-                                symbol_rerank_information.push(
-                                    SnippetReRankInformation::new(
-                                        symbol_index,
-                                        class_snippet.range().clone(),
-                                        class_snippet.fs_file_path().to_owned(),
-                                    )
-                                    .set_is_outline(),
-                                );
-                                symbol_index = symbol_index + 1;
-                                Some(overlapp_snippet)
+                                // guard against impl blocks in rust, since including
+                                // just the impl statement can confuse the LLM
+                                if !class_snippet.is_class_declaration() && class_snippet.language().to_lowercase() == "rust" && class_snippet.has_trait_implementation().is_none() {
+                                    None
+                                } else {
+                                    symbol_rerank_information.push(
+                                        SnippetReRankInformation::new(
+                                            symbol_index,
+                                            class_snippet.range().clone(),
+                                            class_snippet.fs_file_path().to_owned(),
+                                        )
+                                        .set_is_outline(),
+                                    );
+                                    symbol_index = symbol_index + 1;
+                                    Some(overlapp_snippet)
+                                }
                             } else {
                                 None
                             };

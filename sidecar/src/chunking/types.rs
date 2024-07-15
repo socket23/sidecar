@@ -184,6 +184,14 @@ impl OutlineNodeContent {
         }
     }
 
+    pub fn is_class_declaration(&self) -> bool {
+        matches!(self.outline_node_type(), OutlineNodeType::ClassDefinition)
+    }
+
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+
     pub fn to_xml(&self) -> String {
         let name = &self.name;
         let file_path = &self.fs_file_path;

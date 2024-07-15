@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -37,114 +38,58 @@ impl RepoMap {
             .to_path_buf()
     }
 
+    fn process_file(
+        &self,
+        fname: &PathBuf,
+        ts_parsing: &Arc<TSLanguageParsing>,
+        tag_index: &mut TagIndex,
+    ) -> Result<(), Box<dyn Error>> {
+        if !fname.exists() {
+            return Err(format!("File not found: {}", fname.display()).into());
+        }
+
+        let rel_path = self.get_rel_fname(fname);
+        let config = ts_parsing
+            .for_file_path(fname.to_str().unwrap())
+            .ok_or_else(|| format!("Language configuration not found for: {}", fname.display()))?;
+
+        let tags = config.get_tags(fname, &rel_path);
+
+        for tag in tags {
+            tag_index.add_tag(tag, rel_path.clone());
+        }
+
+        Ok(())
+    }
+
     pub fn get_ranked_tags(
         &self,
         chat_fnames: &[PathBuf],
         other_fnames: &[PathBuf],
         ts_parsing: Arc<TSLanguageParsing>,
     ) {
-        // set of file paths where the tag is defined
-        // good for question "In which files is tag X defined?"
-        let mut defines: HashMap<String, HashSet<PathBuf>> = HashMap::new();
-
-        // allows duplicates to accommodate multiple references to the same definition
-        let mut references: HashMap<String, Vec<PathBuf>> = HashMap::new();
-
-        // map of (file path, tag name) to tag
-        // good for question "What are the details of tag X in file Y?"
-        let mut definitions: HashMap<(PathBuf, String), HashSet<Tag>> = HashMap::new();
-
         // TODO: implement personalization
         // let mut personalization: HashMap<String, f64> = HashMap::new();
 
-        let mut fnames: HashSet<PathBuf> = chat_fnames.iter().cloned().collect();
-        fnames.extend(other_fnames.iter().cloned());
-
-        let fnames: Vec<PathBuf> = fnames.into_iter().collect();
+        let mut tag_index = TagIndex::new();
+        let fnames: HashSet<PathBuf> = chat_fnames
+            .iter()
+            .chain(other_fnames.iter())
+            .cloned()
+            .collect();
 
         for fname in &fnames {
-            if !fname.exists() {
-                eprintln!("Error: File not found: {}", fname.display());
-                continue;
-            }
-
-            println!(
-                "===============\nFile: {}\n================",
-                fname.display()
-            );
-
-            let rel_path = self.get_rel_fname(&fname);
-
-            let config = match ts_parsing.for_file_path(fname.to_str().unwrap()) {
-                Some(config) => config,
-                None => {
-                    eprintln!(
-                        "Error: Language configuration not found for: {}",
-                        fname.display()
-                    );
-                    continue;
-                }
-            };
-
-            let tags = config.get_tags(fname, &rel_path);
-
-            for tag in tags {
-                match tag.kind {
-                    TagKind::Definition => {
-                        defines
-                            .entry(tag.name.clone())
-                            .or_default()
-                            .insert(rel_path.clone());
-                        definitions
-                            .entry((rel_path.clone(), tag.name.clone()))
-                            .or_default()
-                            .insert(tag);
-                    }
-                    TagKind::Reference => {
-                        references
-                            .entry(tag.name.clone())
-                            .or_default()
-                            .push(rel_path.clone());
-                    }
-                }
+            if let Err(e) = self.process_file(fname, &ts_parsing, &mut tag_index) {
+                eprintln!("Error processing file {}: {}", fname.display(), e);
             }
         }
 
         // if references are empty, use defines as references
-        if references.is_empty() {
-            references = defines
-                .iter()
-                .map(|(k, v)| (k.clone(), v.iter().cloned().collect::<Vec<PathBuf>>()))
-                .collect();
-        }
+        tag_index.process_empty_references();
 
-        println!("==========Defines==========");
-        defines.iter().for_each(|(key, set)| {
-            println!("Key {}, Set: {:?}", key, set);
-        });
+        let common_tags = tag_index.get_common_tags();
 
-        println!("==========Definitions==========");
-        definitions.iter().for_each(|((pathbuf, tag_name), set)| {
-            println!("Key {:?}, Set: {:?}", (pathbuf, tag_name), set);
-        });
-
-        println!("==========References==========");
-        references.iter().for_each(|(tag_name, paths)| {
-            println!("Tag: {}, Paths: {:?}", tag_name, paths);
-        });
-
-        let common_tags: HashSet<&String> = defines
-            .keys()
-            .filter(|&key| references.contains_key(key))
-            .collect();
-
-        println!("==========Common Tags==========");
-        common_tags.iter().for_each(|&tag| {
-            println!(
-                "Common Tag: {}\n(defined in: {:?}, referenced in: {:?})",
-                tag, &defines[tag], &references[tag]
-            );
-        });
+        tag_index.debug_print();
     }
 }
 
@@ -185,4 +130,103 @@ impl Tag {
 pub enum TagKind {
     Definition,
     Reference,
+}
+
+/// An index structure for managing tags across multiple files.
+pub struct TagIndex {
+    /// Maps tag names to the set of file paths where the tag is defined.
+    ///
+    /// Useful for answering: "In which files is tag X defined?"
+    defines: HashMap<String, HashSet<PathBuf>>,
+
+    /// Maps tag names to a list of file paths where the tag is referenced.
+    ///
+    /// Allows duplicates to accommodate multiple references to the same definition.
+    references: HashMap<String, Vec<PathBuf>>,
+
+    /// Maps (file path, tag name) pairs to a set of tag definitions.
+    ///
+    /// Useful for answering: "What are the details of tag X in file Y?"
+    definitions: HashMap<(PathBuf, String), HashSet<Tag>>,
+
+    /// A set of commonly used tags across all files.
+    common_tags: HashSet<String>,
+}
+
+impl TagIndex {
+    pub fn new() -> Self {
+        Self {
+            defines: HashMap::new(),
+            references: HashMap::new(),
+            definitions: HashMap::new(),
+            common_tags: HashSet::new(),
+        }
+    }
+
+    pub fn add_tag(&mut self, tag: Tag, rel_path: PathBuf) {
+        match tag.kind {
+            TagKind::Definition => {
+                self.defines
+                    .entry(tag.name.clone())
+                    .or_default()
+                    .insert(rel_path.clone());
+                self.definitions
+                    .entry((rel_path.clone(), tag.name.clone()))
+                    .or_default()
+                    .insert(tag);
+            }
+            TagKind::Reference => {
+                self.references
+                    .entry(tag.name.clone())
+                    .or_default()
+                    .push(rel_path.clone());
+            }
+        }
+    }
+
+    pub fn process_empty_references(&mut self) {
+        if self.references.is_empty() {
+            self.references = self
+                .defines
+                .iter()
+                .map(|(k, v)| (k.clone(), v.iter().cloned().collect::<Vec<PathBuf>>()))
+                .collect();
+        }
+    }
+
+    pub fn get_common_tags(&self) -> HashSet<&String> {
+        self.defines
+            .keys()
+            .filter(|&key| self.references.contains_key(key))
+            .collect()
+    }
+
+    pub fn debug_print(&self) {
+        println!("==========Defines==========");
+        self.defines.iter().for_each(|(key, set)| {
+            println!("Key {}, Set: {:?}", key, set);
+        });
+
+        println!("==========Definitions==========");
+        self.definitions
+            .iter()
+            .for_each(|((pathbuf, tag_name), set)| {
+                println!("Key {:?}, Set: {:?}", (pathbuf, tag_name), set);
+            });
+
+        println!("==========References==========");
+        self.references.iter().for_each(|(tag_name, paths)| {
+            println!("Tag: {}, Paths: {:?}", tag_name, paths);
+        });
+
+        println!("==========Common Tags==========");
+        self.common_tags.iter().for_each(|tag| {
+            println!(
+                "Common Tag: {}\n(defined in: {:?}, referenced in: {:?})",
+                tag, &self.defines[tag], &self.references[tag]
+            );
+        });
+    }
+
+    // Add methods to query the index as needed
 }

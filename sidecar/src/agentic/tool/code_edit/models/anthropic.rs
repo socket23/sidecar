@@ -171,7 +171,17 @@ In this example the mistake you made is that you went ahead and edited code outs
         )
     }
 
-    fn system_message(&self, language: &str, file_path: &str) -> String {
+    fn system_message(
+        &self,
+        language: &str,
+        file_path: &str,
+        symbol_to_edit: Option<String>,
+    ) -> String {
+        let symbol_to_edit_instruction = if let Some(symbol_to_edit) = symbol_to_edit {
+            format!("- You have to edit the code for {symbol_to_edit} which has been shown to you in <code_to_edit> section.\n")
+        } else {
+            "".to_owned()
+        };
         format!(
             r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
 Follow the user's requirements carefully and to the letter.
@@ -190,6 +200,7 @@ Follow the user's requirements carefully and to the letter.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
+{symbol_to_edit_instruction}
 
 We are also showing you an example:
 
@@ -229,6 +240,49 @@ The user instruction requires us to print the parameters for the function. I can
 ```
 </code_edited>
 </reply>
+
+We are showing you another example now, where the output is WRONG:
+<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>
+
+Your reply:
+<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+    def add(a, b):
+        print(a, b)
+        return a + b
+
+    @class_method
+    def multiply(a, b):
+        print(a, b)
+        return a + b
+</code_edited>
+</reply>
+
+Notice how you moved beyond the add method and also changed the multiply method which is wrong. We only want to change the add method.
 
 Notice how we rewrote the whole section of the code and only the portion which was in the selection which needs to be changed again with the right indentation."#
         )
@@ -461,7 +515,7 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
         let system_message = if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
             self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
         } else {
-            self.system_message(language, fs_file_path)
+            self.system_message(language, fs_file_path, context.symbol_to_edit_name())
         };
         let user_message = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
             self.user_message_for_code_addition(context, sub_symbol_name)

@@ -3004,6 +3004,7 @@ instruction:
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
         swe_bench_initial_edit: bool,
+        symbol_to_edit: Option<String>,
         is_new_sub_symbol: Option<String>,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
@@ -3038,6 +3039,7 @@ instruction:
             api_keys,
             provider,
             swe_bench_initial_edit,
+            symbol_to_edit,
             is_new_sub_symbol,
             self.root_request_id.to_owned(),
         ));

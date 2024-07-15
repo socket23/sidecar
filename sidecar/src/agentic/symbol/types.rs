@@ -1716,6 +1716,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 llm_properties.api_key().clone(),
                 request_id,
                 swe_bench_initial_edit,
+                None,
                 Some(sub_symbol.symbol_name().to_owned()),
             )
             .await?;
@@ -1768,6 +1769,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 llm_properties.api_key().clone(),
                 request_id,
                 swe_bench_initial_edit,
+                Some(symbol_to_edit.name().to_owned()),
                 None,
             )
             .await?;

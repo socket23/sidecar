@@ -863,17 +863,14 @@ impl MechaCodeSymbolThinking {
                                     // The range here looks really fucked lol
                                     Range::new(end_position.clone(), end_position.clone()),
                                     snippet_file_path.to_owned(),
-                                    match original_request.get_plan() {
-                                        Some(plan) => vec![
-                                            original_request.get_original_question().to_owned(),
-                                            plan,
-                                            new_sub_symbol.reason_to_create().to_owned(),
-                                        ],
-                                        None => vec![
-                                            original_request.get_original_question().to_owned(),
-                                            new_sub_symbol.reason_to_create().to_owned(),
-                                        ],
-                                    },
+                                    vec![
+                                        original_request.get_original_question().to_owned(),
+                                        {
+                                            let sub_symbol_name = new_sub_symbol.symbol_name().to_owned();
+                                            let reason_to_create = new_sub_symbol.reason_to_create().to_owned();
+                                            format!(r#"instructions for {sub_symbol_name}: {reason_to_create}"#)
+                                        },
+                                    ],
                                     false,
                                     true,
                                 )

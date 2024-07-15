@@ -1679,6 +1679,12 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await;
         } else {
+            println!(
+                "too_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
+                parent_symbol_name,
+                symbol_to_edit.name(),
+                symbol_to_edit.outline_node_type()
+            );
             // something else over here, wonder what it could be
             return Err(SymbolError::NoContainingSymbolFound);
         }

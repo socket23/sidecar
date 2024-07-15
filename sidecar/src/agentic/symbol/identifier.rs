@@ -864,7 +864,10 @@ impl MechaCodeSymbolThinking {
                                     Range::new(end_position.clone(), end_position.clone()),
                                     snippet_file_path.to_owned(),
                                     vec![
-                                        original_request.get_original_question().to_owned(),
+                                        {
+                                            let original_user_quesiton = original_request.get_original_question().to_owned();
+                                            format!(r#"original user request: {original_user_quesiton}"#)
+                                        },
                                         {
                                             let sub_symbol_name = new_sub_symbol.symbol_name().to_owned();
                                             let reason_to_create = new_sub_symbol.reason_to_create().to_owned();

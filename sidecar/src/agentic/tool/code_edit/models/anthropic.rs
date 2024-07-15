@@ -261,7 +261,7 @@ Notice how we rewrote the whole section of the code and only the portion which w
         user_message
     }
 
-    fn user_message_for_code_addition(&self, context: &CodeEdit) -> String {
+    fn user_message_for_code_addition(&self, context: &CodeEdit, new_sub_symbol: String) -> String {
         let extra_data = self.extra_data(context.extra_content());
         let above = self.above_selection(context.above_context());
         // let below = self.below_selection(context.below_context());
@@ -274,7 +274,7 @@ Notice how we rewrote the whole section of the code and only the portion which w
         user_message = user_message
             + &format!(
                 r#"<code_to_add>
-{{you need to add code just here}}
+{{you need to add code for {new_sub_symbol} just here}}
 </code_to_add>
 {in_range}
 "#
@@ -463,8 +463,8 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
         } else {
             self.system_message(language, fs_file_path)
         };
-        let user_message = if let Some(_) = context.is_new_sub_symbol() {
-            self.user_message_for_code_addition(context)
+        let user_message = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
+            self.user_message_for_code_addition(context, sub_symbol_name)
         } else {
             self.user_message_for_code_editing(context)
         };

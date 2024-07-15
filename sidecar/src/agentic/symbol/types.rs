@@ -1844,7 +1844,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 )
                 .await?
             } else {
-                println!("we are going to start editing now");
                 // always return the original code which was present here in case of rollbacks
                 let _ = self.ui_sender.send(UIEventWithID::range_selection_for_edit(
                     request_id_ref.to_owned(),
@@ -2001,10 +2000,16 @@ Satisfy the requirement either by making edits or gathering the required informa
                             }
                             Ok(None) => {
                                 println!("symbol::run::initial_request::empy_response");
+                                let _ = request_sender.send(SymbolEventResponse::TaskDone(
+                                    "initial request done".to_owned(),
+                                ));
                                 Ok(())
                             }
                             Err(e) => {
                                 println!("symbol::run::initial_request::({:?})", &e);
+                                let _ = request_sender.send(SymbolEventResponse::TaskDone(
+                                    "initial request done".to_owned(),
+                                ));
                                 Err(e)
                             }
                         }
@@ -2024,7 +2029,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                             "symbol::types::symbol_event::edit::edit_implementations({})",
                             symbol.symbol_name()
                         );
-                        symbol.edit_implementations(edit_request, request_id).await
+                        let _ = symbol.edit_implementations(edit_request, request_id).await;
+                        let _ =
+                            sender.send(SymbolEventResponse::TaskDone("edit finished".to_owned()));
+                        Ok(())
                     }
                     SymbolEvent::AskQuestion(_ask_question_request) => {
                         // we refresh our state always

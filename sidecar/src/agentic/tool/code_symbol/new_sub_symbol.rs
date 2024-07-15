@@ -169,12 +169,12 @@ impl NewSubSymbolRequired {
     }
 
     pub fn system_message(&self) -> String {
-        r#"You are an expert software engineer who is an expert at figuring out if we need to create new methods inside a class or if existing methods can be edited to satify the user query.
+        r#"You are an expert software engineer who is an expert at figuring out if we need to create new methods inside a class or the implementation block of the class or if existing methods can be edited to satisfy the user query.
 - You will be given the original user query in <user_query>
 - You will be provided the class in <code_symbol> section.
 - The plan of edits which we want to do on this class is also given in <plan> section.
-- You have to decide if we can make changes to the existing methods inside this class or if we need to create new methods which will belong to this class.
-- Creating a new methods inside is hard, so only do it if its absolutely required and is said so in the plan.
+- You have to decide if we can make changes to the existing methods inside this class or if we need to create new methods which will belong to this class or the implementation block
+- Creating a new methods inside the implementation block is hard, so only do it if its absolutely required and is said so in the plan.
 - Before replying, think step-by-step on what approach we want to take and put your thinking in <thinking> section.
 Your reply should be in the following format:
 <reply>

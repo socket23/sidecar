@@ -1,6 +1,3 @@
-use petgraph::algo::page_rank;
-use petgraph::data::Element::Edge;
-use petgraph::graph::{DiGraph, NodeIndex};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::PathBuf;
@@ -72,13 +69,13 @@ impl RepoMap {
         chat_fnames: &[PathBuf],
         other_fnames: &[PathBuf],
         ts_parsing: Arc<TSLanguageParsing>,
+        tag_index: &mut TagIndex,
         // mentioned_fnames: Option<&[PathBuf]>,
         // mentioned_idents: Option<&[String]>,
     ) {
         // TODO: implement personalization
         // let mut personalization: HashMap<String, f64> = HashMap::new();
 
-        let mut tag_index = TagIndex::new();
         let fnames: HashSet<PathBuf> = chat_fnames
             .iter()
             .chain(other_fnames.iter())
@@ -86,7 +83,7 @@ impl RepoMap {
             .collect();
 
         for fname in &fnames {
-            if let Err(e) = self.process_file(fname, &ts_parsing, &mut tag_index) {
+            if let Err(e) = self.process_file(fname, &ts_parsing, tag_index) {
                 eprintln!("Error processing file {}: {}", fname.display(), e);
             }
         }

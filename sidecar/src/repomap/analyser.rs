@@ -14,7 +14,7 @@ impl TagAnalyzer {
             node_indices: HashMap::new(),
         }
     }
-    pub fn build_graph(&mut self, tag_index: &TagIndex, mentioned_idents: &HashSet<String>) {
+    pub fn build_graph(&mut self, tag_index: &mut TagIndex, mentioned_idents: &HashSet<String>) {
         // Iterate through all common tags in the tag index
         for ident in &tag_index.common_tags {
             // Calculate the multiplier for this identifier based on whether it's mentioned or starts with an underscore

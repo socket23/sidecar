@@ -2,16 +2,13 @@ use std::{
     collections::{HashMap, HashSet},
     fs::read_to_string,
     path::{Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
 };
 
-use gix::{bstr::ByteSlice, config::source};
-use tree_sitter::{QueryCaptures, QueryMatch, Tree};
+use tree_sitter::Tree;
 
 use crate::{
     chunking::types::FunctionNodeInformation,
-    repomap::types::{Tag, TagKind},
+    repomap::tag::{Tag, TagKind},
 };
 
 use super::{

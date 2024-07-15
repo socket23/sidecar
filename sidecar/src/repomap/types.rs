@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::fs::read_to_string;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::chunking::languages::TSLanguageParsing;
@@ -56,7 +55,7 @@ impl RepoMap {
         let mut definitions: HashMap<(PathBuf, String), HashSet<Tag>> = HashMap::new();
 
         // TODO: implement personalization
-        let mut personalization: HashMap<String, f64> = HashMap::new();
+        // let mut personalization: HashMap<String, f64> = HashMap::new();
 
         let mut fnames: HashSet<PathBuf> = chat_fnames.iter().cloned().collect();
         fnames.extend(other_fnames.iter().cloned());
@@ -141,7 +140,10 @@ impl RepoMap {
 
         println!("==========Common Tags==========");
         common_tags.iter().for_each(|&tag| {
-            println!("Common Tag: {}", tag);
+            println!(
+                "Common Tag: {}\n(defined in: {:?}, referenced in: {:?})",
+                tag, &defines[tag], &references[tag]
+            );
         });
     }
 }

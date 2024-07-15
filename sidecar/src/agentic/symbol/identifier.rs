@@ -742,6 +742,7 @@ impl MechaCodeSymbolThinking {
         let response = self
             .tool_box
             .check_new_sub_symbols_required(
+                self.symbol_name(),
                 all_contents,
                 llm_properties,
                 original_request.get_original_question(),

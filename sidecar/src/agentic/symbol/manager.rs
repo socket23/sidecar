@@ -527,6 +527,7 @@ impl SymbolManager {
             // weird, this is completely wrong and we should be replying back
             println!("this is wrong, please look at the comment here");
         }
+        println!("symbol_manager::initial_request::finish");
         Ok(())
     }
 }

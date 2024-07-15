@@ -5,19 +5,26 @@ fn main() {
 
     let ts_parsing = Arc::new(TSLanguageParsing::init());
 
-    let file_names = match (read_dir("src/repomap")) {
-        Ok(read_dir) => {
-            dbg!(read_dir);
-        }
-        Err(e) => eprintln!("Error {:?}", e),
-    };
+    let dir_path = FullPath::new(PathBuf::from("src/repomap"));
 
-    // let paths: Vec<PathBuf> = file_names
-    //     .iter()
-    //     .map(|fname| FullPath::new(fname).path)
-    //     .collect();
+    let paths = read_dir(dir_path.path).unwrap();
 
-    // repomap.get_ranked_tags(&paths, &paths, ts_parsing);
+    let mut file_paths: Vec<PathBuf> = paths
+        .filter_map(|path| {
+            let entry = path.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                return None;
+            }
+            Some(FullPath::new(path).path)
+        })
+        .collect();
+
+    let extra_path = FullPath::new(PathBuf::from("src/bin/try_repomap.rs"));
+
+    file_paths.push(extra_path.path);
+
+    repomap.get_ranked_tags(&file_paths, &file_paths, ts_parsing);
 }
 
 struct FullPath {
@@ -25,11 +32,10 @@ struct FullPath {
 }
 
 impl FullPath {
-    pub fn new(fname: &str) -> FullPath {
+    pub fn new(file_path_buf: PathBuf) -> FullPath {
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let path_buf = PathBuf::from(fname);
         FullPath {
-            path: project_root.join(&path_buf),
+            path: project_root.join(&file_path_buf),
         }
     }
 }

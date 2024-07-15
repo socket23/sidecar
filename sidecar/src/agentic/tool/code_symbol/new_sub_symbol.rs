@@ -194,7 +194,8 @@ Your reply should be in the following format:
 </new_methods>
 </reply>
 
-Please make sure to keep your reply in the <reply> tag and the new methods which you need to generate properly in the format under <new_symbols> section."#.to_owned()
+Please make sure to keep your reply in the <reply> tag and the new methods which you need to generate properly in the format under <new_symbols> section.
+Remember you cannot create new classes or enums or types, just methods or functions at this point, even if you think we need to create new classes or enums or types."#.to_owned()
     }
 
     pub fn user_message(&self, request: NewSubSymbolRequiredRequest) -> String {

@@ -1,5 +1,7 @@
 use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write; // Add this line
 
 use super::tag::TagIndex;
 pub struct TagAnalyzer {
@@ -63,4 +65,49 @@ impl TagAnalyzer {
             1.0
         }
     }
+
+    pub fn to_dot(&self) -> String {
+        let mut dot = String::new();
+        writeln!(&mut dot, "digraph {{").unwrap();
+
+        // Add nodes
+        for node_index in self.graph.node_indices() {
+            let node_label = &self.graph[node_index];
+            writeln!(
+                &mut dot,
+                "    {:?} [ label = {:?} ]",
+                node_index.index(),
+                node_label
+            )
+            .unwrap();
+        }
+
+        // Add edges with weights
+        for edge in self.graph.edge_references() {
+            let (source, target) = (edge.source().index(), edge.target().index());
+            let weight = edge.weight();
+            writeln!(
+                &mut dot,
+                "    {:?} -> {:?} [ label = {:?} ]",
+                source, target, weight
+            )
+            .unwrap();
+        }
+
+        writeln!(&mut dot, "}}").unwrap();
+        dot
+    }
+
+    pub fn print_dot(&self) {
+        println!("{}", self.to_dot());
+    }
+
+    // pub fn save_dot(&self, filename: &str) -> std::io::Result<()> {
+    //     use std::fs::File;
+    //     use std::io::Write;
+
+    //     let mut file = File::create(filename)?;
+    //     write!(file, "{}", self.to_dot())?;
+    //     Ok(())
+    // }
 }

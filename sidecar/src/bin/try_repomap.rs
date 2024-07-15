@@ -34,6 +34,12 @@ fn main() {
     let mut analyser = TagAnalyzer::new();
 
     analyser.build_graph(&mut tag_index, &HashSet::new());
+
+    analyser.print_dot();
+
+    // analyser
+    //     .save_dot("graph_with_weights.dot")
+    //     .expect("Failed to save graph");
 }
 
 struct FullPath {

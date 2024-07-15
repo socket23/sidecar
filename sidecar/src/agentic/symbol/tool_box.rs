@@ -410,6 +410,7 @@ impl ToolBox {
     /// the user request
     pub async fn check_new_sub_symbols_required(
         &self,
+        symbol_name: &str,
         symbol_content: String,
         llm_properties: LLMProperties,
         user_query: &str,
@@ -419,6 +420,7 @@ impl ToolBox {
         let tool_input = ToolInput::NewSubSymbolForCodeEditing(NewSubSymbolRequiredRequest::new(
             user_query.to_owned(),
             plan.to_owned(),
+            symbol_name.to_owned(),
             symbol_content,
             llm_properties,
             self.root_request_id.to_owned(),

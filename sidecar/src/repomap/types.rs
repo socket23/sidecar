@@ -87,7 +87,7 @@ impl RepoMap {
         // if references are empty, use defines as references
         tag_index.process_empty_references();
 
-        let common_tags = tag_index.get_common_tags();
+        tag_index.process_common_tags();
 
         tag_index.debug_print();
     }
@@ -194,11 +194,15 @@ impl TagIndex {
         }
     }
 
-    pub fn get_common_tags(&self) -> HashSet<&String> {
-        self.defines
+    pub fn process_common_tags(&mut self) {
+        self.common_tags = self
+            .defines
             .keys()
-            .filter(|&key| self.references.contains_key(key))
-            .collect()
+            .filter_map(|key| match self.references.contains_key(key) {
+                true => Some(key.clone()),
+                false => None,
+            })
+            .collect();
     }
 
     pub fn debug_print(&self) {

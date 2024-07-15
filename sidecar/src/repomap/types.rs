@@ -114,9 +114,20 @@ impl RepoMap {
                 .collect();
         }
 
-        println!("defines: {:?}", defines);
-        println!("references: {:?}", references);
-        println!("definitions: {:?}", definitions);
+        println!("==========Defines==========");
+        for (key, set) in &defines {
+            println!("Key {}, Set: {:?}", key, set);
+        }
+
+        println!("==========Definitions==========");
+        for ((pathbuf, tag_name), set) in &definitions {
+            println!("Key {:?}, Set: {:?}", (pathbuf, tag_name), set);
+        }
+
+        println!("==========References==========");
+        for (tag_name, paths) in references {
+            println!("Tag: {}, Paths: {:?}", tag_name, paths);
+        }
     }
 }
 

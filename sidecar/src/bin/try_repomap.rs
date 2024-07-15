@@ -5,13 +5,26 @@ fn main() {
 
     let ts_parsing = Arc::new(TSLanguageParsing::init());
 
-    let fname_path = PathBuf::from("src/repomap/types.rs");
+    let file_names = vec!["src/repomap/types.rs"];
 
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let paths: Vec<PathBuf> = file_names
+        .iter()
+        .map(|fname| FullPath::new(fname).path)
+        .collect();
 
-    let full_path = project_root.join(&fname_path);
+    repomap.get_ranked_tags(&paths, &paths, ts_parsing);
+}
 
-    println!("{:?}", full_path);
+struct FullPath {
+    path: PathBuf,
+}
 
-    repomap.get_ranked_tags(&[full_path.clone()], &[full_path], ts_parsing);
+impl FullPath {
+    pub fn new(fname: &str) -> FullPath {
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path_buf = PathBuf::from(fname);
+        FullPath {
+            path: project_root.join(&path_buf),
+        }
+    }
 }

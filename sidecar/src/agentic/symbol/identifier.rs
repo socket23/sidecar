@@ -61,6 +61,11 @@ impl LLMProperties {
     pub fn api_key(&self) -> &LLMProviderAPIKeys {
         &self.api_key
     }
+
+    pub fn upgrade_llm_to_gemini_pro(mut self) -> Self {
+        self.llm = LLMType::GeminiPro;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, std::hash::Hash, serde::Serialize)]

@@ -344,7 +344,7 @@ pub async fn code_editing(
         request_id.to_owned(),
     );
 
-    println!("we are getting a hit at this endpoint");
+    println!("webserver::code_editing_flow::endpoint_hit");
 
     // Now we send the original request over here and then await on the sender like
     // before

@@ -3,7 +3,7 @@ use llm_client::{
         gemini_pro::GeminiProClient,
         types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMType},
     },
-    provider::{GeminiProAPIKey, GoogleAIStudioKey, LLMProviderAPIKeys},
+    provider::{GoogleAIStudioKey, LLMProviderAPIKeys},
 };
 
 #[tokio::main]

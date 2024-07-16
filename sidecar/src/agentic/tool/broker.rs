@@ -252,7 +252,10 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::PlanningBeforeCodeEdit,
-            Box::new(PlanningBeforeCodeEdit::new(llm_client.clone())),
+            Box::new(PlanningBeforeCodeEdit::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::NewSubSymbolRequired,

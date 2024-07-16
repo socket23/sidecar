@@ -179,11 +179,15 @@ impl PlanningBeforeCodeEditResponse {
 
 pub struct PlanningBeforeCodeEdit {
     llm_client: Arc<LLMBroker>,
+    fail_over_llm: LLMProperties,
 }
 
 impl PlanningBeforeCodeEdit {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
-        Self { llm_client }
+    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+        Self {
+            llm_client,
+            fail_over_llm,
+        }
     }
 
     fn system_message(&self) -> String {
@@ -296,13 +300,27 @@ impl Tool for PlanningBeforeCodeEdit {
             if retries > 4 {
                 return Err(ToolError::MissingXMLTags);
             }
+            let (llm, api_key, provider) = if retries % 2 == 1 {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            } else {
+                (
+                    llm_properties.llm().clone(),
+                    llm_properties.api_key().clone(),
+                    llm_properties.provider().clone(),
+                )
+            };
+            let cloned_message = message_request.clone().set_llm(llm);
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_client
                 .stream_completion(
-                    llm_properties.api_key().clone(),
-                    message_request.clone(),
-                    llm_properties.provider().clone(),
+                    api_key,
+                    cloned_message.clone(),
+                    provider,
                     vec![
                         ("event_type".to_owned(), "plan_before_code_edit".to_owned()),
                         ("root_id".to_owned(), root_request_id.to_owned()),

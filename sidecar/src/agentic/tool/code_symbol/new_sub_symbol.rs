@@ -164,11 +164,15 @@ impl NewSubSymbolRequiredResponse {
 
 pub struct NewSubSymbolRequired {
     llm_client: Arc<LLMBroker>,
+    fail_over_llm: LLMProperties,
 }
 
 impl NewSubSymbolRequired {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
-        Self { llm_client }
+    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+        Self {
+            llm_client,
+            fail_over_llm,
+        }
     }
 
     pub fn system_message(&self, context: &NewSubSymbolRequiredRequest) -> String {
@@ -243,13 +247,27 @@ impl Tool for NewSubSymbolRequired {
             if retries >= 4 {
                 return Err(ToolError::MissingXMLTags);
             }
+            let (llm, api_key, provider) = if retries % 2 == 1 {
+                (
+                    llm_properties.llm().clone(),
+                    llm_properties.api_key().clone(),
+                    llm_properties.provider().clone(),
+                )
+            } else {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            };
+            let cloned_message = llm_request.clone().set_llm(llm);
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_client
                 .stream_completion(
-                    llm_properties.api_key().clone(),
-                    llm_request.clone(),
-                    llm_properties.provider().clone(),
+                    api_key,
+                    cloned_message,
+                    provider,
                     vec![
                         (
                             "event_type".to_owned(),

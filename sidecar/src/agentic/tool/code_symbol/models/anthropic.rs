@@ -5926,61 +5926,92 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
         code_correctness_request: CodeCorrectnessRequest,
     ) -> Result<CodeCorrectnessAction, CodeSymbolError> {
         let root_request_id = code_correctness_request.root_request_id().to_owned();
-        let llm = code_correctness_request.llm().clone();
-        let provider = code_correctness_request.llm_provider().clone();
-        let api_keys = code_correctness_request.llm_api_keys().clone();
+        let request_llm = code_correctness_request.llm().clone();
+        let request_provider = code_correctness_request.llm_provider().clone();
+        let request_api_keys = code_correctness_request.llm_api_keys().clone();
         let system_message = LLMClientMessage::system(self.system_message_for_correctness_check());
         let user_message =
             LLMClientMessage::user(self.format_code_correctness_request(code_correctness_request));
-        let messages =
-            LLMClientCompletionRequest::new(llm, vec![system_message, user_message], 0.0, None);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_keys,
-                messages,
-                provider,
-                vec![
-                    (
-                        "event_type".to_owned(),
-                        "code_correctness_tool_use".to_owned(),
-                    ),
-                    ("root_id".to_owned(), root_request_id),
-                ]
+        let messages = LLMClientCompletionRequest::new(
+            request_llm.clone(),
+            vec![system_message, user_message],
+            0.0,
+            None,
+        );
+        let mut retries = 0;
+        loop {
+            if retries >= 4 {
+                return Err(CodeSymbolError::ExhaustedRetries);
+            }
+            let (llm, api_keys, provider) = if retries % 2 == 0 {
+                (
+                    request_llm.clone(),
+                    request_api_keys.clone(),
+                    request_provider.clone(),
+                )
+            } else {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            };
+            let cloned_request = messages.clone().set_llm(llm);
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_client
+                .stream_completion(
+                    api_keys,
+                    cloned_request,
+                    provider,
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "code_correctness_tool_use".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await?;
+            // now that we have the response we have to make sure to parse the thinking
+            // process properly or else it will blow up in our faces pretty quickly
+            let mut inside_thinking = false;
+            let fixed_response = response
+                .lines()
                 .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
-        // now that we have the response we have to make sure to parse the thinking
-        // process properly or else it will blow up in our faces pretty quickly
-        let mut inside_thinking = false;
-        let fixed_response = response
-            .lines()
-            .into_iter()
-            .map(|response| {
-                if response.starts_with("<thinking>") {
-                    inside_thinking = true;
-                    return response.to_owned();
-                } else if response.starts_with("</thinking>") {
-                    inside_thinking = false;
-                    return response.to_owned();
-                }
-                if inside_thinking {
-                    // espcae the string here
-                    Self::unescape_xml(response.to_owned())
-                } else {
-                    response.to_owned()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let parsed_response: CodeCorrectnessAction =
-            from_str::<CodeCorrectnessAction>(&fixed_response).map_err(|e| {
+                .map(|response| {
+                    if response.starts_with("<thinking>") {
+                        inside_thinking = true;
+                        return response.to_owned();
+                    } else if response.starts_with("</thinking>") {
+                        inside_thinking = false;
+                        return response.to_owned();
+                    }
+                    if inside_thinking {
+                        // espcae the string here
+                        Self::unescape_xml(response.to_owned())
+                    } else {
+                        response.to_owned()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let parsed_response = from_str::<CodeCorrectnessAction>(&fixed_response).map_err(|e| {
                 CodeSymbolError::SerdeError(SerdeError::new(e, fixed_response.to_owned()))
-            })?;
-        Ok(parsed_response)
+            });
+            match parsed_response {
+                Ok(parsed_response) => {
+                    return Ok(parsed_response);
+                }
+                Err(_e) => {
+                    retries = retries + 1;
+                    continue;
+                }
+            }
+        }
     }
 }
 

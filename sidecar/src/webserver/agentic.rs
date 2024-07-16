@@ -109,7 +109,7 @@ pub async fn probe_request(
         app.language_parsing.clone(),
         None,
         LLMProperties::new(
-            LLMType::GeminiProFlash,
+            LLMType::GeminiPro,
             LLMProvider::CodeStory(Default::default()),
             LLMProviderAPIKeys::CodeStory,
         ),

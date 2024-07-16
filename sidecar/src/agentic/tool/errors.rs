@@ -55,4 +55,7 @@ pub enum ToolError {
 
     #[error("Missing xml tags")]
     MissingXMLTags,
+
+    #[error("Retries exhausted")]
+    RetriesExhausted,
 }

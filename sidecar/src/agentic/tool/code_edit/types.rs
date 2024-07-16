@@ -77,14 +77,20 @@ pub struct CodeEditingTool {
     llm_client: Arc<LLMBroker>,
     broker: Arc<CodeEditBroker>,
     editor_config: Option<LLMProperties>,
+    fail_over_llm: LLMProperties,
 }
 
 impl CodeEditingTool {
-    pub fn new(llm_client: Arc<LLMBroker>, broker: Arc<CodeEditBroker>) -> Self {
+    pub fn new(
+        llm_client: Arc<LLMBroker>,
+        broker: Arc<CodeEditBroker>,
+        fail_over_llm: LLMProperties,
+    ) -> Self {
         Self {
             llm_client,
             broker,
             editor_config: None,
+            fail_over_llm,
         }
     }
 
@@ -203,56 +209,83 @@ impl Tool for CodeEditingTool {
         }
         // If this is not special swe bench initial edit then do the overrideas
         // as before
-        let (llm, api_key, provider) = if !code_edit_context.is_swe_bench_initial_edit {
-            if let Some(llm_properties) = self.get_llm_properties() {
-                (
-                    llm_properties.llm().clone(),
-                    llm_properties.api_key().clone(),
-                    llm_properties.provider().clone(),
-                )
+        let (request_llm, request_api_key, request_provider) =
+            if !code_edit_context.is_swe_bench_initial_edit {
+                if let Some(llm_properties) = self.get_llm_properties() {
+                    (
+                        llm_properties.llm().clone(),
+                        llm_properties.api_key().clone(),
+                        llm_properties.provider().clone(),
+                    )
+                } else {
+                    (
+                        code_edit_context.model.clone(),
+                        code_edit_context.api_key.clone(),
+                        code_edit_context.provider.clone(),
+                    )
+                }
+            // if this is the special swe bench initial edit, then keep the llm properties
+            // as they are being sent from the invoker
             } else {
                 (
                     code_edit_context.model.clone(),
                     code_edit_context.api_key.clone(),
                     code_edit_context.provider.clone(),
                 )
+            };
+        llm_message = llm_message.set_llm(request_llm.clone());
+        let mut retries = 0;
+        loop {
+            if retries >= 4 {
+                return Err(ToolError::RetriesExhausted);
             }
-        // if this is the special swe bench initial edit, then keep the llm properties
-        // as they are being sent from the invoker
-        } else {
-            (
-                code_edit_context.model.clone(),
-                code_edit_context.api_key.clone(),
-                code_edit_context.provider.clone(),
+            let (llm, api_key, provider) = if retries % 2 == 0 {
+                (
+                    request_llm.clone(),
+                    request_api_key.clone(),
+                    request_provider.clone(),
+                )
+            } else {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            };
+            let cloned_llm_message = llm_message.clone().set_llm(llm);
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let result = self
+                .llm_client
+                .stream_completion(
+                    api_key,
+                    cloned_llm_message,
+                    provider,
+                    vec![
+                        ("event_type".to_owned(), "code_edit_tool".to_owned()),
+                        ("root_id".to_owned(), root_id.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| ToolError::LLMClientError(e))?;
+            let edited_code = Self::edit_code(
+                &result,
+                code_edit_context.is_new_sub_symbol().is_some(),
+                code_edit_context.code_to_edit(),
             )
-        };
-        llm_message = llm_message.set_llm(llm);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let result = self
-            .llm_client
-            .stream_completion(
-                api_key,
-                llm_message,
-                provider,
-                vec![
-                    ("event_type".to_owned(), "code_edit_tool".to_owned()),
-                    ("root_id".to_owned(), root_id.to_owned()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await
-            .map_err(|e| ToolError::LLMClientError(e))?;
-        let edited_code = Self::edit_code(
-            &result,
-            code_edit_context.is_new_sub_symbol().is_some(),
-            code_edit_context.code_to_edit(),
-        )
-        // we need to do post-processing here to remove all the gunk
-        // which usually gets added when we are editing code
-        .map(|result| ToolOutput::code_edit_output(result))?;
-        Ok(edited_code)
+            // we need to do post-processing here to remove all the gunk
+            // which usually gets added when we are editing code
+            .map(|result| ToolOutput::code_edit_output(result));
+            match edited_code {
+                Ok(response) => return Ok(response),
+                Err(_e) => {
+                    retries = retries + 1;
+                    continue;
+                }
+            }
+        }
     }
 }
 

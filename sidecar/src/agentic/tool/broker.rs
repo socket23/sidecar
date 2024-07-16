@@ -77,13 +77,17 @@ impl ToolBroker {
         tools.insert(
             ToolType::CodeEditing,
             Box::new(
-                CodeEditingTool::new(llm_client.clone(), code_edit_broker.clone())
-                    .set_editor_config(
-                        tool_broker_config
-                            .map(|tool_broker_config| tool_broker_config.editor_agent)
-                            .clone()
-                            .flatten(),
-                    ),
+                CodeEditingTool::new(
+                    llm_client.clone(),
+                    code_edit_broker.clone(),
+                    fail_over_llm.clone(),
+                )
+                .set_editor_config(
+                    tool_broker_config
+                        .map(|tool_broker_config| tool_broker_config.editor_agent)
+                        .clone()
+                        .flatten(),
+                ),
             ),
         );
         tools.insert(ToolType::LSPDiagnostics, Box::new(LSPDiagnostics::new()));

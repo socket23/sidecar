@@ -90,7 +90,7 @@ impl CodeEditingTool {
             llm_client,
             broker,
             editor_config: None,
-            fail_over_llm,
+            fail_over_llm: fail_over_llm.upgrade_llm_to_gemini_pro(),
         }
     }
 
@@ -445,5 +445,27 @@ This ensures that the primary key of the deleted instances is cleared after the 
                 setattr(instance, model._meta.pk.attname, None)
         return sum(deleted_counter.values()), dict(deleted_counter)"#;
         assert_eq!(edit_code, better_data);
+    }
+
+    #[test]
+    fn parsing_code_edit() {
+        let response = r#"
+<reply>
+<thinking>
+The user wants to add comments to the `RequestEvents` enum variants. I will add a comment to each variant explaining its purpose.
+</thinking>
+<code_edited>
+#[derive(Debug, serde::Serialize)]
+pub enum RequestEvents {
+    /// Indicates the start of a probing interaction.
+    ProbingStart,
+    /// Signifies the completion of a probe, carrying the probe's response.
+    ProbeFinished(RequestEventProbeFinished),
+}
+</code_edited>
+</reply>
+        "#
+        .to_owned();
+        let edit_code = CodeEditingTool::edit_code(&response, false, "").expect("to work");
     }
 }

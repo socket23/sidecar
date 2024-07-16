@@ -5559,20 +5559,34 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             self.user_message_for_codebase_wide_search(code_symbols)
                 .await?,
         );
-        let messages =
-            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.0, None);
+        let messages = LLMClientCompletionRequest::new(
+            model.clone(),
+            vec![system_message, user_message],
+            0.0,
+            None,
+        );
         let mut retries = 0;
         let root_request_id_ref = &root_request_id;
         loop {
             if retries >= 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
             }
+            let (llm, api_key, provider) = if retries % 2 == 1 {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            } else {
+                (model.clone(), api_key.clone(), provider.clone())
+            };
+            let cloned_message = messages.clone().set_llm(llm);
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_client
                 .stream_completion(
                     api_key.clone(),
-                    messages.clone(),
+                    cloned_message.clone(),
                     provider.clone(),
                     vec![
                         ("event_type".to_owned(), "context_wide_search".to_owned()),

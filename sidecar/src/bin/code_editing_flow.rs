@@ -61,11 +61,16 @@ async fn main() {
         ),
     ));
 
-    let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
+    // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
+    let file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned();
 
     // read the file contents
-    let file_contents =
-        String::from_utf8(tokio::fs::read(file_path).await.expect("to work")).expect("to work");
+    let file_contents = String::from_utf8(
+        tokio::fs::read(file_path.to_owned())
+            .await
+            .expect("to work"),
+    )
+    .expect("to work");
 
     let user_context = UserContext::new(
         vec![],
@@ -94,8 +99,9 @@ async fn main() {
     // let problem_statement =
     //     "can you add a new method to CodeStoryLLMTypes for setting the llm type?".to_owned();
 
-    let problem_statement =
-        "can you add another provider for grok for me we just need an api_key?".to_owned();
+    // let problem_statement =
+    //     "can you add another provider for grok for me we just need an api_key?".to_owned();
+    let problem_statement = "Add comments to RequestEvents".to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

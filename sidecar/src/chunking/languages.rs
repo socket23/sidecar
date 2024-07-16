@@ -2130,6 +2130,8 @@ mod tests {
 
     use crate::chunking::text_document::Position;
     use crate::chunking::text_document::Range;
+    use crate::chunking::types::OutlineNode;
+    use crate::chunking::types::OutlineNodeType;
 
     use super::naive_chunker;
     use super::TSLanguageParsing;
@@ -3548,5 +3550,44 @@ enum SomethingElse {
                 ts_language_config.generate_object_qualifier(source_code.as_bytes());
             assert!(object_qualifier.is_none());
         }
+    }
+
+    #[test]
+    fn test_class_declaration_and_definition() {
+        let source_code = r#"
+struct Something {
+}
+
+impl Something {
+}
+
+enum Something {
+}"#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("rust")
+            .expect("language config to be present");
+        let grammar = ts_language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code, None).unwrap();
+        let outline_nodes = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        assert_eq!(outline_nodes.len(), 3);
+        assert_eq!(
+            outline_nodes[0].outline_node_type(),
+            &OutlineNodeType::ClassDefinition,
+        );
+        assert_eq!(
+            outline_nodes[1].outline_node_type(),
+            &OutlineNodeType::Class,
+        );
+        assert_eq!(
+            outline_nodes[2].outline_node_type(),
+            &OutlineNodeType::ClassDefinition,
+        );
     }
 }

@@ -30,12 +30,12 @@ impl RefereneceLocation {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GoToReferencesResponse {
-    references_location: Vec<RefereneceLocation>,
+    reference_locations: Vec<RefereneceLocation>,
 }
 
 impl GoToReferencesResponse {
     pub fn locations(self) -> Vec<RefereneceLocation> {
-        self.references_location
+        self.reference_locations
     }
 }
 
@@ -65,7 +65,7 @@ impl LSPGoToReferences {
 impl Tool for LSPGoToReferences {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.reference_request()?;
-        let editor_endpoint = context.editor_url.to_owned() + "/go_to_reference";
+        let editor_endpoint = context.editor_url.to_owned() + "/go_to_references";
         let response = self
             .client
             .post(editor_endpoint)

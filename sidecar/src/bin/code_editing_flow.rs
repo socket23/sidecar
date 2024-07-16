@@ -4,7 +4,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
@@ -53,19 +53,31 @@ async fn main() {
         Arc::new(TSLanguageParsing::init()),
         None,
         LLMProperties::new(
-            LLMType::GeminiPro,
-            LLMProvider::GoogleAIStudio,
-            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            LLMType::Gpt4O,
+            LLMProvider::OpenAI,
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
             )),
-        ),
+        ), // LLMProperties::new(
+           //     LLMType::GeminiPro,
+           //     LLMProvider::GoogleAIStudio,
+           //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+           //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+           //     )),
+           // ),
     ));
 
-    let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
+    // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
+    let file_path =
+        "/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned();
 
     // read the file contents
-    let file_contents =
-        String::from_utf8(tokio::fs::read(file_path).await.expect("to work")).expect("to work");
+    let file_contents = String::from_utf8(
+        tokio::fs::read(file_path.to_owned())
+            .await
+            .expect("to work"),
+    )
+    .expect("to work");
 
     let user_context = UserContext::new(
         vec![],
@@ -91,7 +103,13 @@ async fn main() {
         request_id.to_string(),
     );
 
-    let problem_statement = "can you add another provider for grok for me?".to_owned();
+    // let problem_statement =
+    //     "can you add a new method to CodeStoryLLMTypes for setting the llm type?".to_owned();
+
+    // let problem_statement =
+    //     "can you add another provider for grok for me we just need an api_key?".to_owned();
+    // let problem_statement = "Add comments to RequestEvents".to_owned();
+    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

@@ -52,7 +52,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::SymbolToEdit,
-        initial_request::InitialRequestData,
+        initial_request::{InitialRequestData, SymbolRequestHistoryItem},
         probe::{SymbolToProbeHistory, SymbolToProbeRequest},
         types::{AskQuestionRequest, SymbolEvent},
     },
@@ -157,11 +157,13 @@ impl SymbolEventRequest {
     pub fn initial_request(
         symbol: SymbolIdentifier,
         request: String,
+        // passing history to the symbols so we do not end up doing repeated work
+        history: Vec<SymbolRequestHistoryItem>,
         tool_properties: ToolProperties,
     ) -> Self {
         Self {
             symbol,
-            event: SymbolEvent::InitialRequest(InitialRequestData::new(request, None)),
+            event: SymbolEvent::InitialRequest(InitialRequestData::new(request, None, history)),
             tool_properties,
         }
     }
@@ -418,7 +420,6 @@ impl Symbol {
                 .filter_map(|implementation| {
                     let file_path = implementation.fs_file_path().to_owned();
                     let range = implementation.range();
-                    println!("symbol::grab_implementations::range::({:?})", &range);
                     // if file content is empty, then we do not add this to our
                     // implementations
                     let file_content = file_content_map.get(&file_path);
@@ -477,10 +478,10 @@ impl Symbol {
                 })
                 .collect::<Vec<_>>();
             println!(
-                "symbol::grab_implementations::({:?})",
-                &filtered_outline_nodes
+                "symbol::grab_implementations::({})::len({})",
+                self.symbol_name(),
+                filtered_outline_nodes.len(),
             );
-            dbg!(&filtered_outline_nodes);
             // we update the snippets we have stored here into the symbol itself
             {
                 self.mecha_code_symbol
@@ -1658,7 +1659,9 @@ Satisfy the requirement either by making edits or gathering the required informa
     async fn find_sub_symbol_location(
         &self,
         mut sub_symbol: SymbolToEdit,
+        request_id: &str,
     ) -> Result<SymbolToEdit, SymbolError> {
+        self.refresh_state(request_id.to_owned()).await;
         // Grabs the implementation of the symbols over here
         let implementation_blocks = self.mecha_code_symbol.get_implementations().await;
         // in languages like typescript and python we have a single implementation block
@@ -1688,7 +1691,6 @@ Satisfy the requirement either by making edits or gathering the required informa
         );
         // update the sub-symbol location to the most appropriate place
         // TODO(codestory): Might need some debug logging on this section
-        let sub_symbol = self.find_sub_symbol_location(sub_symbol.clone()).await?;
         let range_to_insert = sub_symbol.range().clone();
         let content = "".to_owned();
         let (llm_properties, swe_bench_initial_edit) =
@@ -1714,6 +1716,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 llm_properties.api_key().clone(),
                 request_id,
                 swe_bench_initial_edit,
+                None,
                 Some(sub_symbol.symbol_name().to_owned()),
             )
             .await?;
@@ -1766,6 +1769,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 llm_properties.api_key().clone(),
                 request_id,
                 swe_bench_initial_edit,
+                Some(symbol_to_edit.name().to_owned()),
                 None,
             )
             .await?;
@@ -1783,10 +1787,14 @@ Satisfy the requirement either by making edits or gathering the required informa
         edit_request: SymbolToEditRequest,
         request_id: String,
     ) -> Result<(), SymbolError> {
+        let request_id_ref = &request_id;
+
+        // NOTE: we do not add an entry to the history here because the initial
+        // request already adds the entry before sending over the edit
+        let history = edit_request.history().to_vec();
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
-        let request_id_ref = &request_id;
         println!(
             "symbol::edit_implementations::sub_symbols::({}).len({})",
             self.symbol_name(),
@@ -1797,21 +1805,19 @@ Satisfy the requirement either by making edits or gathering the required informa
         // - do a COT to figure out how to go about making the changes
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
-        for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
+        for mut sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
             println!(
-                "symbol::edit_implementation::sub_symbol_to_edit::({})::\n{:?}",
+                "symbol::edit_implementation::sub_symbol_to_edit::({})::is_new({:?})",
                 sub_symbol_to_edit.symbol_name(),
-                &sub_symbol_to_edit,
+                sub_symbol_to_edit.is_new(),
             );
             let context_for_editing = if sub_symbol_to_edit.is_new() {
                 // TODO(skcd): This is wrong, because we want to still grab context over here
                 // even if its a new symbol
                 vec![]
             } else {
-                dbg!(
-                    self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
-                        .await
-                )?
+                self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                    .await?
             };
 
             // if this is a new sub-symbol we have to create we have to diverge the
@@ -1824,6 +1830,15 @@ Satisfy the requirement either by making edits or gathering the required informa
                     sub_symbol_to_edit.range().to_owned(),
                     sub_symbol_to_edit.fs_file_path().to_owned(),
                 ));
+                println!(
+                    "symbol::edit_implementation::add_subsymbol::({})::({})",
+                    self.symbol_name(),
+                    sub_symbol_to_edit.symbol_name()
+                );
+                // Find the location for the sub-symbol
+                sub_symbol_to_edit = self
+                    .find_sub_symbol_location(sub_symbol_to_edit.clone(), request_id_ref)
+                    .await?;
                 self.add_subsymbol(
                     &sub_symbol_to_edit,
                     context_for_editing.to_owned(),
@@ -1831,7 +1846,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 )
                 .await?
             } else {
-                println!("we are going to start editing now");
                 // always return the original code which was present here in case of rollbacks
                 let _ = self.ui_sender.send(UIEventWithID::range_selection_for_edit(
                     request_id_ref.to_owned(),
@@ -1839,14 +1853,12 @@ Satisfy the requirement either by making edits or gathering the required informa
                     sub_symbol_to_edit.range().clone(),
                     sub_symbol_to_edit.fs_file_path().to_owned(),
                 ));
-                dbg!(
-                    self.edit_code(
-                        &sub_symbol_to_edit,
-                        context_for_editing.to_owned(),
-                        &request_id,
-                    )
-                    .await
-                )?
+                self.edit_code(
+                    &sub_symbol_to_edit,
+                    context_for_editing.to_owned(),
+                    &request_id,
+                )
+                .await?
             };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
@@ -1864,6 +1876,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol_to_edit.fs_file_path().to_owned(),
                 edited_code.to_owned(),
             ));
+            println!(
+                "symbol::edit_implementation::check_code_correctness::({})",
+                self.symbol_name()
+            );
             // debugging loop after this
             let _ = self
                 .tools
@@ -1879,6 +1895,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     self.llm_properties.api_key().clone(),
                     request_id_ref,
                     &self.tool_properties,
+                    history.to_vec(),
                     self.hub_sender.clone(),
                 )
                 .await;
@@ -1886,22 +1903,25 @@ Satisfy the requirement either by making edits or gathering the required informa
             // once we have successfully changed the implementation over here
             // we have to start looking for followups over here
             // F in the chat for error handling :')
-            let _ = dbg!(
-                self.tools
-                    .check_for_followups(
-                        self.symbol_name(),
-                        &sub_symbol_to_edit,
-                        &original_code,
-                        self.llm_properties.llm().clone(),
-                        self.llm_properties.provider().clone(),
-                        self.llm_properties.api_key().clone(),
-                        self.hub_sender.clone(),
-                        request_id_ref,
-                        &self.tool_properties,
-                    )
-                    .await
-            );
+            let _ = self
+                .tools
+                .check_for_followups(
+                    self.symbol_name(),
+                    &sub_symbol_to_edit,
+                    &original_code,
+                    self.llm_properties.llm().clone(),
+                    self.llm_properties.provider().clone(),
+                    self.llm_properties.api_key().clone(),
+                    self.hub_sender.clone(),
+                    request_id_ref,
+                    &self.tool_properties,
+                )
+                .await;
         }
+        println!(
+            "symbol::edit_implementation::finish::({})",
+            self.symbol_name()
+        );
         Ok(())
     }
 
@@ -1954,13 +1974,20 @@ Satisfy the requirement either by making edits or gathering the required informa
                             Ok(Some(initial_request)) => {
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
                                 let _ = symbol.hub_sender.send((
-                                    initial_request,
+                                    initial_request.clone(),
                                     // since this is the initial request, we will end up generating
                                     // a new request id for this
                                     uuid::Uuid::new_v4().to_string(),
                                     sender,
                                 ));
                                 let response = receiver.await;
+                                if response.is_err() {
+                                    println!(
+                                        "symbol.hub_sender::({})::initial_request({:?})",
+                                        symbol.symbol_name(),
+                                        &initial_request,
+                                    );
+                                }
                                 println!(
                                     "Response from symbol.hub_sender::({}): {:?}",
                                     symbol.symbol_name(),
@@ -1975,10 +2002,16 @@ Satisfy the requirement either by making edits or gathering the required informa
                             }
                             Ok(None) => {
                                 println!("symbol::run::initial_request::empy_response");
+                                let _ = request_sender.send(SymbolEventResponse::TaskDone(
+                                    "initial request done".to_owned(),
+                                ));
                                 Ok(())
                             }
                             Err(e) => {
                                 println!("symbol::run::initial_request::({:?})", &e);
+                                let _ = request_sender.send(SymbolEventResponse::TaskDone(
+                                    "initial request done".to_owned(),
+                                ));
                                 Err(e)
                             }
                         }
@@ -1998,7 +2031,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                             "symbol::types::symbol_event::edit::edit_implementations({})",
                             symbol.symbol_name()
                         );
-                        symbol.edit_implementations(edit_request, request_id).await
+                        let _ = symbol.edit_implementations(edit_request, request_id).await;
+                        let _ =
+                            sender.send(SymbolEventResponse::TaskDone("edit finished".to_owned()));
+                        Ok(())
                     }
                     SymbolEvent::AskQuestion(_ask_question_request) => {
                         // we refresh our state always

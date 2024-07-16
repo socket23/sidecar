@@ -108,13 +108,13 @@ pub fn rust_language_config() -> TSLanguageConfig {
               ) @definition.class.declaration
               
               (enum_item
-                  name: (type_identifier) @definition.class.name) @definition.class
+                  name: (type_identifier) @definition.class.name) @definition.class.declaration
               
               (union_item
-                  name: (type_identifier) @definition.class.name) @definition.class
+                  name: (type_identifier) @definition.class.name) @definition.class.declaration
                       
               (type_item
-                  name: (type_identifier) @definition.class.name) @definition.class
+                  name: (type_identifier) @definition.class.name) @definition.class.declaration
 
               (impl_item
 				          trait: (type_identifier) @definition.class.trait

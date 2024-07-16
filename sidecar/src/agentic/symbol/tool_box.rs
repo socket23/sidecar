@@ -83,6 +83,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
+use super::events::initial_request::SymbolRequestHistoryItem;
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
@@ -409,6 +410,7 @@ impl ToolBox {
     /// the user request
     pub async fn check_new_sub_symbols_required(
         &self,
+        symbol_name: &str,
         symbol_content: String,
         llm_properties: LLMProperties,
         user_query: &str,
@@ -418,6 +420,7 @@ impl ToolBox {
         let tool_input = ToolInput::NewSubSymbolForCodeEditing(NewSubSymbolRequiredRequest::new(
             user_query.to_owned(),
             plan.to_owned(),
+            symbol_name.to_owned(),
             symbol_content,
             llm_properties,
             self.root_request_id.to_owned(),
@@ -668,8 +671,7 @@ impl ToolBox {
                     std::cmp::min(i64::abs(start_line - index), i64::abs(end_line - index));
                 // we also need to make sure that the selection we are making is in
                 // the range of the snippet we are selecting the symbols in
-                // LLMs have a trendency to go overboard with this
-                dbg!(&line, line.contains(&line_content));
+                // LLMs have a trendency to go overboard with this;
                 if line_content
                     .lines()
                     .any(|line_content_to_search| line.contains(line_content_to_search))
@@ -686,7 +688,7 @@ impl ToolBox {
         containing_lines.sort_by(|a, b| a.0.cmp(&b.0));
         // Now iterate over all the lines containing this symbol and find the one which we can hover over
         // and select the first one possible here
-        let mut symbol_locations = dbg!(containing_lines)
+        let mut symbol_locations = containing_lines
             .into_iter()
             .filter_map(|containing_line| {
                 let (line, line_index) = containing_line.1;
@@ -1589,6 +1591,10 @@ We also believe this symbol needs to be probed because of:
         request_id: &str,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!(
+            "tool_box::check_for_followups::start::symbol({})",
+            parent_symbol_name
+        );
         // followups here are made for checking the references or different symbols
         // or if something has changed
         // first do we show the agent the chagned data and then ask it to decide
@@ -1600,11 +1606,26 @@ We also believe this symbol needs to be probed because of:
             .for_file_path(symbol_edited.fs_file_path())
             .map(|language_config| language_config.language_str.to_owned())
             .unwrap_or("".to_owned());
+        println!(
+            "tool_box::check_for_followups::find_sub_symbol_edited::({})::({})",
+            parent_symbol_name,
+            symbol_edited.symbol_name()
+        );
         let symbol_to_edit = self
             .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
             .await?;
+        println!(
+            "tool_box::check_for_followups::found_sub_symbol_edited::parent_symbol_name({})::symbol_edited({})",
+            parent_symbol_name,
+            symbol_edited.symbol_name(),
+        );
         // over here we have to check if its a function or a class
         if symbol_to_edit.is_function_type() {
+            println!(
+                "tool_box::check_for_followups::is_function_type::parent_symbol_name({})::symbol_to_edit({})",
+                parent_symbol_name,
+                symbol_to_edit.name(),
+            );
             // we do need to get the references over here for the function and
             // send them over as followups to check wherever they are being used
             let references = self
@@ -1626,10 +1647,18 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await;
         } else if symbol_to_edit.is_class_definition() {
-            // TODO(skcd): Show the AI the changed parts over here between the original
-            // code and the changed node and ask it for the symbols which we should go
-            // to references for, that way we are able to do the finer garained changes
-            // as and when required
+            println!(
+                "tool_box::check_for_followups::is_class_definition::parent_symbol_name({})::symbol_to_edit({})",
+                parent_symbol_name,
+                &symbol_to_edit.name()
+            );
+            // TODO(skcd): There are several cases here which we can handle:
+            // - we might have changed the definition of the symbol itself
+            // -  we could have an enum over here and added a new entry at this point, so
+            // we have to follow the symbol itself and go to tht references for it
+            // - so the hard part here is deciding between the following:
+            // - do we follow individual parts of the class type definitions
+            // - or do we follow the symbol itself and check things out
             let _ = self
                 .invoke_references_check_for_class_definition(
                     symbol_edited,
@@ -1644,16 +1673,15 @@ We also believe this symbol needs to be probed because of:
                     tool_properties,
                 )
                 .await;
-            let references = dbg!(
-                self.go_to_references(
+            let references = self
+                .go_to_references(
                     symbol_edited.fs_file_path(),
                     &symbol_edited.range().start_position(),
                     request_id,
                 )
-                .await
-            )?;
-            let _ = dbg!(
-                self.invoke_followup_on_references(
+                .await?;
+            let _ = self
+                .invoke_followup_on_references(
                     symbol_edited,
                     original_code,
                     &symbol_to_edit,
@@ -1662,9 +1690,14 @@ We also believe this symbol needs to be probed because of:
                     request_id,
                     tool_properties,
                 )
-                .await
-            );
+                .await;
         } else {
+            println!(
+                "tool_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
+                parent_symbol_name,
+                symbol_to_edit.name(),
+                symbol_to_edit.outline_node_type()
+            );
             // something else over here, wonder what it could be
             return Err(SymbolError::NoContainingSymbolFound);
         }
@@ -2443,6 +2476,7 @@ Please handle these changes as required."#
         request_id: &str,
         tool_properties: &ToolProperties,
         llm_properties: LLMProperties,
+        history: Vec<SymbolRequestHistoryItem>,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
             String,
@@ -2499,11 +2533,23 @@ instruction:
                 } else {
                     println!("tool_box::code_correctness_chagnes_to_codebase::following_along::self_symbol({})::symbol_to_edit({})", &parent_symbol_name, symbol_name);
                 }
+
+                // skip sending the request here if we have already done the work
+                // in history (ideally we use an LLM but right now we just guard
+                // easily)
+                if history.iter().any(|history| {
+                    history.symbol_name() == symbol_name
+                        && history.fs_file_path() == symbol_file_path
+                }) {
+                    println!("tool_box::code_correctness_changes_to_codebase::skipping::symbol_in_history::({})", symbol_name);
+                    continue;
+                }
                 let (sender, receiver) = tokio::sync::oneshot::channel();
                 let _ = hub_sender.send((
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_name, symbol_file_path),
                         request.to_owned(),
+                        history.to_vec(),
                         tool_properties.clone(),
                     ),
                     request_id.to_owned(),
@@ -2524,6 +2570,7 @@ instruction:
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_to_edit, fs_file_path),
                         request.to_owned(),
+                        history.to_vec(),
                         tool_properties.clone(),
                     ),
                     request_id.to_owned(),
@@ -2551,34 +2598,13 @@ instruction:
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
         tool_properties: &ToolProperties,
+        history: Vec<SymbolRequestHistoryItem>,
         hub_sender: UnboundedSender<(
             SymbolEventRequest,
             String,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>,
     ) -> Result<(), SymbolError> {
-        println!("==========too_box::check_code_correctness==========");
-        println!(
-            "tool_box::check_code_correctness::symbol_edited:\n{:?}",
-            &symbol_edited
-        );
-        println!(
-            "tool_box::check_code_correctness::original_code:\n{}",
-            original_code
-        );
-        println!(
-            "tool_box::check_code_correctness::edited_code:\n{}",
-            edited_code
-        );
-        println!(
-            "tool_box::check_code_correctness::code_edit_extra_context:\n{}",
-            code_edit_extra_context
-        );
-        println!(
-            "tool_box::check_code_correctness::tool_properties:{:?}",
-            tool_properties
-        );
-        println!("====================");
         // code correction looks like this:
         // - apply the edited code to the original selection
         // - look at the code actions which are available
@@ -2612,21 +2638,15 @@ instruction:
             // The range of the symbol before doing the edit
             let edited_range = symbol_to_edit_range;
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
-            let _editor_response = dbg!(
-                self.apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
-                    .await
-            )?;
+            let _editor_response = self
+                .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
+                .await?;
 
             // after applying the edits to the editor, we will need to get the file
             // contents and the symbol again
-            let symbol_to_edit = dbg!(
-                self.find_sub_symbol_to_edit_with_name(
-                    parent_symbol_name,
-                    symbol_edited,
-                    request_id
-                )
-                .await
-            )?;
+            let symbol_to_edit = self
+                .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
+                .await?;
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?
@@ -2640,10 +2660,9 @@ instruction:
             let test_output_maybe = if let Some(swe_bench_test_endpoint) =
                 tool_properties.get_swe_bench_test_endpoint()
             {
-                let swe_bench_test_output = dbg!(
-                    self.swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
-                        .await
-                )?;
+                let swe_bench_test_output = self
+                    .swe_bench_test_tool(&swe_bench_test_endpoint, request_id)
+                    .await?;
                 // Pass the test output through for checking the correctness of
                 // this code
                 Some(swe_bench_test_output)
@@ -2717,10 +2736,9 @@ instruction:
             }
 
             // Now we check for LSP diagnostics
-            let lsp_diagnostics = dbg!(
-                self.get_lsp_diagnostics(fs_file_path, &edited_range, request_id)
-                    .await
-            )?;
+            let lsp_diagnostics = self
+                .get_lsp_diagnostics(fs_file_path, &edited_range, request_id)
+                .await?;
 
             // We also give it the option to edit the code as required
             if lsp_diagnostics.get_diagnostics().is_empty() {
@@ -2781,8 +2799,8 @@ instruction:
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
             if selected_action_index == quick_fix_actions.len() as i64 {
-                let fixed_code = dbg!(
-                    self.code_correctness_with_edits(
+                let fixed_code = self
+                    .code_correctness_with_edits(
                         fs_file_path,
                         &fs_file_content,
                         symbol_to_edit.range(),
@@ -2795,8 +2813,7 @@ instruction:
                         api_keys.clone(),
                         request_id,
                     )
-                    .await
-                )?;
+                    .await?;
 
                 let _ = self.ui_events.send(UIEventWithID::edited_code(
                     request_id.to_owned(),
@@ -2808,15 +2825,9 @@ instruction:
 
                 // after this we have to apply the edits to the editor again and being
                 // the loop again
-                let _ = dbg!(
-                    self.apply_edits_to_editor(
-                        fs_file_path,
-                        &edited_range,
-                        &fixed_code,
-                        request_id
-                    )
-                    .await
-                )?;
+                let _ = self
+                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code, request_id)
+                    .await?;
             } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
                 // over here we want to ping the other symbols and send them requests, there is a search
                 // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
@@ -2837,6 +2848,7 @@ instruction:
                         request_id,
                         tool_properties,
                         LLMProperties::new(llm.clone(), provider.clone(), api_keys.clone()),
+                        history.to_vec(),
                         hub_sender.clone(),
                     )
                     .await;
@@ -2850,10 +2862,9 @@ instruction:
                 break;
             } else {
                 // invoke the code action over here with the editor
-                let response = dbg!(
-                    self.invoke_quick_action(selected_action_index, &lsp_request_id, request_id)
-                        .await
-                )?;
+                let response = self
+                    .invoke_quick_action(selected_action_index, &lsp_request_id, request_id)
+                    .await?;
                 if response.is_success() {
                     // great we have a W
                 } else {
@@ -2967,6 +2978,8 @@ instruction:
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
+        // TODO(skcd): a history parameter and play with the prompt over here so
+        // the LLM does not over index on the history of the symbols which were edited
     ) -> Result<CodeCorrectnessAction, SymbolError> {
         let (code_above, code_below, code_in_selection) =
             split_file_content_into_parts(fs_file_content, edited_range);
@@ -3010,6 +3023,7 @@ instruction:
         api_keys: LLMProviderAPIKeys,
         request_id: &str,
         swe_bench_initial_edit: bool,
+        symbol_to_edit: Option<String>,
         is_new_sub_symbol: Option<String>,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
@@ -3044,6 +3058,7 @@ instruction:
             api_keys,
             provider,
             swe_bench_initial_edit,
+            symbol_to_edit,
             is_new_sub_symbol,
             self.root_request_id.to_owned(),
         ));
@@ -4097,10 +4112,6 @@ instruction:
         snippet: &Snippet,
         request_id: &str,
     ) -> Result<OutlineNode, SymbolError> {
-        println!(
-            "tool_box::get_outline_node_from_snippet::snippet::({:?})",
-            snippet.range()
-        );
         let fs_file_path = snippet.file_path();
         let file_open_request = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let _ = self
@@ -4139,13 +4150,6 @@ instruction:
             })
             .collect::<Vec<_>>();
 
-        println!(
-            "tool_box::get_outline_node_from_snippet::nodes({:?})",
-            outline_nodes_with_distance
-                .iter()
-                .map(|(distance, outline_node)| (distance, outline_node.range()))
-                .collect::<Vec<_>>()
-        );
         // Now sort it based on the distance in ascending order
         outline_nodes_with_distance.sort_by_key(|outline_node| outline_node.0);
         if outline_nodes_with_distance.is_empty() {

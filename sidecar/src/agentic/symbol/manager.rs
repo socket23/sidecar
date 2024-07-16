@@ -336,7 +336,6 @@ impl SymbolManager {
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
-        println!("Tool input: {:?}", &tool_input);
         if let Some(tool_input) = tool_input {
             // send the tool input to the ui sender
             // we need some kind of cache here so we do not invoke the expensive
@@ -363,7 +362,6 @@ impl SymbolManager {
                 }
             };
 
-            println!("Important symbols {:?}", &important_symbols);
             let tool_output = match important_symbols {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
                 None => self
@@ -502,6 +500,9 @@ impl SymbolManager {
                         SymbolEvent::InitialRequest(InitialRequestData::new(
                             user_query.to_owned(),
                             Some(high_level_plan_ref.to_owned()),
+                            // empty history when symbol manager sends the initial
+                            // request
+                            vec![],
                         )),
                         tool_properties_ref.clone(),
                     );
@@ -520,47 +521,13 @@ impl SymbolManager {
                         &response
                     );
                 }
-                // let _ = stream::iter(symbol_identifiers.into_iter().map(|symbol_identifier| {
-                //     (
-                //         symbol_identifier.clone(),
-                //         request_id_ref.to_owned(),
-                //         SymbolEventRequest::new(
-                //             symbol_identifier,
-                //             SymbolEvent::InitialRequest(InitialRequestData::new(
-                //                 user_query.to_owned(),
-                //                 Some(high_level_plan_ref.to_owned()),
-                //             )),
-                //             tool_properties_ref.clone(),
-                //         ),
-                //     )
-                // }))
-                // .map(
-                //     |(symbol_identifier, request_id, symbol_event_request)| async move {
-                //         let (sender, receiver) = tokio::sync::oneshot::channel();
-                //         dbg!(
-                //             "sending initial request to symbol: {:?}",
-                //             &symbol_identifier
-                //         );
-                //         self.symbol_locker
-                //             .process_request((symbol_event_request, request_id, sender))
-                //             .await;
-                //         let response = receiver.await;
-                //         dbg!(
-                //             "For symbol identifier: {:?} the response is {:?}",
-                //             &symbol_identifier,
-                //             &response
-                //         );
-                //     },
-                // )
-                // .buffer_unordered(100)
-                // .collect::<Vec<_>>()
-                // .await;
             }
         } else {
             // We are for some reason not even invoking the first passage which is
             // weird, this is completely wrong and we should be replying back
             println!("this is wrong, please look at the comment here");
         }
+        println!("symbol_manager::initial_request::finish");
         Ok(())
     }
 }

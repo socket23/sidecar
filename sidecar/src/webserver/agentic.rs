@@ -3,7 +3,7 @@
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::StreamExt;
-use llm_client::provider::GoogleAIStudioKey;
+use llm_client::provider::{GoogleAIStudioKey, OpenAIProvider};
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -109,7 +109,7 @@ pub async fn probe_request(
         app.language_parsing.clone(),
         None,
         LLMProperties::new(
-            LLMType::GeminiProFlash,
+            LLMType::GeminiPro,
             LLMProvider::CodeStory(Default::default()),
             LLMProviderAPIKeys::CodeStory,
         ),
@@ -311,12 +311,18 @@ pub async fn code_editing(
         app.language_parsing.clone(),
         None,
         LLMProperties::new(
-            LLMType::GeminiPro,
-            LLMProvider::GoogleAIStudio,
-            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            LLMType::Gpt4O,
+            LLMProvider::OpenAI,
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
             )),
-        ),
+        ), // LLMProperties::new(
+           //     LLMType::GeminiPro,
+           //     LLMProvider::GoogleAIStudio,
+           //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+           //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+           //     )),
+           // ),
     ));
     if let Some(active_window_data) = active_window_data {
         user_context = user_context.update_file_content_map(
@@ -344,7 +350,7 @@ pub async fn code_editing(
         request_id.to_owned(),
     );
 
-    println!("we are getting a hit at this endpoint");
+    println!("webserver::code_editing_flow::endpoint_hit");
 
     // Now we send the original request over here and then await on the sender like
     // before

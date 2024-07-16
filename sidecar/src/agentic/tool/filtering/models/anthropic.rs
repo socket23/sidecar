@@ -1177,9 +1177,9 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
         // for the sections to edit in a single symbol
         let root_request_id = request.root_request_id().to_owned();
         let query = request.query().to_owned();
-        let llm = request.llm().clone();
-        let provider = request.provider().clone();
-        let api_key = request.api_key().clone();
+        let request_llm = request.llm().clone();
+        let request_provider = request.provider().clone();
+        let request_api_key = request.api_key().clone();
         let xml_string = request.xml_string();
         let user_query = format!(
             r#"<user_query>
@@ -1193,28 +1193,61 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
             LLMClientMessage::system(system_message),
             LLMClientMessage::user(user_query),
         ];
-        let llm_request = LLMClientCompletionRequest::new(llm, messages, 0.1, None);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_broker
-            .stream_completion(
-                api_key,
-                llm_request,
-                provider,
-                vec![
-                    (
-                        "event_type".to_owned(),
-                        "code_snippet_to_edit_for_symbol".to_owned(),
-                    ),
-                    ("root_id".to_owned(), root_request_id.to_owned()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await
-            .map_err(|e| CodeToEditFilteringError::LLMClientError(e))?;
-        self.parse_code_sections(&response)
+        let llm_request = LLMClientCompletionRequest::new(request_llm.clone(), messages, 0.1, None);
+        let mut retries = 0;
+        loop {
+            if retries >= 4 {
+                return Err(CodeToEditFilteringError::RetriesExhausted);
+            }
+            let (llm, api_key, provider) = if retries % 2 == 1 {
+                (
+                    request_llm.clone(),
+                    request_api_key.clone(),
+                    request_provider.clone(),
+                )
+            } else {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            };
+            let cloned_llm_request = llm_request.clone().set_llm(llm);
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let response = self
+                .llm_broker
+                .stream_completion(
+                    api_key,
+                    cloned_llm_request,
+                    provider,
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "code_snippet_to_edit_for_symbol".to_owned(),
+                        ),
+                        ("root_id".to_owned(), root_request_id.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| CodeToEditFilteringError::LLMClientError(e));
+            match response {
+                Ok(response) => {
+                    if let Ok(parsed_response) = self.parse_code_sections(&response) {
+                        return Ok(parsed_response);
+                    } else {
+                        retries = retries + 1;
+                        continue;
+                    }
+                }
+                Err(_e) => {
+                    retries = retries + 1;
+                    continue;
+                }
+            }
+        }
     }
 
     async fn filter_code_snippets(

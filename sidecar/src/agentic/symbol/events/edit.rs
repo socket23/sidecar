@@ -1,5 +1,7 @@
 use crate::{agentic::symbol::identifier::SymbolIdentifier, chunking::text_document::Range};
 
+use super::initial_request::SymbolRequestHistoryItem;
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToEdit {
     outline: bool,
@@ -66,21 +68,31 @@ impl SymbolToEdit {
 pub struct SymbolToEditRequest {
     symbols: Vec<SymbolToEdit>,
     symbol_identifier: SymbolIdentifier,
+    history: Vec<SymbolRequestHistoryItem>,
 }
 
 impl SymbolToEditRequest {
-    pub fn new(symbols: Vec<SymbolToEdit>, identifier: SymbolIdentifier) -> Self {
+    pub fn new(
+        symbols: Vec<SymbolToEdit>,
+        identifier: SymbolIdentifier,
+        history: Vec<SymbolRequestHistoryItem>,
+    ) -> Self {
         Self {
             symbol_identifier: identifier,
             symbols,
+            history,
         }
     }
 
-    pub fn symbols(&self) -> &[SymbolToEdit] {
-        self.symbols.as_slice()
+    pub fn symbols(self) -> Vec<SymbolToEdit> {
+        self.symbols
     }
 
     pub fn symbol_identifier(&self) -> &SymbolIdentifier {
         &self.symbol_identifier
+    }
+
+    pub fn history(&self) -> &[SymbolRequestHistoryItem] {
+        self.history.as_slice()
     }
 }

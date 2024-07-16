@@ -118,10 +118,18 @@ impl AnthropicRequest {
         completion_request: LLMClientCompletionRequest,
         model_str: String,
     ) -> Self {
+        let model = completion_request.model();
         let temperature = completion_request.temperature();
         let max_tokens = match completion_request.get_max_tokens() {
             Some(tokens) => Some(tokens),
-            None => Some(4096),
+            None => {
+                // TODO(codestory): Fix this proper
+                if model == &LLMType::ClaudeSonnet {
+                    Some(4096)
+                } else {
+                    Some(4096)
+                }
+            }
         };
         let messages = completion_request.messages();
         // First we try to find the system message
@@ -320,8 +328,6 @@ impl LLMClient for AnthropicClient {
             }
         }
 
-        println!("{:?}", &buffered_string);
-
         Ok(buffered_string)
     }
 
@@ -342,6 +348,10 @@ impl LLMClient for AnthropicClient {
             .header(
                 "x-api-key".to_owned(),
                 self.generate_api_bearer_key(api_key)?,
+            )
+            .header(
+                "anthropic-beta".to_owned(),
+                "max-tokens-3-5-sonnet-2024-07-15".to_owned(),
             )
             .header("anthropic-version".to_owned(), "2023-06-01".to_owned())
             .header("content-type".to_owned(), "application/json".to_owned())

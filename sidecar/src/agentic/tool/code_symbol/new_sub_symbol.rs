@@ -39,6 +39,7 @@ fn unescape_xml(s: String) -> String {
 pub struct NewSubSymbolRequiredRequest {
     user_query: String,
     plan: String,
+    symbol_name: String,
     symbol_content: String,
     llm_properties: LLMProperties,
     root_request_id: String,
@@ -48,6 +49,7 @@ impl NewSubSymbolRequiredRequest {
     pub fn new(
         user_query: String,
         plan: String,
+        symbol_name: String,
         symbol_content: String,
         llm_properties: LLMProperties,
         root_request_id: String,
@@ -55,6 +57,7 @@ impl NewSubSymbolRequiredRequest {
         Self {
             user_query,
             plan,
+            symbol_name,
             symbol_content,
             llm_properties,
             root_request_id,
@@ -161,20 +164,25 @@ impl NewSubSymbolRequiredResponse {
 
 pub struct NewSubSymbolRequired {
     llm_client: Arc<LLMBroker>,
+    fail_over_llm: LLMProperties,
 }
 
 impl NewSubSymbolRequired {
-    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
-        Self { llm_client }
+    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+        Self {
+            llm_client,
+            fail_over_llm,
+        }
     }
 
-    pub fn system_message(&self) -> String {
-        r#"You are an expert software engineer who is an expert at figuring out if we need to create new methods inside a class or if existing methods can be edited to satify the user query.
+    pub fn system_message(&self, context: &NewSubSymbolRequiredRequest) -> String {
+        let symbol_name = context.symbol_name.to_owned();
+        format!(r#"You are an expert software engineer who is an expert at figuring out if we need to create new methods inside a class or the implementation block of the class or if existing methods can be edited to satisfy the user query.
 - You will be given the original user query in <user_query>
 - You will be provided the class in <code_symbol> section.
 - The plan of edits which we want to do on this class is also given in <plan> section.
-- You have to decide if we can make changes to the existing methods inside this class or if we need to create new methods which will belong to this class.
-- Creating a new methods inside is hard, so only do it if its absolutely required and is said so in the plan.
+- You have to decide if we can make changes to the existing methods inside this class or if we need to create new methods which will belong to this class or the implementation block
+- Creating a new methods inside the implementation block is hard, so only do it if its absolutely required and is said so in the plan.
 - Before replying, think step-by-step on what approach we want to take and put your thinking in <thinking> section.
 Your reply should be in the following format:
 <reply>
@@ -194,7 +202,10 @@ Your reply should be in the following format:
 </new_methods>
 </reply>
 
-Please make sure to keep your reply in the <reply> tag and the new methods which you need to generate properly in the format under <new_symbols> section."#.to_owned()
+- Please make sure to keep your reply in the <reply> tag and the new methods which you need to generate properly in the format under <new_symbols> section.
+- You can only create methods or functions for `{symbol_name}` and no other struct, enum or type.
+- If you do not need to create a new method or function for `{symbol_name}` just give back an empty list in <new_methods> section
+- Remember you cannot create new classes or enums or types, just methods or functions at this point, even if you think we need to create new classes or enums or types."#).to_owned()
     }
 
     pub fn user_message(&self, request: NewSubSymbolRequiredRequest) -> String {
@@ -223,7 +234,7 @@ impl Tool for NewSubSymbolRequired {
         let context = input.get_new_sub_symbol_for_code_editing()?;
         let root_request_id = context.root_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
-        let system_message = LLMClientMessage::system(self.system_message());
+        let system_message = LLMClientMessage::system(self.system_message(&context));
         let user_message = LLMClientMessage::user(self.user_message(context));
         let llm_request = LLMClientCompletionRequest::new(
             llm_properties.llm().clone(),
@@ -236,13 +247,27 @@ impl Tool for NewSubSymbolRequired {
             if retries >= 4 {
                 return Err(ToolError::MissingXMLTags);
             }
+            let (llm, api_key, provider) = if retries % 2 == 1 {
+                (
+                    llm_properties.llm().clone(),
+                    llm_properties.api_key().clone(),
+                    llm_properties.provider().clone(),
+                )
+            } else {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            };
+            let cloned_message = llm_request.clone().set_llm(llm);
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
             let response = self
                 .llm_client
                 .stream_completion(
-                    llm_properties.api_key().clone(),
-                    llm_request.clone(),
-                    llm_properties.provider().clone(),
+                    api_key,
+                    cloned_message,
+                    provider,
                     vec![
                         (
                             "event_type".to_owned(),

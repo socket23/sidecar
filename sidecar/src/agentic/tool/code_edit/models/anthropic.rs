@@ -21,19 +21,27 @@ impl AnthropicCodeEditFromatter {
             r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
 Follow the user's requirements carefully and to the letter.
 - The user instructions are present in <user_instruction> tag.
-- Create new code for the method {symbol_name} as the user has asked, the code will be put in <code_to_edit> section.
-- The code present above the section you have to edit will be given in <code_above> section.
-- The code present below the section you have to edit will be given in <code_below> section.
-- The code you have to rewrite will be given to you in <code_to_edit> section.
+- Create new code for the method {symbol_name} as the user has asked, the code will be put in <code_to_add> section, remember we just want to add the new method.
+- The code present above the section where you will be adding code is given in <code_above> section.
+- The code present below the section where you will be adding code is given in <code_below> section.
+- The code you will be adding is in <code_to_add> section.
+- The file content will be shown to you like this:
+<code_above>
+</code_above>
+<code_to_add>
+</code_to_add>
+<code_below>
+</code_below>
+We are going to insert the code in the section <code_to_add> of the input, when you write the code for is_grok method we will replace the <code_to_add> section with what you generate.
 - User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
 - You must always answer in {language} code.
 - Your reply should be contained in the <reply> tags.
-- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.
+- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the added code will be present in <code_to_add> section.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
-- Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
+- Make sure to add the new method in <code_to_add> section without leaving any comments or placeholder values.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
 
 We are also showing you an example:
@@ -52,10 +60,79 @@ class Maths
     def add(a, b):
         return a + b
 </code_above>
+<code_to_add>
+{{you need to add code just here}}
+</code_to_add>
 <code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+
+    @class_method
+    def power(a, b):
+        return pow(a, b)
+
+if __name__ == '__main__':
+    # All the operations supported by Maths class
+    sum_value = Maths.add(1, 2)
+    sub_value = Maths.sub(1, 2)
+    mul_value = Maths.multiply(1, 2)
+    power = Maths.power(1, 2)
 </code_below>
-<code_to_edit>
-</code_to_edit>
+
+<code_to_add>
+</code_to_add>
+
+Your reply is:
+<reply>
+<thinking>
+The user has asked to me to add a function to divide 2 numbers. We have to update the main script as well, but we can not do that now.
+</thinking>
+<code_edited>
+```python
+    def divide(a, b):
+        return a / b
+```
+</code_edited>
+</reply>
+
+Another bad example for you to avoid:
+<user_instruction>
+Add the function to divide 2 numbers, we also want to change the main function to use Maths.divide
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+    def add(a, b):
+        return a + b
+</code_above>
+<code_to_add>
+{{you need to add code just here}}
+</code_to_add>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+
+    @class_method
+    def power(a, b):
+        return pow(a, b)
+
+if __name__ == '__main__':
+    # All the operations supported by Maths class
+    sum_value = Maths.add(1, 2)
+    sub_value = Maths.sub(1, 2)
+    mul_value = Maths.multiply(1, 2)
+    power = Maths.power(1, 2)
+</code_below>
+
+<code_to_add>
+</code_to_add>
 
 Your reply is:
 <reply>
@@ -66,15 +143,45 @@ The user has asked to me to add a function to divide 2 numbers
 ```python
     def divide(a, b):
         return a / b
+
+    @class_method
+    def multiply(a, b):
+        return a * b
+
+    @class_method
+    def power(a, b):
+        return pow(a, b)
+
+if __name__ == '__main__':
+    # All the operations supported by Maths class
+    sum_value = Maths.add(1, 2)
+    sub_value = Maths.sub(1, 2)
+    divide_value = Maths.divide(1, 2)
+    mul_value = Maths.multiply(1, 2)
+    power = Maths.power(1, 2)
 ```
 </code_edited>
 </reply>
 
-Notice how the indentation is always correct and we are inserting the method at the end of the class, so remember that when presented with the user query."#
+In this example the mistake you made is that you went ahead and edited code outside of the <code_to_add> section, we want to always avoid that
+
+- Notice how the indentation is always correct and we are inserting the method at the end of the class, so remember that when presented with the user query and we did not generate any code beyond just the user requirement.
+- Do not generate any code which is present in <code_below> only write the code which is in the user requirement and can be inserted in <code_to_add> section
+- Never write code which will go beyond the <code_to_add> section"#
         )
     }
 
-    fn system_message(&self, language: &str, file_path: &str) -> String {
+    fn system_message(
+        &self,
+        language: &str,
+        file_path: &str,
+        symbol_to_edit: Option<String>,
+    ) -> String {
+        let symbol_to_edit_instruction = if let Some(symbol_to_edit) = symbol_to_edit {
+            format!("- You have to edit the code for {symbol_to_edit} which has been shown to you in <code_to_edit> section.\n")
+        } else {
+            "".to_owned()
+        };
         format!(
             r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
 Follow the user's requirements carefully and to the letter.
@@ -93,6 +200,7 @@ Follow the user's requirements carefully and to the letter.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
+{symbol_to_edit_instruction}
 
 We are also showing you an example:
 
@@ -133,8 +241,111 @@ The user instruction requires us to print the parameters for the function. I can
 </code_edited>
 </reply>
 
+We are showing you another example now, where the output is WRONG:
+<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>
+
+Your reply:
+<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+    def add(a, b):
+        print(a, b)
+        return a + b
+
+    @class_method
+    def multiply(a, b):
+        print(a, b)
+        return a + b
+</code_edited>
+</reply>
+
+Notice how you moved beyond the add method and also changed the multiply method which is wrong. We only want to change the add method.
+
 Notice how we rewrote the whole section of the code and only the portion which was in the selection which needs to be changed again with the right indentation."#
         )
+    }
+
+    fn user_message_for_code_editing(&self, context: &CodeEdit) -> String {
+        let extra_data = self.extra_data(context.extra_content());
+        let above = self.above_selection(context.above_context());
+        let below = self.below_selection(context.below_context());
+        let in_range = self.selection_to_edit(context.code_to_edit());
+        let mut user_message = "".to_owned();
+        user_message = user_message + &extra_data + "\n";
+        if let Some(above) = above {
+            user_message = user_message + &above + "\n";
+        }
+        if let Some(below) = below {
+            user_message = user_message + &below + "\n";
+        }
+        user_message = user_message + &in_range + "\n";
+
+        // Now we add the instruction from the user
+        let user_instruction = context.instruction();
+        user_message = user_message
+            + &format!(
+                r#"Only edit the code in <code_to_edit> section, my instructions are:
+<user_instruction>
+{user_instruction}
+</user_instruction>"#
+            );
+        user_message
+    }
+
+    fn user_message_for_code_addition(&self, context: &CodeEdit, new_sub_symbol: String) -> String {
+        let extra_data = self.extra_data(context.extra_content());
+        let above = self.above_selection(context.above_context());
+        // let below = self.below_selection(context.below_context());
+        let mut user_message = "".to_owned();
+        user_message = user_message + &extra_data + "\n";
+        if let Some(above) = above {
+            user_message = user_message + &above + "\n";
+        }
+        let in_range = context.code_to_edit();
+        user_message = user_message
+            + &format!(
+                r#"<code_to_add>
+{{you need to add code for {new_sub_symbol} just here}}
+</code_to_add>
+{in_range}
+"#
+            );
+        // if let Some(below) = below {
+        //     user_message = user_message + &below + "\n";
+        // }
+
+        let user_instructions = context.instruction();
+        user_message = user_message
+            + &format!(
+                r#"Only add the code in <code_to_add> section, my instructions are:
+<user_instructions>
+{user_instructions}
+</user_instructions>"#
+            );
+        user_message
     }
 
     fn above_selection(&self, above_selection: Option<&str>) -> Option<String> {
@@ -299,44 +510,24 @@ We need to select this block to edit because this is where the test for multiply
 
 impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
     fn format_prompt(&self, context: &CodeEdit) -> LLMClientCompletionRequest {
-        let extra_data = self.extra_data(context.extra_content());
-        let above = self.above_selection(context.above_context());
-        let below = self.below_selection(context.below_context());
-        let in_range = self.selection_to_edit(context.code_to_edit());
         let language = context.language();
         let fs_file_path = context.fs_file_path();
         let system_message = if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
             self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
         } else {
-            self.system_message(language, fs_file_path)
+            self.system_message(language, fs_file_path, context.symbol_to_edit_name())
+        };
+        let user_message = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
+            self.user_message_for_code_addition(context, sub_symbol_name)
+        } else {
+            self.user_message_for_code_editing(context)
         };
         let mut messages = vec![];
 
         // add the system message
         messages.push(LLMClientMessage::system(system_message));
-
-        let mut user_message = "".to_owned();
-        user_message = user_message + &extra_data + "\n";
-        if let Some(above) = above {
-            user_message = user_message + &above + "\n";
-        }
-        if let Some(below) = below {
-            user_message = user_message + &below + "\n";
-        }
-        user_message = user_message + &in_range + "\n";
-
-        // Now we add the instruction from the user
-        let user_instruction = context.instruction();
-        user_message = user_message
-            + &format!(
-                r#"Only edit the code in <code_to_edit> section, my instructions are:
-<user_instruction>
-{user_instruction}
-</user_instruction>"#
-            );
-
-        // Now add the user message to the messages
         messages.push(LLMClientMessage::user(user_message));
+
         // we use 0.2 temperature so the model can imagine ✨
         LLMClientCompletionRequest::new(context.model().clone(), messages, 0.2, None)
     }

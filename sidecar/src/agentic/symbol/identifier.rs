@@ -13,7 +13,10 @@ use llm_client::{
 use tokio::sync::{mpsc::UnboundedSender, oneshot::Sender};
 
 use crate::{
-    agentic::tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
+    agentic::{
+        symbol::events::initial_request::SymbolRequestHistoryItem,
+        tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
+    },
     chunking::{text_document::Range, types::OutlineNodeContent},
     user_context::types::UserContext,
 };
@@ -57,6 +60,11 @@ impl LLMProperties {
 
     pub fn api_key(&self) -> &LLMProviderAPIKeys {
         &self.api_key
+    }
+
+    pub fn upgrade_llm_to_gemini_pro(mut self) -> Self {
+        self.llm = LLMType::GeminiPro;
+        self
     }
 }
 
@@ -622,18 +630,17 @@ impl MechaCodeSymbolThinking {
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
             {
                 println!("mecha_code_symbol_thinking::probe_sub_symbol::filter_code_snippets_subsymbol_for_probing::({})", self.symbol_name());
-                let filtered_list = dbg!(
-                    self.tool_box
-                        .filter_code_snippets_subsymbol_for_probing(
-                            ranked_xml_list,
-                            query.to_owned(),
-                            llm_properties.llm().clone(),
-                            llm_properties.provider().clone(),
-                            llm_properties.api_key().clone(),
-                            &request_id,
-                        )
-                        .await
-                )?;
+                let filtered_list = self
+                    .tool_box
+                    .filter_code_snippets_subsymbol_for_probing(
+                        ranked_xml_list,
+                        query.to_owned(),
+                        llm_properties.llm().clone(),
+                        llm_properties.provider().clone(),
+                        llm_properties.api_key().clone(),
+                        &request_id,
+                    )
+                    .await?;
 
                 let filtered_list_ref = &filtered_list;
 
@@ -740,6 +747,7 @@ impl MechaCodeSymbolThinking {
         let response = self
             .tool_box
             .check_new_sub_symbols_required(
+                self.symbol_name(),
                 all_contents,
                 llm_properties,
                 original_request.get_original_question(),
@@ -799,6 +807,15 @@ impl MechaCodeSymbolThinking {
             self.symbol_name(),
         );
 
+        // This history of the paths we have taken upto this point
+        let mut history = original_request.history().to_vec();
+        // add the current symbol in the history list
+        history.push(SymbolRequestHistoryItem::new(
+            self.symbol_name().to_owned(),
+            self.fs_file_path().to_owned(),
+            original_request.get_original_question().to_owned(),
+        ));
+
         // First we need to verify if we even have to enter the coding loop, often
         // times thinking about this is better and solves generating a lot of code
         // for no reason
@@ -852,23 +869,24 @@ impl MechaCodeSymbolThinking {
                                     // The range here looks really fucked lol
                                     Range::new(end_position.clone(), end_position.clone()),
                                     snippet_file_path.to_owned(),
-                                    match original_request.get_plan() {
-                                        Some(plan) => vec![
-                                            original_request.get_original_question().to_owned(),
-                                            plan,
-                                            new_sub_symbol.reason_to_create().to_owned(),
-                                        ],
-                                        None => vec![
-                                            original_request.get_original_question().to_owned(),
-                                            new_sub_symbol.reason_to_create().to_owned(),
-                                        ],
-                                    },
+                                    vec![
+                                        {
+                                            let original_user_quesiton = original_request.get_original_question().to_owned();
+                                            format!(r#"original user request: {original_user_quesiton}"#)
+                                        },
+                                        {
+                                            let sub_symbol_name = new_sub_symbol.symbol_name().to_owned();
+                                            let reason_to_create = new_sub_symbol.reason_to_create().to_owned();
+                                            format!(r#"instructions for {sub_symbol_name}: {reason_to_create}"#)
+                                        },
+                                    ],
                                     false,
                                     true,
                                 )
                             })
                             .collect::<Vec<_>>(),
                         self.to_symbol_identifier(),
+                        history.to_vec(),
                     )),
                     tool_properties.clone(),
                 );
@@ -898,19 +916,15 @@ impl MechaCodeSymbolThinking {
                     llm_properties
                 };
                 println!(
-                    "mecha_code_symbol_thinking::reverse_lookup_list::({:?})",
-                    &reverse_lookup
+                    "mecha_code_symbol_thinking::reverse_lookup_list::({})::len({})",
+                    self.symbol_name(),
+                    reverse_lookup.len(),
                 );
                 // now we send it over to the LLM and register as a rearank operation
                 // and then ask the llm to reply back to us
                 println!(
                     "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::start({})",
                     self.symbol_name(),
-                );
-                println!(
-                    "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::ranked_xml_list({})\n{}",
-                    self.symbol_name(),
-                    &ranked_xml_list,
                 );
                 let filtered_list = tool_box
                     .filter_code_snippets_in_symbol_for_editing(
@@ -963,14 +977,13 @@ Reason to edit:
                                 // here instead of the original symbol name which
                                 // would not work
                                 println!("mecha_code_symbol_thinking::initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
-                                let symbol_in_range = dbg!(
+                                let symbol_in_range = 
                                     self.find_sub_symbol_in_range(
                                         range,
                                         fs_file_path,
                                         request_id_ref
                                     )
-                                    .await
-                                );
+                                    .await;
                                 if let Ok(symbol) = symbol_in_range {
                                     Some(SymbolToEdit::new(
                                         symbol,
@@ -1002,6 +1015,7 @@ Reason to edit:
                     SymbolEvent::Edit(SymbolToEditRequest::new(
                         sub_symbols_to_edit,
                         self.to_symbol_identifier(),
+                        history,
                     )),
                     tool_properties.clone(),
                 ))
@@ -1161,7 +1175,7 @@ Reason to edit:
                     }
                 }
 
-                let outline_nodes_vec = dbg!(outline_nodes)
+                let outline_nodes_vec = outline_nodes
                     .into_iter()
                     .map(|outline_node| outline_node.consume_all_outlines())
                     .flatten()
@@ -1266,16 +1280,22 @@ Reason to edit:
 </rerank_entry>"#
                                 )
                                 .to_owned();
-                                symbol_rerank_information.push(
-                                    SnippetReRankInformation::new(
-                                        symbol_index,
-                                        class_snippet.range().clone(),
-                                        class_snippet.fs_file_path().to_owned(),
-                                    )
-                                    .set_is_outline(),
-                                );
-                                symbol_index = symbol_index + 1;
-                                Some(overlapp_snippet)
+                                // guard against impl blocks in rust, since including
+                                // just the impl statement can confuse the LLM
+                                if !class_snippet.is_class_declaration() && class_snippet.language().to_lowercase() == "rust" && class_snippet.has_trait_implementation().is_none() {
+                                    None
+                                } else {
+                                    symbol_rerank_information.push(
+                                        SnippetReRankInformation::new(
+                                            symbol_index,
+                                            class_snippet.range().clone(),
+                                            class_snippet.fs_file_path().to_owned(),
+                                        )
+                                        .set_is_outline(),
+                                    );
+                                    symbol_index = symbol_index + 1;
+                                    Some(overlapp_snippet)
+                                }
                             } else {
                                 None
                             };

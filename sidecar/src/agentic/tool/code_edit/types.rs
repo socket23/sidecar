@@ -32,6 +32,7 @@ pub struct CodeEdit {
     api_key: LLMProviderAPIKeys,
     provider: LLMProvider,
     is_swe_bench_initial_edit: bool,
+    symbol_to_edit: Option<String>,
     is_new_symbol_request: Option<String>,
     root_request_id: String,
 }
@@ -49,6 +50,7 @@ impl CodeEdit {
         api_key: LLMProviderAPIKeys,
         provider: LLMProvider,
         is_swe_bench_initial_edit: bool,
+        symbol_to_edit: Option<String>,
         is_new_symbol_request: Option<String>,
         root_request_id: String,
     ) -> Self {
@@ -64,6 +66,7 @@ impl CodeEdit {
             api_key,
             provider,
             is_swe_bench_initial_edit,
+            symbol_to_edit,
             is_new_symbol_request,
             root_request_id,
         }
@@ -74,14 +77,20 @@ pub struct CodeEditingTool {
     llm_client: Arc<LLMBroker>,
     broker: Arc<CodeEditBroker>,
     editor_config: Option<LLMProperties>,
+    fail_over_llm: LLMProperties,
 }
 
 impl CodeEditingTool {
-    pub fn new(llm_client: Arc<LLMBroker>, broker: Arc<CodeEditBroker>) -> Self {
+    pub fn new(
+        llm_client: Arc<LLMBroker>,
+        broker: Arc<CodeEditBroker>,
+        fail_over_llm: LLMProperties,
+    ) -> Self {
         Self {
             llm_client,
             broker,
             editor_config: None,
+            fail_over_llm,
         }
     }
 
@@ -108,12 +117,21 @@ impl CodeEditingTool {
     /// </reply>
     /// {garbage}
     /// So we find this pattern and trim it out if we can
-    fn edit_code(code: &str) -> Result<String, ToolError> {
+    fn edit_code(
+        code: &str,
+        new_sub_symbol: bool,
+        section_to_edit: &str,
+    ) -> Result<String, ToolError> {
+        let tag_to_search = if new_sub_symbol {
+            "code_to_add"
+        } else {
+            "code_edited"
+        };
         let lines = code
             .lines()
-            .skip_while(|line| !line.contains("<code_edited>"))
+            .skip_while(|line| !line.contains(&format!("<{tag_to_search}>")))
             .skip(1)
-            .take_while(|line| !line.contains("</code_edited>"))
+            .take_while(|line| !line.contains(&format!("</{tag_to_search}>")))
             .collect::<Vec<_>>()
             .into_iter()
             .skip_while(|line| !line.contains("```"))
@@ -124,7 +142,11 @@ impl CodeEditingTool {
         if lines == "" {
             Err(ToolError::CodeNotFormatted(code.to_owned()))
         } else {
-            Ok(lines)
+            if new_sub_symbol {
+                Ok(lines + "\n" + section_to_edit + "\n")
+            } else {
+                Ok(lines)
+            }
         }
     }
 }
@@ -169,6 +191,10 @@ impl CodeEdit {
     pub fn is_new_sub_symbol(&self) -> Option<String> {
         self.is_new_symbol_request.clone()
     }
+
+    pub fn symbol_to_edit_name(&self) -> Option<String> {
+        self.symbol_to_edit.clone()
+    }
 }
 
 #[async_trait]
@@ -183,52 +209,83 @@ impl Tool for CodeEditingTool {
         }
         // If this is not special swe bench initial edit then do the overrideas
         // as before
-        let (llm, api_key, provider) = if !code_edit_context.is_swe_bench_initial_edit {
-            if let Some(llm_properties) = self.get_llm_properties() {
-                (
-                    llm_properties.llm().clone(),
-                    llm_properties.api_key().clone(),
-                    llm_properties.provider().clone(),
-                )
+        let (request_llm, request_api_key, request_provider) =
+            if !code_edit_context.is_swe_bench_initial_edit {
+                if let Some(llm_properties) = self.get_llm_properties() {
+                    (
+                        llm_properties.llm().clone(),
+                        llm_properties.api_key().clone(),
+                        llm_properties.provider().clone(),
+                    )
+                } else {
+                    (
+                        code_edit_context.model.clone(),
+                        code_edit_context.api_key.clone(),
+                        code_edit_context.provider.clone(),
+                    )
+                }
+            // if this is the special swe bench initial edit, then keep the llm properties
+            // as they are being sent from the invoker
             } else {
                 (
                     code_edit_context.model.clone(),
                     code_edit_context.api_key.clone(),
                     code_edit_context.provider.clone(),
                 )
+            };
+        llm_message = llm_message.set_llm(request_llm.clone());
+        let mut retries = 0;
+        loop {
+            if retries >= 4 {
+                return Err(ToolError::RetriesExhausted);
             }
-        // if this is the special swe bench initial edit, then keep the llm properties
-        // as they are being sent from the invoker
-        } else {
-            (
-                code_edit_context.model.clone(),
-                code_edit_context.api_key.clone(),
-                code_edit_context.provider.clone(),
+            let (llm, api_key, provider) = if retries % 2 == 0 {
+                (
+                    request_llm.clone(),
+                    request_api_key.clone(),
+                    request_provider.clone(),
+                )
+            } else {
+                (
+                    self.fail_over_llm.llm().clone(),
+                    self.fail_over_llm.api_key().clone(),
+                    self.fail_over_llm.provider().clone(),
+                )
+            };
+            let cloned_llm_message = llm_message.clone().set_llm(llm);
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let result = self
+                .llm_client
+                .stream_completion(
+                    api_key,
+                    cloned_llm_message,
+                    provider,
+                    vec![
+                        ("event_type".to_owned(), "code_edit_tool".to_owned()),
+                        ("root_id".to_owned(), root_id.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+                .map_err(|e| ToolError::LLMClientError(e))?;
+            let edited_code = Self::edit_code(
+                &result,
+                code_edit_context.is_new_sub_symbol().is_some(),
+                code_edit_context.code_to_edit(),
             )
-        };
-        llm_message = llm_message.set_llm(llm);
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let result = self
-            .llm_client
-            .stream_completion(
-                api_key,
-                llm_message,
-                provider,
-                vec![
-                    ("event_type".to_owned(), "code_edit_tool".to_owned()),
-                    ("root_id".to_owned(), root_id.to_owned()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await
-            .map_err(|e| ToolError::LLMClientError(e))?;
-        let edited_code = Self::edit_code(&result)
             // we need to do post-processing here to remove all the gunk
             // which usually gets added when we are editing code
-            .map(|result| ToolOutput::code_edit_output(result))?;
-        Ok(edited_code)
+            .map(|result| ToolOutput::code_edit_output(result));
+            match edited_code {
+                Ok(response) => return Ok(response),
+                Err(_e) => {
+                    retries = retries + 1;
+                    continue;
+                }
+            }
+        }
     }
 }
 
@@ -320,7 +377,7 @@ for model, instances in self.data.items():
 ```
 
 This ensures that the primary key of the deleted instances is cleared after the deletion process is complete."#.to_owned();
-        let edit_code = CodeEditingTool::edit_code(&code).expect("to work");
+        let edit_code = CodeEditingTool::edit_code(&code, false, "").expect("to work");
         let better_data = r#"    def delete(self):
         # sort instance collections
         for model, instances in self.data.items():
@@ -388,5 +445,27 @@ This ensures that the primary key of the deleted instances is cleared after the 
                 setattr(instance, model._meta.pk.attname, None)
         return sum(deleted_counter.values()), dict(deleted_counter)"#;
         assert_eq!(edit_code, better_data);
+    }
+
+    #[test]
+    fn parsing_code_edit() {
+        let response = r#"
+<reply>
+<thinking>
+The user wants to add comments to the `RequestEvents` enum variants. I will add a comment to each variant explaining its purpose.
+</thinking>
+<code_edited>
+#[derive(Debug, serde::Serialize)]
+pub enum RequestEvents {
+    /// Indicates the start of a probing interaction.
+    ProbingStart,
+    /// Signifies the completion of a probe, carrying the probe's response.
+    ProbeFinished(RequestEventProbeFinished),
+}
+</code_edited>
+</reply>
+        "#
+        .to_owned();
+        let edit_code = CodeEditingTool::edit_code(&response, false, "").expect("to work");
     }
 }

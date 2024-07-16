@@ -3,14 +3,13 @@ use llm_client::{
         gemini_pro::GeminiProClient,
         types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMType},
     },
-    provider::{GeminiProAPIKey, LLMProviderAPIKeys},
+    provider::{GeminiProAPIKey, GoogleAIStudioKey, LLMProviderAPIKeys},
 };
 
 #[tokio::main]
 async fn main() {
-    let api_key = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new(
-        "ya29.a0AXooCgs8y42lwdXpYkBXCiReRXBjVnvfkdnGA3JadAVraH6sGw_hqyOPVy0R-eSsSElaPKAI9OjQGDG9S0i4fFfaUtKBaF9qXaRQbUTIwIwbJX0T2yciqEJTPHbV2YQe4jrZwLs2rifas3FsCu3eIW5wfMLKGiutdJA6QKVs7QaCgYKAccSARESFQHGX2MiGybA9H-ZXPMSK5Pvz3XuoA0177".to_owned(),
-        "anton-390822".to_owned(),
+    let api_key = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
     ));
     let _request = LLMClientCompletionRequest::from_messages(
         vec![

@@ -1615,12 +1615,17 @@ We also believe this symbol needs to be probed because of:
             .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
             .await?;
         println!(
-            "tool_box::check_for_followups::found_sub_symbol_edited::({})::({})",
+            "tool_box::check_for_followups::found_sub_symbol_edited::parent_symbol_name({})::symbol_edited({})",
             parent_symbol_name,
             symbol_edited.symbol_name(),
         );
         // over here we have to check if its a function or a class
         if symbol_to_edit.is_function_type() {
+            println!(
+                "tool_box::check_for_followups::is_function_type::parent_symbol_name({})::symbol_to_edit({})",
+                parent_symbol_name,
+                symbol_to_edit.name(),
+            );
             // we do need to get the references over here for the function and
             // send them over as followups to check wherever they are being used
             let references = self
@@ -1642,10 +1647,18 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await;
         } else if symbol_to_edit.is_class_definition() {
-            // TODO(skcd): Show the AI the changed parts over here between the original
-            // code and the changed node and ask it for the symbols which we should go
-            // to references for, that way we are able to do the finer garained changes
-            // as and when required
+            println!(
+                "tool_box::check_for_followups::is_class_definition::parent_symbol_name({})::symbol_to_edit({})",
+                parent_symbol_name,
+                &symbol_to_edit.name()
+            );
+            // TODO(skcd): There are several cases here which we can handle:
+            // - we might have changed the definition of the symbol itself
+            // -  we could have an enum over here and added a new entry at this point, so
+            // we have to follow the symbol itself and go to tht references for it
+            // - so the hard part here is deciding between the following:
+            // - do we follow individual parts of the class type definitions
+            // - or do we follow the symbol itself and check things out
             let _ = self
                 .invoke_references_check_for_class_definition(
                     symbol_edited,
@@ -1680,7 +1693,7 @@ We also believe this symbol needs to be probed because of:
                 .await;
         } else {
             println!(
-                "too_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
+                "tool_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
                 parent_symbol_name,
                 symbol_to_edit.name(),
                 symbol_to_edit.outline_node_type()

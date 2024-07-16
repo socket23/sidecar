@@ -90,7 +90,7 @@ impl CodeEditingTool {
             llm_client,
             broker,
             editor_config: None,
-            fail_over_llm: fail_over_llm.upgrade_llm_to_gemini_pro(),
+            fail_over_llm,
         }
     }
 

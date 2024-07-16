@@ -62,7 +62,8 @@ async fn main() {
     ));
 
     // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
-    let file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned();
+    let file_path =
+        "/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned();
 
     // read the file contents
     let file_contents = String::from_utf8(

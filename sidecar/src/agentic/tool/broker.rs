@@ -259,7 +259,10 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::NewSubSymbolRequired,
-            Box::new(NewSubSymbolRequired::new(llm_client.clone())),
+            Box::new(NewSubSymbolRequired::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         tools.insert(
             ToolType::ProbeTryHardAnswer,

@@ -25,22 +25,42 @@ impl TagGraph {
         tag_graph
     }
 
+    // TODO - petgraph does not support personalization vectors
+
     pub fn populate_from_tag_index(
         &mut self,
         tag_index: &TagIndex,
         mentioned_idents: &HashSet<String>,
     ) {
+        let mut edge_count = 0;
         for ident in &tag_index.common_tags {
             let mul = self.calculate_multiplier(ident, mentioned_idents);
             let num_refs = tag_index.references[ident].len() as f64;
             let scaled_refs = num_refs.sqrt();
 
+            println!(
+                "Ident: {} has {} references and {} defines",
+                ident,
+                num_refs,
+                tag_index.defines[ident].len()
+            );
+
             for referencer in &tag_index.references[ident] {
                 for definer in &tag_index.defines[ident] {
                     let referencer_idx = self.get_or_create_node(referencer.to_str().unwrap());
                     let definer_idx = self.get_or_create_node(definer.to_str().unwrap());
+
+                    println!(
+                        "Adding edge {} from {} to {}. Weight: {} \n\n",
+                        edge_count + 1,
+                        referencer.display(),
+                        definer.display(),
+                        mul * scaled_refs
+                    );
+
                     self.graph
                         .add_edge(referencer_idx, definer_idx, mul * scaled_refs);
+                    edge_count += 1;
                 }
             }
         }
@@ -50,7 +70,34 @@ impl TagGraph {
         page_rank(&self.graph, 0.85, 100)
     }
 
-    pub fn distribute_rank(&mut self, ranks: Vec<f64>) {}
+    pub fn distribute_rank(&self, ranked: &Vec<f64>) -> Vec<((NodeIndex, String), f64)> {
+        let mut ranked_definitions: HashMap<(NodeIndex, String), f64> = HashMap::new();
+
+        for src in self.graph.node_indices() {
+            let src_rank = ranked[src.index() as usize];
+
+            println!("Source: {:?} has rank: {}", src, src_rank);
+            let total_weight: f64 = self.graph.edges(src).map(|edge| *edge.weight()).sum();
+
+            for edge in self.graph.edges(src) {
+                println!("Edge: {:?}", edge);
+                let dst = edge.target();
+                let weight = *edge.weight();
+                // let rank = src_rank * weight / total_weight;
+
+                // Assuming you have a way to get the 'ident' for each edge
+                // let ident = get_ident_for_edge(edge);
+
+                // *ranked_definitions.entry((dst, ident)).or_insert(0.0) += rank;
+            }
+        }
+
+        let mut ranked_tags: Vec<((NodeIndex, String), f64)> =
+            ranked_definitions.into_iter().collect();
+        ranked_tags.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        ranked_tags
+    }
 
     pub fn generate_dot_representation(&self) -> String {
         let mut dot = String::new();

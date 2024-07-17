@@ -2646,7 +2646,45 @@ instruction:
             // contents and the symbol again
             let symbol_to_edit = self
                 .find_sub_symbol_to_edit_with_name(parent_symbol_name, symbol_edited, request_id)
-                .await?;
+                .await;
+            // what we are doing here is getting the edited range and then using
+            // that to figure out where to invoke code correctness
+            // the catch here is that when doing code addition we might end up creating
+            // more code than required.
+            // we plan on doing the following:
+            // grabbing the symbols which are present after doing code correctness
+            // and checking if there are complete symbols present in it
+            // if thats the case we can apply the changes by ourselves over here
+            // we still need a range to check so for that we can find the changed
+            // symbol which belongs in the range of the parent symbol we are interested
+            // in which has been changed and use that to check for code correctness
+            // LLM will never generate code which is not correct when doing code-addition
+            // is the assumption we are going for
+            // we want to return here the symbol to edit
+            let symbol_to_edit = match symbol_to_edit {
+                Ok(symbol_to_edit) => Ok(symbol_to_edit),
+                Err(e) => {
+                    println!(
+                        "too_box::check_code_correctness::missing_symbol_to_edit::({})",
+                        parent_symbol_name
+                    );
+                    if symbol_edited.is_new() {
+                        println!(
+                            "tool_box::check_code_corretness::missing_symbol_to_edit::new_symbol::({})::({})",
+                            parent_symbol_name,
+                            symbol_edited.symbol_name(),
+                        );
+                        Err(e)
+                    } else {
+                        println!(
+                            "tool_box::check_code_corretness::missing_symbol_to_edit::not_new_symbol::({})::({})",
+                            parent_symbol_name,
+                            symbol_edited.symbol_name(),
+                        );
+                        Err(e)
+                    }
+                }
+            }?;
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), request_id)
                 .await?

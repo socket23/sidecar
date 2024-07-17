@@ -170,6 +170,25 @@ impl TSLanguageConfig {
         hoverable_nodes.into_iter().collect::<Vec<_>>()
     }
 
+    /// Generates a fresh outline node and does quite a bit of heavy-lifting
+    /// Tree generation by tree-sitter is computiationally expensive, we should
+    /// default to always storing the tree and maintaining it by looking at the edits
+    ///
+    /// This can be used to generate a fresh instance and parse the code
+    pub fn generate_outline_fresh(
+        &self,
+        source_code: &[u8],
+        fs_file_path: &str,
+    ) -> Vec<OutlineNode> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(grammar())
+            .expect("for lanaguage parser from tree_sitter should not fail");
+        let tree = parser.parse(source_code, None).unwrap();
+        self.generate_outline(source_code, &tree, fs_file_path.to_owned())
+    }
+
     pub fn generate_outline(
         &self,
         source_code: &[u8],

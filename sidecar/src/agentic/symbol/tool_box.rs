@@ -2582,6 +2582,115 @@ instruction:
         Ok(true)
     }
 
+    /// Takes as input the edited code and the symbol which needs to be edited
+    /// and applies the changes
+    /// This can lead to multiple outline nodes which need to be checked but for now
+    /// we will focus only on the symbols which are part of the parent symbol
+    async fn _apply_code_changes(
+        &self,
+        edited_code: &str,
+        symbol_edited: &SymbolToEdit,
+        _parent_symbol_name: &str,
+        request_id: &str,
+    ) -> Result<(), SymbolError> {
+        let fs_file_path = symbol_edited.fs_file_path();
+        // we are going to parse the edited code and get the outline nodes for it
+        let ts_language_parsing = self
+            .editor_parsing
+            .for_file_path(fs_file_path)
+            .ok_or(SymbolError::FileTypeNotSupported(fs_file_path.to_owned()))?;
+        let edited_code_outline_nodes =
+            ts_language_parsing.generate_outline_fresh(edited_code.as_bytes(), fs_file_path);
+
+        // Here is where things get tricky, we have a parent node we want to apply
+        // changes to and various other nodes which might or might not be present
+        // in the scope of the symbol which needs to edited
+        // our assumption right now is that:
+        // no matter the nodes which are generated we do the insertions or the apply the changes
+        // as directed by the edited code and let the symbols self-heal cause they will get invoked
+        // as part of the code-correctness or the plan
+        // code-addition never generates code which is wrong or partial and only complete code
+
+        let file_content = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let file_outline_nodes = ts_language_parsing
+            .generate_outline_fresh(file_content.contents_ref().as_bytes(), fs_file_path);
+
+        // 2 step process now with various cases:
+        // - if the edited code has a new new outline node, we need to insert it always (new outline node and for the children as well)
+        // - if the edited code has any outline nodes which already exist, we want to overwrite it
+        let _outline_nodes_which_are_fresh = edited_code_outline_nodes
+            .iter()
+            .filter(|edited_code_outline_node| {
+                let node_name = edited_code_outline_node.name();
+                // check if outline node does not exist
+                !file_outline_nodes
+                    .iter()
+                    .any(|file_outline_node| file_outline_node.name() == node_name)
+            })
+            .collect::<Vec<_>>();
+
+        // outline nodes which require a child insertion
+        let _outline_node_child_addition = edited_code_outline_nodes
+            .iter()
+            .filter_map(|edited_code_outline_node| {
+                let matching_file_outline_node =
+                    file_outline_nodes.iter().find(|file_outline_node| {
+                        file_outline_node.name() == edited_code_outline_node.name()
+                    });
+                if let Some(file_outline_node) = matching_file_outline_node {
+                    let new_added_nodes = edited_code_outline_node
+                        .children()
+                        .iter()
+                        .filter(|child_node| {
+                            !file_outline_node
+                                .children()
+                                .iter()
+                                .any(|file_child_node| file_child_node.name() == child_node.name())
+                        })
+                        .collect::<Vec<_>>();
+                    Some((file_outline_node, new_added_nodes))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // outline nodes which have changed now
+        // we do not consider child node changes over here, only the main symbol
+        // which changed
+        // one of the tricks which we can use here is:
+        // the content of the changed node should not be empty or an empty string
+        // we can comapre it on the length because we could have deletions which happened
+        // to the definition, but since this is addition (and only addition) we can be pretty
+        // sure that our length of the outline node will be > (going for strictly greater) original length of the outline node
+        let _outline_nodes_which_changed = edited_code_outline_nodes
+            .iter()
+            .filter_map(|edited_code_outline_node| {
+                let matching_file_outline_node =
+                    file_outline_nodes.iter().find(|file_outline_node| {
+                        file_outline_node.name() == edited_code_outline_node.name()
+                    });
+                if let Some(file_outline_node) = matching_file_outline_node {
+                    if edited_code_outline_node.content().content().len()
+                        > file_outline_node.content().content().len()
+                    {
+                        Some((file_outline_node, edited_code_outline_node))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // At the end of this function we have to get back the outline nodes if any
+        // which changed and belongs to the parent node
+        // since there can be multiple symbols and we DO NOT support that flow
+        // right now we will pick the first symbol and run with it
+        Ok(())
+    }
+
     pub async fn check_code_correctness(
         &self,
         parent_symbol_name: &str,
@@ -2674,6 +2783,8 @@ instruction:
                             parent_symbol_name,
                             symbol_edited.symbol_name(),
                         );
+                        // we want to take the edited code and only get back the range
+                        // for the code snippet which was edited as part of the parent symbol over here
                         Err(e)
                     } else {
                         println!(

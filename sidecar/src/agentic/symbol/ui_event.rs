@@ -17,6 +17,12 @@ pub struct UIEventWithID {
 }
 
 impl UIEventWithID {
+    pub fn finish_edit_request(request_id: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::EditRequestFinished(request_id),
+        }
+    }
     pub fn from_tool_event(request_id: String, input: ToolInput) -> Self {
         Self {
             request_id,
@@ -148,6 +154,7 @@ pub enum UIEvent {
     SymbolLoctationUpdate(SymbolLocation),
     SymbolEventSubStep(SymbolEventSubStepRequest),
     RequestEvent(RequestEvents),
+    EditRequestFinished(String),
 }
 
 impl From<SymbolEventRequest> for UIEvent {

@@ -528,6 +528,9 @@ impl SymbolManager {
             println!("this is wrong, please look at the comment here");
         }
         println!("symbol_manager::initial_request::finish");
+        let _ = self
+            .ui_sender
+            .send(UIEventWithID::finish_edit_request(request_id));
         Ok(())
     }
 }

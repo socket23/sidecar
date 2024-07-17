@@ -2826,7 +2826,7 @@ instruction:
             .any(|outline_node_changed| outline_node_changed.0.name() == parent_symbol_name);
 
         // we want something related to the parent symbol to change
-        if child_added || outline_node_changed {
+        if !child_added && !outline_node_changed {
             return Ok(None);
         }
 

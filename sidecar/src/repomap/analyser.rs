@@ -77,6 +77,10 @@ impl TagGraph {
             let src_rank = ranked[src.index() as usize];
 
             println!("Source: {:?} has rank: {}", src, src_rank);
+            self.graph.edges(src).for_each(|edge| {
+                println!("Edge: {:?}", edge);
+            });
+
             let total_weight: f64 = self.graph.edges(src).map(|edge| *edge.weight()).sum();
 
             for edge in self.graph.edges(src) {

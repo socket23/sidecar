@@ -354,6 +354,10 @@ impl OutlineNode {
         &self.content.name
     }
 
+    pub fn is_class_definition(&self) -> bool {
+        matches!(self.content.r#type, OutlineNodeType::ClassDefinition)
+    }
+
     pub fn is_class(&self) -> bool {
         matches!(self.content.r#type, OutlineNodeType::Class)
     }

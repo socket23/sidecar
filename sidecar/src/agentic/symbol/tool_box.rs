@@ -3059,6 +3059,10 @@ instruction:
                 // LLM will never generate code which is not correct when doing code-addition
                 // is the assumption we are going for
                 // we want to return here the symbol to edit
+                println!(
+                    "too_box::check_code_correctness::code_addition::file_wide_edits::({})",
+                    parent_symbol_name
+                );
                 let _ = self
                     .apply_code_changes_code_addition(
                         edited_code,

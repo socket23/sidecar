@@ -303,6 +303,7 @@ pub async fn code_editing(
         active_window_data,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
+    println!("webserver::code_editing_start");
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let tool_broker = Arc::new(ToolBroker::new(
         app.llm_broker.clone(),

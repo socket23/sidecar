@@ -109,7 +109,8 @@ async fn main() {
     // let problem_statement =
     //     "can you add another provider for grok for me we just need an api_key?".to_owned();
     // let problem_statement = "Add comments to RequestEvents".to_owned();
-    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
+    // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
+    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

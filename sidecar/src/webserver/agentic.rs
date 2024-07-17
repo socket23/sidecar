@@ -84,6 +84,7 @@ pub async fn probe_request_stop(
     Extension(app): Extension<Application>,
     Json(ProbeStopRequest { request_id }): Json<ProbeStopRequest>,
 ) -> Result<impl IntoResponse> {
+    println!("webserver::probe_request_stop");
     let probe_request_tracker = app.probe_request_tracker.clone();
     let _ = probe_request_tracker.cancel_request(&request_id).await;
     Ok(Json(ProbeStopResponse { done: true }))
@@ -305,6 +306,7 @@ pub async fn code_editing(
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start");
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let edit_request_tracker = app.probe_request_tracker.clone();
     let tool_broker = Arc::new(ToolBroker::new(
         app.llm_broker.clone(),
         Arc::new(CodeEditBroker::new()),
@@ -353,9 +355,10 @@ pub async fn code_editing(
 
     println!("webserver::code_editing_flow::endpoint_hit");
 
+    let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
     // Now we send the original request over here and then await on the sender like
     // before
-    tokio::spawn(async move {
+    let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
             .initial_request(SymbolInputEvent::new(
                 user_context,
@@ -363,7 +366,7 @@ pub async fn code_editing(
                 provider_type,
                 anthropic_api_keys,
                 user_query,
-                request_id,
+                edit_request_id,
                 None,
                 None,
                 None,
@@ -375,6 +378,10 @@ pub async fn code_editing(
             ))
             .await;
     });
+    let _ = edit_request_tracker
+        .track_new_request(&request_id, join_handle)
+        .await;
+
     let event_stream = Sse::new(
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
             sse::Event::default()

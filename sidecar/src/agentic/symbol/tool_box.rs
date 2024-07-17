@@ -2827,6 +2827,10 @@ instruction:
 
         // we want something related to the parent symbol to change
         if !child_added && !outline_node_changed {
+            println!(
+                "tool_box::apply_code_changes_code_addition::no_parent_symbol_changed::({})",
+                parent_symbol_name
+            );
             return Ok(None);
         }
 
@@ -2846,6 +2850,11 @@ instruction:
             let range = Range::new(
                 Position::new(file_length, 0, 0),
                 Position::new(file_length, 0, 0),
+            );
+            println!(
+                "tool_box::apply_code_changes_code_addition::fresh_outline_node::({})::({})",
+                parent_symbol_name,
+                fresh_outline_node.name()
             );
             let _ = self
                 .apply_edits_to_editor(
@@ -2902,6 +2911,7 @@ instruction:
                     .next()
                     .map(|outline_node| outline_node.range().end_position());
                 if let Some(end_position) = insert_position {
+                    println!("tool_box::apply_code_changes_code_addition::outline_node_child_added::({})::({})", parent_symbol_name, child_nodes.iter().map(|child_node| child_node.name()).collect::<Vec<_>>().join(","));
                     let _ = self
                         .apply_edits_to_editor(
                             fs_file_path,
@@ -2938,6 +2948,11 @@ instruction:
             }
             let implementation_outline_node =
                 implementation_outline_node_maybe.expect("if let None to hold");
+            println!(
+                "tool_box::apply_code_changes_code_addition::outline_node_which_changed::({})::({})",
+                parent_symbol_name,
+                implementation_outline_node.name(),
+            );
             let _ = self
                 .apply_edits_to_editor(
                     &fs_file_path,

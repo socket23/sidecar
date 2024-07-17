@@ -90,11 +90,6 @@ impl RepoMap {
 
         // if references are empty, use defines as references
         tag_index.process_empty_references();
-
         tag_index.process_common_tags();
-
-        tag_index.debug_print();
-
-        // tag_index.build_graph(HashSet::new());
     }
 }

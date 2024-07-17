@@ -1,6 +1,6 @@
 use sidecar::{
     chunking::languages::TSLanguageParsing,
-    repomap::{analyser::TagAnalyzer, tag::TagIndex, types::RepoMap},
+    repomap::{analyser::TagGraph, tag::TagIndex, types::RepoMap},
 };
 use std::{collections::HashSet, fs::read_dir, path::PathBuf, sync::Arc};
 fn main() {
@@ -31,11 +31,13 @@ fn main() {
 
     repomap.get_ranked_tags(&file_paths, &file_paths, ts_parsing, &mut tag_index);
 
-    let mut analyser = TagAnalyzer::new();
+    let mut analyser = TagGraph::new();
 
-    analyser.build_graph(&mut tag_index, &HashSet::new());
+    analyser.generate_graph(&mut tag_index, &HashSet::new());
 
     analyser.print_dot();
+
+    analyser.calculate_page_ranks();
 
     // analyser
     //     .save_dot("graph_with_weights.dot")

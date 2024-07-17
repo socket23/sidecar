@@ -1,29 +1,31 @@
+use petgraph::algo::page_rank::page_rank;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write; // Add this line
 
 use super::tag::TagIndex;
-pub struct TagAnalyzer {
+pub struct TagGraph {
     graph: DiGraph<String, f64>,
     node_indices: HashMap<String, NodeIndex>,
 }
 
-impl TagAnalyzer {
+impl TagGraph {
     pub fn new() -> Self {
         Self {
             graph: DiGraph::new(),
             node_indices: HashMap::new(),
         }
     }
-    pub fn build_graph(&mut self, tag_index: &mut TagIndex, mentioned_idents: &HashSet<String>) {
+    pub fn generate_graph(&mut self, tag_index: &mut TagIndex, mentioned_idents: &HashSet<String>) {
         // Iterate through all common tags in the tag index
         for ident in &tag_index.common_tags {
             // Calculate the multiplier for this identifier based on whether it's mentioned or starts with an underscore
-            let mul = self.get_multiplier(ident, mentioned_idents);
+            let mul = self.calculate_multiplier(ident, mentioned_idents);
 
             // Get the number of references for this identifier
             let num_refs = tag_index.references[ident].len() as f64;
+            println!("There are {} references for {}", num_refs, ident);
 
             // Scale the number of references using square root to dampen the effect of very high reference counts
             let scaled_refs = num_refs.sqrt();
@@ -49,6 +51,10 @@ impl TagAnalyzer {
         }
     }
 
+    pub fn calculate_page_ranks(&self) {
+        page_rank(&self.graph, 0.85, 100);
+    }
+
     fn get_or_create_node(&mut self, name: &str) -> NodeIndex {
         *self
             .node_indices
@@ -56,7 +62,7 @@ impl TagAnalyzer {
             .or_insert_with(|| self.graph.add_node(name.to_string()))
     }
 
-    fn get_multiplier(&self, tag: &str, mentioned_idents: &HashSet<String>) -> f64 {
+    fn calculate_multiplier(&self, tag: &str, mentioned_idents: &HashSet<String>) -> f64 {
         if mentioned_idents.contains(tag) {
             10.0
         } else if tag.starts_with('_') {
@@ -66,7 +72,7 @@ impl TagAnalyzer {
         }
     }
 
-    pub fn to_dot(&self) -> String {
+    pub fn generate_dot_representation(&self) -> String {
         let mut dot = String::new();
         writeln!(&mut dot, "digraph {{").unwrap();
 
@@ -99,7 +105,7 @@ impl TagAnalyzer {
     }
 
     pub fn print_dot(&self) {
-        println!("{}", self.to_dot());
+        println!("{}", self.generate_dot_representation());
     }
 
     // pub fn save_dot(&self, filename: &str) -> std::io::Result<()> {

@@ -1268,16 +1268,21 @@ Reason to edit:
                                 let file_path = class_snippet.fs_file_path();
                                 let non_overlap_prefix_content = non_overlap_prefix.0;
                                 let non_overlap_prefix_range = non_overlap_prefix.1;
+                                let start_line = non_overlap_prefix_range.start_line();
+                                let end_line = non_overlap_prefix_range.end_line();
+                                let language = class_snippet.language();
                                 let overlapp_snippet = format!(
                                     r#"<rerank_entry>
 <id>
 {symbol_index}
 </id>
 <file_path>
-{file_path}
+{file_path}:{start_line}-{end_line}
 </file_path>
 <content>
+```{language}
 {non_overlap_prefix_content}
+```
 </content>
 </rerank_entry>"#
                                 )

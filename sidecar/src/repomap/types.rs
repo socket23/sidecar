@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -33,7 +32,12 @@ impl RepoMap {
 
         let ranked_tags = analyser.get_ranked_tags();
 
-        println!("Ranked Tags: {:?}", ranked_tags);
+        for tag_set in ranked_tags {
+            for tag in tag_set {
+                println!("{}", tag.name);
+            }
+            println!("---");
+        }
 
         Ok(true)
     }
@@ -74,32 +78,5 @@ impl RepoMap {
         }
 
         Ok(())
-    }
-
-    pub fn get_ranked_tags(
-        &self,
-        chat_fnames: &[PathBuf],
-        other_fnames: &[PathBuf],
-        ts_parsing: Arc<TSLanguageParsing>,
-        tag_index: &mut TagIndex,
-        // todo
-        // mentioned_fnames: Option<&[PathBuf]>,
-        // mentioned_idents: Option<&[String]>,
-    ) {
-        let fnames: HashSet<PathBuf> = chat_fnames
-            .iter()
-            .chain(other_fnames.iter())
-            .cloned()
-            .collect();
-
-        for fname in &fnames {
-            if let Err(e) = self.process_file(fname, &ts_parsing, tag_index) {
-                eprintln!("Error processing file {}: {}", fname.display(), e);
-            }
-        }
-
-        // if references are empty, use defines as references
-        tag_index.process_empty_references();
-        tag_index.process_common_tags();
     }
 }

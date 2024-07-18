@@ -20,7 +20,11 @@ impl TagAnalyzer {
 
     pub fn get_ranked_tags(&mut self) -> Vec<&HashSet<Tag>> {
         self.tag_graph.calculate_and_distribute_ranks();
+
+        self.tag_graph.debug_ranked_definitions();
+
         let sorted_definitions = self.tag_graph.get_sorted_definitions();
+
         let graph = self.tag_graph.get_graph();
 
         let mut tags = vec![];
@@ -35,5 +39,10 @@ impl TagAnalyzer {
         tags
     }
 
-    // Add other methods that require both TagIndex and TagGraph...
+    pub fn debug_print_ranked_tags(&mut self) {
+        let ranked_tags = self.get_ranked_tags();
+        for tag in &ranked_tags {
+            println!("{:?}", tag);
+        }
+    }
 }

@@ -38,8 +38,18 @@ impl RepoMap {
         }
     }
 
-    pub fn generate(&self, dir: &Path) -> Result<bool, RepoMapError> {
-        let files = self.fs.get_files(dir)?;
+    pub fn generate(&self, root: &Path) -> Result<bool, RepoMapError> {
+        let files = self.fs.get_files(root)?;
+        let mut tag_index = TagIndex::new();
+
+        let ts_parsing = Arc::new(TSLanguageParsing::init());
+        for file in files {
+            self.process_file(&file, &ts_parsing, &mut tag_index)?;
+        }
+        tag_index.process_empty_references();
+        tag_index.process_common_tags();
+
+        tag_index.debug_print();
 
         Ok(true)
     }
@@ -54,15 +64,16 @@ impl RepoMap {
         fname: &PathBuf,
         ts_parsing: &Arc<TSLanguageParsing>,
         tag_index: &mut TagIndex,
-    ) -> Result<(), Box<dyn Error>> {
-        if !fname.exists() {
-            return Err(format!("File not found: {}", fname.display()).into());
-        }
-
+    ) -> Result<(), RepoMapError> {
         let rel_path = self.get_rel_fname(fname);
         let config = ts_parsing
             .for_file_path(fname.to_str().unwrap())
-            .ok_or_else(|| format!("Language configuration not found for: {}", fname.display()))?;
+            .ok_or_else(|| {
+                RepoMapError::ParseError(format!(
+                    "Language configuration not found for: {}",
+                    fname.display()
+                ))
+            })?;
 
         let tags = config.get_tags(fname, &rel_path);
 

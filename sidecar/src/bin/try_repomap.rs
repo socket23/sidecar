@@ -36,10 +36,10 @@ fn main() {
     tag_graph.print_dot();
 
     let ranks = tag_graph.calculate_page_ranks();
-
-    let _ = tag_graph.distribute_rank(&ranks);
-
     println!("Ranks: {:?}", ranks);
+
+    let ranked = tag_graph.distribute_rank(&ranks);
+    println!("post_dist ranks: {:?}", ranked);
 
     // analyser
     //     .save_dot("graph_with_weights.dot")

@@ -216,7 +216,7 @@ impl OutlineNodeContent {
     }
 
     // we try to get the non overlapping lines from our content
-    pub fn get_non_overlapping_content(&self, range: &[&Range]) -> Option<String> {
+    pub fn get_non_overlapping_content(&self, range: &[&Range]) -> Option<(String, Range)> {
         let lines = self
             .content
             .lines()
@@ -234,10 +234,25 @@ impl OutlineNodeContent {
             })
             .map(|(_, line)| line)
             .collect::<Vec<String>>();
+        let mut start_positions = range
+            .into_iter()
+            .map(|range| range.start_position())
+            .collect::<Vec<_>>();
+        start_positions.sort_by_key(|position| position.line());
         if lines.is_empty() {
             None
         } else {
-            Some(lines.join("\n"))
+            if start_positions.is_empty() {
+                Some((lines.join("\n"), self.range.clone()))
+            } else {
+                Some((
+                    lines.join("\n"),
+                    Range::new(
+                        self.range.start_position(),
+                        start_positions.remove(0).move_to_previous_line(),
+                    ),
+                ))
+            }
         }
     }
 

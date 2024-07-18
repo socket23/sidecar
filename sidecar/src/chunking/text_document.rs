@@ -146,6 +146,15 @@ impl Position {
         self.byte_offset = 0;
         self
     }
+
+    /// Moving to previous line and we shift the character to the maximum extent
+    /// possible
+    pub fn move_to_previous_line(mut self) -> Self {
+        self.line = self.line - 1;
+        self.character = 1000;
+        self.byte_offset = 0;
+        self
+    }
 }
 
 #[derive(

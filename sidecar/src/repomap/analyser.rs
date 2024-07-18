@@ -4,14 +4,20 @@ use petgraph::prelude::EdgeIndex;
 use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::path::PathBuf;
 
 use super::tag::TagIndex;
+
+pub type RankedDefinition = ((NodeIndex, String), f64);
+
+pub type RankedDefinitionsMap = HashMap<(NodeIndex, String), f64>;
 
 pub struct TagGraph {
     graph: DiGraph<String, f64>,
     node_indices: HashMap<String, NodeIndex>,
     edge_to_ident: HashMap<EdgeIndex, String>, // for rank distribution
-    ranked_definitions: HashMap<(NodeIndex, String), f64>,
+    ranked_definitions: RankedDefinitionsMap,
+    sorted_definitions: Vec<RankedDefinition>,
 }
 
 impl TagGraph {
@@ -21,6 +27,7 @@ impl TagGraph {
             node_indices: HashMap::new(),
             edge_to_ident: HashMap::new(),
             ranked_definitions: HashMap::new(),
+            sorted_definitions: Vec::new(),
         }
     }
 
@@ -42,13 +49,6 @@ impl TagGraph {
             let num_refs = tag_index.references[ident].len() as f64;
             let scaled_refs = num_refs.sqrt();
 
-            println!(
-                "Ident: {} has {} references and {} defines",
-                ident,
-                num_refs,
-                tag_index.defines[ident].len()
-            );
-
             for referencer in &tag_index.references[ident] {
                 for definer in &tag_index.defines[ident] {
                     let referencer_idx = self.get_or_create_node(referencer.to_str().unwrap());
@@ -68,32 +68,53 @@ impl TagGraph {
         page_rank(&self.graph, 0.85, 100)
     }
 
-    pub fn get_ranked_definitions(&self) -> &HashMap<(NodeIndex, String), f64> {
+    pub fn get_ranked_definitions(&self) -> &RankedDefinitionsMap {
         &self.ranked_definitions
+    }
+
+    pub fn get_sorted_definitions(&self) -> &[RankedDefinition] {
+        &self.sorted_definitions
     }
 
     pub fn calculate_and_distribute_ranks(&mut self) {
         let ranks = self.calculate_page_ranks();
         self.distribute_rank(&ranks);
-        self.sort_ranks();
+        self.sort_by_rank();
     }
 
-    fn sort_ranks(&mut self) {
-        let mut sorted_definitions: Vec<_> = self.ranked_definitions.iter().collect();
-        sorted_definitions
-            .sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+    pub fn get_ranked_tags(&mut self, tag_index: &TagIndex) {
+        let definitions = &self.ranked_definitions;
+
+        // let tags = vec![];
+
+        for ((node, tag_name), rank) in definitions {
+            let path = PathBuf::from(&self.graph[*node]);
+            println!("path: {:?}, tag_name: {}", path, tag_name);
+
+            let definition = tag_index
+                .definitions
+                .get(&(path, tag_name.clone()))
+                .unwrap();
+            println!("definition: {:?}", definition);
+        }
+    }
+
+    fn sort_by_rank(&mut self) {
+        let mut vec: Vec<_> = self.ranked_definitions.iter().collect();
+
+        vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        dbg!(&vec);
+
+        self.sorted_definitions = vec.into_iter().map(|(k, v)| (k.clone(), *v)).collect();
     }
 
     fn distribute_rank(&mut self, ranked: &Vec<f64>) {
         for src in self.graph.node_indices() {
             let src_rank = ranked[src.index() as usize];
-            println!("Source: {:?} has rank: {}", src, src_rank);
-            println!("Source file: {}", self.graph[src]);
 
             let total_outgoing_weights: f64 =
                 self.graph.edges(src).map(|edge| *edge.weight()).sum();
-
-            println!("Total outgoing weights: {}", total_outgoing_weights);
 
             for edge in self.graph.edges(src) {
                 let destination = edge.target();

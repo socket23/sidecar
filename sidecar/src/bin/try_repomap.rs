@@ -33,14 +33,13 @@ fn main() {
 
     let mut tag_graph = TagGraph::from_tag_index(&tag_index, &HashSet::new());
 
-    tag_graph.print_dot();
-
     let ranks = tag_graph.calculate_page_ranks();
-    println!("Ranks: {:?}", ranks);
 
     tag_graph.calculate_and_distribute_ranks();
 
-    dbg!(tag_graph.get_ranked_definitions());
+    dbg!(tag_graph.get_sorted_definitions());
+
+    // tag_graph.get_ranked_tags(&tag_index);
 
     // analyser
     //     .save_dot("graph_with_weights.dot")

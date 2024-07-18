@@ -55,8 +55,11 @@ impl RepoMap {
     }
 
     fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {
-        let self_root = "src/repomap";
-        fname.strip_prefix(self_root).unwrap_or(fname).to_path_buf()
+        let self_root = env!("CARGO_MANIFEST_DIR").to_string();
+        fname
+            .strip_prefix(&self_root)
+            .unwrap_or(fname)
+            .to_path_buf()
     }
 
     fn process_file(

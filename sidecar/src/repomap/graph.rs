@@ -1,12 +1,10 @@
+use super::tag::TagIndex;
 use petgraph::algo::page_rank::page_rank;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::prelude::EdgeIndex;
 use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
-use std::path::PathBuf;
-
-use super::tag::{Tag, TagIndex};
 
 pub type RankedDefinition = ((NodeIndex, String), f64);
 
@@ -90,8 +88,6 @@ impl TagGraph {
         let mut vec: Vec<_> = self.ranked_definitions.iter().collect();
 
         vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        dbg!(&vec);
 
         self.sorted_definitions = vec.into_iter().map(|(k, v)| (k.clone(), *v)).collect();
     }

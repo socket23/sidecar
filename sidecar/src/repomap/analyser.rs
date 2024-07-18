@@ -1,9 +1,4 @@
-use petgraph::algo::page_rank::page_rank;
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::prelude::EdgeIndex;
-use petgraph::visit::EdgeRef;
-use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::graph::TagGraph;
@@ -23,13 +18,14 @@ impl TagAnalyzer {
         }
     }
 
-    pub fn get_ranked_tags(&self) -> Vec<&HashSet<Tag>> {
-        let ranked_definitions = self.tag_graph.get_ranked_definitions();
+    pub fn get_ranked_tags(&mut self) -> Vec<&HashSet<Tag>> {
+        self.tag_graph.calculate_and_distribute_ranks();
+        let sorted_definitions = self.tag_graph.get_sorted_definitions();
         let graph = self.tag_graph.get_graph();
 
         let mut tags = vec![];
 
-        for ((node, tag_name), _rank) in ranked_definitions {
+        for ((node, tag_name), _rank) in sorted_definitions {
             let path = PathBuf::from(&graph[*node]);
             if let Some(definition) = self.tag_index.definitions.get(&(path, tag_name.clone())) {
                 tags.push(definition);

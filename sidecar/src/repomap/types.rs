@@ -1,41 +1,21 @@
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
-use std::io;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::chunking::languages::TSLanguageParsing;
 
+use super::analyser::TagAnalyzer;
 use super::error::RepoMapError;
 use super::files::FileSystem;
 use super::tag::TagIndex;
 
-// #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoMap {
     fs: Box<dyn FileSystem>,
-    // root: PathBuf,
-    // max_map_tokens: usize,
-    // map_mul_no_files: usize,
-    // max_context_window: Option<usize>,
-    // tags_cache: HashMap<PathBuf, CachedTags>,
-    // verbose: bool,
-    // queries_cache: HashMap<String, String>,
-    // package_path: String,
 }
 
 impl RepoMap {
     pub fn new(fs: Box<dyn FileSystem>) -> Self {
-        Self {
-            fs,
-            // root,
-            // max_map_tokens,
-            // map_mul_no_files,
-            // max_context_window,
-            // tags_cache: HashMap::new(),
-            // verbose,
-            // queries_cache: HashMap::new(),
-            // package_path: env!("CARGO_MANIFEST_DIR").to_string(),
-        }
+        Self { fs }
     }
 
     pub fn generate(&self, root: &Path) -> Result<bool, RepoMapError> {
@@ -46,12 +26,21 @@ impl RepoMap {
         for file in files {
             self.process_file(&file, &ts_parsing, &mut tag_index)?;
         }
-        tag_index.process_empty_references();
-        tag_index.process_common_tags();
 
-        tag_index.debug_print();
+        self.post_process_tags(&mut tag_index);
+
+        let mut analyser = TagAnalyzer::new(tag_index);
+
+        let ranked_tags = analyser.get_ranked_tags();
+
+        println!("Ranked Tags: {:?}", ranked_tags);
 
         Ok(true)
+    }
+
+    fn post_process_tags(&self, tag_index: &mut TagIndex) {
+        tag_index.process_empty_references();
+        tag_index.process_common_tags();
     }
 
     fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {
@@ -93,12 +82,10 @@ impl RepoMap {
         other_fnames: &[PathBuf],
         ts_parsing: Arc<TSLanguageParsing>,
         tag_index: &mut TagIndex,
+        // todo
         // mentioned_fnames: Option<&[PathBuf]>,
         // mentioned_idents: Option<&[String]>,
     ) {
-        // TODO: implement personalization
-        // let mut personalization: HashMap<String, f64> = HashMap::new();
-
         let fnames: HashSet<PathBuf> = chat_fnames
             .iter()
             .chain(other_fnames.iter())

@@ -5,10 +5,12 @@ use std::sync::Arc;
 
 use crate::chunking::languages::TSLanguageParsing;
 
+use super::files::FileSystem;
 use super::tag::TagIndex;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+// #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoMap {
+    fs: Box<dyn FileSystem>,
     root: PathBuf,
     // max_map_tokens: usize,
     // map_mul_no_files: usize,
@@ -20,8 +22,9 @@ pub struct RepoMap {
 }
 
 impl RepoMap {
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(fs: Box<dyn FileSystem>, root: PathBuf) -> Self {
         Self {
+            fs,
             root,
             // max_map_tokens,
             // map_mul_no_files,

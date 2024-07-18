@@ -1228,7 +1228,7 @@ Reason to edit:
                     .collect::<Vec<(
                         &OutlineNodeContent,
                         Vec<&&OutlineNodeContent>,
-                        Option<String>,
+                        Option<(String, Range)>,
                     )>>();
 
                 // now we will generate the code snippets over here
@@ -1266,6 +1266,8 @@ Reason to edit:
                         } else {
                             let overlap = if let Some(non_overlap_prefix) = non_overlap_prefix {
                                 let file_path = class_snippet.fs_file_path();
+                                let non_overlap_prefix_content = non_overlap_prefix.0;
+                                let non_overlap_prefix_range = non_overlap_prefix.1;
                                 let overlapp_snippet = format!(
                                     r#"<rerank_entry>
 <id>
@@ -1275,7 +1277,7 @@ Reason to edit:
 {file_path}
 </file_path>
 <content>
-{non_overlap_prefix}
+{non_overlap_prefix_content}
 </content>
 </rerank_entry>"#
                                 )
@@ -1288,7 +1290,7 @@ Reason to edit:
                                     symbol_rerank_information.push(
                                         SnippetReRankInformation::new(
                                             symbol_index,
-                                            class_snippet.range().clone(),
+                                            non_overlap_prefix_range,
                                             class_snippet.fs_file_path().to_owned(),
                                         )
                                         .set_is_outline(),

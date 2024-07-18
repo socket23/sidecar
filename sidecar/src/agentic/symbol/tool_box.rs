@@ -3046,14 +3046,15 @@ instruction:
             }
             tries = tries + 1;
 
-            let should_apply_code_changes_for_addition = self
-                .should_apply_code_changes_code_addition(
-                    edited_code,
-                    symbol_edited,
-                    parent_symbol_name,
-                    request_id,
-                )
-                .await?;
+            let should_apply_code_changes_for_addition = symbol_edited.is_new()
+                && self
+                    .should_apply_code_changes_code_addition(
+                        edited_code,
+                        symbol_edited,
+                        parent_symbol_name,
+                        request_id,
+                    )
+                    .await?;
 
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
 
@@ -3075,7 +3076,7 @@ instruction:
                 // is the assumption we are going for
                 // we want to return here the symbol to edit
                 println!(
-                    "too_box::check_code_correctness::code_addition::file_wide_edits::({})",
+                    "tool_box::check_code_correctness::code_addition::file_wide_edits::({})",
                     parent_symbol_name
                 );
                 let _ = self

@@ -11,6 +11,7 @@ pub struct TagGraph {
     graph: DiGraph<String, f64>,
     node_indices: HashMap<String, NodeIndex>,
     edge_to_ident: HashMap<EdgeIndex, String>, // for rank distribution
+    ranked_definitions: HashMap<(NodeIndex, String), f64>,
 }
 
 impl TagGraph {
@@ -19,6 +20,7 @@ impl TagGraph {
             graph: DiGraph::new(),
             node_indices: HashMap::new(),
             edge_to_ident: HashMap::new(),
+            ranked_definitions: HashMap::new(),
         }
     }
 
@@ -66,9 +68,23 @@ impl TagGraph {
         page_rank(&self.graph, 0.85, 100)
     }
 
-    pub fn distribute_rank(&self, ranked: &Vec<f64>) -> Vec<((NodeIndex, String), f64)> {
-        let mut ranked_definitions: HashMap<(NodeIndex, String), f64> = HashMap::new();
+    pub fn get_ranked_definitions(&self) -> &HashMap<(NodeIndex, String), f64> {
+        &self.ranked_definitions
+    }
 
+    pub fn calculate_and_distribute_ranks(&mut self) {
+        let ranks = self.calculate_page_ranks();
+        self.distribute_rank(&ranks);
+        self.sort_ranks();
+    }
+
+    fn sort_ranks(&mut self) {
+        let mut sorted_definitions: Vec<_> = self.ranked_definitions.iter().collect();
+        sorted_definitions
+            .sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+    }
+
+    fn distribute_rank(&mut self, ranked: &Vec<f64>) {
         for src in self.graph.node_indices() {
             let src_rank = ranked[src.index() as usize];
             println!("Source: {:?} has rank: {}", src, src_rank);
@@ -97,19 +113,12 @@ impl TagGraph {
                 // Update the rank for the destination node and identifier combination
                 // If it doesn't exist in the map, initialize it with 0.0
                 // Then add the newly calculated weight to its current value
-                *ranked_definitions
+                *self
+                    .ranked_definitions
                     .entry((destination, ident.clone()))
                     .or_insert(0.0) += new_weight;
             }
         }
-
-        dbg!(ranked_definitions.clone());
-
-        let mut ranked_tags: Vec<((NodeIndex, String), f64)> =
-            ranked_definitions.into_iter().collect();
-        ranked_tags.sort_by(|a, b| b.1.total_cmp(&a.1));
-
-        ranked_tags
     }
 
     pub fn generate_dot_representation(&self) -> String {

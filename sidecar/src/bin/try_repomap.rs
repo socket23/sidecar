@@ -31,15 +31,16 @@ fn main() {
 
     repomap.get_ranked_tags(&file_paths, &file_paths, ts_parsing, &mut tag_index);
 
-    let tag_graph = TagGraph::from_tag_index(&tag_index, &HashSet::new());
+    let mut tag_graph = TagGraph::from_tag_index(&tag_index, &HashSet::new());
 
     tag_graph.print_dot();
 
     let ranks = tag_graph.calculate_page_ranks();
     println!("Ranks: {:?}", ranks);
 
-    let ranked = tag_graph.distribute_rank(&ranks);
-    println!("post_dist ranks: {:?}", ranked);
+    tag_graph.calculate_and_distribute_ranks();
+
+    dbg!(tag_graph.get_ranked_definitions());
 
     // analyser
     //     .save_dot("graph_with_weights.dot")

@@ -7,7 +7,7 @@ pub trait FileSystem {
     fn get_files(&self, dir: &Path) -> Result<Vec<PathBuf>, io::Error>;
 }
 
-struct SimpleFileSystem;
+pub struct SimpleFileSystem;
 
 impl FileSystem for SimpleFileSystem {
     fn get_files(&self, dir: &Path) -> Result<Vec<PathBuf>, io::Error> {

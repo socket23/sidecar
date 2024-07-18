@@ -1,46 +1,52 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::chunking::languages::TSLanguageParsing;
 
+use super::error::RepoMapError;
 use super::files::FileSystem;
 use super::tag::TagIndex;
 
 // #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoMap {
     fs: Box<dyn FileSystem>,
-    root: PathBuf,
+    // root: PathBuf,
     // max_map_tokens: usize,
     // map_mul_no_files: usize,
     // max_context_window: Option<usize>,
     // tags_cache: HashMap<PathBuf, CachedTags>,
     // verbose: bool,
-    queries_cache: HashMap<String, String>,
-    package_path: String,
+    // queries_cache: HashMap<String, String>,
+    // package_path: String,
 }
 
 impl RepoMap {
-    pub fn new(fs: Box<dyn FileSystem>, root: PathBuf) -> Self {
+    pub fn new(fs: Box<dyn FileSystem>) -> Self {
         Self {
             fs,
-            root,
+            // root,
             // max_map_tokens,
             // map_mul_no_files,
             // max_context_window,
             // tags_cache: HashMap::new(),
             // verbose,
-            queries_cache: HashMap::new(),
-            package_path: env!("CARGO_MANIFEST_DIR").to_string(),
+            // queries_cache: HashMap::new(),
+            // package_path: env!("CARGO_MANIFEST_DIR").to_string(),
         }
     }
 
+    pub fn generate(&self, dir: &Path) -> Result<bool, RepoMapError> {
+        let files = self.fs.get_files(dir)?;
+
+        Ok(true)
+    }
+
     fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {
-        fname
-            .strip_prefix(&self.root)
-            .unwrap_or(fname)
-            .to_path_buf()
+        let self_root = "src/repomap";
+        fname.strip_prefix(self_root).unwrap_or(fname).to_path_buf()
     }
 
     fn process_file(

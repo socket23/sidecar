@@ -80,6 +80,12 @@ impl TagGraph {
         }
     }
 
+    pub fn debug_sorted_definitions(&self) {
+        for ((node_index, ident), v) in &self.sorted_definitions {
+            println!("{:?}:{} -> {}", self.graph[*node_index], ident, v);
+        }
+    }
+
     pub fn get_sorted_definitions(&self) -> &[RankedDefinition] {
         &self.sorted_definitions
     }

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -6,7 +7,7 @@ use crate::chunking::languages::TSLanguageParsing;
 use super::analyser::TagAnalyzer;
 use super::error::RepoMapError;
 use super::files::FileSystem;
-use super::tag::TagIndex;
+use super::tag::{Tag, TagIndex};
 
 pub struct RepoMap {
     fs: Box<dyn FileSystem>,
@@ -17,7 +18,7 @@ impl RepoMap {
         Self { fs }
     }
 
-    pub fn generate(&self, root: &Path) -> Result<bool, RepoMapError> {
+    pub fn generate(&self, root: &Path) -> Result<Vec<HashSet<Tag>>, RepoMapError> {
         let files = self.fs.get_files(root)?;
         let mut tag_index = TagIndex::new();
 
@@ -32,14 +33,7 @@ impl RepoMap {
 
         let ranked_tags = analyser.get_ranked_tags();
 
-        for tag_set in ranked_tags {
-            for tag in tag_set {
-                println!("{}", tag.name);
-            }
-            println!("---");
-        }
-
-        Ok(true)
+        Ok(ranked_tags.into_iter().map(|set| set.clone()).collect())
     }
 
     fn post_process_tags(&self, tag_index: &mut TagIndex) {

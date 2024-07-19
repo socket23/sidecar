@@ -17,7 +17,10 @@ use sidecar::{
             tool_properties::ToolProperties,
             types::Symbol,
         },
-        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
+        tool::{
+            broker::{ToolBroker, ToolBrokerConfiguration},
+            code_edit::models::broker::CodeEditBroker,
+        },
     },
     chunking::{
         editor_parsing::EditorParsing,
@@ -54,7 +57,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
-        None,
+        ToolBrokerConfiguration::new(None, true),
         LLMProperties::new(
             LLMType::GeminiPro,
             LLMProvider::GoogleAIStudio,

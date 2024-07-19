@@ -9,7 +9,10 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{identifier::LLMProperties, tool_box::ToolBox},
-        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
+        tool::{
+            broker::{ToolBroker, ToolBrokerConfiguration},
+            code_edit::models::broker::CodeEditBroker,
+        },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
@@ -37,7 +40,8 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
-        None,
+        // apply the edits directly
+        ToolBrokerConfiguration::new(None, true),
         LLMProperties::new(
             LLMType::GeminiPro,
             LLMProvider::GoogleAIStudio,

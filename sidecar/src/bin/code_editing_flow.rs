@@ -12,7 +12,10 @@ use sidecar::{
         symbol::{
             events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
         },
-        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
+        tool::{
+            broker::{ToolBroker, ToolBrokerConfiguration},
+            code_edit::models::broker::CodeEditBroker,
+        },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
@@ -52,7 +55,8 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
-        None,
+        // for our testing workflow we want to apply the edits directly
+        ToolBrokerConfiguration::new(None, true),
         LLMProperties::new(
             LLMType::Gpt4O,
             LLMProvider::OpenAI,

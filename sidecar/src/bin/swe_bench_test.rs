@@ -131,7 +131,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
-        Some(ToolBrokerConfiguration::new(Some(code_editing_properties))),
+        ToolBrokerConfiguration::new(Some(code_editing_properties), true),
         LLMProperties::new(
             LLMType::GeminiPro,
             LLMProvider::GoogleAIStudio,

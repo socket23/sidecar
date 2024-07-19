@@ -45,11 +45,15 @@ use super::{
 
 pub struct ToolBrokerConfiguration {
     editor_agent: Option<LLMProperties>,
+    apply_edits_directly: bool,
 }
 
 impl ToolBrokerConfiguration {
-    pub fn new(editor_agent: Option<LLMProperties>) -> Self {
-        Self { editor_agent }
+    pub fn new(editor_agent: Option<LLMProperties>, apply_edits_directly: bool) -> Self {
+        Self {
+            editor_agent,
+            apply_edits_directly,
+        }
     }
 }
 
@@ -66,7 +70,7 @@ impl ToolBroker {
         code_edit_broker: Arc<CodeEditBroker>,
         symbol_tracking: Arc<SymbolTrackerInline>,
         language_broker: Arc<TSLanguageParsing>,
-        tool_broker_config: Option<ToolBrokerConfiguration>,
+        tool_broker_config: ToolBrokerConfiguration,
         // Use this if the llm we were talking to times out or does not produce
         // outout which is coherent
         // we should have finer control over the fail-over llm but for now
@@ -82,12 +86,7 @@ impl ToolBroker {
                     code_edit_broker.clone(),
                     fail_over_llm.clone(),
                 )
-                .set_editor_config(
-                    tool_broker_config
-                        .map(|tool_broker_config| tool_broker_config.editor_agent)
-                        .clone()
-                        .flatten(),
-                ),
+                .set_editor_config(tool_broker_config.editor_agent.clone()),
             ),
         );
         tools.insert(ToolType::LSPDiagnostics, Box::new(LSPDiagnostics::new()));
@@ -164,7 +163,10 @@ impl ToolBroker {
                 fail_over_llm.clone(),
             )),
         );
-        tools.insert(ToolType::EditorApplyEdits, Box::new(EditorApply::new()));
+        tools.insert(
+            ToolType::EditorApplyEdits,
+            Box::new(EditorApply::new(tool_broker_config.apply_edits_directly)),
+        );
         tools.insert(ToolType::GetQuickFix, Box::new(LSPQuickFixClient::new()));
         tools.insert(
             ToolType::ApplyQuickFix,

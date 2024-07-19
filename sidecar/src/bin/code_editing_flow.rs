@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use futures::{stream, StreamExt};
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
@@ -74,30 +75,27 @@ async fn main() {
     //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned();
     // let file_path =
-    //     "/Users/skcd/scratch/ide/src/vs/platform/configuration/common/configurationRegistry.ts"
+    //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned();
-    let file_path =
-        "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
-            .to_owned();
+    let file_paths = vec![
+        "/Users/skcd/test_repo/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
+        "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
+    ];
+    let file_content_value = stream::iter(file_paths)
+        .map(|file_path| async move {
+            let file_content = String::from_utf8(
+                tokio::fs::read(file_path.to_owned())
+                    .await
+                    .expect("to work"),
+            )
+            .expect("to work");
+            FileContentValue::new(file_path, file_content, "rust".to_owned())
+        })
+        .buffer_unordered(2)
+        .collect::<Vec<_>>()
+        .await;
 
-    // read the file contents
-    let file_contents = String::from_utf8(
-        tokio::fs::read(file_path.to_owned())
-            .await
-            .expect("to work"),
-    )
-    .expect("to work");
-
-    let user_context = UserContext::new(
-        vec![],
-        vec![FileContentValue::new(
-            file_path.to_owned(),
-            file_contents,
-            "rust".to_owned(),
-        )],
-        None,
-        vec![],
-    );
+    let user_context = UserContext::new(vec![], file_content_value, None, vec![]);
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -121,10 +119,12 @@ async fn main() {
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
-    // let problem_statement = "Add a new disallowConfigurationDefault configuration property to let the user decide if extensions can contribute configuration defaults or not".to_owned();
     let problem_statement =
-        "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
+        "Add support for a new stop_code_editing endpoint and implement it similar to probing stop"
             .to_owned();
+    // let problem_statement =
+    //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
+    //         .to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

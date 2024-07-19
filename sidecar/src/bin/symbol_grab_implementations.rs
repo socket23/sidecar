@@ -38,8 +38,10 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs".to_owned();
-    let placeholder_range = Range::new(Position::new(40, 0, 0), Position::new(45, 1, 0));
+    let fs_file_path =
+        "/Users/skcd/scratch/ide/src/vs/platform/configuration/common/configurationRegistry.ts"
+            .to_owned();
+    let placeholder_range = Range::new(Position::new(264, 0, 0), Position::new(686, 1, 0));
     let editor_url = "http://localhost:42450".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
@@ -74,17 +76,17 @@ async fn main() {
     ));
 
     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
-        "LLMBroker".to_owned(),
+        "ConfigurationRegistry".to_owned(),
         vec![],
         false,
         fs_file_path.to_owned(),
         Some(Snippet::new(
-            "LLMBroker".to_owned(),
+            "ConfigurationRegistry".to_owned(),
             placeholder_range.clone(),
             fs_file_path.to_owned(),
             "".to_owned(),
             OutlineNodeContent::new(
-                "LLMBroker".to_owned(),
+                "ConfigurationRegistry".to_owned(),
                 placeholder_range.clone(),
                 sidecar::chunking::types::OutlineNodeType::Class,
                 "".to_owned(),
@@ -104,7 +106,7 @@ async fn main() {
     let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let symbol = Symbol::new(
-        SymbolIdentifier::with_file_path("LLMBroker", &fs_file_path),
+        SymbolIdentifier::with_file_path("ConfigurationRegistry", &fs_file_path),
         mecha_code_symbol_thinking,
         sender,
         tool_box,

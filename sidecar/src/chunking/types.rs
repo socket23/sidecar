@@ -184,6 +184,18 @@ impl OutlineNodeContent {
         }
     }
 
+    /// Overrides the range for the outline node content
+    pub fn set_range(mut self, range: Range) -> Self {
+        self.range = range;
+        self
+    }
+
+    /// Overrides the content for the outline node content
+    pub fn set_content(mut self, content: String) -> Self {
+        self.content = content;
+        self
+    }
+
     pub fn is_class_declaration(&self) -> bool {
         matches!(self.outline_node_type(), OutlineNodeType::ClassDefinition)
     }

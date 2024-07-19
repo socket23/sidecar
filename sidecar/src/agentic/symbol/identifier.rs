@@ -17,7 +17,7 @@ use crate::{
         symbol::events::initial_request::SymbolRequestHistoryItem,
         tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
     },
-    chunking::{text_document::Range, types::OutlineNodeContent},
+    chunking::{text_document::Range, types::{OutlineNodeContent, OutlineNodeType}},
     user_context::types::UserContext,
 };
 
@@ -119,6 +119,10 @@ impl Snippet {
     // TODO(skcd): Fix the language over here and make it not None
     pub fn language(&self) -> String {
         self.language.clone().unwrap_or("".to_owned()).to_owned()
+    }
+
+    pub fn node_type(&self) -> &OutlineNodeType {
+        self.outline_node_content.outline_node_type()
     }
 
     pub fn file_path(&self) -> &str {

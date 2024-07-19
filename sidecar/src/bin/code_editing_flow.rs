@@ -73,8 +73,11 @@ async fn main() {
     // let file_path =
     //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned();
+    // let file_path =
+    //     "/Users/skcd/scratch/ide/src/vs/platform/configuration/common/configurationRegistry.ts"
+    //         .to_owned();
     let file_path =
-        "/Users/skcd/scratch/ide/src/vs/platform/configuration/common/configurationRegistry.ts"
+        "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
             .to_owned();
 
     // read the file contents
@@ -118,7 +121,10 @@ async fn main() {
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
-    let problem_statement = "Add a new disallowConfigurationDefault configuration property to let the user decide if extensions can contribute configuration defaults or not".to_owned();
+    // let problem_statement = "Add a new disallowConfigurationDefault configuration property to let the user decide if extensions can contribute configuration defaults or not".to_owned();
+    let problem_statement =
+        "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
+            .to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,

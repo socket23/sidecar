@@ -206,15 +206,18 @@ impl ToolBox {
             // for the new sub-symbol which we want to edit
             let valid_position = implementations
                 .into_iter()
+                // reversing it here so we get the largest class implementation
+                // block
+                .rev()
                 .filter(|implementation| implementation.outline_node_content().is_class_type())
-                .next()
                 .map(|implementation| {
                     let outline_node_content = implementation.outline_node_content();
                     (
                         outline_node_content.fs_file_path().to_owned(),
                         implementation.range().end_position(),
                     )
-                });
+                })
+                .next();
             match valid_position {
                 Some((fs_file_path, end_position)) => {
                     sub_symbol_to_edit.set_fs_file_path(fs_file_path);

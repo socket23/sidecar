@@ -6,7 +6,10 @@ use llm_client::{
     config::LLMBrokerConfiguration,
     provider::{GeminiProAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
-use sidecar::agentic::{symbol::identifier::LLMProperties, tool::r#type::Tool};
+use sidecar::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::{broker::ToolBrokerConfiguration, r#type::Tool},
+};
 use sidecar::{
     agentic::tool::{
         broker::ToolBroker, code_edit::models::broker::CodeEditBroker,
@@ -47,7 +50,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
-        None,
+        ToolBrokerConfiguration::new(None, true),
         LLMProperties::new(
             LLMType::GeminiPro,
             LLMProvider::GoogleAIStudio,

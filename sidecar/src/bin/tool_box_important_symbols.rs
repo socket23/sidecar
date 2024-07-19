@@ -10,7 +10,7 @@ use sidecar::{
     agentic::{
         symbol::{identifier::LLMProperties, tool_box::ToolBox},
         tool::{
-            broker::ToolBroker,
+            broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
             code_symbol::important::{
                 CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
@@ -43,7 +43,7 @@ async fn main() {
         Arc::new(CodeEditBroker::new()),
         symbol_broker.clone(),
         Arc::new(TSLanguageParsing::init()),
-        None,
+        ToolBrokerConfiguration::new(None, true),
         LLMProperties::new(
             LLMType::GeminiPro,
             LLMProvider::GoogleAIStudio,

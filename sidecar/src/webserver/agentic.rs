@@ -14,6 +14,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::{
     agentic::{
         symbol::{
@@ -108,7 +109,7 @@ pub async fn probe_request(
         Arc::new(CodeEditBroker::new()),
         app.symbol_tracker.clone(),
         app.language_parsing.clone(),
-        None,
+        ToolBrokerConfiguration::new(None, false),
         LLMProperties::new(
             LLMType::GeminiPro,
             LLMProvider::CodeStory(Default::default()),
@@ -208,7 +209,8 @@ pub async fn swe_bench(
         Arc::new(CodeEditBroker::new()),
         app.symbol_tracker.clone(),
         app.language_parsing.clone(),
-        None,
+        // for swe-bench tests we do not care about tracking edits
+        ToolBrokerConfiguration::new(None, true),
         LLMProperties::new(
             LLMType::GeminiPro,
             LLMProvider::GoogleAIStudio,
@@ -312,7 +314,8 @@ pub async fn code_editing(
         Arc::new(CodeEditBroker::new()),
         app.symbol_tracker.clone(),
         app.language_parsing.clone(),
-        None,
+        // do not apply the edits directly
+        ToolBrokerConfiguration::new(None, false),
         LLMProperties::new(
             LLMType::Gpt4O,
             LLMProvider::OpenAI,
@@ -356,8 +359,8 @@ pub async fn code_editing(
     println!("webserver::code_editing_flow::endpoint_hit");
 
     let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
-    // Now we send the original request over here and then await on the sender like
-    // before
+                                              // Now we send the original request over here and then await on the sender like
+                                              // before
     let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
             .initial_request(SymbolInputEvent::new(

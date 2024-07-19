@@ -7,12 +7,14 @@ use crate::{
 
 pub struct EditorApply {
     client: reqwest::Client,
+    apply_edits_directly: bool,
 }
 
 impl EditorApply {
-    pub fn new() -> Self {
+    pub fn new(apply_edits_directly: bool) -> Self {
         Self {
             client: reqwest::Client::new(),
+            apply_edits_directly,
         }
     }
 }
@@ -39,6 +41,25 @@ impl EditorApplyRequest {
             editor_url,
         }
     }
+
+    fn to_editor_request(self, apply_edits: bool) -> EditorApplyRequestDirect {
+        EditorApplyRequestDirect {
+            fs_file_path: self.fs_file_path,
+            edited_content: self.edited_content,
+            selected_range: self.selected_range,
+            editor_url: self.editor_url,
+            apply_directly: apply_edits,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct EditorApplyRequestDirect {
+    fs_file_path: String,
+    edited_content: String,
+    selected_range: Range,
+    editor_url: String,
+    apply_directly: bool,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -60,7 +81,10 @@ impl EditorApply {
         let response = self
             .client
             .post(editor_endpoint)
-            .body(serde_json::to_string(&request).map_err(|_e| ToolError::SerdeConversionFailed)?)
+            .body(
+                serde_json::to_string(&request.to_editor_request(self.apply_edits_directly))
+                    .map_err(|_e| ToolError::SerdeConversionFailed)?,
+            )
             .send()
             .await
             .map_err(|_e| ToolError::ErrorCommunicatingWithEditor)?;

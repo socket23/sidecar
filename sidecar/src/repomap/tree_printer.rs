@@ -1,4 +1,13 @@
-#[derive(Debug)]
+use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
+use std::sync::Arc;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("No language configuration found for file: {0}")]
+    MissingConfig(String),
+}
+
 struct TreeContext {
     filename: String,
     code: String,
@@ -32,7 +41,7 @@ impl Default for TreeContext {
 }
 
 impl TreeContext {
-    pub fn new(filename: String, code: String) -> Self {
+    pub fn new(filename: String, code: String, ts_parser: &Arc<TSLanguageParsing>) -> Self {
         Self {
             filename,
             code,
@@ -41,7 +50,15 @@ impl TreeContext {
     }
 
     // todo: get parser for language
-    fn get_parser() {}
+    fn get_ts_config(
+        &self,
+        ts_parsing: &TSLanguageParsing,
+    ) -> Result<TSLanguageConfig, ConfigError> {
+        match ts_parsing.for_file_path(&self.filename) {
+            Some(config) => Ok(config.clone()),
+            None => Err(ConfigError::MissingConfig(self.filename.clone())),
+        }
+    }
 
     // todo: get tree from parser
 
@@ -85,5 +102,30 @@ mod tests {
         assert_eq!(default_context.header_max, 10);
         assert_eq!(default_context.show_top_of_file_parent_scope, false);
         assert_eq!(default_context.loi_pad, 1);
+    }
+
+    #[test]
+    fn test_get_ts_config_success() {
+        let ts_parsing = Arc::new(TSLanguageParsing::init());
+        let context = TreeContext::new("test.ts".to_string(), "".to_string(), &ts_parsing);
+        let config = context.get_ts_config(&ts_parsing).unwrap();
+
+        assert_eq!(config.file_extensions.contains(&"ts"), true);
+        assert_eq!(config.file_extensions.contains(&"tsx"), true);
+    }
+
+    #[test]
+    fn test_get_ts_config_failure() {
+        let ts_parsing = Arc::new(TSLanguageParsing::init());
+        let context = TreeContext::new("nonexistent.xyz".to_string(), "".to_string(), &ts_parsing);
+        let result = context.get_ts_config(&ts_parsing);
+
+        assert!(result.is_err());
+        match result {
+            Err(ConfigError::MissingConfig(filename)) => {
+                assert_eq!(filename, "nonexistent.xyz");
+            }
+            _ => panic!("Expected MissingConfig error"),
+        }
     }
 }

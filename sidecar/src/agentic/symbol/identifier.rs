@@ -2,7 +2,7 @@
 //! location for it
 //! We can also use the tools along with this symbol to traverse the code graph
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::{HashMap, HashSet}, sync::Arc};
 
 use derivative::Derivative;
 use futures::{lock::Mutex, stream, StreamExt};
@@ -15,7 +15,7 @@ use tokio::sync::{mpsc::UnboundedSender, oneshot::Sender};
 use crate::{
     agentic::{
         symbol::events::initial_request::SymbolRequestHistoryItem,
-        tool::code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
+        tool::{code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse}, lsp::open_file::OpenFileResponse},
     },
     chunking::{text_document::Range, types::{OutlineNodeContent, OutlineNodeType}},
     user_context::types::UserContext,
@@ -31,7 +31,7 @@ use super::{
     },
     tool_box::ToolBox,
     tool_properties::ToolProperties,
-    types::{SymbolEventRequest, SymbolEventResponse},
+    types::{SymbolEventRequest, SymbolEventResponse, SymbolLocation}, ui_event::UIEventWithID,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -719,6 +719,185 @@ impl MechaCodeSymbolThinking {
         Ok(())
     }
 
+    pub async fn grab_implementations(&self, tools: Arc<ToolBox>, symbol_identifier: SymbolIdentifier, request_id: &str) -> Result<(), SymbolError> {
+        let snippet_file_path: Option<String>;
+        {
+            snippet_file_path = self
+                .get_snippet()
+                .await
+                .map(|snippet| snippet.file_path().to_owned());
+        }
+        if let Some(snippet_file_path) = snippet_file_path {
+            // We first rerank the snippets and then ask the llm for which snippets
+            // need to be edited
+            // this is not perfect as there is heirarchy in the symbols which we might have
+            // to model at some point (but not sure if we really need to do)
+            // assuming: LLMs do not need more granular output per class (if there are functions
+            // which need to change, we can catch them in the refine step)
+            // we break this apart in pieces so the llm can do better
+            // we iterate until the llm has listed out all the functions which
+            // need to be changed
+            // and we are anyways tracking the changes which are happening
+            // in the first level of iteration
+            // PS: we can ask for a refinement step after this which forces the
+            // llm to generate more output for a step using the context it has
+            let implementations = tools
+                .go_to_implementation(
+                    &snippet_file_path,
+                    symbol_identifier.symbol_name(),
+                    request_id,
+                )
+                .await?;
+            let unique_files = implementations
+                .get_implementation_locations_vec()
+                .iter()
+                .map(|implementation| implementation.fs_file_path().to_owned())
+                .collect::<HashSet<String>>();
+            let cloned_tools = tools.clone();
+            // once we have the unique files we have to request to open these locations
+            let file_content_map = stream::iter(unique_files.clone())
+                .map(|file_path| (file_path, cloned_tools.clone()))
+                .map(|(file_path, tool_box)| async move {
+                    let file_path = file_path.to_owned();
+                    let file_content = tool_box.file_open(file_path.to_owned(), request_id).await;
+                    // we will also force add the file to the symbol broker
+                    if let Ok(file_content) = &file_content {
+                        let _ = tool_box
+                            .force_add_document(
+                                &file_path,
+                                file_content.contents_ref(),
+                                &file_content.language(),
+                            )
+                            .await;
+                    }
+                    (file_path, file_content)
+                })
+                // limit how many files we open in parallel
+                .buffer_unordered(4)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .collect::<HashMap<String, Result<OpenFileResponse, SymbolError>>>();
+            // grab the outline nodes as well
+            let outline_nodes = stream::iter(unique_files)
+                .map(|file_path| (file_path, cloned_tools.clone()))
+                .map(|(file_path, tool_box)| async move {
+                    (
+                        file_path.to_owned(),
+                        // TODO(skcd): One of the bugs here is that we are also
+                        // returning the node containing the full outline
+                        // which wins over any other node, so this breaks the rest of the
+                        // flow, what should we do here??
+                        tool_box.get_outline_nodes(&file_path, request_id).await,
+                    )
+                })
+                .buffer_unordered(1)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .collect::<HashMap<String, Option<Vec<OutlineNodeContent>>>>();
+            // Once we have the file content map, we can read the ranges which we are
+            // interested in and generate the implementation areas
+            // we have to figure out how to handle updates etc as well, but we will get
+            // to that later
+            // TODO(skcd): This is probably wrong since we need to calculate the bounding box
+            // for the function
+            let implementation_content = implementations
+                .get_implementation_locations_vec()
+                .iter()
+                .filter_map(|implementation| {
+                    let file_path = implementation.fs_file_path().to_owned();
+                    let range = implementation.range();
+                    // if file content is empty, then we do not add this to our
+                    // implementations
+                    let file_content = file_content_map.get(&file_path);
+                    if let Some(Ok(ref file_content)) = file_content {
+                        let outline_node_for_range = outline_nodes
+                            .get(&file_path)
+                            .map(|outline_nodes| {
+                                if let Some(outline_nodes) = outline_nodes {
+                                    // grab the first outline node which we find which contains the range we are interested in
+                                    // this will always give us the biggest range
+                                    let first_outline_node = outline_nodes
+                                        .iter()
+                                        .filter(|outline_node| {
+                                            outline_node.range().contains_check_line(range)
+                                        })
+                                        .next();
+                                    first_outline_node.map(|outline_node| outline_node.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .flatten();
+                        match (
+                            file_content.content_in_range(&range),
+                            outline_node_for_range,
+                        ) {
+                            (Some(content), Some(outline_node)) => Some(Snippet::new(
+                                symbol_identifier.symbol_name().to_owned(),
+                                range.clone(),
+                                file_path,
+                                content,
+                                outline_node,
+                            )),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            // We are de-duplicating the ranges over here since in rust, the derive
+            // macros end up pointing to the same outline node over and over again
+            let mut outline_ranges_accounted_for: HashSet<Range> = Default::default();
+            let filtered_outline_nodes = implementation_content
+                .into_iter()
+                .filter_map(|snippet| {
+                    if outline_ranges_accounted_for.contains(snippet.outline_node_content().range())
+                    {
+                        None
+                    } else {
+                        outline_ranges_accounted_for
+                            .insert(snippet.outline_node_content().range().clone());
+                        Some(snippet)
+                    }
+                })
+                .collect::<Vec<_>>();
+            println!(
+                "symbol::grab_implementations::({})::len({})",
+                self.symbol_name(),
+                filtered_outline_nodes.len(),
+            );
+            // we update the snippets we have stored here into the symbol itself
+            {
+                self.set_implementations(filtered_outline_nodes)
+                    .await;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn refresh_state(&self, ui_sender: UnboundedSender<UIEventWithID>, request_id: &str) {
+        // do we really have to do this? or can we get away from this just by
+        // not worrying about things?
+        let snippet = self.tool_box
+            .find_snippet_for_symbol(self.fs_file_path(), self.symbol_name(), &request_id)
+            .await;
+        // if we do have a snippet here which is present update it, otherwise its a pretty
+        // bad sign that we had the snippet before but do not have it now
+        if let Ok(snippet) = snippet {
+            self.set_snippet(snippet.clone()).await;
+            let _ = ui_sender.send(UIEventWithID::symbol_location(
+                request_id.to_owned(),
+                SymbolLocation::new(self.to_symbol_identifier().clone(), snippet),
+            ));
+        }
+        // now grab the implementations again
+        let _ = self.grab_implementations(self.tool_box.clone(), self.to_symbol_identifier(), &request_id).await;
+    }
+
     /// Grabs the list of new sub-symbols if any that we have to create
     pub async fn decide_new_sub_symbols(
         &self,
@@ -785,6 +964,7 @@ impl MechaCodeSymbolThinking {
         request_id: String,
         tool_properties: &ToolProperties,
         hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<SymbolEventRequest, SymbolError> {
         println!(
             "mecha_code_symbol_thinking::symbol_name({})",
@@ -903,14 +1083,14 @@ impl MechaCodeSymbolThinking {
                 let _ = hub_sender.send((new_symbol_request, request_id.to_owned(), sender));
                 let _ = receiver.await;
             }
-            // TODO(skcd): We want to send this request for reranking
-            // and get back the snippet indexes
-            // and then we parse it back from here to get back to the symbol
-            // we are interested in
             println!(
                 "mecha_code_symbol_thinking::llm_request::start({})",
                 self.symbol_name()
             );
+            // TODO(skcd): We have to refresh our state over here so we get the
+            // latest implementation of the symbol
+            let _ = self.refresh_state(ui_sender, &request_id).await;
+
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
             {
                 let is_too_long = if reverse_lookup.len() > 100 {

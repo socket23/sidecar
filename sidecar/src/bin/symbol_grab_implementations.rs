@@ -105,11 +105,14 @@ async fn main() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
+    let symbol_identifier =
+        SymbolIdentifier::with_file_path("ConfigurationRegistry", &fs_file_path);
+
     let symbol = Symbol::new(
-        SymbolIdentifier::with_file_path("ConfigurationRegistry", &fs_file_path),
+        symbol_identifier.clone(),
         mecha_code_symbol_thinking,
         sender,
-        tool_box,
+        tool_box.clone(),
         LLMProperties::new(
             LLMType::ClaudeOpus,
             LLMProvider::Anthropic,
@@ -124,7 +127,10 @@ async fn main() {
     .await
     .expect("to work");
 
-    let implementations = symbol.grab_implementations("testing").await;
+    let implementations = symbol
+        .mecha_code_symbol()
+        .grab_implementations(tool_box, symbol_identifier, "testing")
+        .await;
     println!("implementations: {:?}", implementations);
     let mecha_code_symbol = symbol.mecha_code_symbol();
     dbg!(mecha_code_symbol.to_llm_request("testing").await);

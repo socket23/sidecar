@@ -2064,7 +2064,6 @@ mod tests {
 
     use crate::chunking::text_document::Position;
     use crate::chunking::text_document::Range;
-    use crate::chunking::types::OutlineNode;
     use crate::chunking::types::OutlineNodeType;
 
     use super::naive_chunker;
@@ -3523,5 +3522,28 @@ enum Something {
             outline_nodes[2].outline_node_type(),
             &OutlineNodeType::ClassDefinition,
         );
+    }
+
+    #[test]
+    fn test_parsing_outline_nodes_for_typescript_error() {
+        let source_code = r#"
+private isDefaultConfigurationAllowed(configuration: IConfigurationNode): boolean {
+    return configuration.disallowConfigurationDefault !== true;
+}
+        "#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("typescript")
+            .expect("language config to be present");
+        let grammar = ts_language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code, None).unwrap();
+        let outline_nodes = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        assert!(outline_nodes.is_empty());
     }
 }

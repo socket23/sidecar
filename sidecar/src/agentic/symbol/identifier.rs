@@ -849,6 +849,9 @@ impl MechaCodeSymbolThinking {
                 // TODO(skcd): This is clown-town heavy, if we are going to create
                 // a new symbol, we need a better way to signal that, this is totally
                 // wrong right now
+                // clown-town vibes: for typescript this will break since we will
+                // move to the end of the symbol which ends with `}` for python
+                // we have an empty-line which is okay
                 let end_position = self
                     .snippet
                     .lock()
@@ -858,6 +861,8 @@ impl MechaCodeSymbolThinking {
                     .range()
                     .end_position()
                     .move_to_next_line();
+
+                // we have to generate the new sub-symbol
                 let new_symbol_request = SymbolEventRequest::new(
                     self.to_symbol_identifier(),
                     SymbolEvent::Edit(SymbolToEditRequest::new(

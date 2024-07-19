@@ -1729,6 +1729,10 @@ Satisfy the requirement either by making edits or gathering the required informa
         context: Vec<String>,
         request_id: &str,
     ) -> Result<EditedCodeSymbol, SymbolError> {
+        // TODO(skcd): This part of the lookup is not correct because we might
+        // want to edit the private members of the class and its an outline
+        // instead if we pass the outline over here we get back the whole symbol
+        // instead
         let symbol_to_edit = self
             .tools
             .find_sub_symbol_to_edit_with_name(self.symbol_name(), sub_symbol, request_id)

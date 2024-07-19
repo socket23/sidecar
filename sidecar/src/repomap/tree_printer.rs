@@ -41,6 +41,7 @@ impl TreeContext {
     }
 
     // todo: get parser for language
+    fn get_parser() {}
 
     // todo: get tree from parser
 
@@ -61,4 +62,28 @@ impl TreeContext {
     // add context()
 
     // format
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tree_context_default() {
+        // Act
+        let default_context = TreeContext::default();
+
+        // Assert
+        assert_eq!(default_context.filename, "");
+        assert_eq!(default_context.code, "");
+        assert_eq!(default_context.line_number, false);
+        assert_eq!(default_context.parent_context, true);
+        assert_eq!(default_context.child_context, true);
+        assert_eq!(default_context.last_line, true);
+        assert_eq!(default_context.margin, 3);
+        assert_eq!(default_context.mark_lois, true);
+        assert_eq!(default_context.header_max, 10);
+        assert_eq!(default_context.show_top_of_file_parent_scope, false);
+        assert_eq!(default_context.loi_pad, 1);
+    }
 }

@@ -39,4 +39,26 @@ impl TreeContext {
             ..Default::default()
         }
     }
+
+    // todo: get parser for language
+
+    // todo: get tree from parser
+
+    // split code into lines
+
+    // get lines count
+
+    // initialise output lines HashMap
+
+    // initialise scopes, headers, nodes
+
+    // get root node
+
+    // walk tree
+
+    // add lines of interest (lois)
+
+    // add context()
+
+    // format
 }

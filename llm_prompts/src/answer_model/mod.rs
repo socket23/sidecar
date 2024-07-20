@@ -101,7 +101,16 @@ pub const GPT4_O_128K: AnswerModel = AnswerModel {
     answer_tokens: 1024 * 2,
     prompt_tokens_limit: 2500 * 8,
     history_tokens_limit: 2048 * 8,
-    total_tokens: 12800,
+    total_tokens: 128000,
+    inline_completion_tokens: None,
+};
+
+pub const GPT4_O_MINI: AnswerModel = AnswerModel {
+    llm_type: LLMType::Gpt4OMini,
+    answer_tokens: 8069,
+    prompt_tokens_limit: 2500 * 4,
+    history_tokens_limit: 2048 * 4,
+    total_tokens: 128000,
     inline_completion_tokens: None,
 };
 
@@ -254,6 +263,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(CLAUDE_SONNET)
             .add_answer_model(CLAUDE_HAIKU)
             .add_answer_model(GEMINI_PRO)
+            .add_answer_model(GPT4_O_MINI)
     }
 
     fn add_answer_model(mut self, model: AnswerModel) -> Self {

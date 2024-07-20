@@ -4675,6 +4675,7 @@ dependencies = [
  "str-distance",
  "sysinfo",
  "tantivy",
+ "tempfile",
  "thiserror",
  "thread-priority",
  "tiktoken-rs",

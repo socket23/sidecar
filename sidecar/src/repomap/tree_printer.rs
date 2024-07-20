@@ -1,11 +1,18 @@
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 use std::{borrow::Cow, sync::Arc};
 use thiserror::Error;
+use tree_sitter::Tree;
 
 #[derive(Debug, Error)]
-pub enum ConfigError {
+pub enum TreePrinterError {
     #[error("No language configuration found for file: {0}")]
     MissingConfig(String),
+    #[error("Failed to parse tree for file: {0}")]
+    ParseError(String),
+    #[error("Invalid tree structure: {0}")]
+    InvalidTree(String),
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 struct TreeContext {
@@ -53,15 +60,17 @@ impl TreeContext {
     fn get_ts_config<'a>(
         &self,
         ts_parser: &'a TSLanguageParsing,
-    ) -> Result<&'a TSLanguageConfig, ConfigError> {
+    ) -> Result<&'a TSLanguageConfig, TreePrinterError> {
         ts_parser
             .for_file_path(&self.filename)
-            .ok_or_else(move || ConfigError::MissingConfig(self.filename.clone()))
+            .ok_or(TreePrinterError::MissingConfig(self.filename.clone()))
     }
 
     // todo: get tree from parser
-    fn get_tree(&self, ts_config: &TSLanguageConfig) {
-        let tree = ts_config.get_tree_sitter_tree(&self.code.as_bytes());
+    fn get_tree(&self, ts_config: &TSLanguageConfig) -> Result<Tree, TreePrinterError> {
+        ts_config
+            .get_tree_sitter_tree(&self.code.as_bytes())
+            .ok_or(TreePrinterError::ParseError(self.code.clone()))
     }
 
     // split code into lines
@@ -90,6 +99,7 @@ mod tests {
     use std::io::Read;
     use std::io::Write;
     use tempfile::Builder;
+    use tree_sitter::Language;
 
     #[test]
     fn test_tree_context_default() {
@@ -128,7 +138,7 @@ mod tests {
 
         assert!(result.is_err());
         match result {
-            Err(ConfigError::MissingConfig(filename)) => {
+            Err(TreePrinterError::MissingConfig(filename)) => {
                 assert_eq!(filename, "nonexistent.xyz");
             }
             _ => panic!("Expected MissingConfig error"),
@@ -279,22 +289,28 @@ mod tests {
 
         file.write_all(test_content.as_bytes()).unwrap();
 
-        let ts_parsing = Arc::new(TSLanguageParsing::init());
-
         let path = file.path().to_str().unwrap().to_string();
 
-        let context = TreeContext::new(path, test_content.to_string());
+        let mut code = String::new();
+        file.read_to_string(&mut code).unwrap();
+
+        // let mut buffer = Vec::new();
+
+        // file.read_to_end(&mut buffer).unwrap();
+
+        // let source_code = &buffer;
+
+        let ts_parsing = Arc::new(TSLanguageParsing::init());
+
+        let context = TreeContext::new(path, code);
 
         let config = context.get_ts_config(&ts_parsing).unwrap();
 
-        let mut buffer = Vec::new();
+        let tree = context.get_tree(&config);
 
-        file.read_to_end(&mut buffer).unwrap();
+        assert!(tree.is_ok());
+        let tree = tree.unwrap();
 
-        let source_code = &buffer;
-
-        let tree = config.get_tree_sitter_tree(source_code);
-
-        assert!(tree.is_some());
+        assert_eq!(tree.root_node().kind(), "program");
     }
 }

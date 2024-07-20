@@ -17,6 +17,7 @@ pub enum LLMType {
     GPT3_5_16k,
     Gpt4_32k,
     Gpt4O,
+    Gpt4OMini,
     Gpt4Turbo,
     DeepSeekCoder1_3BInstruct,
     DeepSeekCoder33BInstruct,
@@ -70,6 +71,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "Mixtral" => Ok(LLMType::Mixtral),
                     "MistralInstruct" => Ok(LLMType::MistralInstruct),
                     "Gpt4" => Ok(LLMType::Gpt4),
+                    "Gpt4OMini" => Ok(LLMType::Gpt4OMini),
                     "GPT3_5_16k" => Ok(LLMType::GPT3_5_16k),
                     "Gpt4_32k" => Ok(LLMType::Gpt4_32k),
                     "Gpt4Turbo" => Ok(LLMType::Gpt4Turbo),
@@ -107,6 +109,7 @@ impl LLMType {
                 | LLMType::Gpt4_32k
                 | LLMType::Gpt4Turbo
                 | LLMType::Gpt4O
+                | LLMType::Gpt4OMini
         )
     }
 
@@ -168,6 +171,7 @@ impl fmt::Display for LLMType {
             LLMType::Gpt4O => write!(f, "Gpt4O"),
             LLMType::GeminiProFlash => write!(f, "GeminiProFlash"),
             LLMType::DeepSeekCoderV2 => write!(f, "DeepSeekCoderV2"),
+            LLMType::Gpt4OMini => write!(f, "Gpt4OMini"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

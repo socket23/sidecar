@@ -119,6 +119,7 @@ impl LLMTokenizer {
             // TODO(skcd): This is the wrong tokenizer we really want to use
             // the new o200k here, but tiktoken needs to upgrade first
             LLMType::Gpt4O => Some("gpt-4-32k-0613".to_owned()),
+            LLMType::Gpt4OMini => Some("gpt-4-32k-0613".to_owned()),
             _ => None,
         }
     }

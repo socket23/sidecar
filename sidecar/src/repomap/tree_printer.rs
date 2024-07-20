@@ -74,9 +74,14 @@ impl TreeContext {
     }
 
     // split code into lines
+    fn split_code_into_lines(&self) -> Vec<&str> {
+        self.code.split('\n').collect()
+    }
 
     // get lines count
-
+    fn get_lines_count(&self) -> usize {
+        self.split_code_into_lines().len()
+    }
     // initialise output lines HashMap
 
     // initialise scopes, headers, nodes
@@ -95,11 +100,9 @@ impl TreeContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     use std::io::Read;
     use std::io::Write;
     use tempfile::Builder;
-    use tree_sitter::Language;
 
     #[test]
     fn test_tree_context_default() {
@@ -294,12 +297,6 @@ mod tests {
         let mut code = String::new();
         file.read_to_string(&mut code).unwrap();
 
-        // let mut buffer = Vec::new();
-
-        // file.read_to_end(&mut buffer).unwrap();
-
-        // let source_code = &buffer;
-
         let ts_parsing = Arc::new(TSLanguageParsing::init());
 
         let context = TreeContext::new(path, code);
@@ -312,5 +309,16 @@ mod tests {
         let tree = tree.unwrap();
 
         assert_eq!(tree.root_node().kind(), "program");
+    }
+
+    #[test]
+    fn test_split_code_into_lines() {
+        let str = "line1\nline2\nline3";
+        let context = TreeContext::new("test.ts".to_string(), str.to_string());
+        let lines: Vec<&str> = context.split_code_into_lines();
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], "line1");
+        assert_eq!(lines[1], "line2");
+        assert_eq!(lines[2], "line3");
     }
 }

@@ -16,4 +16,5 @@ fn main() {
     let cursor = tree.walk();
     let mut printer = TreePrinter::new(cursor, test_code).unwrap();
     printer.walk_tree();
+    printer.arrange_headers();
 }

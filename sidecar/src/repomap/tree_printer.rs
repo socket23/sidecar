@@ -66,6 +66,8 @@ impl<'a> TreePrinter<'a> {
 
         self.nodes[start_line].push(node);
 
+        // only assign headers to nodes that span more than one line
+        // multiple nodes may share the same start line
         if size > 0 {
             self.header[start_line].push((size, start_line, end_line));
         }
@@ -83,6 +85,30 @@ impl<'a> TreePrinter<'a> {
                 }
             }
             self.cursor.goto_parent();
+        }
+    }
+
+    pub fn arrange_headers(&mut self) {
+        for i in 0..self.num_lines {
+            self.header[i].sort_unstable();
+
+            // determine the header's start and end lines
+            let (start_line, end_line) = if self.header[i].len() > 1 {
+                let (size, start, end) = self.header[i][0];
+
+                // if the node spans more than the max header size, curtail the header
+                if size > self.header_max {
+                    (start, start + self.header_max)
+                } else {
+                    (start, end)
+                }
+            } else {
+                // if the node spans only one line
+                (i, i + 1)
+            };
+
+            // size is now redundant
+            self.header[i] = vec![(0, start_line, end_line)];
         }
     }
 

@@ -59,11 +59,7 @@ impl<'a> TreeContext<'a> {
 
         let mut cursor = root_node.walk();
 
-        TreeContext::print_node_at_cursor(&cursor);
-
-        cursor.goto_first_child();
-
-        TreeContext::print_node_at_cursor(&cursor);
+        TreeContext::walk_tree(&mut cursor);
 
         // // Traverse child nodes
         // for child in root_node.children(&mut cursor) {
@@ -94,21 +90,29 @@ impl<'a> TreeContext<'a> {
     fn print_node_at_cursor(cursor: &TreeCursor) {
         println!("Node type: {}", cursor.node().kind());
         println!("Node field_name: {:?}", cursor.field_name());
-        println!("Node start_position: {:?}", cursor.node().start_position());
-        println!("Node end_position: {:?}", cursor.node().end_position());
     }
 
-    fn walk_tree(node: Node) {
-        // Process the current node
-        println!("Node type: {}", node.kind());
-
+    fn walk_tree(cursor: &mut TreeCursor) {
         // Create a cursor for traversing child nodes
-        let mut cursor = node.walk();
+        println!("Starting node:");
+        TreeContext::print_node_at_cursor(&cursor);
 
-        // Traverse child nodes
-        for child in node.children(&mut cursor) {
-            TreeContext::walk_tree(child);
+        if !cursor.goto_first_child() {
+            println!("No first child");
+            return;
         }
+
+        println!("First child");
+        TreeContext::print_node_at_cursor(&cursor);
+
+        let mut sibling_index = 0;
+        while cursor.goto_next_sibling() {
+            println!("sibling {sibling_index}");
+            TreeContext::print_node_at_cursor(&cursor);
+            sibling_index += 1;
+        }
+
+        println!("No next sibling");
     }
 
     // fn walk_tree(&mut self, node: Node<'a>) {

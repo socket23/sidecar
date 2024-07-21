@@ -1,4 +1,3 @@
-use crate::chunking::languages::TSLanguageParsing;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use tree_sitter::{Node, Tree, TreeCursor};
@@ -16,7 +15,7 @@ pub enum TreePrinterError {
 }
 
 pub struct TreePrinter<'a> {
-    tree: &'a Tree,
+    cursor: TreeCursor<'a>,
     code: String,
     line_number: bool,
     parent_context: bool,
@@ -35,11 +34,11 @@ pub struct TreePrinter<'a> {
 }
 
 impl<'a> TreePrinter<'a> {
-    pub fn new(tree: &'a Tree, code: String) -> Result<Self, TreePrinterError> {
+    pub fn new(cursor: TreeCursor<'a>, code: String) -> Result<Self, TreePrinterError> {
         let num_lines = code.lines().count();
 
         Ok(Self {
-            tree,
+            cursor,
             code,
             line_number: false,
             parent_context: true,
@@ -64,8 +63,8 @@ impl<'a> TreePrinter<'a> {
     }
 
     /// TreeCursor shares lifetime with self.nodes
-    pub fn walk_tree(&mut self, cursor: &mut TreeCursor<'a>) {
-        let node = cursor.node();
+    pub fn walk_tree(&mut self) {
+        let node = self.cursor.node();
 
         let start_line = node.start_position().row;
         let end_line = node.end_position().row;
@@ -82,14 +81,14 @@ impl<'a> TreePrinter<'a> {
             self.scopes[i].insert(start_line);
         }
 
-        if cursor.goto_first_child() {
+        if self.cursor.goto_first_child() {
             loop {
-                self.walk_tree(cursor);
-                if !cursor.goto_next_sibling() {
+                self.walk_tree();
+                if !self.cursor.goto_next_sibling() {
                     break;
                 }
             }
-            cursor.goto_parent();
+            self.cursor.goto_parent();
         }
     }
 

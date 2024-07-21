@@ -57,12 +57,6 @@ impl<'a> TreePrinter<'a> {
         })
     }
 
-    fn print_node_at_cursor(cursor: &TreeCursor) {
-        println!("Node type: {}", cursor.node().kind());
-        println!("Node field_name: {:?}", cursor.field_name());
-    }
-
-    /// TreeCursor shares lifetime with self.nodes
     pub fn walk_tree(&mut self) {
         let node = self.cursor.node();
 
@@ -91,8 +85,6 @@ impl<'a> TreePrinter<'a> {
             self.cursor.goto_parent();
         }
     }
-
-    // walk tree
 
     // add lines of interest (lois)
 

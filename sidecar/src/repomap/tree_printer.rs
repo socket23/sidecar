@@ -1,7 +1,7 @@
-use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
-use std::{borrow::Cow, collections::HashSet, sync::Arc};
+use crate::chunking::languages::TSLanguageParsing;
+use std::collections::HashSet;
 use thiserror::Error;
-use tree_sitter::{Node, Tree};
+use tree_sitter::{Node, Tree, TreeCursor};
 
 #[derive(Debug, Error)]
 pub enum TreePrinterError {
@@ -15,7 +15,7 @@ pub enum TreePrinterError {
     IoError(#[from] std::io::Error),
 }
 
-struct TreeContext {
+pub struct TreeContext<'a> {
     filename: String,
     code: String,
     line_number: bool,
@@ -29,13 +29,13 @@ struct TreeContext {
     loi_pad: usize,
     scopes: Vec<HashSet<usize>>,
     header: Vec<Vec<(usize, usize, usize)>>,
-    nodes: Vec<Vec<Node<'static>>>,
+    nodes: Vec<Vec<&'a Node<'a>>>, // tree-sitter node requires lifetime parameter
     num_lines: usize,
     tree: Tree,
-    // ts_config: Arc<TSLanguageConfig>,
+    output: Vec<String>,
 }
 
-impl TreeContext {
+impl<'a> TreeContext<'a> {
     pub fn new(
         filename: String,
         code: String,
@@ -50,6 +50,25 @@ impl TreeContext {
             .ok_or(TreePrinterError::ParseError(filename.clone()))?;
 
         let num_lines = code.lines().count();
+
+        let root_node = &tree.root_node();
+
+        // iterate through nodes
+        // for each node, get start and end positions
+        // add to nodes
+
+        let mut cursor = root_node.walk();
+
+        TreeContext::print_node_at_cursor(&cursor);
+
+        cursor.goto_first_child();
+
+        TreeContext::print_node_at_cursor(&cursor);
+
+        // // Traverse child nodes
+        // for child in root_node.children(&mut cursor) {
+        //     TreeContext::walk_tree(child);
+        // }
 
         Ok(Self {
             filename,
@@ -67,16 +86,48 @@ impl TreeContext {
             header: vec![Vec::new(); num_lines],
             nodes: vec![Vec::new(); num_lines],
             num_lines,
-            tree,
-            // ts_config: Arc::new(ts_config.clone()),
+            tree: tree.clone(),
+            output: vec![],
         })
     }
 
-    // get lines count - dropped, this is unnecessary
+    fn print_node_at_cursor(cursor: &TreeCursor) {
+        println!("Node type: {}", cursor.node().kind());
+        println!("Node field_name: {:?}", cursor.field_name());
+        println!("Node start_position: {:?}", cursor.node().start_position());
+        println!("Node end_position: {:?}", cursor.node().end_position());
+    }
 
-    // initialise output lines HashMap
+    fn walk_tree(node: Node) {
+        // Process the current node
+        println!("Node type: {}", node.kind());
 
-    // initialise scopes, headers, nodes
+        // Create a cursor for traversing child nodes
+        let mut cursor = node.walk();
+
+        // Traverse child nodes
+        for child in node.children(&mut cursor) {
+            TreeContext::walk_tree(child);
+        }
+    }
+
+    // fn walk_tree(&mut self, node: Node<'a>) {
+    //     let start = node.start_position();
+    //     let end = node.end_position();
+
+    //     let start_line = start.row;
+    //     let start_col = start.column;
+    //     let end_line = end.row;
+    //     let end_col = end.column;
+
+    //     let size = end_line - start_line;
+    //     self.nodes[start_line].push(&node);
+    // }
+
+    // pub fn print_tree(&'a mut self) {
+    //     let root_node = self.tree.root_node();
+    //     self.walk_tree(root_node);
+    // }
 
     // walk tree
 

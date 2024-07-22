@@ -33,7 +33,60 @@ impl RepoMap {
 
         let ranked_tags = analyser.get_ranked_tags();
 
+        let tree_string = self.to_tree(ranked_tags.clone());
+
+        println!("{}", tree_string);
+
         Ok(ranked_tags.into_iter().map(|set| set.clone()).collect())
+    }
+
+    fn to_tree(&self, tags: Vec<&HashSet<Tag>>) -> String {
+        let mut output = String::new();
+
+        let mut cur_fname = "";
+        let mut cur_abs_fname = "";
+
+        let mut lois: Vec<usize> = vec![];
+
+        for (i, tag_set) in tags.iter().enumerate() {
+            println!("Number of tags in tag_set #{}: {}", i, tag_set.len());
+            // there should only be one tag per file
+            let tag = tag_set.iter().next().unwrap();
+            let this_rel_fname = tag.rel_fname.to_str().unwrap();
+
+            if this_rel_fname != cur_fname {
+                if !lois.is_empty() {
+                    output.push_str("\n");
+                    output.push_str(&cur_fname);
+                    // todo: output.push_str(render_tree(cur_abs_fname, cur_fname, lois));
+                } else if !cur_fname.is_empty() {
+                    output.push_str(&format!("\n{}\n", cur_fname));
+                }
+
+                lois = vec![];
+                cur_abs_fname = tag.fname.to_str().unwrap();
+                cur_fname = this_rel_fname;
+            }
+
+            if !lois.is_empty() {
+                lois.push(tag.line);
+            }
+        }
+
+        output = output
+            .lines()
+            .map(|line| {
+                if line.len() > 100 {
+                    line[..100].to_string()
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+        output.push('\n');
+
+        output
     }
 
     fn post_process_tags(&self, tag_index: &mut TagIndex) {

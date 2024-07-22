@@ -30,7 +30,6 @@ pub struct TreePrinter<'a> {
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
     nodes: Vec<Vec<Node<'a>>>,               // tree-sitter node requires lifetime parameter
     num_lines: usize,
-    output: Vec<String>,
 }
 
 impl<'a> TreePrinter<'a> {
@@ -53,7 +52,6 @@ impl<'a> TreePrinter<'a> {
             header: vec![Vec::new(); num_lines],
             nodes: vec![Vec::new(); num_lines],
             num_lines,
-            output: vec![],
         })
     }
 
@@ -109,6 +107,16 @@ impl<'a> TreePrinter<'a> {
 
             // size is now redundant
             self.header[i] = vec![(0, start_line, end_line)];
+        }
+    }
+
+    pub fn format(&self) {
+        let mut output = String::new();
+        let mut show_lines = vec![true; self.num_lines];
+
+        for (i, line) in self.code.lines().enumerate() {
+            output.push_str(line);
+            output.push('\n');
         }
     }
 

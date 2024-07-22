@@ -49,6 +49,8 @@ pub struct TagIndex {
     /// Maps (file path, tag name) pairs to a set of tag definitions.
     ///
     /// Useful for answering: "What are the details of tag X in file Y?"
+    ///
+    /// Needs to be a HashSet<Tag> due to function overloading where multiple functions share the same name but have different parameters
     pub definitions: HashMap<(PathBuf, String), HashSet<Tag>>,
 
     /// A set of commonly used tags across all files.

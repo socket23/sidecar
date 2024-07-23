@@ -96,6 +96,7 @@ async fn main() {
         None,
         None,
         None,
+        true,
     );
 
     // execute input on manager

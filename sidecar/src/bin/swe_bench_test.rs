@@ -176,6 +176,7 @@ async fn main() {
         Some(gpt4o_config),
         Some(gemini_llm_properties),
         Some(long_code_editing_llm),
+        true,
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
 

@@ -37,6 +37,7 @@ pub struct SymbolInputEvent {
     swe_bench_code_editing: Option<LLMProperties>,
     swe_bench_gemini_api_keys: Option<LLMProperties>,
     swe_bench_long_context_editing: Option<LLMProperties>,
+    full_symbol_edit: bool,
 }
 
 impl SymbolInputEvent {
@@ -55,6 +56,7 @@ impl SymbolInputEvent {
         swe_bench_code_editing: Option<LLMProperties>,
         swe_bench_gemini_api_keys: Option<LLMProperties>,
         swe_bench_long_context_editing: Option<LLMProperties>,
+        full_symbol_edit: bool,
     ) -> Self {
         Self {
             context,
@@ -71,7 +73,12 @@ impl SymbolInputEvent {
             swe_bench_code_editing,
             swe_bench_gemini_api_keys,
             swe_bench_long_context_editing,
+            full_symbol_edit,
         }
+    }
+
+    pub fn full_symbol_edit(&self) -> bool {
+        self.full_symbol_edit
     }
 
     pub fn user_query(&self) -> &str {

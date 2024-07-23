@@ -245,7 +245,7 @@ impl Tool for NewSubSymbolRequired {
         let mut retries = 0;
         loop {
             if retries >= 4 {
-                return Err(ToolError::MissingXMLTags);
+                return Err(ToolError::RetriesExhausted);
             }
             let (llm, api_key, provider) = if retries % 2 == 1 {
                 (

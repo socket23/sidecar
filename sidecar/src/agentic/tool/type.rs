@@ -71,6 +71,8 @@ pub enum ToolType {
     FindFileForNewSymbol,
     // Find symbol to edit in user context
     FindSymbolsToEditInContext,
+    // ReRanking code snippets for code editing context
+    ReRankingCodeSnippetsForCodeEditingContext,
 }
 
 impl std::fmt::Display for ToolType {
@@ -122,6 +124,9 @@ impl std::fmt::Display for ToolType {
             ToolType::GrepSymbolInCodebase => write!(f, "Grep symbol in the codebase"),
             ToolType::FindFileForNewSymbol => write!(f, "Find file for new symbol"),
             ToolType::FindSymbolsToEditInContext => write!(f, "Find Symbols to edit in context"),
+            ToolType::ReRankingCodeSnippetsForCodeEditingContext => {
+                write!(f, "ReRanking code snippets for code editing")
+            }
         }
     }
 }

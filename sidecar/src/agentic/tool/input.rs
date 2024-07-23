@@ -20,6 +20,7 @@ use super::{
         probe_question_for_symbol::ProbeQuestionForSymbolRequest,
         probe_try_hard_answer::ProbeTryHardAnswerSymbolRequest,
         repo_map_search::RepoMapSearchQuery,
+        reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingRequest,
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
@@ -92,6 +93,8 @@ pub enum ToolInput {
     FindFileForNewSymbol(FindFileForSymbolRequest),
     // Find symbol to edit in user context
     FindSymbolsToEditInContext(FindSymbolsToEditInContextRequest),
+    // ReRanking outline nodes for code editing context
+    ReRankingCodeSnippetsForEditing(ReRankingSnippetsForCodeEditingRequest),
 }
 
 impl ToolInput {
@@ -139,6 +142,21 @@ impl ToolInput {
             ToolInput::GrepSymbolInCodebase(_) => ToolType::GrepSymbolInCodebase,
             ToolInput::FindFileForNewSymbol(_) => ToolType::FindFileForNewSymbol,
             ToolInput::FindSymbolsToEditInContext(_) => ToolType::FindSymbolsToEditInContext,
+            ToolInput::ReRankingCodeSnippetsForEditing(_) => {
+                ToolType::ReRankingCodeSnippetsForCodeEditingContext
+            }
+        }
+    }
+
+    pub fn reranking_code_snippets_for_editing_context(
+        self,
+    ) -> Result<ReRankingSnippetsForCodeEditingRequest, ToolError> {
+        if let ToolInput::ReRankingCodeSnippetsForEditing(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::ReRankingCodeSnippetsForCodeEditingContext,
+            ))
         }
     }
 

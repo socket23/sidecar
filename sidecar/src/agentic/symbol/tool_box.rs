@@ -277,7 +277,7 @@ impl ToolBox {
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    pub async fn find_import_nodes(
+    async fn find_import_nodes(
         &self,
         fs_file_path: &str,
         request_id: &str,
@@ -301,6 +301,47 @@ impl ToolBox {
             })
             .collect::<Vec<_>>();
         Ok(clickable_imports)
+    }
+
+    /// Grabs all the files which are imported by the current file we are interested
+    /// in
+    ///
+    /// Use this for getting a sense of code graph and where we are loacted in the code
+    pub async fn get_imported_files(
+        &self,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Result<Vec<String>, SymbolError> {
+        let clickable_import_range = self
+            .find_import_nodes(fs_file_path, request_id)
+            .await?
+            .into_iter()
+            .map(|(_, range)| range)
+            .collect::<Vec<_>>();
+        // Now we execute a go-to-definition request on all the imports
+        let definition_files = stream::iter(clickable_import_range)
+            .map(|range| async move {
+                let go_to_definition = self
+                    .go_to_definition(fs_file_path, range.end_position(), request_id)
+                    .await;
+                match go_to_definition {
+                    Ok(go_to_definition) => go_to_definition
+                        .definitions()
+                        .into_iter()
+                        .map(|definition| definition.file_path().to_owned())
+                        .collect::<Vec<_>>(),
+                    Err(_e) => vec![],
+                }
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .flatten()
+            .collect::<HashSet<String>>()
+            .into_iter()
+            .collect::<Vec<String>>();
+        Ok(definition_files)
     }
 
     pub async fn find_file_location_for_new_symbol(

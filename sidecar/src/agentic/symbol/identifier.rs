@@ -1056,6 +1056,7 @@ Edit selection reason:
                                         vec![reason],
                                         outline,
                                         false,
+                                        true,
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);
@@ -1204,6 +1205,7 @@ Edit selection reason:
                                     ],
                                     false,
                                     true,
+                                    false,
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1315,6 +1317,7 @@ Reason to edit:
                                         fs_file_path.to_owned(),
                                         vec![reason],
                                         outline,
+                                        false,
                                         false,
                                     ))
                                 } else {

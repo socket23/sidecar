@@ -932,6 +932,9 @@ Please provide the order along with the reason in 2 lists, one for code snippets
         let example_message = self.example_message();
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
+- You should select a code section for editing if and only if you want to make changes to that section.
+- Adding new functionality is a very valid reason to select a sub-section for editing.
+- Editing or deleting some code is also a very valid reason for selecting a code section for editing.
 - First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words.
 - If you want to edit the code section with id 0 then you must output in the following format:
 <code_to_edit_list>

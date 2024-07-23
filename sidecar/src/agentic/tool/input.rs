@@ -549,19 +549,6 @@ impl ToolInput {
         }
     }
 
-    pub fn filter_code_snippets_single_symbol(self) -> Result<CodeToEditSymbolRequest, ToolError> {
-        if let ToolInput::FilterCodeSnippetsForEditingSingleSymbols(
-            filter_code_snippets_for_editing,
-        ) = self
-        {
-            Ok(filter_code_snippets_for_editing)
-        } else {
-            Err(ToolError::WrongToolInput(
-                ToolType::FilterCodeSnippetsSingleSymbolForEditing,
-            ))
-        }
-    }
-
     pub fn filter_code_snippets_request(
         self,
     ) -> Result<either::Either<CodeToEditFilterRequest, CodeToEditSymbolRequest>, ToolError> {

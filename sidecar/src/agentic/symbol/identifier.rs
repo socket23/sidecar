@@ -979,7 +979,7 @@ impl MechaCodeSymbolThinking {
         ));
 
         if self.is_snippet_present().await {
-            let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await;
+            let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
         }
         unimplemented!("figure out how to solve this");

@@ -14,6 +14,7 @@ use super::{
         new_sub_symbol::NewSubSymbolRequiredResponse,
         planning_before_code_edit::PlanningBeforeCodeEditResponse,
         probe::ProbeEnoughOrDeeperResponse,
+        reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingResponse,
     },
     editor::apply::EditorApplyResponse,
     filtering::broker::{
@@ -122,9 +123,17 @@ pub enum ToolOutput {
     FindFileForNewSymbol(FindFileForSymbolResponse),
     // Find symbols to edit in the user context
     FindSymbolsToEditInContext(FindSymbolsToEditInContextResponse),
+    // the outline nodes which we should use as context for the code editing
+    ReRankedCodeSnippetsForCodeEditing(ReRankingSnippetsForCodeEditingResponse),
 }
 
 impl ToolOutput {
+    pub fn re_ranked_code_snippets_for_editing_context(
+        response: ReRankingSnippetsForCodeEditingResponse,
+    ) -> Self {
+        ToolOutput::ReRankedCodeSnippetsForCodeEditing(response)
+    }
+
     pub fn find_symbols_to_edit_in_context(output: FindSymbolsToEditInContextResponse) -> Self {
         ToolOutput::FindSymbolsToEditInContext(output)
     }

@@ -8,7 +8,7 @@ use derivative::Derivative;
 use futures::{lock::Mutex, stream, StreamExt};
 use llm_client::{
     clients::types::LLMType,
-    provider::{LLMProvider, LLMProviderAPIKeys},
+    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 use tokio::sync::{mpsc::UnboundedSender, oneshot::Sender};
 
@@ -959,11 +959,11 @@ impl MechaCodeSymbolThinking {
     /// - after the outline we generate a full code edit on the symbol
     pub async fn full_symbol_initial_request(
         &self,
-        _tool_box: Arc<ToolBox>,
+        tool_box: Arc<ToolBox>,
         original_request: &InitialRequestData,
-        _llm_properties: LLMProperties,
+        llm_properties: LLMProperties,
         request_id: &str,
-        _tool_properties: &ToolProperties,
+        tool_properties: &ToolProperties,
         _hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
         _ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<SymbolEventRequest, SymbolError> {
@@ -978,11 +978,111 @@ impl MechaCodeSymbolThinking {
             original_request.get_original_question().to_owned(),
         ));
 
+        let request_id_ref = &request_id;
+
         if self.is_snippet_present().await {
-            let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
+            // let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_requet_full(&request_id).await {
+                // now we have to rerank the whole section
+                // if the xml is too long, then use a beefier model otherwise use
+                // a weaker model for the reranking and selection
+                let llm_properties_for_filtering = if ranked_xml_list.lines().collect::<Vec<_>>().len() > 1000 {
+                    // use sonnet3.5 if this is too large
+                    llm_properties.clone()
+                } else {
+                    // use a smaller model for the filtering if this is a small
+                    // prompt
+                    LLMProperties::new(
+                        LLMType::GeminiProFlash,
+                        LLMProvider::GoogleAIStudio,
+                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new("AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned())),
+                    )
+                };
+                let filtered_list = tool_box
+                .filter_code_snippets_in_symbol_for_editing(
+                    ranked_xml_list,
+                    original_request.get_original_question().to_owned(),
+                    llm_properties_for_filtering.llm().clone(),
+                    llm_properties_for_filtering.provider().clone(),
+                    llm_properties_for_filtering.api_key().clone(),
+                    &request_id,
+                )
+                .await?;
+                let code_to_edit_list = filtered_list.code_to_edit_list();
+                let original_request_ref = &original_request;
+                let sub_symbols_to_edit = stream::iter(reverse_lookup)
+                    .filter_map(|reverse_lookup| async move {
+                        let idx = reverse_lookup.idx();
+                        let range = reverse_lookup.range();
+                        let fs_file_path = reverse_lookup.fs_file_path();
+                        let outline = reverse_lookup.is_outline();
+                        let found_reason_to_edit = code_to_edit_list
+                            .snippets()
+                            .into_iter()
+                            .find(|snippet| snippet.id() == idx)
+                            .map(|snippet| {
+                                let original_question =
+                                    original_request_ref.get_original_question();
+                                let reason_to_edit = snippet.reason_to_edit().to_owned();
+                                format!(
+                                    r#"Original user query:
+{original_question}
+
+Edit selection reason:
+{reason_to_edit}"#
+                                )
+                            });
+                        match found_reason_to_edit {
+                            Some(reason) => {
+                                // TODO(skcd): We need to get the sub-symbol over
+                                // here instead of the original symbol name which
+                                // would not work
+                                println!("mecha_code_symbol_thinking::initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
+                                // TODO(skcd): Shoudn't this use the search by name
+                                // instead of the using the range for searching
+                                let symbol_in_range = 
+                                    self.find_sub_symbol_in_range(
+                                        range,
+                                        fs_file_path,
+                                        request_id_ref
+                                    )
+                                    .await;
+                                if let Ok(symbol) = symbol_in_range {
+                                    Some(SymbolToEdit::new(
+                                        symbol,
+                                        range.clone(),
+                                        fs_file_path.to_owned(),
+                                        vec![reason],
+                                        outline,
+                                        false,
+                                    ))
+                                } else {
+                                    println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);
+                                    None
+                                }
+                            }
+                            None => None,
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .await;
+                Ok(SymbolEventRequest::new(
+                    self.to_symbol_identifier(),
+                    SymbolEvent::Edit(SymbolToEditRequest::new(
+                        sub_symbols_to_edit,
+                        self.to_symbol_identifier(),
+                        history,
+                    )),
+                    tool_properties.clone(),
+                ))
+            } else {
+                println!("mecha_code_symbol_thinking::missing_to_llm_request_full::({})", self.symbol_name());
+                Err(SymbolError::SnippetNotFound)
+            }
+        } else {
+            Err(SymbolError::SymbolError(self.symbol_name().to_owned()))
         }
-        unimplemented!("figure out how to solve this");
     }
 
     /// Initial request follows the following flow:
@@ -1310,6 +1410,87 @@ Reason to edit:
                 )
                 // This is a class, so over here we have to grab all the implementations
                 // as well as the current snippet and then send that over
+            }
+        } else {
+            None
+        }
+    }
+
+    /// We generate the sections of the symbols here in full, which implies
+    /// that we are not going to create sections of the symbol per function
+    /// or in other logical units but as complete
+    pub async fn to_llm_requet_full(&self, _request_id: &str) -> Option<(String, Vec<SnippetReRankInformation>)> {
+        let snippet_maybe = {
+            self.snippet.lock().await.as_ref().map(|snippet| snippet.clone())
+        };
+        if let Some(snippet) = snippet_maybe {
+            println!(
+                "mecha_code_symbol_thinking::to_llm_request_full::symbol_as_ref({})",
+                &self.symbol_name()
+            );
+            let is_function = snippet
+                .outline_node_content
+                .outline_node_type()
+                .is_function();
+            let is_definition_assignment = snippet
+                .outline_node_content
+                .outline_node_type()
+                .is_definition_assigument();
+            if is_function || is_definition_assignment {
+                let function_body = snippet.to_xml();
+                Some((
+                    format!(
+                        r#"<rerank_entry>
+<id>
+0
+</id>
+{function_body}
+</rerank_entry>"#
+                    ),
+                    vec![SnippetReRankInformation::new(
+                        0,
+                        snippet.range.clone(),
+                        snippet.fs_file_path.to_owned(),
+                    )],
+                ))
+            } else {
+                let implementations = self.get_implementations().await;
+                let snippets_ref = implementations.iter().collect::<Vec<_>>();
+                // Now we need to format this properly and send it back over to the LLM
+                let snippet_xml = snippets_ref.iter().enumerate().map(|(idx, snippet)| {
+                    let file_path = snippet.file_path();
+                    let start_line = snippet.range().start_line();
+                    let end_line = snippet.range().end_line();
+                    let location = format!("{}:{}-{}", file_path, start_line, end_line);
+                    let language = snippet.language();
+                    let content = snippet.content();
+                    format!(
+                        r#"<rerank_entry>
+<id>
+{idx}
+</id>
+<file_path>
+{location}
+</file_path>
+<content>
+```{language}
+{content}
+```
+</content>
+</rerank_entry>"#
+                    )
+                }).collect::<Vec<_>>().join("\n");
+                let snippet_information = snippets_ref.into_iter().enumerate().map(|(idx, snippet)| {
+                    SnippetReRankInformation::new(
+                        idx,
+                        snippet.range().clone(),
+                        snippet.fs_file_path.to_owned(),
+                    )
+                }).collect::<Vec<_>>();
+                Some((
+                    snippet_xml,
+                    snippet_information,
+                ))
             }
         } else {
             None

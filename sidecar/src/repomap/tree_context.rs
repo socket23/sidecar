@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use tree_sitter::Node;
+use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 
@@ -30,6 +30,7 @@ pub struct TreeContext<'a> {
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
     nodes: Vec<Vec<Node<'a>>>,               // tree-sitter node requires lifetime parameter
     output_lines: HashMap<(usize, usize), String>,
+    tree: Tree,
 }
 
 impl<'a> TreeContext<'a> {
@@ -38,6 +39,7 @@ impl<'a> TreeContext<'a> {
         let config = ts_parsing.for_file_path(&filename).unwrap().clone();
         let lines: Vec<String> = code.split('\n').map(|s| s.to_string()).collect();
         let num_lines = lines.len() + 1;
+        let tree = config.get_tree_sitter_tree(code.as_bytes()).unwrap();
 
         Self {
             filename,
@@ -62,18 +64,18 @@ impl<'a> TreeContext<'a> {
             nodes: vec![Vec::new(); num_lines],
             line_number: false,
             output_lines: HashMap::new(),
+            tree,
         }
     }
 
-    pub fn initialize(mut self) -> Self {
-        let tree = self
-            .config
-            .get_tree_sitter_tree(self.code.as_bytes())
-            .unwrap();
-        let root_node = tree.root_node();
+    pub fn initialize(&'a mut self) {
+        let root_node;
+        {
+            root_node = self.tree.root_node().clone();
+        }
+        // let mut cursor = root_node.walk();
         self.walk_tree(root_node);
-        self.arrange_headers();
-        self
+        // self.arrange_headers();
     }
 
     pub fn get_config(&self) -> &TSLanguageConfig {
@@ -302,12 +304,13 @@ impl<'a> TreeContext<'a> {
         }
     }
 
-    fn walk_tree(&mut self, node: Node<'a>) {
-        let start_line = node.start_position().row;
-        let end_line = node.end_position().row;
+    fn walk_tree(&mut self, cursor: Node<'a>) {
+        let mut cursor = cursor.walk();
+        let start_line = cursor.node().start_position().row;
+        let end_line = cursor.node().end_position().row;
         let size = end_line - start_line;
 
-        self.nodes[start_line].push(node);
+        self.nodes[start_line].push(cursor.node());
 
         // only assign headers to nodes that span more than one line
         // multiple nodes may share the same start line
@@ -319,8 +322,6 @@ impl<'a> TreeContext<'a> {
         for i in start_line..=end_line {
             self.scopes[i].insert(start_line);
         }
-
-        let mut cursor = node.walk();
 
         if cursor.goto_first_child() {
             loop {

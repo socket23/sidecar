@@ -4,4 +4,5 @@ pub mod files;
 pub mod graph;
 pub mod tag;
 pub mod tree_context;
+pub mod tree_walker;
 pub mod types;

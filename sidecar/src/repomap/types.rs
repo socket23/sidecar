@@ -103,7 +103,6 @@ impl RepoMap {
         // todo - consider using rel_fname
         let mut context = TreeContext::new(abs_fname.to_string(), code);
 
-        context.initialize();
         context.add_lois(lois);
         context.add_context();
 

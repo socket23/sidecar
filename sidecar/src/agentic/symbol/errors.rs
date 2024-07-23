@@ -55,4 +55,7 @@ pub enum SymbolError {
 
     #[error("File type not supported: {0}")]
     FileTypeNotSupported(String),
+
+    #[error("Full symbol edit failure: {0}")]
+    SymbolError(String),
 }

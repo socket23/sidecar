@@ -20,7 +20,7 @@ pub struct TreeContext<'a> {
     output: Vec<String>,
     config: TSLanguageConfig,
     lois: HashSet<usize>,
-    show_lines: HashSet<usize>,
+    show_lines: HashSet<usize>, // row numbers
     num_lines: usize,
     lines: Vec<String>,
     done_parent_scopes: HashSet<usize>,
@@ -76,11 +76,28 @@ impl<'a> TreeContext<'a> {
 
         self.show_lines = self.lois.clone();
 
+        if self.loi_pad > 0 {
+            // for each interesting line
+            for line in self.show_lines.clone().iter() {
+                // for each of their surrounding lines
+                for new_line in
+                    line.saturating_sub(self.loi_pad)..=line.saturating_add(self.loi_pad)
+                // since new_line usize could be negative
+                {
+                    if new_line >= self.num_lines {
+                        continue;
+                    }
+
+                    self.show_lines.insert(new_line);
+                }
+            }
+        }
+
         if self.last_line {
             // add the bottom line
             let bottom_line = self.num_lines - 2;
             self.show_lines.insert(bottom_line);
-            todo!()
+            self.add_parent_scopes(bottom_line);
         }
 
         todo!()
@@ -101,7 +118,6 @@ impl<'a> TreeContext<'a> {
 
         self.done_parent_scopes.insert(index);
 
-        // todo - check borrow / ownership here.
         for line_num in self.scopes[index].clone().iter() {
             let (size, head_start, head_end) = self.header[*line_num].first().unwrap();
 

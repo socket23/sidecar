@@ -59,12 +59,13 @@ impl RepoMap {
                 if !lois.is_empty() {
                     output.push_str("\n");
                     output.push_str(&cur_fname);
-                    // todo: output.push_str(render_tree(cur_abs_fname, cur_fname, lois));
+                    output.push_str(&self.render_tree(cur_abs_fname, cur_fname, lois.clone()));
+                    lois.clear();
                 } else if !cur_fname.is_empty() {
                     output.push_str(&format!("\n{}\n", cur_fname));
                 }
 
-                lois = vec![];
+                lois.clear();
                 cur_abs_fname = tag.fname.to_str().unwrap();
                 cur_fname = this_rel_fname;
             }
@@ -102,6 +103,7 @@ impl RepoMap {
         // todo - consider using rel_fname
         let mut context = TreeContext::new(abs_fname.to_string(), code);
 
+        context.initialize();
         context.add_lois(lois);
         context.add_context();
 

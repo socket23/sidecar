@@ -7,8 +7,6 @@ use tree_sitter::Node;
 
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 
-use super::tree_printer::TreePrinter;
-
 pub struct TreeContext<'a> {
     filename: String,
     code: String,
@@ -65,6 +63,17 @@ impl<'a> TreeContext<'a> {
             line_number: false,
             output_lines: HashMap::new(),
         }
+    }
+
+    pub fn initialize(mut self) -> Self {
+        let tree = self
+            .config
+            .get_tree_sitter_tree(self.code.as_bytes())
+            .unwrap();
+        let root_node = tree.root_node();
+        self.walk_tree(root_node);
+        self.arrange_headers();
+        self
     }
 
     pub fn get_config(&self) -> &TSLanguageConfig {
@@ -293,15 +302,58 @@ impl<'a> TreeContext<'a> {
         }
     }
 
-    pub fn print_tree(&self) {
-        let tree = self
-            .config
-            .get_tree_sitter_tree(&self.code.as_bytes())
-            .unwrap();
+    fn walk_tree(&mut self, node: Node<'a>) {
+        let start_line = node.start_position().row;
+        let end_line = node.end_position().row;
+        let size = end_line - start_line;
 
-        let cursor = tree.walk();
+        self.nodes[start_line].push(node);
 
-        let mut printer = TreePrinter::new(cursor, self.code.clone()).unwrap();
-        printer.walk_tree();
+        // only assign headers to nodes that span more than one line
+        // multiple nodes may share the same start line
+        if size > 0 {
+            self.header[start_line].push((size, start_line, end_line));
+        }
+
+        // for every line the node spans, add the position of its start line
+        for i in start_line..=end_line {
+            self.scopes[i].insert(start_line);
+        }
+
+        let mut cursor = node.walk();
+
+        if cursor.goto_first_child() {
+            loop {
+                self.walk_tree(cursor.node());
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+            cursor.goto_parent();
+        }
+    }
+
+    fn arrange_headers(&mut self) {
+        for i in 0..self.num_lines {
+            self.header[i].sort_unstable();
+
+            // determine the header's start and end lines
+            let (start_line, end_line) = if self.header[i].len() > 1 {
+                let (size, start, end) = self.header[i][0];
+
+                // if the node spans more than the max header size, curtail the header
+                if size > self.header_max {
+                    (start, start + self.header_max)
+                } else {
+                    (start, end)
+                }
+            } else {
+                // if the node spans only one line
+                (i, i + 1)
+            };
+
+            // size is now redundant
+            self.header[i] = vec![(0, start_line, end_line)];
+        }
     }
 }

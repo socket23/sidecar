@@ -28,6 +28,8 @@ pub struct InitialRequestData {
     original_question: String,
     plan_if_available: Option<String>,
     history: Vec<SymbolRequestHistoryItem>,
+    /// We operate on the full symbol instead of the
+    full_symbol_request: bool,
 }
 
 impl InitialRequestData {
@@ -35,12 +37,18 @@ impl InitialRequestData {
         original_question: String,
         plan_if_available: Option<String>,
         history: Vec<SymbolRequestHistoryItem>,
+        full_symbol_request: bool,
     ) -> Self {
         Self {
             original_question,
             plan_if_available,
             history,
+            full_symbol_request,
         }
+    }
+
+    pub fn full_symbol_request(&self) -> bool {
+        self.full_symbol_request
     }
 
     pub fn get_original_question(&self) -> &str {

@@ -157,7 +157,12 @@ impl SymbolEventRequest {
     ) -> Self {
         Self {
             symbol,
-            event: SymbolEvent::InitialRequest(InitialRequestData::new(request, None, history)),
+            event: SymbolEvent::InitialRequest(InitialRequestData::new(
+                request,
+                None,
+                history,
+                tool_properties.get_full_symbol_request(),
+            )),
             tool_properties,
         }
     }

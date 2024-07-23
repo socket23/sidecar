@@ -8,6 +8,7 @@ pub struct ToolProperties {
     swe_bench_code_editing_llm: Option<LLMProperties>,
     swe_bench_reranking_llm: Option<LLMProperties>,
     swe_bench_long_context_editing_llm: Option<LLMProperties>,
+    full_symbol_request: bool,
 }
 
 impl ToolProperties {
@@ -17,7 +18,17 @@ impl ToolProperties {
             swe_bench_code_editing_llm: None,
             swe_bench_reranking_llm: None,
             swe_bench_long_context_editing_llm: None,
+            full_symbol_request: false,
         }
+    }
+
+    pub fn get_full_symbol_request(&self) -> bool {
+        self.full_symbol_request
+    }
+
+    pub fn set_full_symbol_request(mut self, full_symbol_edit: bool) -> Self {
+        self.full_symbol_request = full_symbol_edit;
+        self
     }
 
     pub fn set_long_context_editing_llm(

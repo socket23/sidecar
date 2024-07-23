@@ -328,11 +328,13 @@ impl SymbolManager {
         let swe_bench_code_editing_model = input_event.get_swe_bench_code_editing();
         let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
         let swe_bench_long_context_editing = input_event.get_swe_bench_long_context_editing();
+        let full_symbol_edit = input_event.full_symbol_edit();
         let tool_properties = ToolProperties::new()
             .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
             .set_swe_bench_code_editing_llm(swe_bench_code_editing_model)
             .set_swe_bench_reranking_llm(swe_bench_gemini_properties)
-            .set_long_context_editing_llm(swe_bench_long_context_editing);
+            .set_long_context_editing_llm(swe_bench_long_context_editing)
+            .set_full_symbol_request(full_symbol_edit);
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event.tool_use_on_initial_invocation().await;
@@ -503,6 +505,7 @@ impl SymbolManager {
                             // empty history when symbol manager sends the initial
                             // request
                             vec![],
+                            full_symbol_edit,
                         )),
                         tool_properties_ref.clone(),
                     );

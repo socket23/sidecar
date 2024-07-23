@@ -131,18 +131,18 @@ impl<'a> TreeContext<'a> {
         let mut sorted_show: Vec<usize> = self.show_lines.iter().cloned().collect();
         sorted_show.sort_unstable();
 
-        for i in 0..sorted_show.len() - 1 {
-            if sorted_show[i + 1] - sorted_show[i] == 2 {
-                closed_show.insert(sorted_show[i] + 1);
+        for (i, &value) in sorted_show.iter().enumerate().take(sorted_show.len() - 1) {
+            if sorted_show[i + 1] - value == 2 {
+                closed_show.insert(value + 1);
             }
         }
 
         // pick up adjacent blank lines
-        for i in 0..self.lines.len() {
+        for (i, line) in self.lines.iter().enumerate() {
             if !closed_show.contains(&i) {
                 continue;
             }
-            if !self.lines[i].trim().is_empty()
+            if !line.trim().is_empty()
                 && i < self.num_lines - 2
                 && self.lines[i + 1].trim().is_empty()
             {

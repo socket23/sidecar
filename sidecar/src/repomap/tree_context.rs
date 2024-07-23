@@ -1,4 +1,8 @@
-use std::collections::HashSet;
+use std::{
+    cmp::{max, min},
+    collections::HashSet,
+    thread::current,
+};
 
 use tree_sitter::Node;
 
@@ -100,7 +104,74 @@ impl<'a> TreeContext<'a> {
             self.add_parent_scopes(bottom_line);
         }
 
-        todo!()
+        if self.parent_context {
+            for index in self.lois.clone().iter() {
+                self.add_parent_scopes(*index);
+            }
+        }
+
+        if self.child_context {
+            for index in self.lois.clone().iter() {
+                self.add_child_context(*index);
+            }
+        }
+    }
+
+    fn add_child_context(&mut self, index: usize) {
+        if self.nodes[index].is_empty() {
+            return;
+        }
+
+        let last_line = self.get_last_line_of_scope(index);
+        let size = last_line - index;
+
+        if size < 5 {
+            self.show_lines.extend(index..=last_line); // inclusive
+            return;
+        }
+
+        let mut children: Vec<Node<'a>> = vec![];
+
+        for node in self.nodes[index].iter() {
+            children.extend(self.find_all_children(*node));
+        }
+
+        children.sort_by_key(|node| node.end_position().row - node.start_position().row);
+        children.reverse();
+
+        let currently_showing = self.show_lines.len();
+
+        let max_to_show = 25;
+        let min_to_show = 5;
+        let percent_to_show = 0.10;
+        let max_to_show = max(
+            min((size as f64 * percent_to_show) as usize, max_to_show),
+            min_to_show,
+        );
+
+        let child_start_lines: Vec<usize> = children
+            .iter()
+            .map(|child| child.start_position().row)
+            .collect();
+
+        for &child_start_line in child_start_lines.iter() {
+            if self.show_lines.len() > currently_showing + max_to_show {
+                break;
+            }
+
+            self.add_parent_scopes(child_start_line);
+        }
+    }
+
+    fn find_all_children(&self, node: Node<'a>) -> Vec<Node<'a>> {
+        let mut children = vec![node];
+        let mut cursor = node.walk();
+
+        for child in node.children(&mut cursor) {
+            children.push(child);
+        }
+
+        children
     }
 
     fn get_last_line_of_scope(&self, index: usize) -> usize {

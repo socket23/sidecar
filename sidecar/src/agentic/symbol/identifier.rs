@@ -957,33 +957,33 @@ impl MechaCodeSymbolThinking {
     /// need to be applied
     /// - Grab context using sonnet 3.5 over here (toggle to faster models later on)
     /// - after the outline we generate a full code edit on the symbol
-    // pub async fn full_symbol_initial_request(
-    //     &self,
-    //     tool_box: Arc<ToolBox>,
-    //     original_request: &InitialRequestData,
-    //     llm_properties: LLMProperties,
-    //     request_id: &str,
-    //     tool_properties: &ToolProperties,
-    //     hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
-    //     ui_sender: UnboundedSender<UIEventWithID>,
-    // ) -> Result<SymbolEventRequest, SymbolError> {
-    //     println!(
-    //         "mecha_code_symbol_thinking::full_symbol::symbol_name({})",
-    //         self.symbol_name(),
-    //     );
-    //     let request_id_ref = &request_id;
-    //     let mut history = original_request.history().to_vec();
-    //     history.push(SymbolRequestHistoryItem::new(
-    //         self.symbol_name().to_owned(),
-    //         self.fs_file_path().to_owned(),
-    //         original_request.get_original_question().to_owned(),
-    //     ));
+    pub async fn full_symbol_initial_request(
+        &self,
+        _tool_box: Arc<ToolBox>,
+        original_request: &InitialRequestData,
+        _llm_properties: LLMProperties,
+        request_id: &str,
+        _tool_properties: &ToolProperties,
+        _hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
+        _ui_sender: UnboundedSender<UIEventWithID>,
+    ) -> Result<SymbolEventRequest, SymbolError> {
+        println!(
+            "mecha_code_symbol_thinking::full_symbol::symbol_name({})",
+            self.symbol_name(),
+        );
+        let mut history = original_request.history().to_vec();
+        history.push(SymbolRequestHistoryItem::new(
+            self.symbol_name().to_owned(),
+            self.fs_file_path().to_owned(),
+            original_request.get_original_question().to_owned(),
+        ));
 
-    //     if self.is_snippet_present().await {
-    //         // todo
-    //     }
-    //     unimplemented!("figure out how to solve this");
-    // }
+        if self.is_snippet_present().await {
+            let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await;
+            // now we want to only keep the snippets which we are interested in
+        }
+        unimplemented!("figure out how to solve this");
+    }
 
     /// Initial request follows the following flow:
     /// - COT + follow-along questions for any other symbols which might even lead to edits

@@ -553,6 +553,117 @@ impl OutlineNode {
         self.content.content.to_owned()
     }
 
+    fn outline_node_compressed_function(&self, function: &OutlineNodeContent) -> String {
+        let function_range = function.range();
+        let start_line = function_range.start_line();
+        let function_outline = function
+            .content()
+            .lines()
+            .enumerate()
+            .into_iter()
+            .map(|(idx, content)| (idx + start_line, content.to_owned()))
+            .filter_map(|(line_number, content)| {
+                if line_number <= function.body_range.start_line() {
+                    Some(content)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        function_outline
+    }
+
+    pub fn get_outline_node_compressed(&self) -> Option<String> {
+        match &self.content.r#type {
+            OutlineNodeType::Class | OutlineNodeType::ClassDefinition => {
+                if &self.language == "rust"
+                    && self.content.r#type == OutlineNodeType::ClassDefinition
+                {
+                    let file_path = self.fs_file_path();
+                    let content = self.content().content().to_owned();
+                    Some(format!(
+                        r#"FILEPATH: {file_path}
+{content}"#
+                    ))
+                } else {
+                    // Now we have an impl block over here for which we want to get the outline
+                    let children_compressed = self
+                        .children()
+                        .into_iter()
+                        .map(|children_node| self.outline_node_compressed_function(children_node))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let start_line = self.range().start_line();
+                    // now we need to get the lines which are not part of any functions
+                    let symbol_content_without_children = self
+                        .content()
+                        .content()
+                        .lines()
+                        .enumerate()
+                        .map(|(idx, content)| (idx + start_line, content.to_owned()))
+                        .filter_map(|(line_number, content)| {
+                            if self.children().into_iter().any(|children_node| {
+                                children_node.range().contains_line(line_number)
+                            }) {
+                                None
+                            } else {
+                                Some(content)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let symbol_content_without_children_lines =
+                        symbol_content_without_children.lines().collect::<Vec<_>>();
+                    if symbol_content_without_children_lines.len() == 1 {
+                        let file_path = self.fs_file_path();
+                        let formatted_lines = format!(
+                            r#"FILEPATH: {file_path}
+{symbol_content_without_children}
+{children_compressed}"#
+                        );
+                        Some(formatted_lines)
+                    } else {
+                        // take the last line and insert the children compressed
+                        // represenatation inside the range over here
+                        if let Some((last, remaining)) =
+                            symbol_content_without_children_lines.split_last()
+                        {
+                            let remaining = remaining
+                                .into_iter()
+                                .map(|str_value| str_value.to_owned())
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            let file_path = self.fs_file_path();
+                            Some(format!(
+                                r#"FILEPATH: {file_path}
+{remaining}
+{children_compressed}
+{last}"#
+                            ))
+                        } else {
+                            let file_path = self.fs_file_path();
+                            Some(format!(
+                                r#"FILEPATH: {file_path}
+{symbol_content_without_children}
+{children_compressed}"#
+                            ))
+                        }
+                    }
+                }
+            }
+            OutlineNodeType::Function => {
+                let file_path = self.fs_file_path();
+                let outline_compressed = self.outline_node_compressed_function(self.content());
+                Some(format!(
+                    r#"FILEPATH: {file_path}
+{outline_compressed}"#
+                ))
+            }
+            _ => None,
+        }
+    }
+
     pub fn get_outline(&self) -> Option<String> {
         // we want to generate the outline for the node here, we have to do some
         // language specific gating here but thats fine

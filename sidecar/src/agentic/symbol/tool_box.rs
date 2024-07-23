@@ -307,7 +307,7 @@ impl ToolBox {
     /// in
     ///
     /// Use this for getting a sense of code graph and where we are loacted in the code
-    pub async fn get_imported_files(
+    async fn get_imported_files(
         &self,
         fs_file_path: &str,
         request_id: &str,
@@ -342,6 +342,27 @@ impl ToolBox {
             .into_iter()
             .collect::<Vec<String>>();
         Ok(definition_files)
+    }
+
+    /// Grab the outline nodes for the files which are imported
+    pub async fn local_code_graph(
+        &self,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Result<Vec<OutlineNode>, SymbolError> {
+        let imported_files = self.get_imported_files(fs_file_path, request_id).await?;
+        let outline_nodes = stream::iter(imported_files)
+            .map(
+                |imported_file| async move { self.get_outline_nodes_grouped(&imported_file).await },
+            )
+            .buffer_unordered(5)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|s| s)
+            .flatten()
+            .collect::<Vec<_>>();
+        Ok(outline_nodes)
     }
 
     pub async fn find_file_location_for_new_symbol(

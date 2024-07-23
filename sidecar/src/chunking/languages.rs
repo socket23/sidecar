@@ -3546,4 +3546,72 @@ private isDefaultConfigurationAllowed(configuration: IConfigurationNode): boolea
         );
         assert!(outline_nodes.is_empty());
     }
+
+    #[test]
+    fn test_parsing_outline_nodes_compressed() {
+        let source_code = r#"
+fn something() {
+    // something over here
+}
+
+impl Blah for SomethingElse {
+    fn something_important() {
+        // something over here
+    }
+
+    fn something_important_over_here() {
+        // something important over here
+    }
+}
+
+struct SomethingExtremelyImportant {
+    important_field: String,
+}
+        "#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("rust")
+            .expect("language config to be present");
+        let grammar = ts_language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code, None).unwrap();
+        let outline_nodes = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        assert!(!outline_nodes.is_empty());
+        assert_eq!(outline_nodes.len(), 3);
+        let output = outline_nodes[0]
+            .get_outline_node_compressed()
+            .expect("to work");
+        assert_eq!(
+            output,
+            r#"FILEPATH: /tmp/something.rs
+fn something() {"#
+        );
+        let output = outline_nodes[1]
+            .get_outline_node_compressed()
+            .expect("to work");
+        assert_eq!(
+            output,
+            r#"FILEPATH: /tmp/something.rs
+impl Blah for SomethingElse {
+
+    fn something_important() {
+    fn something_important_over_here() {
+}"#
+        );
+        let output = outline_nodes[2]
+            .get_outline_node_compressed()
+            .expect("to work");
+        assert_eq!(
+            output,
+            r#"FILEPATH: /tmp/something.rs
+struct SomethingExtremelyImportant {
+    important_field: String,
+}"#
+        );
+    }
 }

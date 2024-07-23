@@ -115,6 +115,42 @@ impl<'a> TreeContext<'a> {
                 self.add_child_context(*index);
             }
         }
+
+        if self.margin > 0 {
+            self.show_lines.extend(0..self.margin);
+        }
+
+        self.close_small_gaps();
+    }
+
+    fn close_small_gaps(&mut self) {
+        // a "closing" operation on the integers in set.
+        // if i and i+2 are in there but i+1 is not, I want to add i+1
+        // Create a new set for the "closed" lines
+        let mut closed_show = self.show_lines.clone();
+        let mut sorted_show: Vec<usize> = self.show_lines.iter().cloned().collect();
+        sorted_show.sort_unstable();
+
+        for i in 0..sorted_show.len() - 1 {
+            if sorted_show[i + 1] - sorted_show[i] == 2 {
+                closed_show.insert(sorted_show[i] + 1);
+            }
+        }
+
+        // pick up adjacent blank lines
+        for i in 0..self.lines.len() {
+            if !closed_show.contains(&i) {
+                continue;
+            }
+            if !self.lines[i].trim().is_empty()
+                && i < self.num_lines - 2
+                && self.lines[i + 1].trim().is_empty()
+            {
+                closed_show.insert(i + 1);
+            }
+        }
+
+        self.show_lines = closed_show;
     }
 
     fn add_child_context(&mut self, index: usize) {

@@ -99,9 +99,13 @@ impl RepoMap {
             code.push('\n');
         }
 
-        let context = TreeContext::new(abs_fname.to_string(), code);
+        // todo - consider using rel_fname
+        let mut context = TreeContext::new(abs_fname.to_string(), code);
 
-        todo!()
+        context.add_lois(lois);
+        context.add_context();
+
+        context.format()
     }
 
     fn post_process_tags(&self, tag_index: &mut TagIndex) {

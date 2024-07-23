@@ -1,7 +1,6 @@
 use std::{
     cmp::{max, min},
-    collections::HashSet,
-    thread::current,
+    collections::{HashMap, HashSet},
 };
 
 use tree_sitter::Node;
@@ -27,10 +26,12 @@ pub struct TreeContext<'a> {
     show_lines: HashSet<usize>, // row numbers
     num_lines: usize,
     lines: Vec<String>,
+    line_number: bool,
     done_parent_scopes: HashSet<usize>,
     scopes: Vec<HashSet<usize>>, // the starting lines of the nodes that span the line
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
     nodes: Vec<Vec<Node<'a>>>,               // tree-sitter node requires lifetime parameter
+    output_lines: HashMap<(usize, usize), String>,
 }
 
 impl<'a> TreeContext<'a> {
@@ -61,6 +62,8 @@ impl<'a> TreeContext<'a> {
             scopes: vec![HashSet::new(); num_lines],
             header: vec![Vec::new(); num_lines],
             nodes: vec![Vec::new(); num_lines],
+            line_number: false,
+            output_lines: HashMap::new(),
         }
     }
 
@@ -216,6 +219,57 @@ impl<'a> TreeContext<'a> {
             .map(|node| node.end_position().row)
             .max()
             .unwrap()
+    }
+
+    pub fn format(&self) -> String {
+        if self.show_lines.is_empty() {
+            return String::new();
+        }
+
+        let mut output = String::new();
+
+        let mut dots = !(self.show_lines.contains(&0));
+
+        for (index, line) in self.show_lines.iter().enumerate() {
+            if self.show_lines.contains(&index) {
+                if dots {
+                    if self.line_number {
+                        output.push_str("...⋮...\n");
+                    } else {
+                        output.push_str("⋮...\n");
+                    }
+
+                    dots = false;
+                }
+                continue;
+            }
+
+            if self.lois.contains(&index) && self.mark_lois {
+                output.push_str("⋮...\n");
+                continue;
+            }
+
+            let spacer = "|";
+
+            let mut line_output = format!(
+                "{}{}",
+                spacer,
+                self.output_lines
+                    .get(&(index, *line))
+                    .unwrap_or(&"".to_string())
+            );
+
+            if self.line_number {
+                line_output = format!("{:3}{}", index + 1, line_output);
+            }
+
+            output.push_str(&line_output);
+            output.push('\n');
+
+            dots = true;
+        }
+
+        output
     }
 
     pub fn add_parent_scopes(&mut self, index: usize) {

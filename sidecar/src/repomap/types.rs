@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::chunking::languages::TSLanguageParsing;
+use crate::repomap::tree_context::TreeContext;
 
 use super::analyser::TagAnalyzer;
 use super::error::RepoMapError;
@@ -87,6 +88,20 @@ impl RepoMap {
         output.push('\n');
 
         output
+    }
+
+    fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: Vec<usize>) -> String {
+        println!("Rendering tree for abs_fname: {}", abs_fname);
+
+        let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
+
+        if !code.ends_with('\n') {
+            code.push('\n');
+        }
+
+        let context = TreeContext::new(abs_fname.to_string(), code);
+
+        todo!()
     }
 
     fn post_process_tags(&self, tag_index: &mut TagIndex) {

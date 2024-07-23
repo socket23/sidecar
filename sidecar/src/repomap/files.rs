@@ -5,6 +5,7 @@ use std::{
 
 pub trait FileSystem {
     fn get_files(&self, dir: &Path) -> Result<Vec<PathBuf>, io::Error>;
+    fn read_file(&self, path: &Path) -> Result<String, io::Error>;
 }
 
 pub struct SimpleFileSystem;
@@ -14,6 +15,11 @@ impl FileSystem for SimpleFileSystem {
         let mut files = Vec::new();
         self.get_files_recursive(dir, &mut files)?;
         Ok(files)
+    }
+
+    fn read_file(&self, path: &Path) -> Result<String, io::Error> {
+        let contents = std::fs::read_to_string(path)?;
+        Ok(contents)
     }
 }
 

@@ -34,7 +34,7 @@ pub struct TreePrinter<'a> {
 
 impl<'a> TreePrinter<'a> {
     pub fn new(cursor: TreeCursor<'a>, code: String) -> Result<Self, TreePrinterError> {
-        let num_lines = code.lines().count();
+        let num_lines: usize = code.lines().count();
 
         Ok(Self {
             cursor,
@@ -119,10 +119,4 @@ impl<'a> TreePrinter<'a> {
             output.push('\n');
         }
     }
-
-    // add lines of interest (lois)
-
-    // add context()
-
-    // format
 }

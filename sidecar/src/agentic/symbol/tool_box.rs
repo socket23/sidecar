@@ -277,17 +277,11 @@ impl ToolBox {
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    pub async fn find_file_location_for_new_symbol(
+    pub async fn find_import_nodes(
         &self,
-        symbol_name: &str,
         fs_file_path: &str,
-        code_location: &Range,
-        user_query: &str,
         request_id: &str,
-    ) -> Result<FindFileForSymbolResponse, SymbolError> {
-        // Here there are multiple steps which we need to take to answer this:
-        // - Get all the imports in the file which we are interested in
-        // - Get the location of the imports which are present in the file (just the file paths)
+    ) -> Result<Vec<(String, Range)>, SymbolError> {
         let language_config = self
             .editor_parsing
             .for_file_path(fs_file_path)
@@ -306,6 +300,22 @@ impl ToolBox {
                     .any(|hoverable_range| hoverable_range.contains(import_range))
             })
             .collect::<Vec<_>>();
+        Ok(clickable_imports)
+    }
+
+    pub async fn find_file_location_for_new_symbol(
+        &self,
+        symbol_name: &str,
+        fs_file_path: &str,
+        code_location: &Range,
+        user_query: &str,
+        request_id: &str,
+    ) -> Result<FindFileForSymbolResponse, SymbolError> {
+        // Here there are multiple steps which we need to take to answer this:
+        // - Get all the imports in the file which we are interested in
+        // - Get the location of the imports which are present in the file (just the file paths)
+        let clickable_imports = self.find_import_nodes(fs_file_path, request_id).await?;
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
         // grab the lines which contain the imports, this will be unordered
         let mut import_line_numbers = clickable_imports
             .iter()

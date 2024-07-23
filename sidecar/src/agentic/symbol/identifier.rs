@@ -984,6 +984,18 @@ impl MechaCodeSymbolThinking {
             // let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
             if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_requet_full(&request_id).await {
+                // if we just have a single element over here, then we do not need
+                // to do any lookups, especially if the code is in languages other than
+                // rust, since for them we always have a single snippet
+                if reverse_lookup.len() == 1 {
+                    let snippet = self.get_snippet().await.expect("to be present");
+                    if snippet.language.is_some() && snippet.language != Some("rust".to_owned()) {
+                        // TODO(skcd): Figure out how to short-circuit overe here
+                        // when its a non rust like language and all the implementations
+                        // are present in the same block of code
+                        println!("non-rust language found, we should short-circuit over here");
+                    }
+                }
                 // now we have to rerank the whole section
                 // if the xml is too long, then use a beefier model otherwise use
                 // a weaker model for the reranking and selection

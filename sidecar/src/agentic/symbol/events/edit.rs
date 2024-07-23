@@ -10,6 +10,8 @@ pub struct SymbolToEdit {
     symbol_name: String,
     instructions: Vec<String>,
     is_new: bool,
+    // If this is a full symbol edit instead of being sub-symbol level
+    is_full_edit: bool,
 }
 
 impl SymbolToEdit {
@@ -20,6 +22,7 @@ impl SymbolToEdit {
         instructions: Vec<String>,
         outline: bool,
         is_new: bool,
+        is_full_edit: bool,
     ) -> Self {
         Self {
             symbol_name,
@@ -28,6 +31,7 @@ impl SymbolToEdit {
             fs_file_path,
             instructions,
             is_new,
+            is_full_edit,
         }
     }
 

@@ -1341,6 +1341,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 vec![request_data.get_original_question().to_owned()],
                 false,
                 true,
+                false,
             );
             let _ = self
                 .edit_code(&sub_symbol_to_edit, vec![], &request_id)

@@ -7,21 +7,38 @@ use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 
+#[derive(Clone)] // Add this line
 pub struct NodePositions {
     start: usize,
     end: usize,
 }
 pub struct TreeWalker2<'a> {
-    nodes_for_line: Vec<Vec<NodePositions>>,
+    // nodes_for_line: Vec<Vec<NodePositions>>,
     nodes: Vec<Vec<Node<'a>>>,
+    scopes: Vec<HashSet<usize>>, // the starting lines of the nodes that span the line
+    header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
 }
 
 impl<'a> TreeWalker2<'a> {
     pub fn new(num_lines: usize) -> Self {
         Self {
-            nodes_for_line: vec![Vec::new(); num_lines],
+            // nodes_for_line: vec![Vec::new(); num_lines],
             nodes: vec![Vec::new(); num_lines],
+            scopes: vec![HashSet::new(); num_lines],
+            header: vec![Vec::new(); num_lines],
         }
+    }
+
+    // pub fn get_nodes_for_line(&self, line: usize) -> &Vec<NodePositions> {
+    //     &self.nodes_for_line[line]
+    // }
+
+    pub fn get_all_true_nodes(&self) -> &Vec<Vec<Node<'a>>> {
+        &self.nodes
+    }
+
+    pub fn get_nodes_for_line(&self, line: usize) -> &Vec<Node<'a>> {
+        &self.nodes[line]
     }
 
     pub fn find_all_children<'b>(node: Node<'b>) -> Vec<NodePositions> {
@@ -37,18 +54,21 @@ impl<'a> TreeWalker2<'a> {
         children
     }
 
-    pub fn walk(&mut self, mut cursor: TreeCursor) {
+    pub fn walk(&mut self, mut cursor: TreeCursor<'a>) {
         loop {
-            // todo: process the node
-            println!("Node kind: {}", cursor.node().kind());
-            let start_row = cursor.node().start_position().row;
-            let end_row = cursor.node().end_position().row;
+            let start_line = cursor.node().start_position().row;
+            let end_line = cursor.node().end_position().row;
+            let size = end_line - start_line;
 
-            self.nodes[start_row].push(cursor.node());
-            self.nodes_for_line[start_row].push(NodePositions {
-                start: start_row,
-                end: end_row,
-            });
+            self.nodes[start_line].push(cursor.node());
+
+            if size > 0 {
+                self.header[start_line].push((size, start_line, end_line));
+            }
+
+            for i in start_line..=end_line {
+                self.scopes[i].insert(start_line);
+            }
 
             // Try to move to the first child
             if cursor.goto_first_child() {

@@ -38,7 +38,7 @@ impl RepoMap {
 
         let tree_string = self.to_tree(&ranked_tags);
 
-        // println!("{}", tree_string);
+        println!("{}", tree_string);
 
         Ok(ranked_tags)
     }
@@ -112,8 +112,20 @@ impl RepoMap {
             code.push('\n');
         }
 
+        let ts_parsing = TSLanguageParsing::init();
+        let config = ts_parsing.for_file_path(abs_fname).unwrap().clone();
+        let lines: Vec<String> = code.split('\n').map(|s| s.to_string()).collect();
+        let num_lines = lines.len() + 1;
+
+        let tree = config.get_tree_sitter_tree(code.as_bytes()).unwrap();
+
+        let root_node = tree.root_node();
+
+        let cursor = root_node.walk();
+
         // todo - consider using rel_fname
-        let mut context = TreeContext::new(abs_fname.to_string(), code);
+        let mut context = TreeContext::new(code);
+        context.walk(cursor);
 
         context.add_lois(lois.clone());
 

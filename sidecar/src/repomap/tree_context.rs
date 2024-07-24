@@ -10,7 +10,7 @@ use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 use super::tree_walker::{self, TreeWalker, TreeWalker2};
 
 pub struct TreeContext<'a> {
-    filename: String,
+    // filename: String,
     code: String,
     parent_context: bool,
     child_context: bool,
@@ -21,39 +21,27 @@ pub struct TreeContext<'a> {
     show_top_of_file_parent_scope: bool,
     loi_pad: usize,
     output: Vec<String>,
-    config: TSLanguageConfig,
+    // config: TSLanguageConfig,
     lois: HashSet<usize>,
     show_lines: HashSet<usize>, // row numbers
     num_lines: usize,
     lines: Vec<String>,
     line_number: bool,
     done_parent_scopes: HashSet<usize>,
+    nodes: Vec<Vec<Node<'a>>>,
     scopes: Vec<HashSet<usize>>, // the starting lines of the nodes that span the line
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
     output_lines: HashMap<usize, String>,
 }
 
 impl<'a> TreeContext<'a> {
-    pub fn new(filename: String, code: String) -> Self {
-        let ts_parsing = TSLanguageParsing::init();
-        let config = ts_parsing.for_file_path(&filename).unwrap().clone();
+    pub fn new(code: String) -> Self {
+        // let ts_parsing = TSLanguageParsing::init();
+        // let config = ts_parsing.for_file_path(&filename).unwrap().clone();
         let lines: Vec<String> = code.split('\n').map(|s| s.to_string()).collect();
         let num_lines = lines.len() + 1;
 
-        let tree = config.get_tree_sitter_tree(code.as_bytes()).unwrap();
-
-        let root_node = tree.root_node();
-
-        let mut cursor = root_node.walk();
-
-        // let mut tree_walker = TreeWalker::new(tree, num_lines);
-
-        let mut walker = TreeWalker2::new(num_lines);
-
-        walker.walk(cursor);
-
         Self {
-            filename,
             code,
             parent_context: true,
             child_context: true,
@@ -64,7 +52,6 @@ impl<'a> TreeContext<'a> {
             show_top_of_file_parent_scope: false,
             loi_pad: 1,
             output: vec![],
-            config,
             lois: HashSet::new(),
             show_lines: HashSet::new(),
             num_lines,
@@ -74,12 +61,54 @@ impl<'a> TreeContext<'a> {
             header: vec![Vec::new(); num_lines],
             line_number: false,
             output_lines: HashMap::new(),
+            nodes: vec![vec![]; num_lines],
         }
     }
 
-    pub fn get_config(&self) -> &TSLanguageConfig {
-        &self.config
+    pub fn walk(&mut self, mut cursor: TreeCursor<'a>) {
+        loop {
+            let start_line = cursor.node().start_position().row;
+            let end_line = cursor.node().end_position().row;
+            let size = end_line - start_line;
+
+            self.nodes[start_line].push(cursor.node());
+
+            if size > 0 {
+                self.header[start_line].push((size, start_line, end_line));
+            }
+
+            for i in start_line..=end_line {
+                self.scopes[i].insert(start_line);
+            }
+
+            // Try to move to the first child
+            if cursor.goto_first_child() {
+                continue;
+            }
+
+            // If no children, try to move to the next sibling
+            if cursor.goto_next_sibling() {
+                continue;
+            }
+
+            // If no next sibling, go up the tree
+            loop {
+                if !cursor.goto_parent() {
+                    // We've reached the root again, we're done
+                    return;
+                }
+
+                // go to next sibling, break to continue outer loop
+                if cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
     }
+
+    // pub fn get_config(&self) -> &TSLanguageConfig {
+    //     &self.config
+    // }
 
     pub fn get_lois(&self) -> &HashSet<usize> {
         &self.lois
@@ -186,7 +215,7 @@ impl<'a> TreeContext<'a> {
             return;
         }
 
-        let mut children: Vec<Node<'a>> = vec![];
+        let mut children: Vec<Node> = vec![];
 
         // for all nodes that start at line[index], extend children.
         for node in self.nodes[index].iter() {

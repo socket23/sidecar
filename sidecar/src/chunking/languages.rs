@@ -1307,6 +1307,8 @@ impl TSLanguageConfig {
                 // A 'match' represents a successful pattern match from our query, potentially containing multiple captures
                 let tag_name = &query.capture_names()[capture.index as usize];
                 let node = capture.node;
+
+                // todo - consider
                 let line: usize = node.start_position().row + 1; // line numbers are 1-indexed
                 let symbol_name = &content[node.start_byte()..node.end_byte()];
                 match tag_name {

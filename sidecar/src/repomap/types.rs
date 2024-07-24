@@ -47,10 +47,6 @@ impl RepoMap {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
 
-        // for tag in &tags {
-        //     println!("{} - {}", tag.rel_fname.to_str().unwrap(), tag.name);
-        // }
-
         let mut output = String::new();
 
         let mut cur_fname = "";
@@ -60,8 +56,6 @@ impl RepoMap {
 
         for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().unwrap();
-
-            // println!("{}:{} - {}", this_rel_fname, tag.line, tag.name);
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -105,7 +99,6 @@ impl RepoMap {
     }
 
     fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: &Vec<usize>) -> String {
-        println!("lois for {}: {:?}", abs_fname, lois);
         let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
 
         if !code.ends_with('\n') {
@@ -125,11 +118,9 @@ impl RepoMap {
 
         // todo - consider using rel_fname
         let mut context = TreeContext::new(code);
-        context.walk(cursor);
+        context.init(cursor);
 
         context.add_lois(lois.clone());
-
-        println!("adding context for {}", rel_fname);
 
         context.add_context();
 

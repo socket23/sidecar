@@ -65,6 +65,11 @@ impl<'a> TreeContext<'a> {
         }
     }
 
+    pub fn init(&mut self, cursor: TreeCursor<'a>) {
+        self.walk(cursor);
+        self.arrange_headers();
+    }
+
     pub fn walk(&mut self, mut cursor: TreeCursor<'a>) {
         loop {
             let start_line = cursor.node().start_position().row;
@@ -167,9 +172,6 @@ impl<'a> TreeContext<'a> {
         }
 
         self.close_small_gaps();
-
-        println!("done parent scopes: {:?}", self.done_parent_scopes);
-        println!("show lines: {:?}", self.show_lines);
     }
 
     fn close_small_gaps(&mut self) {

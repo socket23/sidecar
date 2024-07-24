@@ -43,6 +43,13 @@ impl RepoMap {
 
     fn to_tree(&self, tags: &Vec<Tag>) -> String {
         // todo - sort tags by filename
+        let mut tags = tags.clone();
+        tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
+
+        for tag in &tags {
+            println!("{} - {}", tag.rel_fname.to_str().unwrap(), tag.name);
+        }
+
         let mut output = String::new();
 
         let mut cur_fname = "";
@@ -50,8 +57,10 @@ impl RepoMap {
 
         let mut lois: Option<Vec<usize>> = None;
 
-        for tag in tags {
+        for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().unwrap();
+
+            println!("{}:{} - {}", this_rel_fname, tag.line, tag.name);
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -95,8 +104,7 @@ impl RepoMap {
     }
 
     fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: &Vec<usize>) -> String {
-        println!("Rendering tree for abs_fname: {}", abs_fname);
-
+        println!("lois for {}: {:?}", abs_fname, lois);
         let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
 
         if !code.ends_with('\n') {
@@ -107,6 +115,9 @@ impl RepoMap {
         let mut context = TreeContext::new(abs_fname.to_string(), code);
 
         context.add_lois(lois.clone());
+
+        println!("updated context lois: {:?}", context.get_lois());
+
         context.add_context();
 
         context.format()

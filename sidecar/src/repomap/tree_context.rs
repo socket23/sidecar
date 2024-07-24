@@ -31,7 +31,7 @@ pub struct TreeContext<'a> {
     scopes: Vec<HashSet<usize>>, // the starting lines of the nodes that span the line
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
     nodes: Vec<Vec<Node<'a>>>,               // tree-sitter node requires lifetime parameter
-    output_lines: HashMap<(usize, usize), String>,
+    output_lines: HashMap<usize, String>,
 }
 
 impl<'a> TreeContext<'a> {
@@ -78,6 +78,10 @@ impl<'a> TreeContext<'a> {
 
     pub fn get_config(&self) -> &TSLanguageConfig {
         &self.config
+    }
+
+    pub fn get_lois(&self) -> &HashSet<usize> {
+        &self.lois
     }
 
     /// add lines of interest to the context
@@ -239,7 +243,7 @@ impl<'a> TreeContext<'a> {
 
         let mut dots = !(self.show_lines.contains(&0));
 
-        for (index, line) in self.show_lines.iter().enumerate() {
+        for index in self.show_lines.iter() {
             if self.show_lines.contains(&index) {
                 if dots {
                     if self.line_number {
@@ -250,7 +254,6 @@ impl<'a> TreeContext<'a> {
 
                     dots = false;
                 }
-                continue;
             }
 
             if self.lois.contains(&index) && self.mark_lois {
@@ -263,9 +266,7 @@ impl<'a> TreeContext<'a> {
             let mut line_output = format!(
                 "{}{}",
                 spacer,
-                self.output_lines
-                    .get(&(index, *line))
-                    .unwrap_or(&"".to_string())
+                self.output_lines.get(&index).unwrap_or(&self.lines[*index])
             );
 
             if self.line_number {

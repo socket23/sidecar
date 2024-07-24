@@ -1307,8 +1307,9 @@ impl TSLanguageConfig {
                 // A 'match' represents a successful pattern match from our query, potentially containing multiple captures
                 let tag_name = &query.capture_names()[capture.index as usize];
                 let node = capture.node;
-                let line = node.start_position().row;
+                let line: usize = node.start_position().row + 1; // line numbers are 1-indexed
                 let symbol_name = &content[node.start_byte()..node.end_byte()];
+                println!("Tag: {} on line {}", symbol_name, line);
                 match tag_name {
                     name if name.starts_with("name.definition.") => Some(Tag::new(
                         rel_fname.clone(),

@@ -11,18 +11,20 @@ pub struct NodePositions {
     start: usize,
     end: usize,
 }
-pub struct TreeWalker2 {
+pub struct TreeWalker2<'a> {
     nodes_for_line: Vec<Vec<NodePositions>>,
+    nodes: Vec<Vec<Node<'a>>>,
 }
 
-impl TreeWalker2 {
+impl<'a> TreeWalker2<'a> {
     pub fn new(num_lines: usize) -> Self {
         Self {
             nodes_for_line: vec![Vec::new(); num_lines],
+            nodes: vec![Vec::new(); num_lines],
         }
     }
 
-    pub fn find_all_children<'a>(node: Node<'a>) -> Vec<NodePositions> {
+    pub fn find_all_children<'b>(node: Node<'b>) -> Vec<NodePositions> {
         let mut children: Vec<NodePositions> = vec![];
         let mut cursor = node.walk();
 
@@ -39,6 +41,14 @@ impl TreeWalker2 {
         loop {
             // todo: process the node
             println!("Node kind: {}", cursor.node().kind());
+            let start_row = cursor.node().start_position().row;
+            let end_row = cursor.node().end_position().row;
+
+            self.nodes[start_row].push(cursor.node());
+            self.nodes_for_line[start_row].push(NodePositions {
+                start: start_row,
+                end: end_row,
+            });
 
             // Try to move to the first child
             if cursor.goto_first_child() {

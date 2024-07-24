@@ -18,7 +18,7 @@ impl TagAnalyzer {
         }
     }
 
-    pub fn get_ranked_tags(&mut self) -> Vec<&HashSet<Tag>> {
+    pub fn get_ranked_tags(&mut self) -> Vec<Tag> {
         self.tag_graph.calculate_and_distribute_ranks();
 
         let sorted_definitions = self.tag_graph.get_sorted_definitions();
@@ -32,7 +32,7 @@ impl TagAnalyzer {
         for ((node, tag_name), _rank) in sorted_definitions {
             let path = PathBuf::from(&graph[*node]);
             if let Some(definition) = self.tag_index.definitions.get(&(path, tag_name.clone())) {
-                tags.push(definition);
+                tags.extend(definition.to_owned());
             }
         }
 

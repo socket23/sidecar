@@ -7,7 +7,7 @@ use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 
-use super::tree_walker::{self, TreeWalker};
+use super::tree_walker::{self, NodeCollector, TreeWalker};
 
 pub struct TreeContext<'a> {
     filename: String,
@@ -41,10 +41,15 @@ impl<'a> TreeContext<'a> {
         let lines: Vec<String> = code.split('\n').map(|s| s.to_string()).collect();
         let num_lines = lines.len() + 1;
 
-        let tree_walker = TreeWalker::new(
+        let mut tree_walker = TreeWalker::new(
             config.get_tree_sitter_tree(code.as_bytes()).unwrap(),
             num_lines,
         );
+
+        let mut node_collector = NodeCollector::new();
+        node_collector.collect_nodes(&mut tree_walker.get_tree().root_node().walk());
+        let nodes = node_collector.get_nodes();
+        println!("nodes: {:?}", nodes);
 
         Self {
             filename,

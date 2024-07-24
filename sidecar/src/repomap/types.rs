@@ -19,7 +19,7 @@ impl RepoMap {
         Self { fs }
     }
 
-    pub fn generate(&self, root: &Path) -> Result<Vec<HashSet<Tag>>, RepoMapError> {
+    pub fn generate(&self, root: &Path) -> Result<Vec<Tag>, RepoMapError> {
         let files = self.fs.get_files(root)?;
         let mut tag_index = TagIndex::new();
 
@@ -32,45 +32,49 @@ impl RepoMap {
 
         let mut analyser = TagAnalyzer::new(tag_index);
 
-        let ranked_tags = analyser.get_ranked_tags();
+        let ranked_tags = analyser.get_ranked_tags().clone();
 
-        let tree_string = self.to_tree(ranked_tags.clone());
+        let tree_string = self.to_tree(&ranked_tags);
 
         println!("{}", tree_string);
 
-        Ok(ranked_tags.into_iter().map(|set| set.clone()).collect())
+        Ok(ranked_tags)
     }
 
-    fn to_tree(&self, tags: Vec<&HashSet<Tag>>) -> String {
+    fn to_tree(&self, tags: &Vec<Tag>) -> String {
         let mut output = String::new();
 
         let mut cur_fname = "";
         let mut cur_abs_fname = "";
 
-        let mut lois: Vec<usize> = vec![];
+        let mut lois: Vec<usize> = Vec::new();
 
-        for (i, tag_set) in tags.iter().enumerate() {
-            println!("Number of tags in tag_set #{}: {}", i, tag_set.len());
+        for tag in tags {
             // there should only be one tag per file
-            let tag = tag_set.iter().next().unwrap();
+            println!("tag: {:?}", tag);
             let this_rel_fname = tag.rel_fname.to_str().unwrap();
 
             if this_rel_fname != cur_fname {
                 if !lois.is_empty() {
-                    output.push_str("\n");
+                    output.push('\n');
                     output.push_str(&cur_fname);
-                    output.push_str(&self.render_tree(cur_abs_fname, cur_fname, lois.clone()));
+                    output.push_str(":\n");
+                    output.push_str(&self.render_tree(&cur_abs_fname, &cur_fname, &lois));
                     lois.clear();
                 } else if !cur_fname.is_empty() {
-                    output.push_str(&format!("\n{}\n", cur_fname));
+                    output.push('\n');
+                    output.push_str(&cur_fname);
+                    output.push('\n');
                 }
 
-                lois.clear();
+                lois.push(tag.line);
                 cur_abs_fname = tag.fname.to_str().unwrap();
                 cur_fname = this_rel_fname;
             }
 
             if !lois.is_empty() {
+                // sadge
+                lois.pop();
                 lois.push(tag.line);
             }
         }
@@ -91,7 +95,7 @@ impl RepoMap {
         output
     }
 
-    fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: Vec<usize>) -> String {
+    fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: &Vec<usize>) -> String {
         println!("Rendering tree for abs_fname: {}", abs_fname);
 
         let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
@@ -103,7 +107,7 @@ impl RepoMap {
         // todo - consider using rel_fname
         let mut context = TreeContext::new(abs_fname.to_string(), code);
 
-        context.add_lois(lois);
+        context.add_lois(lois.clone());
         context.add_context();
 
         context.format()

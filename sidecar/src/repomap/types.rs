@@ -34,21 +34,22 @@ impl RepoMap {
 
         let ranked_tags = analyser.get_ranked_tags().clone();
 
+        analyser.debug_print_ranked_tags();
+
         let tree_string = self.to_tree(&ranked_tags);
 
-        println!("{}", tree_string);
+        // println!("{}", tree_string);
 
         Ok(ranked_tags)
     }
 
     fn to_tree(&self, tags: &Vec<Tag>) -> String {
-        // todo - sort tags by filename
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
 
-        for tag in &tags {
-            println!("{} - {}", tag.rel_fname.to_str().unwrap(), tag.name);
-        }
+        // for tag in &tags {
+        //     println!("{} - {}", tag.rel_fname.to_str().unwrap(), tag.name);
+        // }
 
         let mut output = String::new();
 
@@ -60,7 +61,7 @@ impl RepoMap {
         for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().unwrap();
 
-            println!("{}:{} - {}", this_rel_fname, tag.line, tag.name);
+            // println!("{}:{} - {}", this_rel_fname, tag.line, tag.name);
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -116,7 +117,7 @@ impl RepoMap {
 
         context.add_lois(lois.clone());
 
-        println!("updated context lois: {:?}", context.get_lois());
+        println!("adding context for {}", rel_fname);
 
         context.add_context();
 

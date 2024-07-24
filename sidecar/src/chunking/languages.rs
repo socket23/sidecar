@@ -1309,7 +1309,6 @@ impl TSLanguageConfig {
                 let node = capture.node;
                 let line: usize = node.start_position().row + 1; // line numbers are 1-indexed
                 let symbol_name = &content[node.start_byte()..node.end_byte()];
-                println!("Tag: {} on line {}", symbol_name, line);
                 match tag_name {
                     name if name.starts_with("name.definition.") => Some(Tag::new(
                         rel_fname.clone(),

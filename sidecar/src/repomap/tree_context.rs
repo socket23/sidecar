@@ -7,7 +7,7 @@ use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 
-use super::tree_walker::{self, NodeCollector, TreeWalker};
+use super::tree_walker::{self, TreeWalker, TreeWalker2};
 
 pub struct TreeContext<'a> {
     filename: String,
@@ -30,7 +30,6 @@ pub struct TreeContext<'a> {
     done_parent_scopes: HashSet<usize>,
     scopes: Vec<HashSet<usize>>, // the starting lines of the nodes that span the line
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
-    nodes: Vec<Vec<Node<'a>>>,               // tree-sitter node requires lifetime parameter
     output_lines: HashMap<usize, String>,
 }
 
@@ -41,14 +40,17 @@ impl<'a> TreeContext<'a> {
         let lines: Vec<String> = code.split('\n').map(|s| s.to_string()).collect();
         let num_lines = lines.len() + 1;
 
-        let mut tree_walker = TreeWalker::new(
-            config.get_tree_sitter_tree(code.as_bytes()).unwrap(),
-            num_lines,
-        );
+        let tree = config.get_tree_sitter_tree(code.as_bytes()).unwrap();
 
-        let mut node_collector = NodeCollector::new();
-        node_collector.collect_nodes(&mut tree_walker.get_tree().root_node().walk());
-        let nodes = node_collector.get_nodes();
+        let root_node = tree.root_node();
+
+        let mut cursor = root_node.walk();
+
+        // let mut tree_walker = TreeWalker::new(tree, num_lines);
+
+        let mut walker = TreeWalker2::new(num_lines);
+
+        walker.walk(cursor);
 
         Self {
             filename,
@@ -70,7 +72,6 @@ impl<'a> TreeContext<'a> {
             done_parent_scopes: HashSet::new(),
             scopes: vec![HashSet::new(); num_lines],
             header: vec![Vec::new(); num_lines],
-            nodes: vec![Vec::new(); num_lines],
             line_number: false,
             output_lines: HashMap::new(),
         }
@@ -137,6 +138,9 @@ impl<'a> TreeContext<'a> {
         }
 
         self.close_small_gaps();
+
+        println!("done parent scopes: {:?}", self.done_parent_scopes);
+        println!("show lines: {:?}", self.show_lines);
     }
 
     fn close_small_gaps(&mut self) {
@@ -184,6 +188,7 @@ impl<'a> TreeContext<'a> {
 
         let mut children: Vec<Node<'a>> = vec![];
 
+        // for all nodes that start at line[index], extend children.
         for node in self.nodes[index].iter() {
             children.extend(self.find_all_children(*node));
         }

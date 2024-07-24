@@ -7,34 +7,62 @@ use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 
-pub struct NodeCollector<'a> {
-    nodes: Vec<Node<'a>>,
+pub struct NodePositions {
+    start: usize,
+    end: usize,
+}
+pub struct TreeWalker2 {
+    nodes_for_line: Vec<Vec<NodePositions>>,
 }
 
-impl<'a> NodeCollector<'a> {
-    pub fn new() -> Self {
-        NodeCollector { nodes: Vec::new() }
-    }
-
-    pub fn collect_nodes(&mut self, cursor: &mut TreeCursor<'a>) {
-        // Add the current node
-        self.nodes.push(cursor.node());
-
-        // Recursively collect child nodes
-        if cursor.goto_first_child() {
-            loop {
-                self.collect_nodes(cursor);
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-            // Go back to the parent after processing all children
-            cursor.goto_parent();
+impl TreeWalker2 {
+    pub fn new(num_lines: usize) -> Self {
+        Self {
+            nodes_for_line: vec![Vec::new(); num_lines],
         }
     }
 
-    pub fn get_nodes(&self) -> &[Node<'a>] {
-        &self.nodes
+    pub fn find_all_children<'a>(node: Node<'a>) -> Vec<NodePositions> {
+        let mut children: Vec<NodePositions> = vec![];
+        let mut cursor = node.walk();
+
+        for child in node.children(&mut cursor) {
+            children.push(NodePositions {
+                start: child.start_position().row,
+                end: child.end_position().row,
+            });
+        }
+        children
+    }
+
+    pub fn walk(&mut self, mut cursor: TreeCursor) {
+        loop {
+            // todo: process the node
+            println!("Node kind: {}", cursor.node().kind());
+
+            // Try to move to the first child
+            if cursor.goto_first_child() {
+                continue;
+            }
+
+            // If no children, try to move to the next sibling
+            if cursor.goto_next_sibling() {
+                continue;
+            }
+
+            // If no next sibling, go up the tree
+            loop {
+                if !cursor.goto_parent() {
+                    // We've reached the root again, we're done
+                    return;
+                }
+
+                // go to next sibling, break to continue outer loop
+                if cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
     }
 }
 

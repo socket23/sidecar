@@ -1312,20 +1312,31 @@ Satisfy the requirement either by making edits or gathering the required informa
             .follow_along_requests(&request_id, original_request)
             .await;
         if self.mecha_code_symbol.is_snippet_present().await {
-            // this is a very big block because of the LLM request, but lets see how
-            // this plays out in practice
-            let request = self
-                .mecha_code_symbol
-                .initial_request(
-                    self.tools.clone(),
-                    &request_data,
-                    self.llm_properties.clone(),
-                    request_id,
-                    &self.tool_properties,
-                    self.hub_sender.clone(),
-                    self.ui_sender.clone(),
-                )
-                .await?;
+            let request = if request_data.full_symbol_request() {
+                self.mecha_code_symbol
+                    .full_symbol_initial_request(
+                        self.tools.clone(),
+                        &request_data,
+                        self.llm_properties.clone(),
+                        request_id,
+                        &self.tool_properties,
+                        self.hub_sender.clone(),
+                        self.ui_sender.clone(),
+                    )
+                    .await?
+            } else {
+                self.mecha_code_symbol
+                    .initial_request(
+                        self.tools.clone(),
+                        &request_data,
+                        self.llm_properties.clone(),
+                        request_id,
+                        &self.tool_properties,
+                        self.hub_sender.clone(),
+                        self.ui_sender.clone(),
+                    )
+                    .await?
+            };
             Ok(Some(request))
         } else {
             // we just edit over here
@@ -1555,7 +1566,7 @@ Satisfy the requirement either by making edits or gathering the required informa
     /// of the changes
     /// - We then use a weaker model to apply the changes very quickly
     /// - Code correction happens naturally after that
-    async fn _edit_code_full(
+    async fn edit_code_full(
         &self,
         // sub-symbol here referes to the full symbol not an individual symbol
         // inside the symbol itself
@@ -1728,12 +1739,23 @@ Satisfy the requirement either by making edits or gathering the required informa
                     sub_symbol_to_edit.range().clone(),
                     sub_symbol_to_edit.fs_file_path().to_owned(),
                 ));
-                self.edit_code(
-                    &sub_symbol_to_edit,
-                    context_for_editing.to_owned(),
-                    &request_id,
-                )
-                .await?
+
+                // Toggle between the full edit mode and the accurate edits
+                if sub_symbol_to_edit.is_full_edit() {
+                    self.edit_code_full(
+                        &sub_symbol_to_edit,
+                        context_for_editing.to_vec(),
+                        &request_id,
+                    )
+                    .await?
+                } else {
+                    self.edit_code(
+                        &sub_symbol_to_edit,
+                        context_for_editing.to_vec(),
+                        &request_id,
+                    )
+                    .await?
+                }
             };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;

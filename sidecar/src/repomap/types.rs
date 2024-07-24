@@ -34,7 +34,7 @@ impl RepoMap {
 
         let ranked_tags = analyser.get_ranked_tags().clone();
 
-        analyser.debug_print_ranked_tags();
+        // analyser.debug_print_ranked_tags();
 
         let tree_string = self.to_tree(&ranked_tags);
 
@@ -46,6 +46,7 @@ impl RepoMap {
     fn to_tree(&self, tags: &Vec<Tag>) -> String {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
+        tags.truncate(3);
 
         let mut output = String::new();
 

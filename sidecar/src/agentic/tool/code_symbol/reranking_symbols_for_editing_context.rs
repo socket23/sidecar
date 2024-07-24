@@ -6,7 +6,7 @@ use llm_client::{
 };
 
 use async_trait::async_trait;
-use quick_xml::de::from_str;
+use serde_xml_rs::from_str;
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
@@ -84,8 +84,7 @@ impl ReRankingSnippetsForCodeEditingRequest {
 #[serde(rename = "code_symbol")]
 pub struct ReRankingCodeSymbol {
     name: String,
-    #[serde(rename = "file_path")]
-    fs_file_path: String,
+    file_path: String,
 }
 
 impl ReRankingCodeSymbol {
@@ -94,28 +93,38 @@ impl ReRankingCodeSymbol {
     }
 
     pub fn fs_file_path(&self) -> &str {
-        &self.fs_file_path
+        &self.file_path
     }
+}
+
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReRankingCodeSymbolList {
+    #[serde(default)]
+    code_symbol: Vec<ReRankingCodeSymbol>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct ReRankingSnippetsForCodeEditingResponse {
     thinking: String,
-    code_symbol_outline_list: Vec<ReRankingCodeSymbol>,
+    #[serde(rename = "code_symbol_outline_list")]
+    code_symbol_outline_list: ReRankingCodeSymbolList,
 }
 
 impl ReRankingSnippetsForCodeEditingResponse {
     fn parse_response(response: &str) -> Result<Self, ToolError> {
         let parsed_response = from_str::<Self>(response);
         match parsed_response {
-            Err(_e) => Err(ToolError::SerdeConversionFailed),
+            Err(_e) => {
+                println!("{:?}", _e);
+                Err(ToolError::SerdeConversionFailed)
+            }
             Ok(parsed_response) => Ok(parsed_response),
         }
     }
 
     pub fn code_symbol_outline_list(self) -> Vec<ReRankingCodeSymbol> {
-        self.code_symbol_outline_list
+        self.code_symbol_outline_list.code_symbol
     }
 }
 
@@ -165,35 +174,141 @@ Your reply should be in the following format:
 </code_symbol_outline_list>
 <reply>
 
-Now we will show you some examples:
+Now we will show you an example of how the output should look like:
 <user_query>
-
+We want to implement a new method on symbol event which exposes the initial request question
 </user_query>
 <code_snippet_to_edit>
+```rust
+#[derive(Debug, Clone, serde::Serialize)]
+pub enum SymbolEvent {{
+    InitialRequest(InitialRequestData),
+    AskQuestion(AskQuestionRequest),
+    UserFeedback,
+    Delete,
+    Edit(SymbolToEditRequest),
+    Outline,
+    // Probe
+    Probe(SymbolToProbeRequest),
+}}
+```
 </code_snippet_to_edit>
 <code_symbol_outline_list>
 <code_symbol>
 <name>
+InitialRequestData
 </name>
 <content>
+FILEPATH: /Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/events/initial_request.rs
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InitialRequestData {{
+    original_question: String,
+    plan_if_available: Option<String>,
+    history: Vec<SymbolRequestHistoryItem>,
+    /// We operate on the full symbol instead of the
+    full_symbol_request: bool,
+}}
+
+impl InitialRequestData {{
+    pub fn new(
+        original_question: String,
+        plan_if_available: Option<String>,
+        history: Vec<SymbolRequestHistoryItem>,
+        full_symbol_request: bool,
+    ) -> Self
+    
+    pub fn full_symbol_request(&self) -> bool
+
+    pub fn get_original_question(&self) -> &str
+
+    pub fn get_plan(&self) -> Option<String>
+
+    pub fn history(&self) -> &[SymbolRequestHistoryItem]
+}}
 </content>
 </code_symbol>
 <code_symbol>
 <name>
+AskQuestionRequest
 </name>
 <content>
+FILEPATH: /Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/events/edit.rs
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AskQuestionRequest {{
+    question: String,
+}}
+
+impl AskQuestionRequest {{
+    pub fn new(question: String) -> Self
+
+    pub fn get_question(&self) -> &str
+}}
 </content>
 </code_symbol>
 <code_symbol>
 <name>
+SymbolToEditRequest
 </name>
 <content>
+FILEPATH: /Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/events/edit.rs
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SymbolToEditRequest {{
+    symbols: Vec<SymbolToEdit>,
+    symbol_identifier: SymbolIdentifier,
+    history: Vec<SymbolRequestHistoryItem>,
+}}
+
+impl SymbolToEditRequest {{
+    pub fn new(
+        symbols: Vec<SymbolToEdit>,
+        identifier: SymbolIdentifier,
+        history: Vec<SymbolRequestHistoryItem>,
+    ) -> Self
+
+    pub fn symbols(self) -> Vec<SymbolToEdit>
+
+    pub fn symbol_identifier(&self) -> &SymbolIdentifier
+
+    pub fn history(&self) -> &[SymbolRequestHistoryItem]
+}}
 </content>
 </code_symbol>
 <code_symbol>
 <name>
+SymbolToProbeRequest
 </name>
 <content>
+FILEPATH: /Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/events/probe.rs
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SymbolToProbeRequest {{
+    symbol_identifier: SymbolIdentifier,
+    probe_request: String,
+    original_request: String,
+    original_request_id: String,
+    history: Vec<SymbolToProbeHistory>,
+}}
+
+impl SymbolToProbeRequest {{
+    pub fn new(
+        symbol_identifier: SymbolIdentifier,
+        probe_request: String,
+        original_request: String,
+        original_request_id: String,
+        history: Vec<SymbolToProbeHistory>,
+    ) -> Self
+
+    pub fn symbol_identifier(&self) -> &SymbolIdentifier
+
+    pub fn original_request_id(&self) -> &str
+
+    pub fn original_request(&self) -> &str
+
+    pub fn probe_request(&self) -> &str
+
+    pub fn history_slice(&self) -> &[SymbolToProbeHistory]
+
+    pub fn history(&self) -> String
+}}
 </content>
 </code_symbol>
 </code_symbol_outline_list>
@@ -201,12 +316,15 @@ Now we will show you some examples:
 Your reply should be:
 <reply>
 <thinking>
+The request talks about implementing new methods for the initial request data, so we need to include the initial request data symbol in the context when trying to edit the code.
 </thinking>
 <code_symbol_outline_list>
 <code_symbol>
 <name>
+InitialRequestData
 </name>
 <file_path>
+/Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/events/initial_request.rs
 </file_path>
 </code_symbol>
 </code_symbol_outline_list>
@@ -356,5 +474,56 @@ impl Tool for ReRankingSnippetsForCodeEditingContext {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ReRankingSnippetsForCodeEditingResponse;
+
+    #[test]
+    fn test_parsing_with_some_items_in_list_works() {
+        let response = r#"
+<reply>
+<thinking>
+The user query requires adding a new endpoint `stop_code_editing` similar to the existing `probe_request_stop` endpoint. To achieve this, we need to understand the implementation of the `probe_request_stop` endpoint and replicate its structure for the new `stop_code_editing` endpoint. Therefore, we need the outline of the `probe_request_stop` function.
+</thinking>
+<code_symbol_outline_list>
+<code_symbol>
+<name>
+probe_request_stop
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs
+</file_path>
+</code_symbol>
+<code_symbol>
+<name>
+probe_request_stop
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs
+</file_path>
+</code_symbol>
+</code_symbol_outline_list>
+</reply>
+        "#;
+        let parsed_response = ReRankingSnippetsForCodeEditingResponse::parse_response(response);
+        assert!(parsed_response.is_ok());
+    }
+
+    #[test]
+    fn test_empty_list_also_works() {
+        let response = r#"
+<reply>
+<thinking>
+The user query indicates that we need to add a new endpoint for `stop_code_editing` similar to the existing `probe_request_stop` endpoint. This means we will be modifying the `agentic_router` function to include the new route. Since there are no specific code symbols provided in the outline list, we will focus on the existing structure of the `agentic_router` function and the related endpoints.
+</thinking>
+<code_symbol_outline_list>
+</code_symbol_outline_list>
+</reply>
+        "#;
+        let parsed_response = ReRankingSnippetsForCodeEditingResponse::parse_response(response);
+        assert!(parsed_response.is_ok());
     }
 }

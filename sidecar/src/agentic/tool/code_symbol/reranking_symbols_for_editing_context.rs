@@ -72,7 +72,7 @@ impl ReRankingSnippetsForCodeEditingContext {
         }
     }
 
-    pub fn system_message(&self) -> String {
+    fn system_message(&self) -> String {
         format!(
             r"You are an expert software eningeer who never writes incorrect code. As a first step before making changes, you are tasked with collecting all the context you need for the definitions of various code symbols which will be necessary for making the code changes.
 - You will be given the original user query in <user_query>

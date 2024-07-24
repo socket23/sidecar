@@ -2,6 +2,7 @@
 
 use super::{
     code_symbol::{
+        apply_outline_edit_to_range::ApplyOutlineEditsToRangeResponse,
         correctness::CodeCorrectnessAction,
         find_file_for_new_symbol::FindFileForSymbolResponse,
         find_symbols_to_edit_in_context::FindSymbolsToEditInContextResponse,
@@ -125,9 +126,15 @@ pub enum ToolOutput {
     FindSymbolsToEditInContext(FindSymbolsToEditInContextResponse),
     // the outline nodes which we should use as context for the code editing
     ReRankedCodeSnippetsForCodeEditing(ReRankingSnippetsForCodeEditingResponse),
+    // Apply outline edits to the range
+    ApplyOutlineEditsToRange(ApplyOutlineEditsToRangeResponse),
 }
 
 impl ToolOutput {
+    pub fn apply_outline_edits_to_range(response: ApplyOutlineEditsToRangeResponse) -> Self {
+        ToolOutput::ApplyOutlineEditsToRange(response)
+    }
+
     pub fn re_ranked_code_snippets_for_editing_context(
         response: ReRankingSnippetsForCodeEditingResponse,
     ) -> Self {
@@ -468,6 +475,13 @@ impl ToolOutput {
     pub fn get_code_symbols_to_edit_in_context(self) -> Option<FindSymbolsToEditInContextResponse> {
         match self {
             ToolOutput::FindSymbolsToEditInContext(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_apply_edits_to_range_response(self) -> Option<ApplyOutlineEditsToRangeResponse> {
+        match self {
+            ToolOutput::ApplyOutlineEditsToRange(response) => Some(response),
             _ => None,
         }
     }

@@ -73,6 +73,8 @@ pub enum ToolType {
     FindSymbolsToEditInContext,
     // ReRanking code snippets for code editing context
     ReRankingCodeSnippetsForCodeEditingContext,
+    // Apply the outline of the changes to the range we are interested in
+    ApplyOutlineEditToRange,
 }
 
 impl std::fmt::Display for ToolType {
@@ -127,6 +129,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ReRankingCodeSnippetsForCodeEditingContext => {
                 write!(f, "ReRanking code snippets for code editing")
             }
+            ToolType::ApplyOutlineEditToRange => write!(f, "Apply outline edit to range"),
         }
     }
 }

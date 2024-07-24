@@ -35,6 +35,9 @@ pub struct CodeEdit {
     symbol_to_edit: Option<String>,
     is_new_symbol_request: Option<String>,
     root_request_id: String,
+    // If this edit is just generating an outline of the changes which need to happen
+    // in the symbol and not the complete change which needs to happen
+    is_outline_edit: bool,
 }
 
 impl CodeEdit {
@@ -53,6 +56,7 @@ impl CodeEdit {
         symbol_to_edit: Option<String>,
         is_new_symbol_request: Option<String>,
         root_request_id: String,
+        is_outline_edit: bool,
     ) -> Self {
         Self {
             code_above,
@@ -69,6 +73,7 @@ impl CodeEdit {
             symbol_to_edit,
             is_new_symbol_request,
             root_request_id,
+            is_outline_edit,
         }
     }
 }
@@ -194,6 +199,12 @@ impl CodeEdit {
 
     pub fn symbol_to_edit_name(&self) -> Option<String> {
         self.symbol_to_edit.clone()
+    }
+
+    /// Returns if this is an outline edit and not a deep verbose edit which
+    /// we want to perform
+    pub fn is_outline_edit(&self) -> bool {
+        self.is_outline_edit
     }
 }
 

@@ -14,14 +14,15 @@ use super::{
         test_correction::TestCorrection, types::CodeEditingTool,
     },
     code_symbol::{
-        correctness::CodeCorrectnessBroker, error_fix::CodeSymbolErrorFixBroker,
-        find_file_for_new_symbol::FindFileForNewSymbol,
+        apply_outline_edit_to_range::ApplyOutlineEditsToRange, correctness::CodeCorrectnessBroker,
+        error_fix::CodeSymbolErrorFixBroker, find_file_for_new_symbol::FindFileForNewSymbol,
         find_symbols_to_edit_in_context::FindSymbolsToEditInContext,
         followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
         initial_request_follow::CodeSymbolFollowInitialRequestBroker,
         new_sub_symbol::NewSubSymbolRequired, planning_before_code_edit::PlanningBeforeCodeEdit,
         probe::ProbeEnoughOrDeeper, probe_question_for_symbol::ProbeQuestionForSymbol,
         probe_try_hard_answer::ProbeTryHardAnswer, repo_map_search::RepoMapSearchBroker,
+        reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingContext,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -291,6 +292,20 @@ impl ToolBroker {
         tools.insert(
             ToolType::FindSymbolsToEditInContext,
             Box::new(FindSymbolsToEditInContext::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::ReRankingCodeSnippetsForCodeEditingContext,
+            Box::new(ReRankingSnippetsForCodeEditingContext::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::ApplyOutlineEditToRange,
+            Box::new(ApplyOutlineEditsToRange::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

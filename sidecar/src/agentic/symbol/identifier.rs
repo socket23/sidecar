@@ -978,8 +978,6 @@ impl MechaCodeSymbolThinking {
             original_request.get_original_question().to_owned(),
         ));
 
-        let request_id_ref = &request_id;
-
         if self.is_snippet_present().await {
             // let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
@@ -1050,17 +1048,17 @@ Edit selection reason:
                                 // TODO(skcd): We need to get the sub-symbol over
                                 // here instead of the original symbol name which
                                 // would not work
-                                println!("mecha_code_symbol_thinking::initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
+                                println!("mecha_code_symbol_thinking::full_symbol_initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
                                 // TODO(skcd): Shoudn't this use the search by name
                                 // instead of the using the range for searching
                                 let symbol_in_range = 
-                                    self.find_sub_symbol_in_range(
+                                    self.find_symbol_in_range(
                                         range,
                                         fs_file_path,
-                                        request_id_ref
                                     )
                                     .await;
-                                if let Ok(symbol) = symbol_in_range {
+                                if let Some(symbol) = symbol_in_range {
+                                    println!("mecha_code_symbol_thinking::full_symbol_initial_request::symbol_in_range::({})", self.symbol_name());
                                     Some(SymbolToEdit::new(
                                         symbol,
                                         range.clone(),
@@ -1071,7 +1069,7 @@ Edit selection reason:
                                         true,
                                     ))
                                 } else {
-                                    println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);
+                                    println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({})::({:?})::({:?})", self.symbol_name(), &range, &fs_file_path);
                                     None
                                 }
                             }

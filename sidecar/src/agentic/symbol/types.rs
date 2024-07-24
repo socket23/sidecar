@@ -1550,6 +1550,20 @@ Satisfy the requirement either by making edits or gathering the required informa
         Ok(EditedCodeSymbol::new(content, response))
     }
 
+    /// Editing the full symbol in total is a 2 step process
+    /// - We use sonnet 3.5 for planning the changes and generating an outline
+    /// of the changes
+    /// - We then use a weaker model to apply the changes very quickly
+    /// - Code correction happens naturally after that
+    async fn _edit_code_full(
+        &self,
+        _sub_symbol: &SymbolToEdit,
+        _context: Vec<String>,
+        _request_id: &str,
+    ) -> Result<EditedCodeSymbol, SymbolError> {
+        todo!("figure out what to do over here")
+    }
+
     async fn edit_code(
         &self,
         sub_symbol: &SymbolToEdit,

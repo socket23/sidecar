@@ -3,6 +3,7 @@ use super::{
         find::FindCodeSelectionInput, test_correction::TestOutputCorrectionRequest, types::CodeEdit,
     },
     code_symbol::{
+        apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest,
         correctness::CodeCorrectnessRequest,
         error_fix::CodeEditingErrorRequest,
         find_file_for_new_symbol::FindFileForSymbolRequest,
@@ -95,6 +96,8 @@ pub enum ToolInput {
     FindSymbolsToEditInContext(FindSymbolsToEditInContextRequest),
     // ReRanking outline nodes for code editing context
     ReRankingCodeSnippetsForEditing(ReRankingSnippetsForCodeEditingRequest),
+    // Apply the generated code outline to the range we are interested in
+    ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest),
 }
 
 impl ToolInput {
@@ -145,6 +148,17 @@ impl ToolInput {
             ToolInput::ReRankingCodeSnippetsForEditing(_) => {
                 ToolType::ReRankingCodeSnippetsForCodeEditingContext
             }
+            ToolInput::ApplyOutlineEditToRange(_) => ToolType::ApplyOutlineEditToRange,
+        }
+    }
+
+    pub fn apply_outline_edits_to_range(
+        self,
+    ) -> Result<ApplyOutlineEditsToRangeRequest, ToolError> {
+        if let ToolInput::ApplyOutlineEditToRange(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ApplyOutlineEditToRange))
         }
     }
 

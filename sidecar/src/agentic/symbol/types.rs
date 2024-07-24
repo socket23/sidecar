@@ -1557,11 +1557,41 @@ Satisfy the requirement either by making edits or gathering the required informa
     /// - Code correction happens naturally after that
     async fn _edit_code_full(
         &self,
-        _sub_symbol: &SymbolToEdit,
-        _context: Vec<String>,
-        _request_id: &str,
+        // sub-symbol here referes to the full symbol not an individual symbol
+        // inside the symbol itself
+        sub_symbol: &SymbolToEdit,
+        context: Vec<String>,
+        request_id: &str,
     ) -> Result<EditedCodeSymbol, SymbolError> {
-        todo!("figure out what to do over here")
+        let symbol_to_edit = self
+            .tools
+            .find_symbol_to_edit_closest_to_range(sub_symbol, request_id)
+            .await?;
+        let content = symbol_to_edit.content().to_owned();
+        let file_content = self
+            .tools
+            .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
+            .await?;
+
+        // Here there are 2 steps which will need to happen:
+        // - First we use a more powerful model for generating the outline of the changes
+        // which need to be done
+        // - Second: we use a weaker model to generate the final outline of the changes which will be done
+        let edited_code = self
+            .tools
+            .code_edit_outline(
+                sub_symbol.fs_file_path(),
+                file_content.contents_ref(),
+                symbol_to_edit.range(),
+                context.join("\n"),
+                sub_symbol.instructions().join("\n"),
+                self.llm_properties.clone(),
+                request_id,
+                Some(symbol_to_edit.name().to_owned()),
+            )
+            .await?;
+
+        Ok(EditedCodeSymbol::new(content, edited_code))
     }
 
     async fn edit_code(

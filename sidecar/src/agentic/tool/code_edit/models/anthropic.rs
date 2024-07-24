@@ -11,6 +11,120 @@ impl AnthropicCodeEditFromatter {
         Self {}
     }
 
+    fn system_message_for_code_editing_outline(
+        &self,
+        language: &str,
+        file_path: &str,
+        symbol_to_edit: Option<String>,
+    ) -> String {
+        let symbol_to_edit_instruction = if let Some(symbol_to_edit) = symbol_to_edit {
+            format!("- You have to edit the code for {symbol_to_edit} which has been shown to you in <code_to_edit> section.\n")
+        } else {
+            "".to_owned()
+        };
+        format!(
+            r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
+Follow the user's requirements carefully and to the letter.
+- The user instructions are present in <user_instruction> tag.
+- Modify the code or create new code, the code is present in <code_to_edit>
+- The code present above the section you have to edit will be given in <code_above> section.
+- The code present below the section you have to edit will be given in <code_below> section.
+- The code you have to rewrite will be given to you in <code_to_edit> section.
+- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- The code you have to edit is in {file_path}
+- Output the edited code in a single code block.
+- Each code block starts with ```{language}.
+- You must always answer in {language} code.
+- Your reply should be contained in the <reply> tags.
+- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.
+- Make sure you follow the pattern specified for replying and make no mistakes while doing that.
+- Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
+{symbol_to_edit_instruction}
+
+We are also showing you an example:
+
+<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>
+
+Your reply is:
+<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+```python
+    def add(a, b):
+        print(a, b)
+        return a + b
+```
+</code_edited>
+</reply>
+
+We are showing you another example now, where the output is WRONG:
+<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>
+
+Your reply:
+<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+    def add(a, b):
+        print(a, b)
+        return a + b
+
+    @class_method
+    def multiply(a, b):
+        print(a, b)
+        return a + b
+</code_edited>
+</reply>
+
+Notice how you moved beyond the add method and also changed the multiply method which is wrong. We only want to change the add method."#
+        )
+    }
+
     fn system_message_for_code_insertion(
         &self,
         language: &str,
@@ -512,10 +626,18 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
     fn format_prompt(&self, context: &CodeEdit) -> LLMClientCompletionRequest {
         let language = context.language();
         let fs_file_path = context.fs_file_path();
-        let system_message = if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
-            self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
+        let system_message = if context.is_outline_edit() {
+            self.system_message_for_code_editing_outline(
+                language,
+                fs_file_path,
+                context.symbol_to_edit_name(),
+            )
         } else {
-            self.system_message(language, fs_file_path, context.symbol_to_edit_name())
+            if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
+                self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
+            } else {
+                self.system_message(language, fs_file_path, context.symbol_to_edit_name())
+            }
         };
         let user_message = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
             self.user_message_for_code_addition(context, sub_symbol_name)

@@ -1,3 +1,4 @@
+pub mod apply_outline_edit_to_range;
 pub mod correctness;
 pub mod error_fix;
 pub mod find_file_for_new_symbol;

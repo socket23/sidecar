@@ -3,13 +3,14 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{LLMProvider, LLMProviderAPIKeys};
+use llm_client::provider::{LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionRequest;
 use crate::agentic::tool::code_edit::types::CodeEdit;
+use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
 use crate::agentic::tool::code_symbol::correctness::{
     CodeCorrectnessAction, CodeCorrectnessRequest,
 };
@@ -1399,6 +1400,60 @@ We also believe this symbol needs to be probed because of:
                     .map(|outline_node| outline_node.content().clone())
                     .ok_or(SymbolError::NoOutlineNodeSatisfyPosition)
             }
+        }
+    }
+
+    /// Finds the symbol which we want to edit and is closest to the range
+    /// we are interested in
+    ///
+    /// This gives us back the full symbol instead of the sub-symbol we are interested
+    /// in
+    pub async fn find_symbol_to_edit_closest_to_range(
+        &self,
+        symbol_to_edit: &SymbolToEdit,
+        request_id: &str,
+    ) -> Result<OutlineNodeContent, SymbolError> {
+        let file_open_response = self
+            .file_open(symbol_to_edit.fs_file_path().to_owned(), request_id)
+            .await?;
+        let _ = self
+            .force_add_document(
+                symbol_to_edit.fs_file_path(),
+                file_open_response.contents_ref(),
+                file_open_response.language(),
+            )
+            .await;
+        let outline_nodes = self
+            .get_outline_nodes_grouped(symbol_to_edit.fs_file_path())
+            .await
+            .ok_or(SymbolError::ExpectedFileToExist)?
+            .into_iter()
+            .filter(|outline_node| outline_node.name() == symbol_to_edit.symbol_name())
+            .collect::<Vec<_>>();
+
+        if outline_nodes.is_empty() {
+            return Err(SymbolError::NoOutlineNodeSatisfyPosition);
+        }
+        // Now we want to get the outline node which is closest in the range to all
+        // the outline nodes which we are getting
+        let mut outline_nodes_with_distance = outline_nodes
+            .into_iter()
+            .map(|outline_node| {
+                let outline_node_range = outline_node.range();
+                let symbol_to_edit_range = symbol_to_edit.range();
+                let range_distance = outline_node_range.minimal_line_distance(symbol_to_edit_range);
+                (range_distance, outline_node)
+            })
+            .collect::<Vec<_>>();
+        outline_nodes_with_distance.sort_by_key(|(distance, _)| *distance);
+
+        // grab the first outline node over here
+        if outline_nodes_with_distance.is_empty() {
+            return Err(SymbolError::NoOutlineNodeSatisfyPosition);
+        } else {
+            // grabs the outline node which is at the lowest distance from the
+            // range we are interested in
+            Ok(outline_nodes_with_distance.remove(0).1.content().clone())
         }
     }
 
@@ -3624,6 +3679,91 @@ instruction:
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    /// This uses a more powerful LLM to plan out the changes and generate
+    /// an outline of the edits which need to happen and then a weaker model
+    /// to apply those edits to the range we are interested in
+    ///
+    /// - Use anything >= GPT-4 level intelligence to make the changes over here
+    /// - Use a weaker model to start applying the changes
+    pub async fn code_edit_outline(
+        &self,
+        fs_file_path: &str,
+        file_content: &str,
+        selection_range: &Range,
+        extra_context: String,
+        instruction: String,
+        llm_properties: LLMProperties,
+        request_id: &str,
+        symbol_to_edit: Option<String>,
+    ) -> Result<String, SymbolError> {
+        println!("============tool_box::code_edit_outline============");
+        println!("tool_box::code_edit_outline::fs_file_path:{}", fs_file_path);
+        println!(
+            "tool_box::code_edit_outline::selection_range:{:?}",
+            selection_range
+        );
+        println!("============");
+        let language = self
+            .editor_parsing
+            .for_file_path(fs_file_path)
+            .map(|language_config| language_config.get_language())
+            .flatten()
+            .unwrap_or("".to_owned());
+        let (above, below, in_range_selection) =
+            split_file_content_into_parts(file_content, selection_range);
+        let request = ToolInput::CodeEditing(CodeEdit::new(
+            above,
+            below,
+            fs_file_path.to_owned(),
+            in_range_selection.to_owned(),
+            extra_context,
+            language.to_owned(),
+            instruction.to_owned(),
+            llm_properties.llm().clone(),
+            llm_properties.api_key().clone(),
+            llm_properties.provider().clone(),
+            false,
+            symbol_to_edit,
+            None,
+            self.root_request_id.to_owned(),
+            // we want an outline edit
+            true,
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            request.clone(),
+        ));
+        let response = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_edit_output()
+            .ok_or(SymbolError::WrongToolOutput)?;
+
+        let request = ToolInput::ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest::new(
+            instruction,
+            in_range_selection,
+            response,
+            self.root_request_id.to_owned(),
+            LLMProperties::new(
+                LLMType::Gpt4OMini,
+                LLMProvider::OpenAI,
+                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                    "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".to_owned(),
+                )),
+            ),
+        ));
+        let response = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_apply_edits_to_range_response()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(response.code())
+    }
+
     pub async fn code_edit(
         &self,
         fs_file_path: &str,
@@ -3641,14 +3781,7 @@ instruction:
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
         println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
-        // println!("tool_box::code_edit::file_content:{}", file_content);
         println!("tool_box::code_edit::selection_range:{:?}", selection_range);
-        // println!("tool_box::code_edit::extra_context:{}", &extra_context);
-        // println!("tool_box::code_edit::instruction:{}", &instruction);
-        // println!(
-        //     "tool_box::code_edit::llm_properties: {:?}, {:?}, {:?}",
-        //     &llm, &api_keys, &provider
-        // );
         println!("============");
         // we need to get the range above and then below and then in the selection
         let language = self
@@ -3674,6 +3807,8 @@ instruction:
             symbol_to_edit,
             is_new_sub_symbol,
             self.root_request_id.to_owned(),
+            // we want a complete edit over here
+            false,
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(
             request_id.to_owned(),

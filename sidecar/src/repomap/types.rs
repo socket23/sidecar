@@ -36,6 +36,7 @@ impl RepoMap {
 
         // analyser.debug_print_ranked_tags();
 
+        println!("repo_map::to_tree");
         let tree_string = self.to_tree(&ranked_tags);
 
         println!("{}", tree_string);
@@ -48,6 +49,8 @@ impl RepoMap {
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
         tags.truncate(3);
 
+        println!("repo_map::tags::({:?})", &tags);
+
         let mut output = String::new();
 
         let mut cur_fname = "";
@@ -57,6 +60,10 @@ impl RepoMap {
 
         for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().unwrap();
+            println!(
+                "repo_map::fnames::this_rel_fname({})::cur_fname::({})",
+                &this_rel_fname, cur_fname
+            );
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -100,6 +107,15 @@ impl RepoMap {
     }
 
     fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: &Vec<usize>) -> String {
+        println!(
+            "repo_map::render_tree::({})::({})",
+            rel_fname,
+            lois.to_vec()
+                .into_iter()
+                .map(|lois| lois.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
         let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
 
         if !code.ends_with('\n') {
@@ -108,7 +124,7 @@ impl RepoMap {
 
         let ts_parsing = TSLanguageParsing::init();
         let config = ts_parsing.for_file_path(abs_fname).unwrap().clone();
-        let lines: Vec<String> = code.split('\n').map(|s| s.to_string()).collect();
+        let lines: Vec<String> = code.lines().map(|s| s.to_string()).collect();
         let num_lines = lines.len() + 1;
 
         let tree = config.get_tree_sitter_tree(code.as_bytes()).unwrap();
@@ -119,9 +135,12 @@ impl RepoMap {
 
         // todo - consider using rel_fname
         let mut context = TreeContext::new(code);
+        println!("repo_map::tree_context::start::({})", rel_fname);
         context.init(cursor);
 
         context.add_lois(lois.clone());
+
+        context.print_state();
 
         context.add_context();
 

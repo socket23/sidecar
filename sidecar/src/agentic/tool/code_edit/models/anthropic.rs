@@ -38,7 +38,7 @@ Follow the user's requirements carefully and to the letter.
 - Your reply should be contained in the <reply> tags.
 - Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
-- Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
+- - If most of the code is the same, then leave a comment stating that it is the same code (do not write code which is the same)
 {symbol_to_edit_instruction}
 
 We are also showing you an example:

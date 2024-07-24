@@ -23,8 +23,6 @@ impl TagAnalyzer {
 
         let sorted_definitions = self.tag_graph.get_sorted_definitions();
 
-        self.tag_graph.debug_sorted_definitions();
-
         let graph = self.tag_graph.get_graph();
 
         let mut tags = vec![];

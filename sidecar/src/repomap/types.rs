@@ -42,39 +42,38 @@ impl RepoMap {
     }
 
     fn to_tree(&self, tags: &Vec<Tag>) -> String {
+        // todo - sort tags by filename
         let mut output = String::new();
 
         let mut cur_fname = "";
         let mut cur_abs_fname = "";
 
-        let mut lois: Vec<usize> = Vec::new();
+        let mut lois: Option<Vec<usize>> = None;
 
         for tag in tags {
-            // there should only be one tag per file
-            println!("tag: {:?}", tag);
             let this_rel_fname = tag.rel_fname.to_str().unwrap();
 
+            // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
-                if !lois.is_empty() {
+                // take() resets the lois to None, inner_lois may be used as value for render_tree
+                if let Some(inner_lois) = lois.take() {
                     output.push('\n');
                     output.push_str(&cur_fname);
                     output.push_str(":\n");
-                    output.push_str(&self.render_tree(&cur_abs_fname, &cur_fname, &lois));
-                    lois.clear();
+                    output.push_str(&self.render_tree(&cur_abs_fname, &cur_fname, &inner_lois));
                 } else if !cur_fname.is_empty() {
                     output.push('\n');
                     output.push_str(&cur_fname);
                     output.push('\n');
                 }
 
-                lois.push(tag.line);
+                lois = Some(Vec::new());
                 cur_abs_fname = tag.fname.to_str().unwrap();
                 cur_fname = this_rel_fname;
             }
 
-            if !lois.is_empty() {
-                // sadge
-                lois.pop();
+            // as_mut() is critical here as we want to mutate the original lois
+            if let Some(lois) = lois.as_mut() {
                 lois.push(tag.line);
             }
         }

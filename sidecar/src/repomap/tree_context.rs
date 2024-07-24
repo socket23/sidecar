@@ -49,7 +49,6 @@ impl<'a> TreeContext<'a> {
         let mut node_collector = NodeCollector::new();
         node_collector.collect_nodes(&mut tree_walker.get_tree().root_node().walk());
         let nodes = node_collector.get_nodes();
-        println!("nodes: {:?}", nodes);
 
         Self {
             filename,

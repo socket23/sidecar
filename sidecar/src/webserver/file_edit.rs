@@ -11,9 +11,7 @@ use tracing::info;
 use crate::application::application::Application;
 use crate::chunking::languages::TSLanguageParsing;
 use crate::chunking::text_document::Range;
-use crate::chunking::types::{
-    ClassInformation, ClassNodeType, FunctionInformation, TypeInformation,
-};
+use crate::chunking::types::ClassNodeType;
 use crate::in_line_agent::types::ContextSelection;
 use crate::reranking::snippet_reranking::rerank_snippets;
 
@@ -142,9 +140,9 @@ pub async fn file_edit(
 // moment
 #[derive(Debug, Clone)]
 enum CodeSymbolInformation {
-    Class(ClassInformation),
-    Function(FunctionInformation),
-    Type(TypeInformation),
+    Class,
+    Function,
+    Type,
 }
 
 async fn find_nearest_position_for_code_edit(
@@ -331,7 +329,7 @@ async fn find_nearest_position_for_code_edit(
         })
         .collect::<Vec<_>>()
         .into_iter()
-        .map(|(range, function)| (range, CodeSymbolInformation::Function(function)))
+        .map(|(range, _function)| (range, CodeSymbolInformation::Function))
         .collect::<Vec<_>>();
 
     // Now we have to try and match the classes in the same way, so we can figure out if we have a smaller range to apply the diff
@@ -359,7 +357,7 @@ async fn find_nearest_position_for_code_edit(
         })
         .collect::<Vec<_>>()
         .into_iter()
-        .map(|(range, class)| (range, CodeSymbolInformation::Class(class)))
+        .map(|(range, _class)| (range, CodeSymbolInformation::Class))
         .collect::<Vec<_>>();
 
     // Now we try to get the types which the llm has suggested and which might be also present in the file
@@ -379,7 +377,7 @@ async fn find_nearest_position_for_code_edit(
         })
         .collect::<Vec<_>>()
         .into_iter()
-        .map(|(range, type_information)| (range, CodeSymbolInformation::Type(type_information)))
+        .map(|(range, _type_information)| (range, CodeSymbolInformation::Type))
         .collect::<Vec<_>>();
 
     // TODO(skcd): Now we have classes and functions which are mapped to their actual representations in the file

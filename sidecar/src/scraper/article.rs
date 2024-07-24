@@ -21,17 +21,6 @@ use url::Url;
 
 include!(concat!(env!("OUT_DIR"), "/languages.rs"));
 
-#[derive(Debug)]
-struct DefaultExtractor {
-    url: Url,
-}
-
-impl Extractor for DefaultExtractor {
-    fn url(&self) -> &Url {
-        &self.url
-    }
-}
-
 pub trait Extractor {
     fn url(&self) -> &Url;
 

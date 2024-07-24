@@ -35,6 +35,10 @@ impl SymbolToEdit {
         }
     }
 
+    pub fn is_full_edit(&self) -> bool {
+        self.is_full_edit
+    }
+
     pub fn set_fs_file_path(&mut self, fs_file_path: String) {
         self.fs_file_path = fs_file_path;
     }

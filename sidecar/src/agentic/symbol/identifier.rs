@@ -962,7 +962,7 @@ impl MechaCodeSymbolThinking {
         tool_box: Arc<ToolBox>,
         original_request: &InitialRequestData,
         llm_properties: LLMProperties,
-        request_id: &str,
+        request_id: String,
         tool_properties: &ToolProperties,
         _hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
         _ui_sender: UnboundedSender<UIEventWithID>,

@@ -322,6 +322,7 @@ impl SymbolManager {
             request_id.to_owned(),
             input_event.clone(),
         ));
+        let is_full_edit = input_event.full_symbol_edit();
         let swe_bench_id = input_event.swe_bench_instance_id();
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
@@ -410,23 +411,27 @@ impl SymbolManager {
                 {
                     Some(important_symbols) => important_symbols,
                     None => {
-                        let important_symbols = self
-                            .tool_box
-                            .planning_before_code_editing(
-                                &important_symbols,
-                                &user_query,
-                                self.llm_properties.clone(),
-                                &request_id,
-                            )
-                            .await?
-                            .fix_symbol_names(self.ts_parsing.clone());
-                        self.long_context_cache
-                            .update_cache_for_plan_before_editing(
-                                swe_bench_id.map(|_swe_bench_id| request_id.to_owned()),
-                                &important_symbols,
-                            )
-                            .await;
-                        important_symbols
+                        if is_full_edit {
+                            important_symbols
+                        } else {
+                            let important_symbols = self
+                                .tool_box
+                                .planning_before_code_editing(
+                                    &important_symbols,
+                                    &user_query,
+                                    self.llm_properties.clone(),
+                                    &request_id,
+                                )
+                                .await?
+                                .fix_symbol_names(self.ts_parsing.clone());
+                            self.long_context_cache
+                                .update_cache_for_plan_before_editing(
+                                    swe_bench_id.map(|_swe_bench_id| request_id.to_owned()),
+                                    &important_symbols,
+                                )
+                                .await;
+                            important_symbols
+                        }
                     }
                 };
                 let high_level_plan = important_symbols.ordered_symbols_to_plan();

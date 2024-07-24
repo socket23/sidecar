@@ -485,4 +485,13 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_reranked_outline_nodes_for_code_editing(
+        self,
+    ) -> Option<ReRankingSnippetsForCodeEditingResponse> {
+        match self {
+            ToolOutput::ReRankedCodeSnippetsForCodeEditing(response) => Some(response),
+            _ => None,
+        }
+    }
 }

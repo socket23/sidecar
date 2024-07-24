@@ -45,6 +45,9 @@ use crate::agentic::tool::code_symbol::probe::{
 };
 use crate::agentic::tool::code_symbol::probe_question_for_symbol::ProbeQuestionForSymbolRequest;
 use crate::agentic::tool::code_symbol::probe_try_hard_answer::ProbeTryHardAnswerSymbolRequest;
+use crate::agentic::tool::code_symbol::reranking_symbols_for_editing_context::{
+    ReRankingCodeSnippetSymbolOutline, ReRankingSnippetsForCodeEditingRequest,
+};
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
@@ -343,6 +346,97 @@ impl ToolBox {
             .into_iter()
             .collect::<Vec<String>>();
         Ok(definition_files)
+    }
+
+    /// ReRanking the outline nodes which we have to gather context for the code
+    /// editing
+    pub async fn rerank_outline_nodes_for_code_editing(
+        &self,
+        sub_symbol: &SymbolToEdit,
+        request_id: &str,
+    ) -> Result<Vec<String>, SymbolError> {
+        let local_code_graph = self
+            .local_code_graph(sub_symbol.fs_file_path(), request_id)
+            .await?;
+
+        let outline_nodes_for_query = local_code_graph
+            .iter()
+            .filter_map(|outline_node| {
+                let outline_node_compressed = outline_node.get_outline_node_compressed();
+                if let Some(outline_node_compressed) = outline_node_compressed {
+                    Some(ReRankingCodeSnippetSymbolOutline::new(
+                        outline_node.name().to_owned(),
+                        outline_node.fs_file_path().to_owned(),
+                        outline_node_compressed,
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let file_contents = self
+            .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
+            .await?;
+        let file_contents = file_contents.contents();
+        let range = sub_symbol.range();
+        let (above, below, in_selection) = split_file_content_into_parts(&file_contents, range);
+        let user_query = sub_symbol.instructions().join("\n");
+        let tool_input = ToolInput::ReRankingCodeSnippetsForEditing(
+            ReRankingSnippetsForCodeEditingRequest::new(
+                outline_nodes_for_query.to_vec(),
+                above,
+                below,
+                in_selection,
+                sub_symbol.fs_file_path().to_owned(),
+                user_query,
+                LLMProperties::new(
+                    LLMType::Gpt4OMini,
+                    LLMProvider::OpenAI,
+                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                        "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                    )),
+                ),
+                self.root_request_id.to_owned(),
+            ),
+        );
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+
+        let code_symbol_outline_list = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_reranked_outline_nodes_for_code_editing()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .code_symbol_outline_list();
+
+        // Now we pick the outline nodes which are part of the response and join
+        // them together with \n on the compressed view
+        let filetered_outline_node = outline_nodes_for_query
+            .into_iter()
+            .filter(|outline_node| {
+                let name = outline_node.name();
+                let fs_file_path = outline_node.fs_file_path();
+                if code_symbol_outline_list
+                    .iter()
+                    .any(|outline_node_selected| {
+                        outline_node_selected.name() == name
+                            && outline_node_selected.fs_file_path() == fs_file_path
+                    })
+                {
+                    true
+                } else {
+                    false
+                }
+            })
+            // TODO(skcd): boooo bad ownership here, we should be able to use a reference
+            // over here if we use the outline_nodes_for_query as a slice
+            .map(|outline_node| outline_node.content().to_owned())
+            .collect::<Vec<_>>();
+        Ok(filetered_outline_node)
     }
 
     /// Grab the outline nodes for the files which are imported

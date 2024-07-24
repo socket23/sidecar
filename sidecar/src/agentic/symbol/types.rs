@@ -1374,6 +1374,22 @@ Satisfy the requirement either by making edits or gathering the required informa
         todo!("we need to make sure this works")
     }
 
+    /// Grabs the context which is required for editing, this is necessary to make
+    /// the code editing work properly and use the right functions
+    ///
+    /// We look at the all symbols which are part of the import scope and filter
+    /// them down and only include the outlines for it in the context, this way
+    /// we reduce the amount of tokens and use a weaker model to generate the data
+    pub async fn grab_context_for_editing_faster(
+        &self,
+        sub_symbol: &SymbolToEdit,
+        request_id: &str,
+    ) -> Result<Vec<String>, SymbolError> {
+        self.tools
+            .rerank_outline_nodes_for_code_editing(sub_symbol, request_id)
+            .await
+    }
+
     // TODO(skcd): Handle the cases where the outline is within a symbol and spread
     // across different lines (as is the case in typescript and python)
     // for now we are focussing on rust
@@ -1702,8 +1718,13 @@ Satisfy the requirement either by making edits or gathering the required informa
                 // even if its a new symbol
                 vec![]
             } else {
-                self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
-                    .await?
+                if sub_symbol_to_edit.is_full_edit() {
+                    self.grab_context_for_editing_faster(&sub_symbol_to_edit, &request_id_ref)
+                        .await?
+                } else {
+                    self.grab_context_for_editing(&sub_symbol_to_edit, request_id_ref)
+                        .await?
+                }
             };
 
             // if this is a new sub-symbol we have to create we have to diverge the

@@ -20,6 +20,28 @@ pub struct ReRankingCodeSnippetSymbolOutline {
     content: String,
 }
 
+impl ReRankingCodeSnippetSymbolOutline {
+    pub fn new(name: String, fs_file_path: String, content: String) -> Self {
+        Self {
+            name,
+            fs_file_path,
+            content,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReRankingSnippetsForCodeEditingRequest {
     outline_nodes: Vec<ReRankingCodeSnippetSymbolOutline>,
@@ -34,12 +56,46 @@ pub struct ReRankingSnippetsForCodeEditingRequest {
     root_request_id: String,
 }
 
+impl ReRankingSnippetsForCodeEditingRequest {
+    pub fn new(
+        outline_nodes: Vec<ReRankingCodeSnippetSymbolOutline>,
+        code_above: Option<String>,
+        code_below: Option<String>,
+        code_to_edit_selection: String,
+        fs_file_path: String,
+        user_query: String,
+        llm_properties: LLMProperties,
+        root_request_id: String,
+    ) -> Self {
+        Self {
+            outline_nodes,
+            code_above,
+            code_below,
+            code_to_edit_selection,
+            fs_file_path,
+            user_query,
+            llm_properties,
+            root_request_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "code_symbol")]
 pub struct ReRankingCodeSymbol {
     name: String,
     #[serde(rename = "file_path")]
     fs_file_path: String,
+}
+
+impl ReRankingCodeSymbol {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -56,6 +112,10 @@ impl ReRankingSnippetsForCodeEditingResponse {
             Err(_e) => Err(ToolError::SerdeConversionFailed),
             Ok(parsed_response) => Ok(parsed_response),
         }
+    }
+
+    pub fn code_symbol_outline_list(self) -> Vec<ReRankingCodeSymbol> {
+        self.code_symbol_outline_list
     }
 }
 

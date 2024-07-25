@@ -1,10 +1,8 @@
 use llm_client::clients::types::LLMType;
-use llm_client::tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerError, LLMTokenizerInput};
+use llm_client::tokenizer::tokenizer::LLMTokenizer;
 use std::cmp::min;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tracing_subscriber::field::display::Messages;
 
 use crate::chunking::languages::TSLanguageParsing;
 use crate::repomap::tree_context::TreeContext;
@@ -194,7 +192,7 @@ impl RepoMap {
         output
     }
 
-    fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: &Vec<usize>) -> String {
+    fn render_tree(&self, abs_fname: &str, _rel_fname: &str, lois: &Vec<usize>) -> String {
         let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
 
         if !code.ends_with('\n') {
@@ -203,8 +201,6 @@ impl RepoMap {
 
         let ts_parsing = TSLanguageParsing::init();
         let config = ts_parsing.for_file_path(abs_fname).unwrap().clone();
-        let lines: Vec<String> = code.lines().map(|s| s.to_string()).collect();
-        let num_lines = lines.len() + 1;
 
         let tree = config.get_tree_sitter_tree(code.as_bytes()).unwrap();
 

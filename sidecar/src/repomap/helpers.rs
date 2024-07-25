@@ -1,4 +1,23 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
+
+/// Checks if a path is a git directory, it looks for any commit hash present
+/// and gets the timestamp for it as a poor-man's check
+pub fn is_git_repository(dir: &PathBuf) -> bool {
+    gix::open(dir)
+        .ok()
+        .map(|repo| {
+            repo.head().ok().map(|mut head| {
+                head.peel_to_commit_in_place()
+                    .ok()
+                    .map(|commit| commit.time().ok().map(|time| time.seconds))
+            })
+        })
+        // all the flattens over here, F
+        .flatten()
+        .flatten()
+        .flatten()
+        .is_some()
+}
 
 // TODO(codestory): Improve the name over here
 pub fn close_small_gaps_helper(

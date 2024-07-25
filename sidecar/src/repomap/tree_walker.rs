@@ -1,19 +1,8 @@
-use std::{
-    cmp::{max, min},
-    collections::{HashMap, HashSet},
-};
+use std::collections::HashSet;
 
 use tree_sitter::{Node, Tree, TreeCursor};
 
-use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
-
-#[derive(Clone)] // Add this line
-pub struct NodePositions {
-    start: usize,
-    end: usize,
-}
 pub struct TreeWalker2<'a> {
-    // nodes_for_line: Vec<Vec<NodePositions>>,
     nodes: Vec<Vec<Node<'a>>>,
     scopes: Vec<HashSet<usize>>, // the starting lines of the nodes that span the line
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
@@ -29,29 +18,12 @@ impl<'a> TreeWalker2<'a> {
         }
     }
 
-    // pub fn get_nodes_for_line(&self, line: usize) -> &Vec<NodePositions> {
-    //     &self.nodes_for_line[line]
-    // }
-
     pub fn get_all_true_nodes(&self) -> &Vec<Vec<Node<'a>>> {
         &self.nodes
     }
 
     pub fn get_nodes_for_line(&self, line: usize) -> &Vec<Node<'a>> {
         &self.nodes[line]
-    }
-
-    pub fn find_all_children<'b>(node: Node<'b>) -> Vec<NodePositions> {
-        let mut children: Vec<NodePositions> = vec![];
-        let mut cursor = node.walk();
-
-        for child in node.children(&mut cursor) {
-            children.push(NodePositions {
-                start: child.start_position().row,
-                end: child.end_position().row,
-            });
-        }
-        children
     }
 
     pub fn walk(&mut self, mut cursor: TreeCursor<'a>) {

@@ -38,6 +38,8 @@ pub struct SymbolInputEvent {
     swe_bench_gemini_api_keys: Option<LLMProperties>,
     swe_bench_long_context_editing: Option<LLMProperties>,
     full_symbol_edit: bool,
+    codebase_search: bool,
+    root_directory: Option<String>,
 }
 
 impl SymbolInputEvent {
@@ -57,6 +59,8 @@ impl SymbolInputEvent {
         swe_bench_gemini_api_keys: Option<LLMProperties>,
         swe_bench_long_context_editing: Option<LLMProperties>,
         full_symbol_edit: bool,
+        codebase_search: bool,
+        root_directory: Option<String>,
     ) -> Self {
         Self {
             context,
@@ -74,6 +78,8 @@ impl SymbolInputEvent {
             swe_bench_gemini_api_keys,
             swe_bench_long_context_editing,
             full_symbol_edit,
+            codebase_search,
+            root_directory,
         }
     }
 

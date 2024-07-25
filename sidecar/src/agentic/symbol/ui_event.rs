@@ -155,6 +155,7 @@ pub enum UIEvent {
     SymbolEventSubStep(SymbolEventSubStepRequest),
     RequestEvent(RequestEvents),
     EditRequestFinished(String),
+    FrameworkEvent(FrameworkEvent),
 }
 
 impl From<SymbolEventRequest> for UIEvent {
@@ -362,4 +363,12 @@ impl RequestEventProbeFinished {
 pub enum RequestEvents {
     ProbingStart,
     ProbeFinished(RequestEventProbeFinished),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum FrameworkEvent {
+    RepoMapGenerationStart(String),
+    RepoMapGenerationFinished(String),
+    LongContextSearchStart(String),
+    LongContextSearchFinished(String),
 }

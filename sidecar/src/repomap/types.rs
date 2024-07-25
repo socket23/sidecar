@@ -1,5 +1,3 @@
-use llm_client::clients::types::LLMType;
-use llm_client::tokenizer::tokenizer::LLMTokenizer;
 use std::cmp::min;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -47,14 +45,18 @@ impl RepoMap {
 
     pub fn get_repo_map(&self, root: &Path) -> Result<String, RepoMapError> {
         let files = self.fs.get_files(root)?;
-        let file_listing = self.get_ranked_tags_map(files, self.map_tokens)?;
 
-        let mut repo_content = String::new();
-        repo_content.push_str(&file_listing);
+        let repomap = self.get_ranked_tags_map(files, self.map_tokens)?;
 
-        println!("{}", repo_content);
+        if repomap.is_empty() {
+            return Err(RepoMapError::TreeGenerationError(
+                "No tree generated".to_string(),
+            ));
+        }
 
-        Ok(repo_content)
+        println!("Repomap: {}k tokens", self.get_token_count(&repomap) / 1024);
+
+        Ok(repomap)
     }
 
     fn get_token_count(&self, tree: &str) -> usize {
@@ -125,12 +127,15 @@ impl RepoMap {
         files: Vec<PathBuf>,
         max_map_tokens: usize,
     ) -> Result<String, RepoMapError> {
+        println!("[TagIndex] Generating tags from {} files...", files.len());
         let tag_index = self.generate_tag_index(&files)?;
 
         let mut analyser = TagAnalyzer::new(tag_index);
 
+        println!("[Analyser] Ranking tags...");
         let ranked_tags = analyser.get_ranked_tags().clone();
 
+        println!("[Tree] Finding best tree...");
         let tree = self.find_best_tree(ranked_tags, max_map_tokens);
 
         Ok(tree)

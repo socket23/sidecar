@@ -12,5 +12,7 @@ fn main() {
 
     let full_path = project_root.join(&dir);
 
-    let _ = repomap.get_repo_map(&full_path);
+    let repomap = repomap.get_repo_map(&full_path).unwrap();
+
+    println!("{}", repomap);
 }

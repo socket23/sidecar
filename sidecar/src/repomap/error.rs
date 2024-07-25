@@ -14,4 +14,7 @@ pub enum RepoMapError {
 
     #[error("Graph analysis error: {0}")]
     GraphAnalysisError(String),
+
+    #[error("Tree generation error: {0}")]
+    TreeGenerationError(String),
 }

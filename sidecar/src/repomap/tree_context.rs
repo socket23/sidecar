@@ -1,20 +1,14 @@
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet},
+    collections::HashSet,
 };
 
-use tree_sitter::{Node, Tree, TreeCursor};
+use tree_sitter::{Node, TreeCursor};
 
-use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
-
-use super::{
-    helpers::close_small_gaps_helper,
-    tree_walker::{self, TreeWalker, TreeWalker2},
-};
+use super::helpers::close_small_gaps_helper;
 
 pub struct TreeContext<'a> {
     // filename: String,
-    code: String,
     parent_context: bool,
     child_context: bool,
     last_line: bool,
@@ -23,7 +17,6 @@ pub struct TreeContext<'a> {
     header_max: usize,
     show_top_of_file_parent_scope: bool,
     loi_pad: usize,
-    output: Vec<String>,
     // config: TSLanguageConfig,
     lois: HashSet<usize>,
     show_lines: HashSet<usize>, // row numbers
@@ -34,7 +27,6 @@ pub struct TreeContext<'a> {
     nodes: Vec<Vec<Node<'a>>>,
     scopes: Vec<HashSet<usize>>, // the starting lines of the nodes that span the line
     header: Vec<Vec<(usize, usize, usize)>>, // the size, start line, end line of the nodes that span the line
-    output_lines: HashMap<usize, String>,
 }
 
 impl<'a> TreeContext<'a> {
@@ -45,7 +37,6 @@ impl<'a> TreeContext<'a> {
         let num_lines = lines.len() + 1;
 
         Self {
-            code,
             parent_context: true,
             child_context: false,
             last_line: false,
@@ -54,7 +45,6 @@ impl<'a> TreeContext<'a> {
             header_max: 10,
             show_top_of_file_parent_scope: false,
             loi_pad: 0,
-            output: vec![],
             lois: HashSet::new(),
             show_lines: HashSet::new(),
             num_lines,
@@ -63,7 +53,6 @@ impl<'a> TreeContext<'a> {
             scopes: vec![HashSet::new(); num_lines],
             header: vec![Vec::new(); num_lines],
             line_number: false,
-            output_lines: HashMap::new(),
             nodes: vec![vec![]; num_lines],
         }
     }
@@ -294,7 +283,7 @@ impl<'a> TreeContext<'a> {
         // understand this 🤷‍♂️
         let mut dots = !(self.show_lines.contains(&0));
 
-        for (index, line) in self.lines.iter().enumerate() {
+        for (index, _line) in self.lines.iter().enumerate() {
             if !self.show_lines.contains(&index) {
                 if dots {
                     if self.line_number {
@@ -314,7 +303,7 @@ impl<'a> TreeContext<'a> {
                 "|".to_owned()
             };
 
-            let mut line_output = format!("{}{}\n", spacer, &self.lines[index]);
+            let line_output = format!("{}{}\n", spacer, &self.lines[index]);
 
             // if self.line_number {
             //     line_output = format!("{:3}{}", index + 1, line_output);
@@ -340,7 +329,7 @@ impl<'a> TreeContext<'a> {
         // here for the scopes we are getting the headers and then figuring out
         // the first header (or the biggest one which we want to keep for the scope)
         for line_num in self.scopes[index].clone().iter() {
-            let (size, head_start, head_end) = self.header[*line_num].first().unwrap();
+            let (_size, head_start, head_end) = self.header[*line_num].first().unwrap();
 
             if head_start > &0 || self.show_top_of_file_parent_scope {
                 self.show_lines.extend(*head_start..*head_end);
@@ -360,7 +349,6 @@ impl<'a> TreeContext<'a> {
         for line_number in 0..self.num_lines {
             // what is the sorting doing over here??
             self.header[line_number].sort_unstable();
-            let header_values = self.header[line_number].clone();
             // determine the header's start and end lines
             let start_end_maybe = if self.header[line_number].len() > 1 {
                 let (size, start, end) = self.header[line_number][0];
@@ -382,15 +370,6 @@ impl<'a> TreeContext<'a> {
                 // size is now redundant
                 self.header[line_number] = vec![(0, start_line, end_line)];
             }
-        }
-
-        for index in 0..self.num_lines {
-            // get all the headers which are present in the line
-            let headers = self.header[index]
-                .iter()
-                .map(|(_, start, end)| format!("[{}-{}]", start + 1, end + 1))
-                .collect::<Vec<_>>()
-                .join(",");
         }
     }
 }

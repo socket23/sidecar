@@ -1,5 +1,5 @@
 use sidecar::repomap::{files::SimpleFileSystem, types::RepoMap};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn main() {
     let fs = Box::new(SimpleFileSystem);

@@ -1,4 +1,3 @@
-use core::fmt;
 use std::io;
 use thiserror::Error;
 

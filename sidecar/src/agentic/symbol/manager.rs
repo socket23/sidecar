@@ -338,7 +338,9 @@ impl SymbolManager {
             .set_full_symbol_request(full_symbol_edit);
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
-        let tool_input = input_event.tool_use_on_initial_invocation().await;
+        let tool_input = input_event
+            .tool_use_on_initial_invocation(self.tool_box.clone())
+            .await;
         if let Some(tool_input) = tool_input {
             // send the tool input to the ui sender
             // we need some kind of cache here so we do not invoke the expensive

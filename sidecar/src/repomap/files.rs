@@ -1,8 +1,10 @@
+use async_trait::async_trait;
 use std::{
     io,
     path::{Path, PathBuf},
 };
 
+#[async_trait]
 pub trait FileSystem {
     fn get_files(&self, dir: &Path) -> Result<Vec<PathBuf>, io::Error>;
     fn read_file(&self, path: &Path) -> Result<String, io::Error>;
@@ -10,6 +12,7 @@ pub trait FileSystem {
 
 pub struct SimpleFileSystem;
 
+#[async_trait]
 impl FileSystem for SimpleFileSystem {
     fn get_files(&self, dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
         let mut files = Vec::new();

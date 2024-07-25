@@ -2,6 +2,8 @@
 //! convert between different types of inputs.. something like that
 //! or we can keep hardcoded actions somewhere.. we will figure it out as we go
 
+use std::sync::Arc;
+
 use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
@@ -9,7 +11,7 @@ use llm_client::{
 
 use crate::{
     agentic::{
-        symbol::identifier::LLMProperties,
+        symbol::{identifier::LLMProperties, tool_box::ToolBox},
         tool::{
             code_symbol::{
                 important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
@@ -135,7 +137,7 @@ impl SymbolInputEvent {
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball
-    pub async fn tool_use_on_initial_invocation(self) -> Option<ToolInput> {
+    pub async fn tool_use_on_initial_invocation(self, tool_box: Arc<ToolBox>) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
         let final_model = if self.llm.is_anthropic()
@@ -160,7 +162,36 @@ impl SymbolInputEvent {
                     self.api_keys.clone(),
                     self.request_id.to_string(),
                 ))),
-                Err(_) => None,
+                Err(_) => {
+                    // try to fetch it from the root_directory using repo_search
+                    if let Some(root_directory) = self.root_directory.to_owned() {
+                        return tool_box
+                            .load_repo_map(&root_directory)
+                            .await
+                            .map(|repo_map| {
+                                ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
+                                    repo_map,
+                                    self.user_query.to_owned(),
+                                    LLMType::ClaudeSonnet,
+                                    LLMProvider::Anthropic,
+                                    self.api_keys.clone(),
+                                    self.request_id.to_string(),
+                                ))
+                            });
+                    } else {
+                        let code_wide_search: CodeSymbolImportantWideSearch =
+                            CodeSymbolImportantWideSearch::new(
+                                self.context,
+                                self.user_query.to_owned(),
+                                final_model,
+                                self.provider,
+                                self.api_keys,
+                                self.request_id.to_string(),
+                            );
+                        // just symbol search instead for quick access
+                        return Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search));
+                    }
+                }
             }
         } else {
             let code_wide_search: CodeSymbolImportantWideSearch =

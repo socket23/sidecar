@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::Arc;
 
 use futures::{stream, StreamExt};
@@ -79,6 +80,8 @@ use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchT
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
+use crate::repomap::files::SimpleFileSystem;
+use crate::repomap::types::RepoMap;
 use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, input::ToolInput, lsp::open_file::OpenFileRequest},
@@ -3286,6 +3289,13 @@ instruction:
                 .next();
             Ok(child_outline_node)
         }
+    }
+
+    /// Generate the repo map for the tools
+    pub async fn load_repo_map(&self, repo_map_path: &String) -> Option<String> {
+        // TODO(skcd): Should have proper construct time sharing (we only create it once) over here
+        let repo_map = RepoMap::new(SimpleFileSystem {}).with_map_tokens(2000);
+        repo_map.get_repo_map(Path::new(repo_map_path)).await.ok()
     }
 
     pub async fn check_code_correctness(

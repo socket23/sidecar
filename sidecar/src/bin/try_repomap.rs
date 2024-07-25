@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() {
-    let fs = Box::new(SimpleFileSystem);
+    let fs = SimpleFileSystem {};
 
     let repomap = RepoMap::new(fs).with_map_tokens(1000);
 

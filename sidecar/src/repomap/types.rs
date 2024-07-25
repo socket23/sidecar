@@ -9,18 +9,18 @@ use crate::repomap::tree_context::TreeContext;
 
 use super::analyser::TagAnalyzer;
 use super::error::RepoMapError;
-use super::files::FileSystem;
+use super::files::{FileSystem, SimpleFileSystem};
 use super::tag::{Tag, TagIndex};
 
 pub struct RepoMap {
-    fs: Box<dyn FileSystem>,
+    fs: SimpleFileSystem,
     map_tokens: usize,
 }
 
 const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 
 impl RepoMap {
-    pub fn new(fs: Box<dyn FileSystem>) -> Self {
+    pub fn new(fs: SimpleFileSystem) -> Self {
         Self {
             fs,
             map_tokens: REPOMAP_DEFAULT_TOKENS,

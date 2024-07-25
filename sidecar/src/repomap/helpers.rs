@@ -37,7 +37,7 @@ pub fn close_small_gaps_helper(
         // and we are 2 lines above the end and the next line is empty
         if !line.trim().is_empty()
             && i < code_len - 2
-            && !code_split_by_lines[i + 1].trim().is_empty()
+            && code_split_by_lines[i + 1].trim().is_empty()
         {
             closed_show.insert(i + 1);
         }

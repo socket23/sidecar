@@ -25,14 +25,7 @@ impl RepoMap {
 
         let ts_parsing = Arc::new(TSLanguageParsing::init());
         for file in files {
-            // overriding to only include the analyser.rs
-            if file.to_str().expect("to work").ends_with("analyser.rs") {
-                println!(
-                    "repo_map::process_file::({})",
-                    file.to_str().expect("to work")
-                );
-                self.process_file(&file, &ts_parsing, &mut tag_index)?;
-            }
+            self.process_file(&file, &ts_parsing, &mut tag_index)?;
         }
 
         self.post_process_tags(&mut tag_index);
@@ -150,7 +143,7 @@ impl RepoMap {
         let mut context = TreeContext::new(code);
         println!("repo_map::tree_context::start::({})", rel_fname);
 
-        // 🫤
+        // ✅: extra line_number entry present over here in headers
         context.init(cursor);
 
         // ✅
@@ -191,12 +184,14 @@ impl RepoMap {
                     "Language configuration not found for: {}",
                     fname.display()
                 ))
-            })?;
+            });
 
-        let tags = config.get_tags(fname, &rel_path);
+        if let Ok(config) = config {
+            let tags = config.get_tags(fname, &rel_path);
 
-        for tag in tags {
-            tag_index.add_tag(tag, rel_path.clone());
+            for tag in tags {
+                tag_index.add_tag(tag, rel_path.clone());
+            }
         }
 
         Ok(())

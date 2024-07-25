@@ -47,13 +47,13 @@ impl<'a> TreeContext<'a> {
         Self {
             code,
             parent_context: true,
-            child_context: true,
-            last_line: true,
-            margin: 3,
-            mark_lois: true,
+            child_context: false,
+            last_line: false,
+            margin: 0,
+            mark_lois: false,
             header_max: 10,
             show_top_of_file_parent_scope: false,
-            loi_pad: 1,
+            loi_pad: 0,
             output: vec![],
             lois: HashSet::new(),
             show_lines: HashSet::new(),
@@ -79,6 +79,7 @@ impl<'a> TreeContext<'a> {
         loop {
             let start_line = cursor.node().start_position().row;
             let end_line = cursor.node().end_position().row;
+            println!("tree_context::walk::({})::({})", start_line, end_line);
             let size = end_line - start_line;
 
             self.nodes[start_line].push(cursor.node());
@@ -90,6 +91,12 @@ impl<'a> TreeContext<'a> {
                     start_line + 1,
                     end_line + 1
                 );
+                if start_line == self.num_lines {
+                    println!(
+                        "tree_context::header_insertion::num_lines_insertion::({})::({}-{})",
+                        self.num_lines, start_line, end_line
+                    );
+                }
                 self.header[start_line].push((size, start_line, end_line));
             }
 
@@ -168,12 +175,22 @@ impl<'a> TreeContext<'a> {
             });
     }
 
+    /// Updated state from this is the show lines
     pub fn add_context(&mut self) {
         if self.lois.is_empty() {
             return;
         }
 
         self.show_lines = self.lois.clone();
+
+        println!(
+            "tree_context::show_lines_initial:({})",
+            self.show_lines
+                .iter()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
 
         if self.loi_pad > 0 {
             // for each interesting line
@@ -192,6 +209,15 @@ impl<'a> TreeContext<'a> {
             }
         }
 
+        println!(
+            "tree_context::first_block::show_lines:({})",
+            self.show_lines
+                .iter()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+
         if self.last_line {
             // add the bottom line
             // we are adding \n and then we need to go back to 0 based indexing
@@ -201,17 +227,44 @@ impl<'a> TreeContext<'a> {
             self.add_parent_scopes(bottom_line, vec![]);
         }
 
+        println!(
+            "tree_context::first_block::show_lines:({})",
+            self.show_lines
+                .iter()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+
         if self.parent_context {
             for index in self.lois.clone().iter() {
                 self.add_parent_scopes(*index, vec![]);
             }
         }
 
+        println!(
+            "tree_context::second_block::show_lines:({})",
+            self.show_lines
+                .iter()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+
         if self.child_context {
             for index in self.lois.clone().iter() {
                 self.add_child_context(*index);
             }
         }
+
+        println!(
+            "tree_context::third_block::show_lines:({})",
+            self.show_lines
+                .iter()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
 
         // this shows the top of the lines
         if self.margin > 0 {
@@ -314,14 +367,6 @@ impl<'a> TreeContext<'a> {
 
         let mut cloned_show_lines = self.show_lines.clone().into_iter().collect::<Vec<_>>();
         cloned_show_lines.sort();
-        println!(
-            "tree_context::format::({})",
-            cloned_show_lines
-                .iter()
-                .map(|line| (line + 1).to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
 
         let mut output = String::new();
 
@@ -329,7 +374,7 @@ impl<'a> TreeContext<'a> {
         let mut dots = !(self.show_lines.contains(&0));
 
         for (index, line) in self.lines.iter().enumerate() {
-            if self.show_lines.contains(&index) {
+            if !self.show_lines.contains(&index) {
                 if dots {
                     if self.line_number {
                         output.push_str("...⋮...\n");
@@ -339,23 +384,22 @@ impl<'a> TreeContext<'a> {
 
                     dots = false;
                 }
-            }
-
-            if self.lois.contains(&index) && self.mark_lois {
-                output.push_str("⋮...\n");
                 continue;
             }
 
-            let spacer = "|";
+            let spacer = if self.lois.contains(&index) && self.mark_lois {
+                "█".to_owned()
+            } else {
+                "|".to_owned()
+            };
 
-            let mut line_output = format!("{}{}", spacer, &self.lines[index]);
+            let mut line_output = format!("{}{}\n", spacer, &self.lines[index]);
 
             // if self.line_number {
             //     line_output = format!("{:3}{}", index + 1, line_output);
             // }
 
             output.push_str(&line_output);
-            output.push('\n');
 
             dots = true;
         }
@@ -364,6 +408,7 @@ impl<'a> TreeContext<'a> {
     }
 
     // TODO: understand this completely since we are messing with states
+    // maybe this is correct?
     pub fn add_parent_scopes(&mut self, index: usize, recurse_depth: Vec<usize>) {
         if self.done_parent_scopes.contains(&index) {
             return;
@@ -373,26 +418,7 @@ impl<'a> TreeContext<'a> {
 
         // here for the scopes we are getting the headers and then figuring out
         // the first header (or the biggest one which we want to keep for the scope)
-        println!(
-            "tree_context::add_parent_scope::({})",
-            recurse_depth
-                .iter()
-                .map(|depth| depth.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
         for line_num in self.scopes[index].clone().iter() {
-            // the header has 45-46 is very weird
-            println!(
-                "tree_context::add_parent_node::index::({})line_num::({})header::({})",
-                index,
-                line_num,
-                self.header[*line_num]
-                    .iter()
-                    .map(|(size, head_start, head_end)| format!("[{head_start}-{head_end}]"))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            );
             let (size, head_start, head_end) = self.header[*line_num].first().unwrap();
 
             if head_start > &0 || self.show_top_of_file_parent_scope {
@@ -411,13 +437,19 @@ impl<'a> TreeContext<'a> {
     /// We want to grab the right header range?
     fn arrange_headers(&mut self) {
         for line_number in 0..self.num_lines {
-            println!(
-                "tree_context::arrange_headers::header_len::({})::({})",
-                line_number,
-                self.header[line_number].len()
-            );
             // what is the sorting doing over here??
             self.header[line_number].sort_unstable();
+            let header_values = self.header[line_number].clone();
+            println!(
+                "tree_context::arrange_headers::initial_header::line_index({})::headers_len({})::({})",
+                line_number + 1,
+                header_values.len(),
+                header_values
+                    .into_iter()
+                    .map(|(_, start, end)| format!("[{}-{}]", start + 1, end + 1))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
 
             // determine the header's start and end lines
             let start_end_maybe = if self.header[line_number].len() > 1 {
@@ -429,20 +461,27 @@ impl<'a> TreeContext<'a> {
                 } else {
                     (start, end)
                 })
-            } else if self.header[line_number].len() == 0 {
+            } else if self.header[line_number].len() == 1 {
                 // if the node spans only one line
                 Some((line_number, line_number + 1))
             } else {
-                None
+                Some((line_number, line_number + 1))
             };
 
             if let Some((start_line, end_line)) = start_end_maybe {
                 // size is now redundant
                 println!(
-                    "tree_context::arrange_headers::line_index({})::({}-{})",
-                    line_number, start_line, end_line
+                    "tree_context::arrange_headers::headers_fixing::line_index({})::({}-{})",
+                    line_number + 1,
+                    start_line + 1,
+                    end_line + 1
                 );
                 self.header[line_number] = vec![(0, start_line, end_line)];
+            } else {
+                println!(
+                    "tree_context::arrange_headers::headers_fixing::not_found::line_index({})",
+                    line_number + 1
+                );
             }
         }
 
@@ -455,7 +494,7 @@ impl<'a> TreeContext<'a> {
                 .collect::<Vec<_>>()
                 .join(",");
             println!(
-                "tree_context::arrange_headers::line_index({})::headers({})",
+                "tree_context::arrange_headers::final_headers::line_index({})::headers({})",
                 index + 1,
                 headers
             );

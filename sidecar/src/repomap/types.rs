@@ -1,8 +1,10 @@
+use llm_client::clients::types::LLMType;
 use llm_client::tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerError, LLMTokenizerInput};
 use std::cmp::min;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tracing_subscriber::field::display::Messages;
 
 use crate::chunking::languages::TSLanguageParsing;
 use crate::repomap::tree_context::TreeContext;
@@ -47,52 +49,74 @@ impl RepoMap {
         Ok(tag_index)
     }
 
-    pub fn get_repo_map(&self, root: &Path) -> Result<Vec<Tag>, RepoMapError> {
+    pub fn get_repo_map(&self, root: &Path) -> Result<String, RepoMapError> {
         let files = self.fs.get_files(root)?;
-        let ranked_tags = self.get_ranked_tags_map(files, self.map_tokens)?;
+        let file_listing = self.get_ranked_tags_map(files, self.map_tokens)?;
 
-        println!("repo_map::ranked_tags::({:?})", ranked_tags);
+        println!("{}", file_listing);
 
-        Ok(ranked_tags)
+        let mut repo_content = String::new();
+        repo_content.push_str(&file_listing);
+
+        Ok(repo_content)
     }
 
-    // fn get_tokens(&self, tree: &str) -> usize {
-    //     let tokenizer = Tokenizer::from_pretrained("gpt2").unwrap();
-    //     let encoded = tokenizer.encode(tree).unwrap();
-    //     encoded.len()
-    // }
+    fn get_token_count(&self, tree: &str) -> usize {
+        let tokenizer = LLMTokenizer::new().unwrap();
+        let llm_type = LLMType::Gpt4O; // default
+        let token_count = tokenizer
+            .count_tokens_using_tokenizer(&llm_type, &tree)
+            .unwrap();
 
-    fn find_best_tree(
-        &self,
-        ranked_tags: Vec<Tag>,
-        files: Vec<PathBuf>,
-        max_map_tokens: usize,
-    ) -> Vec<Tag> {
+        println!("get_token_count::({})", token_count);
+
+        token_count
+    }
+
+    fn find_best_tree(&self, ranked_tags: Vec<Tag>, max_map_tokens: usize) -> String {
         let num_tags = ranked_tags.len();
-        let lower_bound = 0;
-        let upper_bound = num_tags;
-        let best_tree = Vec::new();
-        let best_tree_tokens = 0;
-
-        let chat_rel_fnames: Vec<PathBuf> = files
-            .iter()
-            .map(|fname| self.get_rel_fname(fname))
-            .collect();
+        let mut lower_bound = 0;
+        let mut upper_bound = num_tags;
+        let mut best_tree = String::new();
+        let mut best_tree_tokens = 0;
 
         let mut middle = min(max_map_tokens / 25, num_tags);
 
         while lower_bound <= upper_bound {
             let tree = self.to_tree(&ranked_tags[..middle].to_vec());
+            let num_tokens = self.get_token_count(&tree);
+
+            if num_tokens < max_map_tokens && num_tokens > best_tree_tokens {
+                println!(
+                    "new tree tokens are less than max_map_tokens and greater than best_tree_tokens"
+                );
+                println!(
+                    "Previous best tree tokens: {}\nNew tree tokens: {}",
+                    best_tree_tokens, num_tokens
+                );
+                best_tree.replace_range(.., &tree);
+                best_tree_tokens = num_tokens;
+            }
+
+            if num_tokens < max_map_tokens {
+                println!("num_tokens < max_map_tokens");
+                lower_bound = middle + 1;
+            } else {
+                println!("num_tokens >= max_map_tokens");
+                upper_bound = middle - 1;
+            }
+
+            middle = (lower_bound + upper_bound) / 2;
         }
 
-        let tree_string = self.to_tree(&ranked_tags);
+        best_tree
     }
 
     pub fn get_ranked_tags_map(
         &self,
         files: Vec<PathBuf>,
         max_map_tokens: usize,
-    ) -> Result<Vec<Tag>, RepoMapError> {
+    ) -> Result<String, RepoMapError> {
         let tag_index = self.generate_tag_index(&files)?;
 
         let mut analyser = TagAnalyzer::new(tag_index);
@@ -101,19 +125,15 @@ impl RepoMap {
 
         let tree_string = self.to_tree(&ranked_tags);
 
-        self.find_best_tree(ranked_tags, files, max_map_tokens);
+        let tree = self.find_best_tree(ranked_tags, max_map_tokens);
 
-        println!("{}", tree_string);
-
-        Ok(ranked_tags)
+        Ok(tree)
     }
 
     fn to_tree(&self, tags: &Vec<Tag>) -> String {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
         tags.push(Tag::dummy());
-
-        println!("repo_map::tags::({:?})", &tags);
 
         let mut output = String::new();
 
@@ -124,10 +144,6 @@ impl RepoMap {
 
         for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().unwrap();
-            println!(
-                "repo_map::fnames::this_rel_fname({})::cur_fname::({})",
-                &this_rel_fname, cur_fname
-            );
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -146,11 +162,6 @@ impl RepoMap {
                 lois = Some(Vec::new());
                 cur_abs_fname = tag.fname.to_str().unwrap();
                 cur_fname = this_rel_fname;
-            } else {
-                println!(
-                    "repo_map::this_rel_fname==cur_fname::this_rel_fname({})::cur_fname({})",
-                    this_rel_fname, cur_fname
-                );
             }
 
             // as_mut() is critical here as we want to mutate the original lois
@@ -175,17 +186,7 @@ impl RepoMap {
         output
     }
 
-    /// Fix this part of the code, we are sure that the lois are correct
     fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: &Vec<usize>) -> String {
-        println!(
-            "repo_map::render_tree::({})::({})",
-            rel_fname,
-            lois.to_vec()
-                .into_iter()
-                .map(|lois| lois.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
         let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
 
         if !code.ends_with('\n') {
@@ -205,16 +206,10 @@ impl RepoMap {
 
         // todo - consider using rel_fname
         let mut context = TreeContext::new(code);
-        println!("repo_map::tree_context::start::({})", rel_fname);
 
-        // ✅: extra line_number entry present over here in headers
         context.init(cursor);
 
-        // ✅
         context.add_lois(lois.clone());
-
-        // ✅
-        context.print_state();
 
         context.add_context();
 

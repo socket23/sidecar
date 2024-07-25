@@ -127,15 +127,6 @@ impl<'a> TreeContext<'a> {
     /// add lines of interest to the context
     pub fn add_lois(&mut self, lois: Vec<usize>) {
         self.lois.extend(lois);
-        let cloned_lois = self.lois.clone();
-        println!(
-            "tree_context::lois::({})",
-            cloned_lois
-                .into_iter()
-                .map(|line| line.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
     }
 
     pub fn print_state(&self) {
@@ -169,15 +160,6 @@ impl<'a> TreeContext<'a> {
         }
 
         self.show_lines = self.lois.clone();
-
-        println!(
-            "tree_context::show_lines_initial:({})",
-            self.show_lines
-                .iter()
-                .map(|line| line.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
 
         if self.loi_pad > 0 {
             // for each interesting line

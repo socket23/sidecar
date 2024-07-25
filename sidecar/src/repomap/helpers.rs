@@ -12,14 +12,6 @@ pub fn close_small_gaps_helper(
     let mut closed_show = lines.clone();
     let mut sorted_show: Vec<usize> = lines.iter().cloned().collect();
     sorted_show.sort_unstable();
-    println!(
-        "tree_context::close_small_gaps::({})",
-        sorted_show
-            .iter()
-            .map(|show| show.to_string())
-            .collect::<Vec<_>>()
-            .join(",")
-    );
 
     for (i, &value) in sorted_show.iter().enumerate().take(sorted_show.len() - 1) {
         if sorted_show[i + 1] - value == 2 {
@@ -45,15 +37,6 @@ pub fn close_small_gaps_helper(
 
     let mut closed_closed_show = closed_show.clone().into_iter().collect::<Vec<_>>();
     closed_closed_show.sort_unstable();
-
-    println!(
-        "tree_context::close_small_gaps::closed::({})",
-        closed_closed_show
-            .iter()
-            .map(|show| show.to_string())
-            .collect::<Vec<_>>()
-            .join(",")
-    );
 
     closed_show
 }

@@ -10,7 +10,7 @@ fn main() {
     let dir = PathBuf::from("src/repomap");
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    let _ = repomap.generate(Path::new(
+    let _ = repomap.get_repo_map(Path::new(
         "/Users/skcd/test_repo/sidecar/sidecar/src/repomap/",
     ));
     println!("finished_running");

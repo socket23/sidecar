@@ -124,6 +124,6 @@ impl TagAnalyzer {
             code_len,
         );
         // we do not want line 38 since its empty
-        assert!(!updated_lines.contains(38));
+        assert!(!updated_lines.contains(&38));
     }
 }

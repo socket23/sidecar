@@ -12,15 +12,19 @@ use super::tag::{Tag, TagIndex};
 
 pub struct RepoMap {
     fs: Box<dyn FileSystem>,
+    map_tokens: usize,
 }
 
+const REPOMAP_DEFAULT_TOKENS: usize = 1024;
+
 impl RepoMap {
-    pub fn new(fs: Box<dyn FileSystem>) -> Self {
-        Self { fs }
+    pub fn new(fs: Box<dyn FileSystem>, map_tokens: Option<usize>) -> Self {
+        let map_tokens = map_tokens.unwrap_or(REPOMAP_DEFAULT_TOKENS);
+
+        Self { fs, map_tokens }
     }
 
-    pub fn generate(&self, root: &Path) -> Result<Vec<Tag>, RepoMapError> {
-        let files = self.fs.get_files(root)?;
+    fn generate_tag_index(&self, files: &[PathBuf]) -> Result<TagIndex, RepoMapError> {
         let mut tag_index = TagIndex::new();
 
         let ts_parsing = Arc::new(TSLanguageParsing::init());
@@ -28,15 +32,19 @@ impl RepoMap {
             self.process_file(&file, &ts_parsing, &mut tag_index)?;
         }
 
-        self.post_process_tags(&mut tag_index);
+        tag_index.post_process_tags();
+
+        Ok(tag_index)
+    }
+
+    pub fn get_repo_map(&self, root: &Path) -> Result<Vec<Tag>, RepoMapError> {
+        let files = self.fs.get_files(root)?;
+        let tag_index = self.generate_tag_index(&files)?;
 
         let mut analyser = TagAnalyzer::new(tag_index);
 
         let ranked_tags = analyser.get_ranked_tags().clone();
 
-        analyser.debug_print_ranked_tags();
-
-        println!("repo_map::to_tree");
         let tree_string = self.to_tree(&ranked_tags);
 
         println!("{}", tree_string);
@@ -155,11 +163,6 @@ impl RepoMap {
         context.add_context();
 
         context.format()
-    }
-
-    fn post_process_tags(&self, tag_index: &mut TagIndex) {
-        tag_index.process_empty_references();
-        tag_index.process_common_tags();
     }
 
     fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {

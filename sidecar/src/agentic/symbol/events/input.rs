@@ -137,7 +137,11 @@ impl SymbolInputEvent {
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball
-    pub async fn tool_use_on_initial_invocation(self, tool_box: Arc<ToolBox>) -> Option<ToolInput> {
+    pub async fn tool_use_on_initial_invocation(
+        self,
+        tool_box: Arc<ToolBox>,
+        request_id: &str,
+    ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
         let final_model = if self.llm.is_anthropic()
@@ -166,7 +170,7 @@ impl SymbolInputEvent {
                     // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
                         return tool_box
-                            .load_repo_map(&root_directory)
+                            .load_repo_map(&root_directory, request_id)
                             .await
                             .map(|repo_map| {
                                 ToolInput::RepoMapSearch(RepoMapSearchQuery::new(

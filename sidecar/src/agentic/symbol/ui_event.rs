@@ -30,9 +30,25 @@ impl UIEventWithID {
         }
     }
 
+    /// Repo map search start
+    pub fn repo_map_gen_start(request_id: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::RepoMapGenerationStart(request_id)),
+        }
+    }
+
+    /// Repo map generation end
+    pub fn repo_map_gen_end(request_id: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::RepoMapGenerationFinished(request_id)),
+        }
+    }
+
     pub fn from_symbol_event(request_id: String, input: SymbolEventRequest) -> Self {
         Self {
-            request_id,
+            request_id: request_id,
             event: UIEvent::SymbolEvent(input),
         }
     }

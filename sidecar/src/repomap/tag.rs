@@ -83,7 +83,7 @@ impl TagIndex {
         self.process_common_tags();
     }
 
-    pub fn add_tag(&mut self, tag: Tag, rel_path: PathBuf) {
+    pub fn add_tag(&mut self, tag: Tag, rel_path: &PathBuf) {
         match tag.kind {
             TagKind::Definition => {
                 self.defines

@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs::read_to_string,
     path::{Path, PathBuf},
 };
 
@@ -1290,8 +1289,8 @@ impl TSLanguageConfig {
     // TODO: get_tags cache
 
     // get tags for a given file
-    pub fn get_tags(&self, fname: &PathBuf, rel_fname: &PathBuf) -> Vec<Tag> {
-        let content = match read_to_string(&fname) {
+    pub async fn get_tags(&self, fname: &PathBuf, rel_fname: &PathBuf) -> Vec<Tag> {
+        let content = match tokio::fs::read(&fname).await {
             Ok(content) => content,
             Err(e) => {
                 eprintln!("Error reading file {}: {}", fname.display(), e);
@@ -1299,7 +1298,7 @@ impl TSLanguageConfig {
             }
         };
 
-        let tree = match self.get_tree_sitter_tree(content.as_bytes()) {
+        let tree = match self.get_tree_sitter_tree(content.as_slice()) {
             Some(tree) => tree,
             None => {
                 eprintln!(
@@ -1317,7 +1316,7 @@ impl TSLanguageConfig {
 
         let mut cursor = tree_sitter::QueryCursor::new();
 
-        let captures = cursor.captures(&query, root_node, content.as_bytes());
+        let captures = cursor.captures(&query, root_node, content.as_slice());
 
         captures
             .filter_map(|(match_, capture_index)| {
@@ -1329,20 +1328,19 @@ impl TSLanguageConfig {
 
                 // todo - consider
                 let line: usize = node.start_position().row + 1; // line numbers are 1-indexed
-                let symbol_name = &content[node.start_byte()..node.end_byte()];
                 match tag_name {
                     name if name.starts_with("name.definition.") => Some(Tag::new(
                         rel_fname.clone(),
                         fname.clone(),
                         line,
-                        String::from(symbol_name),
+                        get_string_from_bytes(&content, node.start_byte(), node.end_byte()),
                         TagKind::Definition,
                     )),
                     name if name.starts_with("name.reference.") => Some(Tag::new(
                         rel_fname.clone(),
                         fname.clone(),
                         line,
-                        String::from(symbol_name),
+                        get_string_from_bytes(&content, node.start_byte(), node.end_byte()),
                         TagKind::Reference,
                     )),
                     _ => None,

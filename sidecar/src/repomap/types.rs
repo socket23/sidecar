@@ -2,6 +2,8 @@ use std::cmp::min;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use futures::{stream, StreamExt};
+
 use crate::chunking::languages::TSLanguageParsing;
 use crate::repomap::tree_context::TreeContext;
 
@@ -30,23 +32,42 @@ impl RepoMap {
         self
     }
 
-    fn generate_tag_index(&self, files: &[PathBuf]) -> Result<TagIndex, RepoMapError> {
+    async fn generate_tag_index(&self, files: &[PathBuf]) -> Result<TagIndex, RepoMapError> {
         let mut tag_index = TagIndex::new();
 
         let ts_parsing = Arc::new(TSLanguageParsing::init());
-        for file in files {
-            self.process_file(&file, &ts_parsing, &mut tag_index)?;
-        }
+        let _ = stream::iter(
+            files
+                .to_vec()
+                .into_iter()
+                .map(|file| (file, ts_parsing.clone())),
+        )
+        .map(|(file, ts_parsing)| async move {
+            self.generate_tags_for_file(&file, ts_parsing)
+                .await
+                .map(|tags| (tags, file))
+                .ok()
+        })
+        .buffer_unordered(10000)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .for_each(|(tags, file)| {
+            tags.into_iter().for_each(|tag| {
+                tag_index.add_tag(tag, &file);
+            });
+        });
 
         tag_index.post_process_tags();
 
         Ok(tag_index)
     }
 
-    pub fn get_repo_map(&self, root: &Path) -> Result<String, RepoMapError> {
+    pub async fn get_repo_map(&self, root: &Path) -> Result<String, RepoMapError> {
         let files = self.fs.get_files(root)?;
 
-        let repomap = self.get_ranked_tags_map(files, self.map_tokens)?;
+        let repomap = self.get_ranked_tags_map(files, self.map_tokens).await?;
 
         if repomap.is_empty() {
             return Err(RepoMapError::TreeGenerationError(
@@ -122,13 +143,13 @@ impl RepoMap {
         best_tree
     }
 
-    pub fn get_ranked_tags_map(
+    pub async fn get_ranked_tags_map(
         &self,
         files: Vec<PathBuf>,
         max_map_tokens: usize,
     ) -> Result<String, RepoMapError> {
         println!("[TagIndex] Generating tags from {} files...", files.len());
-        let tag_index = self.generate_tag_index(&files)?;
+        let tag_index = self.generate_tag_index(&files).await?;
 
         let mut analyser = TagAnalyzer::new(tag_index);
 
@@ -233,12 +254,11 @@ impl RepoMap {
             .to_path_buf()
     }
 
-    fn process_file(
+    async fn generate_tags_for_file(
         &self,
         fname: &PathBuf,
-        ts_parsing: &Arc<TSLanguageParsing>,
-        tag_index: &mut TagIndex,
-    ) -> Result<(), RepoMapError> {
+        ts_parsing: Arc<TSLanguageParsing>,
+    ) -> Result<Vec<Tag>, RepoMapError> {
         let rel_path = self.get_rel_fname(fname);
         let config = ts_parsing
             .for_file_path(fname.to_str().unwrap())
@@ -248,15 +268,11 @@ impl RepoMap {
                     fname.display()
                 ))
             });
-
         if let Ok(config) = config {
-            let tags = config.get_tags(fname, &rel_path);
-
-            tags.into_iter().for_each(|tag| {
-                tag_index.add_tag(tag, rel_path.clone());
-            });
+            let tags = config.get_tags(fname, &rel_path).await;
+            Ok(tags)
+        } else {
+            Ok(vec![])
         }
-
-        Ok(())
     }
 }

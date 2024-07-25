@@ -394,7 +394,7 @@ InitialRequestData
 {code_below}
 <code_in_selection>
 {code_interested}
-<?code_in_selection>
+</code_in_selection>
 
 <code_symbol_outline_list>
 {outline_nodes}

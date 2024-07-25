@@ -18,10 +18,16 @@ pub struct RepoMap {
 const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 
 impl RepoMap {
-    pub fn new(fs: Box<dyn FileSystem>, map_tokens: Option<usize>) -> Self {
-        let map_tokens = map_tokens.unwrap_or(REPOMAP_DEFAULT_TOKENS);
+    pub fn new(fs: Box<dyn FileSystem>) -> Self {
+        Self {
+            fs,
+            map_tokens: REPOMAP_DEFAULT_TOKENS,
+        }
+    }
 
-        Self { fs, map_tokens }
+    pub fn with_map_tokens(mut self, map_tokens: usize) -> Self {
+        self.map_tokens = map_tokens;
+        self
     }
 
     fn generate_tag_index(&self, files: &[PathBuf]) -> Result<TagIndex, RepoMapError> {

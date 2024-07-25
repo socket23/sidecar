@@ -1,7 +1,8 @@
 use sidecar::repomap::{files::SimpleFileSystem, types::RepoMap};
 use std::path::PathBuf;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let fs = Box::new(SimpleFileSystem);
 
     let repomap = RepoMap::new(fs).with_map_tokens(1000);
@@ -12,7 +13,7 @@ fn main() {
 
     let full_path = project_root.join(&dir);
 
-    let repomap = repomap.get_repo_map(&full_path).unwrap();
+    let repomap = repomap.get_repo_map(&full_path).await.unwrap();
 
     println!("{}", repomap);
 }

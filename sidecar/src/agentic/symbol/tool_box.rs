@@ -3292,10 +3292,17 @@ instruction:
     }
 
     /// Generate the repo map for the tools
-    pub async fn load_repo_map(&self, repo_map_path: &String) -> Option<String> {
+    pub async fn load_repo_map(&self, repo_map_path: &String, request_id: &str) -> Option<String> {
         // TODO(skcd): Should have proper construct time sharing (we only create it once) over here
         let repo_map = RepoMap::new(SimpleFileSystem {}).with_map_tokens(2000);
-        repo_map.get_repo_map(Path::new(repo_map_path)).await.ok()
+        let _ = self
+            .ui_events
+            .send(UIEventWithID::repo_map_gen_start(request_id.to_owned()));
+        let result = repo_map.get_repo_map(Path::new(repo_map_path)).await.ok();
+        let _ = self
+            .ui_events
+            .send(UIEventWithID::repo_map_gen_end(request_id.to_owned()));
+        result
     }
 
     pub async fn check_code_correctness(

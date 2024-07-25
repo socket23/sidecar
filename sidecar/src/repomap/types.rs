@@ -1,3 +1,5 @@
+use llm_client::tokenizer::tokenizer::{LLMTokenizer, LLMTokenizerError, LLMTokenizerInput};
+use std::cmp::min;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,6 +15,7 @@ use super::tag::{Tag, TagIndex};
 pub struct RepoMap {
     fs: Box<dyn FileSystem>,
     map_tokens: usize,
+    token_count: usize,
 }
 
 const REPOMAP_DEFAULT_TOKENS: usize = 1024;
@@ -22,6 +25,7 @@ impl RepoMap {
         Self {
             fs,
             map_tokens: REPOMAP_DEFAULT_TOKENS,
+            token_count: 20000, // model token count
         }
     }
 
@@ -45,6 +49,50 @@ impl RepoMap {
 
     pub fn get_repo_map(&self, root: &Path) -> Result<Vec<Tag>, RepoMapError> {
         let files = self.fs.get_files(root)?;
+        let ranked_tags = self.get_ranked_tags_map(files, self.map_tokens)?;
+
+        println!("repo_map::ranked_tags::({:?})", ranked_tags);
+
+        Ok(ranked_tags)
+    }
+
+    // fn get_tokens(&self, tree: &str) -> usize {
+    //     let tokenizer = Tokenizer::from_pretrained("gpt2").unwrap();
+    //     let encoded = tokenizer.encode(tree).unwrap();
+    //     encoded.len()
+    // }
+
+    fn find_best_tree(
+        &self,
+        ranked_tags: Vec<Tag>,
+        files: Vec<PathBuf>,
+        max_map_tokens: usize,
+    ) -> Vec<Tag> {
+        let num_tags = ranked_tags.len();
+        let lower_bound = 0;
+        let upper_bound = num_tags;
+        let best_tree = Vec::new();
+        let best_tree_tokens = 0;
+
+        let chat_rel_fnames: Vec<PathBuf> = files
+            .iter()
+            .map(|fname| self.get_rel_fname(fname))
+            .collect();
+
+        let mut middle = min(max_map_tokens / 25, num_tags);
+
+        while lower_bound <= upper_bound {
+            let tree = self.to_tree(&ranked_tags[..middle].to_vec());
+        }
+
+        let tree_string = self.to_tree(&ranked_tags);
+    }
+
+    pub fn get_ranked_tags_map(
+        &self,
+        files: Vec<PathBuf>,
+        max_map_tokens: usize,
+    ) -> Result<Vec<Tag>, RepoMapError> {
         let tag_index = self.generate_tag_index(&files)?;
 
         let mut analyser = TagAnalyzer::new(tag_index);
@@ -52,6 +100,8 @@ impl RepoMap {
         let ranked_tags = analyser.get_ranked_tags().clone();
 
         let tree_string = self.to_tree(&ranked_tags);
+
+        self.find_best_tree(ranked_tags, files, max_map_tokens);
 
         println!("{}", tree_string);
 

@@ -25,7 +25,14 @@ impl RepoMap {
 
         let ts_parsing = Arc::new(TSLanguageParsing::init());
         for file in files {
-            self.process_file(&file, &ts_parsing, &mut tag_index)?;
+            // overriding to only include the analyser.rs
+            if file.to_str().expect("to work").ends_with("analyser.rs") {
+                println!(
+                    "repo_map::process_file::({})",
+                    file.to_str().expect("to work")
+                );
+                self.process_file(&file, &ts_parsing, &mut tag_index)?;
+            }
         }
 
         self.post_process_tags(&mut tag_index);
@@ -47,7 +54,7 @@ impl RepoMap {
     fn to_tree(&self, tags: &Vec<Tag>) -> String {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
-        tags.truncate(3);
+        tags.push(Tag::dummy());
 
         println!("repo_map::tags::({:?})", &tags);
 
@@ -82,6 +89,11 @@ impl RepoMap {
                 lois = Some(Vec::new());
                 cur_abs_fname = tag.fname.to_str().unwrap();
                 cur_fname = this_rel_fname;
+            } else {
+                println!(
+                    "repo_map::this_rel_fname==cur_fname::this_rel_fname({})::cur_fname({})",
+                    this_rel_fname, cur_fname
+                );
             }
 
             // as_mut() is critical here as we want to mutate the original lois
@@ -106,6 +118,7 @@ impl RepoMap {
         output
     }
 
+    /// Fix this part of the code, we are sure that the lois are correct
     fn render_tree(&self, abs_fname: &str, rel_fname: &str, lois: &Vec<usize>) -> String {
         println!(
             "repo_map::render_tree::({})::({})",
@@ -136,10 +149,14 @@ impl RepoMap {
         // todo - consider using rel_fname
         let mut context = TreeContext::new(code);
         println!("repo_map::tree_context::start::({})", rel_fname);
+
+        // 🫤
         context.init(cursor);
 
+        // ✅
         context.add_lois(lois.clone());
 
+        // ✅
         context.print_state();
 
         context.add_context();

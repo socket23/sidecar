@@ -7,7 +7,10 @@ use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::chunking::languages::{TSLanguageConfig, TSLanguageParsing};
 
-use super::tree_walker::{self, TreeWalker, TreeWalker2};
+use super::{
+    helpers::close_small_gaps_helper,
+    tree_walker::{self, TreeWalker, TreeWalker2},
+};
 
 pub struct TreeContext<'a> {
     // filename: String,
@@ -70,6 +73,7 @@ impl<'a> TreeContext<'a> {
         self.arrange_headers();
     }
 
+    // ✅
     pub fn walk(&mut self, mut cursor: TreeCursor<'a>) {
         // It is dfs in a way
         loop {
@@ -82,7 +86,9 @@ impl<'a> TreeContext<'a> {
             if size > 0 {
                 println!(
                     "tree_context::header_insertion::line_number({})::({}-{})",
-                    start_line, start_line, end_line
+                    start_line + 1,
+                    start_line + 1,
+                    end_line + 1
                 );
                 self.header[start_line].push((size, start_line, end_line));
             }
@@ -127,6 +133,15 @@ impl<'a> TreeContext<'a> {
     /// add lines of interest to the context
     pub fn add_lois(&mut self, lois: Vec<usize>) {
         self.lois.extend(lois);
+        let cloned_lois = self.lois.clone();
+        println!(
+            "tree_context::lois::({})",
+            cloned_lois
+                .into_iter()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
     }
 
     pub fn print_state(&self) {
@@ -216,57 +231,9 @@ impl<'a> TreeContext<'a> {
         self.close_small_gaps();
     }
 
-    // One of the bugs here is with this input:
-    // tree_context::close_small_gaps::(0,1,2,6,7,8,9,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,37,45,46)
-    // tree_context::close_small_gaps::closed::(0,1,2,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,37,38,45,46)
     fn close_small_gaps(&mut self) {
-        // a "closing" operation on the integers in set.
-        // if i and i+2 are in there but i+1 is not, I want to add i+1
-        // Create a new set for the "closed" lines
-        let mut closed_show = self.show_lines.clone();
-        let mut sorted_show: Vec<usize> = self.show_lines.iter().cloned().collect();
-        sorted_show.sort_unstable();
-        println!(
-            "tree_context::close_small_gaps::({})",
-            sorted_show
-                .iter()
-                .map(|show| show.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-
-        for (i, &value) in sorted_show.iter().enumerate().take(sorted_show.len() - 1) {
-            if sorted_show[i + 1] - value == 2 {
-                closed_show.insert(value + 1);
-            }
-        }
-
-        // pick up adjacent blank lines
-        for (i, line) in self.lines.iter().enumerate() {
-            if !closed_show.contains(&i) {
-                continue;
-            }
-            if !line.trim().is_empty()
-                && i < self.num_lines - 2
-                && self.lines[i + 1].trim().is_empty()
-            {
-                closed_show.insert(i + 1);
-            }
-        }
-
-        let mut closed_closed_show = closed_show.clone().into_iter().collect::<Vec<_>>();
-        closed_closed_show.sort_unstable();
-
-        println!(
-            "tree_context::close_small_gaps::closed::({})",
-            closed_closed_show
-                .iter()
-                .map(|show| show.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-
-        self.show_lines = closed_show;
+        self.show_lines =
+            close_small_gaps_helper(self.show_lines.clone(), self.lines.to_vec(), self.num_lines);
     }
 
     fn add_child_context(&mut self, index: usize) {
@@ -291,6 +258,7 @@ impl<'a> TreeContext<'a> {
 
         // for all nodes that start at line[index], extend children.
         for node in self.nodes[index].iter() {
+            // check find_all_children function over here
             children.extend(self.find_all_children(*node));
         }
 
@@ -312,12 +280,10 @@ impl<'a> TreeContext<'a> {
             .map(|child| child.start_position().row)
             .collect();
 
-        // moved this because it was part of the for loop
-        if self.show_lines.len() > currently_showing + max_to_show {
-            return;
-        }
-
         for &child_start_line in child_start_lines.iter() {
+            if self.show_lines.len() > currently_showing + max_to_show {
+                return;
+            }
             self.add_parent_scopes(child_start_line, vec![]);
         }
     }
@@ -346,11 +312,23 @@ impl<'a> TreeContext<'a> {
             return String::new();
         }
 
+        let mut cloned_show_lines = self.show_lines.clone().into_iter().collect::<Vec<_>>();
+        cloned_show_lines.sort();
+        println!(
+            "tree_context::format::({})",
+            cloned_show_lines
+                .iter()
+                .map(|line| (line + 1).to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+
         let mut output = String::new();
 
+        // understand this 🤷‍♂️
         let mut dots = !(self.show_lines.contains(&0));
 
-        for index in self.show_lines.iter() {
+        for (index, line) in self.lines.iter().enumerate() {
             if self.show_lines.contains(&index) {
                 if dots {
                     if self.line_number {
@@ -370,15 +348,11 @@ impl<'a> TreeContext<'a> {
 
             let spacer = "|";
 
-            let mut line_output = format!(
-                "{}{}",
-                spacer,
-                self.output_lines.get(&index).unwrap_or(&self.lines[*index])
-            );
+            let mut line_output = format!("{}{}", spacer, &self.lines[index]);
 
-            if self.line_number {
-                line_output = format!("{:3}{}", index + 1, line_output);
-            }
+            // if self.line_number {
+            //     line_output = format!("{:3}{}", index + 1, line_output);
+            // }
 
             output.push_str(&line_output);
             output.push('\n');
@@ -434,18 +408,20 @@ impl<'a> TreeContext<'a> {
         }
     }
 
+    /// We want to grab the right header range?
     fn arrange_headers(&mut self) {
-        for i in 0..self.num_lines {
+        for line_number in 0..self.num_lines {
             println!(
                 "tree_context::arrange_headers::header_len::({})::({})",
-                i,
-                self.header[i].len()
+                line_number,
+                self.header[line_number].len()
             );
-            self.header[i].sort_unstable();
+            // what is the sorting doing over here??
+            self.header[line_number].sort_unstable();
 
             // determine the header's start and end lines
-            let start_end_maybe = if self.header[i].len() > 1 {
-                let (size, start, end) = self.header[i][0];
+            let start_end_maybe = if self.header[line_number].len() > 1 {
+                let (size, start, end) = self.header[line_number][0];
 
                 // if the node spans more than the max header size, curtail the header
                 Some(if size > self.header_max {
@@ -453,9 +429,9 @@ impl<'a> TreeContext<'a> {
                 } else {
                     (start, end)
                 })
-            } else if self.header[i].len() == 0 {
+            } else if self.header[line_number].len() == 0 {
                 // if the node spans only one line
-                Some((i, i + 1))
+                Some((line_number, line_number + 1))
             } else {
                 None
             };
@@ -464,10 +440,25 @@ impl<'a> TreeContext<'a> {
                 // size is now redundant
                 println!(
                     "tree_context::arrange_headers::line_index({})::({}-{})",
-                    i, start_line, end_line
+                    line_number, start_line, end_line
                 );
-                self.header[i] = vec![(0, start_line, end_line)];
+                self.header[line_number] = vec![(0, start_line, end_line)];
             }
+        }
+
+        println!("tree_context::arrange_headers::debug_printing");
+        for index in 0..self.num_lines {
+            // get all the headers which are present in the line
+            let headers = self.header[index]
+                .iter()
+                .map(|(_, start, end)| format!("[{}-{}]", start + 1, end + 1))
+                .collect::<Vec<_>>()
+                .join(",");
+            println!(
+                "tree_context::arrange_headers::line_index({})::headers({})",
+                index + 1,
+                headers
+            );
         }
     }
 }

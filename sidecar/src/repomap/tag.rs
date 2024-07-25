@@ -26,6 +26,17 @@ impl Tag {
             kind,
         }
     }
+
+    /// Using this to generate a dummy tag
+    pub fn dummy() -> Self {
+        Self {
+            rel_fname: PathBuf::new(),
+            fname: PathBuf::new(),
+            line: 0,
+            name: "".to_owned(),
+            kind: TagKind::Definition,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

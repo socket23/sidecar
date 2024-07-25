@@ -1,11 +1,15 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
+    fs::read_to_string,
+    path::{Path, PathBuf},
 };
 
 use tree_sitter::Tree;
 
-use crate::chunking::types::FunctionNodeInformation;
+use crate::{
+    chunking::types::FunctionNodeInformation,
+    repomap::tag::{Tag, TagKind},
+};
 
 use super::{
     go::go_language_config,
@@ -123,6 +127,9 @@ pub struct TSLanguageConfig {
 
     /// Used to specify which object a method or property belongs to.
     pub object_qualifier: String,
+
+    /// Used to get the definitions for the file
+    pub file_definitions_query: String,
 }
 
 impl TSLanguageConfig {
@@ -1280,6 +1287,70 @@ impl TSLanguageConfig {
         self.capture_function_data_with_tree(source_code, &parsed_data, false)
     }
 
+    // TODO: get_tags cache
+
+    // get tags for a given file
+    pub fn get_tags(&self, fname: &PathBuf, rel_fname: &PathBuf) -> Vec<Tag> {
+        let content = match read_to_string(&fname) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error reading file {}: {}", fname.display(), e);
+                return vec![];
+            }
+        };
+
+        let tree = match self.get_tree_sitter_tree(content.as_bytes()) {
+            Some(tree) => tree,
+            None => {
+                eprintln!(
+                    "Error: Failed to get tree-sitter tree for: {}",
+                    fname.display()
+                );
+                return vec![];
+            }
+        };
+
+        let root_node = tree.root_node();
+        let grammar = self.grammar;
+        let query = tree_sitter::Query::new(grammar(), &self.file_definitions_query)
+            .expect("file definitions queries to be well formed");
+
+        let mut cursor = tree_sitter::QueryCursor::new();
+
+        let captures = cursor.captures(&query, root_node, content.as_bytes());
+
+        captures
+            .filter_map(|(match_, capture_index)| {
+                let capture = &match_.captures[capture_index]; // the specific capture we're interested in, as opposed to other captures in the match
+
+                // A 'match' represents a successful pattern match from our query, potentially containing multiple captures
+                let tag_name = &query.capture_names()[capture.index as usize];
+                let node = capture.node;
+
+                // todo - consider
+                let line: usize = node.start_position().row + 1; // line numbers are 1-indexed
+                let symbol_name = &content[node.start_byte()..node.end_byte()];
+                match tag_name {
+                    name if name.starts_with("name.definition.") => Some(Tag::new(
+                        rel_fname.clone(),
+                        fname.clone(),
+                        line,
+                        String::from(symbol_name),
+                        TagKind::Definition,
+                    )),
+                    name if name.starts_with("name.reference.") => Some(Tag::new(
+                        rel_fname.clone(),
+                        fname.clone(),
+                        line,
+                        String::from(symbol_name),
+                        TagKind::Reference,
+                    )),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
     pub fn function_information_nodes(&self, source_code: &[u8]) -> Vec<FunctionInformation> {
         let function_queries = self.function_query.to_vec();
 
@@ -1373,6 +1444,22 @@ impl TSLanguageParsing {
         self.configs
             .iter()
             .find(|config| config.language_ids.contains(&language))
+    }
+
+    pub fn for_file_path(&self, file_path: &str) -> Option<&TSLanguageConfig> {
+        let file_path = PathBuf::from(file_path);
+        let file_extension = file_path
+            .extension()
+            .map(|extension| extension.to_str())
+            .map(|extension| extension.to_owned())
+            .flatten();
+        match file_extension {
+            Some(extension) => self
+                .configs
+                .iter()
+                .find(|config| config.file_extensions.contains(&extension)),
+            None => None,
+        }
     }
 
     /// We will use this to chunk the file to pieces which can be used for

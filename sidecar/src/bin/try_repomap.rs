@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 fn main() {
     let fs = Box::new(SimpleFileSystem);
 
-    let repomap = RepoMap::new(fs).with_map_tokens(20000);
+    let repomap = RepoMap::new(fs).with_map_tokens(1000);
 
     // change this to the directory you want to generate a repomap for
     let dir = PathBuf::from("src/repomap");
@@ -13,5 +13,4 @@ fn main() {
     let full_path = project_root.join(&dir);
 
     let _ = repomap.get_repo_map(&full_path);
-    println!("finished_running");
 }

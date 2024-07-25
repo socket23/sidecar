@@ -17,7 +17,6 @@ use super::tag::{Tag, TagIndex};
 pub struct RepoMap {
     fs: Box<dyn FileSystem>,
     map_tokens: usize,
-    token_count: usize,
 }
 
 const REPOMAP_DEFAULT_TOKENS: usize = 1024;
@@ -27,7 +26,6 @@ impl RepoMap {
         Self {
             fs,
             map_tokens: REPOMAP_DEFAULT_TOKENS,
-            token_count: 20000, // model token count
         }
     }
 
@@ -53,10 +51,10 @@ impl RepoMap {
         let files = self.fs.get_files(root)?;
         let file_listing = self.get_ranked_tags_map(files, self.map_tokens)?;
 
-        println!("{}", file_listing);
-
         let mut repo_content = String::new();
         repo_content.push_str(&file_listing);
+
+        println!("{}", repo_content);
 
         Ok(repo_content)
     }
@@ -75,39 +73,52 @@ impl RepoMap {
 
     fn find_best_tree(&self, ranked_tags: Vec<Tag>, max_map_tokens: usize) -> String {
         let num_tags = ranked_tags.len();
+        println!("Initial conditions:");
+        println!("  Number of tags: {}", num_tags);
+        println!("  Max map tokens: {}", max_map_tokens);
+
         let mut lower_bound = 0;
         let mut upper_bound = num_tags;
         let mut best_tree = String::new();
         let mut best_tree_tokens = 0;
-
         let mut middle = min(max_map_tokens / 25, num_tags);
+        let mut iteration = 0;
 
         while lower_bound <= upper_bound {
+            iteration += 1;
+            println!("\nIteration {}:", iteration);
+            println!("  Bounds: [{}, {}]", lower_bound, upper_bound);
+            println!("  Middle: {}", middle);
+
             let tree = self.to_tree(&ranked_tags[..middle].to_vec());
             let num_tokens = self.get_token_count(&tree);
 
+            println!("  Tree tokens: {}", num_tokens);
+
             if num_tokens < max_map_tokens && num_tokens > best_tree_tokens {
-                println!(
-                    "new tree tokens are less than max_map_tokens and greater than best_tree_tokens"
-                );
-                println!(
-                    "Previous best tree tokens: {}\nNew tree tokens: {}",
-                    best_tree_tokens, num_tokens
-                );
+                println!("  New best tree found!");
+                println!("    Previous best: {} tokens", best_tree_tokens);
+                println!("    New best: {} tokens", num_tokens);
                 best_tree.replace_range(.., &tree);
                 best_tree_tokens = num_tokens;
             }
 
             if num_tokens < max_map_tokens {
-                println!("num_tokens < max_map_tokens");
+                println!("  Increasing lower bound");
                 lower_bound = middle + 1;
             } else {
-                println!("num_tokens >= max_map_tokens");
+                println!("  Decreasing upper bound");
                 upper_bound = middle - 1;
             }
 
             middle = (lower_bound + upper_bound) / 2;
+
+            println!("  Next middle: {}", middle);
         }
+
+        println!("\nSearch completed:");
+        println!("  Best tree tokens: {}", best_tree_tokens);
+        println!("  Final bounds: [{}, {}]", lower_bound, upper_bound);
 
         best_tree
     }
@@ -122,8 +133,6 @@ impl RepoMap {
         let mut analyser = TagAnalyzer::new(tag_index);
 
         let ranked_tags = analyser.get_ranked_tags().clone();
-
-        let tree_string = self.to_tree(&ranked_tags);
 
         let tree = self.find_best_tree(ranked_tags, max_map_tokens);
 

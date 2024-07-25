@@ -60,15 +60,14 @@ impl RepoMap {
     }
 
     fn get_token_count(&self, tree: &str) -> usize {
-        let tokenizer = LLMTokenizer::new().unwrap();
-        let llm_type = LLMType::Gpt4O; // default
-        let token_count = tokenizer
-            .count_tokens_using_tokenizer(&llm_type, &tree)
-            .unwrap();
+        let chars = tree.chars().count();
 
-        println!("get_token_count::({})", token_count);
+        // https://platform.openai.com/tokenizer
+        let token_per_char_ratio = 0.25;
 
-        token_count
+        let token_estimate = (chars as f64 * token_per_char_ratio) as usize;
+
+        token_estimate
     }
 
     fn find_best_tree(&self, ranked_tags: Vec<Tag>, max_map_tokens: usize) -> String {

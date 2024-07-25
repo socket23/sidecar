@@ -34,7 +34,7 @@ impl RepoMap {
 
         let ranked_tags = analyser.get_ranked_tags().clone();
 
-        // analyser.debug_print_ranked_tags();
+        analyser.debug_print_ranked_tags();
 
         println!("repo_map::to_tree");
         let tree_string = self.to_tree(&ranked_tags);
@@ -189,9 +189,9 @@ impl RepoMap {
         if let Ok(config) = config {
             let tags = config.get_tags(fname, &rel_path);
 
-            for tag in tags {
+            tags.into_iter().for_each(|tag| {
                 tag_index.add_tag(tag, rel_path.clone());
-            }
+            });
         }
 
         Ok(())

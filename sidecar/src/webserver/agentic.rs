@@ -261,6 +261,8 @@ pub async fn swe_bench(
                     None,
                     None,
                     false,
+                    false,
+                    None,
                 )
                 .set_swe_bench_id(swe_bench_id),
             )
@@ -295,6 +297,8 @@ pub struct AgenticCodeEditing {
     request_id: String,
     user_context: UserContext,
     active_window_data: Option<ProbeRequestActiveWindow>,
+    root_directory: String,
+    codebase_search: bool,
 }
 
 pub async fn code_editing(
@@ -305,6 +309,8 @@ pub async fn code_editing(
         request_id,
         mut user_context,
         active_window_data,
+        root_directory,
+        codebase_search,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start");
@@ -380,6 +386,8 @@ pub async fn code_editing(
                 None,
                 None,
                 true,
+                codebase_search,
+                Some(root_directory),
             ))
             .await;
     });

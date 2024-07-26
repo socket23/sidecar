@@ -29,38 +29,40 @@ impl GitWalker {
         }
 
         let git = git.expect("if let Err to hold");
+        let cloned_git = git.clone();
 
         let local_git = git.to_thread_local();
-        let mut head = local_git.head().map_err(|_e| FileError::GixError)?;
-        let trees = vec![(
-            true,
-            "HEAD".to_owned(),
-            head.peel_to_commit_in_place()
-                .map_err(|_e| FileError::GixError)?
-                .tree()
-                .map_err(|_e| FileError::GixError)?,
-        )];
+        let tree = local_git
+            .head()
+            .map_err(|_e| FileError::GixError)?
+            .peel_to_commit_in_place()
+            .map_err(|_e| FileError::GixError)?
+            .tree()
+            .map_err(|_e| FileError::GixError)?;
+        let trees = vec![(true, "HEAD".to_owned(), tree)];
 
         let directory_ref: &Path = directory.as_ref();
 
         Ok(trees
             .into_iter()
-            .flat_map(|(is_head, branch, tree)| {
+            .flat_map(|(is_head, _, tree)| {
                 let files = tree.traverse().breadthfirst.files().unwrap().into_iter();
 
-                files.map(move |entry| {
-                    let strpath = String::from_utf8_lossy(entry.filepath.as_ref());
-                    let full_path = directory_ref.join(strpath.as_ref());
-                    (
-                        is_head,
-                        branch.clone(),
-                        full_path.to_string_lossy().to_string(),
-                        entry.mode,
-                        entry.oid,
-                    )
-                })
+                files
+                    .map(|file| (file, cloned_git.clone()))
+                    .map(move |(entry, git)| {
+                        let strpath = String::from_utf8_lossy(entry.filepath.as_ref());
+                        let full_path = directory_ref.join(strpath.as_ref());
+                        (
+                            is_head,
+                            full_path.to_string_lossy().to_string(),
+                            entry.mode,
+                            entry.oid,
+                            git,
+                        )
+                    })
             })
-            .filter_map(|(_, _, file, mode, oid)| {
+            .map(|(_, file, mode, oid, git)| {
                 let kind = if mode.is_tree() {
                     FileType::Directory
                 } else if mode.is_blob() {
@@ -70,15 +72,22 @@ impl GitWalker {
                 };
 
                 let git = git.to_thread_local();
-                let Ok(Some(object)) = git.try_find_object(oid) else {
+                let Ok(Some(_)) = git.try_find_object(oid) else {
                     return None;
                 };
 
                 match kind {
-                    FileType::File => Some((file, object.data.to_vec())),
+                    FileType::File => {
+                        let file_content = std::fs::read(file.to_owned());
+                        match file_content {
+                            Ok(file_content) => Some((file, file_content)),
+                            Err(_) => None,
+                        }
+                    }
                     _ => None,
                 }
             })
+            .filter_map(|s| s)
             .collect::<HashMap<String, Vec<u8>>>())
     }
 

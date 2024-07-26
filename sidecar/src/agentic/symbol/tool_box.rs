@@ -80,7 +80,6 @@ use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchT
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
-use crate::repomap::files::SimpleFileSystem;
 use crate::repomap::types::RepoMap;
 use crate::user_context::types::UserContext;
 use crate::{
@@ -3294,7 +3293,8 @@ instruction:
     /// Generate the repo map for the tools
     pub async fn load_repo_map(&self, repo_map_path: &String, request_id: &str) -> Option<String> {
         // TODO(skcd): Should have proper construct time sharing (we only create it once) over here
-        let repo_map = RepoMap::new(SimpleFileSystem {}).with_map_tokens(2000);
+        println!("tool_box::load_repo_map::start({})", &request_id);
+        let repo_map = RepoMap::new().with_map_tokens(2000);
         let _ = self
             .ui_events
             .send(UIEventWithID::repo_map_gen_start(request_id.to_owned()));
@@ -3302,6 +3302,7 @@ instruction:
         let _ = self
             .ui_events
             .send(UIEventWithID::repo_map_gen_end(request_id.to_owned()));
+        println!("tool_box::load_repo_map::end({})", &request_id);
         result
     }
 

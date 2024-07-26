@@ -172,33 +172,34 @@ impl SymbolInputEvent {
                 None => {
                     // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
-                        println!("symbol_input::load_repo_map::start({})", &request_id);
-                        return tool_box
-                            .load_repo_map(&root_directory, request_id)
-                            .await
-                            .map(|repo_map| {
-                                ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
-                                    repo_map,
-                                    self.user_query.to_owned(),
-                                    LLMType::ClaudeSonnet,
-                                    LLMProvider::Anthropic,
-                                    self.api_keys.clone(),
-                                    self.request_id.to_string(),
-                                ))
-                            });
-                    } else {
-                        let code_wide_search: CodeSymbolImportantWideSearch =
-                            CodeSymbolImportantWideSearch::new(
-                                self.context,
-                                self.user_query.to_owned(),
-                                final_model,
-                                self.provider,
-                                self.api_keys,
-                                self.request_id.to_string(),
-                            );
-                        // just symbol search instead for quick access
-                        return Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search));
+                        if self.codebase_search {
+                            println!("symbol_input::load_repo_map::start({})", &request_id);
+                            return tool_box
+                                .load_repo_map(&root_directory, request_id)
+                                .await
+                                .map(|repo_map| {
+                                    ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
+                                        repo_map,
+                                        self.user_query.to_owned(),
+                                        LLMType::ClaudeSonnet,
+                                        LLMProvider::Anthropic,
+                                        self.api_keys.clone(),
+                                        self.request_id.to_string(),
+                                    ))
+                                });
+                        }
                     }
+                    let code_wide_search: CodeSymbolImportantWideSearch =
+                        CodeSymbolImportantWideSearch::new(
+                            self.context,
+                            self.user_query.to_owned(),
+                            final_model,
+                            self.provider,
+                            self.api_keys,
+                            self.request_id.to_string(),
+                        );
+                    // just symbol search instead for quick access
+                    return Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search));
                 }
             }
         } else {

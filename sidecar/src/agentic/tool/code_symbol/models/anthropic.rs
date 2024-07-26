@@ -5161,8 +5161,16 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
         Ok(context_string + "\n" + "<user_query>\n" + &user_query + "\n</user_query>")
     }
 
-    fn system_message_for_repo_map_search(&self) -> String {
-        r#"You are a search engine which makes no mistakes while retriving important context for a user-query.
+    fn system_message_for_repo_map_search(
+        &self,
+        repo_map_search_request: &RepoMapSearchQuery,
+    ) -> String {
+        let root_directory = repo_map_search_request
+            .root_directory()
+            .clone()
+            .map(|root_directory| format!("{}/", root_directory))
+            .unwrap_or("".to_owned());
+        format!(r#"You are a search engine which makes no mistakes while retriving important context for a user-query.
 You will be given context which the user has selected in <user_context> and you have to retrive the "code symbols" which are important for answering to the user query.
 - The user might have selected some context manually in the form of <selection> these might be more important
 - You will be given files which contains a lot of code, you have to select the "code symbols" which are important
@@ -5176,7 +5184,7 @@ Let's focus on getting the "code symbols" which are necessary to satisfy the use
 As an example, given the following code selection:
 <code_selection>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 ```rust
 pub struct FillInMiddleBroker {{
@@ -5238,7 +5246,7 @@ Your reply should be, you should strictly follow this format:
 LLMType
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 <thinking>
 We need to first check if grok is part of the LLMType enum, this will make sure that the code we produce is never wrong
@@ -5249,7 +5257,7 @@ We need to first check if grok is part of the LLMType enum, this will make sure 
 FillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 <thinking>
 Other LLM's are implementing FillInMiddleFormatter trait, grok will also require support for this, so we need to check how to implement FillInMiddleFormatter trait
@@ -5260,7 +5268,7 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
 new
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 <thinking>
 We have to change the new function and add the grok llm after implementing the formatter for grok llm.
@@ -5273,7 +5281,7 @@ We have to change the new function and add the grok llm after implementing the f
 LLMType
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 <step>
 We will need to first check the LLMType if it has support for grok or we need to edit it first
@@ -5284,7 +5292,7 @@ We will need to first check the LLMType if it has support for grok or we need to
 FillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 <step>
 Check the definition of `FillInMiddleFormatter` to see how to implement it
@@ -5295,7 +5303,7 @@ Check the definition of `FillInMiddleFormatter` to see how to implement it
 CodeLlamaFillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 <step>
 We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will also have to follow a similar pattern of making changes and adding it to the right places if there are more.
@@ -5306,7 +5314,7 @@ We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will
 GrokFillInMiddleFormatter
 </name>
 <file_path>
-sidecar/broker/fill_in_middle.rs
+{root_directory}sidecar/broker/fill_in_middle.rs
 </file_path>
 <new>
 true
@@ -5320,7 +5328,7 @@ Implement the GrokFillInMiddleFormatter following the similar pattern in `CodeLl
 
 Another example:
 <file_path>
-sidecar/bin/webserver.rs
+{root_directory}sidecar/bin/webserver.rs
 </file_path>
 <code_selection>
 ```rust
@@ -5397,7 +5405,7 @@ Your reply should be:
 inline_completion
 </name>
 <file_path>
-sidecar/bin/webserver.rs
+{root_directory}sidecar/bin/webserver.rs
 </file_path>
 <thinking>
 inline_completion holds all the endpoints for symbols because it also has the `get_symbol_history` endpoint. We have to start adding the endpoint there
@@ -5408,7 +5416,7 @@ inline_completion holds all the endpoints for symbols because it also has the `g
 symbol_history
 </name>
 <file_path>
-sidecar/bin/webserver.rs
+{root_directory}sidecar/bin/webserver.rs
 </file_path>
 <thinking>
 I can find more information on how to write the code for the endpoint by following the symbol `symbol_history` in the line: `             post(sidecar::webserver::inline_completion::symbol_history),`
@@ -5421,7 +5429,7 @@ I can find more information on how to write the code for the endpoint by followi
 symbol_history
 </name>
 <file_path>
-sidecar/bin/webserver.rs
+{root_directory}sidecar/bin/webserver.rs
 </file_path>
 <thinking>
 We need to follow the symbol_history to check the pattern on how we are going to implement the very similar functionality
@@ -5432,14 +5440,14 @@ We need to follow the symbol_history to check the pattern on how we are going to
 inline_completion
 </name>
 <file_path>
-sidecar/bin/webserver.rs
+{root_directory}sidecar/bin/webserver.rs
 </file_path>
 <thinking>
 We have to add the newly created endpoint in inline_completion to add support for the new endpoint which we want to create
 </thinking>
 </step_list>
 </step_by_step>
-</reply>"#.to_owned()
+</reply>"#).to_owned()
     }
 
     fn user_message_for_repo_map_search(
@@ -6101,7 +6109,8 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         let model = request.llm().clone();
         let provider = request.provider().clone();
         let api_keys = request.api_keys().clone();
-        let system_message = LLMClientMessage::system(self.system_message_for_repo_map_search());
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_repo_map_search(&request));
         let user_message = LLMClientMessage::user(self.user_message_for_repo_map_search(request));
         let messages =
             LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.2, None);

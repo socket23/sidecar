@@ -28,6 +28,7 @@ pub struct RepoMapSearchQuery {
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_directory: Option<String>,
     root_request_id: String,
 }
 
@@ -38,6 +39,7 @@ impl RepoMapSearchQuery {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_directory: Option<String>,
         root_request_id: String,
     ) -> Self {
         Self {
@@ -46,8 +48,13 @@ impl RepoMapSearchQuery {
             llm,
             provider,
             api_keys,
+            root_directory,
             root_request_id,
         }
+    }
+
+    pub fn root_directory(&self) -> Option<String> {
+        self.root_directory.clone()
     }
 
     pub fn root_request_id(&self) -> &str {

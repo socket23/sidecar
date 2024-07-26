@@ -167,6 +167,7 @@ impl SymbolInputEvent {
                     LLMType::ClaudeSonnet,
                     LLMProvider::Anthropic,
                     self.api_keys.clone(),
+                    None,
                     self.request_id.to_string(),
                 ))),
                 None => {
@@ -184,6 +185,7 @@ impl SymbolInputEvent {
                                         LLMType::ClaudeSonnet,
                                         LLMProvider::Anthropic,
                                         self.api_keys.clone(),
+                                        Some(root_directory.to_owned()),
                                         self.request_id.to_string(),
                                     ))
                                 });

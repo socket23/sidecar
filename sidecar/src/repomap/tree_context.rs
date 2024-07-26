@@ -33,7 +33,8 @@ impl<'a> TreeContext<'a> {
     pub fn new(code: String) -> Self {
         // let ts_parsing = TSLanguageParsing::init();
         // let config = ts_parsing.for_file_path(&filename).unwrap().clone();
-        let lines: Vec<String> = code.split('\n').map(|s| s.to_string()).collect();
+        println!("code::\n{}", &code);
+        let lines: Vec<String> = code.lines().map(|s| s.to_string()).collect();
         let num_lines = lines.len() + 1;
 
         Self {
@@ -328,8 +329,13 @@ impl<'a> TreeContext<'a> {
 
         // here for the scopes we are getting the headers and then figuring out
         // the first header (or the biggest one which we want to keep for the scope)
+        if self.scopes.get(index).is_none() {
+            return;
+        }
         for line_num in self.scopes[index].clone().iter() {
-            let (_size, head_start, head_end) = self.header[*line_num].first().unwrap();
+            let (_size, head_start, head_end) = self.header[*line_num]
+                .first()
+                .expect("header to be always present");
 
             if head_start > &0 || self.show_top_of_file_parent_scope {
                 self.show_lines.extend(*head_start..*head_end);

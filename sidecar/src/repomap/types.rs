@@ -120,7 +120,7 @@ impl RepoMap {
             println!("  Middle: {}", middle);
 
             // The clone here is very very expensive
-            let tree = self.to_tree(&ranked_tags[..middle].to_vec(), files.clone());
+            let tree = self.to_tree(&ranked_tags[..middle].to_vec());
             let num_tokens = self.get_token_count(&tree);
 
             println!("  Tree tokens: {}", num_tokens);
@@ -172,7 +172,7 @@ impl RepoMap {
         Ok(tree)
     }
 
-    fn to_tree(&self, tags: &Vec<Tag>, files: HashMap<String, Vec<u8>>) -> String {
+    fn to_tree(&self, tags: &Vec<Tag>) -> String {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
         tags.push(Tag::dummy());
@@ -187,10 +187,11 @@ impl RepoMap {
         for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().expect("to_str to work for path");
             let fname = tag.fname.to_str().expect("to_str to work for path");
-            if !files.contains_key(fname) {
+            let file_content = std::fs::read(&fname);
+            if let Err(_) = file_content {
                 continue;
             }
-            let file_content = files.get(fname).expect("!contains_key to work");
+            let file_content = file_content.expect("file_content to be present");
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -203,7 +204,7 @@ impl RepoMap {
                         &cur_abs_fname,
                         &cur_fname,
                         &inner_lois,
-                        file_content,
+                        &file_content,
                     ));
                 } else if !cur_fname.is_empty() {
                     output.push('\n');
@@ -289,9 +290,14 @@ impl RepoMap {
         let config = ts_parsing.for_file_path(fname).ok_or_else(|| {
             RepoMapError::ParseError(format!("Language configuration not found for: {}", fname,))
         });
+        let content = tokio::fs::read(fname).await;
+        if let Err(_) = content {
+            return Err(RepoMapError::IoError);
+        }
+        let content = content.expect("if let Err to hold");
         if let Ok(config) = config {
             let tags = config
-                .get_tags(&PathBuf::from(fname), &rel_path, file_content)
+                .get_tags(&PathBuf::from(fname), &rel_path, content)
                 .await;
             Ok(tags)
         } else {

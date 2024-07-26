@@ -153,12 +153,15 @@ impl SymbolInputEvent {
         };
         // TODO(skcd): Toggle the request here depending on if we have the repo map
         if self.has_repo_map() || self.root_directory.is_some() {
-            let contents = tokio::fs::read_to_string(
-                self.repo_map_fs_path.expect("has_repo_map to not break"),
-            )
-            .await;
+            let contents = if self.has_repo_map() {
+                tokio::fs::read_to_string(self.repo_map_fs_path.expect("has_repo_map to not break"))
+                    .await
+                    .ok()
+            } else {
+                None
+            };
             match contents {
-                Ok(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
+                Some(contents) => Some(ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
                     contents,
                     self.user_query.to_owned(),
                     LLMType::ClaudeSonnet,
@@ -166,7 +169,7 @@ impl SymbolInputEvent {
                     self.api_keys.clone(),
                     self.request_id.to_string(),
                 ))),
-                Err(_) => {
+                None => {
                     // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
                         println!("symbol_input::load_repo_map::start({})", &request_id);

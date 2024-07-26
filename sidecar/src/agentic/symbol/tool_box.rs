@@ -3294,7 +3294,7 @@ instruction:
     pub async fn load_repo_map(&self, repo_map_path: &String, request_id: &str) -> Option<String> {
         // TODO(skcd): Should have proper construct time sharing (we only create it once) over here
         println!("tool_box::load_repo_map::start({})", &request_id);
-        let repo_map = RepoMap::new().with_map_tokens(2000);
+        let repo_map = RepoMap::new().with_map_tokens(20_000);
         let _ = self
             .ui_events
             .send(UIEventWithID::repo_map_gen_start(request_id.to_owned()));

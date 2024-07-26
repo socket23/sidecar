@@ -3,7 +3,7 @@ use std::path::Path;
 
 #[tokio::main]
 async fn main() {
-    let repomap = RepoMap::new().with_map_tokens(1000);
+    let repomap = RepoMap::new().with_map_tokens(50_000);
 
     // change this to the directory you want to generate a repomap for
     // let dir = PathBuf::from(".");

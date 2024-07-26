@@ -8,7 +8,7 @@ use tree_sitter::{Node, TreeCursor};
 use super::helpers::close_small_gaps_helper;
 
 pub struct TreeContext<'a> {
-    // filename: String,
+    filename: String,
     parent_context: bool,
     child_context: bool,
     last_line: bool,
@@ -30,14 +30,13 @@ pub struct TreeContext<'a> {
 }
 
 impl<'a> TreeContext<'a> {
-    pub fn new(code: String) -> Self {
+    pub fn new(code: String, fs_file_path: String) -> Self {
         // let ts_parsing = TSLanguageParsing::init();
         // let config = ts_parsing.for_file_path(&filename).unwrap().clone();
-        println!("code::\n{}", &code);
         let lines: Vec<String> = code.lines().map(|s| s.to_string()).collect();
         let num_lines = lines.len() + 1;
-
         Self {
+            filename: fs_file_path,
             parent_context: true,
             child_context: false,
             last_line: false,

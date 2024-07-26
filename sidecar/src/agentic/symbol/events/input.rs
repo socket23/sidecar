@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{LLMProvider, LLMProviderAPIKeys},
+    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -182,9 +182,11 @@ impl SymbolInputEvent {
                                     ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
                                         repo_map,
                                         self.user_query.to_owned(),
-                                        LLMType::ClaudeSonnet,
-                                        LLMProvider::Anthropic,
-                                        self.api_keys.clone(),
+                                        LLMType::GeminiProFlash,
+                                        LLMProvider::GoogleAIStudio,
+                                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                                        )),
                                         Some(root_directory.to_owned()),
                                         self.request_id.to_string(),
                                     ))

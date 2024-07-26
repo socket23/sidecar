@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -9,20 +10,20 @@ use crate::repomap::tree_context::TreeContext;
 
 use super::analyser::TagAnalyzer;
 use super::error::RepoMapError;
-use super::files::{FileSystem, SimpleFileSystem};
+use super::file::git::GitWalker;
 use super::tag::{Tag, TagIndex};
 
 pub struct RepoMap {
-    fs: SimpleFileSystem,
+    git_walker: GitWalker,
     map_tokens: usize,
 }
 
 const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 
 impl RepoMap {
-    pub fn new(fs: SimpleFileSystem) -> Self {
+    pub fn new() -> Self {
         Self {
-            fs,
+            git_walker: GitWalker {},
             map_tokens: REPOMAP_DEFAULT_TOKENS,
         }
     }
@@ -32,18 +33,20 @@ impl RepoMap {
         self
     }
 
-    async fn generate_tag_index(&self, files: &[PathBuf]) -> Result<TagIndex, RepoMapError> {
+    async fn generate_tag_index(
+        &self,
+        files: HashMap<String, Vec<u8>>,
+    ) -> Result<TagIndex, RepoMapError> {
         let mut tag_index = TagIndex::new();
 
         let ts_parsing = Arc::new(TSLanguageParsing::init());
         let _ = stream::iter(
             files
-                .to_vec()
                 .into_iter()
-                .map(|file| (file, ts_parsing.clone())),
+                .map(|(file, file_content)| (file, file_content, ts_parsing.clone())),
         )
-        .map(|(file, ts_parsing)| async move {
-            self.generate_tags_for_file(&file, ts_parsing)
+        .map(|(file, file_content, ts_parsing)| async move {
+            self.generate_tags_for_file(&file, file_content, ts_parsing)
                 .await
                 .map(|tags| (tags, file))
                 .ok()
@@ -54,8 +57,9 @@ impl RepoMap {
         .into_iter()
         .filter_map(|s| s)
         .for_each(|(tags, file)| {
+            let file_ref = &file;
             tags.into_iter().for_each(|tag| {
-                tag_index.add_tag(tag, &file);
+                tag_index.add_tag(tag, &PathBuf::from(file_ref));
             });
         });
 
@@ -65,7 +69,7 @@ impl RepoMap {
     }
 
     pub async fn get_repo_map(&self, root: &Path) -> Result<String, RepoMapError> {
-        let files = self.fs.get_files(root)?;
+        let files = self.git_walker.read_files(root)?;
 
         let repomap = self.get_ranked_tags_map(files, self.map_tokens).await?;
 
@@ -91,7 +95,12 @@ impl RepoMap {
         token_estimate
     }
 
-    fn find_best_tree(&self, ranked_tags: Vec<Tag>, max_map_tokens: usize) -> String {
+    fn find_best_tree(
+        &self,
+        ranked_tags: Vec<Tag>,
+        max_map_tokens: usize,
+        files: HashMap<String, Vec<u8>>,
+    ) -> String {
         let num_tags = ranked_tags.len();
         println!("Initial conditions:");
         println!("  Number of tags: {}", num_tags);
@@ -110,7 +119,8 @@ impl RepoMap {
             println!("  Bounds: [{}, {}]", lower_bound, upper_bound);
             println!("  Middle: {}", middle);
 
-            let tree = self.to_tree(&ranked_tags[..middle].to_vec());
+            // The clone here is very very expensive
+            let tree = self.to_tree(&ranked_tags[..middle].to_vec(), files.clone());
             let num_tokens = self.get_token_count(&tree);
 
             println!("  Tree tokens: {}", num_tokens);
@@ -145,11 +155,11 @@ impl RepoMap {
 
     pub async fn get_ranked_tags_map(
         &self,
-        files: Vec<PathBuf>,
+        files: HashMap<String, Vec<u8>>,
         max_map_tokens: usize,
     ) -> Result<String, RepoMapError> {
         println!("[TagIndex] Generating tags from {} files...", files.len());
-        let tag_index = self.generate_tag_index(&files).await?;
+        let tag_index = self.generate_tag_index(files.clone()).await?;
 
         let mut analyser = TagAnalyzer::new(tag_index);
 
@@ -157,12 +167,12 @@ impl RepoMap {
         let ranked_tags = analyser.get_ranked_tags().clone();
 
         println!("[Tree] Finding best tree...");
-        let tree = self.find_best_tree(ranked_tags, max_map_tokens);
+        let tree = self.find_best_tree(ranked_tags, max_map_tokens, files);
 
         Ok(tree)
     }
 
-    fn to_tree(&self, tags: &Vec<Tag>) -> String {
+    fn to_tree(&self, tags: &Vec<Tag>, files: HashMap<String, Vec<u8>>) -> String {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
         tags.push(Tag::dummy());
@@ -175,7 +185,12 @@ impl RepoMap {
         let mut lois: Option<Vec<usize>> = None;
 
         for tag in &tags {
-            let this_rel_fname = tag.rel_fname.to_str().unwrap();
+            let this_rel_fname = tag.rel_fname.to_str().expect("to_str to work for path");
+            let fname = tag.fname.to_str().expect("to_str to work for path");
+            if !files.contains_key(fname) {
+                continue;
+            }
+            let file_content = files.get(fname).expect("!contains_key to work");
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -184,7 +199,12 @@ impl RepoMap {
                     output.push('\n');
                     output.push_str(&cur_fname);
                     output.push_str(":\n");
-                    output.push_str(&self.render_tree(&cur_abs_fname, &cur_fname, &inner_lois));
+                    output.push_str(&self.render_tree(
+                        &cur_abs_fname,
+                        &cur_fname,
+                        &inner_lois,
+                        file_content,
+                    ));
                 } else if !cur_fname.is_empty() {
                     output.push('\n');
                     output.push_str(&cur_fname);
@@ -218,9 +238,14 @@ impl RepoMap {
         output
     }
 
-    fn render_tree(&self, abs_fname: &str, _rel_fname: &str, lois: &Vec<usize>) -> String {
-        let mut code = self.fs.read_file(Path::new(abs_fname)).unwrap();
-
+    fn render_tree(
+        &self,
+        abs_fname: &str,
+        _rel_fname: &str,
+        lois: &Vec<usize>,
+        file_content: &Vec<u8>,
+    ) -> String {
+        let mut code = String::from_utf8_lossy(file_content.as_slice()).to_string();
         if !code.ends_with('\n') {
             code.push('\n');
         }
@@ -256,20 +281,18 @@ impl RepoMap {
 
     async fn generate_tags_for_file(
         &self,
-        fname: &PathBuf,
+        fname: &str,
+        file_content: Vec<u8>,
         ts_parsing: Arc<TSLanguageParsing>,
     ) -> Result<Vec<Tag>, RepoMapError> {
-        let rel_path = self.get_rel_fname(fname);
-        let config = ts_parsing
-            .for_file_path(fname.to_str().unwrap())
-            .ok_or_else(|| {
-                RepoMapError::ParseError(format!(
-                    "Language configuration not found for: {}",
-                    fname.display()
-                ))
-            });
+        let rel_path = self.get_rel_fname(&PathBuf::from(fname));
+        let config = ts_parsing.for_file_path(fname).ok_or_else(|| {
+            RepoMapError::ParseError(format!("Language configuration not found for: {}", fname,))
+        });
         if let Ok(config) = config {
-            let tags = config.get_tags(fname, &rel_path).await;
+            let tags = config
+                .get_tags(&PathBuf::from(fname), &rel_path, file_content)
+                .await;
             Ok(tags)
         } else {
             Ok(vec![])

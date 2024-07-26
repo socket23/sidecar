@@ -1,11 +1,9 @@
-use sidecar::repomap::{files::SimpleFileSystem, types::RepoMap};
+use sidecar::repomap::types::RepoMap;
 use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() {
-    let fs = SimpleFileSystem {};
-
-    let repomap = RepoMap::new(fs).with_map_tokens(1000);
+    let repomap = RepoMap::new().with_map_tokens(1000);
 
     // change this to the directory you want to generate a repomap for
     let dir = PathBuf::from(".");

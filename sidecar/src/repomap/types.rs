@@ -43,10 +43,10 @@ impl RepoMap {
         let _ = stream::iter(
             files
                 .into_iter()
-                .map(|(file, file_content)| (file, file_content, ts_parsing.clone())),
+                .map(|(file, _)| (file, ts_parsing.clone())),
         )
-        .map(|(file, file_content, ts_parsing)| async move {
-            self.generate_tags_for_file(&file, file_content, ts_parsing)
+        .map(|(file, ts_parsing)| async move {
+            self.generate_tags_for_file(&file, ts_parsing)
                 .await
                 .map(|tags| (tags, file))
                 .ok()
@@ -95,12 +95,7 @@ impl RepoMap {
         token_estimate
     }
 
-    fn find_best_tree(
-        &self,
-        ranked_tags: Vec<Tag>,
-        max_map_tokens: usize,
-        files: HashMap<String, Vec<u8>>,
-    ) -> String {
+    fn find_best_tree(&self, ranked_tags: Vec<Tag>, max_map_tokens: usize) -> String {
         let num_tags = ranked_tags.len();
         println!("Initial conditions:");
         println!("  Number of tags: {}", num_tags);
@@ -159,7 +154,7 @@ impl RepoMap {
         max_map_tokens: usize,
     ) -> Result<String, RepoMapError> {
         println!("[TagIndex] Generating tags from {} files...", files.len());
-        let tag_index = self.generate_tag_index(files.clone()).await?;
+        let tag_index = self.generate_tag_index(files).await?;
 
         let mut analyser = TagAnalyzer::new(tag_index);
 
@@ -167,7 +162,7 @@ impl RepoMap {
         let ranked_tags = analyser.get_ranked_tags().clone();
 
         println!("[Tree] Finding best tree...");
-        let tree = self.find_best_tree(ranked_tags, max_map_tokens, files);
+        let tree = self.find_best_tree(ranked_tags, max_map_tokens);
 
         Ok(tree)
     }
@@ -283,7 +278,6 @@ impl RepoMap {
     async fn generate_tags_for_file(
         &self,
         fname: &str,
-        file_content: Vec<u8>,
         ts_parsing: Arc<TSLanguageParsing>,
     ) -> Result<Vec<Tag>, RepoMapError> {
         let rel_path = self.get_rel_fname(&PathBuf::from(fname));

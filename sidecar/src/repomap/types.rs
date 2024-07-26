@@ -182,7 +182,6 @@ impl RepoMap {
 
         for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().expect("to_str to work for path");
-            let fname = tag.fname.to_str().expect("to_str to work for path");
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {

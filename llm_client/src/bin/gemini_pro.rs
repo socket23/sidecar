@@ -47,7 +47,7 @@ You will be given context which the user has selected in <user_context> and you 
 - The user might have selected some context manually in the form of <selection> these might be more important
 - You will be given files which contains a lot of code, you have to select the "code symbols" which are important
 - "code symbols" here referes to the different classes, functions, or constants which might be necessary to answer the user query.
-- Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_item> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
+- Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_list> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
 

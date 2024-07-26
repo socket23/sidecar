@@ -366,6 +366,14 @@ impl ToolInput {
         }
     }
 
+    pub fn is_repo_map_search(&self) -> bool {
+        if let ToolInput::RepoMapSearch(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn is_probe_follow_along_symbol_request(&self) -> bool {
         if let ToolInput::ProbeFollowAlongSymbol(_) = self {
             true

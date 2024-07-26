@@ -369,11 +369,31 @@ impl SymbolManager {
 
             let tool_output = match important_symbols {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
-                None => self
-                    .tools
-                    .invoke(tool_input)
-                    .await
-                    .map_err(|e| SymbolError::ToolError(e))?,
+                None => {
+                    if tool_input.is_repo_map_search() {
+                        let _ = self
+                            .ui_sender
+                            .send(UIEventWithID::start_long_context_search(
+                                request_id.to_owned(),
+                            ));
+                        let result = self
+                            .tools
+                            .invoke(tool_input)
+                            .await
+                            .map_err(|e| SymbolError::ToolError(e));
+                        let _ = self
+                            .ui_sender
+                            .send(UIEventWithID::finish_long_context_search(
+                                request_id.to_owned(),
+                            ));
+                        result?
+                    } else {
+                        self.tools
+                            .invoke(tool_input)
+                            .await
+                            .map_err(|e| SymbolError::ToolError(e))?
+                    }
+                }
             };
 
             if let ToolOutput::ImportantSymbols(important_symbols)

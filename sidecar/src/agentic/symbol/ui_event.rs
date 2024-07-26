@@ -17,6 +17,20 @@ pub struct UIEventWithID {
 }
 
 impl UIEventWithID {
+    pub fn start_long_context_search(request_id: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::LongContextSearchStart(request_id)),
+        }
+    }
+
+    pub fn finish_long_context_search(request_id: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::LongContextSearchFinished(request_id)),
+        }
+    }
+
     pub fn finish_edit_request(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),

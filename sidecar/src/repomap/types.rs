@@ -160,6 +160,7 @@ impl RepoMap {
 
         println!("[Analyser] Ranking tags...");
         let ranked_tags = analyser.get_ranked_tags().clone();
+        println!("[Analyser] tags::len({})", ranked_tags.len());
 
         println!("[Tree] Finding best tree...");
         let tree = self.find_best_tree(ranked_tags, max_map_tokens);
@@ -182,11 +183,6 @@ impl RepoMap {
         for tag in &tags {
             let this_rel_fname = tag.rel_fname.to_str().expect("to_str to work for path");
             let fname = tag.fname.to_str().expect("to_str to work for path");
-            let file_content = std::fs::read(&fname);
-            if let Err(_) = file_content {
-                continue;
-            }
-            let file_content = file_content.expect("file_content to be present");
 
             // check whether filename has changed, including first iteration
             if this_rel_fname != cur_fname {
@@ -195,6 +191,12 @@ impl RepoMap {
                     output.push('\n');
                     output.push_str(&cur_fname);
                     output.push_str(":\n");
+                    let file_content = std::fs::read(&cur_abs_fname);
+                    if let Err(_) = file_content {
+                        continue;
+                    }
+                    let file_content = file_content.expect("file_content to be present");
+                    // read the file content and keep track of it
                     output.push_str(&self.render_tree(
                         &cur_abs_fname,
                         &cur_fname,
@@ -256,7 +258,7 @@ impl RepoMap {
         let cursor = root_node.walk();
 
         // todo - consider using rel_fname
-        let mut context = TreeContext::new(code);
+        let mut context = TreeContext::new(code, abs_fname.to_owned());
 
         context.init(cursor);
 

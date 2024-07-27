@@ -134,6 +134,16 @@ pub const MIXTRAL: AnswerModel = AnswerModel {
     inline_completion_tokens: None,
 };
 
+// LLAMA 3.1 8B Instruct
+pub const LLAMA_3_1_8B_INSTRUCT: AnswerModel = AnswerModel {
+    llm_type: LLMType::Llama3_1_8bInstruct,
+    answer_tokens: 128_000,
+    prompt_tokens_limit: 32_000,
+    history_tokens_limit: 32_000,
+    total_tokens: 128_000,
+    inline_completion_tokens: None,
+};
+
 // CodeLLaMA70B has 100k tokens in total
 pub const CODE_LLAMA_70B: AnswerModel = AnswerModel {
     llm_type: LLMType::CodeLLama70BInstruct,
@@ -264,6 +274,7 @@ impl LLMAnswerModelBroker {
             .add_answer_model(CLAUDE_HAIKU)
             .add_answer_model(GEMINI_PRO)
             .add_answer_model(GPT4_O_MINI)
+            .add_answer_model(LLAMA_3_1_8B_INSTRUCT)
     }
 
     fn add_answer_model(mut self, model: AnswerModel) -> Self {

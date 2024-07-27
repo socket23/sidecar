@@ -144,11 +144,12 @@ impl TogetherAIClient {
             LLMType::Mixtral => Some("mistralai/Mixtral-8x7B-Instruct-v0.1".to_owned()),
             LLMType::MistralInstruct => Some("mistralai/Mistral-7B-Instruct-v0.1".to_owned()),
             LLMType::CodeLLama70BInstruct => Some("codellama/CodeLlama-70b-Instruct-hf".to_owned()),
-            LLMType::CodeLlama13BInstruct => Some("codellama/CodeLlama-13b-Instruct-hf".to_owned()),
-            LLMType::CodeLlama7BInstruct => Some("codellama/CodeLlama-7b-Instruct-hf".to_owned()),
             LLMType::Llama3_8bInstruct => Some("meta-llama/Meta-Llama-3-8B-Instruct".to_owned()),
             LLMType::DeepSeekCoder33BInstruct => {
                 Some("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
+            }
+            LLMType::Llama3_1_8bInstruct => {
+                Some("accounts/fireworks/models/llama-v3p1-8b-instruct".to_owned())
             }
             LLMType::Custom(model) => Some(model.to_owned()),
             _ => None,

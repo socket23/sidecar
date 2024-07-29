@@ -32,6 +32,15 @@ struct Task {
     problem_statement: String,
 }
 
+impl Task {
+    fn new(golden_file: String, problem_statement: String) -> Self {
+        Task {
+            golden_file,
+            problem_statement,
+        }
+    }
+}
+
 fn default_index_dir() -> PathBuf {
     match directories::ProjectDirs::from("ai", "codestory", "sidecar") {
         Some(dirs) => dirs.data_dir().to_owned(),
@@ -59,95 +68,167 @@ fn read_problems_from_csv(path: &str, repo: &str) -> Result<Vec<Task>, Box<dyn E
 mod tests {
     use super::*;
 
-    const ROOT_DIR: &str = "/Users/zi/codestory/testing/sqlfluff";
-
-    #[tokio::test]
-    async fn test_sqlfluff_031() {
-        let task = Task {
-            golden_file: "src/sqlfluff/rules/L031.py".to_string(),
-            problem_statement: r#""TSQL - L031 incorrectly triggers ""Avoid using aliases in join condition"" when no join present
-            ## Expected Behaviour
-            
-            Both of these queries should pass, the only difference is the addition of a table alias 'a':
-            
-            1/ no alias
-            
-            ```
-            SELECT [hello]
-            FROM
-                mytable
-            ```
-            
-            2/ same query with alias
-            
-            ```
-            SELECT a.[hello]
-            FROM
-                mytable AS a
-            ```
-            
-            ## Observed Behaviour
-            
-            1/ passes
-            2/ fails with: L031: Avoid using aliases in join condition.
-            
-            But there is no join condition :-)
-            
-            ## Steps to Reproduce
-            
-            Lint queries above
-            
-            ## Dialect
-            
-            TSQL
-            
-            ## Version
-            
-            sqlfluff 0.6.9
-            Python 3.6.9
-            
-            ## Configuration
-            
-            N/A
-            "#.to_string(),
-        };
-        test_one(&task).await;
-    }
+    const SQLFLUFF_ROOT_DIR: &str = "/Users/zi/codestory/testing/sqlfluff";
 
     #[tokio::test]
     async fn test_sqlfluff_060() {
-        let task = Task {
-            golden_file: "src/sqlfluff/rules/L060.py".to_string(),
-            problem_statement: r#""Rule L060 could give a specific error message
-            At the moment rule L060 flags something like this:
-            
-            ```
-            L:  21 | P:   9 | L060 | Use 'COALESCE' instead of 'IFNULL' or 'NVL'.
-            ```
-            
-            Since we likely know the wrong word, it might be nice to actually flag that instead of both `IFNULL` and `NVL` - like most of the other rules do.
-            
-            That is it should flag this:
-            
-            ```
-            L:  21 | P:   9 | L060 | Use 'COALESCE' instead of 'IFNULL'.
-            ```
-             Or this:
-            
-            ```
-            L:  21 | P:   9 | L060 | Use 'COALESCE' instead of 'NVL'.
-            ```
-            
-            As appropriate.
-            
-            What do you think @jpy-git ?
-            
-            ""#.to_string(),
-        };
-        test_one(&task).await;
+        let task = Task::new("src/sqlfluff/rules/L060.py".to_string(), r#""Rule L060 could give a specific error message
+        At the moment rule L060 flags something like this:
+        
+        ```
+        L:  21 | P:   9 | L060 | Use 'COALESCE' instead of 'IFNULL' or 'NVL'.
+        ```
+        
+        Since we likely know the wrong word, it might be nice to actually flag that instead of both `IFNULL` and `NVL` - like most of the other rules do.
+        
+        That is it should flag this:
+        
+        ```
+        L:  21 | P:   9 | L060 | Use 'COALESCE' instead of 'IFNULL'.
+        ```
+         Or this:
+        
+        ```
+        L:  21 | P:   9 | L060 | Use 'COALESCE' instead of 'NVL'.
+        ```
+        
+        As appropriate.
+        
+        What do you think @jpy-git ?
+        
+        ""#.to_string());
+        test_golden_file_search(&task, SQLFLUFF_ROOT_DIR).await;
     }
 
-    async fn test_one(task: &Task) {
+    #[tokio::test]
+    async fn test_sqlfluff_039() {
+        let task = Task::new("src/sqlfluff/rules/L039.py".to_string(), r#""Extra space when first field moved to new line in a WITH statement
+        Note, the query below uses a `WITH` statement. If I just try to fix the SQL within the CTE, this works fine.
+        
+        Given the following SQL:
+        
+        ```sql
+        WITH example AS (
+            SELECT my_id,
+                other_thing,
+                one_more
+            FROM
+                my_table
+        )
+        
+        SELECT *
+        FROM example
+        ```
+        
+        ## Expected Behaviour
+        
+        after running `sqlfluff fix` I'd expect (`my_id` gets moved down and indented properly):
+        
+        ```sql
+        WITH example AS (
+            SELECT
+                my_id,
+                other_thing,
+                one_more
+            FROM
+                my_table
+        )
+        
+        SELECT *
+        FROM example
+        ```
+        
+        ## Observed Behaviour
+        
+        after running `sqlfluff fix` we get (notice that `my_id` is indented one extra space)
+        
+        ```sql
+        WITH example AS (
+            SELECT
+                 my_id,
+                other_thing,
+                one_more
+            FROM
+                my_table
+        )
+        
+        SELECT *
+        FROM example
+        ```
+        
+        ## Steps to Reproduce
+        
+        Noted above. Create a file with the initial SQL and fun `sqfluff fix` on it.
+        
+        ## Dialect
+        
+        Running with default config.
+        
+        ## Version
+        Include the output of `sqlfluff --version` along with your Python version
+        
+        sqlfluff, version 0.7.0
+        Python 3.7.5
+        
+        ## Configuration
+        
+        Default config.
+        
+        ""#.to_string());
+        test_golden_file_search(&task, SQLFLUFF_ROOT_DIR).await;
+    }
+
+    #[tokio::test]
+    async fn test_sqlfluff_031() {
+        let task = Task::new("src/sqlfluff/rules/L031.py".to_string(), r#""TSQL - L031 incorrectly triggers ""Avoid using aliases in join condition"" when no join present
+        ## Expected Behaviour
+        
+        Both of these queries should pass, the only difference is the addition of a table alias 'a':
+        
+        1/ no alias
+        
+        ```
+        SELECT [hello]
+        FROM
+            mytable
+        ```
+        
+        2/ same query with alias
+        
+        ```
+        SELECT a.[hello]
+        FROM
+            mytable AS a
+        ```
+        
+        ## Observed Behaviour
+        
+        1/ passes
+        2/ fails with: L031: Avoid using aliases in join condition.
+        
+        But there is no join condition :-)
+        
+        ## Steps to Reproduce
+        
+        Lint queries above
+        
+        ## Dialect
+        
+        TSQL
+        
+        ## Version
+        
+        sqlfluff 0.6.9
+        Python 3.6.9
+        
+        ## Configuration
+        
+        N/A
+        ""#.to_string());
+        test_golden_file_search(&task, SQLFLUFF_ROOT_DIR).await;
+    }
+
+    async fn test_golden_file_search(task: &Task, root_dir: &str) {
         let request_id = uuid::Uuid::new_v4();
         let request_id_str = request_id.to_string();
         let parea_url = format!(
@@ -214,7 +295,7 @@ mod tests {
             None,
             true, // full_symbol_edit
             true, // codebase search
-            Some(ROOT_DIR.to_string()),
+            Some(root_dir.to_string()),
         );
 
         let mut initial_request_task = Box::pin(symbol_manager.test_golden_file(initial_request));

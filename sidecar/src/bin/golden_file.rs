@@ -64,10 +64,112 @@ fn read_problems_from_csv(path: &str, repo: &str) -> Result<Vec<Task>, Box<dyn E
     Ok(problems)
 }
 
+/// Copied from code_editing_flow binary
+async fn test_golden_file_search(task: &Task, root_dir: &str) {
+    let request_id = uuid::Uuid::new_v4();
+    let request_id_str = request_id.to_string();
+    let parea_url = format!(
+        r#"https://app.parea.ai/logs?colViz=%7B%220%22%3Afalse%2C%221%22%3Afalse%2C%222%22%3Afalse%2C%223%22%3Afalse%2C%22error%22%3Afalse%2C%22deployment_id%22%3Afalse%2C%22feedback_score%22%3Afalse%2C%22time_to_first_token%22%3Afalse%2C%22scores%22%3Afalse%2C%22start_timestamp%22%3Afalse%2C%22user%22%3Afalse%2C%22session_id%22%3Afalse%2C%22target%22%3Afalse%2C%22experiment_uuid%22%3Afalse%2C%22dataset_references%22%3Afalse%2C%22in_dataset%22%3Afalse%2C%22event_type%22%3Afalse%2C%22request_type%22%3Afalse%2C%22evaluation_metric_names%22%3Afalse%2C%22request%22%3Afalse%2C%22calling_node%22%3Afalse%2C%22edges%22%3Afalse%2C%22metadata_evaluation_metric_names%22%3Afalse%2C%22metadata_event_type%22%3Afalse%2C%22metadata_0%22%3Afalse%2C%22metadata_calling_node%22%3Afalse%2C%22metadata_edges%22%3Afalse%2C%22metadata_root_id%22%3Afalse%7D&filter=%7B%22filter_field%22%3A%22meta_data%22%2C%22filter_operator%22%3A%22equals%22%2C%22filter_key%22%3A%22root_id%22%2C%22filter_value%22%3A%22{request_id_str}%22%7D&page=1&page_size=50&time_filter=1m"#
+    );
+    println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
+    let editor_url = "http://localhost:42424".to_owned();
+    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    let anthropic_llm_properties = LLMProperties::new(
+        LLMType::ClaudeSonnet,
+        LLMProvider::Anthropic,
+        anthropic_api_keys.clone(),
+    );
+    let editor_parsing = Arc::new(EditorParsing::default());
+    let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
+    let tool_broker = Arc::new(ToolBroker::new(
+        Arc::new(
+            LLMBroker::new(LLMBrokerConfiguration::new(default_index_dir()))
+                .await
+                .expect("to initialize properly"),
+        ),
+        Arc::new(CodeEditBroker::new()),
+        symbol_broker.clone(),
+        Arc::new(TSLanguageParsing::init()),
+        ToolBrokerConfiguration::new(None, true),
+        LLMProperties::new(
+            LLMType::Gpt4O,
+            LLMProvider::OpenAI,
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+            )),
+        ),
+    ));
+
+    let user_context = UserContext::new(vec![], vec![], None, vec![]);
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    let symbol_manager = SymbolManager::new(
+        tool_broker.clone(),
+        symbol_broker.clone(),
+        editor_parsing,
+        editor_url.to_owned(),
+        sender,
+        anthropic_llm_properties.clone(),
+        user_context.clone(),
+        request_id.to_string(),
+    );
+
+    let initial_request = SymbolInputEvent::new(
+        user_context,
+        LLMType::ClaudeSonnet,
+        LLMProvider::Anthropic,
+        anthropic_api_keys,
+        task.problem_statement.clone(),
+        request_id.to_string(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        true, // full_symbol_edit
+        true, // codebase search
+        Some(root_dir.to_string()),
+    );
+
+    let mut initial_request_task = Box::pin(symbol_manager.test_golden_file(initial_request));
+
+    loop {
+        tokio::select! {
+            event = receiver.recv() => {
+                if event.is_none() {
+                    break; // Receiver closed, exit the loop
+                }
+            }
+            result = &mut initial_request_task => {
+                match result {
+                    Ok(symbols) => {
+                        assert!(!symbols.is_empty(), "Expected non-empty vector of symbols");
+                        assert!(
+                            symbols.iter().any(|symbol| symbol.file_path().ends_with(&task.golden_file)),
+                            "Expected golden file '{}' not found in the returned symbols",
+                            task.golden_file,
+                        );
+                        break
+                    }
+                    Err(e) => {
+                        eprintln!("Error in initial_request_task: {}", e);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // change accordingly
     const SQLFLUFF_ROOT_DIR: &str = "/Users/zi/codestory/testing/sqlfluff";
 
     #[tokio::test]
@@ -228,103 +330,248 @@ mod tests {
         test_golden_file_search(&task, SQLFLUFF_ROOT_DIR).await;
     }
 
-    async fn test_golden_file_search(task: &Task, root_dir: &str) {
-        let request_id = uuid::Uuid::new_v4();
-        let request_id_str = request_id.to_string();
-        let parea_url = format!(
-            r#"https://app.parea.ai/logs?colViz=%7B%220%22%3Afalse%2C%221%22%3Afalse%2C%222%22%3Afalse%2C%223%22%3Afalse%2C%22error%22%3Afalse%2C%22deployment_id%22%3Afalse%2C%22feedback_score%22%3Afalse%2C%22time_to_first_token%22%3Afalse%2C%22scores%22%3Afalse%2C%22start_timestamp%22%3Afalse%2C%22user%22%3Afalse%2C%22session_id%22%3Afalse%2C%22target%22%3Afalse%2C%22experiment_uuid%22%3Afalse%2C%22dataset_references%22%3Afalse%2C%22in_dataset%22%3Afalse%2C%22event_type%22%3Afalse%2C%22request_type%22%3Afalse%2C%22evaluation_metric_names%22%3Afalse%2C%22request%22%3Afalse%2C%22calling_node%22%3Afalse%2C%22edges%22%3Afalse%2C%22metadata_evaluation_metric_names%22%3Afalse%2C%22metadata_event_type%22%3Afalse%2C%22metadata_0%22%3Afalse%2C%22metadata_calling_node%22%3Afalse%2C%22metadata_edges%22%3Afalse%2C%22metadata_root_id%22%3Afalse%7D&filter=%7B%22filter_field%22%3A%22meta_data%22%2C%22filter_operator%22%3A%22equals%22%2C%22filter_key%22%3A%22root_id%22%2C%22filter_value%22%3A%22{request_id_str}%22%7D&page=1&page_size=50&time_filter=1m"#
-        );
-        println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
-        let editor_url = "http://localhost:42424".to_owned();
-        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-        let anthropic_llm_properties = LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            anthropic_api_keys.clone(),
-        );
-        let editor_parsing = Arc::new(EditorParsing::default());
-        let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
-        let tool_broker = Arc::new(ToolBroker::new(
-            Arc::new(
-                LLMBroker::new(LLMBrokerConfiguration::new(default_index_dir()))
-                    .await
-                    .expect("to initialize properly"),
-            ),
-            Arc::new(CodeEditBroker::new()),
-            symbol_broker.clone(),
-            Arc::new(TSLanguageParsing::init()),
-            ToolBrokerConfiguration::new(None, true),
-            LLMProperties::new(
-                LLMType::Gpt4O,
-                LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
-                )),
-            ),
-        ));
+    #[tokio::test]
+    async fn test_sqlfluff_helpers() {
+        let task = Task::new("src/sqlfluff/core/parser/helpers.py".to_string(), r#""""Dropped elements in sequence matching"" when doubled semicolon
+        ## Expected Behaviour
+        Frankly, I'm not sure whether it (doubled `;`) should be just ignored or rather some specific rule should be triggered.
+        ## Observed Behaviour
+        ```console
+        (.venv) ?master ~/prod/_inne/sqlfluff> echo ""select id from tbl;;"" | sqlfluff lint -
+        Traceback (most recent call last):
+          File ""/home/adam/prod/_inne/sqlfluff/.venv/bin/sqlfluff"", line 11, in <module>
+            load_entry_point('sqlfluff', 'console_scripts', 'sqlfluff')()
+          File ""/home/adam/prod/_inne/sqlfluff/.venv/lib/python3.9/site-packages/click/core.py"", line 1137, in __call__
+            return self.main(*args, **kwargs)
+          File ""/home/adam/prod/_inne/sqlfluff/.venv/lib/python3.9/site-packages/click/core.py"", line 1062, in main
+            rv = self.invoke(ctx)
+          File ""/home/adam/prod/_inne/sqlfluff/.venv/lib/python3.9/site-packages/click/core.py"", line 1668, in invoke
+            return _process_result(sub_ctx.command.invoke(sub_ctx))
+          File ""/home/adam/prod/_inne/sqlfluff/.venv/lib/python3.9/site-packages/click/core.py"", line 1404, in invoke
+            return ctx.invoke(self.callback, **ctx.params)
+          File ""/home/adam/prod/_inne/sqlfluff/.venv/lib/python3.9/site-packages/click/core.py"", line 763, in invoke
+            return __callback(*args, **kwargs)
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/cli/commands.py"", line 347, in lint
+            result = lnt.lint_string_wrapped(sys.stdin.read(), fname=""stdin"")
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/linter/linter.py"", line 789, in lint_string_wrapped
+            linted_path.add(self.lint_string(string, fname=fname, fix=fix))
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/linter/linter.py"", line 668, in lint_string
+            parsed = self.parse_string(in_str=in_str, fname=fname, config=config)
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/linter/linter.py"", line 607, in parse_string
+            return self.parse_rendered(rendered, recurse=recurse)
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/linter/linter.py"", line 313, in parse_rendered
+            parsed, pvs = cls._parse_tokens(
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/linter/linter.py"", line 190, in _parse_tokens
+            parsed: Optional[BaseSegment] = parser.parse(
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/parser/parser.py"", line 32, in parse
+            parsed = root_segment.parse(parse_context=ctx)
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/parser/segments/base.py"", line 821, in parse
+            check_still_complete(segments, m.matched_segments, m.unmatched_segments)
+          File ""/home/adam/prod/_inne/sqlfluff/src/sqlfluff/core/parser/helpers.py"", line 30, in check_still_complete
+            raise RuntimeError(
+        RuntimeError: Dropped elements in sequence matching! 'select id from tbl;;' != ';'
+        
+        ```
+        ## Steps to Reproduce
+        Run 
+        ```console
+        echo ""select id from tbl;;"" | sqlfluff lint -
+        ```
+        ## Dialect
+        default (ansi)
+        ## Version
+        ```
+        sqlfluff, version 0.6.6
+        Python 3.9.5
+        ```
+        ## Configuration
+        None
+        
+        ""#.to_string());
+        test_golden_file_search(&task, SQLFLUFF_ROOT_DIR).await;
+    }
 
-        let user_context = UserContext::new(vec![], vec![], None, vec![]);
-
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let symbol_manager = SymbolManager::new(
-            tool_broker.clone(),
-            symbol_broker.clone(),
-            editor_parsing,
-            editor_url.to_owned(),
-            sender,
-            anthropic_llm_properties.clone(),
-            user_context.clone(),
-            request_id.to_string(),
-        );
-
-        let initial_request = SymbolInputEvent::new(
-            user_context,
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            anthropic_api_keys,
-            task.problem_statement.clone(),
-            request_id.to_string(),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            true, // full_symbol_edit
-            true, // codebase search
-            Some(root_dir.to_string()),
-        );
-
-        let mut initial_request_task = Box::pin(symbol_manager.test_golden_file(initial_request));
-
-        loop {
-            tokio::select! {
-                event = receiver.recv() => {
-                    if event.is_none() {
-                        break; // Receiver closed, exit the loop
-                    }
-                }
-                result = &mut initial_request_task => {
-                    match result {
-                        Ok(symbols) => {
-                            assert!(!symbols.is_empty(), "Expected non-empty vector of symbols");
-                            assert!(
-                                symbols.iter().any(|symbol| symbol.file_path().ends_with(&task.golden_file)),
-                                "Expected golden file '{}' not found in the returned symbols",
-                                task.golden_file,
-                            );
-                            break
-                        }
-                        Err(e) => {
-                            eprintln!("Error in initial_request_task: {}", e);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+    #[tokio::test]
+    async fn test_sqlfluff_linted_file() {
+        let task = Task::new("src/sqlfluff/core/linter/linted_file.py".to_string(), r#""dbt postgres fix command errors with UnicodeEncodeError and also wipes the .sql file
+        _If this is a parsing or linting issue, please include a minimal SQL example which reproduces the issue, along with the `sqlfluff parse` output, `sqlfluff lint` output and `sqlfluff fix` output when relevant._
+        
+        ## Expected Behaviour
+        Violation failure notice at a minimum, without wiping the file. Would like a way to ignore the known error at a minimum as --noqa is not getting past this. Actually would expect --noqa to totally ignore this.
+        
+        ## Observed Behaviour
+        Reported error: `UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 120: character maps to <undefined>`
+        
+        ## Steps to Reproduce
+        SQL file:
+        ```sql
+        SELECT
+            reacted_table_name_right.descendant_id AS category_id,
+            string_agg(redacted_table_name_left.name, ' → ' ORDER BY reacted_table_name_right.generations DESC) AS breadcrumbs -- noqa
+        FROM {{ ref2('redacted_schema_name', 'redacted_table_name_left') }} AS redacted_table_name_left
+        INNER JOIN {{ ref2('redacted_schema_name', 'reacted_table_name_right') }} AS reacted_table_name_right
+            ON redacted_table_name_left.id = order_issue_category_hierarchies.ancestor_id
+        GROUP BY reacted_table_name_right.descendant_id
+        ```
+        Running `sqlfluff fix --ignore templating,parsing,lexing -vvvv` and accepting proposed fixes for linting violations.
+        
+        ## Dialect
+        `postgres`, with `dbt` templater
+        
+        ## Version
+        `python 3.7.12`
+        `sqlfluff 0.7.0`
+        `sqlfluff-templater-dbt 0.7.0`
+        
+        ## Configuration
+        I've tried a few, here's one:
+        ```
+        [sqlfluff]
+        verbose = 2
+        dialect = postgres
+        templater = dbt
+        exclude_rules = None
+        output_line_length = 80
+        runaway_limit = 10
+        ignore_templated_areas = True
+        processes = 3
+        # Comma separated list of file extensions to lint.
+        
+        # NB: This config will only apply in the root folder.
+        sql_file_exts = .sql
+        
+        [sqlfluff:indentation]
+        indented_joins = False
+        indented_using_on = True
+        template_blocks_indent = True
+        
+        [sqlfluff:templater]
+        unwrap_wrapped_queries = True
+        
+        [sqlfluff:templater:jinja]
+        apply_dbt_builtins = True
+        
+        [sqlfluff:templater:jinja:macros]
+        # Macros provided as builtins for dbt projects
+        dbt_ref = {% macro ref(model_ref) %}{{model_ref}}{% endmacro %}
+        dbt_source = {% macro source(source_name, table) %}{{source_name}}_{{table}}{% endmacro %}
+        dbt_config = {% macro config() %}{% for k in kwargs %}{% endfor %}{% endmacro %}
+        dbt_var = {% macro var(variable, default='') %}item{% endmacro %}
+        dbt_is_incremental = {% macro is_incremental() %}True{% endmacro %}
+        
+        # Common config across rules
+        [sqlfluff:rules]
+        tab_space_size = 4
+        indent_unit = space
+        single_table_references = consistent
+        unquoted_identifiers_policy = all
+        
+        # L001 - Remove trailing whitespace (fix)
+        # L002 - Single section of whitespace should not contain both tabs and spaces (fix)
+        # L003 - Keep consistent indentation (fix)
+        # L004 - We use 4 spaces for indentation just for completeness (fix)
+        # L005 - Remove space before commas (fix)
+        # L006 - Operators (+, -, *, /) will be wrapped by a single space each side (fix)
+        
+        # L007 - Operators should not be at the end of a line
+        [sqlfluff:rules:L007]  # Keywords
+        operator_new_lines = after
+        
+        # L008 - Always use a single whitespace after a comma (fix)
+        # L009 - Files will always end with a trailing newline
+        
+        # L010 - All keywords will use full upper case (fix)
+        [sqlfluff:rules:L010]  # Keywords
+        capitalisation_policy = upper
+        
+        # L011 - Always explicitly alias tables (fix)
+        [sqlfluff:rules:L011]  # Aliasing
+        aliasing = explicit
+        
+        # L012 - Do not have to explicitly alias all columns
+        [sqlfluff:rules:L012]  # Aliasing
+        aliasing = explicit
+        
+        # L013 - Always explicitly alias a column with an expression in it (fix)
+        [sqlfluff:rules:L013]  # Aliasing
+        allow_scalar = False
+        
+        # L014 - Always user full lower case for 'quoted identifiers' -> column refs. without an alias (fix)
+        [sqlfluff:rules:L014]  # Unquoted identifiers
+        extended_capitalisation_policy = lower
+        
+        # L015 - Always remove parenthesis when using DISTINCT to be clear that DISTINCT applies to all columns (fix)
+        
+        # L016 - Lines should be 120 characters of less. Comment lines should not be ignored (fix)
+        [sqlfluff:rules:L016]
+        ignore_comment_lines = False
+        max_line_length = 120
+        
+        # L017 - There should not be whitespace between function name and brackets (fix)
+        # L018 - Always align closing bracket of WITH to the WITH keyword (fix)
+        
+        # L019 - Always use trailing commas / commas at the end of the line (fix)
+        [sqlfluff:rules:L019]
+        comma_style = trailing
+        
+        # L020 - Table aliases will always be unique per statement
+        # L021 - Remove any use of ambiguous DISTINCT and GROUP BY combinations. Lean on removing the GROUP BY.
+        # L022 - Add blank lines after common table expressions (CTE) / WITH.
+        # L023 - Always add a single whitespace after AS in a WITH clause (fix)
+        
+        [sqlfluff:rules:L026]
+        force_enable = False
+        
+        # L027 - Always add references if more than one referenced table or view is used
+        
+        [sqlfluff:rules:L028]
+        force_enable = False
+        
+        [sqlfluff:rules:L029]  # Keyword identifiers
+        unquoted_identifiers_policy = aliases
+        
+        [sqlfluff:rules:L030]  # Function names
+        capitalisation_policy = upper
+        
+        # L032 - We prefer use of join keys rather than USING
+        # L034 - We prefer ordering of columns in select statements as (fix):
+        # 1. wildcards
+        # 2. single identifiers
+        # 3. calculations and aggregates
+        
+        # L035 - Omit 'else NULL'; it is redundant (fix)
+        # L036 - Move select targets / identifiers onto new lines each (fix)
+        # L037 - When using ORDER BY, make the direction explicit (fix)
+        
+        # L038 - Never use trailing commas at the end of the SELECT clause
+        [sqlfluff:rules:L038]
+        select_clause_trailing_comma = forbid
+        
+        # L039 - Remove unnecessary whitespace (fix)
+        
+        [sqlfluff:rules:L040]  # Null & Boolean Literals
+        capitalisation_policy = upper
+        
+        # L042 - Join clauses should not contain subqueries. Use common tables expressions (CTE) instead.
+        [sqlfluff:rules:L042]
+        # By default, allow subqueries in from clauses, but not join clauses.
+        forbid_subquery_in = join
+        
+        # L043 - Reduce CASE WHEN conditions to COALESCE (fix)
+        # L044 - Prefer a known number of columns along the path to the source data
+        # L045 - Remove unused common tables expressions (CTE) / WITH statements (fix)
+        # L046 - Jinja tags should have a single whitespace on both sides
+        
+        # L047 - Use COUNT(*) instead of COUNT(0) or COUNT(1) alternatives (fix)
+        [sqlfluff:rules:L047]  # Consistent syntax to count all rows
+        prefer_count_1 = False
+        prefer_count_0 = False
+        
+        # L048 - Quoted literals should be surrounded by a single whitespace (fix)
+        # L049 - Always use IS or IS NOT for comparisons with NULL (fix)
+        ```
+        
+        ""#.to_string());
+        test_golden_file_search(&task, SQLFLUFF_ROOT_DIR).await;
     }
 }

@@ -551,16 +551,6 @@ impl ToolInput {
         }
     }
 
-    pub fn codebase_wide_important_symbols(
-        self,
-    ) -> Result<CodeSymbolImportantWideSearch, ToolError> {
-        if let ToolInput::RequestImportantSybmolsCodeWide(request_code_symbol_important) = self {
-            Ok(request_code_symbol_important)
-        } else {
-            Err(ToolError::WrongToolInput(ToolType::RequestImportantSymbols))
-        }
-    }
-
     pub fn filter_code_snippets_for_editing(self) -> Result<CodeToEditFilterRequest, ToolError> {
         if let ToolInput::FilterCodeSnippetsForEditing(filter_code_snippets_for_editing) = self {
             Ok(filter_code_snippets_for_editing)

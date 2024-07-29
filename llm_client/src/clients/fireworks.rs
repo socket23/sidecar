@@ -33,7 +33,7 @@ struct FireworksAIRequestCompletion {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct ChoiceCompletionDelta {
-    content: String,
+    content: Option<String>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -132,6 +132,12 @@ impl FireworksAIClient {
         match model {
             LLMType::CodeLlama13BInstruct => {
                 Some("accounts/fireworks/models/llama-v2-13b-code".to_owned())
+            }
+            LLMType::Llama3_1_8bInstruct => {
+                Some("accounts/fireworks/models/llama-v3p1-8b-instruct".to_owned())
+            }
+            LLMType::Llama3_1_70bInstruct => {
+                Some("accounts/fireworks/models/llama-v3p1-70b-instruct".to_owned())
             }
             _ => None,
         }
@@ -237,12 +243,14 @@ impl LLMClient for FireworksAIClient {
                         continue;
                     }
                     let value = serde_json::from_str::<FireworksAIChatCompletion>(&event.data)?;
-                    buffered_string.push_str(&value.choices[0].delta.content);
-                    sender.send(LLMClientCompletionResponse::new(
-                        buffered_string.to_owned(),
-                        Some(value.choices[0].delta.content.to_owned()),
-                        original_model_str.to_owned(),
-                    ))?;
+                    if let Some(content) = &value.choices[0].delta.content {
+                        buffered_string.push_str(content);
+                        sender.send(LLMClientCompletionResponse::new(
+                            buffered_string.to_owned(),
+                            Some(content.to_owned()),
+                            original_model_str.to_owned(),
+                        ))?;
+                    };
                 }
                 Err(e) => {
                     dbg!(e);

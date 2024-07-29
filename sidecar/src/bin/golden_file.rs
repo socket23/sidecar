@@ -173,6 +173,7 @@ mod tests {
     const SQLFLUFF_ROOT_DIR: &str = "/Users/zi/codestory/testing/sqlfluff";
 
     #[tokio::test]
+    // commit: f1dba0e1dd764ae72d67c3d5e1471cf14d3db030
     async fn test_sqlfluff_060() {
         let task = Task::new("src/sqlfluff/rules/L060.py".to_string(), r#""Rule L060 could give a specific error message
         At the moment rule L060 flags something like this:
@@ -203,6 +204,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // commit: a1579a16b1d8913d9d7c7d12add374a290bcc78c
     async fn test_sqlfluff_039() {
         let task = Task::new("src/sqlfluff/rules/L039.py".to_string(), r#""Extra space when first field moved to new line in a WITH statement
         Note, the query below uses a `WITH` statement. If I just try to fix the SQL within the CTE, this works fine.
@@ -281,6 +283,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // commit: 14e1a23a3166b9a645a16de96f694c77a5d4abb7
     async fn test_sqlfluff_031() {
         let task = Task::new("src/sqlfluff/rules/L031.py".to_string(), r#""TSQL - L031 incorrectly triggers ""Avoid using aliases in join condition"" when no join present
         ## Expected Behaviour
@@ -331,6 +334,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // commit: 304a197829f98e7425a46d872ada73176137e5ae
     async fn test_sqlfluff_helpers() {
         let task = Task::new("src/sqlfluff/core/parser/helpers.py".to_string(), r#""""Dropped elements in sequence matching"" when doubled semicolon
         ## Expected Behaviour
@@ -392,6 +396,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // commit: a10057635e5b2559293a676486f0b730981f037a
     async fn test_sqlfluff_linted_file() {
         let task = Task::new("src/sqlfluff/core/linter/linted_file.py".to_string(), r#""dbt postgres fix command errors with UnicodeEncodeError and also wipes the .sql file
         _If this is a parsing or linting issue, please include a minimal SQL example which reproduces the issue, along with the `sqlfluff parse` output, `sqlfluff lint` output and `sqlfluff fix` output when relevant._

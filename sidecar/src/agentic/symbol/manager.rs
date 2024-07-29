@@ -468,7 +468,7 @@ impl SymbolManager {
                         .clone()
                         .symbols()
                         .iter()
-                        .map(|s| format!("Symbol: {}\nPath: {}", s.code_symbol(), s.file_path()))
+                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
                         .collect::<Vec<String>>()
                         .join(", ")
                 );
@@ -479,7 +479,7 @@ impl SymbolManager {
                         .clone()
                         .ordered_symbols()
                         .iter()
-                        .map(|s| format!("Symbol: {}\nPath: {}", s.code_symbol(), s.file_path()))
+                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
                         .collect::<Vec<String>>()
                         .join(", ")
                 );

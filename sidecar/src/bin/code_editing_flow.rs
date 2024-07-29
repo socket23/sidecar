@@ -124,7 +124,7 @@ async fn main() {
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
     let problem_statement =
-        r#"TSQL - L031 incorrectly triggers "Avoid using aliases in join condition" when no join present ## Expected Behaviour Both of these queries should pass, the only difference is the addition of a table alias 'a': 1/ no alias ``` SELECT [hello] FROM mytable ``` 2/ same query with alias ``` SELECT a.[hello] FROM mytable AS a ``` ## Observed Behaviour 1/ passes 2/ fails with: L031: Avoid using aliases in join condition. But there is no join condition :-) ## Steps to Reproduce Lint queries above ## Dialect TSQL ## Version sqlfluff 0.6.9 Python 3.6.9 ## Configuration N/A"#
+        r#"Rule L060 could give a specific error message At the moment rule L060 flags something like this: ``` L: 21 | P: 9 | L060 | Use 'COALESCE' instead of 'IFNULL' or 'NVL'. ``` Since we likely know the wrong word, it might be nice to actually flag that instead of both `IFNULL` and `NVL` - like most of the other rules do. That is it should flag this: ``` L: 21 | P: 9 | L060 | Use 'COALESCE' instead of 'IFNULL'. ``` Or this: ``` L: 21 | P: 9 | L060 | Use 'COALESCE' instead of 'NVL'. ``` As appropriate. What do you think @jpy-git ?"#
             .to_owned();
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"

@@ -14,6 +14,7 @@ use crate::agentic::symbol::events::initial_request::InitialRequestData;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
+use crate::agentic::symbol::ui_event::InitialSearchSymbolInformation;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
@@ -463,6 +464,29 @@ impl SymbolManager {
                         }
                     }
                 };
+
+                // send a UI event to the frontend over here
+                let _ = self
+                    .ui_sender
+                    .send(UIEventWithID::initial_search_symbol_event(
+                        request_id.to_owned(),
+                        important_symbols
+                            .ordered_symbols()
+                            .into_iter()
+                            .map(|symbol| {
+                                InitialSearchSymbolInformation::new(
+                                    symbol.code_symbol().to_owned(),
+                                    // TODO(codestory): umm.. how can we have a file path for a symbol
+                                    // which does not exist if is_new is true
+                                    Some(symbol.file_path().to_owned()),
+                                    symbol.is_new(),
+                                    symbol.steps().join("\n"),
+                                )
+                            })
+                            .collect(),
+                    ));
+
+                // get the high level plan over here
                 let high_level_plan = important_symbols.ordered_symbols_to_plan();
                 let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");

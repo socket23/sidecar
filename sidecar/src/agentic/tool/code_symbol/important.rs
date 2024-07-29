@@ -180,6 +180,7 @@ pub struct CodeSymbolImportantWideSearch {
     api_key: LLMProviderAPIKeys,
     file_extension_filters: HashSet<String>,
     root_request_id: String,
+    symbol_outline: String,
 }
 
 impl CodeSymbolImportantWideSearch {
@@ -190,6 +191,7 @@ impl CodeSymbolImportantWideSearch {
         llm_provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
         root_request_id: String,
+        symbol_outline: String,
     ) -> Self {
         Self {
             user_context,
@@ -199,7 +201,12 @@ impl CodeSymbolImportantWideSearch {
             api_key,
             file_extension_filters: Default::default(),
             root_request_id,
+            symbol_outline,
         }
+    }
+
+    pub fn symbol_outline(&self) -> &str {
+        &self.symbol_outline
     }
 
     pub fn root_request_id(&self) -> &str {

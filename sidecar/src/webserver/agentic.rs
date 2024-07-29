@@ -143,6 +143,7 @@ pub async fn probe_request(
         user_context.clone(),
         request_id.to_owned(),
     );
+
     // spawn a background thread to keep polling the probe_request future
     let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
@@ -262,6 +263,7 @@ pub async fn swe_bench(
                     None,
                     false,
                     false,
+                    None,
                     None,
                 )
                 .set_swe_bench_id(swe_bench_id),
@@ -388,6 +390,7 @@ pub async fn code_editing(
                 true,
                 codebase_search,
                 Some(root_directory),
+                None,
             ))
             .await;
     });

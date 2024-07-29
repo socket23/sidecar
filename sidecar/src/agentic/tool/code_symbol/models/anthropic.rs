@@ -4683,6 +4683,7 @@ You will be given context which the user has selected in <user_context> and you 
 - Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_list> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
 - If we are using absolute paths, make sure to use absolute paths in your reply.
+- We will give you an outline of the symbols which are present in the file so you can use that as reference for selecting the right symbol, this outline is present to you in <outline> section
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
 
 Let's focus on getting the "code symbols" which are necessary to satisfy the user query.
@@ -4738,6 +4739,17 @@ impl FillInMiddleBroker {{
     }}
 ```
 </code_selection>
+
+<outline>
+FILEPATH: /broker/fill_in_middle.rs
+pub struct FillInMiddleBroker {{
+    provider: HashMap<LLMType, Box<dyn FillInMiddleFormatter + Send + Sync>>,
+}}
+
+impl FillInMiddleBroker {{
+    pub fn new() -> Self
+}}
+</outline>
 
 and the user query is:
 <user_query>
@@ -4897,6 +4909,16 @@ fn inline_completion() -> Router {{
 
 ```
 </code_selection>
+<outline>
+FILEPATH: /src/bin/webserver.rs
+fn tree_sitter_router -> Router
+
+FILEPATH: /src/bin/webserver.rs
+fn file_operations_router() -> Router
+
+FILEPATH: /src/bin/webserver.rs
+fn inline_completion() -> Router
+</outline>
 
 and the user query is:
 <user_query>
@@ -5152,13 +5174,21 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
     ) -> Result<String, CodeSymbolError> {
         let user_query = code_symbol_search_context_wide.user_query().to_owned();
         let file_extension_filter = code_symbol_search_context_wide.file_extension_filters();
+        let outline = code_symbol_search_context_wide.symbol_outline().to_owned();
         let user_context = code_symbol_search_context_wide.remove_user_context();
         let context_string = user_context
             .to_xml(file_extension_filter)
             .await
             .map_err(|e| CodeSymbolError::UserContextError(e))?;
         // also send the user query here
-        Ok(context_string + "\n" + "<user_query>\n" + &user_query + "\n</user_query>")
+        Ok(context_string
+            + "\n"
+            + "<outline>\n"
+            + &outline
+            + "\n</outline>\n"
+            + "<user_query>\n"
+            + &user_query
+            + "\n</user_query>")
     }
 
     fn system_message_for_repo_map_search(

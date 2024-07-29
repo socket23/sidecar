@@ -22,7 +22,7 @@ use crate::agentic::{
                 CodeSymbolFollowAlongForProbing, CodeSymbolImportant, CodeSymbolImportantRequest,
                 CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
                 CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest,
-                CodeSymbolUtilityRequest, CodeSymbolWithSteps, CodeSymbolWithThinking,
+                CodeSymbolUtilityRequest, CodeSymbolWithSteps,
             },
             repo_map_search::{RepoMapSearch, RepoMapSearchQuery},
             types::{CodeSymbolError, SerdeError},
@@ -67,28 +67,6 @@ impl AnthropicCodeSymbolImportant {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "name")]
-pub struct SymbolName {
-    #[serde(rename = "$value")]
-    name: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "thinking")]
-pub struct SymbolThinking {
-    #[serde(rename = "$value")]
-    thinking: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "symbol")]
-pub struct Symbol {
-    name: String,
-    thinking: String,
-    file_path: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "step_list")]
 pub struct StepListItem {
     name: String,
@@ -96,13 +74,6 @@ pub struct StepListItem {
     #[serde(default)]
     new: bool,
     file_path: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "symbol_list")]
-pub struct SymbolList {
-    #[serde(rename = "$value")]
-    symbol_list: Vec<Symbol>,
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -115,7 +86,6 @@ pub struct StepList {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct Reply {
-    symbol_list: SymbolList,
     // #[serde(rename = "step_by_step")]
     #[serde(default)]
     step_by_step: StepList,
@@ -377,7 +347,6 @@ impl Reply {
             })
             .collect::<Vec<_>>();
         Self {
-            symbol_list: self.symbol_list,
             step_by_step: StepList {
                 steps: step_by_step,
             },
@@ -387,25 +356,13 @@ impl Reply {
 
 impl Reply {
     fn to_code_symbol_important_response(self) -> CodeSymbolImportantResponse {
-        let code_symbols_with_thinking = self
-            .symbol_list
-            .symbol_list
-            .into_iter()
-            .map(|symbol_list| {
-                CodeSymbolWithThinking::new(
-                    symbol_list.name,
-                    symbol_list.thinking,
-                    symbol_list.file_path,
-                )
-            })
-            .collect();
         let code_symbols_with_steps = self
             .step_by_step
             .steps
             .into_iter()
             .map(|step| CodeSymbolWithSteps::new(step.name, step.step, step.new, step.file_path))
             .collect();
-        CodeSymbolImportantResponse::new(code_symbols_with_thinking, code_symbols_with_steps)
+        CodeSymbolImportantResponse::new(vec![], code_symbols_with_steps)
     }
 
     fn unescape_xml(s: String) -> String {
@@ -4750,41 +4707,9 @@ I want to add support for the grok llm
 
 Your reply should be, you should strictly follow this format:
 <reply>
-<symbol_list>
-<symbol>
-<name>
-LLMType
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
 <thinking>
-We need to first check if grok is part of the LLMType enum, this will make sure that the code we produce is never wrong
+Check if the LLMType supports grok and the various definitions which are present in `FillInMiddleBroker`
 </thinking>
-</symbol>
-<symbol>
-<name>
-FillInMiddleFormatter
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
-<thinking>
-Other LLM's are implementing FillInMiddleFormatter trait, grok will also require support for this, so we need to check how to implement FillInMiddleFormatter trait
-</thinking>
-</symbol>
-<symbol>
-<name>
-new
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
-<thinking>
-We have to change the new function and add the grok llm after implementing the formatter for grok llm.
-</thinking>
-</symbol>
-</symbol_list>
 <step_by_step>
 <step_list>
 <name>
@@ -4832,139 +4757,6 @@ true
 <step>
 Implement the GrokFillInMiddleFormatter following the similar pattern in `CodeLlamaFillInMiddleFormatter`
 </step>
-</step_list>
-</step_by_step>
-</reply>
-
-Another example:
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<code_selection>
-```rust
-fn tree_sitter_router() -> Router {{
-    use axum::routing::*;
-    Router::new()
-        .route(
-            "/documentation_parsing",
-            post(sidecar::webserver::tree_sitter::extract_documentation_strings),
-        )
-        .route(
-            "/diagnostic_parsing",
-            post(sidecar::webserver::tree_sitter::extract_diagnostics_range),
-        )
-        .route(
-            "/tree_sitter_valid",
-            post(sidecar::webserver::tree_sitter::tree_sitter_node_check),
-        )
-}}
-
-fn file_operations_router() -> Router {{
-    use axum::routing::*;
-    Router::new().route("/edit_file", post(sidecar::webserver::file_edit::file_edit))
-}}
-
-fn inline_completion() -> Router {{
-    use axum::routing::*;
-    Router::new()
-        .route(
-            "/inline_completion",
-            post(sidecar::webserver::inline_completion::inline_completion),
-        )
-        .route(
-            "/cancel_inline_completion",
-            post(sidecar::webserver::inline_completion::cancel_inline_completion),
-        )
-        .route(
-            "/document_open",
-            post(sidecar::webserver::inline_completion::inline_document_open),
-        )
-        .route(
-            "/document_content_changed",
-            post(sidecar::webserver::inline_completion::inline_completion_file_content_change),
-        )
-        .route(
-            "/get_document_content",
-            post(sidecar::webserver::inline_completion::inline_completion_file_content),
-        )
-        .route(
-            "/get_identifier_nodes",
-            post(sidecar::webserver::inline_completion::get_identifier_nodes),
-        )
-        .route(
-            "/get_symbol_history",
-            post(sidecar::webserver::inline_completion::symbol_history),
-        )
-}}
-
-// TODO(skcd): Figure out why we are passing the context in the suffix and not the prefix
-
-```
-</code_selection>
-<outline>
-FILEPATH: /src/bin/webserver.rs
-fn tree_sitter_router -> Router
-
-FILEPATH: /src/bin/webserver.rs
-fn file_operations_router() -> Router
-
-FILEPATH: /src/bin/webserver.rs
-fn inline_completion() -> Router
-</outline>
-
-and the user query is:
-<user_query>
-I want to get the list of most important symbols in inline completions
-</user_query>
-
-Your reply should be:
-<reply>
-<symbol_list>
-<symbol>
-<name>
-inline_completion
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-inline_completion holds all the endpoints for symbols because it also has the `get_symbol_history` endpoint. We have to start adding the endpoint there
-</thinking>
-</symbol>
-<symbol>
-<name>
-symbol_history
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-I can find more information on how to write the code for the endpoint by following the symbol `symbol_history` in the line: `             post(sidecar::webserver::inline_completion::symbol_history),`
-<thinking>
-</symbol>
-</symbol_list>
-<step_by_step>
-<step_list>
-<name>
-symbol_history
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-We need to follow the symbol_history to check the pattern on how we are going to implement the very similar functionality
-</thinking>
-</step_list>
-<step_list>
-<name>
-inline_completion
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-We have to add the newly created endpoint in inline_completion to add support for the new endpoint which we want to create
-</thinking>
 </step_list>
 </step_by_step>
 </reply>"#

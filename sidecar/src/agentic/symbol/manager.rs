@@ -14,7 +14,9 @@ use crate::agentic::symbol::events::initial_request::InitialRequestData;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
-use crate::agentic::tool::code_symbol::important::{self, CodeSymbolImportantWideSearch};
+use crate::agentic::tool::code_symbol::important::{
+    self, CodeSymbolImportantWideSearch, CodeSymbolWithSteps,
+};
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
@@ -313,6 +315,192 @@ impl SymbolManager {
         Ok(())
     }
 
+    pub async fn test_golden_file(
+        &self,
+        input_event: SymbolInputEvent,
+    ) -> Result<Vec<CodeSymbolWithSteps>, SymbolError> {
+        let user_context = input_event.provided_context().clone();
+        let request_id = input_event.request_id().to_owned();
+        let _ = self.ui_sender.send(UIEventWithID::for_codebase_event(
+            request_id.to_owned(),
+            input_event.clone(),
+        ));
+        let is_full_edit = input_event.full_symbol_edit();
+        let swe_bench_id = input_event.swe_bench_instance_id();
+        let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
+        let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
+        let swe_bench_code_editing_model = input_event.get_swe_bench_code_editing();
+        let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
+        let swe_bench_long_context_editing = input_event.get_swe_bench_long_context_editing();
+        let full_symbol_edit = input_event.full_symbol_edit();
+        let tool_properties = ToolProperties::new()
+            .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
+            .set_swe_bench_code_editing_llm(swe_bench_code_editing_model)
+            .set_swe_bench_reranking_llm(swe_bench_gemini_properties)
+            .set_long_context_editing_llm(swe_bench_long_context_editing)
+            .set_full_symbol_request(full_symbol_edit);
+        let tool_properties_ref = &tool_properties;
+        let user_query = input_event.user_query().to_owned();
+        let tool_input = input_event
+            .tool_use_on_initial_invocation(self.tool_box.clone(), &request_id)
+            .await;
+        if let Some(tool_input) = tool_input {
+            // send the tool input to the ui sender
+            // we need some kind of cache here so we do not invoke the expensive
+            // query so many times
+            let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
+                request_id.to_owned(),
+                tool_input.clone(),
+            ));
+            let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
+                let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
+                if let Some(_git_dname) = swe_bench_git_dname {
+                    match symbols {
+                        Some(symbols) => Some(symbols),
+                        None => None,
+                    }
+                } else {
+                    symbols
+                }
+            } else {
+                if request_id == "testing_code_editing_flow" {
+                    self.long_context_cache.check_cache(&request_id).await
+                } else {
+                    None
+                }
+            };
+
+            let tool_output = match important_symbols {
+                Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
+                None => {
+                    if tool_input.is_repo_map_search() {
+                        let _ = self
+                            .ui_sender
+                            .send(UIEventWithID::start_long_context_search(
+                                request_id.to_owned(),
+                            ));
+                        let result = self
+                            .tools
+                            .invoke(tool_input)
+                            .await
+                            .map_err(|e| SymbolError::ToolError(e));
+                        let _ = self
+                            .ui_sender
+                            .send(UIEventWithID::finish_long_context_search(
+                                request_id.to_owned(),
+                            ));
+                        result?
+                    } else {
+                        println!("initial_request::important_symbols::match-None");
+                        println!(
+                            "Type of tool_input: {:?}",
+                            std::any::type_name::<ToolInput>()
+                        );
+                        self.tools
+                            .invoke(tool_input)
+                            .await
+                            .map_err(|e| SymbolError::ToolError(e))?
+                    }
+                }
+            };
+
+            if let ToolOutput::ImportantSymbols(important_symbols)
+            | ToolOutput::RepoMapSearch(important_symbols) = tool_output
+            {
+                // The fix symbol name here helps us get the top-level symbol name
+                // if the LLM decides to have fun and spit out a.b.c instead of a or b or c individually
+                // as it can with python where it will tell class.method_name instead of just class or just
+                // method_name
+
+                // should pass self.editorparsing <tsconfigs>
+                let important_symbols = important_symbols.fix_symbol_names(self.ts_parsing.clone());
+                // swe bench caching hit over here we just do it
+                self.long_context_cache
+                    .update_cache(swe_bench_id.clone(), &important_symbols)
+                    .await;
+                // TODO(codestory): Remove this after testing
+                if request_id == "testing_code_editing_flow" {
+                    let _ = self
+                        .long_context_cache
+                        .update_cache(Some(request_id.to_owned()), &important_symbols)
+                        .await;
+                }
+
+                // Debug printing
+                println!("Important symbols: {:?}", &important_symbols);
+
+                println!("symbol_manager::planning_before_editing");
+                let important_symbols = match self
+                    .long_context_cache
+                    .check_cache_for_plan_before_editing(
+                        swe_bench_id
+                            .clone()
+                            .map(|_swe_bench_id| request_id.to_owned()),
+                    )
+                    .await
+                {
+                    Some(important_symbols) => important_symbols,
+                    None => {
+                        if is_full_edit {
+                            important_symbols
+                        } else {
+                            let important_symbols = self
+                                .tool_box
+                                .planning_before_code_editing(
+                                    &important_symbols,
+                                    &user_query,
+                                    self.llm_properties.clone(),
+                                    &request_id,
+                                )
+                                .await?
+                                .fix_symbol_names(self.ts_parsing.clone());
+                            self.long_context_cache
+                                .update_cache_for_plan_before_editing(
+                                    swe_bench_id.map(|_swe_bench_id| request_id.to_owned()),
+                                    &important_symbols,
+                                )
+                                .await;
+                            important_symbols
+                        }
+                    }
+                };
+
+                println!(
+                    "initial_request::symbols:\n{}",
+                    important_symbols
+                        .clone()
+                        .symbols()
+                        .iter()
+                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
+
+                println!(
+                    "initial_request::ordered_symbols:\n{}",
+                    important_symbols
+                        .clone()
+                        .ordered_symbols()
+                        .iter()
+                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
+
+                let high_level_plan = important_symbols.ordered_symbols_to_plan();
+                let high_level_plan_ref = &high_level_plan;
+                println!("symbol_manager::plan_finished_before_editing");
+
+                println!("initial_request::high_level_plan: {:?}", high_level_plan);
+
+                Ok(important_symbols.ordered_symbols().to_vec())
+            } else {
+                Ok(Vec::new())
+            }
+        } else {
+            Ok(Vec::new())
+        }
+    }
     // once we have the initial request, which we will go through the initial request
     // mode once, we have the symbols from it we can use them to spin up sub-symbols as well
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {

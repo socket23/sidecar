@@ -137,6 +137,10 @@ impl SymbolManager {
                 )
                 .await
         );
+        let outline = self
+            .tool_box
+            .outline_for_user_context(&user_context, &request_id)
+            .await;
         let code_wide_search =
             ToolInput::RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch::new(
                 user_context.clone(),
@@ -148,6 +152,7 @@ impl SymbolManager {
                     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                 )),
                 self.root_request_id.to_owned(),
+                outline,
             ));
         // send the request on to the ui sender
         let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
@@ -330,12 +335,14 @@ impl SymbolManager {
         let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
         let swe_bench_long_context_editing = input_event.get_swe_bench_long_context_editing();
         let full_symbol_edit = input_event.full_symbol_edit();
+        let fast_code_symbol_llm = input_event.get_fast_code_symbol_llm();
         let tool_properties = ToolProperties::new()
             .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
             .set_swe_bench_code_editing_llm(swe_bench_code_editing_model)
             .set_swe_bench_reranking_llm(swe_bench_gemini_properties)
             .set_long_context_editing_llm(swe_bench_long_context_editing)
-            .set_full_symbol_request(full_symbol_edit);
+            .set_full_symbol_request(full_symbol_edit)
+            .set_fast_code_symbol_search(fast_code_symbol_llm);
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event

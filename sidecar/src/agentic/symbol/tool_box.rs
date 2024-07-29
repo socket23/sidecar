@@ -3934,6 +3934,60 @@ instruction:
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    /// We get the outline of the files which are mentioned in the user context
+    /// along with the variables (excluding any selection)
+    pub async fn outline_for_user_context(
+        &self,
+        user_context: &UserContext,
+        request_id: &str,
+    ) -> String {
+        // we need to traverse the files and the folders which are mentioned over here
+        let file_paths = user_context
+            .file_content_map
+            .iter()
+            .map(|file_content_value| file_content_value.file_path.to_owned())
+            .into_iter()
+            .collect::<HashSet<String>>();
+        let _ = stream::iter(file_paths.clone())
+            .map(|file_path| async move {
+                let file_open_response = self.file_open(file_path.to_owned(), request_id).await;
+                if let Ok(file_open_response) = file_open_response {
+                    // force add the document
+                    let _ = self
+                        .force_add_document(
+                            &file_path,
+                            file_open_response.contents_ref(),
+                            file_open_response.language(),
+                        )
+                        .await;
+                }
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+
+        // now we want to parse the files which we are getting
+        stream::iter(file_paths)
+            .map(|file_path| async move {
+                let outline_nodes = self.get_outline_nodes_grouped(&file_path).await;
+                (file_path, outline_nodes)
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|(_, outline_nodes)| outline_nodes)
+            .map(|outline_nodes| {
+                outline_nodes
+                    .into_iter()
+                    .filter_map(|outline_node| outline_node.get_outline_node_compressed())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     async fn invoke_quick_action(
         &self,
         quick_fix_index: i64,

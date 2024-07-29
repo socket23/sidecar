@@ -5,7 +5,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{AnthropicAPIKey, FireworksAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
@@ -43,6 +43,13 @@ async fn main() {
         LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,
         anthropic_api_keys.clone(),
+    );
+    let llama_70b_properties = LLMProperties::new(
+        LLMType::Llama3_1_70bInstruct,
+        LLMProvider::FireworksAI,
+        LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+            "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+        )),
     );
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
@@ -147,6 +154,7 @@ async fn main() {
         true,
         false,
         None,
+        Some(llama_70b_properties),
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

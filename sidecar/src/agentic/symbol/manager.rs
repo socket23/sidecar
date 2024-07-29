@@ -14,7 +14,7 @@ use crate::agentic::symbol::events::initial_request::InitialRequestData;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
-use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
+use crate::agentic::tool::code_symbol::important::{self, CodeSymbolImportantWideSearch};
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
@@ -367,11 +367,6 @@ impl SymbolManager {
                 }
             };
 
-            println!(
-                "intiial_request::important_symbols: {:?}",
-                important_symbols
-            );
-
             let tool_output = match important_symbols {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
                 None => {
@@ -466,6 +461,29 @@ impl SymbolManager {
                         }
                     }
                 };
+
+                println!(
+                    "initial_request::symbols:\n{}",
+                    important_symbols
+                        .clone()
+                        .symbols()
+                        .iter()
+                        .map(|s| format!("Symbol: {}\nPath: {}", s.code_symbol(), s.file_path()))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
+
+                println!(
+                    "initial_request::ordered_symbols:\n{}",
+                    important_symbols
+                        .clone()
+                        .ordered_symbols()
+                        .iter()
+                        .map(|s| format!("Symbol: {}\nPath: {}", s.code_symbol(), s.file_path()))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
+
                 let high_level_plan = important_symbols.ordered_symbols_to_plan();
                 let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");

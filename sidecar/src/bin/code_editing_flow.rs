@@ -81,25 +81,25 @@ async fn main() {
     // let file_path =
     //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned();
-    let file_paths = vec![
-        "/Users/skcd/test_repo/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
-        "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
-    ];
-    let file_content_value = stream::iter(file_paths)
-        .map(|file_path| async move {
-            let file_content = String::from_utf8(
-                tokio::fs::read(file_path.to_owned())
-                    .await
-                    .expect("to work"),
-            )
-            .expect("to work");
-            FileContentValue::new(file_path, file_content, "rust".to_owned())
-        })
-        .buffer_unordered(2)
-        .collect::<Vec<_>>()
-        .await;
+    // let file_paths = vec![
+    //     "/Users/zi/codestory/testing/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
+    //     "/Users/zi/codestory/testing/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
+    // ];
+    // let file_content_value = stream::iter(file_paths)
+    //     .map(|file_path| async move {
+    //         let file_content = String::from_utf8(
+    //             tokio::fs::read(file_path.to_owned())
+    //                 .await
+    //                 .expect("to work"),
+    //         )
+    //         .expect("to work");
+    //         FileContentValue::new(file_path, file_content, "rust".to_owned())
+    //     })
+    //     .buffer_unordered(2)
+    //     .collect::<Vec<_>>()
+    //     .await;
 
-    let user_context = UserContext::new(vec![], file_content_value, None, vec![]);
+    let user_context = UserContext::new(vec![], vec![], None, vec![]);
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -124,11 +124,14 @@ async fn main() {
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
     let problem_statement =
-        "Add support for a new stop_code_editing endpoint and implement it similar to probing stop"
+        r#"TSQL - L031 incorrectly triggers "Avoid using aliases in join condition" when no join present ## Expected Behaviour Both of these queries should pass, the only difference is the addition of a table alias 'a': 1/ no alias ``` SELECT [hello] FROM mytable ``` 2/ same query with alias ``` SELECT a.[hello] FROM mytable AS a ``` ## Observed Behaviour 1/ passes 2/ fails with: L031: Avoid using aliases in join condition. But there is no join condition :-) ## Steps to Reproduce Lint queries above ## Dialect TSQL ## Version sqlfluff 0.6.9 Python 3.6.9 ## Configuration N/A"#
             .to_owned();
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
     //         .to_owned();
+
+    let root_dir = "/Users/zi/codestory/testing/sqlfluff/src/sqlfluff".to_owned();
+
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,
@@ -144,9 +147,9 @@ async fn main() {
         None,
         None,
         None,
-        true,
-        false,
-        None,
+        true, // full_symbol_edit
+        true, // codebase search
+        Some(root_dir),
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

@@ -392,7 +392,7 @@ impl ToolBox {
                 sub_symbol.fs_file_path().to_owned(),
                 user_query,
                 LLMProperties::new(
-                    LLMType::Gpt4OMini,
+                    LLMType::Gpt4O,
                     LLMProvider::OpenAI,
                     LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
                         "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),

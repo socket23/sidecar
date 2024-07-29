@@ -1016,7 +1016,7 @@ impl CodeSymbolWithSteps {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct CodeSymbolImportantResponse {
     symbols: Vec<CodeSymbolWithThinking>,
     ordered_symbols: Vec<CodeSymbolWithSteps>,

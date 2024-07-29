@@ -498,66 +498,52 @@ impl SymbolManager {
                         .map_err(|e| e.into())?;
                 }
 
-                let request_id_ref = &request_id;
-                let symbol_identifiers_to_query = symbols
-                    .iter()
-                    .map(|symbol| symbol.to_symbol_identifier())
-                    .collect::<Vec<_>>();
                 // This is where we are creating all the symbols
-                let symbol_identifiers = stream::iter(symbols)
-                    .map(|symbol_request| async move {
-                        let symbol_identifier = self
-                            .symbol_locker
-                            .create_symbol_agent(
-                                symbol_request,
-                                request_id_ref.to_owned(),
-                                tool_properties_ref.clone(),
-                            )
-                            .await;
-                        symbol_identifier
-                    })
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await
-                    .into_iter()
-                    .filter_map(|s| s.ok())
-                    .collect::<Vec<_>>();
-
-                dbg!("Symbol identifiers size: ({})", symbol_identifiers.len());
-                // Once we have the symbols spinning up, we send them the original request
-                // which the user had and send it over and then we can await on all of them
-                // working at the same time.
-                dbg!("initial request");
-                // we can synchronize this a bit and let the symbols go out
-                // one after the other
-                for symbol_identifier in symbol_identifiers_to_query.into_iter() {
-                    let symbol_event_request = SymbolEventRequest::new(
-                        symbol_identifier.clone(),
-                        SymbolEvent::InitialRequest(InitialRequestData::new(
-                            user_query.to_owned(),
-                            Some(high_level_plan_ref.to_owned()),
-                            // empty history when symbol manager sends the initial
-                            // request
-                            vec![],
-                            full_symbol_edit,
-                        )),
-                        tool_properties_ref.clone(),
-                    );
-                    let (sender, receiver) = tokio::sync::oneshot::channel();
-                    dbg!(
-                        "sending initial request to symbol: {:?}",
-                        &symbol_identifier
-                    );
-                    self.symbol_locker
-                        .process_request((symbol_event_request, request_id.to_owned(), sender))
+                let _ = stream::iter(
+                    symbols
+                        .into_iter()
+                        .map(|symbol| (symbol, request_id.to_owned(), user_query.to_owned())),
+                )
+                .map(|(symbol_request, request_id, user_query)| async move {
+                    let symbol_identifier = self
+                        .symbol_locker
+                        .create_symbol_agent(
+                            symbol_request,
+                            request_id.to_owned(),
+                            tool_properties_ref.clone(),
+                        )
                         .await;
-                    let response = receiver.await;
-                    dbg!(
-                        "For symbol identifier: {:?} the response is {:?}",
-                        &symbol_identifier,
-                        &response
-                    );
-                }
+                    if let Ok(symbol_identifier) = symbol_identifier {
+                        let symbol_event_request = SymbolEventRequest::new(
+                            symbol_identifier.clone(),
+                            SymbolEvent::InitialRequest(InitialRequestData::new(
+                                user_query.to_owned(),
+                                Some(high_level_plan_ref.to_owned()),
+                                // empty history when symbol manager sends the initial
+                                // request
+                                vec![],
+                                full_symbol_edit,
+                            )),
+                            tool_properties_ref.clone(),
+                        );
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        dbg!(
+                            "sending initial request to symbol: {:?}",
+                            &symbol_identifier
+                        );
+                        self.symbol_locker
+                            .process_request((symbol_event_request, request_id.to_owned(), sender))
+                            .await;
+                        let response = receiver.await;
+                        dbg!(
+                            "For symbol identifier: {:?} the response is {:?}",
+                            &symbol_identifier,
+                            &response
+                        );
+                    }
+                })
+                .collect::<Vec<_>>()
+                .await;
             }
         } else {
             // We are for some reason not even invoking the first passage which is

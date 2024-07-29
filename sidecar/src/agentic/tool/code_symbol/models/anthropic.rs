@@ -5,7 +5,7 @@ use tracing::info;
 
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
 use crate::agentic::{
@@ -42,14 +42,6 @@ impl AnthropicCodeSymbolImportant {
         Self {
             llm_client,
             fail_over_llm,
-        }
-    }
-
-    fn is_model_supported(&self, llm_type: &LLMType) -> bool {
-        if llm_type.is_anthropic() || llm_type.is_openai() || llm_type.is_gemini_model() {
-            true
-        } else {
-            false
         }
     }
 
@@ -5506,12 +5498,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(code_symbols.model().is_gemini_model()
-            || code_symbols.model().is_anthropic()
-            || code_symbols.model().is_openai())
-        {
-            return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
-        }
         let system_message = LLMClientMessage::system(self.system_message(&code_symbols));
         let user_message = LLMClientMessage::user(self.user_message(&code_symbols));
         let messages = LLMClientCompletionRequest::new(
@@ -5585,9 +5571,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantWideSearch,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(self.is_model_supported(code_symbols.model())) {
-            return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
-        }
         let api_key = code_symbols.api_key();
         let provider = code_symbols.llm_provider();
         let model = code_symbols.model().clone();
@@ -5656,11 +5639,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         utility_symbol_request: CodeSymbolUtilityRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(self.is_model_supported(&utility_symbol_request.model())) {
-            return Err(CodeSymbolError::WrongLLM(
-                utility_symbol_request.model().clone(),
-            ));
-        }
         let api_key = utility_symbol_request.api_key();
         let provider = utility_symbol_request.provider();
         let model = utility_symbol_request.model();
@@ -5700,9 +5678,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<CodeSymbolToAskQuestionsResponse, CodeSymbolError> {
-        if !(self.is_model_supported(&request.model())) {
-            return Err(CodeSymbolError::WrongLLM(request.model().clone()));
-        }
         let root_request_id = request.root_request_id().to_owned();
         let model = request.model().clone();
         let request_api_key = request.api_key().clone();

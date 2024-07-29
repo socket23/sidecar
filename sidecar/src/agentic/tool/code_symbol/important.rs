@@ -86,6 +86,13 @@ impl CodeSymbolImportantBroker {
             LLMType::GeminiProFlash,
             Box::new(AnthropicCodeSymbolImportant::new(
                 llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        llms.insert(
+            LLMType::Llama3_1_70bInstruct,
+            Box::new(AnthropicCodeSymbolImportant::new(
+                llm_client.clone(),
                 fail_over_llm,
             )),
         );

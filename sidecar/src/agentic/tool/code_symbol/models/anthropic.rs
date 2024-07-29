@@ -4633,6 +4633,7 @@ You will be given context which the user has selected in <user_context> and you 
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
 - If we are using absolute paths, make sure to use absolute paths in your reply.
 - We will give you an outline of the symbols which are present in the file so you can use that as reference for selecting the right symbol, this outline is present to you in <outline> section
+- Before giving us the list of symbols, you can think for a bit in the <thinking> section in no more than 2 lines.
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
 
 Let's focus on getting the "code symbols" which are necessary to satisfy the user query.

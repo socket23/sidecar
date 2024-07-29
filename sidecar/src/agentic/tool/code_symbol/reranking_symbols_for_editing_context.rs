@@ -143,10 +143,13 @@ impl ReRankingSnippetsForCodeEditingContext {
 
     fn system_message(&self) -> String {
         format!(
-            r"You are an expert software eningeer who never writes incorrect code. As a first step before making changes, you are tasked with collecting all the context you need for the definitions of various code symbols which will be necessary for making the code changes.
+            r"You are an expert software eningeer who never writes incorrect code and is tasked with selecting code symbols whose definitions you can use for editing.
+The editor has stopped working for you, so we get no help with auto-complete when writing code, hence we want to make sure that we select all the code symbols which are necessary.
+As a first step before making changes, you are tasked with collecting all the definitions of the various code symbols whose methods or parameters you will be using when editing the code in the selection.
 - You will be given the original user query in <user_query>
 - You will be provided the code snippet you will be editing in <code_snippet_to_edit> section.
-- The various definitions of the class (just the high level outline of it) will be given to you as a list in <code_symbol_outline_list>. When writing code you will reuse the methods from here to make the edits, so be very careful when selecting the symbol outlines you are interested in.
+- The various definitions of the class, method or function (just the high level outline of it) will be given to you as a list in <code_symbol_outline_list>. When writing code you will reuse the methods from here to make the edits, so be very careful when selecting the symbol outlines you are interested in.
+- Pay attention to the <code_snippet_to_edit> section and select code symbols accordingly, do not select symbols which we will not be using for making edits.
 - Each code_symbol_outline entry is in the following format:
 ```
 <code_symbol>

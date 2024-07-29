@@ -138,7 +138,7 @@ impl SymbolManager {
                 .await
         );
         let code_wide_search =
-            ToolInput::RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch::new(
+            ToolInput::RequestImportantSymbolsCodeWide(CodeSymbolImportantWideSearch::new(
                 user_context.clone(),
                 query.to_owned(),
                 // Hardcoding here, but we can remove this later
@@ -367,6 +367,11 @@ impl SymbolManager {
                 }
             };
 
+            println!(
+                "intiial_request::important_symbols: {:?}",
+                important_symbols
+            );
+
             let tool_output = match important_symbols {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
                 None => {
@@ -388,6 +393,11 @@ impl SymbolManager {
                             ));
                         result?
                     } else {
+                        println!("initial_request::important_symbols::match-None");
+                        println!(
+                            "Type of tool_input: {:?}",
+                            std::any::type_name::<ToolInput>()
+                        );
                         self.tools
                             .invoke(tool_input)
                             .await
@@ -459,6 +469,8 @@ impl SymbolManager {
                 let high_level_plan = important_symbols.ordered_symbols_to_plan();
                 let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");
+
+                println!("initial_request::high_level_plan: {:?}", high_level_plan);
 
                 // Lets first start another round of COT over here to figure out
                 // how to go about making the changes, I know this is a bit orthodox

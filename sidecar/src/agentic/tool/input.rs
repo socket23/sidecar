@@ -51,7 +51,7 @@ pub enum ToolInput {
     ReRank(ReRankEntriesForBroker),
     CodeSymbolUtilitySearch(CodeSymbolUtilityRequest),
     RequestImportantSymbols(CodeSymbolImportantRequest),
-    RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch),
+    RequestImportantSymbolsCodeWide(CodeSymbolImportantWideSearch),
     GoToDefinition(GoToDefinitionRequest),
     GoToReference(GoToReferencesRequest),
     OpenFile(OpenFileRequest),
@@ -108,7 +108,7 @@ impl ToolInput {
             ToolInput::FindCodeSnippets(_) => ToolType::FindCodeSnippets,
             ToolInput::ReRank(_) => ToolType::ReRank,
             ToolInput::RequestImportantSymbols(_) => ToolType::RequestImportantSymbols,
-            ToolInput::RequestImportantSybmolsCodeWide(_) => ToolType::FindCodeSymbolsCodeBaseWide,
+            ToolInput::RequestImportantSymbolsCodeWide(_) => ToolType::FindCodeSymbolsCodeBaseWide,
             ToolInput::GoToDefinition(_) => ToolType::GoToDefinitions,
             ToolInput::GoToReference(_) => ToolType::GoToReferences,
             ToolInput::OpenFile(_) => ToolType::OpenFile,
@@ -542,7 +542,7 @@ impl ToolInput {
     {
         if let ToolInput::RequestImportantSymbols(request_code_symbol_important) = self {
             Ok(either::Either::Left(request_code_symbol_important))
-        } else if let ToolInput::RequestImportantSybmolsCodeWide(request_code_symbol_important) =
+        } else if let ToolInput::RequestImportantSymbolsCodeWide(request_code_symbol_important) =
             self
         {
             Ok(either::Either::Right(request_code_symbol_important))
@@ -554,7 +554,7 @@ impl ToolInput {
     pub fn codebase_wide_important_symbols(
         self,
     ) -> Result<CodeSymbolImportantWideSearch, ToolError> {
-        if let ToolInput::RequestImportantSybmolsCodeWide(request_code_symbol_important) = self {
+        if let ToolInput::RequestImportantSymbolsCodeWide(request_code_symbol_important) = self {
             Ok(request_code_symbol_important)
         } else {
             Err(ToolError::WrongToolInput(ToolType::RequestImportantSymbols))

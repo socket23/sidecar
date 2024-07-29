@@ -203,7 +203,7 @@ impl SymbolInputEvent {
                             self.request_id.to_string(),
                         );
                     // just symbol search instead for quick access
-                    return Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search));
+                    return Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search));
                 }
             }
         } else {
@@ -217,7 +217,7 @@ impl SymbolInputEvent {
                     self.request_id.to_string(),
                 );
             // Now we try to generate the tool input for this
-            Some(ToolInput::RequestImportantSybmolsCodeWide(code_wide_search))
+            Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search))
         }
     }
 }

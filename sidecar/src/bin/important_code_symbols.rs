@@ -59,7 +59,7 @@ async fn main() {
             )),
         ),
     ));
-    let code_wide_search = ToolInput::RequestImportantSybmolsCodeWide(
+    let code_wide_search = ToolInput::RequestImportantSymbolsCodeWide(
         CodeSymbolImportantWideSearch::new(
             user_context,
             user_query,

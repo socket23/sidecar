@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
+use llm_client::provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
@@ -487,21 +487,21 @@ impl ToolBox {
             .await?;
         let file_contents = file_contents.contents();
         let range = sub_symbol.range();
-        let (above, below, in_selection) = split_file_content_into_parts(&file_contents, range);
+        let (_above, _below, in_selection) = split_file_content_into_parts(&file_contents, range);
         let user_query = sub_symbol.instructions().join("\n");
         let tool_input = ToolInput::ReRankingCodeSnippetsForEditing(
             ReRankingSnippetsForCodeEditingRequest::new(
                 outline_nodes_for_query.to_vec(),
-                above,
-                below,
+                None,
+                None,
                 in_selection,
                 sub_symbol.fs_file_path().to_owned(),
                 user_query,
                 LLMProperties::new(
-                    LLMType::Gpt4O,
-                    LLMProvider::OpenAI,
-                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                        "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                    LLMType::GeminiProFlash,
+                    LLMProvider::GoogleAIStudio,
+                    LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                     )),
                 ),
                 self.root_request_id.to_owned(),

@@ -4,7 +4,7 @@ use crate::chunking::languages::TSLanguageConfig;
 
 pub fn rust_language_config() -> TSLanguageConfig {
     TSLanguageConfig {
-        language_ids: &["Rust", "rust"],
+        language_ids: &["Rust", "rust", "rs"],
         file_extensions: &["rs"],
         grammar: tree_sitter_rust::language,
         namespaces: vec![vec![

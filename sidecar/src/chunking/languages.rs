@@ -3696,4 +3696,32 @@ struct SomethingExtremelyImportant {
 }"#
         );
     }
+
+    #[test]
+    fn test_outline_nodes_for_rust() {
+        let source_code = r#"#[derive(Debug, Clone)]
+enum Something {
+    entry1,
+    entry2,
+}"#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("rust")
+            .expect("language config to be present");
+        let grammar = ts_language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code, None).unwrap();
+        let outline_nodes = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.rs".to_owned(),
+        );
+        assert_eq!(outline_nodes.len(), 1);
+        let compressed_node = outline_nodes[0].get_outline_node_compressed();
+        assert!(compressed_node.is_some());
+        let compressed_node = compressed_node.expect("is_some to hold");
+        println!("{}", &compressed_node);
+        assert!(false);
+    }
 }

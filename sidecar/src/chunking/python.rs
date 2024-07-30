@@ -4,7 +4,7 @@ use crate::chunking::languages::TSLanguageConfig;
 
 pub fn python_language_config() -> TSLanguageConfig {
     TSLanguageConfig {
-        language_ids: &["Python", "python"],
+        language_ids: &["Python", "python", "py"],
         file_extensions: &["py"],
         grammar: tree_sitter_python::language,
         namespaces: vec![vec!["class", "function", "parameter", "variable"]

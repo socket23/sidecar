@@ -350,6 +350,28 @@ impl ToolBox {
         Ok(definition_files)
     }
 
+    /// Compresses the symbol by removing function content if its present
+    /// and leaves an outline which we can work on top of
+    pub fn get_compressed_symbol_view(&self, content: &str, file_path: &str) -> String {
+        let language_parsing = self.editor_parsing.for_file_path(file_path);
+        if let None = language_parsing {
+            return content.to_owned();
+        }
+        let language_parsing = language_parsing.expect("if let None to hold");
+        let outlines = language_parsing.generate_outline_fresh(content.as_bytes(), file_path);
+        if outlines.is_empty() {
+            return content.to_owned();
+        }
+        let compressed_outlines = outlines
+            .into_iter()
+            .filter_map(|outline| outline.get_outline_node_compressed())
+            .collect::<Vec<_>>();
+        if compressed_outlines.is_empty() {
+            return content.to_owned();
+        }
+        compressed_outlines.join("\n")
+    }
+
     /// ReRanking the outline nodes which we have to gather context for the code
     /// editing
     pub async fn rerank_outline_nodes_for_code_editing(

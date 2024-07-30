@@ -15,7 +15,9 @@ use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::ui_event::InitialSearchSymbolInformation;
-use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
+use crate::agentic::tool::code_symbol::important::{
+    self, CodeSymbolImportantWideSearch, CodeSymbolWithSteps,
+};
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
@@ -337,12 +339,14 @@ impl SymbolManager {
         let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
         let swe_bench_long_context_editing = input_event.get_swe_bench_long_context_editing();
         let full_symbol_edit = input_event.full_symbol_edit();
+        let fast_code_symbol_llm = input_event.get_fast_code_symbol_llm();
         let tool_properties = ToolProperties::new()
             .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
             .set_swe_bench_code_editing_llm(swe_bench_code_editing_model)
             .set_swe_bench_reranking_llm(swe_bench_gemini_properties)
             .set_long_context_editing_llm(swe_bench_long_context_editing)
-            .set_full_symbol_request(full_symbol_edit);
+            .set_full_symbol_request(full_symbol_edit)
+            .set_fast_code_symbol_search(fast_code_symbol_llm);
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event
@@ -469,28 +473,28 @@ impl SymbolManager {
                     }
                 };
 
-                println!(
-                    "initial_request::symbols:\n{}",
-                    important_symbols
-                        .clone()
-                        .symbols()
-                        .iter()
-                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
+                // send a UI event to the frontend over here
+                let _ = self
+                    .ui_sender
+                    .send(UIEventWithID::initial_search_symbol_event(
+                        request_id.to_owned(),
+                        important_symbols
+                            .ordered_symbols()
+                            .into_iter()
+                            .map(|symbol| {
+                                InitialSearchSymbolInformation::new(
+                                    symbol.code_symbol().to_owned(),
+                                    // TODO(codestory): umm.. how can we have a file path for a symbol
+                                    // which does not exist if is_new is true
+                                    Some(symbol.file_path().to_owned()),
+                                    symbol.is_new(),
+                                    symbol.steps().join("\n"),
+                                )
+                            })
+                            .collect(),
+                    ));
 
-                println!(
-                    "initial_request::ordered_symbols:\n{}",
-                    important_symbols
-                        .clone()
-                        .ordered_symbols()
-                        .iter()
-                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
-
+                // get the high level plan over here
                 let high_level_plan = important_symbols.ordered_symbols_to_plan();
                 let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");
@@ -499,10 +503,10 @@ impl SymbolManager {
 
                 Ok(important_symbols.ordered_symbols().to_vec())
             } else {
-                Ok(Vec::new())
+                Ok(vec![])
             }
         } else {
-            Ok(Vec::new())
+            Ok(vec![])
         }
     }
     // once we have the initial request, which we will go through the initial request

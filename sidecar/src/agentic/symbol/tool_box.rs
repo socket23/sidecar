@@ -283,7 +283,7 @@ impl ToolBox {
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    async fn find_import_nodes(
+    pub async fn find_import_nodes(
         &self,
         fs_file_path: &str,
         request_id: &str,
@@ -298,12 +298,17 @@ impl ToolBox {
         let import_identifiers = language_config.generate_import_identifiers_fresh(source_code);
         // Now we do the dance where we go over the hoverable nodes and only look at the ranges which overlap
         // with the import identifiers
-        let clickable_imports = import_identifiers
+        let clickable_imports = hoverable_nodes
             .into_iter()
-            .filter(|(_, import_range)| {
-                hoverable_nodes
+            .filter(|hoverable_node| {
+                import_identifiers
                     .iter()
-                    .any(|hoverable_range| hoverable_range.contains(import_range))
+                    .any(|(_, import_identifier)| import_identifier.contains(&hoverable_node))
+            })
+            .filter_map(|hoverable_node_range| {
+                file_contents
+                    .content_in_ranges_exact(&hoverable_node_range)
+                    .map(|content| (content, hoverable_node_range))
             })
             .collect::<Vec<_>>();
         Ok(clickable_imports)
@@ -336,7 +341,10 @@ impl ToolBox {
                         .into_iter()
                         .map(|definition| definition.file_path().to_owned())
                         .collect::<Vec<_>>(),
-                    Err(_e) => vec![],
+                    Err(e) => {
+                        println!("get_imported_files::error({:?})", e);
+                        vec![]
+                    }
                 }
             })
             .buffer_unordered(4)
@@ -471,9 +479,19 @@ impl ToolBox {
     ) -> Result<Vec<OutlineNode>, SymbolError> {
         let imported_files = self.get_imported_files(fs_file_path, request_id).await?;
         let outline_nodes = stream::iter(imported_files)
-            .map(
-                |imported_file| async move { self.get_outline_nodes_grouped(&imported_file).await },
-            )
+            .map(|imported_file| async move {
+                let file_open_response = self.file_open(imported_file.to_owned(), request_id).await;
+                if let Ok(file_open_response) = file_open_response {
+                    let _ = self
+                        .force_add_document(
+                            &imported_file,
+                            file_open_response.contents_ref(),
+                            file_open_response.language(),
+                        )
+                        .await;
+                }
+                self.get_outline_nodes_grouped(&imported_file).await
+            })
             .buffer_unordered(5)
             .collect::<Vec<_>>()
             .await

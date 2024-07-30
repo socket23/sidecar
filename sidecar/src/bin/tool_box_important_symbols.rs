@@ -31,7 +31,7 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let editor_url = "http://localhost:42424".to_owned();
+    let editor_url = "http://localhost:42425".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -93,8 +93,7 @@ async fn main() {
         ],
     );
     let user_context = UserContext::new(vec![], vec![], None, vec![]);
-    let response = tool_box
+    let _ = tool_box
         .important_symbols(&important_symbols, user_context, "")
         .await;
-    println!("{:?}", response);
 }

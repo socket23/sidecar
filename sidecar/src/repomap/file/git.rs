@@ -156,9 +156,9 @@ fn should_index<P: AsRef<Path>>(p: &P) -> bool {
         "png", "jpg", "jpeg", "ico", "bmp", "bpg", "eps", "pcx", "ppm", "tga", "tiff", "wmf", "xpm",
         "svg", "riv",
         // fonts
-        "ttf", "woff2", "fnt", "fon", "otf",
+        "ttf", "woff2", "fnt", "fon", "otf", "woff", "eot",
         // documents
-        "pdf", "ps", "doc", "dot", "docx", "dotx", "xls", "xlsx", "xlt", "odt", "ott", "ods", "ots", "dvi", "pcl",
+        "pdf", "ps", "doc", "dot", "docx", "dotx", "xls", "xlsx", "xlt", "odt", "ott", "ods", "ots", "dvi", "pcl", "mo", "po",
         // media
         "mp3", "ogg", "ac3", "aac", "mod", "mp4", "mkv", "avi", "m4v", "mov", "flv",
         // compiled

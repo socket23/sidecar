@@ -611,6 +611,10 @@ impl OutlineNode {
                                 Some(content)
                             }
                         })
+                        .filter(|content| {
+                            // only keep lines which are not empty over here
+                            !content.is_empty()
+                        })
                         .collect::<Vec<_>>()
                         .join("\n");
                     let symbol_content_without_children_lines =

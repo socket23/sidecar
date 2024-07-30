@@ -497,9 +497,15 @@ impl MechaCodeSymbolThinking {
             .map(|snippet| snippet.clone())
             .collect::<Vec<_>>();
         println!(
-            "mecha_code_symbol_thinking::get_implementations::get_snippet({})::get_implementations_len({})",
+            "mecha_code_symbol_thinking::get_implementations::get_snippet({})::get_implementations_len({})::implementations_range({})",
             &self.symbol_name(),
             implementations.len(),
+            implementations.iter().map(|implementation| {
+                let range = implementation.range();
+                let start_line = range.start_line();
+                let end_line = range.end_line();
+                format!("[{}-{}]", start_line, end_line)
+            }).collect::<Vec<_>>().join(",")
         );
         let self_implementation = self.get_snippet().await;
         if let Some(snippet) = self_implementation {
@@ -844,18 +850,20 @@ impl MechaCodeSymbolThinking {
                                 }
                             })
                             .flatten();
-                        match (
-                            file_content.content_in_range(&range),
-                            outline_node_for_range,
-                        ) {
-                            (Some(content), Some(outline_node)) => Some(Snippet::new(
-                                symbol_identifier.symbol_name().to_owned(),
-                                outline_node.range().clone(),
-                                file_path,
-                                content,
-                                outline_node,
-                            )),
-                            _ => None,
+                        if let Some(outline_node) = outline_node_for_range {
+                            if let Some(content) = file_content.content_in_range(&outline_node.range()) {
+                                Some(Snippet::new(
+                                    symbol_identifier.symbol_name().to_owned(),
+                                    outline_node.range().clone(),
+                                    file_path,
+                                    content,
+                                    outline_node
+                                ))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
                         }
                     } else {
                         None
@@ -1506,7 +1514,7 @@ Reason to edit:
                     let end_line = snippet.range().end_line();
                     let location = format!("{}:{}-{}", file_path, start_line, end_line);
                     let language = snippet.language();
-                    let content = snippet.content();
+                    let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
                     format!(
                         r#"<rerank_entry>
 <id>

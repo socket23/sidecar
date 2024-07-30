@@ -18,6 +18,7 @@ use crate::{
         fireworks::FireworksAIClient,
         gemini_pro::GeminiProClient,
         google_ai::GoogleAIStdioClient,
+        groq::GroqClient,
         lmstudio::LMStudioClient,
         ollama::OllamaClient,
         open_router::OpenRouterClient,
@@ -83,7 +84,8 @@ impl LLMBroker {
             .add_provider(
                 LLMProvider::GoogleAIStudio,
                 Box::new(GoogleAIStdioClient::new()),
-            ))
+            )
+            .add_provider(LLMProvider::Groq, Box::new(GroqClient::new())))
     }
 
     pub fn add_provider(
@@ -131,6 +133,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
             LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
+            LLMProviderAPIKeys::GroqProvider(_) => LLMProvider::Groq,
         }
     }
 
@@ -161,6 +164,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
             LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
+            LLMProviderAPIKeys::GroqProvider(_) => LLMProvider::Groq,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {
@@ -432,6 +436,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
             LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
+            LLMProviderAPIKeys::GroqProvider(_) => LLMProvider::Groq,
         };
         let provider = self.providers.get(&provider_type);
         if let Some(provider) = provider {

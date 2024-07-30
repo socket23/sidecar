@@ -22,13 +22,22 @@ struct FireworksAIRequestString {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct FireworksAIUsage {
+    prompt_tokens: usize,
+    total_tokens: usize,
+    completion_tokens: usize,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct FireworksAIChatCompletion {
     choices: Vec<ChoiceCompletionChat>,
+    usage: Option<FireworksAIUsage>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct FireworksAIRequestCompletion {
     choices: Vec<ChoiceCompletion>,
+    usage: Option<FireworksAIUsage>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -192,12 +201,16 @@ impl LLMClient for FireworksAIClient {
 
         let mut buffered_string = "".to_owned();
         while let Some(event) = response_stream.next().await {
+            println!("{:?}", &event);
             match event {
                 Ok(event) => {
                     if &event.data == "[DONE]" {
                         continue;
                     }
                     let value = serde_json::from_str::<FireworksAIRequestCompletion>(&event.data)?;
+                    if let Some(usage) = value.usage {
+                        println!("fireworksai::usage::({:?})", usage);
+                    }
                     buffered_string.push_str(&value.choices[0].text);
                     sender.send(LLMClientCompletionResponse::new(
                         buffered_string.to_owned(),
@@ -243,6 +256,9 @@ impl LLMClient for FireworksAIClient {
                         continue;
                     }
                     let value = serde_json::from_str::<FireworksAIChatCompletion>(&event.data)?;
+                    if let Some(usage) = value.usage {
+                        println!("fireworksai::stream_completion::usage({:?})", &usage);
+                    }
                     if let Some(content) = &value.choices[0].delta.content {
                         buffered_string.push_str(content);
                         sender.send(LLMClientCompletionResponse::new(

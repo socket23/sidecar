@@ -39,6 +39,7 @@ pub enum LLMProvider {
     GeminiPro,
     GoogleAIStudio,
     OpenRouter,
+    Groq,
 }
 
 impl std::fmt::Display for LLMProvider {
@@ -56,6 +57,7 @@ impl std::fmt::Display for LLMProvider {
             LLMProvider::GeminiPro => write!(f, "GeminiPro"),
             LLMProvider::GoogleAIStudio => write!(f, "GoogleAIStudio"),
             LLMProvider::OpenRouter => write!(f, "OpenRouter"),
+            LLMProvider::Groq => write!(f, "Groq"),
         }
     }
 }
@@ -84,6 +86,7 @@ pub enum LLMProviderAPIKeys {
     GeminiPro(GeminiProAPIKey),
     GoogleAIStudio(GoogleAIStudioKey),
     OpenRouter(OpenRouterAPIKey),
+    GroqProvider(GroqProviderAPIKey),
 }
 
 impl LLMProviderAPIKeys {
@@ -111,6 +114,7 @@ impl LLMProviderAPIKeys {
             LLMProviderAPIKeys::GeminiPro(_) => LLMProvider::GeminiPro,
             LLMProviderAPIKeys::GoogleAIStudio(_) => LLMProvider::GoogleAIStudio,
             LLMProviderAPIKeys::OpenRouter(_) => LLMProvider::OpenRouter,
+            LLMProviderAPIKeys::GroqProvider(_) => LLMProvider::Groq,
         }
     }
 
@@ -209,6 +213,13 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
+            LLMProvider::Groq => {
+                if let LLMProviderAPIKeys::GroqProvider(groq_api_key) = self {
+                    Some(LLMProviderAPIKeys::GroqProvider(groq_api_key.clone()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -230,6 +241,18 @@ pub struct TogetherAIProvider {
 }
 
 impl TogetherAIProvider {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
+
+/// Groq API key which is used to use an account on Groq
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GroqProviderAPIKey {
+    pub api_key: String,
+}
+
+impl GroqProviderAPIKey {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
     }
@@ -295,6 +318,12 @@ impl AnthropicAPIKey {
 pub struct OpenAICompatibleConfig {
     pub api_key: String,
     pub api_base: String,
+}
+
+impl OpenAICompatibleConfig {
+    pub fn new(api_key: String, api_base: String) -> Self {
+        Self { api_base, api_key }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]

@@ -330,7 +330,7 @@ impl ToolBox {
             .map(|(_, range)| range)
             .collect::<Vec<_>>();
         // Now we execute a go-to-definition request on all the imports
-        let definition_files = stream::iter(clickable_import_range)
+        let definition_files = stream::iter(clickable_import_range.to_vec())
             .map(|range| async move {
                 let go_to_definition = self
                     .go_to_definition(fs_file_path, range.end_position(), request_id)
@@ -349,13 +349,36 @@ impl ToolBox {
             })
             .buffer_unordered(4)
             .collect::<Vec<_>>()
-            .await
+            .await;
+        let implementation_files = stream::iter(clickable_import_range)
+            .map(|range| async move {
+                let go_to_implementations = self
+                    .go_to_implementations_exact(fs_file_path, &range.end_position(), request_id)
+                    .await;
+                match go_to_implementations {
+                    Ok(go_to_implementations) => go_to_implementations
+                        .get_implementation_locations_vec()
+                        .into_iter()
+                        .map(|implementation| implementation.fs_file_path().to_owned())
+                        .collect::<Vec<_>>(),
+                    Err(e) => {
+                        println!("get_imported_files::go_to_implementation::error({:?})", e);
+                        vec![]
+                    }
+                }
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+        // combine the definition and implementation files together to get the local
+        // code graph
+        Ok(definition_files
             .into_iter()
             .flatten()
+            .chain(implementation_files.into_iter().flatten())
             .collect::<HashSet<String>>()
             .into_iter()
-            .collect::<Vec<String>>();
-        Ok(definition_files)
+            .collect())
     }
 
     /// Compresses the symbol by removing function content if its present

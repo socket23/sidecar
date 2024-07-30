@@ -104,7 +104,12 @@ impl Snippet {
     pub fn is_single_block_language(&self) -> bool {
         match self.language.as_deref() {
             Some("python" | "typescript" | "javascript" | "ts" | "js" | "py") => true,
-            _ => false
+            _ => {
+                match self.outline_node_content().language() {
+                    "python" | "typescript" | "javascript" | "ts" | "js" | "py" => true,
+                    _ => false,
+                }
+            }
         }
     }
     
@@ -845,7 +850,7 @@ impl MechaCodeSymbolThinking {
                         ) {
                             (Some(content), Some(outline_node)) => Some(Snippet::new(
                                 symbol_identifier.symbol_name().to_owned(),
-                                range.clone(),
+                                outline_node.range().clone(),
                                 file_path,
                                 content,
                                 outline_node,
@@ -1414,7 +1419,7 @@ Reason to edit:
             let is_definition_assignment = snippet
                 .outline_node_content
                 .outline_node_type()
-                .is_definition_assigument();
+                .is_definition_assignment();
             if is_function || is_definition_assignment {
                 let content = snippet.outline_node_content.content();
                 let file_path = snippet.outline_node_content.fs_file_path();
@@ -1472,7 +1477,7 @@ Reason to edit:
             let is_definition_assignment = snippet
                 .outline_node_content
                 .outline_node_type()
-                .is_definition_assigument();
+                .is_definition_assignment();
             if is_function || is_definition_assignment {
                 let function_body = snippet.to_xml();
                 Some((
@@ -1492,6 +1497,7 @@ Reason to edit:
                 ))
             } else {
                 let implementations = self.get_implementations().await;
+                println!("mecha_code_symbol_thinking::implementations_for_symbol::({:?})::symbol({})", &implementations, self.symbol_name());
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
                 // Now we need to format this properly and send it back over to the LLM
                 let snippet_xml = snippets_ref.iter().enumerate().map(|(idx, snippet)| {
@@ -1575,7 +1581,7 @@ Reason to edit:
             let is_definition_assignment = snippet
                 .outline_node_content
                 .outline_node_type()
-                .is_definition_assigument();
+                .is_definition_assignment();
             if is_function || is_definition_assignment {
                 let function_body = snippet.to_xml();
                 Some((

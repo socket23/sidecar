@@ -522,6 +522,8 @@ impl SymbolManager {
                         .map_err(|e| e.into())?;
                 }
 
+                println!("symbol_manager::symbols_len::({})", symbols.len());
+
                 // This is where we are creating all the symbols
                 let _ = stream::iter(
                     symbols
@@ -529,6 +531,7 @@ impl SymbolManager {
                         .map(|symbol| (symbol, request_id.to_owned(), user_query.to_owned())),
                 )
                 .map(|(symbol_request, request_id, user_query)| async move {
+                    let symbol_name = symbol_request.symbol_name().to_owned();
                     let symbol_identifier = self
                         .symbol_locker
                         .create_symbol_agent(
@@ -564,8 +567,14 @@ impl SymbolManager {
                             &symbol_identifier,
                             &response
                         );
+                    } else {
+                        println!(
+                            "symbol_manager::initial_request::no_symbol_identifier({})",
+                            symbol_name
+                        );
                     }
                 })
+                .buffered(1)
                 .collect::<Vec<_>>()
                 .await;
             }

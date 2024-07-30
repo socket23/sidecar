@@ -40,6 +40,7 @@ impl OpenAIClient {
             LLMType::Gpt4O => Some("gpt-4o".to_owned()),
             LLMType::Gpt4OMini => Some("gpt-4o-mini".to_owned()),
             LLMType::DeepSeekCoder33BInstruct => Some("deepseek-coder-33b".to_owned()),
+            LLMType::Llama3_1_8bInstruct => Some("llama-3.1-8b-instant".to_owned()),
             _ => None,
         }
     }

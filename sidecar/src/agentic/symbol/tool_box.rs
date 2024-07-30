@@ -410,8 +410,61 @@ impl ToolBox {
         sub_symbol: &SymbolToEdit,
         request_id: &str,
     ) -> Result<Vec<String>, SymbolError> {
+        let current_file_outline_nodes: Vec<_> = self
+            .get_outline_nodes(sub_symbol.fs_file_path(), request_id)
+            .await
+            .unwrap_or_default();
+
+        let surrounding_files_from_symbols_in_file = stream::iter(current_file_outline_nodes)
+            .map(|outline_node| async move {
+                let definitions = self
+                    .go_to_definition(
+                        outline_node.fs_file_path(),
+                        outline_node.range().end_position(),
+                        request_id,
+                    )
+                    .await;
+                let implementations = self
+                    .go_to_implementations_exact(
+                        outline_node.fs_file_path(),
+                        &outline_node.range().end_position(),
+                        request_id,
+                    )
+                    .await;
+                let mut files_to_visit = vec![];
+                if let Ok(definitions) = definitions {
+                    files_to_visit.extend(
+                        definitions
+                            .definitions()
+                            .into_iter()
+                            .map(|definition| definition.file_path().to_owned()),
+                    );
+                }
+                if let Ok(implementations) = implementations {
+                    files_to_visit.extend(
+                        implementations
+                            .get_implementation_locations_vec()
+                            .into_iter()
+                            .map(|implementation| implementation.fs_file_path().to_owned()),
+                    );
+                }
+                files_to_visit
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        // we also want to check the implementations for the outline nodes which we are getting here
+        // so we have the total picture of the nodes which we should be using
         let local_code_graph = self
-            .local_code_graph(sub_symbol.fs_file_path(), request_id)
+            .local_code_graph(
+                sub_symbol.fs_file_path(),
+                request_id,
+                surrounding_files_from_symbols_in_file,
+            )
             .await?;
 
         let outline_nodes_for_query = local_code_graph
@@ -499,29 +552,35 @@ impl ToolBox {
         &self,
         fs_file_path: &str,
         request_id: &str,
+        extra_files_to_include: Vec<String>,
     ) -> Result<Vec<OutlineNode>, SymbolError> {
         let imported_files = self.get_imported_files(fs_file_path, request_id).await?;
-        let outline_nodes = stream::iter(imported_files)
-            .map(|imported_file| async move {
-                let file_open_response = self.file_open(imported_file.to_owned(), request_id).await;
-                if let Ok(file_open_response) = file_open_response {
-                    let _ = self
-                        .force_add_document(
-                            &imported_file,
-                            file_open_response.contents_ref(),
-                            file_open_response.language(),
-                        )
-                        .await;
-                }
-                self.get_outline_nodes_grouped(&imported_file).await
-            })
-            .buffer_unordered(5)
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .filter_map(|s| s)
-            .flatten()
-            .collect::<Vec<_>>();
+        let outline_nodes = stream::iter(
+            imported_files
+                .into_iter()
+                .chain(extra_files_to_include)
+                .collect::<HashSet<String>>(),
+        )
+        .map(|imported_file| async move {
+            let file_open_response = self.file_open(imported_file.to_owned(), request_id).await;
+            if let Ok(file_open_response) = file_open_response {
+                let _ = self
+                    .force_add_document(
+                        &imported_file,
+                        file_open_response.contents_ref(),
+                        file_open_response.language(),
+                    )
+                    .await;
+            }
+            self.get_outline_nodes_grouped(&imported_file).await
+        })
+        .buffer_unordered(5)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .flatten()
+        .collect::<Vec<_>>();
         Ok(outline_nodes)
     }
 

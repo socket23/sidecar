@@ -99,6 +99,15 @@ impl Snippet {
         }
     }
 
+    /// Figures out if the snippet belongs to a language which has single snippet
+    /// location for the language
+    pub fn is_single_block_language(&self) -> bool {
+        match self.language.as_deref() {
+            Some("python" | "typescript" | "javascript" | "ts" | "js" | "py") => true,
+            _ => false
+        }
+    }
+    
     pub fn is_potential_match(&self, range: &Range, fs_file_path: &str, is_outline: bool) -> bool {
         if &self.range == range && self.fs_file_path == fs_file_path {
             if is_outline {
@@ -981,17 +990,32 @@ impl MechaCodeSymbolThinking {
         if self.is_snippet_present().await {
             // let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_requet_full(&request_id).await {
+            if let Some((ranked_xml_list, mut reverse_lookup)) = self.to_llm_requet_full(&request_id).await {
                 // if we just have a single element over here, then we do not need
                 // to do any lookups, especially if the code is in languages other than
                 // rust, since for them we always have a single snippet
                 if reverse_lookup.len() == 1 {
                     let snippet = self.get_snippet().await.expect("to be present");
-                    if snippet.language.is_some() && snippet.language != Some("rust".to_owned()) {
-                        // TODO(skcd): Figure out how to short-circuit overe here
-                        // when its a non rust like language and all the implementations
-                        // are present in the same block of code
-                        println!("non-rust language found, we should short-circuit over here");
+                    if snippet.is_single_block_language() {
+                        println!("single block language found, we should short-circuit over here");
+                        return Ok(SymbolEventRequest::new(
+                            self.to_symbol_identifier(),
+                            SymbolEvent::Edit(SymbolToEditRequest::new(
+                                // figure out what to fill over here
+                                vec![SymbolToEdit::new(
+                                    self.symbol_name().to_owned(),
+                                    reverse_lookup.remove(0).range().clone(),
+                                    self.fs_file_path().to_owned(),
+                                    vec!["This is where the symbol is present".to_owned()],
+                                    false,
+                                    false,
+                                    true,
+                                )],
+                                self.to_symbol_identifier(),
+                                history,
+                            )),
+                            tool_properties.clone(),
+                        ));
                     }
                 }
                 // now we have to rerank the whole section

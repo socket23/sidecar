@@ -4705,7 +4705,7 @@ instruction:
         user_context: UserContext,
         request_id: &str,
     ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
-        let symbols = important_symbols.symbols();
+        let symbols = important_symbols.ordered_symbols();
         // let ordered_symbols = important_symbols.ordered_symbols();
         // there can be overlaps between these, but for now its fine
         // let mut new_symbols: HashSet<String> = Default::default();
@@ -4717,7 +4717,7 @@ instruction:
                 .map(|ordered_symbol| ordered_symbol.file_path().to_owned()),
         )
         .for_each(|file_path| async move {
-            let file_open_response = self.file_open(file_path.to_owned(), request_id).await;
+            let file_open_response = dbg!(self.file_open(file_path.to_owned(), request_id).await);
             if let Ok(file_open_response) = file_open_response {
                 let _ = self
                     .force_add_document(
@@ -4726,15 +4726,20 @@ instruction:
                         file_open_response.language(),
                     )
                     .await;
+            } else {
+                println!(
+                    "tool_box::important_symbols::file_open_response_error({})",
+                    file_path
+                );
             }
         })
         .await;
 
         let mut bounding_symbol_to_instruction: HashMap<
             OutlineNodeContent,
-            Vec<(usize, &CodeSymbolWithThinking)>,
+            Vec<(usize, &CodeSymbolWithSteps)>,
         > = Default::default();
-        let mut unbounded_symbols: Vec<&CodeSymbolWithThinking> = Default::default();
+        let mut unbounded_symbols: Vec<&CodeSymbolWithSteps> = Default::default();
         for (idx, symbol) in symbols.iter().enumerate() {
             let file_path = symbol.file_path();
             let symbol_name = symbol.code_symbol();

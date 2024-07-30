@@ -31,7 +31,7 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let editor_url = "http://localhost:42450".to_owned();
+    let editor_url = "http://localhost:42426".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -65,9 +65,11 @@ async fn main() {
     ));
 
     let _ = Range::new(Position::new(139, 0, 0), Position::new(157, 0, 0));
-    let fs_file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs".to_owned();
-    let _ = "post(sidecar::webserver::agent::followup_chat),".to_owned();
-    let symbol_to_search = "LLMProvider".to_owned();
+    let fs_file_path =
+        "/Users/skcd/test_repo/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
+            .to_owned();
+    // let _ = "post(sidecar::webserver::agent::followup_chat),".to_owned();
+    let symbol_to_search = "AuxiliaryBarPart".to_owned();
     // This is what I have to debug
     let snippet = tool_box
         .find_snippet_for_symbol(&fs_file_path, &symbol_to_search, "")

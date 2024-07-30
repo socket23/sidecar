@@ -9,7 +9,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{AnthropicAPIKey, FireworksAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
@@ -79,6 +79,13 @@ async fn test_golden_file_search(task: &Task, root_dir: &str) {
         LLMProvider::Anthropic,
         anthropic_api_keys.clone(),
     );
+    let llama_70b_properties = LLMProperties::new(
+        LLMType::Llama3_1_70bInstruct,
+        LLMProvider::FireworksAI,
+        LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+            "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+        )),
+    );
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -133,6 +140,7 @@ async fn test_golden_file_search(task: &Task, root_dir: &str) {
         true, // full_symbol_edit
         true, // codebase search
         Some(root_dir.to_string()),
+        Some(llama_70b_properties),
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.test_golden_file(initial_request));
@@ -147,12 +155,15 @@ async fn test_golden_file_search(task: &Task, root_dir: &str) {
             result = &mut initial_request_task => {
                 match result {
                     Ok(symbols) => {
+
                         assert!(!symbols.is_empty(), "Expected non-empty vector of symbols");
                         assert!(
                             symbols.iter().any(|symbol| symbol.file_path().ends_with(&task.golden_file)),
                             "Expected golden file '{}' not found in the returned symbols",
                             task.golden_file,
                         );
+                        println!("Symbols: {:?}", symbols);
+                        println!("Golden file: {}", task.golden_file);
                         break
                     }
                     Err(e) => {
@@ -171,6 +182,8 @@ mod tests {
 
     // change accordingly
     const SQLFLUFF_ROOT_DIR: &str = "/Users/zi/codestory/testing/sqlfluff";
+
+    const DJANGO_ROOT_DIR: &str = "/Users/zi/codestory/testing/django";
 
     #[tokio::test]
     // commit: f1dba0e1dd764ae72d67c3d5e1471cf14d3db030
@@ -205,6 +218,7 @@ mod tests {
 
     #[tokio::test]
     // commit: a1579a16b1d8913d9d7c7d12add374a290bcc78c
+    // writeup: https://gist.github.com/sartoshi-foot-dao/739810e22e9d432de496079d08e62b4d
     async fn test_sqlfluff_039() {
         let task = Task::new("src/sqlfluff/rules/L039.py".to_string(), r#""Extra space when first field moved to new line in a WITH statement
         Note, the query below uses a `WITH` statement. If I just try to fix the SQL within the CTE, this works fine.
@@ -578,5 +592,14 @@ mod tests {
         
         ""#.to_string());
         test_golden_file_search(&task, SQLFLUFF_ROOT_DIR).await;
+    }
+
+    #[tokio::test]
+    async fn test_django_sqlmigrate() {
+        let task = Task::new(
+            "core/management/commands/sqlmigrate.py".to_string(),
+            r#"Misleading sqlmigrate "App 'apps.somethings' does not have migrations." error message Description This ticket is very similar to https://code.djangoproject.com/ticket/29506 As shown above, validation should be added sqlmigrate."#.to_string(),
+        );
+        test_golden_file_search(&task, DJANGO_ROOT_DIR).await;
     }
 }

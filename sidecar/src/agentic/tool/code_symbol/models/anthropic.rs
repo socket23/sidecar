@@ -5,7 +5,7 @@ use tracing::info;
 
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
 use crate::agentic::{
@@ -22,7 +22,7 @@ use crate::agentic::{
                 CodeSymbolFollowAlongForProbing, CodeSymbolImportant, CodeSymbolImportantRequest,
                 CodeSymbolImportantResponse, CodeSymbolImportantWideSearch,
                 CodeSymbolProbingSummarize, CodeSymbolToAskQuestionsRequest,
-                CodeSymbolUtilityRequest, CodeSymbolWithSteps, CodeSymbolWithThinking,
+                CodeSymbolUtilityRequest, CodeSymbolWithSteps,
             },
             repo_map_search::{RepoMapSearch, RepoMapSearchQuery},
             types::{CodeSymbolError, SerdeError},
@@ -42,14 +42,6 @@ impl AnthropicCodeSymbolImportant {
         Self {
             llm_client,
             fail_over_llm,
-        }
-    }
-
-    fn is_model_supported(&self, llm_type: &LLMType) -> bool {
-        if llm_type.is_anthropic() || llm_type.is_openai() || llm_type.is_gemini_model() {
-            true
-        } else {
-            false
         }
     }
 
@@ -75,28 +67,6 @@ impl AnthropicCodeSymbolImportant {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "name")]
-pub struct SymbolName {
-    #[serde(rename = "$value")]
-    name: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "thinking")]
-pub struct SymbolThinking {
-    #[serde(rename = "$value")]
-    thinking: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "symbol")]
-pub struct Symbol {
-    name: String,
-    thinking: String,
-    file_path: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "step_list")]
 pub struct StepListItem {
     name: String,
@@ -104,13 +74,6 @@ pub struct StepListItem {
     #[serde(default)]
     new: bool,
     file_path: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "symbol_list")]
-pub struct SymbolList {
-    #[serde(rename = "$value")]
-    symbol_list: Vec<Symbol>,
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -123,7 +86,6 @@ pub struct StepList {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct Reply {
-    symbol_list: SymbolList,
     // #[serde(rename = "step_by_step")]
     #[serde(default)]
     step_by_step: StepList,
@@ -385,7 +347,6 @@ impl Reply {
             })
             .collect::<Vec<_>>();
         Self {
-            symbol_list: self.symbol_list,
             step_by_step: StepList {
                 steps: step_by_step,
             },
@@ -395,25 +356,13 @@ impl Reply {
 
 impl Reply {
     fn to_code_symbol_important_response(self) -> CodeSymbolImportantResponse {
-        let code_symbols_with_thinking = self
-            .symbol_list
-            .symbol_list
-            .into_iter()
-            .map(|symbol_list| {
-                CodeSymbolWithThinking::new(
-                    symbol_list.name,
-                    symbol_list.thinking,
-                    symbol_list.file_path,
-                )
-            })
-            .collect();
         let code_symbols_with_steps = self
             .step_by_step
             .steps
             .into_iter()
             .map(|step| CodeSymbolWithSteps::new(step.name, step.step, step.new, step.file_path))
             .collect();
-        CodeSymbolImportantResponse::new(code_symbols_with_thinking, code_symbols_with_steps)
+        CodeSymbolImportantResponse::new(vec![], code_symbols_with_steps)
     }
 
     fn unescape_xml(s: String) -> String {
@@ -4683,6 +4632,8 @@ You will be given context which the user has selected in <user_context> and you 
 - Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_list> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
 - If we are using absolute paths, make sure to use absolute paths in your reply.
+- We will give you an outline of the symbols which are present in the file so you can use that as reference for selecting the right symbol, this outline is present to you in <outline> section
+- Before giving us the list of symbols, you can think for a bit in the <thinking> section in no more than 2 lines.
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
 
 Let's focus on getting the "code symbols" which are necessary to satisfy the user query.
@@ -4739,6 +4690,17 @@ impl FillInMiddleBroker {{
 ```
 </code_selection>
 
+<outline>
+FILEPATH: /broker/fill_in_middle.rs
+pub struct FillInMiddleBroker {{
+    provider: HashMap<LLMType, Box<dyn FillInMiddleFormatter + Send + Sync>>,
+}}
+
+impl FillInMiddleBroker {{
+    pub fn new() -> Self
+}}
+</outline>
+
 and the user query is:
 <user_query>
 I want to add support for the grok llm
@@ -4746,41 +4708,9 @@ I want to add support for the grok llm
 
 Your reply should be, you should strictly follow this format:
 <reply>
-<symbol_list>
-<symbol>
-<name>
-LLMType
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
 <thinking>
-We need to first check if grok is part of the LLMType enum, this will make sure that the code we produce is never wrong
+Check if the LLMType supports grok and the various definitions which are present in `FillInMiddleBroker`
 </thinking>
-</symbol>
-<symbol>
-<name>
-FillInMiddleFormatter
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
-<thinking>
-Other LLM's are implementing FillInMiddleFormatter trait, grok will also require support for this, so we need to check how to implement FillInMiddleFormatter trait
-</thinking>
-</symbol>
-<symbol>
-<name>
-new
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
-<thinking>
-We have to change the new function and add the grok llm after implementing the formatter for grok llm.
-</thinking>
-</symbol>
-</symbol_list>
 <step_by_step>
 <step_list>
 <name>
@@ -4828,129 +4758,6 @@ true
 <step>
 Implement the GrokFillInMiddleFormatter following the similar pattern in `CodeLlamaFillInMiddleFormatter`
 </step>
-</step_list>
-</step_by_step>
-</reply>
-
-Another example:
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<code_selection>
-```rust
-fn tree_sitter_router() -> Router {{
-    use axum::routing::*;
-    Router::new()
-        .route(
-            "/documentation_parsing",
-            post(sidecar::webserver::tree_sitter::extract_documentation_strings),
-        )
-        .route(
-            "/diagnostic_parsing",
-            post(sidecar::webserver::tree_sitter::extract_diagnostics_range),
-        )
-        .route(
-            "/tree_sitter_valid",
-            post(sidecar::webserver::tree_sitter::tree_sitter_node_check),
-        )
-}}
-
-fn file_operations_router() -> Router {{
-    use axum::routing::*;
-    Router::new().route("/edit_file", post(sidecar::webserver::file_edit::file_edit))
-}}
-
-fn inline_completion() -> Router {{
-    use axum::routing::*;
-    Router::new()
-        .route(
-            "/inline_completion",
-            post(sidecar::webserver::inline_completion::inline_completion),
-        )
-        .route(
-            "/cancel_inline_completion",
-            post(sidecar::webserver::inline_completion::cancel_inline_completion),
-        )
-        .route(
-            "/document_open",
-            post(sidecar::webserver::inline_completion::inline_document_open),
-        )
-        .route(
-            "/document_content_changed",
-            post(sidecar::webserver::inline_completion::inline_completion_file_content_change),
-        )
-        .route(
-            "/get_document_content",
-            post(sidecar::webserver::inline_completion::inline_completion_file_content),
-        )
-        .route(
-            "/get_identifier_nodes",
-            post(sidecar::webserver::inline_completion::get_identifier_nodes),
-        )
-        .route(
-            "/get_symbol_history",
-            post(sidecar::webserver::inline_completion::symbol_history),
-        )
-}}
-
-// TODO(skcd): Figure out why we are passing the context in the suffix and not the prefix
-
-```
-</code_selection>
-
-and the user query is:
-<user_query>
-I want to get the list of most important symbols in inline completions
-</user_query>
-
-Your reply should be:
-<reply>
-<symbol_list>
-<symbol>
-<name>
-inline_completion
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-inline_completion holds all the endpoints for symbols because it also has the `get_symbol_history` endpoint. We have to start adding the endpoint there
-</thinking>
-</symbol>
-<symbol>
-<name>
-symbol_history
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-I can find more information on how to write the code for the endpoint by following the symbol `symbol_history` in the line: `             post(sidecar::webserver::inline_completion::symbol_history),`
-<thinking>
-</symbol>
-</symbol_list>
-<step_by_step>
-<step_list>
-<name>
-symbol_history
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-We need to follow the symbol_history to check the pattern on how we are going to implement the very similar functionality
-</thinking>
-</step_list>
-<step_list>
-<name>
-inline_completion
-</name>
-<file_path>
-/src/bin/webserver.rs
-</file_path>
-<thinking>
-We have to add the newly created endpoint in inline_completion to add support for the new endpoint which we want to create
-</thinking>
 </step_list>
 </step_by_step>
 </reply>"#
@@ -5152,13 +4959,21 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
     ) -> Result<String, CodeSymbolError> {
         let user_query = code_symbol_search_context_wide.user_query().to_owned();
         let file_extension_filter = code_symbol_search_context_wide.file_extension_filters();
+        let outline = code_symbol_search_context_wide.symbol_outline().to_owned();
         let user_context = code_symbol_search_context_wide.remove_user_context();
         let context_string = user_context
             .to_xml(file_extension_filter)
             .await
             .map_err(|e| CodeSymbolError::UserContextError(e))?;
         // also send the user query here
-        Ok(context_string + "\n" + "<user_query>\n" + &user_query + "\n</user_query>")
+        Ok(context_string
+            + "\n"
+            + "<outline>\n"
+            + &outline
+            + "\n</outline>\n"
+            + "<user_query>\n"
+            + &user_query
+            + "\n</user_query>")
     }
 
     fn system_message_for_repo_map_search(
@@ -5174,7 +4989,7 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
 You will be given context which the user has selected in <user_context> and you have to retrive the "code symbols" which are important for answering to the user query.
 - The user might have selected some context manually in the form of <selection> these might be more important
 - You will be given files which contains a lot of code, you have to select the "code symbols" which are important
-- "code symbols" here referes to the different classes, functions, or constants which might be necessary to answer the user query.
+- "code symbols" here referes to the different classes, functions, enums, methods or constants which might be necessary to answer the user query.
 - Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_list> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
 - Strictly follow the reply format which is mentioned to you below, your reply should always start with <reply> tag and end with </reply> tag
@@ -5476,12 +5291,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(code_symbols.model().is_gemini_model()
-            || code_symbols.model().is_anthropic()
-            || code_symbols.model().is_openai())
-        {
-            return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
-        }
         let system_message = LLMClientMessage::system(self.system_message(&code_symbols));
         let user_message = LLMClientMessage::user(self.user_message(&code_symbols));
         let messages = LLMClientCompletionRequest::new(
@@ -5555,9 +5364,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         code_symbols: CodeSymbolImportantWideSearch,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(self.is_model_supported(code_symbols.model())) {
-            return Err(CodeSymbolError::WrongLLM(code_symbols.model().clone()));
-        }
         let api_key = code_symbols.api_key();
         let provider = code_symbols.llm_provider();
         let model = code_symbols.model().clone();
@@ -5626,11 +5432,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         utility_symbol_request: CodeSymbolUtilityRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        if !(self.is_model_supported(&utility_symbol_request.model())) {
-            return Err(CodeSymbolError::WrongLLM(
-                utility_symbol_request.model().clone(),
-            ));
-        }
         let api_key = utility_symbol_request.api_key();
         let provider = utility_symbol_request.provider();
         let model = utility_symbol_request.model();
@@ -5670,9 +5471,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         &self,
         request: CodeSymbolToAskQuestionsRequest,
     ) -> Result<CodeSymbolToAskQuestionsResponse, CodeSymbolError> {
-        if !(self.is_model_supported(&request.model())) {
-            return Err(CodeSymbolError::WrongLLM(request.model().clone()));
-        }
         let root_request_id = request.root_request_id().to_owned();
         let model = request.model().clone();
         let request_api_key = request.api_key().clone();

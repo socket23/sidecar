@@ -9,6 +9,7 @@ pub struct ToolProperties {
     swe_bench_reranking_llm: Option<LLMProperties>,
     swe_bench_long_context_editing_llm: Option<LLMProperties>,
     full_symbol_request: bool,
+    fast_code_symbol_search: Option<LLMProperties>,
 }
 
 impl ToolProperties {
@@ -19,7 +20,20 @@ impl ToolProperties {
             swe_bench_reranking_llm: None,
             swe_bench_long_context_editing_llm: None,
             full_symbol_request: false,
+            fast_code_symbol_search: None,
         }
+    }
+
+    pub fn set_fast_code_symbol_search(
+        mut self,
+        fast_code_symbol_search_llm: Option<LLMProperties>,
+    ) -> Self {
+        self.fast_code_symbol_search = fast_code_symbol_search_llm;
+        self
+    }
+
+    pub fn fast_code_symbol_search(&self) -> Option<LLMProperties> {
+        self.fast_code_symbol_search.clone()
     }
 
     pub fn get_full_symbol_request(&self) -> bool {

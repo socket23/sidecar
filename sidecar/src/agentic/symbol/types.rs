@@ -1064,7 +1064,9 @@ impl Symbol {
 
     /// Sends additional requests to symbols which need changes or gathering more
     /// information to understand how to solve a problem
-    async fn follow_along_requests(
+    ///
+    /// TODO(codestory): This is disabled for now
+    async fn _follow_along_requests(
         &self,
         request_id: &str,
         original_request: &str,
@@ -1307,10 +1309,11 @@ Satisfy the requirement either by making edits or gathering the required informa
             "symbol::generate_follow_along_requests::symbol_name({})",
             self.symbol_name()
         );
-        let original_request = request_data.get_original_question();
-        let _ = self
-            .follow_along_requests(&request_id, original_request)
-            .await;
+        // disable follow_along_requests so we can get to the code editing faster
+        // let original_request = request_data.get_original_question();
+        // let _ = self
+        //     .follow_along_requests(&request_id, original_request)
+        //     .await;
         if self.mecha_code_symbol.is_snippet_present().await {
             let request = if request_data.full_symbol_request() {
                 self.mecha_code_symbol

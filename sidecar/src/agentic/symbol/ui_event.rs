@@ -174,6 +174,19 @@ impl UIEventWithID {
             )),
         }
     }
+
+    /// Sends the initial search event to the editor
+    pub fn initial_search_symbol_event(
+        request_id: String,
+        symbols: Vec<InitialSearchSymbolInformation>,
+    ) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::InitialSearchSymbols(
+                InitialSearchSymbolEvent::new(request_id, symbols),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -396,9 +409,49 @@ pub enum RequestEvents {
 }
 
 #[derive(Debug, serde::Serialize)]
+pub struct InitialSearchSymbolInformation {
+    symbol_name: String,
+    fs_file_path: Option<String>,
+    is_new: bool,
+    thinking: String,
+}
+
+impl InitialSearchSymbolInformation {
+    pub fn new(
+        symbol_name: String,
+        fs_file_path: Option<String>,
+        is_new: bool,
+        thinking: String,
+    ) -> Self {
+        Self {
+            symbol_name,
+            fs_file_path,
+            is_new,
+            thinking,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct InitialSearchSymbolEvent {
+    request_id: String,
+    symbols: Vec<InitialSearchSymbolInformation>,
+}
+
+impl InitialSearchSymbolEvent {
+    pub fn new(request_id: String, symbols: Vec<InitialSearchSymbolInformation>) -> Self {
+        Self {
+            request_id,
+            symbols,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
 pub enum FrameworkEvent {
     RepoMapGenerationStart(String),
     RepoMapGenerationFinished(String),
     LongContextSearchStart(String),
     LongContextSearchFinished(String),
+    InitialSearchSymbols(InitialSearchSymbolEvent),
 }

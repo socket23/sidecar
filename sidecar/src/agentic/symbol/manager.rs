@@ -14,9 +14,8 @@ use crate::agentic::symbol::events::initial_request::InitialRequestData;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
-use crate::agentic::tool::code_symbol::important::{
-    self, CodeSymbolImportantWideSearch, CodeSymbolWithSteps,
-};
+use crate::agentic::symbol::ui_event::InitialSearchSymbolInformation;
+use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
@@ -139,6 +138,10 @@ impl SymbolManager {
                 )
                 .await
         );
+        let outline = self
+            .tool_box
+            .outline_for_user_context(&user_context, &request_id)
+            .await;
         let code_wide_search =
             ToolInput::RequestImportantSymbolsCodeWide(CodeSymbolImportantWideSearch::new(
                 user_context.clone(),
@@ -150,6 +153,7 @@ impl SymbolManager {
                     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                 )),
                 self.root_request_id.to_owned(),
+                outline,
             ));
         // send the request on to the ui sender
         let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
@@ -518,12 +522,14 @@ impl SymbolManager {
         let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
         let swe_bench_long_context_editing = input_event.get_swe_bench_long_context_editing();
         let full_symbol_edit = input_event.full_symbol_edit();
+        let fast_code_symbol_llm = input_event.get_fast_code_symbol_llm();
         let tool_properties = ToolProperties::new()
             .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
             .set_swe_bench_code_editing_llm(swe_bench_code_editing_model)
             .set_swe_bench_reranking_llm(swe_bench_gemini_properties)
             .set_long_context_editing_llm(swe_bench_long_context_editing)
-            .set_full_symbol_request(full_symbol_edit);
+            .set_full_symbol_request(full_symbol_edit)
+            .set_fast_code_symbol_search(fast_code_symbol_llm);
         let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event
@@ -650,28 +656,28 @@ impl SymbolManager {
                     }
                 };
 
-                println!(
-                    "initial_request::symbols:\n{}",
-                    important_symbols
-                        .clone()
-                        .symbols()
-                        .iter()
-                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
+                // send a UI event to the frontend over here
+                let _ = self
+                    .ui_sender
+                    .send(UIEventWithID::initial_search_symbol_event(
+                        request_id.to_owned(),
+                        important_symbols
+                            .ordered_symbols()
+                            .into_iter()
+                            .map(|symbol| {
+                                InitialSearchSymbolInformation::new(
+                                    symbol.code_symbol().to_owned(),
+                                    // TODO(codestory): umm.. how can we have a file path for a symbol
+                                    // which does not exist if is_new is true
+                                    Some(symbol.file_path().to_owned()),
+                                    symbol.is_new(),
+                                    symbol.steps().join("\n"),
+                                )
+                            })
+                            .collect(),
+                    ));
 
-                println!(
-                    "initial_request::ordered_symbols:\n{}",
-                    important_symbols
-                        .clone()
-                        .ordered_symbols()
-                        .iter()
-                        .map(|s| format!("Symbol: {}\nPath: {}\n", s.code_symbol(), s.file_path()))
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
-
+                // get the high level plan over here
                 let high_level_plan = important_symbols.ordered_symbols_to_plan();
                 let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");
@@ -709,66 +715,52 @@ impl SymbolManager {
                         .map_err(|e| e.into())?;
                 }
 
-                let request_id_ref = &request_id;
-                let symbol_identifiers_to_query = symbols
-                    .iter()
-                    .map(|symbol| symbol.to_symbol_identifier())
-                    .collect::<Vec<_>>();
                 // This is where we are creating all the symbols
-                let symbol_identifiers = stream::iter(symbols)
-                    .map(|symbol_request| async move {
-                        let symbol_identifier = self
-                            .symbol_locker
-                            .create_symbol_agent(
-                                symbol_request,
-                                request_id_ref.to_owned(),
-                                tool_properties_ref.clone(),
-                            )
-                            .await;
-                        symbol_identifier
-                    })
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await
-                    .into_iter()
-                    .filter_map(|s| s.ok())
-                    .collect::<Vec<_>>();
-
-                dbg!("Symbol identifiers size: ({})", symbol_identifiers.len());
-                // Once we have the symbols spinning up, we send them the original request
-                // which the user had and send it over and then we can await on all of them
-                // working at the same time.
-                dbg!("initial request");
-                // we can synchronize this a bit and let the symbols go out
-                // one after the other
-                for symbol_identifier in symbol_identifiers_to_query.into_iter() {
-                    let symbol_event_request = SymbolEventRequest::new(
-                        symbol_identifier.clone(),
-                        SymbolEvent::InitialRequest(InitialRequestData::new(
-                            user_query.to_owned(),
-                            Some(high_level_plan_ref.to_owned()),
-                            // empty history when symbol manager sends the initial
-                            // request
-                            vec![],
-                            full_symbol_edit,
-                        )),
-                        tool_properties_ref.clone(),
-                    );
-                    let (sender, receiver) = tokio::sync::oneshot::channel();
-                    dbg!(
-                        "sending initial request to symbol: {:?}",
-                        &symbol_identifier
-                    );
-                    self.symbol_locker
-                        .process_request((symbol_event_request, request_id.to_owned(), sender))
+                let _ = stream::iter(
+                    symbols
+                        .into_iter()
+                        .map(|symbol| (symbol, request_id.to_owned(), user_query.to_owned())),
+                )
+                .map(|(symbol_request, request_id, user_query)| async move {
+                    let symbol_identifier = self
+                        .symbol_locker
+                        .create_symbol_agent(
+                            symbol_request,
+                            request_id.to_owned(),
+                            tool_properties_ref.clone(),
+                        )
                         .await;
-                    let response = receiver.await;
-                    dbg!(
-                        "For symbol identifier: {:?} the response is {:?}",
-                        &symbol_identifier,
-                        &response
-                    );
-                }
+                    if let Ok(symbol_identifier) = symbol_identifier {
+                        let symbol_event_request = SymbolEventRequest::new(
+                            symbol_identifier.clone(),
+                            SymbolEvent::InitialRequest(InitialRequestData::new(
+                                user_query.to_owned(),
+                                Some(high_level_plan_ref.to_owned()),
+                                // empty history when symbol manager sends the initial
+                                // request
+                                vec![],
+                                full_symbol_edit,
+                            )),
+                            tool_properties_ref.clone(),
+                        );
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        dbg!(
+                            "sending initial request to symbol: {:?}",
+                            &symbol_identifier
+                        );
+                        self.symbol_locker
+                            .process_request((symbol_event_request, request_id.to_owned(), sender))
+                            .await;
+                        let response = receiver.await;
+                        dbg!(
+                            "For symbol identifier: {:?} the response is {:?}",
+                            &symbol_identifier,
+                            &response
+                        );
+                    }
+                })
+                .collect::<Vec<_>>()
+                .await;
             }
         } else {
             // We are for some reason not even invoking the first passage which is

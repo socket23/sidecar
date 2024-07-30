@@ -67,7 +67,8 @@ impl TagGraph {
     }
 
     pub fn calculate_page_ranks(&self) -> Vec<f64> {
-        page_rank(&self.graph, 0.85, 100)
+        let final_rank = page_rank(&self.graph, 0.85, 100);
+        final_rank
     }
 
     pub fn get_ranked_definitions(&self) -> &RankedDefinitionsMap {

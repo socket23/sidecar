@@ -42,6 +42,10 @@ pub struct SymbolInputEvent {
     full_symbol_edit: bool,
     codebase_search: bool,
     root_directory: Option<String>,
+    /// The properties for the llm which does fast and stable
+    /// code symbol selection on an initial context, this can be used
+    /// when we are not using full codebase context search
+    fast_code_symbol_search_llm: Option<LLMProperties>,
 }
 
 impl SymbolInputEvent {
@@ -63,6 +67,7 @@ impl SymbolInputEvent {
         full_symbol_edit: bool,
         codebase_search: bool,
         root_directory: Option<String>,
+        fast_code_symbol_search_llm: Option<LLMProperties>,
     ) -> Self {
         Self {
             context,
@@ -82,6 +87,7 @@ impl SymbolInputEvent {
             full_symbol_edit,
             codebase_search,
             root_directory,
+            fast_code_symbol_search_llm,
         }
     }
 
@@ -118,6 +124,10 @@ impl SymbolInputEvent {
         self.repo_map_fs_path.is_some()
     }
 
+    pub fn get_fast_code_symbol_llm(&self) -> Option<LLMProperties> {
+        self.fast_code_symbol_search_llm.clone()
+    }
+
     pub fn get_swe_bench_code_editing(&self) -> Option<LLMProperties> {
         self.swe_bench_code_editing.clone()
     }
@@ -144,13 +154,16 @@ impl SymbolInputEvent {
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
-        let final_model = if self.llm.is_anthropic()
-            && (self.provider.is_codestory() || self.provider.is_anthropic_api_key())
-        {
-            LLMType::ClaudeSonnet
-        } else {
-            self.llm.clone()
-        };
+        let llm_properties_for_symbol_search =
+            if let Some(llm_properties) = self.get_fast_code_symbol_llm() {
+                llm_properties.clone()
+            } else {
+                LLMProperties::new(
+                    self.llm.clone(),
+                    self.provider.clone(),
+                    self.api_keys.clone(),
+                )
+            };
         // TODO(skcd): Toggle the request here depending on if we have the repo map
         if self.has_repo_map() || self.root_directory.is_some() {
             let contents = if self.has_repo_map() {
@@ -193,28 +206,36 @@ impl SymbolInputEvent {
                                 });
                         }
                     }
+                    let outline_for_user_context = tool_box
+                        .outline_for_user_context(&self.context, &self.request_id)
+                        .await;
                     let code_wide_search: CodeSymbolImportantWideSearch =
                         CodeSymbolImportantWideSearch::new(
                             self.context,
                             self.user_query.to_owned(),
-                            final_model,
-                            self.provider,
-                            self.api_keys,
+                            llm_properties_for_symbol_search.llm().clone(),
+                            llm_properties_for_symbol_search.provider().clone(),
+                            llm_properties_for_symbol_search.api_key().clone(),
                             self.request_id.to_string(),
+                            outline_for_user_context,
                         );
                     // just symbol search instead for quick access
                     return Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search));
                 }
             }
         } else {
+            let outline_for_user_context = tool_box
+                .outline_for_user_context(&self.context, &self.request_id)
+                .await;
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(
                     self.context,
                     self.user_query.to_owned(),
-                    final_model,
-                    self.provider,
-                    self.api_keys,
+                    llm_properties_for_symbol_search.llm().clone(),
+                    llm_properties_for_symbol_search.provider().clone(),
+                    llm_properties_for_symbol_search.api_key().clone(),
                     self.request_id.to_string(),
+                    outline_for_user_context,
                 );
             // Now we try to generate the tool input for this
             Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search))

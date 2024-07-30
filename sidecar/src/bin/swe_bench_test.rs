@@ -179,6 +179,7 @@ async fn main() {
         true,
         false,
         None,
+        None,
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
 

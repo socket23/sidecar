@@ -322,13 +322,22 @@ impl ToolBox {
         &self,
         fs_file_path: &str,
         request_id: &str,
-    ) -> Result<Vec<String>, SymbolError> {
-        let clickable_import_range = self
-            .find_import_nodes(fs_file_path, request_id)
+        // returns the Vec<files_on_the_local_graph>, Vec<outline_nodes_symbol_filter>)
+        // this allows us to get the local graph of the files which are related
+        // to the current file and the outline nodes which we can include
+    ) -> Result<(Vec<String>, Vec<String>), SymbolError> {
+        let mut clickable_import_range = vec![];
+        // the name of the outline nodes which we can include when we are looking
+        // at the imports, this prevents extra context or nodes from slipping in
+        // and only includes the local code graph
+        let mut outline_node_name_filter = vec![];
+        self.find_import_nodes(fs_file_path, request_id)
             .await?
             .into_iter()
-            .map(|(_, range)| range)
-            .collect::<Vec<_>>();
+            .for_each(|(import_node_name, range)| {
+                clickable_import_range.push(range);
+                outline_node_name_filter.push(import_node_name)
+            });
         // Now we execute a go-to-definition request on all the imports
         let definition_files = stream::iter(clickable_import_range.to_vec())
             .map(|range| async move {
@@ -372,13 +381,16 @@ impl ToolBox {
             .await;
         // combine the definition and implementation files together to get the local
         // code graph
-        Ok(definition_files
-            .into_iter()
-            .flatten()
-            .chain(implementation_files.into_iter().flatten())
-            .collect::<HashSet<String>>()
-            .into_iter()
-            .collect())
+        Ok((
+            definition_files
+                .into_iter()
+                .flatten()
+                .chain(implementation_files.into_iter().flatten())
+                .collect::<HashSet<String>>()
+                .into_iter()
+                .collect(),
+            outline_node_name_filter,
+        ))
     }
 
     /// Compresses the symbol by removing function content if its present
@@ -414,6 +426,13 @@ impl ToolBox {
             .get_outline_nodes(sub_symbol.fs_file_path(), request_id)
             .await
             .unwrap_or_default();
+
+        // Keep a list of symbol names which we should include and filter the outline
+        // nodes against this
+        let symbol_filter = current_file_outline_nodes
+            .iter()
+            .map(|outline_node| outline_node.name().to_owned())
+            .collect::<Vec<_>>();
 
         let surrounding_files_from_symbols_in_file = stream::iter(current_file_outline_nodes)
             .map(|outline_node| async move {
@@ -464,6 +483,7 @@ impl ToolBox {
                 sub_symbol.fs_file_path(),
                 request_id,
                 surrounding_files_from_symbols_in_file,
+                symbol_filter,
             )
             .await?;
 
@@ -553,8 +573,23 @@ impl ToolBox {
         fs_file_path: &str,
         request_id: &str,
         extra_files_to_include: Vec<String>,
+        symbol_filter: Vec<String>,
     ) -> Result<Vec<OutlineNode>, SymbolError> {
-        let imported_files = self.get_imported_files(fs_file_path, request_id).await?;
+        let (imported_files, outline_nodes_filter) =
+            self.get_imported_files(fs_file_path, request_id).await?;
+
+        let final_outline_nodes_filter = outline_nodes_filter
+            .into_iter()
+            .chain(symbol_filter.into_iter())
+            .collect::<HashSet<String>>();
+        println!(
+            "too_box::local_code_graph::final_outline_nodes_filter::({})",
+            final_outline_nodes_filter
+                .iter()
+                .map(|outline_node| outline_node.to_owned())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
         let outline_nodes = stream::iter(
             imported_files
                 .into_iter()
@@ -580,6 +615,9 @@ impl ToolBox {
         .into_iter()
         .filter_map(|s| s)
         .flatten()
+        // filter to only include the ouline nodes which we know of, not including
+        // the whole world
+        .filter(|outline_node| final_outline_nodes_filter.contains(outline_node.name()))
         .collect::<Vec<_>>();
         Ok(outline_nodes)
     }

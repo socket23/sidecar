@@ -470,7 +470,7 @@ impl ToolBox {
                 files_to_visit
             })
             .buffer_unordered(4)
-            .collect::<Vec<_>>()
+            .collect::<HashSet<_>>()
             .await
             .into_iter()
             .flatten()
@@ -582,14 +582,6 @@ impl ToolBox {
             .into_iter()
             .chain(symbol_filter.into_iter())
             .collect::<HashSet<String>>();
-        println!(
-            "too_box::local_code_graph::final_outline_nodes_filter::({})",
-            final_outline_nodes_filter
-                .iter()
-                .map(|outline_node| outline_node.to_owned())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
         let outline_nodes = stream::iter(
             imported_files
                 .into_iter()

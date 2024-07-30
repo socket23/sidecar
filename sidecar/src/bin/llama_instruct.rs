@@ -184,7 +184,7 @@ impl SymbolToProbeRequest {
 Your reply should be:
 <reply>
 <thinking>
-The request talks about implementing new methods for the initial request data, so we need to include the initial request data symbol so we edit the code properly.
+The request talks about implementing new methods for the initial request data, so we need to include the initial request data symbol in the context when trying to edit the code.
 </thinking>
 <code_symbol_outline_list>
 <code_symbol>
@@ -199,262 +199,751 @@ InitialRequestData
 </reply>"#;
     let user_message = r#"<user_query>
 Original user query:
-change this function to not fail: FAIL: test_async_main_with_in_memory_storage (test_main.TestMain.test_async_main_with_in_memory_storage)
-Test async_main function with in-memory storage.
-----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "C:\Users\kroen\AppData\Local\Programs\Python\Python312\Lib\unittest\async_case.py", line 90, in _callTestMethod
-    if self._callMaybeAsync(method) is not None:
-       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\kroen\AppData\Local\Programs\Python\Python312\Lib\unittest\async_case.py", line 112, in _callMaybeAsync
-    return self._asyncioRunner.run(
-           ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\kroen\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py", line 118, in run
-    return self._loop.run_until_complete(task)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\kroen\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py", line 664, in run_until_complete
-    return future.result()
-           ^^^^^^^^^^^^^^^
-  File "C:\Users\kroen\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py", line 1404, in patched
-    return await func(*newargs, **newkeywargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\codebuddyschedula\tests\test_main.py", line 116, in test_async_main_with_in_memory_storage
-    mock_memory.assert_called_once()
-  File "C:\Users\kroen\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py", line 923, in assert_called_once
-    raise AssertionError(msg)
-AssertionError: Expected 'ConversationBufferMemory' to have been called once. Called 0 times.
+Add support for mixtral model to LLMType
 
 Edit selection reason:
-The `async_main` function needs to be modified to ensure that `ConversationBufferMemory` is correctly initialized and called when using in-memory storage. This will address the test failure where `ConversationBufferMemory` was expected to be called but wasn&apos;t.
+The `Deserialize` implementation for `LLMType` needs to be updated to correctly deserialize the new Mixtral model.
 </user_query>
 
 <file_path>
-d:\CodebuddySchedula\src\main.py
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
 </file_path>
 
-<code_above>
-from datetime import datetime
-import warnings
-from googleapiclient import discovery
-from langchain.schema import AIMessage
 
-from src.constants import TIMEZONE
 
-warnings.filterwarnings("ignore", "file_cache is unavailable when using oauth2client >= 4.0.0")
-discovery.DISCOVERY_CACHE_DISABLED = True
+<code_snippet_to_edit>
 
-import asyncio
-import os
-from typing import Dict, Any
+impl<'de> Deserialize<'de> for LLMType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct LLMTypeVisitor;
 
-from langchain.prompts import MessagesPlaceholder, ChatPromptTemplate
-from langchain_community.chat_models import ChatAnthropic, ChatOpenAI
-from langchain_community.chat_message_histories import RedisChatMessageHistory
-from langchain.memory import ConversationBufferMemory
-from langchain.agents import AgentExecutor, create_openai_functions_agent
-from langchain_community.vectorstores import Redis as RedisVectorStore
-from langchain_openai import OpenAIEmbeddings
-from src.redis_config import RedisMemory, REDIS_URL
+        impl<'de> Visitor<'de> for LLMTypeVisitor {
+            type Value = LLMType;
 
-from src.calendar_tools import create_calendar_tools, get_calendar_service
-from src.chains import create_chains
-from src.cli_interface import cli
-from src.logging_config import setup_logging
-from src.model_management import get_available_models, initialize_llm, select_model
-from src.gamification import GamificationSystem
-from src.custom_agent import CustomAgent
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string representing an LLMType")
+            }
 
-try:
-    from langchain import hub
-except ImportError:
-    print("Could not import langchainhub. Please install with 'pip install langchainhub'")
-    hub = None
+            fn visit_str<E>(self, value: &str) -> Result<LLMType, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    "Mixtral" => Ok(LLMType::Mixtral),
+                    "MistralInstruct" => Ok(LLMType::MistralInstruct),
+                    "Gpt4" => Ok(LLMType::Gpt4),
+                    "Gpt4OMini" => Ok(LLMType::Gpt4OMini),
+                    "GPT3_5_16k" => Ok(LLMType::GPT3_5_16k),
+                    "Gpt4_32k" => Ok(LLMType::Gpt4_32k),
+                    "Gpt4Turbo" => Ok(LLMType::Gpt4Turbo),
+                    "DeepSeekCoder1.3BInstruct" => Ok(LLMType::DeepSeekCoder1_3BInstruct),
+                    "DeepSeekCoder6BInstruct" => Ok(LLMType::DeepSeekCoder6BInstruct),
+                    "CodeLLama70BInstruct" => Ok(LLMType::CodeLLama70BInstruct),
+                    "CodeLlama13BInstruct" => Ok(LLMType::CodeLlama13BInstruct),
+                    "CodeLlama7BInstruct" => Ok(LLMType::CodeLlama7BInstruct),
+                    "DeepSeekCoder33BInstruct" => Ok(LLMType::DeepSeekCoder33BInstruct),
+                    "ClaudeOpus" => Ok(LLMType::ClaudeOpus),
+                    "ClaudeSonnet" => Ok(LLMType::ClaudeSonnet),
+                    "ClaudeHaiku" => Ok(LLMType::ClaudeHaiku),
+                    "PPLXSonnetSmall" => Ok(LLMType::PPLXSonnetSmall),
+                    "CohereRerankV3" => Ok(LLMType::CohereRerankV3),
+                    "GeminiPro1.5" => Ok(LLMType::GeminiPro),
+                    "Llama3_8bInstruct" => Ok(LLMType::Llama3_8bInstruct),
+                    "Llama3_1_8bInstruct" => Ok(LLMType::Llama3_1_8bInstruct),
+                    "Llama3_1_70bInstruct" => Ok(LLMType::Llama3_1_70bInstruct),
+                    "Gpt4O" => Ok(LLMType::Gpt4O),
+                    "GeminiProFlash" => Ok(LLMType::GeminiProFlash),
+                    "DeepSeekCoderV2" => Ok(LLMType::DeepSeekCoderV2),
+                    _ => Ok(LLMType::Custom(value.to_string())),
+                }
+            }
+        }
 
-logger = setup_logging(log_level="DEBUG")  # Set to "INFO" in production
-
-from redis.exceptions import RedisError
-from src.redis_config import RedisMemory
-
-class AgentManager:
-    def __init__(self, llm, tools, session_id):
-        self.llm = llm
-        self.tools = tools
-        self.session_id = session_id
-        self._memory = self._setup_memory()
-        self.agent = self._create_agent()
-        self.executor = AgentExecutor(agent=self.agent, tools=self.tools, memory=self._memory, verbose=True)
-        self.gamification = GamificationSystem()
-
-    @property
-    def memory(self):
-        if self._memory is None:
-            logger.warning("Memory is not initialized. Attempting to set up memory.")
-            self._memory = self._setup_memory()
-        return self._memory
-
-    def _setup_memory(self):
-        try:
-            memory = RedisMemory(session_id=self.session_id)
-            logger.info(f"RedisMemory initialized with session_id: {self.session_id}")
-            return memory
-        except RedisError as e:
-            logger.warning(f"Failed to connect to Redis: {str(e)}. Using in-memory storage instead.")
-            memory = ConversationBufferMemory(return_messages=True)
-            if not hasattr(memory, 'clear'):
-                memory.clear = lambda: memory.chat_memory.clear()
-            return memory
-        except Exception as e:
-            logger.error(f"Unexpected error setting up memory: {str(e)}. Using in-memory storage.")
-            memory = ConversationBufferMemory(return_messages=True)
-            if not hasattr(memory, 'clear'):
-                memory.clear = lambda: memory.chat_memory.clear()
-            return memory
-
-    def _create_agent(self):
-        logger.debug("Creating agent")
-        if hub:
-            prompt = hub.pull("wfh/langsmith-agent-prompt:latest")
-        else:
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", "You are a helpful AI assistant."),
-                ("human", "{input}"),
-            ])
-        return create_openai_functions_agent(self.llm, self.tools, prompt)
-
-    async def process_user_input(self, user_input: str) -> str:
-        try:
-            logger.debug(f"Processing user input: {user_input}")
-            
-            response = await self.executor.ainvoke({"input": user_input})
-            logger.debug(f"Received response: {response}")
-            
-            points = await asyncio.to_thread(self.gamification.update_points, user_input)
-            total_points = await asyncio.to_thread(self.gamification.get_total_points)
-            gamification_result = f"\n\nYou earned {points} points! Total: {total_points}"
-            
-            final_response = f"Agent response: {response['output']}{gamification_result}"
-            logger.info(f"Final response prepared: {final_response}")
-            return final_response
-        except Exception as e:
-            logger.exception(f"Error processing user input: {str(e)}")
-            return f"An error occurred while processing your request: {str(e)}"
-
-    async def clear_memory(self):
-        try:
-            if hasattr(self.memory, 'clear'):
-                await asyncio.to_thread(self.memory.clear)
-                logger.debug("Memory cleared successfully")
-            else:
-                logger.warning("Memory object does not have a clear method")
-        except Exception as e:
-            logger.error(f"Error clearing memory: {str(e)}")
-
-    async def check_redis_connection(self):
-        if isinstance(self.memory, RedisMemory):
-            try:
-                await asyncio.to_thread(self.memory.redis.ping)
-                logger.info("Redis connection is active")
-                return True
-            except RedisError as e:
-                logger.error(f"Redis connection check failed: {str(e)}")
-                return False
-            except Exception as e:
-                logger.error(f"Unexpected error during Redis connection check: {str(e)}")
-                return False
-        else:
-            logger.info("Not using Redis memory, using in-memory storage")
-            return False
-
-import logging
-
-</code_above>
-<code_below>
-
-async def main():
-    await cli.run(async_main)
-
-if __name__ == "__main__":
-    available_models = get_available_models()
-    logger.info(f"Available models: {available_models}")
-    asyncio.run(main())
-</code_below>
-<code_in_selection>
-async def async_main(user_input: str, llm: Any = None) -> str:
-    logging.debug("Entering async_main")
-    try:
-        # Initialize AgentManager with default values
-        agent_manager = AgentManager(None, [], "test_session")
-        
-        # Check Redis connection
-        redis_connected = False
-        redis_error_message = ""
-        try:
-            redis_connected = await asyncio.wait_for(agent_manager.check_redis_connection(), timeout=5.0)
-            logging.info(f"Redis connection status: {'Connected' if redis_connected else 'Not connected'}")
-        except asyncio.TimeoutError:
-            redis_error_message = "Redis connection check timed out"
-        except AttributeError:
-            redis_error_message = "AgentManager doesn't support Redis checks"
-        except (RedisError, ConnectionError) as e:
-            redis_error_message = f"Redis connection failed: {str(e)}"
-        except Exception as e:
-            redis_error_message = f"Unexpected error: {str(e)}"
-
-        if not redis_connected:
-            logging.warning(f"Failed to connect to Redis: {redis_error_message}. Using in-memory storage instead.")
-
-        current_date = datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %Z")
-        user_input_with_date = f"{user_input} (Current date and time: {current_date})"
-        
-        # Create tasks for concurrent execution
-        calendar_service_task = asyncio.create_task(get_calendar_service())
-        llm_task = asyncio.create_task(asyncio.to_thread(initialize_llm, "anthropic", "claude-3-sonnet-20240229") if llm is None else asyncio.sleep(0))
-
-        # Wait for tasks to complete
-        calendar_service, llm = await asyncio.gather(calendar_service_task, llm_task)
-        
-        # Create tools using the obtained calendar_service
-        tools = await asyncio.to_thread(create_calendar_tools, calendar_service)
-        
-        # Update AgentManager with new llm and tools
-        agent_manager.llm = llm
-        agent_manager.tools = tools
-
-        # Create chains asynchronously
-        try:
-            memory = agent_manager.memory
-            chains = await asyncio.to_thread(create_chains, llm, memory, None, None, tools)
-        except AttributeError:
-            logging.error("AgentManager does not have a 'memory' attribute")
-            memory = None
-            chains = await asyncio.to_thread(create_chains, llm, None, None, None, tools)
-        
-        # Process user input with a timeout
-        try:
-            if hasattr(agent_manager, 'process_user_input'):
-                response = await asyncio.wait_for(agent_manager.process_user_input(user_input_with_date), timeout=60)
-            else:
-                logging.error("AgentManager does not have a 'process_user_input' method")
-                response = "I'm sorry, but there was an issue processing your request. Please try again later."
-        except asyncio.TimeoutError:
-            logging.warning("Agent response timed out")
-            response = "I apologize, but I couldn't process your request in time. Please try again or simplify your query."
-        except AttributeError as ae:
-            logging.error(f"AttributeError in agent_manager.process_user_input: {str(ae)}")
-            response = "I'm sorry, but there was an issue with the agent's configuration. Please try again later."
-        except Exception as e:
-            logging.error(f"Unexpected error in process_user_input: {str(e)}")
-            response = "An unexpected error occurred while processing your request. Please try again later."
-
-        logging.debug(f"Final response: {response}")
-        return response
-    except Exception as e:
-        logging.exception(f"Error in async_main: {str(e)}")
-        return f"Error: An unexpected error occurred: {str(e)}"
-<?code_in_selection>
+        deserializer.deserialize_string(LLMTypeVisitor)
+    }
+</code_snippet_to_edit>
 
 <code_symbol_outline_list>
+<code_symbol>
+<name>
+LLMType
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+pub enum LLMType {
+    Mixtral,
+    MistralInstruct,
+    Gpt4,
+    GPT3_5_16k,
+    Gpt4_32k,
+    Gpt4O,
+    Gpt4OMini,
+    Gpt4Turbo,
+    DeepSeekCoder1_3BInstruct,
+    DeepSeekCoder33BInstruct,
+    DeepSeekCoder6BInstruct,
+    DeepSeekCoderV2,
+    CodeLLama70BInstruct,
+    CodeLlama13BInstruct,
+    CodeLlama7BInstruct,
+    Llama3_8bInstruct,
+    Llama3_1_8bInstruct,
+    Llama3_1_70bInstruct,
+    ClaudeOpus,
+    ClaudeSonnet,
+    ClaudeHaiku,
+    PPLXSonnetSmall,
+    CohereRerankV3,
+    GeminiPro,
+    GeminiProFlash,
+    Custom(String),
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMType
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl Serialize for LLMType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMType
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl<'de> Deserialize<'de> for LLMType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn visit_str<E>(self, value: &str) -> Result<LLMType, E>
+            where
+                E: de::Error,
+            {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMType
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMType {
+    pub fn is_openai(&self) -> bool {
+    pub fn is_custom(&self) -> bool {
+    pub fn is_anthropic(&self) -> bool {
+    pub fn is_openai_gpt4o(&self) -> bool {
+    pub fn is_gemini_model(&self) -> bool {
+    pub fn is_gemini_pro(&self) -> bool {
+    pub fn is_togetherai_model(&self) -> bool {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMType
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl fmt::Display for LLMType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientRole
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub enum LLMClientRole {
+    System,
+    User,
+    Assistant,
+    // function calling is weird, its only supported by openai right now
+    // and not other LLMs, so we are going to make this work with the formatters
+    // and still keep it as it is
+    Function,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientRole
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMClientRole {
+    pub fn is_system(&self) -> bool {
+    pub fn is_user(&self) -> bool {
+    pub fn is_assistant(&self) -> bool {
+    pub fn is_function(&self) -> bool {
+    pub fn to_string(&self) -> String {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientMessageFunctionCall
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct LLMClientMessageFunctionCall {
+    name: String,
+    // arguments are generally given as a JSON string, so we keep it as a string
+    // here, validate in the upper handlers for this
+    arguments: String,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientMessageFunctionCall
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMClientMessageFunctionCall {
+    pub fn name(&self) -> &str {
+    pub fn arguments(&self) -> &str {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientMessageFunctionReturn
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct LLMClientMessageFunctionReturn {
+    name: String,
+    content: String,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientMessageFunctionReturn
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMClientMessageFunctionReturn {
+    pub fn name(&self) -> &str {
+    pub fn content(&self) -> &str {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientMessage
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct LLMClientMessage {
+    role: LLMClientRole,
+    message: String,
+    function_call: Option<LLMClientMessageFunctionCall>,
+    function_return: Option<LLMClientMessageFunctionReturn>,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientMessage
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMClientMessage {
+    pub fn new(role: LLMClientRole, message: String) -> Self {
+    pub fn concat_message(&mut self, message: &str) {
+    pub fn concat(self, other: Self) -> Self {
+    pub fn function_call(name: String, arguments: String) -> Self {
+    pub fn function_return(name: String, content: String) -> Self {
+    pub fn user(message: String) -> Self {
+    pub fn assistant(message: String) -> Self {
+    pub fn system(message: String) -> Self {
+    pub fn content(&self) -> &str {
+    pub fn set_empty_content(&mut self) {
+    pub fn function(message: String) -> Self {
+    pub fn role(&self) -> &LLMClientRole {
+    pub fn get_function_call(&self) -> Option<&LLMClientMessageFunctionCall> {
+    pub fn get_function_return(&self) -> Option<&LLMClientMessageFunctionReturn> {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientCompletionRequest
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(Clone, Debug)]
+pub struct LLMClientCompletionRequest {
+    model: LLMType,
+    messages: Vec<LLMClientMessage>,
+    temperature: f32,
+    frequency_penalty: Option<f32>,
+    stop_words: Option<Vec<String>>,
+    max_tokens: Option<usize>,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientCompletionStringRequest
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(Clone)]
+pub struct LLMClientCompletionStringRequest {
+    model: LLMType,
+    prompt: String,
+    temperature: f32,
+    frequency_penalty: Option<f32>,
+    stop_words: Option<Vec<String>>,
+    max_tokens: Option<usize>,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientCompletionStringRequest
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMClientCompletionStringRequest {
+    pub fn new(
+        model: LLMType,
+        prompt: String,
+        temperature: f32,
+        frequency_penalty: Option<f32>,
+    ) -> Self {
+    pub fn set_stop_words(mut self, stop_words: Vec<String>) -> Self {
+    pub fn model(&self) -> &LLMType {
+    pub fn temperature(&self) -> f32 {
+    pub fn frequency_penalty(&self) -> Option<f32> {
+    pub fn prompt(&self) -> &str {
+    pub fn stop_words(&self) -> Option<&[String]> {
+    pub fn set_max_tokens(mut self, max_tokens: usize) -> Self {
+    pub fn get_max_tokens(&self) -> Option<usize> {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientCompletionRequest
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMClientCompletionRequest {
+    pub fn new(
+        model: LLMType,
+        messages: Vec<LLMClientMessage>,
+        temperature: f32,
+        frequency_penalty: Option<f32>,
+    ) -> Self {
+    pub fn set_llm(mut self, llm: LLMType) -> Self {
+    pub fn fix_message_structure(mut self: Self) -> Self {
+    pub fn from_messages(messages: Vec<LLMClientMessage>, model: LLMType) -> Self {
+    pub fn set_temperature(mut self, temperature: f32) -> Self {
+    pub fn messages(&self) -> &[LLMClientMessage] {
+    pub fn temperature(&self) -> f32 {
+    pub fn frequency_penalty(&self) -> Option<f32> {
+    pub fn model(&self) -> &LLMType {
+    pub fn stop_words(&self) -> Option<&[String]> {
+    pub fn set_max_tokens(mut self, max_tokens: usize) -> Self {
+    pub fn get_max_tokens(&self) -> Option<usize> {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientCompletionResponse
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(Debug)]
+pub struct LLMClientCompletionResponse {
+    answer_up_until_now: String,
+    delta: Option<String>,
+    model: String,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientCompletionResponse
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+impl LLMClientCompletionResponse {
+    pub fn new(answer_up_until_now: String, delta: Option<String>, model: String) -> Self {
+    pub fn get_answer_up_until_now(self) -> String {
+    pub fn answer_up_until_now(&self) -> &str {
+    pub fn delta(&self) -> Option<&str> {
+    pub fn model(&self) -> &str {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClientError
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[derive(Error, Debug)]
+pub enum LLMClientError {
+    #[error("Failed to get response from LLM")]
+    FailedToGetResponse,
 
+    #[error("Reqwest error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+
+    #[error("serde failed: {0}")]
+    SerdeError(#[from] serde_json::Error),
+
+    #[error("send error over channel: {0}")]
+    SendError(#[from] tokio::sync::mpsc::error::SendError<LLMClientCompletionResponse>),
+
+    #[error("unsupported model")]
+    UnSupportedModel,
+
+    #[error("OpenAI api error: {0}")]
+    OpenAPIError(#[from] async_openai::error::OpenAIError),
+
+    #[error("Wrong api key type")]
+    WrongAPIKeyType,
+
+    #[error("OpenAI does not support completion")]
+    OpenAIDoesNotSupportCompletion,
+
+    #[error("Sqlite setup error")]
+    SqliteSetupError,
+
+    #[error("tokio mspc error")]
+    TokioMpscSendError,
+
+    #[error("Failed to store in sqlite DB")]
+    FailedToStoreInDB,
+
+    #[error("Sqlx erorr: {0}")]
+    SqlxError(#[from] sqlx::Error),
+
+    #[error("Function calling role but not function call present")]
+    FunctionCallNotPresent,
+
+    #[error("Gemini pro does not support prompt completion")]
+    GeminiProDoesNotSupportPromptCompletion,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMClient
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+#[async_trait]
+pub trait LLMClient {
+    fn client(&self) -> &LLMProvider;
+    async fn stream_completion(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionRequest,
+        sender: UnboundedSender<LLMClientCompletionResponse>,
+    ) -> Result<String, LLMClientError>;
+    async fn completion(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionRequest,
+    ) -> Result<String, LLMClientError>;
+    async fn stream_prompt_completion(
+        &self,
+        api_key: LLMProviderAPIKeys,
+        request: LLMClientCompletionStringRequest,
+        sender: UnboundedSender<LLMClientCompletionResponse>,
+    ) -> Result<String, LLMClientError>;
+
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+test_llm_type_from_string
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+    fn test_llm_type_from_string() {
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMType
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/ollama.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/clients/ollama.rs
+impl LLMType {
+    pub fn to_ollama_model(&self) -> Result<String, LLMClientError> {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMProvider
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Hash, PartialEq, Eq)]
+pub enum LLMProvider {
+    OpenAI,
+    TogetherAI,
+    Ollama,
+    LMStudio,
+    CodeStory(CodeStoryLLMTypes),
+    Azure(AzureOpenAIDeploymentId),
+    OpenAICompatible,
+    Anthropic,
+    FireworksAI,
+    GeminiPro,
+    GoogleAIStudio,
+    OpenRouter,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMProvider
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+impl std::fmt::Display for LLMProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMProvider
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+impl LLMProvider {
+    pub fn is_codestory(&self) -> bool {
+    pub fn is_anthropic_api_key(&self) -> bool {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMProviderAPIKeys
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub enum LLMProviderAPIKeys {
+    OpenAI(OpenAIProvider),
+    TogetherAI(TogetherAIProvider),
+    Ollama(OllamaProvider),
+    OpenAIAzureConfig(AzureConfig),
+    LMStudio(LMStudioConfig),
+    OpenAICompatible(OpenAICompatibleConfig),
+    CodeStory,
+    Anthropic(AnthropicAPIKey),
+    FireworksAI(FireworksAPIKey),
+    GeminiPro(GeminiProAPIKey),
+    GoogleAIStudio(GoogleAIStudioKey),
+    OpenRouter(OpenRouterAPIKey),
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+LLMProviderAPIKeys
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/llm_client/src/provider.rs
+impl LLMProviderAPIKeys {
+    // Gets the relevant key from the llm provider
+    pub fn is_openai(&self) -> bool {
+    pub fn provider_type(&self) -> LLMProvider {
+    pub fn key(&self, llm_provider: &LLMProvider) -> Option<Self> {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+Error
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+#[derive(Debug)]
+pub struct Error {
+    status: StatusCode,
+    body: EndpointError<'static>,
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+Error
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+Error
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+impl IntoResponse for Error {
+    fn into_response(self) -> axum::response::Response {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+Error
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+impl Error {
+    pub fn internal<S: std::fmt::Display>(message: S) -> Self {
+}
+</content>
+</code_symbol>
+<code_symbol>
+<name>
+Error
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+</file_path>
+<content>
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/types.rs
+impl From<anyhow::Error> for Error {
+    fn from(value: anyhow::Error) -> Self {
+}
+</content>
+</code_symbol>
 </code_symbol_outline_list>"#;
     let llm_request = LLMClientCompletionRequest::new(
         LLMType::Llama3_1_8bInstruct,

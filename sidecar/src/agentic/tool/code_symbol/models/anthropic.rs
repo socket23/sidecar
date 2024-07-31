@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use serde_xml_rs::from_str;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use std::{env, fs};
 use std::{fs::File, sync::Arc};
 use tracing::info;
@@ -5920,6 +5921,9 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
             None,
         );
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let start = Instant::now();
+
         let response = self
             .llm_client
             .stream_completion(
@@ -5937,6 +5941,9 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
             .await?;
         let parsed_response =
             Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response());
+
+        let duration = start.elapsed();
+        println!("get_repo_symbols::LLM_response_time: {:?}", duration);
 
         // writes a trace-safe version of the response
         if let Ok(ref parsed_response) = parsed_response {

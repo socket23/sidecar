@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use serde_xml_rs::from_str;
-use std::sync::Arc;
+use std::io::Write;
+use std::path::Path;
+use std::{fs::File, sync::Arc};
 use tracing::info;
 
 use llm_client::{
@@ -5910,8 +5912,12 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         let system_message =
             LLMClientMessage::system(self.system_message_for_repo_map_search(&request));
         let user_message = LLMClientMessage::user(self.user_message_for_repo_map_search(request));
-        let messages =
-            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.2, None);
+        let messages = LLMClientCompletionRequest::new(
+            model,
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
@@ -5921,14 +5927,51 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
                 provider,
                 vec![
                     ("event_type".to_owned(), "repo_map_search".to_owned()),
-                    ("root_id".to_owned(), root_request_id.to_owned()),
+                    ("root_id".to_owned(), root_request_id.clone()),
                 ]
                 .into_iter()
                 .collect(),
                 sender,
             )
             .await?;
-        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        let parsed_response =
+            Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response());
+
+        self.write_trace(
+            &root_request_id,
+            system_message.content(),
+            user_message.content(),
+            &response,
+        );
+
+        parsed_response
+    }
+}
+
+impl AnthropicCodeSymbolImportant {
+    fn write_trace(
+        &self,
+        root_request_id: &str,
+        system_message: &str,
+        user_message: &str,
+        response: &str,
+    ) -> std::io::Result<()> {
+        let safe_id = root_request_id.replace(|c: char| !c.is_alphanumeric(), "_");
+        let file_path = Path::new("traces").join(format!("{}.md", safe_id));
+        let mut file = File::create(file_path)?;
+
+        writeln!(file, "# [System]")?;
+        writeln!(file, "{}", system_message)?;
+        writeln!(file)?;
+
+        writeln!(file, "# [User]")?;
+        writeln!(file, "{}", user_message,)?;
+        writeln!(file)?;
+
+        writeln!(file, "# [Response]")?;
+        writeln!(file, "{}", response)?;
+
+        Ok(())
     }
 }
 

@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use serde::Deserialize;
 use std::error::Error;
 use std::fs::File;
+use std::time::Instant;
 
 use futures::{stream, StreamExt};
 use llm_client::{
@@ -66,6 +67,8 @@ fn read_problems_from_csv(path: &str, repo: &str) -> Result<Vec<Task>, Box<dyn E
 
 /// Copied from code_editing_flow binary
 async fn test_golden_file_search(task: &Task, root_dir: &str) {
+    let start = Instant::now();
+
     let request_id = uuid::Uuid::new_v4();
     let request_id_str = request_id.to_string();
     let parea_url = format!(
@@ -155,6 +158,11 @@ async fn test_golden_file_search(task: &Task, root_dir: &str) {
             result = &mut initial_request_task => {
                 match result {
                     Ok(symbols) => {
+                        println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
+
+                        let duration = start.elapsed();
+
+                        println!("Time elapsed: {:?}", duration);
 
                         assert!(!symbols.is_empty(), "Expected non-empty vector of symbols");
                         assert!(
@@ -162,10 +170,7 @@ async fn test_golden_file_search(task: &Task, root_dir: &str) {
                             "Expected golden file '{}' not found in the returned symbols",
                             task.golden_file,
                         );
-                        println!("Symbols: {:?}", symbols);
-                        println!("Golden file: {}", task.golden_file);
 
-                        println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
                         break
                     }
                     Err(e) => {
@@ -186,6 +191,8 @@ mod tests {
     const SQLFLUFF_ROOT_DIR: &str = "/Users/zi/codestory/testing/sqlfluff";
 
     const DJANGO_ROOT_DIR: &str = "/Users/zi/codestory/testing/django";
+
+    const SYMPY_ROOT_DIR: &str = "/Users/zi/codestory/testing/sympy";
 
     #[tokio::test]
     // commit: f1dba0e1dd764ae72d67c3d5e1471cf14d3db030
@@ -618,5 +625,29 @@ mod tests {
         I found mentions of this issue ​on GitHub, but did not manage to find any existing bug report in Django's bug tracker.
         ""#.to_string());
         test_golden_file_search(&task, DJANGO_ROOT_DIR).await;
+    }
+
+    #[tokio::test]
+    // 8dcb12a6cf500e8738d6729ab954a261758f49ca
+    async fn test_sympy_11400() {
+        let task = Task::new(
+            "sympy/printing/ccode.py".to_string(),
+            r#""ccode(sinc(x)) doesn't work
+        ```
+        In [30]: ccode(sinc(x))
+        Out[30]: '// Not supported in C:\n// sinc\nsinc(x)'
+        ```
+        
+        I don't think `math.h` has `sinc`, but it could print
+        
+        ```
+        In [38]: ccode(Piecewise((sin(theta)/theta, Ne(theta, 0)), (1, True)))
+        Out[38]: '((Ne(theta, 0)) ? (\n   sin(theta)/theta\n)\n: (\n   1\n))'
+        ```
+        
+        ""#
+            .to_string(),
+        );
+        test_golden_file_search(&task, SYMPY_ROOT_DIR).await;
     }
 }

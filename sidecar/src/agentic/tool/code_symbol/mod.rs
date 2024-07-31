@@ -14,4 +14,5 @@ pub mod probe_question_for_symbol;
 pub mod probe_try_hard_answer;
 pub mod repo_map_search;
 pub mod reranking_symbols_for_editing_context;
+pub mod tree;
 pub mod types;

@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use serde_xml_rs::from_str;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
 use std::{fs::File, sync::Arc};
 use tracing::info;
 
@@ -5937,12 +5938,26 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         let parsed_response =
             Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response());
 
-        self.write_trace(
-            &root_request_id,
-            system_message.content(),
-            user_message.content(),
-            &response,
-        );
+        // writes a trace-safe version of the response
+        if let Ok(ref parsed_response) = parsed_response {
+            let ordered_symbols = parsed_response.ordered_symbols();
+
+            let ordered_symbols_string = ordered_symbols
+                .iter()
+                .map(|symbol| {
+                    // file_path, steps: Vec<String>, code_symbol
+                    format!("{}: {:?}", symbol.file_path(), symbol.steps())
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            self.write_trace(
+                &root_request_id,
+                &system_message.content(),
+                &user_message.content(),
+                &ordered_symbols_string,
+            );
+        }
 
         parsed_response
     }
@@ -5956,9 +5971,17 @@ impl AnthropicCodeSymbolImportant {
         user_message: &str,
         response: &str,
     ) -> std::io::Result<()> {
+        let traces_dir_path = PathBuf::from("/Users/zi/codestory/sidecar/traces");
+
+        let extension = "md";
         let safe_id = root_request_id.replace(|c: char| !c.is_alphanumeric(), "_");
-        let file_path = Path::new("traces").join(format!("{}.md", safe_id));
-        let mut file = File::create(file_path)?;
+
+        let file_name = format!("{}.{}", safe_id, extension);
+
+        let file_path = traces_dir_path.join(file_name);
+
+        let mut file = File::create(&file_path)
+            .unwrap_or_else(|_| panic!("Failed to create trace file: {:?}", file_path));
 
         writeln!(file, "# [System]")?;
         writeln!(file, "{}", system_message)?;

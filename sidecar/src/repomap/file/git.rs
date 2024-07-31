@@ -102,13 +102,10 @@ impl GitWalker {
                     };
 
                     let entry = match kind {
-                        FileType::File => {
-                            println!("git_walking::path::({})", path);
-                            match std::fs::read(path.to_owned()) {
-                                Ok(content) => Some((path, content)),
-                                Err(_) => None,
-                            }
-                        }
+                        FileType::File => match std::fs::read(path.to_owned()) {
+                            Ok(content) => Some((path, content)),
+                            Err(_) => None,
+                        },
                         FileType::Directory => None,
                         FileType::NotTracked => None,
                     };

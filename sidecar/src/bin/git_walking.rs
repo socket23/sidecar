@@ -85,7 +85,6 @@ async fn main() {
 
                 let entry = match kind {
                     FileType::File => {
-                        println!("git_walking::path::({})", path);
                         let buffer = String::from_utf8_lossy(&object.data).to_string();
                         Some(buffer)
                     }

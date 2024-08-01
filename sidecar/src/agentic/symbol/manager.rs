@@ -18,6 +18,7 @@ use crate::agentic::symbol::ui_event::InitialSearchSymbolInformation;
 use crate::agentic::tool::code_symbol::important::{
     self, CodeSymbolImportantWideSearch, CodeSymbolWithSteps,
 };
+use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
@@ -324,25 +325,15 @@ impl SymbolManager {
     pub async fn test_important_file_finder(
         &self,
         tool_input: ToolInput,
-    ) -> Result<Vec<CodeSymbolWithSteps>, SymbolError> {
-        // let output = &self.tools.invoke(tool_input).await;
+    ) -> Result<Vec<String>, ToolError> {
+        let output = self.tools.invoke(tool_input).await?;
 
-        match self.tools.invoke(tool_input).await {
-            Ok(output) => {
-                println!("success");
-                // Process the output here
-                // For example:
-                // let symbols = process_output(&output)?;
-                // Ok(symbols)
-
-                // Placeholder for actual implementation
-                todo!("Implement output processing")
-            }
-            Err(e) => {
-                let error_msg = format!("Tool invocation failed: {}", e);
-                println!("error_msg: {:?}", error_msg);
-                Err(SymbolError::SymbolError(error_msg))
-            }
+        if let ToolOutput::ImportantFilesFinder(response) = output {
+            let file_paths = response.file_paths();
+            println!("file count: {:?}", file_paths.len());
+            Ok(file_paths.to_vec())
+        } else {
+            Err(ToolError::FileImportantError("files not found".to_string()))
         }
     }
 

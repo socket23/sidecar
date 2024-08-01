@@ -91,7 +91,12 @@ async fn test_important_file_finder() {
 
     let symbol_manager = make_symbol_manager().await;
 
-    let _ = symbol_manager.test_important_file_finder(tool_input).await;
+    let output = symbol_manager
+        .test_important_file_finder(tool_input)
+        .await
+        .unwrap();
+
+    println!("output: {:?}", output);
 }
 
 fn read_problems_from_csv(path: &str, repo: &str) -> Result<Vec<Task>, Box<dyn Error>> {

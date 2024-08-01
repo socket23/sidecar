@@ -11,16 +11,30 @@ use crate::agentic::{
     tool::file::{
         file_finder::{ImportantFilesFinder, ImportantFilesFinderQuery},
         important::FileImportantResponse,
-        types::FileImportantError,
+        types::{FileImportantError, SerdeError},
     },
 };
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "reply")]
-pub struct Reply {
-    // #[serde(rename = "step_by_step")]
+#[serde(rename = "files")]
+pub struct FileImportantReply {
     #[serde(default)]
     files: Vec<String>,
+}
+
+impl FileImportantReply {
+    pub fn parse_response(response: &str) -> Result<Self, FileImportantError> {
+        if response.is_empty() {
+            return Err(FileImportantError::EmptyResponse);
+        }
+
+        let lines = response
+            .lines()
+            .map(|line| line.to_owned())
+            .collect::<Vec<String>>();
+
+        Ok(Self { files: lines })
+    }
 }
 
 pub struct AnthropicFileFinder {
@@ -43,7 +57,22 @@ impl AnthropicFileFinder {
         format!(
             r#"Observe the repository tree, and list the files you'd want might want to explore in order to solve the user query. 
             Any file that may be relevant. 
-            Use your existing knowledge and intuition of the {} repository.
+            Use your existing knowledge and intuition of the {} repository
+            
+            Respond in the following XML format:
+
+            <files>
+            User/sidecar/file1/
+            User/sidecar/file2/
+            User/sidecar/file3/
+            </files>
+
+
+            Notice how each xml tag ends with a new line, follow this format strictly.
+            
+            Response:
+
+            <files>
         "#,
             file_important_request.repo_name()
         )
@@ -96,9 +125,17 @@ impl ImportantFilesFinder for AnthropicFileFinder {
             )
             .await?;
 
-        // let parsed_response = Reply::parse_response(&response)
+        let parsed_response = FileImportantReply::parse_response(&response);
 
-        println!("find_important_files::\n{:?}", response);
+        match parsed_response {
+            Ok(ref parsed_response) => {
+                println!("response parsed! Files:");
+                println!("File count: {}", parsed_response.files.len());
+            }
+            Err(e) => {
+                println!("Error parsing response: {:?}", e);
+            }
+        }
 
         println!("Elapsed time: {:?}", start.elapsed());
 

@@ -187,7 +187,14 @@ impl SymbolManager {
                 .map_err(|e| e.into())?;
             // TODO(skcd): Another check over here is that we can search for the exact variable
             // and then ask for the edit
-            println!("Symbols over here: {:?}", &symbols);
+            println!(
+                "symbol_manager::probe_request_from_user_context::[{}]",
+                symbols
+                    .iter()
+                    .map(|symbol| symbol.symbol_name().to_owned())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
             // TODO(skcd): the symbol here might belong to a class or it might be a global function
             // we want to grab the largest node containing the symbol here instead of using
             // the symbol directly since our algorithm would not work otherwise
@@ -503,7 +510,14 @@ impl SymbolManager {
                     .map_err(|e| e.into())?;
                 // TODO(skcd): Another check over here is that we can search for the exact variable
                 // and then ask for the edit
-                println!("Symbols over here: {:?}", &symbols);
+                println!(
+                    "symbol_manager::initial_request::symbols::({})",
+                    symbols
+                        .iter()
+                        .map(|symbol| symbol.symbol_name().to_owned())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
                 // TODO(skcd): the symbol here might belong to a class or it might be a global function
                 // we want to grab the largest node containing the symbol here instead of using
                 // the symbol directly since our algorithm would not work otherwise

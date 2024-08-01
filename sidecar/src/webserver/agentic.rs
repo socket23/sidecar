@@ -3,7 +3,7 @@
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::StreamExt;
-use llm_client::provider::{GoogleAIStudioKey, OpenAIProvider};
+use llm_client::provider::{FireworksAPIKey, GoogleAIStudioKey, OpenAIProvider};
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -347,6 +347,14 @@ pub async fn code_editing(
         );
     }
 
+    let llama_70b_properties = LLMProperties::new(
+        LLMType::Llama3_1_70bInstruct,
+        LLMProvider::FireworksAI,
+        LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+            "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+        )),
+    );
+
     let model = LLMType::ClaudeSonnet;
     let provider_type = LLMProvider::Anthropic;
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
@@ -390,7 +398,7 @@ pub async fn code_editing(
                 true,
                 codebase_search,
                 Some(root_directory),
-                None,
+                Some(llama_70b_properties),
             ))
             .await;
     });

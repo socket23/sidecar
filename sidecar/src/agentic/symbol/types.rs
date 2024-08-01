@@ -1358,7 +1358,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 false,
             );
             let _ = self
-                .edit_code(&sub_symbol_to_edit, vec![], &request_id)
+                .insert_code_full(&sub_symbol_to_edit, vec![], &request_id)
                 .await;
             Ok(None)
         }
@@ -1622,6 +1622,65 @@ Satisfy the requirement either by making edits or gathering the required informa
             .await?;
 
         Ok(EditedCodeSymbol::new(content, edited_code))
+    }
+
+    /// Inserts new code to the file, this is useful when the symbol is not present
+    /// in the file and needs to be inserted anew
+    async fn insert_code_full(
+        &self,
+        sub_symbol: &SymbolToEdit,
+        context: Vec<String>,
+        request_id: &str,
+    ) -> Result<EditedCodeSymbol, SymbolError> {
+        let file_content = self
+            .tools
+            .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
+            .await?;
+        // always return the original code which was present here in case of rollbacks
+        let _ = self.ui_sender.send(UIEventWithID::range_selection_for_edit(
+            request_id.to_owned(),
+            self.symbol_identifier.clone(),
+            sub_symbol.range().clone(),
+            sub_symbol.fs_file_path().to_owned(),
+        ));
+        let edited_code = self
+            .tools
+            .code_edit_outline(
+                sub_symbol.fs_file_path(),
+                file_content.contents_ref(),
+                sub_symbol.range(),
+                context.join("\n"),
+                sub_symbol.instructions().join("\n"),
+                self.llm_properties.clone(),
+                request_id,
+                Some(sub_symbol.symbol_name().to_owned()),
+            )
+            .await?;
+        let _ = self.ui_sender.send(UIEventWithID::edited_code(
+            request_id.to_owned(),
+            self.symbol_identifier.clone(),
+            // we need to reshape our range here for the edited
+            // code so we just make sure that the end line is properly
+            // moved
+            sub_symbol
+                .range()
+                .clone()
+                .reshape_for_selection(&edited_code),
+            sub_symbol.fs_file_path().to_owned(),
+            edited_code.to_owned(),
+        ));
+        // TODO(skcd): Pick up from here we want to apply the edits to the editor
+        // let _editor_response = self
+        //     .apply_edits_to_editor(
+        //         sub_symbol.fs_file_path().to_owned(),
+        //         &edited_range,
+        //         &updated_code,
+        //         request_id,
+        //     )
+        //     .await?;
+        // the initial content is an empty string which we are replacing with
+        // the edited code
+        Ok(EditedCodeSymbol::new("".to_owned(), edited_code))
     }
 
     async fn edit_code(

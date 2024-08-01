@@ -4869,7 +4869,7 @@ instruction:
                 .map(|ordered_symbol| ordered_symbol.file_path().to_owned()),
         )
         .for_each(|file_path| async move {
-            let file_open_response = dbg!(self.file_open(file_path.to_owned(), request_id).await);
+            let file_open_response = self.file_open(file_path.to_owned(), request_id).await;
             if let Ok(file_open_response) = file_open_response {
                 let _ = self
                     .force_add_document(

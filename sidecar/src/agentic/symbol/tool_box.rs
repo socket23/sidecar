@@ -434,6 +434,10 @@ impl ToolBox {
             .map(|outline_node| outline_node.name().to_owned())
             .collect::<Vec<_>>();
 
+        // Always include the current file in the surrounding files from symbols in file
+        // this is necessary to make sure that the LLM can gather the context from the current
+        // file as well (even if its just outline, preventing it from assuming some functions
+        // do not exist)
         let surrounding_files_from_symbols_in_file = stream::iter(current_file_outline_nodes)
             .map(|outline_node| async move {
                 let definitions = self
@@ -474,6 +478,9 @@ impl ToolBox {
             .await
             .into_iter()
             .flatten()
+            .chain(vec![sub_symbol.fs_file_path().to_owned()])
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect::<Vec<_>>();
 
         // we also want to check the implementations for the outline nodes which we are getting here
@@ -507,7 +514,7 @@ impl ToolBox {
             .await?;
         let file_contents = file_contents.contents();
         let range = sub_symbol.range();
-        let (_above, _below, in_selection) = split_file_content_into_parts(&file_contents, range);
+        let (_, _, in_selection) = split_file_content_into_parts(&file_contents, range);
         let user_query = sub_symbol.instructions().join("\n");
         let tool_input = ToolInput::ReRankingCodeSnippetsForEditing(
             ReRankingSnippetsForCodeEditingRequest::new(

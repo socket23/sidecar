@@ -412,25 +412,29 @@ Notice how we rewrote the whole section of the code and only the portion which w
 
     fn user_message_for_code_editing(&self, context: &CodeEdit) -> String {
         let extra_data = self.extra_data(context.extra_content());
-        let above = self
-            .above_selection(context.above_context())
-            .map(|code_above| {
-                // limit it to 100 lines from the start
-                let mut lines = code_above.lines().collect::<Vec<_>>();
-                lines.reverse();
-                lines.truncate(SURROUNDING_CONTEXT_LIMIT);
-                lines.reverse();
-                lines.join("\n")
-            });
-        let below = self
-            .below_selection(context.below_context())
-            .map(|code_below| {
-                let mut lines = code_below.lines().collect::<Vec<_>>();
-                lines.reverse();
-                lines.truncate(SURROUNDING_CONTEXT_LIMIT / 3);
-                lines.reverse();
-                lines.join("\n")
-            });
+        let above = self.above_selection(
+            context
+                .above_context()
+                .map(|code_above| {
+                    // limit it to 100 lines from the start
+                    let mut lines = code_above.lines().collect::<Vec<_>>();
+                    lines.reverse();
+                    lines.truncate(SURROUNDING_CONTEXT_LIMIT);
+                    lines.reverse();
+                    lines.join("\n")
+                })
+                .as_deref(),
+        );
+        let below = self.below_selection(
+            context
+                .below_context()
+                .map(|code_below| {
+                    let mut lines = code_below.lines().collect::<Vec<_>>();
+                    lines.truncate(SURROUNDING_CONTEXT_LIMIT / 3);
+                    lines.join("\n")
+                })
+                .as_deref(),
+        );
         let in_range = self.selection_to_edit(context.code_to_edit());
         let mut user_message = "".to_owned();
         user_message = user_message + &extra_data + "\n";

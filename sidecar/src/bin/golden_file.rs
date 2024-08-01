@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use serde::Deserialize;
 use std::error::Error;
@@ -25,6 +28,7 @@ use sidecar::{
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
+    tree_printer::tree::TreePrinter,
     user_context::types::{FileContentValue, UserContext},
 };
 
@@ -56,12 +60,16 @@ async fn main() {
 }
 
 async fn test_important_file_finder() {
-    let tree = "some tree";
+    // build tree from dir
+
+    let dir = Path::new("/Users/zi/codestory/sidecar/sidecar");
+
+    let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
 
     let llm_type = LLMType::GeminiProFlash;
+    let finder_query = ImportantFilesFinderQuery::new(tree, llm_type);
 
-    let finder_query = ImportantFilesFinderQuery::new(tree.to_string(), llm_type);
-
+    // the type of input...determines the tool used
     let tool_input = ToolInput::ImportantFilesFinder(finder_query);
 
     let symbol_manager = make_symbol_manager().await;

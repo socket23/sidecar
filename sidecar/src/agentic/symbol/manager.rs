@@ -327,7 +327,11 @@ impl SymbolManager {
     ) -> Result<Vec<CodeSymbolWithSteps>, SymbolError> {
         let output = &self.tools.invoke(tool_input).await;
 
-        dbg!(output);
+        if let Ok(output) = output {
+            println!("success");
+        } else {
+            println!("failure");
+        }
 
         todo!()
     }

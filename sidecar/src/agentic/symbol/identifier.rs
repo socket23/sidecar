@@ -1080,6 +1080,8 @@ Edit selection reason:
 {reason_to_edit}"#
                                 )
                             });
+                        // Add one more check for the reason to edit, this time asking it to reject it
+                        // this is reduce in the map operation so we can filter down
                         match found_reason_to_edit {
                             Some(reason) => {
                                 // TODO(skcd): We need to get the sub-symbol over

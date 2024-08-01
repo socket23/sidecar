@@ -1,6 +1,7 @@
 use super::{
     code_edit::{
-        find::FindCodeSelectionInput, test_correction::TestOutputCorrectionRequest, types::CodeEdit,
+        filter_edit::FilterEditOperationRequest, find::FindCodeSelectionInput,
+        test_correction::TestOutputCorrectionRequest, types::CodeEdit,
     },
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest,
@@ -98,6 +99,8 @@ pub enum ToolInput {
     ReRankingCodeSnippetsForEditing(ReRankingSnippetsForCodeEditingRequest),
     // Apply the generated code outline to the range we are interested in
     ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest),
+    // checks if the edit operation needs to be performed or is an extra
+    FilterEditOperation(FilterEditOperationRequest),
 }
 
 impl ToolInput {
@@ -149,6 +152,15 @@ impl ToolInput {
                 ToolType::ReRankingCodeSnippetsForCodeEditingContext
             }
             ToolInput::ApplyOutlineEditToRange(_) => ToolType::ApplyOutlineEditToRange,
+            ToolInput::FilterEditOperation(_) => ToolType::FilterEditOperation,
+        }
+    }
+
+    pub fn filter_edit_operation_request(self) -> Result<FilterEditOperationRequest, ToolError> {
+        if let ToolInput::FilterEditOperation(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::FilterEditOperation))
         }
     }
 

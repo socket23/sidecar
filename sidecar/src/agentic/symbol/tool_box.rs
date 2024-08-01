@@ -126,6 +126,62 @@ impl ToolBox {
         }
     }
 
+    /// Adds a new empty line at the end of the file and returns the start position
+    /// of the newly added line
+    pub async fn add_empty_line_end_of_file(
+        &self,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Result<Position, SymbolError> {
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let file_lines = file_contents
+            .contents_ref()
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>();
+        match file_lines.last() {
+            Some(last_line) => {
+                if last_line.is_empty() {
+                    // if we have an empty line then its safe to just keep this
+                    Ok(Position::new(file_lines.len() - 1, 0, 0))
+                } else {
+                    // we want to insert a new line over here
+                    let edit_range = Range::new(
+                        Position::new(file_lines.len() - 1, 0, 0),
+                        Position::new(file_lines.len() - 1, last_line.chars().count(), 0),
+                    );
+                    let _ = self
+                        .apply_edits_to_editor(
+                            &fs_file_path,
+                            &edit_range,
+                            &format!("{}\n", last_line),
+                            request_id,
+                        )
+                        .await;
+                    // now that we have inserted a new line it should be safe to send
+                    // over the file_lines.len() as the position where we want to
+                    // insert the code
+                    Ok(Position::new(file_lines.len(), 0, 0))
+                }
+            }
+            None => {
+                // if we have no lines in the file, then we can just add an empty
+                // string over here
+                let _ = self
+                    .apply_edits_to_editor(
+                        fs_file_path,
+                        &Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                        "",
+                        request_id,
+                    )
+                    .await?;
+                Ok(Position::new(0, 0, 0))
+            }
+        }
+    }
+
+    /// Returns the position of the last line and also returns if this line is
+    /// empty (which would make it safe for code editing)
     pub async fn get_last_position_in_file(
         &self,
         fs_file_path: &str,
@@ -136,9 +192,8 @@ impl ToolBox {
             .contents_ref()
             .lines()
             .into_iter()
-            .collect::<Vec<_>>()
-            .len();
-        Ok(Position::new(file_lines - 1, 0, 0))
+            .collect::<Vec<_>>();
+        Ok(Position::new(file_lines.len() - 1, 0, 0))
     }
 
     // TODO(codestory): This needs more love, the position we are getting back

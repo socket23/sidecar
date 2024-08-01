@@ -4898,7 +4898,7 @@ instruction:
             OutlineNodeContent,
             Vec<(usize, &CodeSymbolWithSteps)>,
         > = Default::default();
-        let mut unbounded_symbols: Vec<&CodeSymbolWithSteps> = Default::default();
+        let mut unbounded_symbols: Vec<(usize, &CodeSymbolWithSteps)> = Default::default();
         for (idx, symbol) in symbols.iter().enumerate() {
             let file_path = symbol.file_path();
             let symbol_name = symbol.code_symbol();
@@ -4908,7 +4908,7 @@ instruction:
                     self.grab_bounding_symbol_for_symbol(outline_nodes, symbol_name);
                 if bounding_symbols.is_empty() {
                     // well this is weird, we have not outline nodes here
-                    unbounded_symbols.push(symbol);
+                    unbounded_symbols.push((idx, symbol));
                 } else {
                     let outline_node = bounding_symbols.remove(0);
                     if bounding_symbol_to_instruction.contains_key(&outline_node) {
@@ -4960,6 +4960,35 @@ instruction:
                 mecha_code_symbols.push((ordered_values.remove(0), mecha_code_symbol_thinking));
             }
         }
+
+        // Now for all the symbols which are new or unbounded by any other symbol right now
+        // we need to also add them inside properly
+        println!(
+            "tool_box::important_symbols::unbounded_symbols::({})::len({})",
+            unbounded_symbols
+                .iter()
+                .map(|(_, symbol)| symbol.code_symbol().to_owned())
+                .collect::<Vec<_>>()
+                .join(","),
+            unbounded_symbols.len()
+        );
+        unbounded_symbols
+            .iter()
+            .for_each(|(ordered_value, code_symbol_with_steps)| {
+                mecha_code_symbols.push((
+                    *ordered_value,
+                    MechaCodeSymbolThinking::new(
+                        code_symbol_with_steps.code_symbol().to_owned(),
+                        code_symbol_with_steps.steps().to_vec(),
+                        true,
+                        code_symbol_with_steps.file_path().to_owned(),
+                        None,
+                        vec![],
+                        user_context.clone(),
+                        Arc::new(self.clone()),
+                    ),
+                ));
+            });
 
         // Now we iterate over all the values in the array and then sort them via the first key
         mecha_code_symbols.sort_by_key(|(idx, _)| idx.clone());

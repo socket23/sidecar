@@ -3,7 +3,6 @@ use serde_xml_rs::from_str;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use std::{env, fs};
 use std::{fs::File, sync::Arc};
 use tracing::info;
 
@@ -12,9 +11,6 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
-use crate::agentic::tool::file::file_finder::{ImportantFilesFinder, ImportantFilesFinderQuery};
-use crate::agentic::tool::file::important::FileImportantResponse;
-use crate::agentic::tool::file::types::FileImportantError;
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
@@ -38,7 +34,6 @@ use crate::agentic::{
         lsp::diagnostics::Diagnostic,
     },
 };
-use crate::tree_printer::tree::TreePrinter;
 
 pub struct AnthropicCodeSymbolImportant {
     llm_client: Arc<LLMBroker>,
@@ -4984,26 +4979,6 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
             + "\n</user_query>")
     }
 
-    fn system_message_for_file_important(
-        &self,
-        file_important_request: &ImportantFilesFinderQuery,
-    ) -> String {
-        format!(
-            r#"Observe the repository tree, and list the files you'd want might want to explore in order to solve the user query. 
-            Any file that may be relevant. 
-            Use your existing knowledge and intuition of the {} repository.
-        "#,
-            file_important_request.repo_name()
-        )
-    }
-
-    fn user_message_for_file_important(
-        &self,
-        file_important_request: &ImportantFilesFinderQuery,
-    ) -> String {
-        format!("{}", file_important_request.tree())
-    }
-
     fn system_message_for_repo_map_search(
         &self,
         repo_map_search_request: &RepoMapSearchQuery,
@@ -5991,53 +5966,6 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         }
 
         parsed_response
-    }
-}
-
-#[async_trait]
-impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
-    async fn find_important_files(
-        &self,
-        request: ImportantFilesFinderQuery,
-    ) -> Result<FileImportantResponse, FileImportantError> {
-        let root_request_id = request.root_request_id().to_owned();
-        let model = request.llm().clone();
-        let provider = request.provider().clone();
-        let api_keys = request.api_keys().clone();
-        let system_message =
-            LLMClientMessage::system(self.system_message_for_file_important(&request));
-        let user_message = LLMClientMessage::user(self.user_message_for_file_important(&request));
-        let messages = LLMClientCompletionRequest::new(
-            model,
-            vec![system_message.clone(), user_message.clone()],
-            0.2,
-            None,
-        );
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let start = Instant::now();
-
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_keys,
-                messages,
-                provider,
-                vec![
-                    ("event_type".to_owned(), "repo_map_search".to_owned()),
-                    ("root_id".to_owned(), root_request_id.clone()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
-
-        println!("find_important_files::\n{:?}", response);
-
-        println!("Elapsed time: {:?}", start.elapsed());
-
-        todo!()
     }
 }
 

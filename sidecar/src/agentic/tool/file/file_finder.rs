@@ -15,7 +15,10 @@ use crate::agentic::{
     },
 };
 
-use super::{important::FileImportantResponse, types::FileImportantError};
+use super::{
+    important::FileImportantResponse, models::anthropic::AnthropicFileFinder,
+    types::FileImportantError,
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ImportantFilesFinderQuery {
@@ -94,40 +97,25 @@ impl ImportantFilesFinderBroker {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         let mut llms: HashMap<LLMType, Box<dyn ImportantFilesFinder + Send + Sync>> =
             Default::default();
-        llms.insert(
-            LLMType::ClaudeHaiku,
-            Box::new(AnthropicCodeSymbolImportant::new(
-                llm_client.clone(),
-                fail_over_llm.clone(),
-            )),
-        );
+
+        // only smart models allowed
         llms.insert(
             LLMType::ClaudeSonnet,
-            Box::new(AnthropicCodeSymbolImportant::new(
-                llm_client.clone(),
-                fail_over_llm.clone(),
-            )),
-        );
-        llms.insert(
-            LLMType::ClaudeOpus,
-            Box::new(AnthropicCodeSymbolImportant::new(
+            Box::new(AnthropicFileFinder::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),
         );
         llms.insert(
             LLMType::GeminiPro,
-            Box::new(AnthropicCodeSymbolImportant::new(
+            Box::new(AnthropicFileFinder::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),
         );
         llms.insert(
             LLMType::GeminiProFlash,
-            Box::new(AnthropicCodeSymbolImportant::new(
-                llm_client.clone(),
-                fail_over_llm,
-            )),
+            Box::new(AnthropicFileFinder::new(llm_client.clone(), fail_over_llm)),
         );
         Self { llms }
     }

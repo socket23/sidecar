@@ -4984,6 +4984,26 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
             + "\n</user_query>")
     }
 
+    fn system_message_for_file_important(
+        &self,
+        file_important_request: &ImportantFilesFinderQuery,
+    ) -> String {
+        format!(
+            r#"Observe the repository tree, and list the files you'd want might want to explore in order to solve the user query. 
+            Any file that may be relevant. 
+            Use your existing knowledge and intuition of the {} repository.
+        "#,
+            file_important_request.repo_name()
+        )
+    }
+
+    fn user_message_for_file_important(
+        &self,
+        file_important_request: &ImportantFilesFinderQuery,
+    ) -> String {
+        format!("{}", file_important_request.tree())
+    }
+
     fn system_message_for_repo_map_search(
         &self,
         repo_map_search_request: &RepoMapSearchQuery,

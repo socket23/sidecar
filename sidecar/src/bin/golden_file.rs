@@ -22,7 +22,7 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
-            file::tree_search::ImportantFilesFinderQuery,
+            file::file_finder::ImportantFilesFinderQuery,
             input::ToolInput,
         },
     },

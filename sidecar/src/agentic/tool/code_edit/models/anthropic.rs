@@ -4,6 +4,12 @@ use crate::agentic::tool::code_edit::types::CodeEdit;
 
 use super::broker::{CodeEditPromptFormatters, CodeSnippetForEditing};
 
+/// How many lines above the selection can we show to the llm
+/// this is used to truncate the size of the context we show the llm when its
+/// making edits, since we will grab the correct context required almost always
+/// with our definitions
+const SURROUNDING_CONTEXT_LIMIT: usize = 200;
+
 pub struct AnthropicCodeEditFromatter {}
 
 impl AnthropicCodeEditFromatter {
@@ -406,8 +412,25 @@ Notice how we rewrote the whole section of the code and only the portion which w
 
     fn user_message_for_code_editing(&self, context: &CodeEdit) -> String {
         let extra_data = self.extra_data(context.extra_content());
-        let above = self.above_selection(context.above_context());
-        let below = self.below_selection(context.below_context());
+        let above = self
+            .above_selection(context.above_context())
+            .map(|code_above| {
+                // limit it to 100 lines from the start
+                let mut lines = code_above.lines().collect::<Vec<_>>();
+                lines.reverse();
+                lines.truncate(SURROUNDING_CONTEXT_LIMIT);
+                lines.reverse();
+                lines.join("\n")
+            });
+        let below = self
+            .below_selection(context.below_context())
+            .map(|code_below| {
+                let mut lines = code_below.lines().collect::<Vec<_>>();
+                lines.reverse();
+                lines.truncate(SURROUNDING_CONTEXT_LIMIT / 3);
+                lines.reverse();
+                lines.join("\n")
+            });
         let in_range = self.selection_to_edit(context.code_to_edit());
         let mut user_message = "".to_owned();
         user_message = user_message + &extra_data + "\n";

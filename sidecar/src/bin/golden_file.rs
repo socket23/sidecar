@@ -12,7 +12,10 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, FireworksAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{
+        AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
+        OpenAIProvider,
+    },
 };
 use sidecar::{
     agentic::{
@@ -64,10 +67,24 @@ async fn test_important_file_finder() {
 
     let dir = Path::new("/Users/zi/codestory/sidecar/sidecar");
 
+    let repo_name = "sidecar";
+
+    let api_key = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    ));
+
     let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
 
     let llm_type = LLMType::GeminiProFlash;
-    let finder_query = ImportantFilesFinderQuery::new(tree, llm_type);
+    let finder_query = ImportantFilesFinderQuery::new(
+        tree,
+        "".to_string(),
+        llm_type,
+        LLMProvider::GoogleAIStudio,
+        api_key,
+        repo_name.to_string(),
+        "".to_string(),
+    );
 
     // the type of input...determines the tool used
     let tool_input = ToolInput::ImportantFilesFinder(finder_query);

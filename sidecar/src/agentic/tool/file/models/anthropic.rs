@@ -30,10 +30,22 @@ impl FileImportantReply {
 
         let lines = response
             .lines()
+            .skip_while(|line| !line.contains("<files>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</files>"))
             .map(|line| line.to_owned())
             .collect::<Vec<String>>();
 
         Ok(Self { files: lines })
+    }
+
+    pub fn files(&self) -> &Vec<String> {
+        &self.files
+    }
+
+    pub fn to_file_important_response(self) -> FileImportantResponse {
+        let files = self.files().clone();
+        FileImportantResponse::new(files)
     }
 }
 
@@ -125,20 +137,13 @@ impl ImportantFilesFinder for AnthropicFileFinder {
             )
             .await?;
 
+        println!("File important response time: {:?}", start.elapsed());
+
         let parsed_response = FileImportantReply::parse_response(&response);
 
         match parsed_response {
-            Ok(ref parsed_response) => {
-                println!("response parsed! Files:");
-                println!("File count: {}", parsed_response.files.len());
-            }
-            Err(e) => {
-                println!("Error parsing response: {:?}", e);
-            }
+            Ok(parsed_response) => Ok(parsed_response.to_file_important_response()),
+            Err(e) => Err(e),
         }
-
-        println!("Elapsed time: {:?}", start.elapsed());
-
-        todo!()
     }
 }

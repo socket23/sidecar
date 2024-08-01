@@ -1356,7 +1356,9 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.symbol_name().to_owned(),
                 Range::new(end_position.clone(), end_position),
                 self.fs_file_path().to_owned(),
-                vec![request_data.get_original_question().to_owned()],
+                vec![request_data
+                    .get_plan()
+                    .unwrap_or(request_data.get_original_question().to_owned())],
                 false,
                 true,
                 false,

@@ -191,7 +191,7 @@ impl SymbolManager {
                 "symbol_manager::probe_request_from_user_context::[{}]",
                 symbols
                     .iter()
-                    .map(|symbol| symbol.symbol_name().to_owned())
+                    .map(|(symbol, _)| symbol.symbol_name().to_owned())
                     .collect::<Vec<_>>()
                     .join(",")
             );
@@ -211,7 +211,7 @@ impl SymbolManager {
 
             // Create all the symbol agents
             let symbol_identifiers = stream::iter(symbols)
-                .map(|symbol_request| async move {
+                .map(|(symbol_request, _)| async move {
                     let symbol_identifier = self
                         .symbol_locker
                         .create_symbol_agent(
@@ -473,8 +473,8 @@ impl SymbolManager {
                 };
 
                 // get the high level plan over here
-                let high_level_plan = important_symbols.ordered_symbols_to_plan();
-                let high_level_plan_ref = &high_level_plan;
+                // let high_level_plan = important_symbols.ordered_symbols_to_plan();
+                // let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");
 
                 // Lets first start another round of COT over here to figure out
@@ -490,7 +490,7 @@ impl SymbolManager {
 
                 // send a UI event to the frontend over here
                 let mut initial_symbol_search_information = vec![];
-                for symbol in symbols.iter() {
+                for (symbol, _) in symbols.iter() {
                     initial_symbol_search_information.push(InitialSearchSymbolInformation::new(
                         symbol.symbol_name().to_owned(),
                         // TODO(codestory): umm.. how can we have a file path for a symbol
@@ -516,7 +516,7 @@ impl SymbolManager {
                     "symbol_manager::initial_request::symbols::({})",
                     symbols
                         .iter()
-                        .map(|symbol| symbol.symbol_name().to_owned())
+                        .map(|(symbol, _)| symbol.symbol_name().to_owned())
                         .collect::<Vec<_>>()
                         .join(",")
                 );
@@ -542,54 +542,62 @@ impl SymbolManager {
 
                 // This is where we are creating all the symbols
                 let _ = stream::iter(
+                    // we are loosing context about the changes which we want to make
+                    // to the symbol over here
                     symbols
                         .into_iter()
                         .map(|symbol| (symbol, request_id.to_owned(), user_query.to_owned())),
                 )
-                .map(|(symbol_request, request_id, user_query)| async move {
-                    let symbol_name = symbol_request.symbol_name().to_owned();
-                    let symbol_identifier = self
-                        .symbol_locker
-                        .create_symbol_agent(
-                            symbol_request,
-                            request_id.to_owned(),
-                            tool_properties_ref.clone(),
-                        )
-                        .await;
-                    if let Ok(symbol_identifier) = symbol_identifier {
-                        let symbol_event_request = SymbolEventRequest::new(
-                            symbol_identifier.clone(),
-                            SymbolEvent::InitialRequest(InitialRequestData::new(
-                                user_query.to_owned(),
-                                Some(high_level_plan_ref.to_owned()),
-                                // empty history when symbol manager sends the initial
-                                // request
-                                vec![],
-                                full_symbol_edit,
-                            )),
-                            tool_properties_ref.clone(),
-                        );
-                        let (sender, receiver) = tokio::sync::oneshot::channel();
-                        println!(
-                            "symbol_manager::initial_request::sending_request({})",
-                            symbol_identifier.symbol_name()
-                        );
-                        self.symbol_locker
-                            .process_request((symbol_event_request, request_id.to_owned(), sender))
+                .map(
+                    |((symbol_request, steps), request_id, user_query)| async move {
+                        let symbol_name = symbol_request.symbol_name().to_owned();
+                        let symbol_identifier = self
+                            .symbol_locker
+                            .create_symbol_agent(
+                                symbol_request,
+                                request_id.to_owned(),
+                                tool_properties_ref.clone(),
+                            )
                             .await;
-                        let response = receiver.await;
-                        println!(
-                            "symbol_manager::initial_request::response::({})::({:?})",
-                            symbol_identifier.symbol_name(),
-                            &response
-                        );
-                    } else {
-                        println!(
-                            "symbol_manager::initial_request::no_symbol_identifier({})",
-                            symbol_name
-                        );
-                    }
-                })
+                        if let Ok(symbol_identifier) = symbol_identifier {
+                            let symbol_event_request = SymbolEventRequest::new(
+                                symbol_identifier.clone(),
+                                SymbolEvent::InitialRequest(InitialRequestData::new(
+                                    user_query.to_owned(),
+                                    Some(steps.join("\n")),
+                                    // empty history when symbol manager sends the initial
+                                    // request
+                                    vec![],
+                                    full_symbol_edit,
+                                )),
+                                tool_properties_ref.clone(),
+                            );
+                            let (sender, receiver) = tokio::sync::oneshot::channel();
+                            println!(
+                                "symbol_manager::initial_request::sending_request({})",
+                                symbol_identifier.symbol_name()
+                            );
+                            self.symbol_locker
+                                .process_request((
+                                    symbol_event_request,
+                                    request_id.to_owned(),
+                                    sender,
+                                ))
+                                .await;
+                            let response = receiver.await;
+                            println!(
+                                "symbol_manager::initial_request::response::({})::({:?})",
+                                symbol_identifier.symbol_name(),
+                                &response
+                            );
+                        } else {
+                            println!(
+                                "symbol_manager::initial_request::no_symbol_identifier({})",
+                                symbol_name
+                            );
+                        }
+                    },
+                )
                 .buffered(1)
                 .collect::<Vec<_>>()
                 .await;

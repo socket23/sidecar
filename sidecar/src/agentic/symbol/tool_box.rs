@@ -4773,7 +4773,7 @@ instruction:
         important_symbols: CodeSymbolImportantResponse,
         user_context: UserContext,
         request_id: &str,
-    ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
+    ) -> Result<Vec<(MechaCodeSymbolThinking, Vec<String>)>, SymbolError> {
         let ordered_symbols = important_symbols.ordered_symbols();
         stream::iter(
             ordered_symbols
@@ -4794,7 +4794,7 @@ instruction:
         })
         .await;
 
-        let mut mecha_code_symbols: Vec<MechaCodeSymbolThinking> = vec![];
+        let mut mecha_code_symbols: Vec<(MechaCodeSymbolThinking, Vec<String>)> = vec![];
         for symbol in ordered_symbols.into_iter() {
             let file_path = symbol.file_path();
             let symbol_name = symbol.code_symbol();
@@ -4805,21 +4805,24 @@ instruction:
                     .find(|outline_node| outline_node.content().content().contains(symbol_name));
                 if let Some(outline_node) = possible_outline_nodes {
                     let outline_node_content = outline_node.content();
-                    mecha_code_symbols.push(MechaCodeSymbolThinking::new(
-                        outline_node.name().to_owned(),
-                        vec![],
-                        false,
-                        outline_node.fs_file_path().to_owned(),
-                        Some(Snippet::new(
-                            outline_node_content.name().to_owned(),
-                            outline_node_content.range().clone(),
-                            outline_node_content.fs_file_path().to_owned(),
-                            outline_node_content.content().to_owned(),
-                            outline_node_content.clone(),
-                        )),
-                        vec![],
-                        user_context.clone(),
-                        Arc::new(self.clone()),
+                    mecha_code_symbols.push((
+                        MechaCodeSymbolThinking::new(
+                            outline_node.name().to_owned(),
+                            vec![],
+                            false,
+                            outline_node.fs_file_path().to_owned(),
+                            Some(Snippet::new(
+                                outline_node_content.name().to_owned(),
+                                outline_node_content.range().clone(),
+                                outline_node_content.fs_file_path().to_owned(),
+                                outline_node_content.content().to_owned(),
+                                outline_node_content.clone(),
+                            )),
+                            vec![],
+                            user_context.clone(),
+                            Arc::new(self.clone()),
+                        ),
+                        symbol.steps().to_vec(),
                     ));
                 }
             }
@@ -4918,7 +4921,9 @@ instruction:
         important_symbols: &CodeSymbolImportantResponse,
         user_context: UserContext,
         request_id: &str,
-    ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
+        // returning the mecha code symbol along with the steps we want to take
+        // for that symbol
+    ) -> Result<Vec<(MechaCodeSymbolThinking, Vec<String>)>, SymbolError> {
         let symbols = important_symbols.ordered_symbols();
         // let ordered_symbols = important_symbols.ordered_symbols();
         // there can be overlaps between these, but for now its fine
@@ -5005,7 +5010,7 @@ instruction:
             );
             let mut ordered_values = order_vec
                 .into_iter()
-                .map(|(idx, _)| idx)
+                .map(|(idx, code_symbol_with_steps)| (idx, code_symbol_with_steps.steps().to_vec()))
                 .collect::<Vec<_>>();
             // sort by the increasing values of orderes
             ordered_values.sort();
@@ -5031,7 +5036,7 @@ instruction:
             .iter()
             .for_each(|(ordered_value, code_symbol_with_steps)| {
                 mecha_code_symbols.push((
-                    *ordered_value,
+                    (*ordered_value, code_symbol_with_steps.steps().to_vec()),
                     MechaCodeSymbolThinking::new(
                         code_symbol_with_steps.code_symbol().to_owned(),
                         code_symbol_with_steps.steps().to_vec(),
@@ -5049,7 +5054,7 @@ instruction:
         mecha_code_symbols.sort_by_key(|(idx, _)| idx.clone());
         Ok(mecha_code_symbols
             .into_iter()
-            .map(|(_, symbol)| symbol)
+            .map(|((_, steps), symbol)| (symbol, steps))
             .collect())
     }
 

@@ -4,11 +4,16 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
+use llm_client::provider::{
+    FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider,
+};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
+use crate::agentic::tool::code_edit::filter_edit::{
+    FilterEditOperationRequest, FilterEditOperationResponse,
+};
 use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionRequest;
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
@@ -4682,6 +4687,43 @@ instruction:
             .map_err(|e| SymbolError::ToolError(e))?
             .get_go_to_definition()
             .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    /// Used to make sure if the edit request should proceed as planned or we
+    /// are already finished with the edit request
+    pub async fn should_edit_symbol(
+        &self,
+        symbol_to_edit: &SymbolToEdit,
+        symbol_content: &str,
+        request_id: &str,
+    ) -> Result<FilterEditOperationResponse, SymbolError> {
+        let tool_input = ToolInput::FilterEditOperation(FilterEditOperationRequest::new(
+            symbol_content.to_owned(),
+            symbol_to_edit.symbol_name().to_owned(),
+            symbol_to_edit.fs_file_path().to_owned(),
+            symbol_to_edit.original_user_query().to_owned(),
+            symbol_to_edit.instructions().to_vec().join("\n"),
+            LLMProperties::new(
+                LLMType::Llama3_1_8bInstruct,
+                LLMProvider::FireworksAI,
+                LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+                    "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+                )),
+            ),
+            self.root_request_id.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        let output = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_filter_edit_operation_output()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(output)
     }
 
     // This helps us find the snippet for the symbol in the file, this is the

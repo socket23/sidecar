@@ -265,6 +265,14 @@ impl ToolOutput {
         }
     }
 
+    /// Grabs the output of filter edit operations from the ToolOutput
+    pub fn get_filter_edit_operation_output(self) -> Option<FilterEditOperationResponse> {
+        match self {
+            ToolOutput::FilterEditOperation(output) => Some(output),
+            _ => None,
+        }
+    }
+
     pub fn get_code_edit_output(self) -> Option<String> {
         match self {
             ToolOutput::CodeEditTool(output) => Some(output),

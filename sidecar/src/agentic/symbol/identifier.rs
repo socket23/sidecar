@@ -1023,6 +1023,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     false,
                                     true,
+                                    original_request.get_original_question().to_owned(),
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1106,6 +1107,7 @@ Edit selection reason:
                                         outline,
                                         false,
                                         true,
+                                        original_request_ref.get_original_question().to_owned(),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({})::({:?})::({:?})", self.symbol_name(), &range, &fs_file_path);
@@ -1255,6 +1257,7 @@ Edit selection reason:
                                     false,
                                     true,
                                     false,
+                                    original_request.get_original_question().to_owned(),
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1368,6 +1371,7 @@ Reason to edit:
                                         outline,
                                         false,
                                         false,
+                                        original_request_ref.get_original_question().to_owned(),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);

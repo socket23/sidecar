@@ -23,9 +23,31 @@ pub struct FilterEditOperationRequest {
     symbol_name: String,
     fs_file_path: String,
     user_instruction: String,
-    edit_request: String,
+    reason_to_edit: String,
     llm_properties: LLMProperties,
     root_id: String,
+}
+
+impl FilterEditOperationRequest {
+    pub fn new(
+        code_in_selection: String,
+        symbol_name: String,
+        fs_file_path: String,
+        user_instruction: String,
+        reason_to_edit: String,
+        llm_properties: LLMProperties,
+        root_id: String,
+    ) -> Self {
+        Self {
+            code_in_selection,
+            symbol_name,
+            fs_file_path,
+            user_instruction,
+            reason_to_edit,
+            llm_properties,
+            root_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -40,6 +62,14 @@ impl FilterEditOperationResponse {
             thinking,
             should_edit,
         }
+    }
+
+    pub fn should_edit(&self) -> bool {
+        self.should_edit
+    }
+
+    pub fn thinking(&self) -> &str {
+        &self.thinking
     }
 }
 
@@ -69,10 +99,10 @@ impl FilterEditOperationBroker {
 
     fn system_message(&self, symbol_name: &str) -> String {
         format!(
-            r#"You are an expert senior software engineer whose is going to check if the task the junior engineer is asking needs to be done.
+            r#"You are an expert senior software engineer whose is going to check if the reason to editing the junior engineer has come up with is correct and needs to be done.
 
 - You are working with a junior engineer who is a fast coder but might repeat work they have already done.
-- Your job is to look at the code present in <code_to_edit> section and the task which is given in <task> section and reply with yes or no in xml format (which we will show you) and your thinking
+- Your job is to look at the code present in <code_to_edit> section and the reason for editing which is given in <reason_to_edit> section and reply with yes or no in xml format (which we will show you) and your thinking
 - This is part of a greater change which a user wants to get done on the codebase which is given in <user_instruction>
 - Before replying you should think for a bit less than 5 sentences and then decide if you want to edit or not and put `true` or `false` in the should_edit section
 - You should be careful to decide the following:
@@ -93,26 +123,29 @@ Now to show you the reply format:
 
 The input will be in the following format:
 <user_instruction>
+{{the user instruction which generated this edit request}}
 </user_instruction>
-<task>
-</task>
+<reason_to_edit>
+{{the reason for selecting this section of code for editing}}
+</reason_to_edit>
 <code_to_edit>
+{{code which we want to edit}}
 </code_to_edit>"#
         )
     }
 
     fn user_message(&self, context: FilterEditOperationRequest) -> String {
         let user_instruction = context.user_instruction;
-        let edit_operation = context.edit_request;
+        let edit_operation = context.reason_to_edit;
         let code_to_edit = context.code_in_selection;
         let file_path = context.fs_file_path;
         format!(
             r#"<user_instruction>
 {user_instruction}
 </user_instruction>
-<task>
+<reason_to_edit>
 {edit_operation}
-</task>
+</reason_to_edit>
 <code_to_edit>
 ```rust
 FILEPATH: {file_path}

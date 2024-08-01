@@ -1632,6 +1632,10 @@ Satisfy the requirement either by making edits or gathering the required informa
         context: Vec<String>,
         request_id: &str,
     ) -> Result<EditedCodeSymbol, SymbolError> {
+        println!(
+            "symbol::insert_code_full::start::symbol({})",
+            self.symbol_name()
+        );
         let file_content = self
             .tools
             .file_open(sub_symbol.fs_file_path().to_owned(), request_id)
@@ -1643,6 +1647,10 @@ Satisfy the requirement either by making edits or gathering the required informa
             sub_symbol.range().clone(),
             sub_symbol.fs_file_path().to_owned(),
         ));
+        println!(
+            "symbol::insert_code_full::code_edit_outline::symbol({})",
+            self.symbol_name()
+        );
         let edited_code = self
             .tools
             .code_edit_outline(
@@ -1669,15 +1677,22 @@ Satisfy the requirement either by making edits or gathering the required informa
             sub_symbol.fs_file_path().to_owned(),
             edited_code.to_owned(),
         ));
-        // TODO(skcd): Pick up from here we want to apply the edits to the editor
-        // let _editor_response = self
-        //     .apply_edits_to_editor(
-        //         sub_symbol.fs_file_path().to_owned(),
-        //         &edited_range,
-        //         &updated_code,
-        //         request_id,
-        //     )
-        //     .await?;
+
+        // TODO(skcd): We also want to generate followups over here after applying
+        // the edits, that can come later on tho
+        println!(
+            "symbol::insert_code_full::apply_edits_to_editor::symbol({})",
+            self.symbol_name()
+        );
+        let _editor_response = self
+            .tools
+            .apply_edits_to_editor(
+                sub_symbol.fs_file_path(),
+                &sub_symbol.range(),
+                &edited_code,
+                request_id,
+            )
+            .await?;
         // the initial content is an empty string which we are replacing with
         // the edited code
         Ok(EditedCodeSymbol::new("".to_owned(), edited_code))

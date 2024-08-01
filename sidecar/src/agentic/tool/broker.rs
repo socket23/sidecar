@@ -26,7 +26,7 @@ use super::{
     },
     editor::apply::EditorApply,
     errors::ToolError,
-    file::tree_search::ImportantFilesFinderBroker,
+    file::file_finder::ImportantFilesFinderBroker,
     filtering::broker::CodeToEditFormatterBroker,
     grep::file::FindInFile,
     input::ToolInput,

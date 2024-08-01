@@ -12,8 +12,8 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
+use crate::agentic::tool::file::file_finder::{ImportantFilesFinder, ImportantFilesFinderQuery};
 use crate::agentic::tool::file::important::FileImportantResponse;
-use crate::agentic::tool::file::tree_search::{ImportantFilesFinder, ImportantFilesFinderQuery};
 use crate::agentic::tool::file::types::FileImportantError;
 use crate::agentic::{
     symbol::identifier::LLMProperties,

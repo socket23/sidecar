@@ -25,7 +25,7 @@ use super::{
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
-    file::tree_search::ImportantFilesFinderQuery,
+    file::file_finder::ImportantFilesFinderQuery,
     filtering::broker::{
         CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToProbeSubSymbolRequest,
     },

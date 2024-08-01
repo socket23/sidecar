@@ -1,3 +1,3 @@
+pub mod file_finder;
 pub mod important;
-pub mod tree_search;
 pub mod types;

@@ -16,5 +16,6 @@ pub mod reranking;
 pub mod scraper;
 pub mod semantic_search;
 pub mod state;
+pub mod tree_printer;
 pub mod user_context;
 pub mod webserver;

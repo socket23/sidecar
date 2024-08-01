@@ -12,7 +12,9 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
-use crate::agentic::tool::code_symbol::tree::{ImportantFilesFinder, ImportantFilesFinderQuery};
+use crate::agentic::tool::code_symbol::important_files::{
+    ImportantFilesFinder, ImportantFilesFinderQuery,
+};
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
@@ -36,6 +38,7 @@ use crate::agentic::{
         lsp::diagnostics::Diagnostic,
     },
 };
+use crate::tree_printer::tree::TreePrinter;
 
 pub struct AnthropicCodeSymbolImportant {
     llm_client: Arc<LLMBroker>,
@@ -5977,6 +5980,8 @@ impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
         &self,
         request: ImportantFilesFinderQuery,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
+        let dir = "/Users/zi/codestory/sidecar/sidecar";
+        let _ = TreePrinter::print(Path::new(dir));
         Ok(CodeSymbolImportantResponse::new(vec![], vec![]))
     }
 }

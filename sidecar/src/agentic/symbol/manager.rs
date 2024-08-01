@@ -325,15 +325,25 @@ impl SymbolManager {
         &self,
         tool_input: ToolInput,
     ) -> Result<Vec<CodeSymbolWithSteps>, SymbolError> {
-        let output = &self.tools.invoke(tool_input).await;
+        // let output = &self.tools.invoke(tool_input).await;
 
-        if let Ok(output) = output {
-            println!("success");
-        } else {
-            println!("failure");
+        match self.tools.invoke(tool_input).await {
+            Ok(output) => {
+                println!("success");
+                // Process the output here
+                // For example:
+                // let symbols = process_output(&output)?;
+                // Ok(symbols)
+
+                // Placeholder for actual implementation
+                todo!("Implement output processing")
+            }
+            Err(e) => {
+                let error_msg = format!("Tool invocation failed: {}", e);
+                println!("error_msg: {:?}", error_msg);
+                Err(SymbolError::SymbolError(error_msg))
+            }
         }
-
-        todo!()
     }
 
     pub async fn test_golden_file(

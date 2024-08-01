@@ -5981,7 +5981,12 @@ impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
         request: ImportantFilesFinderQuery,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
         let dir = "/Users/zi/codestory/sidecar/sidecar";
-        let _ = TreePrinter::print(Path::new(dir));
+        let tree_string = TreePrinter::to_string(Path::new(dir));
+
+        if let Ok((tree, _, _)) = tree_string {
+            println!("{}", tree);
+        }
+
         Ok(CodeSymbolImportantResponse::new(vec![], vec![]))
     }
 }

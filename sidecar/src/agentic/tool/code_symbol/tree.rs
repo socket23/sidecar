@@ -88,7 +88,7 @@ impl ImportantFilesFinderBroker {
 impl Tool for ImportantFilesFinderBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let request = input.important_files_finder_query()?;
-        if let Some(implementation) = self.llms.get(query.llm()) {
+        if let Some(implementation) = self.llms.get(request.llm()) {
             let output = implementation
                 .find_important_files(request)
                 .await

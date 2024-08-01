@@ -5977,7 +5977,7 @@ impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
         &self,
         request: ImportantFilesFinderQuery,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
-        todo!()
+        Ok(CodeSymbolImportantResponse::new(vec![], vec![]))
     }
 }
 

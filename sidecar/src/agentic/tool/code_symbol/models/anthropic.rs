@@ -12,6 +12,7 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
+use crate::agentic::tool::code_symbol::tree::{ImportantFilesFinder, ImportantFilesFinderQuery};
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
@@ -5967,6 +5968,16 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         }
 
         parsed_response
+    }
+}
+
+#[async_trait]
+impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
+    async fn find_important_files(
+        &self,
+        request: ImportantFilesFinderQuery,
+    ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
+        todo!()
     }
 }
 

@@ -69,6 +69,8 @@ async fn test_important_file_finder() {
 
     let repo_name = "sidecar";
 
+    let problem_statement = "Update the repomap function to increases the size of the map by 10x";
+
     let api_key = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
     ));
@@ -78,7 +80,7 @@ async fn test_important_file_finder() {
     let llm_type = LLMType::GeminiProFlash;
     let finder_query = ImportantFilesFinderQuery::new(
         tree,
-        "".to_string(),
+        problem_statement.to_string(),
         llm_type,
         LLMProvider::GoogleAIStudio,
         api_key,
@@ -91,12 +93,10 @@ async fn test_important_file_finder() {
 
     let symbol_manager = make_symbol_manager().await;
 
-    let output = symbol_manager
+    let important_files = symbol_manager
         .test_important_file_finder(tool_input)
         .await
         .unwrap();
-
-    println!("output: {:?}", output);
 }
 
 fn read_problems_from_csv(path: &str, repo: &str) -> Result<Vec<Task>, Box<dyn Error>> {

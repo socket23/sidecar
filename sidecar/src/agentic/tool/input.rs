@@ -22,6 +22,7 @@ use super::{
         probe_try_hard_answer::ProbeTryHardAnswerSymbolRequest,
         repo_map_search::RepoMapSearchQuery,
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingRequest,
+        tree::ImportantFilesFinderQuery,
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
@@ -77,6 +78,8 @@ pub enum ToolInput {
     ProbeTryHardAnswerRequest(ProbeTryHardAnswerSymbolRequest),
     // repo map query
     RepoMapSearch(RepoMapSearchQuery),
+    // important files query
+    ImportantFilesFinder(ImportantFilesFinderQuery),
     // SWE Bench tooling
     SWEBenchTest(SWEBenchTestRequest),
     // Test output correction
@@ -131,6 +134,7 @@ impl ToolInput {
             ToolInput::ProbeFollowAlongSymbol(_) => ToolType::ProbeFollowAlongSymbol,
             ToolInput::ProbeSummarizeAnswerRequest(_) => ToolType::ProbeSummarizeAnswer,
             ToolInput::RepoMapSearch(_) => ToolType::RepoMapSearch,
+            ToolInput::ImportantFilesFinder(_) => ToolType::ImportantFilesFinder,
             ToolInput::SWEBenchTest(_) => ToolType::SWEBenchToolEndpoint,
             ToolInput::TestOutputCorrection(_) => ToolType::TestCorrection,
             ToolInput::CodeSymbolFollowInitialRequest(_) => {
@@ -307,6 +311,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::RepoMapSearch))
+        }
+    }
+
+    pub fn important_files_finder_query(self) -> Result<ImportantFilesFinderQuery, ToolError> {
+        if let ToolInput::ImportantFilesFinder(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ImportantFilesFinder))
         }
     }
 

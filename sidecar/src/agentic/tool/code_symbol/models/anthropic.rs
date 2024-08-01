@@ -6000,14 +6000,44 @@ impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
         &self,
         request: ImportantFilesFinderQuery,
     ) -> Result<FileImportantResponse, FileImportantError> {
-        let dir = "/Users/zi/codestory/sidecar/sidecar";
-        let tree_string = TreePrinter::to_string(Path::new(dir));
+        let root_request_id = request.root_request_id().to_owned();
+        let model = request.llm().clone();
+        let provider = request.provider().clone();
+        let api_keys = request.api_keys().clone();
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_file_important(&request));
+        let user_message = LLMClientMessage::user(self.user_message_for_file_important(&request));
+        let messages = LLMClientCompletionRequest::new(
+            model,
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        if let Ok((tree, _, _)) = tree_string {
-            println!("{}", tree);
-        }
+        let start = Instant::now();
 
-        Ok(FileImportantResponse::new(vec![]))
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                messages,
+                provider,
+                vec![
+                    ("event_type".to_owned(), "repo_map_search".to_owned()),
+                    ("root_id".to_owned(), root_request_id.clone()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+
+        println!("find_important_files::\n{:?}", response);
+
+        println!("Elapsed time: {:?}", start.elapsed());
+
+        todo!()
     }
 }
 

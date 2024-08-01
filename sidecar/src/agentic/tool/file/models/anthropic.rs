@@ -94,7 +94,11 @@ impl AnthropicFileFinder {
         &self,
         file_important_request: &ImportantFilesFinderQuery,
     ) -> String {
-        format!("{}", file_important_request.tree())
+        format!(
+            "User query: {}\n\nTree:\n{}",
+            file_important_request.user_query(),
+            file_important_request.tree()
+        )
     }
 }
 

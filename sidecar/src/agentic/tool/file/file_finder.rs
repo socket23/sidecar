@@ -1,7 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use llm_client::{broker::LLMBroker, clients::types::LLMType};
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::LLMType,
+    provider::{LLMProvider, LLMProviderAPIKeys},
+};
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
@@ -16,16 +20,61 @@ use super::{important::FileImportantResponse, types::FileImportantError};
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ImportantFilesFinderQuery {
     tree: String,
+    user_query: String,
     llm: LLMType,
+    provider: LLMProvider,
+    api_keys: LLMProviderAPIKeys,
+    repo_name: String,
+    root_request_id: String,
 }
 
 impl ImportantFilesFinderQuery {
-    pub fn new(tree: String, llm: LLMType) -> Self {
-        Self { tree, llm }
+    pub fn new(
+        tree: String,
+        user_query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        repo_name: String,
+        root_request_id: String,
+    ) -> Self {
+        Self {
+            tree,
+            user_query,
+            llm,
+            provider,
+            api_keys,
+            repo_name,
+            root_request_id,
+        }
+    }
+
+    pub fn tree(&self) -> &String {
+        &self.tree
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
     }
 
     pub fn llm(&self) -> &LLMType {
         &self.llm
+    }
+
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    pub fn api_keys(&self) -> &LLMProviderAPIKeys {
+        &self.api_keys
+    }
+
+    pub fn repo_name(&self) -> &str {
+        &self.repo_name
     }
 }
 

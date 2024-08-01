@@ -110,6 +110,8 @@ pub enum ToolOutput {
     ProbeTryHardAnswer(String),
     // Repo map result
     RepoMapSearch(CodeSymbolImportantResponse),
+    // important files result
+    ImportantFilesFinder(CodeSymbolImportantResponse),
     // SWE Bench test output
     SWEBenchTestOutput(SWEBenchTestRepsonse),
     // Test correction output

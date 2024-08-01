@@ -75,6 +75,8 @@ pub enum ToolType {
     ReRankingCodeSnippetsForCodeEditingContext,
     // Apply the outline of the changes to the range we are interested in
     ApplyOutlineEditToRange,
+    // Filter edit operation
+    FilterEditOperation,
 }
 
 impl std::fmt::Display for ToolType {
@@ -130,6 +132,7 @@ impl std::fmt::Display for ToolType {
                 write!(f, "ReRanking code snippets for code editing")
             }
             ToolType::ApplyOutlineEditToRange => write!(f, "Apply outline edit to range"),
+            ToolType::FilterEditOperation => write!(f, "Filter edit operation"),
         }
     }
 }

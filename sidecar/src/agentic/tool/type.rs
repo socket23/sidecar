@@ -55,6 +55,8 @@ pub enum ToolType {
     ProbeTryHardAnswer,
     // Repo map Search
     RepoMapSearch,
+    // Get important files by inferring from repo tree
+    ImportantFilesFinder,
     // SWE Bench tool endpoint
     SWEBenchToolEndpoint,
     // Test correction
@@ -75,8 +77,6 @@ pub enum ToolType {
     ReRankingCodeSnippetsForCodeEditingContext,
     // Apply the outline of the changes to the range we are interested in
     ApplyOutlineEditToRange,
-    // Get important symbols by inferring from repo tree
-    ImportantFilesFinder,
 }
 
 impl std::fmt::Display for ToolType {

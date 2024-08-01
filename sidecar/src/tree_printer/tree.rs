@@ -1,8 +1,15 @@
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 pub struct TreePrinter {}
 
 impl TreePrinter {
+    pub fn new() -> Self {
+        TreePrinter {}
+    }
+
     pub fn print(root: &Path) -> io::Result<()> {
         println!("{}", root.display());
         let (tree, dirs, files) = TreePrinter::to_string(root)?;
@@ -14,14 +21,8 @@ impl TreePrinter {
     pub fn to_string(root: &Path) -> io::Result<(String, usize, usize)> {
         let mut output = String::new();
         let (dirs, files) = TreePrinter::build_tree_string(root, "", &mut output)?;
-        Ok((output, dirs, files))
-    }
 
-    fn print_tree(path: &Path, prefix: &str) -> io::Result<(usize, usize)> {
-        let mut output = String::new();
-        let result = TreePrinter::build_tree_string(path, prefix, &mut output)?;
-        print!("{}", output);
-        Ok(result)
+        Ok((output, dirs, files))
     }
 
     fn build_tree_string(

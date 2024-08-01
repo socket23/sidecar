@@ -79,6 +79,8 @@ async fn test_important_file_finder() {
 
     let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
 
+    println!("{}", tree);
+
     let llm_type = LLMType::GeminiProFlash;
     let finder_query = ImportantFilesFinderQuery::new(
         tree,

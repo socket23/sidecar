@@ -74,9 +74,9 @@ impl AnthropicFileFinder {
             Respond in the following XML format:
 
             <files>
-            User/sidecar/file1/
-            User/sidecar/file2/
-            User/sidecar/file3/
+            path/to/file1
+            path/to/file2
+            path/to/file3
             </files>
 
 

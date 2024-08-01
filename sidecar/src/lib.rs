@@ -5,6 +5,7 @@ pub mod bg_poll;
 pub mod chunking;
 pub mod db;
 pub mod embedder;
+pub mod file_analyser;
 pub mod git;
 pub mod in_line_agent;
 pub mod indexes;

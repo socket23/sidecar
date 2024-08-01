@@ -1,10 +1,9 @@
 use llm_client::{
     clients::{
-        fireworks::FireworksAIClient,
         groq::GroqClient,
         types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMType},
     },
-    provider::{FireworksAPIKey, GroqProviderAPIKey, LLMProviderAPIKeys},
+    provider::{GroqProviderAPIKey, LLMProviderAPIKeys},
 };
 
 #[tokio::main]

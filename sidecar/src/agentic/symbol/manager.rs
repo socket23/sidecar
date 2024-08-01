@@ -554,17 +554,17 @@ impl SymbolManager {
                             tool_properties_ref.clone(),
                         );
                         let (sender, receiver) = tokio::sync::oneshot::channel();
-                        dbg!(
-                            "sending initial request to symbol: {:?}",
-                            &symbol_identifier
+                        println!(
+                            "symbol_manager::initial_request::sending_request({})",
+                            symbol_identifier.symbol_name()
                         );
                         self.symbol_locker
                             .process_request((symbol_event_request, request_id.to_owned(), sender))
                             .await;
                         let response = receiver.await;
-                        dbg!(
-                            "For symbol identifier: {:?} the response is {:?}",
-                            &symbol_identifier,
+                        println!(
+                            "symbol_manager::initial_request::response::({})::({:?})",
+                            symbol_identifier.symbol_name(),
                             &response
                         );
                     } else {

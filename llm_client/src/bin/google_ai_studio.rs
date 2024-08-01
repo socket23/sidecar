@@ -23,5 +23,5 @@ async fn main() {
     let response = google_ai_client
         .stream_completion(api_key, request, sender)
         .await;
-    // println!("{:?}", &response);
+    println!("{:?}", &response);
 }

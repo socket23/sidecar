@@ -289,7 +289,7 @@ impl LLMClient for GoogleAIStdioClient {
                     .remove(0)
                     .remove("text")
                     .ok_or(LLMClientError::FailedToGetResponse);
-                println!("{:?}", &response);
+                // println!("{:?}", &response);
                 response
             }
         }

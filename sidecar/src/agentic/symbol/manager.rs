@@ -472,27 +472,6 @@ impl SymbolManager {
                     }
                 };
 
-                // send a UI event to the frontend over here
-                let _ = self
-                    .ui_sender
-                    .send(UIEventWithID::initial_search_symbol_event(
-                        request_id.to_owned(),
-                        important_symbols
-                            .ordered_symbols()
-                            .into_iter()
-                            .map(|symbol| {
-                                InitialSearchSymbolInformation::new(
-                                    symbol.code_symbol().to_owned(),
-                                    // TODO(codestory): umm.. how can we have a file path for a symbol
-                                    // which does not exist if is_new is true
-                                    Some(symbol.file_path().to_owned()),
-                                    symbol.is_new(),
-                                    symbol.steps().join("\n"),
-                                )
-                            })
-                            .collect(),
-                    ));
-
                 // get the high level plan over here
                 let high_level_plan = important_symbols.ordered_symbols_to_plan();
                 let high_level_plan_ref = &high_level_plan;
@@ -508,6 +487,29 @@ impl SymbolManager {
                     .important_symbols(&important_symbols, user_context.clone(), &request_id)
                     .await
                     .map_err(|e| e.into())?;
+
+                // send a UI event to the frontend over here
+                let mut initial_symbol_search_information = vec![];
+                for symbol in symbols.iter() {
+                    initial_symbol_search_information.push(InitialSearchSymbolInformation::new(
+                        symbol.symbol_name().to_owned(),
+                        // TODO(codestory): umm.. how can we have a file path for a symbol
+                        // which does not exist if is_new is true
+                        Some(symbol.fs_file_path().to_owned()),
+                        symbol.is_new(),
+                        symbol.steps().await.join("\n"),
+                        symbol
+                            .get_snippet()
+                            .await
+                            .map(|snippet| snippet.range().clone()),
+                    ));
+                }
+                let _ = self
+                    .ui_sender
+                    .send(UIEventWithID::initial_search_symbol_event(
+                        request_id.to_owned(),
+                        initial_symbol_search_information,
+                    ));
                 // TODO(skcd): Another check over here is that we can search for the exact variable
                 // and then ask for the edit
                 println!(

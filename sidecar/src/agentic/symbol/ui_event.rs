@@ -414,6 +414,8 @@ pub struct InitialSearchSymbolInformation {
     fs_file_path: Option<String>,
     is_new: bool,
     thinking: String,
+    // send over the range of this symbol
+    range: Option<Range>,
 }
 
 impl InitialSearchSymbolInformation {
@@ -422,12 +424,14 @@ impl InitialSearchSymbolInformation {
         fs_file_path: Option<String>,
         is_new: bool,
         thinking: String,
+        range: Option<Range>,
     ) -> Self {
         Self {
             symbol_name,
             fs_file_path,
             is_new,
             thinking,
+            range,
         }
     }
 }

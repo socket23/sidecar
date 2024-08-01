@@ -321,6 +321,17 @@ impl SymbolManager {
         Ok(())
     }
 
+    pub async fn test_important_file_finder(
+        &self,
+        tool_input: ToolInput,
+    ) -> Result<Vec<CodeSymbolWithSteps>, SymbolError> {
+        let output = &self.tools.invoke(tool_input).await;
+
+        dbg!(output);
+
+        todo!()
+    }
+
     pub async fn test_golden_file(
         &self,
         input_event: SymbolInputEvent,

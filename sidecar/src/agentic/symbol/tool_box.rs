@@ -4360,7 +4360,7 @@ instruction:
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    async fn apply_edits_to_editor(
+    pub async fn apply_edits_to_editor(
         &self,
         fs_file_path: &str,
         range: &Range,

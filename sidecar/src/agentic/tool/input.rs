@@ -14,7 +14,6 @@ use super::{
             CodeSymbolImportantWideSearch, CodeSymbolProbingSummarize,
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
-        important_files::ImportantFilesFinderQuery,
         initial_request_follow::CodeSymbolFollowInitialRequest,
         new_sub_symbol::NewSubSymbolRequiredRequest,
         planning_before_code_edit::PlanningBeforeCodeEditRequest,
@@ -26,6 +25,7 @@ use super::{
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
+    file::tree_search::ImportantFilesFinderQuery,
     filtering::broker::{
         CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToProbeSubSymbolRequest,
     },

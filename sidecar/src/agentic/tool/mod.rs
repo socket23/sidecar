@@ -19,6 +19,7 @@ pub mod code_edit;
 pub mod code_symbol;
 pub mod editor;
 pub mod errors;
+pub mod file;
 pub mod filtering;
 pub mod grep;
 pub mod input;

@@ -12,9 +12,9 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
-use crate::agentic::tool::code_symbol::important_files::{
-    ImportantFilesFinder, ImportantFilesFinderQuery,
-};
+use crate::agentic::tool::file::important::FileImportantResponse;
+use crate::agentic::tool::file::tree_search::{ImportantFilesFinder, ImportantFilesFinderQuery};
+use crate::agentic::tool::file::types::FileImportantError;
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
@@ -5979,7 +5979,7 @@ impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
     async fn find_important_files(
         &self,
         request: ImportantFilesFinderQuery,
-    ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
+    ) -> Result<FileImportantResponse, FileImportantError> {
         let dir = "/Users/zi/codestory/sidecar/sidecar";
         let tree_string = TreePrinter::to_string(Path::new(dir));
 
@@ -5987,7 +5987,7 @@ impl ImportantFilesFinder for AnthropicCodeSymbolImportant {
             println!("{}", tree);
         }
 
-        Ok(CodeSymbolImportantResponse::new(vec![], vec![]))
+        Ok(FileImportantResponse::new(vec![]))
     }
 }
 

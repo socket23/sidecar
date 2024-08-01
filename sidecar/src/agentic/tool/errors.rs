@@ -2,8 +2,8 @@ use llm_client::clients::types::{LLMClientError, LLMType};
 use thiserror::Error;
 
 use super::{
-    code_symbol::types::CodeSymbolError, filtering::errors::CodeToEditFilteringError,
-    r#type::ToolType, rerank::base::ReRankError,
+    code_symbol::types::CodeSymbolError, file::types::FileImportantError,
+    filtering::errors::CodeToEditFilteringError, r#type::ToolType, rerank::base::ReRankError,
 };
 
 #[derive(Debug, Error)]
@@ -58,4 +58,7 @@ pub enum ToolError {
 
     #[error("Retries exhausted")]
     RetriesExhausted,
+
+    #[error("File important error: {0}")]
+    FileImportantError(String),
 }

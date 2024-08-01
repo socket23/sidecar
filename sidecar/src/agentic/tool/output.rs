@@ -18,6 +18,7 @@ use super::{
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingResponse,
     },
     editor::apply::EditorApplyResponse,
+    file::important::FileImportantResponse,
     filtering::broker::{
         CodeToEditFilterResponse, CodeToEditSymbolResponse, CodeToProbeFilterResponse,
         CodeToProbeSubSymbolList,
@@ -111,7 +112,7 @@ pub enum ToolOutput {
     // Repo map result
     RepoMapSearch(CodeSymbolImportantResponse),
     // important files result
-    ImportantFilesFinder(CodeSymbolImportantResponse),
+    ImportantFilesFinder(FileImportantResponse),
     // SWE Bench test output
     SWEBenchTestOutput(SWEBenchTestRepsonse),
     // Test correction output

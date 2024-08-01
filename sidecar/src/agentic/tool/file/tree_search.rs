@@ -5,13 +5,13 @@ use llm_client::{broker::LLMBroker, clients::types::LLMType};
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
-    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    tool::{
+        code_symbol::models::anthropic::AnthropicCodeSymbolImportant, errors::ToolError,
+        input::ToolInput, output::ToolOutput, r#type::Tool,
+    },
 };
 
-use super::{
-    important::CodeSymbolImportantResponse, models::anthropic::AnthropicCodeSymbolImportant,
-    repo_map_search::RepoMapSearch, types::CodeSymbolError,
-};
+use super::{important::FileImportantResponse, types::FileImportantError};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ImportantFilesFinderQuery {
@@ -34,7 +34,7 @@ pub trait ImportantFilesFinder {
     async fn find_important_files(
         &self,
         request: ImportantFilesFinderQuery,
-    ) -> Result<CodeSymbolImportantResponse, CodeSymbolError>;
+    ) -> Result<FileImportantResponse, FileImportantError>;
 }
 
 pub struct ImportantFilesFinderBroker {
@@ -92,7 +92,7 @@ impl Tool for ImportantFilesFinderBroker {
             let output = implementation
                 .find_important_files(request)
                 .await
-                .map_err(|e| ToolError::CodeSymbolError(e))?;
+                .map_err(|e| ToolError::FileImportantError(e.to_string()))?;
             Ok(ToolOutput::ImportantFilesFinder(output))
         } else {
             Err(ToolError::LLMNotSupported)

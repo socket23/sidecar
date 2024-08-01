@@ -200,9 +200,9 @@ impl Tool for FilterEditOperationBroker {
             let response = self
                 .llm_client
                 .stream_completion(
-                    llm_properties.api_key().clone(),
+                    retry_llm_properties.api_key().clone(),
                     retry_llm_request,
-                    llm_properties.provider().clone(),
+                    retry_llm_properties.provider().clone(),
                     vec![
                         ("event_type".to_owned(), "filter_edit_operation".to_owned()),
                         ("root_id".to_owned(), root_id.to_owned()),

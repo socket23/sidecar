@@ -103,8 +103,7 @@ impl Tool for BigSearchBroker {
                 .await
                 .map_err(|e| ToolError::FileImportantError(e.to_string()))?;
 
-            todo!();
-            // Ok(ToolOutput::Bigsear(output.into()))
+            Ok(ToolOutput::BigSearch(output))
         } else {
             Err(ToolError::LLMNotSupported)
         }

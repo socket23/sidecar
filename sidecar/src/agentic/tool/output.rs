@@ -113,6 +113,8 @@ pub enum ToolOutput {
     RepoMapSearch(CodeSymbolImportantResponse),
     // important files result
     ImportantFilesFinder(FileImportantResponse),
+    // Big search result
+    BigSearch(CodeSymbolImportantResponse),
     // SWE Bench test output
     SWEBenchTestOutput(SWEBenchTestRepsonse),
     // Test correction output

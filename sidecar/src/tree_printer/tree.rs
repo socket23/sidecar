@@ -38,7 +38,21 @@ impl TreePrinter {
         let mut dirs = 0;
         let mut files = 0;
 
-        let entries = fs::read_dir(path)?.collect::<Result<Vec<_>, io::Error>>()?;
+        let entries = fs::read_dir(path)?
+            .filter_map(|entry| {
+                entry.ok().and_then(|e| {
+                    let path = e.path();
+                    let file_name = path.file_name().and_then(|n| n.to_str());
+
+                    if path.is_dir() && file_name.map_or(false, |name| name.starts_with(".")) {
+                        None
+                    } else {
+                        Some(e)
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
         let mut count = entries.len();
 
         for entry in entries {

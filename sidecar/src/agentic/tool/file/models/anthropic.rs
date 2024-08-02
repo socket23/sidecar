@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
-use axum::async_trait;
+use async_trait::async_trait;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},

@@ -12,12 +12,12 @@ use crate::agentic::{
     },
 };
 
-pub struct GoogleBigSearch {
+pub struct GoogleStudioBigSearch {
     llm_client: Arc<LLMBroker>,
     fail_over_llm: LLMProperties,
 }
 
-impl GoogleBigSearch {
+impl GoogleStudioBigSearch {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         Self {
             llm_client,
@@ -27,10 +27,10 @@ impl GoogleBigSearch {
 }
 
 #[async_trait]
-impl BigSearch for GoogleBigSearch {
+impl BigSearch for GoogleStudioBigSearch {
     async fn search(
         &self,
-        input: Vec<BigSearchRequest>,
+        input: BigSearchRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
         todo!();
     }

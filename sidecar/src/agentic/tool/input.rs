@@ -39,7 +39,7 @@ use super::{
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
-    r#type::ToolType,
+    r#type::{Tool, ToolType},
     rerank::base::ReRankEntriesForBroker,
     search::types::BigSearchRequest,
     swe_bench::test_tool::SWEBenchTestRequest,
@@ -103,7 +103,7 @@ pub enum ToolInput {
     // Apply the generated code outline to the range we are interested in
     ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest),
     // Big search
-    BigSearch(Vec<BigSearchRequest>),
+    BigSearch(BigSearchRequest),
 }
 
 impl ToolInput {
@@ -323,6 +323,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::ImportantFilesFinder))
+        }
+    }
+
+    pub fn big_search_query(self) -> Result<BigSearchRequest, ToolError> {
+        if let ToolInput::BigSearch(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::BigSearch))
         }
     }
 

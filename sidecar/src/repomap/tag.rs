@@ -75,6 +75,11 @@ pub struct TagIndex {
 
     /// A set of commonly used tags across all files.
     pub common_tags: HashSet<String>,
+
+    /// Maps file paths to the set of tags defined in the file.
+    ///
+    /// Useful for answering: "What are the tags defined in file X?"
+    pub file_to_tags: HashMap<PathBuf, HashSet<String>>,
 }
 
 impl TagIndex {
@@ -84,6 +89,7 @@ impl TagIndex {
             references: HashMap::new(),
             definitions: HashMap::new(),
             common_tags: HashSet::new(),
+            file_to_tags: HashMap::new(),
         }
     }
 
@@ -120,13 +126,23 @@ impl TagIndex {
                 self.definitions
                     .entry((rel_path.clone(), tag.name.clone()))
                     .or_default()
-                    .insert(tag);
+                    .insert(tag.clone());
+
+                self.file_to_tags
+                    .entry(rel_path.clone())
+                    .or_default()
+                    .insert(tag.name.clone());
             }
             TagKind::Reference => {
                 self.references
                     .entry(tag.name.clone())
                     .or_default()
                     .push(rel_path.clone());
+
+                self.file_to_tags
+                    .entry(rel_path.clone())
+                    .or_default()
+                    .insert(tag.name.clone());
             }
         }
     }
@@ -229,6 +245,17 @@ impl TagIndex {
         } else {
             Ok(vec![])
         }
+    }
+
+    pub fn get_tags_for_file(&self, file_name: &Path) -> Option<Vec<String>> {
+        let tag_names = self.file_to_tags.get(file_name)?;
+        Some(tag_names.iter().cloned().collect())
+    }
+
+    pub fn print_file_to_tag_keys(&self) {
+        self.file_to_tags.keys().for_each(|key| {
+            println!("{}", key.display());
+        });
     }
 
     fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {

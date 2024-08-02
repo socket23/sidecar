@@ -134,7 +134,7 @@ async fn main() {
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
     let problem_statement =
-        "Add support for a new stop_code_editing endpoint and implement it similar to probing stop"
+        "Add support for a new stop_code_editing endpoint and implement it similar to probing stop and add the endpoint"
             .to_owned();
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"

@@ -20,28 +20,47 @@ use crate::agentic::{
     },
 };
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum SearchType {
+    Tree(String),
+    Repomap(String),
+    Both(String, String),
+}
+
 use super::models::google_studio::GoogleStudioBigSearch;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BigSearchRequest {
     llm: LLMType,
-    requests: Vec<SearchRequest>,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_request_id: String,
+    repo_name: String,
+    user_query: String,
+    root_dir: String,
+    search_type: SearchType,
 }
 
 impl BigSearchRequest {
     pub fn new(
         llm: LLMType,
-        requests: Vec<SearchRequest>,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_request_id: String,
+        repo_name: String,
+        user_query: String,
+        root_dir: String,
+        search_type: SearchType,
     ) -> Self {
         Self {
             llm,
-            requests,
             provider,
             api_keys,
+            root_request_id,
+            repo_name,
+            user_query,
+            root_dir,
+            search_type,
         }
     }
 
@@ -56,12 +75,26 @@ impl BigSearchRequest {
     pub fn api_keys(&self) -> &LLMProviderAPIKeys {
         &self.api_keys
     }
-}
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SearchRequest {
-    root_dir: String,
-    user_query: String,
+    pub fn root_request_id(&self) -> &String {
+        &self.root_request_id
+    }
+
+    pub fn repo_name(&self) -> &String {
+        &self.repo_name
+    }
+
+    pub fn user_query(&self) -> &String {
+        &self.user_query
+    }
+
+    pub fn root_dir(&self) -> &String {
+        &self.root_dir
+    }
+
+    pub fn search_type(&self) -> &SearchType {
+        &self.search_type
+    }
 }
 
 #[async_trait]

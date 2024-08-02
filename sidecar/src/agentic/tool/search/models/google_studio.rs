@@ -8,7 +8,7 @@ use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
         code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
-        search::types::{BigSearch, BigSearchRequest},
+        search::types::{BigSearch, BigSearchRequest, SearchType},
     },
 };
 
@@ -32,6 +32,20 @@ impl BigSearch for GoogleStudioBigSearch {
         &self,
         input: BigSearchRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
+        match input.search_type() {
+            SearchType::Tree(tree_data) => {
+                // Perform tree search calculation using tree_data
+                // ...
+            }
+            SearchType::Repomap(repomap_data) => {
+                // Perform repomap search calculation using repomap_data
+                // ...
+            }
+            SearchType::Both(tree_data, repomap_data) => {
+                // Perform both tree and repomap search calculation using tree_data and repomap_data
+                // ...
+            }
+        }
         todo!();
     }
 }

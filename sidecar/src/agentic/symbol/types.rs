@@ -1364,12 +1364,18 @@ Satisfy the requirement either by making edits or gathering the required informa
                 false,
                 request_data.get_original_question().to_owned(),
             );
+            let mut history = request_data.history().to_vec();
+            history.push(SymbolRequestHistoryItem::new(
+                self.symbol_name().to_owned(),
+                self.fs_file_path().to_owned(),
+                request_data.get_original_question().to_owned(),
+            ));
             // we need to do context gathering over here as well
             let context = self
                 .grab_context_for_editing_faster(&sub_symbol_to_edit, &request_id)
                 .await?;
             let _ = self
-                .insert_code_full(&sub_symbol_to_edit, context, &request_id)
+                .insert_code_full(&sub_symbol_to_edit, context, history, &request_id)
                 .await;
             Ok(None)
         }
@@ -1663,8 +1669,9 @@ Satisfy the requirement either by making edits or gathering the required informa
         &self,
         sub_symbol: &SymbolToEdit,
         context: Vec<String>,
+        history: Vec<SymbolRequestHistoryItem>,
         request_id: &str,
-    ) -> Result<EditedCodeSymbol, SymbolError> {
+    ) -> Result<(), SymbolError> {
         println!(
             "symbol::insert_code_full::start::symbol({})",
             self.symbol_name()
@@ -1714,21 +1721,29 @@ Satisfy the requirement either by making edits or gathering the required informa
         // TODO(skcd): We also want to generate followups over here after applying
         // the edits, that can come later on tho
         println!(
-            "symbol::insert_code_full::apply_edits_to_editor::symbol({})",
+            "symbol::insert_code_full::check_code_correctness::symbol({})",
             self.symbol_name()
         );
-        let _editor_response = self
+        let context_str = context.join("\n");
+        let _ = self
             .tools
-            .apply_edits_to_editor(
-                sub_symbol.fs_file_path(),
-                &sub_symbol.range(),
+            .check_code_correctness(
+                self.symbol_name(),
+                sub_symbol,
+                self.symbol_identifier.clone(),
+                "",
                 &edited_code,
+                &context_str,
+                self.llm_properties.llm().clone(),
+                self.llm_properties.provider().clone(),
+                self.llm_properties.api_key().clone(),
                 request_id,
+                &self.tool_properties,
+                history,
+                self.hub_sender.clone(),
             )
             .await?;
-        // the initial content is an empty string which we are replacing with
-        // the edited code
-        Ok(EditedCodeSymbol::new("".to_owned(), edited_code))
+        Ok(())
     }
 
     async fn edit_code(

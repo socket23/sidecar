@@ -1,5 +1,14 @@
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use crate::chunking::languages::TSLanguageParsing;
+
+use super::error::RepoMapError;
+
+use super::file::errors::FileError;
+use super::file::git::GitWalker;
+use futures::{stream, StreamExt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Tag {
@@ -78,6 +87,21 @@ impl TagIndex {
         }
     }
 
+    pub fn get_files(root: &Path) -> Result<HashMap<String, Vec<u8>>, FileError> {
+        let git_walker = GitWalker {};
+        git_walker.read_files(root)
+    }
+
+    pub async fn generate_from_files(&mut self, files: HashMap<String, Vec<u8>>) {
+        self.generate_tag_index(files).await;
+    }
+
+    pub async fn generate_from_path(&mut self, path: &Path) {
+        let files = TagIndex::get_files(path).unwrap();
+
+        self.generate_tag_index(files).await;
+    }
+
     pub fn post_process_tags(&mut self) {
         self.process_empty_references();
         self.process_common_tags();
@@ -150,6 +174,66 @@ impl TagIndex {
                 tag, &self.defines[tag], &self.references[tag]
             );
         });
+    }
+
+    async fn generate_tag_index(&mut self, files: HashMap<String, Vec<u8>>) {
+        let ts_parsing = Arc::new(TSLanguageParsing::init());
+        let _ = stream::iter(
+            files
+                .into_iter()
+                .map(|(file, _)| (file, ts_parsing.clone())),
+        )
+        .map(|(file, ts_parsing)| async {
+            self.generate_tags_for_file(&file, ts_parsing)
+                .await
+                .map(|tags| (tags, file))
+                .ok()
+        })
+        .buffer_unordered(10000)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .for_each(|(tags, file)| {
+            let file_ref = &file;
+            tags.into_iter().for_each(|tag| {
+                self.add_tag(tag, &PathBuf::from(file_ref));
+            });
+        });
+
+        self.post_process_tags();
+    }
+
+    async fn generate_tags_for_file(
+        &self,
+        fname: &str,
+        ts_parsing: Arc<TSLanguageParsing>,
+    ) -> Result<Vec<Tag>, RepoMapError> {
+        let rel_path = self.get_rel_fname(&PathBuf::from(fname));
+        let config = ts_parsing.for_file_path(fname).ok_or_else(|| {
+            RepoMapError::ParseError(format!("Language configuration not found for: {}", fname,))
+        });
+        let content = tokio::fs::read(fname).await;
+        if let Err(_) = content {
+            return Err(RepoMapError::IoError);
+        }
+        let content = content.expect("if let Err to hold");
+        if let Ok(config) = config {
+            let tags = config
+                .get_tags(&PathBuf::from(fname), &rel_path, content)
+                .await;
+            Ok(tags)
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {
+        let self_root = env!("CARGO_MANIFEST_DIR").to_string();
+        fname
+            .strip_prefix(&self_root)
+            .unwrap_or(fname)
+            .to_path_buf()
     }
 
     // Add methods to query the index as needed

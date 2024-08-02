@@ -3294,11 +3294,13 @@ instruction:
     pub async fn load_repo_map(&self, repo_map_path: &String, request_id: &str) -> Option<String> {
         // TODO(skcd): Should have proper construct time sharing (we only create it once) over here
         println!("tool_box::load_repo_map::start({})", &request_id);
-        let repo_map = RepoMap::new().with_map_tokens(10_000);
+        let mut repo_map = RepoMap::new(repo_map_path.to_owned()).with_map_tokens(10_000);
+
         let _ = self
             .ui_events
             .send(UIEventWithID::repo_map_gen_start(request_id.to_owned()));
-        let result = repo_map.get_repo_map(Path::new(repo_map_path)).await.ok();
+        let result = repo_map.get_repo_map().await.ok();
+
         let _ = self
             .ui_events
             .send(UIEventWithID::repo_map_gen_end(request_id.to_owned()));

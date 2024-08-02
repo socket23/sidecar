@@ -9,19 +9,15 @@ use super::error::RepoMapError;
 use super::tag::{Tag, TagIndex};
 
 pub struct RepoMap {
-    root: PathBuf,
     map_tokens: usize,
-    tag_index: TagIndex,
 }
 
 const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 
 impl RepoMap {
-    pub fn new(root: String) -> Self {
+    pub fn new() -> Self {
         Self {
             map_tokens: REPOMAP_DEFAULT_TOKENS,
-            tag_index: TagIndex::new(),
-            root: PathBuf::from(root),
         }
     }
 
@@ -30,13 +26,8 @@ impl RepoMap {
         self
     }
 
-    pub async fn generate_tag_index(&mut self) {
-        self.tag_index.generate_from_path(&self.root).await
-    }
-
-    pub async fn get_repo_map(&mut self) -> Result<String, RepoMapError> {
-        self.generate_tag_index().await;
-        let repomap = self.get_ranked_tags_map(self.map_tokens).await?;
+    pub async fn get_repo_map(&self, tag_index: &TagIndex) -> Result<String, RepoMapError> {
+        let repomap = self.get_ranked_tags_map(self.map_tokens, tag_index).await?;
 
         if repomap.is_empty() {
             return Err(RepoMapError::TreeGenerationError(
@@ -113,8 +104,12 @@ impl RepoMap {
         best_tree
     }
 
-    pub async fn get_ranked_tags_map(&self, max_map_tokens: usize) -> Result<String, RepoMapError> {
-        let mut analyser = TagAnalyzer::new(&self.tag_index);
+    pub async fn get_ranked_tags_map(
+        &self,
+        max_map_tokens: usize,
+        tag_index: &TagIndex,
+    ) -> Result<String, RepoMapError> {
+        let mut analyser = TagAnalyzer::new(&tag_index);
 
         println!("[Analyser] Ranking tags...");
         let ranked_tags = analyser.get_ranked_tags().clone();

@@ -96,10 +96,13 @@ impl TagIndex {
         self.generate_tag_index(files).await;
     }
 
-    pub async fn generate_from_path(&mut self, path: &Path) {
+    pub async fn from_path(path: &Path) -> Self {
+        let mut index = TagIndex::new();
         let files = TagIndex::get_files(path).unwrap();
 
-        self.generate_tag_index(files).await;
+        index.generate_tag_index(files).await;
+
+        index
     }
 
     pub fn post_process_tags(&mut self) {

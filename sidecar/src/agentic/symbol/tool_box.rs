@@ -80,6 +80,7 @@ use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchT
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
+use crate::repomap::tag::TagIndex;
 use crate::repomap::types::RepoMap;
 use crate::user_context::types::UserContext;
 use crate::{
@@ -3292,14 +3293,16 @@ instruction:
 
     /// Generate the repo map for the tools
     pub async fn load_repo_map(&self, repo_map_path: &String, request_id: &str) -> Option<String> {
+        let tag_index = TagIndex::from_path(Path::new(repo_map_path)).await;
+
         // TODO(skcd): Should have proper construct time sharing (we only create it once) over here
         println!("tool_box::load_repo_map::start({})", &request_id);
-        let mut repo_map = RepoMap::new(repo_map_path.to_owned()).with_map_tokens(10_000);
+        let repo_map = RepoMap::new().with_map_tokens(10_000);
 
         let _ = self
             .ui_events
             .send(UIEventWithID::repo_map_gen_start(request_id.to_owned()));
-        let result = repo_map.get_repo_map().await.ok();
+        let result = repo_map.get_repo_map(&tag_index).await.ok();
 
         let _ = self
             .ui_events

@@ -27,5 +27,6 @@ pub mod jitter;
 pub mod lsp;
 pub mod output;
 pub mod rerank;
+pub mod search;
 pub mod swe_bench;
 pub mod r#type;

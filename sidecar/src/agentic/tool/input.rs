@@ -41,6 +41,7 @@ use super::{
     },
     r#type::ToolType,
     rerank::base::ReRankEntriesForBroker,
+    search::types::BigSearchRequest,
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 
@@ -101,6 +102,8 @@ pub enum ToolInput {
     ReRankingCodeSnippetsForEditing(ReRankingSnippetsForCodeEditingRequest),
     // Apply the generated code outline to the range we are interested in
     ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest),
+    // Big search
+    BigSearch(Vec<BigSearchRequest>),
 }
 
 impl ToolInput {
@@ -153,6 +156,7 @@ impl ToolInput {
                 ToolType::ReRankingCodeSnippetsForCodeEditingContext
             }
             ToolInput::ApplyOutlineEditToRange(_) => ToolType::ApplyOutlineEditToRange,
+            ToolInput::BigSearch(_) => ToolType::BigSearch,
         }
     }
 

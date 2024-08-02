@@ -80,8 +80,8 @@ async fn main() {
     ));
 
     // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
-    let file_paths =
-        vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
+    // let file_paths =
+    //     vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
     // let file_paths = vec![
     //     "/Users/skcd/test_repo/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned(),
@@ -89,10 +89,10 @@ async fn main() {
     // let file_path =
     //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned();
-    // let file_paths = vec![
-    //     "/Users/skcd/test_repo/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
-    //     "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
-    // ];
+    let file_paths = vec![
+        "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
+        "/Users/skcd/test_repo/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
+    ];
     // let file_paths =
     //     vec!["/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs".to_owned()];
     let file_content_value = stream::iter(file_paths)
@@ -131,11 +131,11 @@ async fn main() {
     //     "can you add another provider for grok for me we just need an api_key?".to_owned();
     // let problem_statement = "Add comments to RequestEvents".to_owned();
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
-    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
+    // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
-    // let problem_statement =
-    //     "Add support for a new stop_code_editing endpoint and implement it similar to probing stop and add the endpoint"
-    //         .to_owned();
+    let problem_statement =
+        "Add support for a new stop_code_editing endpoint and implement it similar to probing stop and add the endpoint"
+            .to_owned();
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
     //         .to_owned();

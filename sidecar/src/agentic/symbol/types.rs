@@ -1364,8 +1364,12 @@ Satisfy the requirement either by making edits or gathering the required informa
                 false,
                 request_data.get_original_question().to_owned(),
             );
+            // we need to do context gathering over here as well
+            let context = self
+                .grab_context_for_editing_faster(&sub_symbol_to_edit, &request_id)
+                .await?;
             let _ = self
-                .insert_code_full(&sub_symbol_to_edit, vec![], &request_id)
+                .insert_code_full(&sub_symbol_to_edit, context, &request_id)
                 .await;
             Ok(None)
         }

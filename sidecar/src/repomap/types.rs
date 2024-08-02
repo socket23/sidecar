@@ -16,6 +16,7 @@ use super::tag::{Tag, TagIndex};
 pub struct RepoMap {
     git_walker: GitWalker,
     map_tokens: usize,
+    tag_index: TagIndex,
 }
 
 const REPOMAP_DEFAULT_TOKENS: usize = 1024;
@@ -25,6 +26,7 @@ impl RepoMap {
         Self {
             git_walker: GitWalker {},
             map_tokens: REPOMAP_DEFAULT_TOKENS,
+            tag_index: TagIndex::new(),
         }
     }
 
@@ -33,19 +35,14 @@ impl RepoMap {
         self
     }
 
-    async fn generate_tag_index(
-        &self,
-        files: HashMap<String, Vec<u8>>,
-    ) -> Result<TagIndex, RepoMapError> {
-        let mut tag_index = TagIndex::new();
-
+    async fn generate_tag_index(&mut self, files: HashMap<String, Vec<u8>>) {
         let ts_parsing = Arc::new(TSLanguageParsing::init());
         let _ = stream::iter(
             files
                 .into_iter()
                 .map(|(file, _)| (file, ts_parsing.clone())),
         )
-        .map(|(file, ts_parsing)| async move {
+        .map(|(file, ts_parsing)| async {
             self.generate_tags_for_file(&file, ts_parsing)
                 .await
                 .map(|tags| (tags, file))
@@ -59,13 +56,11 @@ impl RepoMap {
         .for_each(|(tags, file)| {
             let file_ref = &file;
             tags.into_iter().for_each(|tag| {
-                tag_index.add_tag(tag, &PathBuf::from(file_ref));
+                self.tag_index.add_tag(tag, &PathBuf::from(file_ref));
             });
         });
 
-        tag_index.post_process_tags();
-
-        Ok(tag_index)
+        self.tag_index.post_process_tags();
     }
 
     pub async fn get_repo_map(&self, root: &Path) -> Result<String, RepoMapError> {
@@ -153,10 +148,7 @@ impl RepoMap {
         files: HashMap<String, Vec<u8>>,
         max_map_tokens: usize,
     ) -> Result<String, RepoMapError> {
-        println!("[TagIndex] Generating tags from {} files...", files.len());
-        let tag_index = self.generate_tag_index(files).await?;
-
-        let mut analyser = TagAnalyzer::new(tag_index);
+        let mut analyser = TagAnalyzer::new(&self.tag_index);
 
         println!("[Analyser] Ranking tags...");
         let ranked_tags = analyser.get_ranked_tags().clone();

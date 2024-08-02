@@ -4,14 +4,14 @@ use std::path::PathBuf;
 use super::graph::TagGraph;
 use super::tag::{Tag, TagIndex};
 
-pub struct TagAnalyzer {
-    tag_index: TagIndex,
+pub struct TagAnalyzer<'a> {
+    tag_index: &'a TagIndex,
     tag_graph: TagGraph,
 }
 
-impl TagAnalyzer {
-    pub fn new(tag_index: TagIndex) -> Self {
-        let tag_graph = TagGraph::from_tag_index(&tag_index, &HashSet::new());
+impl<'a> TagAnalyzer<'a> {
+    pub fn new(tag_index: &'a TagIndex) -> Self {
+        let tag_graph = TagGraph::from_tag_index(tag_index, &HashSet::new());
         Self {
             tag_index,
             tag_graph,

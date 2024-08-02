@@ -265,6 +265,7 @@ pub async fn swe_bench(
                     false,
                     None,
                     None,
+                    false,
                 )
                 .set_swe_bench_id(swe_bench_id),
             )
@@ -391,6 +392,7 @@ pub async fn code_editing(
                 codebase_search,
                 Some(root_directory),
                 None,
+                false,
             ))
             .await;
     });

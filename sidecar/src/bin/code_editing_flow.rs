@@ -158,6 +158,7 @@ async fn main() {
         true,
         Some(root_dir),
         Some(llama_70b_properties),
+        false,
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

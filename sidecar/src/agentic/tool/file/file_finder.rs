@@ -10,8 +10,13 @@ use llm_client::{
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
-        code_symbol::models::anthropic::AnthropicCodeSymbolImportant, errors::ToolError,
-        input::ToolInput, output::ToolOutput, r#type::Tool,
+        code_symbol::{
+            important::CodeSymbolImportantResponse, models::anthropic::AnthropicCodeSymbolImportant,
+        },
+        errors::ToolError,
+        input::ToolInput,
+        output::ToolOutput,
+        r#type::Tool,
     },
 };
 
@@ -130,7 +135,8 @@ impl Tool for ImportantFilesFinderBroker {
                 .find_important_files(request)
                 .await
                 .map_err(|e| ToolError::FileImportantError(e.to_string()))?;
-            Ok(ToolOutput::ImportantFilesFinder(output))
+
+            Ok(ToolOutput::ImportantSymbols(output.into()))
         } else {
             Err(ToolError::LLMNotSupported)
         }

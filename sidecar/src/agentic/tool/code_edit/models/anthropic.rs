@@ -8,7 +8,7 @@ use super::broker::{CodeEditPromptFormatters, CodeSnippetForEditing};
 /// this is used to truncate the size of the context we show the llm when its
 /// making edits, since we will grab the correct context required almost always
 /// with our definitions
-const SURROUNDING_CONTEXT_LIMIT: usize = 500;
+const SURROUNDING_CONTEXT_LIMIT: usize = 200;
 
 pub struct AnthropicCodeEditFromatter {}
 

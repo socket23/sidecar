@@ -198,36 +198,6 @@ impl SymbolInputEvent {
                 None => {
                     // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
-                        // if self.big_search() {}
-
-                        // if self.file_important_search {
-                        //     let dir = Path::new(&root_directory);
-
-                        //     let repo_name = "sidecar";
-
-                        //     let api_key =
-                        //         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                        //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                        //         ));
-
-                        //     let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
-
-                        //     println!("{}", tree);
-
-                        //     let llm_type = LLMType::GeminiProFlash;
-
-                        //     let finder_query = ImportantFilesFinderQuery::new(
-                        //         tree,
-                        //         self.user_query.to_owned(),
-                        //         llm_type,
-                        //         LLMProvider::GoogleAIStudio,
-                        //         api_key,
-                        //         repo_name.to_owned(),
-                        //         "".to_owned(),
-                        //     );
-
-                        //     return Some(ToolInput::ImportantFilesFinder(finder_query));
-                        // }
                         if self.codebase_search {
                             // here, search tool, repomap plus files
                             println!("symbol_input::load_repo_map::start({})", &request_id);

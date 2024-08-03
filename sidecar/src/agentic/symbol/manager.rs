@@ -16,7 +16,7 @@ use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::ui_event::InitialSearchSymbolInformation;
 use crate::agentic::tool::code_symbol::important::{
-    self, CodeSymbolImportantWideSearch, CodeSymbolWithSteps,
+    self, CodeSymbolImportantResponse, CodeSymbolImportantWideSearch, CodeSymbolWithSteps,
 };
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::input::ToolInput;
@@ -320,21 +320,6 @@ impl SymbolManager {
         let response = receiver.await;
         println!("{:?}", response.expect("to work"));
         Ok(())
-    }
-
-    pub async fn test_important_file_finder(
-        &self,
-        tool_input: ToolInput,
-    ) -> Result<Vec<String>, ToolError> {
-        let output = self.tools.invoke(tool_input).await?;
-
-        if let ToolOutput::ImportantFilesFinder(response) = output {
-            let file_paths = response.file_paths();
-            println!("file count: {:?}", file_paths.len());
-            Ok(file_paths.to_vec())
-        } else {
-            Err(ToolError::FileImportantError("files not found".to_string()))
-        }
     }
 
     pub async fn test_golden_file(

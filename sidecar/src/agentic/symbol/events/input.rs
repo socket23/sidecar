@@ -49,6 +49,7 @@ pub struct SymbolInputEvent {
     /// when we are not using full codebase context search
     fast_code_symbol_search_llm: Option<LLMProperties>,
     file_important_search: bool, // todo: this currently conflicts with repomap search
+    big_search: bool,
 }
 
 impl SymbolInputEvent {
@@ -72,6 +73,7 @@ impl SymbolInputEvent {
         root_directory: Option<String>,
         fast_code_symbol_search_llm: Option<LLMProperties>,
         file_important_search: bool,
+        big_search: bool,
     ) -> Self {
         Self {
             context,
@@ -93,6 +95,7 @@ impl SymbolInputEvent {
             root_directory,
             fast_code_symbol_search_llm,
             file_important_search,
+            big_search,
         }
     }
 
@@ -149,6 +152,10 @@ impl SymbolInputEvent {
         &self.request_id
     }
 
+    pub fn big_search(&self) -> bool {
+        self.big_search
+    }
+
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball
@@ -191,34 +198,36 @@ impl SymbolInputEvent {
                 None => {
                     // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
-                        if self.file_important_search {
-                            let dir = Path::new(&root_directory);
+                        // if self.big_search() {}
 
-                            let repo_name = "sidecar";
+                        // if self.file_important_search {
+                        //     let dir = Path::new(&root_directory);
 
-                            let api_key =
-                                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                                ));
+                        //     let repo_name = "sidecar";
 
-                            let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
+                        //     let api_key =
+                        //         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                        //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                        //         ));
 
-                            println!("{}", tree);
+                        //     let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
 
-                            let llm_type = LLMType::GeminiProFlash;
+                        //     println!("{}", tree);
 
-                            let finder_query = ImportantFilesFinderQuery::new(
-                                tree,
-                                self.user_query.to_owned(),
-                                llm_type,
-                                LLMProvider::GoogleAIStudio,
-                                api_key,
-                                repo_name.to_owned(),
-                                "".to_owned(),
-                            );
+                        //     let llm_type = LLMType::GeminiProFlash;
 
-                            return Some(ToolInput::ImportantFilesFinder(finder_query));
-                        }
+                        //     let finder_query = ImportantFilesFinderQuery::new(
+                        //         tree,
+                        //         self.user_query.to_owned(),
+                        //         llm_type,
+                        //         LLMProvider::GoogleAIStudio,
+                        //         api_key,
+                        //         repo_name.to_owned(),
+                        //         "".to_owned(),
+                        //     );
+
+                        //     return Some(ToolInput::ImportantFilesFinder(finder_query));
+                        // }
                         if self.codebase_search {
                             // here, search tool, repomap plus files
                             println!("symbol_input::load_repo_map::start({})", &request_id);

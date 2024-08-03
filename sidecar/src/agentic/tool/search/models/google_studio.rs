@@ -42,6 +42,12 @@ impl BigSearch for GoogleStudioBigSearch {
                 // ...
             }
             SearchType::Both(tree_data, repomap_data) => {
+                println!(
+                    "Both tree and repomap search calculation using tree_data and repomap_data"
+                );
+
+                println!("tree_data: {:?}", tree_data);
+                println!("repomap_data: {:?}", repomap_data);
                 // Perform both tree and repomap search calculation using tree_data and repomap_data
                 // ...
             }

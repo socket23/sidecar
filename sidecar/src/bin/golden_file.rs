@@ -6,6 +6,7 @@ use std::{
 use serde::Deserialize;
 use std::error::Error;
 use std::fs::File;
+use std::io::Write;
 
 use futures::{stream, StreamExt};
 use llm_client::{
@@ -26,6 +27,7 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
+            code_symbol::important,
             file::file_finder::ImportantFilesFinderQuery,
             input::ToolInput,
         },
@@ -33,6 +35,7 @@ use sidecar::{
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     file_analyser::types::FileAnalyser,
     inline_completion::symbols_tracker::SymbolTrackerInline,
+    repomap::{tag::TagIndex, types::RepoMap},
     tree_printer::tree::TreePrinter,
     user_context::types::{FileContentValue, UserContext},
 };
@@ -61,64 +64,95 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let _ = test_important_file_finder().await;
+    // let _ = test_important_file_finder().await;
+    let _ = big_search().await;
 }
 
-async fn test_important_file_finder() {
-    // build tree from dir
-
+async fn big_search() {
     let dir = Path::new("/Users/zi/codestory/sidecar/sidecar");
 
     let repo_name = "sidecar";
 
-    let problem_statement = "Update the repomap function to increases the size of the map by 10x";
+    let problem_statement = "Add a new LLMProvider";
 
-    let api_key = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-    ));
+    let _ = test_initial_request(problem_statement, dir.to_str().unwrap()).await;
+}
 
-    let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
+async fn test_important_file_finder() {
+    let dir = Path::new("/Users/zi/codestory/sidecar/sidecar");
 
-    println!("{}", tree);
+    let repo_name = "sidecar";
 
-    let llm_type = LLMType::GeminiProFlash;
-    let finder_query = ImportantFilesFinderQuery::new(
-        tree,
-        problem_statement.to_string(),
-        llm_type,
-        LLMProvider::GoogleAIStudio,
-        api_key,
-        repo_name.to_string(),
-        "".to_string(),
-    );
+    let problem_statement = "Add a new LLMProvider";
 
-    // the type of input...determines the tool used
-    let tool_input = ToolInput::ImportantFilesFinder(finder_query);
+    // let api_key = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+    //     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    // ));
 
-    let symbol_manager = make_symbol_manager().await;
+    // let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
 
-    let important_files = symbol_manager
-        .test_important_file_finder(tool_input)
-        .await
-        .unwrap();
+    // println!("{}", tree);
 
-    let golden_file_files = get_golden_file_files(problem_statement, dir.to_str().unwrap())
-        .await
-        .unwrap();
+    // let llm_type = LLMType::GeminiProFlash;
+    // let finder_query = ImportantFilesFinderQuery::new(
+    //     tree,
+    //     problem_statement.to_string(),
+    //     llm_type,
+    //     LLMProvider::GoogleAIStudio,
+    //     api_key,
+    //     repo_name.to_string(),
+    //     "".to_string(),
+    // );
 
-    println!("important_files_count: {}", important_files.len());
-    println!("important_files: {:?}", important_files);
+    // // // the type of input...determines the tool used
+    // let tool_input = ToolInput::ImportantFilesFinder(finder_query);
 
-    println!("golden_file_count: {}", golden_file_files.len());
-    println!("golden_file_files: {:?}", golden_file_files);
+    // let symbol_manager = make_symbol_manager().await;
 
-    let mut analyser = FileAnalyser::new();
-    analyser.add_file_collection(important_files);
-    analyser.add_file_collection(golden_file_files);
+    // let important_files = symbol_manager.test_important_file_finder(tool_input).await;
 
-    let output = analyser.analyze_top_occurrences(10);
+    // println!("count important files: {}", important_files.len());
 
-    println!("{:?}", output);
+    // // prepend dir to every importantfile
+    // let important_files = important_files
+    //     .iter()
+    //     .map(|file| dir.join(file))
+    //     .collect::<Vec<_>>();
+
+    // let tag_index = TagIndex::from_path(dir).await;
+
+    // tag_index.print_file_to_tag_keys();
+
+    // let mut output_file = File::create("output.txt").unwrap();
+
+    // for file in important_files.iter() {
+    //     writeln!(output_file, "==========================================");
+    //     writeln!(output_file, "{}", file.display());
+    //     writeln!(output_file, "==========================================");
+    //     let tags = tag_index.get_tags_for_file(&file);
+    //     match tags {
+    //         Some(tags) => writeln!(output_file, "tags: {:?}", tags),
+    //         None => writeln!(output_file, "no tags found for file: {}", file.display()),
+    //     };
+    //     writeln!(output_file); // Add an empty line between file entries
+    // }
+
+    let golden_file_files = test_initial_request(problem_statement, dir.to_str().unwrap()).await;
+    //     .unwrap();
+
+    // println!("important_files_count: {}", important_files.len());
+    // println!("important_files: {:?}", important_files);
+
+    // println!("golden_file_count: {}", golden_file_files.len());
+    // println!("golden_file_files: {:?}", golden_file_files);
+
+    // let mut analyser = FileAnalyser::new();
+    // // analyser.add_file_collection(important_files);
+    // analyser.add_file_collection(golden_file_files);
+
+    // let output = analyser.analyze_top_occurrences(10);
+
+    // println!("{:?}", output);
 }
 
 fn read_problems_from_csv(path: &str, repo: &str) -> Result<Vec<Task>, Box<dyn Error>> {
@@ -189,10 +223,10 @@ async fn make_symbol_manager() -> SymbolManager {
     symbol_manager
 }
 
-async fn get_golden_file_files(
+async fn test_initial_request(
     problem_statement: &str,
     root_dir: &str,
-) -> Result<Vec<String>, SymbolError> {
+) -> Result<Vec<(String, String)>, SymbolError> {
     let request_id = uuid::Uuid::new_v4();
     let request_id_str = request_id.to_string();
     let parea_url = format!(
@@ -267,13 +301,20 @@ async fn get_golden_file_files(
         true, // codebase search
         Some(root_dir.to_string()),
         Some(llama_70b_properties),
+        true,
+        true,
     );
 
     let initial_request_task = Box::pin(symbol_manager.test_golden_file(initial_request)).await?;
 
     let file_paths = initial_request_task
         .iter()
-        .map(|symbol| symbol.file_path().to_string())
+        .map(|symbol| {
+            (
+                symbol.file_path().to_string(),
+                symbol.code_symbol().to_string(),
+            )
+        })
         .collect();
 
     Ok(file_paths)
@@ -355,6 +396,8 @@ async fn test_golden_file_search(task: &Task, root_dir: &str) {
         true, // codebase search
         Some(root_dir.to_string()),
         Some(llama_70b_properties),
+        false,
+        true,
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.test_golden_file(initial_request));

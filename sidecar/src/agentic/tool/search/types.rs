@@ -9,10 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
-        code_symbol::{
-            important::CodeSymbolImportantResponse,
-            models::anthropic::AnthropicCodeSymbolImportant, types::CodeSymbolError,
-        },
+        code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
         errors::ToolError,
         input::ToolInput,
         output::ToolOutput,

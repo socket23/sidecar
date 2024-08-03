@@ -13,15 +13,15 @@ use crate::agentic::{
 };
 
 pub struct GoogleStudioBigSearch {
-    llm_client: Arc<LLMBroker>,
-    fail_over_llm: LLMProperties,
+    _llm_client: Arc<LLMBroker>,
+    _fail_over_llm: LLMProperties,
 }
 
 impl GoogleStudioBigSearch {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         Self {
-            llm_client,
-            fail_over_llm,
+            _llm_client: llm_client,
+            _fail_over_llm: fail_over_llm,
         }
     }
 }
@@ -33,11 +33,11 @@ impl BigSearch for GoogleStudioBigSearch {
         input: BigSearchRequest,
     ) -> Result<CodeSymbolImportantResponse, CodeSymbolError> {
         match input.search_type() {
-            SearchType::Tree(tree_data) => {
+            SearchType::Tree(_tree_data) => {
                 // Perform tree search calculation using tree_data
                 // ...
             }
-            SearchType::Repomap(repomap_data) => {
+            SearchType::Repomap(_repomap_data) => {
                 // Perform repomap search calculation using repomap_data
                 // ...
             }

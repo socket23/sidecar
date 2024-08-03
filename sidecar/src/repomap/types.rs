@@ -1,5 +1,4 @@
 use std::cmp::min;
-use std::path::{Path, PathBuf};
 
 use crate::chunking::languages::TSLanguageParsing;
 use crate::repomap::tree_context::TreeContext;

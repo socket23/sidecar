@@ -1039,6 +1039,7 @@ impl From<FileImportantResponse> for CodeSymbolImportantResponse {
             .file_paths()
             .iter()
             .map(|file_path| CodeSymbolWithSteps {
+                // empty strings as we are only concerned with file_path
                 code_symbol: String::from(""),
                 steps: vec![String::from("")],
                 is_new: false,

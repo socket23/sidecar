@@ -67,7 +67,7 @@ impl TagGraph {
     }
 
     pub fn calculate_page_ranks(&self) -> Vec<f64> {
-        let final_rank = page_rank(&self.graph, 0.85, 1);
+        let final_rank = page_rank(&self.graph, 0.85, 1); // for speed, 100 is Aider's default
         final_rank
     }
 

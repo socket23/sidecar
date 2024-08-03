@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 use serde_xml_rs::from_str;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
-use std::{fs::File, sync::Arc};
 use tracing::info;
 
 use llm_client::{
@@ -4067,13 +4065,16 @@ def subtract(a, b, c, d):
 - The code has been edited so that the user instruction present in <user_instruction> section is satisfied.
 - The previous version of the code is shown to you in <previous_code>, this was the original code has now been edited to <re_written_code>
 - You are also shown the whole file content in <file> section, this is useful to understand the overall context in which the change was made.
+- You will also have access to the plan which is present in <plan> section which the engineer is following while making edits
+- - You can use the classes, structs, enums, methods or constants and functions which are mentioned in the plan for your own code correction if you forgot or used the wrong name in your own code.
+- - These classes, structs, enums, methods or constants will be eventually written to the codebase but you can use them starting now for code correction. 
 - The various errors which are present in the edited code are shown to you as <diagnostic_list>
 - The actions you can take to fix the errors present in <diagnostic_list> is shown in <action_list>
 - You have to only select a single action, even if multiple actions will be required for making the fix.
 - You also get access to 3 special actions:
 - "edit code in selection" which allows you to edit the code currently selected and is present in <re_written_code>
 - "edit code in other places" which allows you to make edits in places other than the currently selected code.
-- "no action required" which allows you to not take any actions as the code you have written in <re_written_code> is correct.
+- "no action required" which allows you to not take any actions as the code you have written in <re_written_code> is correct even if there are Language server signals which mention errors.
 
 An example is shown below to you:
 <query>
@@ -4276,6 +4277,7 @@ no action required
 
         let previous_code = code_correctness_request.previous_code();
         let instruction = code_correctness_request.instruction();
+        let extra_symbol_plan = code_correctness_request.extra_symbol_plan();
 
         // now we can create the query and have the llm choose it
         let file_content = format!(
@@ -4295,6 +4297,16 @@ no action required
 </file>"#
         );
 
+        let plan = extra_symbol_plan
+            .map(|symbol_plan| {
+                format!(
+                    r#"<plan>
+{symbol_plan}
+</plan>"#
+                )
+            })
+            .unwrap_or_default();
+
         format!(
             r#"<query>
 {file_content}
@@ -4307,6 +4319,7 @@ no action required
 <user_instruction>
 {instruction}
 </user_instruction>
+{plan}
 <previous_code>
 {previous_code}
 </previous_code>
@@ -5927,7 +5940,8 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         if let Ok(ref parsed_response) = parsed_response {
             let ordered_symbols = parsed_response.ordered_symbols();
 
-            let ordered_symbols_string = ordered_symbols
+            // disabled writing the trace for now
+            let _ordered_symbols_string = ordered_symbols
                 .iter()
                 .map(|symbol| {
                     // file_path, steps: Vec<String>, code_symbol

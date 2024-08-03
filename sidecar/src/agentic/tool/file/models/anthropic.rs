@@ -11,7 +11,7 @@ use crate::agentic::{
     tool::file::{
         file_finder::{ImportantFilesFinder, ImportantFilesFinderQuery},
         important::FileImportantResponse,
-        types::{FileImportantError, SerdeError},
+        types::FileImportantError,
     },
 };
 
@@ -51,14 +51,14 @@ impl FileImportantReply {
 
 pub struct AnthropicFileFinder {
     llm_client: Arc<LLMBroker>,
-    fail_over_llm: LLMProperties,
+    _fail_over_llm: LLMProperties,
 }
 
 impl AnthropicFileFinder {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         Self {
             llm_client,
-            fail_over_llm,
+            _fail_over_llm: fail_over_llm,
         }
     }
 

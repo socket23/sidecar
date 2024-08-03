@@ -3555,6 +3555,8 @@ instruction:
         // - once we have no LSP errors or anything we are good
         let instructions = symbol_edited.instructions().join("\n");
         let fs_file_path = symbol_edited.fs_file_path();
+        let extra_symbol_list = tool_properties.get_plan_for_input();
+        let extra_symbol_list_ref = extra_symbol_list.as_deref();
         let symbol_name = symbol_edited.symbol_name();
         let mut updated_code = edited_code.to_owned();
         let mut tries = 0;
@@ -3741,8 +3743,8 @@ instruction:
 
             // now we can send over the request to the LLM to select the best tool
             // for editing the code out
-            let selected_action = dbg!(
-                self.code_correctness_action_selection(
+            let selected_action = self
+                .code_correctness_action_selection(
                     fs_file_path,
                     &fs_file_content,
                     &edited_range,
@@ -3754,10 +3756,10 @@ instruction:
                     llm.clone(),
                     provider.clone(),
                     api_keys.clone(),
+                    extra_symbol_list_ref,
                     request_id,
                 )
-                .await
-            )?;
+                .await?;
 
             // Now that we have the selected action, we can chose what to do about it
             // there might be a case that we have to re-write the code completely, since
@@ -3956,6 +3958,7 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        extra_symbol_plan: Option<&str>,
         request_id: &str,
         // TODO(skcd): a history parameter and play with the prompt over here so
         // the LLM does not over index on the history of the symbols which were edited
@@ -3976,6 +3979,7 @@ instruction:
             llm,
             provider,
             api_keys,
+            extra_symbol_plan.map(|plan| plan.to_owned()),
             self.root_request_id.to_owned(),
         ));
         let _ = self.ui_events.send(UIEventWithID::from_tool_event(

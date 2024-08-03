@@ -4064,13 +4064,16 @@ def subtract(a, b, c, d):
 - The code has been edited so that the user instruction present in <user_instruction> section is satisfied.
 - The previous version of the code is shown to you in <previous_code>, this was the original code has now been edited to <re_written_code>
 - You are also shown the whole file content in <file> section, this is useful to understand the overall context in which the change was made.
+- You will also have access to the plan which is present in <plan> section which the engineer is following while making edits
+- - You can use the classes, structs, enums, methods or constants and functions which are mentioned in the plan for your own code correction if you forgot or used the wrong name in your own code.
+- - These classes, structs, enums, methods or constants will be eventually written to the codebase but you can use them starting now for code correction. 
 - The various errors which are present in the edited code are shown to you as <diagnostic_list>
 - The actions you can take to fix the errors present in <diagnostic_list> is shown in <action_list>
 - You have to only select a single action, even if multiple actions will be required for making the fix.
 - You also get access to 3 special actions:
 - "edit code in selection" which allows you to edit the code currently selected and is present in <re_written_code>
 - "edit code in other places" which allows you to make edits in places other than the currently selected code.
-- "no action required" which allows you to not take any actions as the code you have written in <re_written_code> is correct.
+- "no action required" which allows you to not take any actions as the code you have written in <re_written_code> is correct even if there are Language server signals which mention errors.
 
 An example is shown below to you:
 <query>

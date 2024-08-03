@@ -53,6 +53,9 @@ pub struct CodeCorrectnessRequest {
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    // the extra symbols which we will be creating and are part of the plan
+    // helps keep the edits in a course correct way
+    extra_symbol_plan: Option<String>,
     root_request_id: String,
 }
 
@@ -71,6 +74,7 @@ impl CodeCorrectnessRequest {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        extra_symbol_plan: Option<String>,
         root_request_id: String,
     ) -> Self {
         Self {
@@ -87,8 +91,13 @@ impl CodeCorrectnessRequest {
             llm,
             provider,
             api_keys,
+            extra_symbol_plan,
             root_request_id,
         }
+    }
+
+    pub fn extra_symbol_plan(&self) -> Option<String> {
+        self.extra_symbol_plan.clone()
     }
 
     pub fn root_request_id(&self) -> &str {

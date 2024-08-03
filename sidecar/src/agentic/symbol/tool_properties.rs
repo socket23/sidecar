@@ -10,6 +10,9 @@ pub struct ToolProperties {
     swe_bench_long_context_editing_llm: Option<LLMProperties>,
     full_symbol_request: bool,
     fast_code_symbol_search: Option<LLMProperties>,
+    // plan for the task instance this contains the overall plan we are going to
+    // be following while making the edits
+    plan_for_input: Option<String>,
 }
 
 impl ToolProperties {
@@ -21,7 +24,19 @@ impl ToolProperties {
             swe_bench_long_context_editing_llm: None,
             full_symbol_request: false,
             fast_code_symbol_search: None,
+            plan_for_input: None,
         }
+    }
+
+    pub fn get_plan_for_input(&self) -> Option<String> {
+        self.plan_for_input.clone()
+    }
+
+    /// Sets the plan for the input in the tool properties so we can refer to it
+    /// while doing code correction or code editing if required
+    pub fn set_plan_for_input(mut self, plan_for_input: Option<String>) -> Self {
+        self.plan_for_input = plan_for_input;
+        self
     }
 
     pub fn set_fast_code_symbol_search(

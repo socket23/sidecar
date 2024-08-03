@@ -351,7 +351,6 @@ impl SymbolManager {
             .set_long_context_editing_llm(swe_bench_long_context_editing)
             .set_full_symbol_request(full_symbol_edit)
             .set_fast_code_symbol_search(fast_code_symbol_llm);
-        let tool_properties_ref = &tool_properties;
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event
             .tool_use_on_initial_invocation(self.tool_box.clone(), &request_id)
@@ -472,10 +471,13 @@ impl SymbolManager {
                     }
                 };
 
-                // get the high level plan over here
-                // let high_level_plan = important_symbols.ordered_symbols_to_plan();
-                // let high_level_plan_ref = &high_level_plan;
                 println!("symbol_manager::plan_finished_before_editing");
+
+                let updated_tool_properties = important_symbols.ordered_symbols_to_plan();
+                let tool_properties = tool_properties
+                    .clone()
+                    .set_plan_for_input(Some(updated_tool_properties));
+                let tool_properties_ref = &tool_properties;
 
                 // Lets first start another round of COT over here to figure out
                 // how to go about making the changes, I know this is a bit orthodox

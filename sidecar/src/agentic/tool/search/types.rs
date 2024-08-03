@@ -134,7 +134,7 @@ impl Tool for BigSearchBroker {
             let output = implementation
                 .search(request)
                 .await
-                .map_err(|e| ToolError::FileImportantError(e.to_string()))?;
+                .map_err(|e| ToolError::CodeSymbolError(e))?;
 
             Ok(ToolOutput::BigSearch(output))
         } else {

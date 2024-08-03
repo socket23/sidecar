@@ -80,16 +80,18 @@ pub struct TagIndex {
     ///
     /// Useful for answering: "What are the tags defined in file X?"
     pub file_to_tags: HashMap<PathBuf, HashSet<(PathBuf, String)>>,
+    pub path: PathBuf,
 }
 
 impl TagIndex {
-    pub fn new() -> Self {
+    pub fn new(path: &Path) -> Self {
         Self {
             defines: HashMap::new(),
             references: HashMap::new(),
             definitions: HashMap::new(),
             common_tags: HashSet::new(),
             file_to_tags: HashMap::new(),
+            path: path.to_path_buf(),
         }
     }
 
@@ -103,7 +105,7 @@ impl TagIndex {
     }
 
     pub async fn from_path(path: &Path) -> Self {
-        let mut index = TagIndex::new();
+        let mut index = TagIndex::new(path);
         let files = TagIndex::get_files(path).unwrap();
 
         index.generate_tag_index(files).await;
@@ -264,9 +266,8 @@ impl TagIndex {
     }
 
     fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {
-        let self_root = env!("CARGO_MANIFEST_DIR").to_string();
         fname
-            .strip_prefix(&self_root)
+            .strip_prefix(&self.path)
             .unwrap_or(fname)
             .to_path_buf()
     }

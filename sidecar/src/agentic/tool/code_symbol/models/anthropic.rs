@@ -5936,52 +5936,54 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
                 .collect::<Vec<_>>()
                 .join("\n");
 
-            self.write_trace(
-                &root_request_id,
-                &system_message.content(),
-                &user_message.content(),
-                &ordered_symbols_string,
-            );
+            // self.write_trace(
+            //     &root_request_id,
+            //     &system_message.content(),
+            //     &user_message.content(),
+            //     &ordered_symbols_string,
+            // );
         }
 
         parsed_response
     }
 }
 
-impl AnthropicCodeSymbolImportant {
-    fn write_trace(
-        &self,
-        root_request_id: &str,
-        system_message: &str,
-        user_message: &str,
-        response: &str,
-    ) -> std::io::Result<()> {
-        let traces_dir_path = PathBuf::from("/Users/zi/codestory/sidecar/traces");
+// for swe-bench traces
 
-        let extension = "md";
-        let safe_id = root_request_id.replace(|c: char| !c.is_alphanumeric(), "_");
+// impl AnthropicCodeSymbolImportant {
+//     fn write_trace(
+//         &self,
+//         root_request_id: &str,
+//         system_message: &str,
+//         user_message: &str,
+//         response: &str,
+//     ) -> std::io::Result<()> {
+//         let traces_dir_path = PathBuf::from("/Users/zi/codestory/sidecar/traces");
 
-        let file_name = format!("{}.{}", safe_id, extension);
+//         let extension = "md";
+//         let safe_id = root_request_id.replace(|c: char| !c.is_alphanumeric(), "_");
 
-        let file_path = traces_dir_path.join(file_name);
+//         let file_name = format!("{}.{}", safe_id, extension);
 
-        let mut file = File::create(&file_path)
-            .unwrap_or_else(|_| panic!("Failed to create trace file: {:?}", file_path));
+//         let file_path = traces_dir_path.join(file_name);
 
-        writeln!(file, "# [System]")?;
-        writeln!(file, "{}", system_message)?;
-        writeln!(file)?;
+//         let mut file = File::create(&file_path)
+//             .unwrap_or_else(|_| panic!("Failed to create trace file: {:?}", file_path));
 
-        writeln!(file, "# [User]")?;
-        writeln!(file, "{}", user_message,)?;
-        writeln!(file)?;
+//         writeln!(file, "# [System]")?;
+//         writeln!(file, "{}", system_message)?;
+//         writeln!(file)?;
 
-        writeln!(file, "# [Response]")?;
-        writeln!(file, "{}", response)?;
+//         writeln!(file, "# [User]")?;
+//         writeln!(file, "{}", user_message,)?;
+//         writeln!(file)?;
 
-        Ok(())
-    }
-}
+//         writeln!(file, "# [Response]")?;
+//         writeln!(file, "{}", response)?;
+
+//         Ok(())
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

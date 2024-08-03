@@ -67,25 +67,25 @@ impl AnthropicFileFinder {
         file_important_request: &ImportantFilesFinderQuery,
     ) -> String {
         format!(
-            r#"Observe the repository tree, and list the files you'd want might want to explore in order to solve the user query. 
-            Any file that may be relevant. 
-            Use your existing knowledge and intuition of the {} repository
+            r#"Observe the repository tree, and list the files you'd want might want to explore in order to solve the user query.
+Any file that may be relevant. 
+Use your existing knowledge and intuition of the {} repository
             
-            Respond in the following XML format:
+Respond in the following XML format:
 
-            <files>
-            path/to/file1
-            path/to/file2
-            path/to/file3
-            </files>
+<files>
+path/to/file1
+path/to/file2
+path/to/file3
+</files>
 
 
-            Notice how each xml tag ends with a new line, follow this format strictly.
-            
-            Response:
+Notice how each xml tag ends with a new line, follow this format strictly.
 
-            <files>
-        "#,
+Response:
+
+<files>
+"#,
             file_important_request.repo_name()
         )
     }
@@ -132,8 +132,8 @@ impl ImportantFilesFinder for AnthropicFileFinder {
                 messages,
                 provider,
                 vec![
-                    ("event_type".to_owned(), "repo_map_search".to_owned()),
-                    ("root_id".to_owned(), root_request_id.clone()),
+                    ("event_type".to_owned(), "important_file_finder".to_owned()),
+                    ("root_id".to_owned(), root_request_id),
                 ]
                 .into_iter()
                 .collect(),

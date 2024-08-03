@@ -40,7 +40,7 @@ use super::{
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
-    r#type::{Tool, ToolType},
+    r#type::ToolType,
     rerank::base::ReRankEntriesForBroker,
     search::types::BigSearchRequest,
     swe_bench::test_tool::SWEBenchTestRequest,

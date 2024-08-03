@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 use serde_xml_rs::from_str;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
-use std::{fs::File, sync::Arc};
 use tracing::info;
 
 use llm_client::{
@@ -4279,6 +4277,7 @@ no action required
 
         let previous_code = code_correctness_request.previous_code();
         let instruction = code_correctness_request.instruction();
+        let extra_symbol_plan = code_correctness_request.extra_symbol_plan();
 
         // now we can create the query and have the llm choose it
         let file_content = format!(
@@ -4298,6 +4297,16 @@ no action required
 </file>"#
         );
 
+        let plan = extra_symbol_plan
+            .map(|symbol_plan| {
+                format!(
+                    r#"<plan>
+{symbol_plan}
+</plan>"#
+                )
+            })
+            .unwrap_or_default();
+
         format!(
             r#"<query>
 {file_content}
@@ -4310,6 +4319,7 @@ no action required
 <user_instruction>
 {instruction}
 </user_instruction>
+{plan}
 <previous_code>
 {previous_code}
 </previous_code>
@@ -5930,7 +5940,8 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         if let Ok(ref parsed_response) = parsed_response {
             let ordered_symbols = parsed_response.ordered_symbols();
 
-            let ordered_symbols_string = ordered_symbols
+            // disabled writing the trace for now
+            let _ordered_symbols_string = ordered_symbols
                 .iter()
                 .map(|symbol| {
                     // file_path, steps: Vec<String>, code_symbol

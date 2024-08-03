@@ -2,7 +2,7 @@
 //! convert between different types of inputs.. something like that
 //! or we can keep hardcoded actions somewhere.. we will figure it out as we go
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use llm_client::{
     clients::types::LLMType,
@@ -16,11 +16,9 @@ use crate::{
             code_symbol::{
                 important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
             },
-            file::file_finder::ImportantFilesFinderQuery,
             input::ToolInput,
         },
     },
-    tree_printer::tree::TreePrinter,
     user_context::types::UserContext,
 };
 

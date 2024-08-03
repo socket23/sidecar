@@ -77,7 +77,7 @@ async fn main() {
         use rayon::prelude::*;
         let _values = entries
             .into_par_iter()
-            .filter_map(|((path, kind, oid), _)| {
+            .filter_map(|((_path, kind, oid), _)| {
                 let git = git.to_thread_local();
                 let Ok(Some(object)) = git.try_find_object(oid) else {
                     return None;

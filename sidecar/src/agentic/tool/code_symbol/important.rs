@@ -1095,8 +1095,12 @@ impl CodeSymbolImportantResponse {
                 let thinking = ordered_symbol.steps().join("\n");
                 format!(
                     "<step id = {idx}>
-<code_symbol>{code_symbol}</code_symbol>
-<file_path>{fs_file_path}</file_path>
+<code_symbol>
+{code_symbol}
+</code_symbol>
+<file_path>
+{fs_file_path}
+</file_path>
 <high_level_plan>
 {thinking}
 </high_level_plan>

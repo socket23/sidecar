@@ -2,7 +2,7 @@
 //! convert between different types of inputs.. something like that
 //! or we can keep hardcoded actions somewhere.. we will figure it out as we go
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use llm_client::{
     clients::types::LLMType,
@@ -16,11 +16,10 @@ use crate::{
             code_symbol::{
                 important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
             },
-            file::file_finder::ImportantFilesFinderQuery,
             input::ToolInput,
+            search::types::{BigSearchRequest, SearchType},
         },
     },
-    tree_printer::tree::TreePrinter,
     user_context::types::UserContext,
 };
 
@@ -162,7 +161,7 @@ impl SymbolInputEvent {
     pub async fn tool_use_on_initial_invocation(
         self,
         tool_box: Arc<ToolBox>,
-        request_id: &str,
+        _request_id: &str,
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
@@ -179,9 +178,13 @@ impl SymbolInputEvent {
         // TODO(skcd): Toggle the request here depending on if we have the repo map
         if self.has_repo_map() || self.root_directory.is_some() {
             let contents = if self.has_repo_map() {
-                tokio::fs::read_to_string(self.repo_map_fs_path.expect("has_repo_map to not break"))
-                    .await
-                    .ok()
+                tokio::fs::read_to_string(
+                    self.repo_map_fs_path
+                        .clone()
+                        .expect("has_repo_map to not break"),
+                )
+                .await
+                .ok()
             } else {
                 None
             };
@@ -198,25 +201,21 @@ impl SymbolInputEvent {
                 None => {
                     // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
-                        if self.codebase_search {
-                            // here, search tool, repomap plus files
-                            println!("symbol_input::load_repo_map::start({})", &request_id);
-                            return tool_box
-                                .load_repo_map(&root_directory, request_id)
-                                .await
-                                .map(|repo_map| {
-                                    ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
-                                        repo_map,
-                                        self.user_query.to_owned(),
-                                        LLMType::GeminiProFlash,
-                                        LLMProvider::GoogleAIStudio,
-                                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                                        )),
-                                        Some(root_directory.to_owned()),
-                                        self.request_id.to_string(),
-                                    ))
-                                });
+                        if self.big_search() {
+                            let repo_name = "remove this";
+                            let request = BigSearchRequest::new(
+                                LLMType::GeminiProFlash,
+                                LLMProvider::GoogleAIStudio,
+                                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                                )),
+                                self.request_id.to_string(),
+                                repo_name.to_string(),
+                                self.user_query().to_string(),
+                                root_directory.to_owned(),
+                                SearchType::Both("tree".to_string(), "repomap".to_string()),
+                            );
+                            return Some(ToolInput::BigSearch(request));
                         }
                     }
                     let outline_for_user_context = tool_box

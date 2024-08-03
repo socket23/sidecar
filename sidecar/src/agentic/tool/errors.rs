@@ -59,6 +59,6 @@ pub enum ToolError {
     #[error("Retries exhausted")]
     RetriesExhausted,
 
-    #[error("File important error: {0}")]
-    FileImportantError(String),
+    #[error("File important error, {0}")]
+    FileImportantError(FileImportantError),
 }

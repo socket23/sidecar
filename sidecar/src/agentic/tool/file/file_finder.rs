@@ -9,15 +9,7 @@ use llm_client::{
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
-    tool::{
-        code_symbol::{
-            important::CodeSymbolImportantResponse, models::anthropic::AnthropicCodeSymbolImportant,
-        },
-        errors::ToolError,
-        input::ToolInput,
-        output::ToolOutput,
-        r#type::Tool,
-    },
+    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
 };
 
 use super::{
@@ -134,7 +126,7 @@ impl Tool for ImportantFilesFinderBroker {
             let output = implementation
                 .find_important_files(request)
                 .await
-                .map_err(|e| ToolError::FileImportantError(e.to_string()))?;
+                .map_err(|e| ToolError::FileImportantError(e))?;
 
             Ok(ToolOutput::ImportantSymbols(output.into()))
         } else {

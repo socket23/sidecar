@@ -104,7 +104,12 @@ impl Snippet {
     pub fn is_single_block_language(&self) -> bool {
         match self.language.as_deref() {
             Some("python" | "typescript" | "javascript" | "ts" | "js" | "py") => true,
-            _ => false
+            _ => {
+                match self.outline_node_content().language() {
+                    "python" | "typescript" | "javascript" | "ts" | "js" | "py" => true,
+                    _ => false,
+                }
+            }
         }
     }
     
@@ -492,9 +497,15 @@ impl MechaCodeSymbolThinking {
             .map(|snippet| snippet.clone())
             .collect::<Vec<_>>();
         println!(
-            "mecha_code_symbol_thinking::get_implementations::get_snippet({})::get_implementations_len({})",
+            "mecha_code_symbol_thinking::get_implementations::get_snippet({})::get_implementations_len({})::implementations_range({})",
             &self.symbol_name(),
             implementations.len(),
+            implementations.iter().map(|implementation| {
+                let range = implementation.range();
+                let start_line = range.start_line();
+                let end_line = range.end_line();
+                format!("[{}-{}]", start_line, end_line)
+            }).collect::<Vec<_>>().join(",")
         );
         let self_implementation = self.get_snippet().await;
         if let Some(snippet) = self_implementation {
@@ -839,18 +850,20 @@ impl MechaCodeSymbolThinking {
                                 }
                             })
                             .flatten();
-                        match (
-                            file_content.content_in_range(&range),
-                            outline_node_for_range,
-                        ) {
-                            (Some(content), Some(outline_node)) => Some(Snippet::new(
-                                symbol_identifier.symbol_name().to_owned(),
-                                range.clone(),
-                                file_path,
-                                content,
-                                outline_node,
-                            )),
-                            _ => None,
+                        if let Some(outline_node) = outline_node_for_range {
+                            if let Some(content) = file_content.content_in_range(&outline_node.range()) {
+                                Some(Snippet::new(
+                                    symbol_identifier.symbol_name().to_owned(),
+                                    outline_node.range().clone(),
+                                    file_path,
+                                    content,
+                                    outline_node
+                                ))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
                         }
                     } else {
                         None
@@ -1010,6 +1023,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     false,
                                     true,
+                                    original_request.get_original_question().to_owned(),
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1067,6 +1081,8 @@ Edit selection reason:
 {reason_to_edit}"#
                                 )
                             });
+                        // Add one more check for the reason to edit, this time asking it to reject it
+                        // this is reduce in the map operation so we can filter down
                         match found_reason_to_edit {
                             Some(reason) => {
                                 // TODO(skcd): We need to get the sub-symbol over
@@ -1091,6 +1107,7 @@ Edit selection reason:
                                         outline,
                                         false,
                                         true,
+                                        original_request_ref.get_original_question().to_owned(),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({})::({:?})::({:?})", self.symbol_name(), &range, &fs_file_path);
@@ -1240,6 +1257,7 @@ Edit selection reason:
                                     false,
                                     true,
                                     false,
+                                    original_request.get_original_question().to_owned(),
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1353,6 +1371,7 @@ Reason to edit:
                                         outline,
                                         false,
                                         false,
+                                        original_request_ref.get_original_question().to_owned(),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);
@@ -1414,7 +1433,7 @@ Reason to edit:
             let is_definition_assignment = snippet
                 .outline_node_content
                 .outline_node_type()
-                .is_definition_assigument();
+                .is_definition_assignment();
             if is_function || is_definition_assignment {
                 let content = snippet.outline_node_content.content();
                 let file_path = snippet.outline_node_content.fs_file_path();
@@ -1472,7 +1491,7 @@ Reason to edit:
             let is_definition_assignment = snippet
                 .outline_node_content
                 .outline_node_type()
-                .is_definition_assigument();
+                .is_definition_assignment();
             if is_function || is_definition_assignment {
                 let function_body = snippet.to_xml();
                 Some((
@@ -1492,6 +1511,7 @@ Reason to edit:
                 ))
             } else {
                 let implementations = self.get_implementations().await;
+                println!("mecha_code_symbol_thinking::implementations_for_symbol::({:?})::symbol({})", &implementations, self.symbol_name());
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
                 // Now we need to format this properly and send it back over to the LLM
                 let snippet_xml = snippets_ref.iter().enumerate().map(|(idx, snippet)| {
@@ -1500,7 +1520,7 @@ Reason to edit:
                     let end_line = snippet.range().end_line();
                     let location = format!("{}:{}-{}", file_path, start_line, end_line);
                     let language = snippet.language();
-                    let content = snippet.content();
+                    let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
                     format!(
                         r#"<rerank_entry>
 <id>
@@ -1575,7 +1595,7 @@ Reason to edit:
             let is_definition_assignment = snippet
                 .outline_node_content
                 .outline_node_type()
-                .is_definition_assigument();
+                .is_definition_assignment();
             if is_function || is_definition_assignment {
                 let function_body = snippet.to_xml();
                 Some((

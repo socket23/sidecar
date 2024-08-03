@@ -12,6 +12,7 @@ pub struct SymbolToEdit {
     is_new: bool,
     // If this is a full symbol edit instead of being sub-symbol level
     is_full_edit: bool,
+    original_user_query: String,
 }
 
 impl SymbolToEdit {
@@ -23,6 +24,7 @@ impl SymbolToEdit {
         outline: bool,
         is_new: bool,
         is_full_edit: bool,
+        original_user_query: String,
     ) -> Self {
         Self {
             symbol_name,
@@ -32,7 +34,12 @@ impl SymbolToEdit {
             instructions,
             is_new,
             is_full_edit,
+            original_user_query,
         }
+    }
+
+    pub fn original_user_query(&self) -> &str {
+        &self.original_user_query
     }
 
     pub fn is_full_edit(&self) -> bool {

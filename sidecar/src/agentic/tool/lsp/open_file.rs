@@ -3,6 +3,7 @@ use crate::{
     chunking::text_document::Range,
 };
 use async_trait::async_trait;
+use gix::bstr::ByteSlice;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFileRequest {
@@ -67,6 +68,23 @@ impl OpenFileResponse {
                 .collect::<Vec<String>>()
                 .join("\n")
                 .into()
+        }
+    }
+
+    /// Grabs the content in a range using the byte offset
+    pub fn content_in_ranges_exact(&self, range: &Range) -> Option<String> {
+        if !self.exists {
+            None
+        } else {
+            let bytes_len = self.file_contents.as_bytes().len();
+            if range.start_byte() < bytes_len && range.end_byte() < bytes_len {
+                self.file_contents.as_bytes()[range.start_byte()..range.end_byte()]
+                    .to_str()
+                    .map(|s| s.to_owned())
+                    .ok()
+            } else {
+                None
+            }
         }
     }
 }

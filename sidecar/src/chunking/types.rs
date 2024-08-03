@@ -112,7 +112,7 @@ impl OutlineNodeType {
             || matches!(self, OutlineNodeType::FunctionParameterIdentifier)
     }
 
-    pub fn is_definition_assigument(&self) -> bool {
+    pub fn is_definition_assignment(&self) -> bool {
         matches!(self, OutlineNodeType::DefinitionAssignment)
     }
 
@@ -610,6 +610,10 @@ impl OutlineNode {
                             } else {
                                 Some(content)
                             }
+                        })
+                        .filter(|content| {
+                            // only keep lines which are not empty over here
+                            !content.is_empty()
                         })
                         .collect::<Vec<_>>()
                         .join("\n");

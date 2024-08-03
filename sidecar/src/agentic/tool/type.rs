@@ -79,6 +79,8 @@ pub enum ToolType {
     ApplyOutlineEditToRange,
     // Big search
     BigSearch,
+    // Filter edit operation
+    FilterEditOperation,
 }
 
 impl std::fmt::Display for ToolType {
@@ -136,6 +138,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ApplyOutlineEditToRange => write!(f, "Apply outline edit to range"),
             ToolType::ImportantFilesFinder => write!(f, "Important files finder"),
             ToolType::BigSearch => write!(f, "Big search"),
+            ToolType::FilterEditOperation => write!(f, "Filter edit operation"),
         }
     }
 }

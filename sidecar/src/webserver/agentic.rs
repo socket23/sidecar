@@ -3,7 +3,7 @@
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::StreamExt;
-use llm_client::provider::{GoogleAIStudioKey, OpenAIProvider};
+use llm_client::provider::{FireworksAPIKey, GoogleAIStudioKey, OpenAIProvider};
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -348,6 +348,22 @@ pub async fn code_editing(
             active_window_data.language,
         );
     }
+
+    let fs_file_path = "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned();
+    let file_bytes = tokio::fs::read(fs_file_path.to_owned())
+        .await
+        .expect("to work");
+    let file_content = String::from_utf8(file_bytes).expect("to work");
+    user_context =
+        user_context.update_file_content_map(fs_file_path, file_content, "rust".to_owned());
+
+    let _llama_70b_properties = LLMProperties::new(
+        LLMType::Llama3_1_70bInstruct,
+        LLMProvider::FireworksAI,
+        LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+            "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+        )),
+    );
 
     let model = LLMType::ClaudeSonnet;
     let provider_type = LLMProvider::Anthropic;

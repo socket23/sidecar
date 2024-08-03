@@ -44,7 +44,7 @@ async fn main() {
         LLMProvider::Anthropic,
         anthropic_api_keys.clone(),
     );
-    let llama_70b_properties = LLMProperties::new(
+    let _llama_70b_properties = LLMProperties::new(
         LLMType::Llama3_1_70bInstruct,
         LLMProvider::FireworksAI,
         LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
@@ -80,31 +80,34 @@ async fn main() {
     ));
 
     // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
-    // let file_path =
-    //     "/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned();
-    // let file_path =
-    //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
-    //         .to_owned();
+    let file_paths =
+        vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
+    // let file_paths = vec![
+    //     "/Users/skcd/test_repo/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
+    //         .to_owned(),
+    // ];
     // let file_path =
     //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned();
     // let file_paths = vec![
-    //     "/Users/zi/codestory/testing/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
-    //     "/Users/zi/codestory/testing/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
+    //     "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
+    //     "/Users/skcd/test_repo/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
     // ];
-    // let file_content_value = stream::iter(file_paths)
-    //     .map(|file_path| async move {
-    //         let file_content = String::from_utf8(
-    //             tokio::fs::read(file_path.to_owned())
-    //                 .await
-    //                 .expect("to work"),
-    //         )
-    //         .expect("to work");
-    //         FileContentValue::new(file_path, file_content, "rust".to_owned())
-    //     })
-    //     .buffer_unordered(2)
-    //     .collect::<Vec<_>>()
-    //     .await;
+    // let file_paths =
+    //     vec!["/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs".to_owned()];
+    let file_content_value = stream::iter(file_paths)
+        .map(|file_path| async move {
+            let file_content = String::from_utf8(
+                tokio::fs::read(file_path.to_owned())
+                    .await
+                    .expect("to work"),
+            )
+            .expect("to work");
+            FileContentValue::new(file_path, file_content, "rust".to_owned())
+        })
+        .buffer_unordered(2)
+        .collect::<Vec<_>>()
+        .await;
 
     let user_context = UserContext::new(vec![], vec![], None, vec![]);
 
@@ -127,18 +130,16 @@ async fn main() {
     // let problem_statement =
     //     "can you add another provider for grok for me we just need an api_key?".to_owned();
     // let problem_statement = "Add comments to RequestEvents".to_owned();
-    // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
+    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
-    let problem_statement =
-        r#"Rule L060 could give a specific error message At the moment rule L060 flags something like this: ``` L: 21 | P: 9 | L060 | Use 'COALESCE' instead of 'IFNULL' or 'NVL'. ``` Since we likely know the wrong word, it might be nice to actually flag that instead of both `IFNULL` and `NVL` - like most of the other rules do. That is it should flag this: ``` L: 21 | P: 9 | L060 | Use 'COALESCE' instead of 'IFNULL'. ``` Or this: ``` L: 21 | P: 9 | L060 | Use 'COALESCE' instead of 'NVL'. ``` As appropriate. What do you think @jpy-git ?"#
-            .to_owned();
+    // let problem_statement =
+    //     "Add support for a new stop_code_editing endpoint and implement it similar to probing stop and add the endpoint"
+    //         .to_owned();
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
     //         .to_owned();
-
-    let root_dir = "/Users/zi/codestory/testing/sqlfluff/src/sqlfluff".to_owned();
-
+    // let problem_statement = "Add support for mixtral model to LLMType".to_owned();
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,
@@ -154,11 +155,13 @@ async fn main() {
         None,
         None,
         None,
-        true,
-        true,
-        Some(root_dir),
-        Some(llama_70b_properties),
+        true, // full code editing
         false,
+        None,
+        None,
+        false,
+        false,
+        // Some(llama_70b_properties),
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

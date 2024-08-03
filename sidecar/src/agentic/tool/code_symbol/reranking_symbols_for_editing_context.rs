@@ -395,9 +395,9 @@ InitialRequestData
 
 {code_above}
 {code_below}
-<code_in_selection>
+<code_snippet_to_edit>
 {code_interested}
-</code_in_selection>
+</code_snippet_to_edit>
 
 <code_symbol_outline_list>
 {outline_nodes}

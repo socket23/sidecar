@@ -4728,28 +4728,6 @@ We will need to first check the LLMType if it has support for grok or we need to
 </step_list>
 <step_list>
 <name>
-FillInMiddleFormatter
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
-<step>
-Check the definition of `FillInMiddleFormatter` to see how to implement it
-</step>
-</step_list>
-<step_list
-<name>
-CodeLlamaFillInMiddleFormatter
-</name>
-<file_path>
-/broker/fill_in_middle.rs
-</file_path>
-<step>
-We can follow the implementation of CodeLlamaFillInMiddleFormatter since we will also have to follow a similar pattern of making changes and adding it to the right places if there are more.
-</step>
-</step_list>
-<step_list>
-<name>
 GrokFillInMiddleFormatter
 </name>
 <file_path>

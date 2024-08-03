@@ -1,6 +1,7 @@
 //! Contains the output of a tool which can be used by any of the callers
 
 use super::{
+    code_edit::filter_edit::FilterEditOperationResponse,
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRangeResponse,
         correctness::CodeCorrectnessAction,
@@ -133,9 +134,15 @@ pub enum ToolOutput {
     ReRankedCodeSnippetsForCodeEditing(ReRankingSnippetsForCodeEditingResponse),
     // Apply outline edits to the range
     ApplyOutlineEditsToRange(ApplyOutlineEditsToRangeResponse),
+    // Filter the edit operations and its reponse
+    FilterEditOperation(FilterEditOperationResponse),
 }
 
 impl ToolOutput {
+    pub fn filter_edit_operation(response: FilterEditOperationResponse) -> Self {
+        ToolOutput::FilterEditOperation(response)
+    }
+
     pub fn apply_outline_edits_to_range(response: ApplyOutlineEditsToRangeResponse) -> Self {
         ToolOutput::ApplyOutlineEditsToRange(response)
     }
@@ -259,6 +266,14 @@ impl ToolOutput {
     pub fn get_editor_apply_response(self) -> Option<EditorApplyResponse> {
         match self {
             ToolOutput::EditorApplyChanges(output) => Some(output),
+            _ => None,
+        }
+    }
+
+    /// Grabs the output of filter edit operations from the ToolOutput
+    pub fn get_filter_edit_operation_output(self) -> Option<FilterEditOperationResponse> {
+        match self {
+            ToolOutput::FilterEditOperation(output) => Some(output),
             _ => None,
         }
     }

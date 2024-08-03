@@ -58,4 +58,7 @@ pub enum SymbolError {
 
     #[error("Full symbol edit failure: {0}")]
     SymbolError(String),
+
+    #[error("Edit not required: {0}")]
+    EditNotRequired(String),
 }

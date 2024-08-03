@@ -4,11 +4,16 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
+use llm_client::provider::{
+    FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider,
+};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::split_file_content_into_parts;
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
+use crate::agentic::tool::code_edit::filter_edit::{
+    FilterEditOperationRequest, FilterEditOperationResponse,
+};
 use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionRequest;
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
@@ -127,6 +132,62 @@ impl ToolBox {
         }
     }
 
+    /// Adds a new empty line at the end of the file and returns the start position
+    /// of the newly added line
+    pub async fn add_empty_line_end_of_file(
+        &self,
+        fs_file_path: &str,
+        request_id: &str,
+    ) -> Result<Position, SymbolError> {
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let file_lines = file_contents
+            .contents_ref()
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>();
+        match file_lines.last() {
+            Some(last_line) => {
+                if last_line.is_empty() {
+                    // if we have an empty line then its safe to just keep this
+                    Ok(Position::new(file_lines.len() - 1, 0, 0))
+                } else {
+                    // we want to insert a new line over here
+                    let edit_range = Range::new(
+                        Position::new(file_lines.len() - 1, 0, 0),
+                        Position::new(file_lines.len() - 1, last_line.chars().count(), 0),
+                    );
+                    let _ = self
+                        .apply_edits_to_editor(
+                            &fs_file_path,
+                            &edit_range,
+                            &format!("{}\n", last_line),
+                            request_id,
+                        )
+                        .await;
+                    // now that we have inserted a new line it should be safe to send
+                    // over the file_lines.len() as the position where we want to
+                    // insert the code
+                    Ok(Position::new(file_lines.len(), 0, 0))
+                }
+            }
+            None => {
+                // if we have no lines in the file, then we can just add an empty
+                // string over here
+                let _ = self
+                    .apply_edits_to_editor(
+                        fs_file_path,
+                        &Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                        "",
+                        request_id,
+                    )
+                    .await?;
+                Ok(Position::new(0, 0, 0))
+            }
+        }
+    }
+
+    /// Returns the position of the last line and also returns if this line is
+    /// empty (which would make it safe for code editing)
     pub async fn get_last_position_in_file(
         &self,
         fs_file_path: &str,
@@ -137,9 +198,8 @@ impl ToolBox {
             .contents_ref()
             .lines()
             .into_iter()
-            .collect::<Vec<_>>()
-            .len();
-        Ok(Position::new(file_lines - 1, 0, 0))
+            .collect::<Vec<_>>();
+        Ok(Position::new(file_lines.len() - 1, 0, 0))
     }
 
     // TODO(codestory): This needs more love, the position we are getting back
@@ -284,7 +344,7 @@ impl ToolBox {
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    async fn find_import_nodes(
+    pub async fn find_import_nodes(
         &self,
         fs_file_path: &str,
         request_id: &str,
@@ -299,12 +359,17 @@ impl ToolBox {
         let import_identifiers = language_config.generate_import_identifiers_fresh(source_code);
         // Now we do the dance where we go over the hoverable nodes and only look at the ranges which overlap
         // with the import identifiers
-        let clickable_imports = import_identifiers
+        let clickable_imports = hoverable_nodes
             .into_iter()
-            .filter(|(_, import_range)| {
-                hoverable_nodes
+            .filter(|hoverable_node| {
+                import_identifiers
                     .iter()
-                    .any(|hoverable_range| hoverable_range.contains(import_range))
+                    .any(|(_, import_identifier)| import_identifier.contains(&hoverable_node))
+            })
+            .filter_map(|hoverable_node_range| {
+                file_contents
+                    .content_in_ranges_exact(&hoverable_node_range)
+                    .map(|content| (content, hoverable_node_range))
             })
             .collect::<Vec<_>>();
         Ok(clickable_imports)
@@ -318,15 +383,24 @@ impl ToolBox {
         &self,
         fs_file_path: &str,
         request_id: &str,
-    ) -> Result<Vec<String>, SymbolError> {
-        let clickable_import_range = self
-            .find_import_nodes(fs_file_path, request_id)
+        // returns the Vec<files_on_the_local_graph>, Vec<outline_nodes_symbol_filter>)
+        // this allows us to get the local graph of the files which are related
+        // to the current file and the outline nodes which we can include
+    ) -> Result<(Vec<String>, Vec<String>), SymbolError> {
+        let mut clickable_import_range = vec![];
+        // the name of the outline nodes which we can include when we are looking
+        // at the imports, this prevents extra context or nodes from slipping in
+        // and only includes the local code graph
+        let mut outline_node_name_filter = vec![];
+        self.find_import_nodes(fs_file_path, request_id)
             .await?
             .into_iter()
-            .map(|(_, range)| range)
-            .collect::<Vec<_>>();
+            .for_each(|(import_node_name, range)| {
+                clickable_import_range.push(range);
+                outline_node_name_filter.push(import_node_name)
+            });
         // Now we execute a go-to-definition request on all the imports
-        let definition_files = stream::iter(clickable_import_range)
+        let definition_files = stream::iter(clickable_import_range.to_vec())
             .map(|range| async move {
                 let go_to_definition = self
                     .go_to_definition(fs_file_path, range.end_position(), request_id)
@@ -337,18 +411,69 @@ impl ToolBox {
                         .into_iter()
                         .map(|definition| definition.file_path().to_owned())
                         .collect::<Vec<_>>(),
-                    Err(_e) => vec![],
+                    Err(e) => {
+                        println!("get_imported_files::error({:?})", e);
+                        vec![]
+                    }
                 }
             })
             .buffer_unordered(4)
             .collect::<Vec<_>>()
-            .await
+            .await;
+        let implementation_files = stream::iter(clickable_import_range)
+            .map(|range| async move {
+                let go_to_implementations = self
+                    .go_to_implementations_exact(fs_file_path, &range.end_position(), request_id)
+                    .await;
+                match go_to_implementations {
+                    Ok(go_to_implementations) => go_to_implementations
+                        .get_implementation_locations_vec()
+                        .into_iter()
+                        .map(|implementation| implementation.fs_file_path().to_owned())
+                        .collect::<Vec<_>>(),
+                    Err(e) => {
+                        println!("get_imported_files::go_to_implementation::error({:?})", e);
+                        vec![]
+                    }
+                }
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+        // combine the definition and implementation files together to get the local
+        // code graph
+        Ok((
+            definition_files
+                .into_iter()
+                .flatten()
+                .chain(implementation_files.into_iter().flatten())
+                .collect::<HashSet<String>>()
+                .into_iter()
+                .collect(),
+            outline_node_name_filter,
+        ))
+    }
+
+    /// Compresses the symbol by removing function content if its present
+    /// and leaves an outline which we can work on top of
+    pub fn get_compressed_symbol_view(&self, content: &str, file_path: &str) -> String {
+        let language_parsing = self.editor_parsing.for_file_path(file_path);
+        if let None = language_parsing {
+            return content.to_owned();
+        }
+        let language_parsing = language_parsing.expect("if let None to hold");
+        let outlines = language_parsing.generate_outline_fresh(content.as_bytes(), file_path);
+        if outlines.is_empty() {
+            return content.to_owned();
+        }
+        let compressed_outlines = outlines
             .into_iter()
-            .flatten()
-            .collect::<HashSet<String>>()
-            .into_iter()
-            .collect::<Vec<String>>();
-        Ok(definition_files)
+            .filter_map(|outline| outline.get_outline_node_compressed())
+            .collect::<Vec<_>>();
+        if compressed_outlines.is_empty() {
+            return content.to_owned();
+        }
+        compressed_outlines.join("\n")
     }
 
     /// ReRanking the outline nodes which we have to gather context for the code
@@ -358,8 +483,76 @@ impl ToolBox {
         sub_symbol: &SymbolToEdit,
         request_id: &str,
     ) -> Result<Vec<String>, SymbolError> {
+        let current_file_outline_nodes: Vec<_> = self
+            .get_outline_nodes(sub_symbol.fs_file_path(), request_id)
+            .await
+            .unwrap_or_default();
+
+        // Keep a list of symbol names which we should include and filter the outline
+        // nodes against this
+        let symbol_filter = current_file_outline_nodes
+            .iter()
+            .map(|outline_node| outline_node.name().to_owned())
+            .collect::<Vec<_>>();
+
+        // Always include the current file in the surrounding files from symbols in file
+        // this is necessary to make sure that the LLM can gather the context from the current
+        // file as well (even if its just outline, preventing it from assuming some functions
+        // do not exist)
+        let surrounding_files_from_symbols_in_file = stream::iter(current_file_outline_nodes)
+            .map(|outline_node| async move {
+                let definitions = self
+                    .go_to_definition(
+                        outline_node.fs_file_path(),
+                        outline_node.range().end_position(),
+                        request_id,
+                    )
+                    .await;
+                let implementations = self
+                    .go_to_implementations_exact(
+                        outline_node.fs_file_path(),
+                        &outline_node.range().end_position(),
+                        request_id,
+                    )
+                    .await;
+                let mut files_to_visit = vec![];
+                if let Ok(definitions) = definitions {
+                    files_to_visit.extend(
+                        definitions
+                            .definitions()
+                            .into_iter()
+                            .map(|definition| definition.file_path().to_owned()),
+                    );
+                }
+                if let Ok(implementations) = implementations {
+                    files_to_visit.extend(
+                        implementations
+                            .get_implementation_locations_vec()
+                            .into_iter()
+                            .map(|implementation| implementation.fs_file_path().to_owned()),
+                    );
+                }
+                files_to_visit
+            })
+            .buffer_unordered(4)
+            .collect::<HashSet<_>>()
+            .await
+            .into_iter()
+            .flatten()
+            .chain(vec![sub_symbol.fs_file_path().to_owned()])
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        // we also want to check the implementations for the outline nodes which we are getting here
+        // so we have the total picture of the nodes which we should be using
         let local_code_graph = self
-            .local_code_graph(sub_symbol.fs_file_path(), request_id)
+            .local_code_graph(
+                sub_symbol.fs_file_path(),
+                request_id,
+                surrounding_files_from_symbols_in_file,
+                symbol_filter,
+            )
             .await?;
 
         let outline_nodes_for_query = local_code_graph
@@ -382,21 +575,21 @@ impl ToolBox {
             .await?;
         let file_contents = file_contents.contents();
         let range = sub_symbol.range();
-        let (above, below, in_selection) = split_file_content_into_parts(&file_contents, range);
+        let (_, _, in_selection) = split_file_content_into_parts(&file_contents, range);
         let user_query = sub_symbol.instructions().join("\n");
         let tool_input = ToolInput::ReRankingCodeSnippetsForEditing(
             ReRankingSnippetsForCodeEditingRequest::new(
                 outline_nodes_for_query.to_vec(),
-                above,
-                below,
+                None,
+                None,
                 in_selection,
                 sub_symbol.fs_file_path().to_owned(),
                 user_query,
                 LLMProperties::new(
-                    LLMType::Gpt4O,
-                    LLMProvider::OpenAI,
-                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                        "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                    LLMType::GeminiProFlash,
+                    LLMProvider::GoogleAIStudio,
+                    LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                     )),
                 ),
                 self.root_request_id.to_owned(),
@@ -447,19 +640,45 @@ impl ToolBox {
         &self,
         fs_file_path: &str,
         request_id: &str,
+        extra_files_to_include: Vec<String>,
+        symbol_filter: Vec<String>,
     ) -> Result<Vec<OutlineNode>, SymbolError> {
-        let imported_files = self.get_imported_files(fs_file_path, request_id).await?;
-        let outline_nodes = stream::iter(imported_files)
-            .map(
-                |imported_file| async move { self.get_outline_nodes_grouped(&imported_file).await },
-            )
-            .buffer_unordered(5)
-            .collect::<Vec<_>>()
-            .await
+        let (imported_files, outline_nodes_filter) =
+            self.get_imported_files(fs_file_path, request_id).await?;
+
+        let final_outline_nodes_filter = outline_nodes_filter
             .into_iter()
-            .filter_map(|s| s)
-            .flatten()
-            .collect::<Vec<_>>();
+            .chain(symbol_filter.into_iter())
+            .collect::<HashSet<String>>();
+        let outline_nodes = stream::iter(
+            imported_files
+                .into_iter()
+                .chain(extra_files_to_include)
+                .collect::<HashSet<String>>(),
+        )
+        .map(|imported_file| async move {
+            let file_open_response = self.file_open(imported_file.to_owned(), request_id).await;
+            if let Ok(file_open_response) = file_open_response {
+                let _ = self
+                    .force_add_document(
+                        &imported_file,
+                        file_open_response.contents_ref(),
+                        file_open_response.language(),
+                    )
+                    .await;
+            }
+            self.get_outline_nodes_grouped(&imported_file).await
+        })
+        .buffer_unordered(5)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .flatten()
+        // filter to only include the ouline nodes which we know of, not including
+        // the whole world
+        .filter(|outline_node| final_outline_nodes_filter.contains(outline_node.name()))
+        .collect::<Vec<_>>();
         Ok(outline_nodes)
     }
 
@@ -3364,27 +3583,7 @@ instruction:
 
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
 
-            // TODO(codestory): just make this branch false so we always use
-            // the previous flow
-            let symbol_to_edit = if should_apply_code_changes_for_addition {
-                // what we are doing here is getting the edited range and then using
-                // that to figure out where to invoke code correctness
-                // the catch here is that when doing code addition we might end up creating
-                // more code than required.
-                // we plan on doing the following:
-                // grabbing the symbols which are present after doing code correctness
-                // and checking if there are complete symbols present in it
-                // if thats the case we can apply the changes by ourselves over here
-                // we still need a range to check so for that we can find the changed
-                // symbol which belongs in the range of the parent symbol we are interested
-                // in which has been changed and use that to check for code correctness
-                // LLM will never generate code which is not correct when doing code-addition
-                // is the assumption we are going for
-                // we want to return here the symbol to edit
-                println!(
-                    "tool_box::check_code_correctness::code_addition::file_wide_edits::({})",
-                    parent_symbol_name
-                );
+            if should_apply_code_changes_for_addition {
                 let _ = self
                     .apply_code_changes_code_addition(
                         edited_code,
@@ -3393,11 +3592,11 @@ instruction:
                         request_id,
                     )
                     .await;
-                // we should run the code correctness operation here for the code
-                // addition, but for now we can skip it
-                println!("too_box::check_code_correctness::code_addition::skipping_on_codebase_wide_edits({})", parent_symbol_name);
-                return Ok(());
-            } else {
+            }
+
+            // TODO(codestory): just make this branch false so we always use
+            // the previous flow
+            let symbol_to_edit = {
                 let symbol_to_edit_range = self
                     .find_sub_symbol_to_edit_with_name(
                         parent_symbol_name,
@@ -4206,7 +4405,7 @@ instruction:
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    async fn apply_edits_to_editor(
+    pub async fn apply_edits_to_editor(
         &self,
         fs_file_path: &str,
         range: &Range,
@@ -4475,6 +4674,43 @@ instruction:
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    /// Used to make sure if the edit request should proceed as planned or we
+    /// are already finished with the edit request
+    pub async fn should_edit_symbol(
+        &self,
+        symbol_to_edit: &SymbolToEdit,
+        symbol_content: &str,
+        request_id: &str,
+    ) -> Result<FilterEditOperationResponse, SymbolError> {
+        let tool_input = ToolInput::FilterEditOperation(FilterEditOperationRequest::new(
+            symbol_content.to_owned(),
+            symbol_to_edit.symbol_name().to_owned(),
+            symbol_to_edit.fs_file_path().to_owned(),
+            symbol_to_edit.original_user_query().to_owned(),
+            symbol_to_edit.instructions().to_vec().join("\n"),
+            LLMProperties::new(
+                LLMType::Llama3_1_8bInstruct,
+                LLMProvider::FireworksAI,
+                LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+                    "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+                )),
+            ),
+            self.root_request_id.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            tool_input.clone(),
+        ));
+        let output = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_filter_edit_operation_output()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(output)
+    }
+
     // This helps us find the snippet for the symbol in the file, this is the
     // best way to do this as this is always exact and we never make mistakes
     // over here since we are using the LSP as well
@@ -4564,7 +4800,7 @@ instruction:
         important_symbols: CodeSymbolImportantResponse,
         user_context: UserContext,
         request_id: &str,
-    ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
+    ) -> Result<Vec<(MechaCodeSymbolThinking, Vec<String>)>, SymbolError> {
         let ordered_symbols = important_symbols.ordered_symbols();
         stream::iter(
             ordered_symbols
@@ -4585,7 +4821,7 @@ instruction:
         })
         .await;
 
-        let mut mecha_code_symbols: Vec<MechaCodeSymbolThinking> = vec![];
+        let mut mecha_code_symbols: Vec<(MechaCodeSymbolThinking, Vec<String>)> = vec![];
         for symbol in ordered_symbols.into_iter() {
             let file_path = symbol.file_path();
             let symbol_name = symbol.code_symbol();
@@ -4596,21 +4832,24 @@ instruction:
                     .find(|outline_node| outline_node.content().content().contains(symbol_name));
                 if let Some(outline_node) = possible_outline_nodes {
                     let outline_node_content = outline_node.content();
-                    mecha_code_symbols.push(MechaCodeSymbolThinking::new(
-                        outline_node.name().to_owned(),
-                        vec![],
-                        false,
-                        outline_node.fs_file_path().to_owned(),
-                        Some(Snippet::new(
-                            outline_node_content.name().to_owned(),
-                            outline_node_content.range().clone(),
-                            outline_node_content.fs_file_path().to_owned(),
-                            outline_node_content.content().to_owned(),
-                            outline_node_content.clone(),
-                        )),
-                        vec![],
-                        user_context.clone(),
-                        Arc::new(self.clone()),
+                    mecha_code_symbols.push((
+                        MechaCodeSymbolThinking::new(
+                            outline_node.name().to_owned(),
+                            vec![],
+                            false,
+                            outline_node.fs_file_path().to_owned(),
+                            Some(Snippet::new(
+                                outline_node_content.name().to_owned(),
+                                outline_node_content.range().clone(),
+                                outline_node_content.fs_file_path().to_owned(),
+                                outline_node_content.content().to_owned(),
+                                outline_node_content.clone(),
+                            )),
+                            vec![],
+                            user_context.clone(),
+                            Arc::new(self.clone()),
+                        ),
+                        symbol.steps().to_vec(),
                     ));
                 }
             }
@@ -4709,8 +4948,10 @@ instruction:
         important_symbols: &CodeSymbolImportantResponse,
         user_context: UserContext,
         request_id: &str,
-    ) -> Result<Vec<MechaCodeSymbolThinking>, SymbolError> {
-        let symbols = important_symbols.symbols();
+        // returning the mecha code symbol along with the steps we want to take
+        // for that symbol
+    ) -> Result<Vec<(MechaCodeSymbolThinking, Vec<String>)>, SymbolError> {
+        let symbols = important_symbols.ordered_symbols();
         // let ordered_symbols = important_symbols.ordered_symbols();
         // there can be overlaps between these, but for now its fine
         // let mut new_symbols: HashSet<String> = Default::default();
@@ -4731,15 +4972,20 @@ instruction:
                         file_open_response.language(),
                     )
                     .await;
+            } else {
+                println!(
+                    "tool_box::important_symbols::file_open_response_error({})",
+                    file_path
+                );
             }
         })
         .await;
 
         let mut bounding_symbol_to_instruction: HashMap<
             OutlineNodeContent,
-            Vec<(usize, &CodeSymbolWithThinking)>,
+            Vec<(usize, &CodeSymbolWithSteps)>,
         > = Default::default();
-        let mut unbounded_symbols: Vec<&CodeSymbolWithThinking> = Default::default();
+        let mut unbounded_symbols: Vec<(usize, &CodeSymbolWithSteps)> = Default::default();
         for (idx, symbol) in symbols.iter().enumerate() {
             let file_path = symbol.file_path();
             let symbol_name = symbol.code_symbol();
@@ -4749,7 +4995,7 @@ instruction:
                     self.grab_bounding_symbol_for_symbol(outline_nodes, symbol_name);
                 if bounding_symbols.is_empty() {
                     // well this is weird, we have not outline nodes here
-                    unbounded_symbols.push(symbol);
+                    unbounded_symbols.push((idx, symbol));
                 } else {
                     let outline_node = bounding_symbols.remove(0);
                     if bounding_symbol_to_instruction.contains_key(&outline_node) {
@@ -4791,7 +5037,7 @@ instruction:
             );
             let mut ordered_values = order_vec
                 .into_iter()
-                .map(|(idx, _)| idx)
+                .map(|(idx, code_symbol_with_steps)| (idx, code_symbol_with_steps.steps().to_vec()))
                 .collect::<Vec<_>>();
             // sort by the increasing values of orderes
             ordered_values.sort();
@@ -4802,11 +5048,40 @@ instruction:
             }
         }
 
+        // Now for all the symbols which are new or unbounded by any other symbol right now
+        // we need to also add them inside properly
+        println!(
+            "tool_box::important_symbols::unbounded_symbols::({})::len({})",
+            unbounded_symbols
+                .iter()
+                .map(|(_, symbol)| symbol.code_symbol().to_owned())
+                .collect::<Vec<_>>()
+                .join(","),
+            unbounded_symbols.len()
+        );
+        unbounded_symbols
+            .iter()
+            .for_each(|(ordered_value, code_symbol_with_steps)| {
+                mecha_code_symbols.push((
+                    (*ordered_value, code_symbol_with_steps.steps().to_vec()),
+                    MechaCodeSymbolThinking::new(
+                        code_symbol_with_steps.code_symbol().to_owned(),
+                        code_symbol_with_steps.steps().to_vec(),
+                        true,
+                        code_symbol_with_steps.file_path().to_owned(),
+                        None,
+                        vec![],
+                        user_context.clone(),
+                        Arc::new(self.clone()),
+                    ),
+                ));
+            });
+
         // Now we iterate over all the values in the array and then sort them via the first key
         mecha_code_symbols.sort_by_key(|(idx, _)| idx.clone());
         Ok(mecha_code_symbols
             .into_iter()
-            .map(|(_, symbol)| symbol)
+            .map(|((_, steps), symbol)| (symbol, steps))
             .collect())
     }
 

@@ -4,6 +4,12 @@ use crate::agentic::tool::code_edit::types::CodeEdit;
 
 use super::broker::{CodeEditPromptFormatters, CodeSnippetForEditing};
 
+/// How many lines above the selection can we show to the llm
+/// this is used to truncate the size of the context we show the llm when its
+/// making edits, since we will grab the correct context required almost always
+/// with our definitions
+const SURROUNDING_CONTEXT_LIMIT: usize = 200;
+
 pub struct AnthropicCodeEditFromatter {}
 
 impl AnthropicCodeEditFromatter {
@@ -38,6 +44,8 @@ Follow the user's requirements carefully and to the letter.
 - Your reply should be contained in the <reply> tags.
 - Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
+- You are not allowed to do edits which fall in the following bucket:
+- - Renaming: We do not allow renaming since the user has explicitly asked us to never change the name of any of the class, enum, type, method or function.
 - - If most of the code is the same, then leave a comment stating that it is the same code (do not write code which is the same)
 {symbol_to_edit_instruction}
 
@@ -404,8 +412,29 @@ Notice how we rewrote the whole section of the code and only the portion which w
 
     fn user_message_for_code_editing(&self, context: &CodeEdit) -> String {
         let extra_data = self.extra_data(context.extra_content());
-        let above = self.above_selection(context.above_context());
-        let below = self.below_selection(context.below_context());
+        let above = self.above_selection(
+            context
+                .above_context()
+                .map(|code_above| {
+                    // limit it to 100 lines from the start
+                    let mut lines = code_above.lines().collect::<Vec<_>>();
+                    lines.reverse();
+                    lines.truncate(SURROUNDING_CONTEXT_LIMIT);
+                    lines.reverse();
+                    lines.join("\n")
+                })
+                .as_deref(),
+        );
+        let below = self.below_selection(
+            context
+                .below_context()
+                .map(|code_below| {
+                    let mut lines = code_below.lines().collect::<Vec<_>>();
+                    lines.truncate(SURROUNDING_CONTEXT_LIMIT / 3);
+                    lines.join("\n")
+                })
+                .as_deref(),
+        );
         let in_range = self.selection_to_edit(context.code_to_edit());
         let mut user_message = "".to_owned();
         user_message = user_message + &extra_data + "\n";

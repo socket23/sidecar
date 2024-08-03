@@ -10,8 +10,8 @@ use crate::{
 
 use super::{
     code_edit::{
-        find::FindCodeSectionsToEdit, models::broker::CodeEditBroker,
-        test_correction::TestCorrection, types::CodeEditingTool,
+        filter_edit::FilterEditOperationBroker, find::FindCodeSectionsToEdit,
+        models::broker::CodeEditBroker, test_correction::TestCorrection, types::CodeEditingTool,
     },
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRange, correctness::CodeCorrectnessBroker,
@@ -314,6 +314,13 @@ impl ToolBroker {
         tools.insert(
             ToolType::ApplyOutlineEditToRange,
             Box::new(ApplyOutlineEditsToRange::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::FilterEditOperation,
+            Box::new(FilterEditOperationBroker::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

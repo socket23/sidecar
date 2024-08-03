@@ -55,6 +55,8 @@ pub enum ToolType {
     ProbeTryHardAnswer,
     // Repo map Search
     RepoMapSearch,
+    // Get important files by inferring from repo tree
+    ImportantFilesFinder,
     // SWE Bench tool endpoint
     SWEBenchToolEndpoint,
     // Test correction
@@ -75,6 +77,8 @@ pub enum ToolType {
     ReRankingCodeSnippetsForCodeEditingContext,
     // Apply the outline of the changes to the range we are interested in
     ApplyOutlineEditToRange,
+    // Big search
+    BigSearch,
     // Filter edit operation
     FilterEditOperation,
 }
@@ -132,6 +136,8 @@ impl std::fmt::Display for ToolType {
                 write!(f, "ReRanking code snippets for code editing")
             }
             ToolType::ApplyOutlineEditToRange => write!(f, "Apply outline edit to range"),
+            ToolType::ImportantFilesFinder => write!(f, "Important files finder"),
+            ToolType::BigSearch => write!(f, "Big search"),
             ToolType::FilterEditOperation => write!(f, "Filter edit operation"),
         }
     }

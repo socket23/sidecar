@@ -26,6 +26,7 @@ use super::{
     },
     editor::apply::EditorApply,
     errors::ToolError,
+    file::file_finder::ImportantFilesFinderBroker,
     filtering::broker::CodeToEditFormatterBroker,
     grep::file::FindInFile,
     input::ToolInput,
@@ -218,6 +219,13 @@ impl ToolBroker {
         tools.insert(
             ToolType::RepoMapSearch,
             Box::new(RepoMapSearchBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::ImportantFilesFinder,
+            Box::new(ImportantFilesFinderBroker::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

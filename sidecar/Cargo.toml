@@ -74,6 +74,7 @@ fancy-regex = "0.12.0"
 petgraph = { version = "0.6.5", default-features = false, features = ["serde-1", "stable_graph"] }
 bincode = "1.3.3"
 tempfile = "3.3.0"
+csv = "1.1"
 
 llm_client = { path = "../llm_client" }
 llm_prompts = { path = "../llm_prompts" }

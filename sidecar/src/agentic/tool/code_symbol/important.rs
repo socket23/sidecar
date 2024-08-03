@@ -21,6 +21,7 @@ use crate::{
         symbol::identifier::LLMProperties,
         tool::{
             errors::ToolError,
+            file::important::FileImportantResponse,
             input::ToolInput,
             output::ToolOutput,
             r#type::{Tool, ToolType},
@@ -1022,6 +1023,36 @@ pub struct CodeSymbolImportantResponse {
     ordered_symbols: Vec<CodeSymbolWithSteps>,
 }
 
+impl From<FileImportantResponse> for CodeSymbolImportantResponse {
+    fn from(response: FileImportantResponse) -> Self {
+        let symbols: Vec<CodeSymbolWithThinking> = response
+            .file_paths()
+            .iter()
+            .map(|file_path| CodeSymbolWithThinking {
+                code_symbol: String::from(""),
+                thinking: String::from(""),
+                file_path: file_path.clone(),
+            })
+            .collect();
+
+        let ordered_symbols: Vec<CodeSymbolWithSteps> = response
+            .file_paths()
+            .iter()
+            .map(|file_path| CodeSymbolWithSteps {
+                // empty strings as we are only concerned with file_path
+                code_symbol: String::from(""),
+                steps: vec![String::from("")],
+                is_new: false,
+                file_path: file_path.clone(),
+            })
+            .collect();
+
+        Self {
+            symbols,
+            ordered_symbols,
+        }
+    }
+}
 impl CodeSymbolImportantResponse {
     pub fn new(
         symbols: Vec<CodeSymbolWithThinking>,

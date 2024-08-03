@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use serde_xml_rs::from_str;
-use std::sync::Arc;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+use std::{fs::File, sync::Arc};
 use tracing::info;
 
 use llm_client::{
@@ -5257,8 +5260,9 @@ We have to add the newly created endpoint in inline_completion to add support fo
 {user_query}
 </user_query>
 
-Remember your reply should always be contained in <reply> tags and follow the format which we have shown you before in the system message.
-Do not forget to include the <file_path> in your reply"#
+- Remember your reply should always be contained in <reply> tags and follow the format which we have shown you before in the system message.
+- Do not forget to include the <file_path> in your reply
+- Return no more than 20 symbols"#
         )
     }
 }
@@ -5888,9 +5892,16 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
         let system_message =
             LLMClientMessage::system(self.system_message_for_repo_map_search(&request));
         let user_message = LLMClientMessage::user(self.user_message_for_repo_map_search(request));
-        let messages =
-            LLMClientCompletionRequest::new(model, vec![system_message, user_message], 0.2, None);
+        let messages = LLMClientCompletionRequest::new(
+            model,
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let start = Instant::now();
+
         let response = self
             .llm_client
             .stream_completion(
@@ -5899,16 +5910,80 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
                 provider,
                 vec![
                     ("event_type".to_owned(), "repo_map_search".to_owned()),
-                    ("root_id".to_owned(), root_request_id.to_owned()),
+                    ("root_id".to_owned(), root_request_id.clone()),
                 ]
                 .into_iter()
                 .collect(),
                 sender,
             )
             .await?;
-        Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response())
+        let parsed_response =
+            Reply::parse_response(&response).map(|reply| reply.to_code_symbol_important_response());
+
+        let duration = start.elapsed();
+        println!("get_repo_symbols::LLM_response_time: {:?}", duration);
+
+        // writes a trace-safe version of the response
+        if let Ok(ref parsed_response) = parsed_response {
+            let ordered_symbols = parsed_response.ordered_symbols();
+
+            let ordered_symbols_string = ordered_symbols
+                .iter()
+                .map(|symbol| {
+                    // file_path, steps: Vec<String>, code_symbol
+                    format!("{}: {:?}", symbol.file_path(), symbol.steps())
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            // self.write_trace(
+            //     &root_request_id,
+            //     &system_message.content(),
+            //     &user_message.content(),
+            //     &ordered_symbols_string,
+            // );
+        }
+
+        parsed_response
     }
 }
+
+// for swe-bench traces
+
+// impl AnthropicCodeSymbolImportant {
+//     fn write_trace(
+//         &self,
+//         root_request_id: &str,
+//         system_message: &str,
+//         user_message: &str,
+//         response: &str,
+//     ) -> std::io::Result<()> {
+//         let traces_dir_path = PathBuf::from("/Users/zi/codestory/sidecar/traces");
+
+//         let extension = "md";
+//         let safe_id = root_request_id.replace(|c: char| !c.is_alphanumeric(), "_");
+
+//         let file_name = format!("{}.{}", safe_id, extension);
+
+//         let file_path = traces_dir_path.join(file_name);
+
+//         let mut file = File::create(&file_path)
+//             .unwrap_or_else(|_| panic!("Failed to create trace file: {:?}", file_path));
+
+//         writeln!(file, "# [System]")?;
+//         writeln!(file, "{}", system_message)?;
+//         writeln!(file)?;
+
+//         writeln!(file, "# [User]")?;
+//         writeln!(file, "{}", user_message,)?;
+//         writeln!(file)?;
+
+//         writeln!(file, "# [Response]")?;
+//         writeln!(file, "{}", response)?;
+
+//         Ok(())
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

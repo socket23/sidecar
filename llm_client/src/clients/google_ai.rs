@@ -240,10 +240,10 @@ impl LLMClient for GoogleAIStdioClient {
                 ),
             ],
         };
-        println!(
-            "{}",
-            serde_json::to_string(&request).expect("to always work")
-        );
+        // println!(
+        //     "{}",
+        //     serde_json::to_string(&request).expect("to always work")
+        // );
         let _token_count_request = GeminiProTokenCountRequestBody {
             // system_instructions: system_message,
             contents: messages,
@@ -289,7 +289,7 @@ impl LLMClient for GoogleAIStdioClient {
                     .remove(0)
                     .remove("text")
                     .ok_or(LLMClientError::FailedToGetResponse);
-                println!("{:?}", &response);
+                // println!("{:?}", &response);
                 response
             }
         }

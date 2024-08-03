@@ -109,7 +109,7 @@ async fn main() {
         .collect::<Vec<_>>()
         .await;
 
-    let user_context = UserContext::new(vec![], file_content_value, None, vec![]);
+    let user_context = UserContext::new(vec![], vec![], None, vec![]);
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -159,6 +159,8 @@ async fn main() {
         false,
         None,
         None,
+        false,
+        false,
         // Some(llama_70b_properties),
     );
 

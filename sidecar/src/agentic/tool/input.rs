@@ -26,6 +26,7 @@ use super::{
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
+    file::file_finder::ImportantFilesFinderQuery,
     filtering::broker::{
         CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToProbeSubSymbolRequest,
     },
@@ -39,8 +40,9 @@ use super::{
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
-    r#type::ToolType,
+    r#type::{Tool, ToolType},
     rerank::base::ReRankEntriesForBroker,
+    search::types::BigSearchRequest,
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 
@@ -52,7 +54,7 @@ pub enum ToolInput {
     ReRank(ReRankEntriesForBroker),
     CodeSymbolUtilitySearch(CodeSymbolUtilityRequest),
     RequestImportantSymbols(CodeSymbolImportantRequest),
-    RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch),
+    RequestImportantSymbolsCodeWide(CodeSymbolImportantWideSearch),
     GoToDefinition(GoToDefinitionRequest),
     GoToReference(GoToReferencesRequest),
     OpenFile(OpenFileRequest),
@@ -78,6 +80,8 @@ pub enum ToolInput {
     ProbeTryHardAnswerRequest(ProbeTryHardAnswerSymbolRequest),
     // repo map query
     RepoMapSearch(RepoMapSearchQuery),
+    // important files query
+    ImportantFilesFinder(ImportantFilesFinderQuery),
     // SWE Bench tooling
     SWEBenchTest(SWEBenchTestRequest),
     // Test output correction
@@ -99,6 +103,8 @@ pub enum ToolInput {
     ReRankingCodeSnippetsForEditing(ReRankingSnippetsForCodeEditingRequest),
     // Apply the generated code outline to the range we are interested in
     ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest),
+    // Big search
+    BigSearch(BigSearchRequest),
     // checks if the edit operation needs to be performed or is an extra
     FilterEditOperation(FilterEditOperationRequest),
 }
@@ -111,7 +117,7 @@ impl ToolInput {
             ToolInput::FindCodeSnippets(_) => ToolType::FindCodeSnippets,
             ToolInput::ReRank(_) => ToolType::ReRank,
             ToolInput::RequestImportantSymbols(_) => ToolType::RequestImportantSymbols,
-            ToolInput::RequestImportantSybmolsCodeWide(_) => ToolType::FindCodeSymbolsCodeBaseWide,
+            ToolInput::RequestImportantSymbolsCodeWide(_) => ToolType::FindCodeSymbolsCodeBaseWide,
             ToolInput::GoToDefinition(_) => ToolType::GoToDefinitions,
             ToolInput::GoToReference(_) => ToolType::GoToReferences,
             ToolInput::OpenFile(_) => ToolType::OpenFile,
@@ -134,6 +140,7 @@ impl ToolInput {
             ToolInput::ProbeFollowAlongSymbol(_) => ToolType::ProbeFollowAlongSymbol,
             ToolInput::ProbeSummarizeAnswerRequest(_) => ToolType::ProbeSummarizeAnswer,
             ToolInput::RepoMapSearch(_) => ToolType::RepoMapSearch,
+            ToolInput::ImportantFilesFinder(_) => ToolType::ImportantFilesFinder,
             ToolInput::SWEBenchTest(_) => ToolType::SWEBenchToolEndpoint,
             ToolInput::TestOutputCorrection(_) => ToolType::TestCorrection,
             ToolInput::CodeSymbolFollowInitialRequest(_) => {
@@ -152,6 +159,7 @@ impl ToolInput {
                 ToolType::ReRankingCodeSnippetsForCodeEditingContext
             }
             ToolInput::ApplyOutlineEditToRange(_) => ToolType::ApplyOutlineEditToRange,
+            ToolInput::BigSearch(_) => ToolType::BigSearch,
             ToolInput::FilterEditOperation(_) => ToolType::FilterEditOperation,
         }
     }
@@ -319,6 +327,22 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::RepoMapSearch))
+        }
+    }
+
+    pub fn important_files_finder_query(self) -> Result<ImportantFilesFinderQuery, ToolError> {
+        if let ToolInput::ImportantFilesFinder(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ImportantFilesFinder))
+        }
+    }
+
+    pub fn big_search_query(self) -> Result<BigSearchRequest, ToolError> {
+        if let ToolInput::BigSearch(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::BigSearch))
         }
     }
 
@@ -554,7 +578,7 @@ impl ToolInput {
     {
         if let ToolInput::RequestImportantSymbols(request_code_symbol_important) = self {
             Ok(either::Either::Left(request_code_symbol_important))
-        } else if let ToolInput::RequestImportantSybmolsCodeWide(request_code_symbol_important) =
+        } else if let ToolInput::RequestImportantSymbolsCodeWide(request_code_symbol_important) =
             self
         {
             Ok(either::Either::Right(request_code_symbol_important))

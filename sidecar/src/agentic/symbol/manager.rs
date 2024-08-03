@@ -143,7 +143,7 @@ impl SymbolManager {
             .outline_for_user_context(&user_context, &request_id)
             .await;
         let code_wide_search =
-            ToolInput::RequestImportantSybmolsCodeWide(CodeSymbolImportantWideSearch::new(
+            ToolInput::RequestImportantSymbolsCodeWide(CodeSymbolImportantWideSearch::new(
                 user_context.clone(),
                 query.to_owned(),
                 // Hardcoding here, but we can remove this later

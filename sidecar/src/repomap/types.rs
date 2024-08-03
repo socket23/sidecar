@@ -1,20 +1,14 @@
 use std::cmp::min;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
-use futures::{stream, StreamExt};
 
 use crate::chunking::languages::TSLanguageParsing;
 use crate::repomap::tree_context::TreeContext;
 
 use super::analyser::TagAnalyzer;
 use super::error::RepoMapError;
-use super::file::git::GitWalker;
 use super::tag::{Tag, TagIndex};
 
 pub struct RepoMap {
-    git_walker: GitWalker,
     map_tokens: usize,
 }
 
@@ -23,7 +17,6 @@ const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 impl RepoMap {
     pub fn new() -> Self {
         Self {
-            git_walker: GitWalker {},
             map_tokens: REPOMAP_DEFAULT_TOKENS,
         }
     }
@@ -33,45 +26,8 @@ impl RepoMap {
         self
     }
 
-    async fn generate_tag_index(
-        &self,
-        files: HashMap<String, Vec<u8>>,
-    ) -> Result<TagIndex, RepoMapError> {
-        let mut tag_index = TagIndex::new();
-
-        let ts_parsing = Arc::new(TSLanguageParsing::init());
-        let _ = stream::iter(
-            files
-                .into_iter()
-                .map(|(file, _)| (file, ts_parsing.clone())),
-        )
-        .map(|(file, ts_parsing)| async move {
-            self.generate_tags_for_file(&file, ts_parsing)
-                .await
-                .map(|tags| (tags, file))
-                .ok()
-        })
-        .buffer_unordered(10000)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .filter_map(|s| s)
-        .for_each(|(tags, file)| {
-            let file_ref = &file;
-            tags.into_iter().for_each(|tag| {
-                tag_index.add_tag(tag, &PathBuf::from(file_ref));
-            });
-        });
-
-        tag_index.post_process_tags();
-
-        Ok(tag_index)
-    }
-
-    pub async fn get_repo_map(&self, root: &Path) -> Result<String, RepoMapError> {
-        let files = self.git_walker.read_files(root)?;
-
-        let repomap = self.get_ranked_tags_map(files, self.map_tokens).await?;
+    pub async fn get_repo_map(&self, tag_index: &TagIndex) -> Result<String, RepoMapError> {
+        let repomap = self.get_ranked_tags_map(self.map_tokens, tag_index).await?;
 
         if repomap.is_empty() {
             return Err(RepoMapError::TreeGenerationError(
@@ -150,13 +106,10 @@ impl RepoMap {
 
     pub async fn get_ranked_tags_map(
         &self,
-        files: HashMap<String, Vec<u8>>,
         max_map_tokens: usize,
+        tag_index: &TagIndex,
     ) -> Result<String, RepoMapError> {
-        println!("[TagIndex] Generating tags from {} files...", files.len());
-        let tag_index = self.generate_tag_index(files).await?;
-
-        let mut analyser = TagAnalyzer::new(tag_index);
+        let mut analyser = TagAnalyzer::new(&tag_index);
 
         println!("[Analyser] Ranking tags...");
         let ranked_tags = analyser.get_ranked_tags().clone();
@@ -266,37 +219,5 @@ impl RepoMap {
         context.add_context();
 
         context.format()
-    }
-
-    fn get_rel_fname(&self, fname: &PathBuf) -> PathBuf {
-        let self_root = env!("CARGO_MANIFEST_DIR").to_string();
-        fname
-            .strip_prefix(&self_root)
-            .unwrap_or(fname)
-            .to_path_buf()
-    }
-
-    async fn generate_tags_for_file(
-        &self,
-        fname: &str,
-        ts_parsing: Arc<TSLanguageParsing>,
-    ) -> Result<Vec<Tag>, RepoMapError> {
-        let rel_path = self.get_rel_fname(&PathBuf::from(fname));
-        let config = ts_parsing.for_file_path(fname).ok_or_else(|| {
-            RepoMapError::ParseError(format!("Language configuration not found for: {}", fname,))
-        });
-        let content = tokio::fs::read(fname).await;
-        if let Err(_) = content {
-            return Err(RepoMapError::IoError);
-        }
-        let content = content.expect("if let Err to hold");
-        if let Ok(config) = config {
-            let tags = config
-                .get_tags(&PathBuf::from(fname), &rel_path, content)
-                .await;
-            Ok(tags)
-        } else {
-            Ok(vec![])
-        }
     }
 }

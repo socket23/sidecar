@@ -1143,7 +1143,7 @@ impl CodeSymbolImportantResponse {
     }
 
     pub fn merge(responses: Vec<CodeSymbolImportantResponse>) -> Self {
-        let (symbols, ordered_symbols) = responses.iter().fold(
+        let (symbols, ordered_symbols) = responses.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut symbols, mut ordered_symbols), response| {
                 symbols.extend(response.symbols);

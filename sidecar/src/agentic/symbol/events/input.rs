@@ -203,19 +203,19 @@ impl SymbolInputEvent {
                     if let Some(root_directory) = self.root_directory.to_owned() {
                         if self.big_search() {
                             let repo_name = "remove this";
-                            let request = BigSearchRequest::new(
-                                LLMType::GeminiProFlash,
-                                LLMProvider::GoogleAIStudio,
-                                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                                )),
-                                self.request_id.to_string(),
-                                repo_name.to_string(),
-                                self.user_query().to_string(),
-                                root_directory.to_owned(),
-                                SearchType::Both("tree".to_string(), "repomap".to_string()),
-                            );
-                            return Some(ToolInput::BigSearch(request));
+                            // let request = BigSearchRequest::new(
+                            //     LLMType::GeminiProFlash,
+                            //     LLMProvider::GoogleAIStudio,
+                            //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                            //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                            //     )),
+                            //     self.request_id.to_string(),
+                            //     repo_name.to_string(),
+                            //     self.user_query().to_string(),
+                            //     root_directory.to_owned(),
+                            //     SearchType::Both("tree".to_string(), "repomap".to_string()),
+                            // );
+                            return Some(ToolInput::BigSearch(BigSearchRequest {}));
                         }
                     }
                     let outline_for_user_context = tool_box

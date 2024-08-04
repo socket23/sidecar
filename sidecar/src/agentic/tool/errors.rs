@@ -61,4 +61,7 @@ pub enum ToolError {
 
     #[error("File important error, {0}")]
     FileImportantError(FileImportantError),
+
+    #[error("Big search error: {0}")]
+    BigSearchError(String),
 }

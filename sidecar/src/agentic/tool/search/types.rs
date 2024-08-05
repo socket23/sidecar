@@ -148,8 +148,8 @@ impl Tool for BigSearchBroker {
 
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
 
-        let search_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
-        let search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
+        let keyword_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
+        let keyword_search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
             request.user_query().to_string(),
             request.llm().clone(),
             request.provider().clone(),
@@ -159,18 +159,6 @@ impl Tool for BigSearchBroker {
             false,
             tag_index.clone(), // using a reference causes lifetime headaches
         ));
-
-        let search_result = search_broker.invoke(search_input).await?;
-
-        match search_result {
-            ToolOutput::KeywordSearch(reply) => {
-                // let keywords = reply.keywords();
-                // println!("Keywords: {:?}", keywords);
-            }
-            _ => {}
-        }
-
-        todo!();
 
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 
@@ -206,13 +194,15 @@ impl Tool for BigSearchBroker {
             request.root_request_id().to_string(),
         ));
 
-        let (tree_result, repo_map_result) = join!(
+        let (tree_result, repo_map_result, keyword_result) = join!(
             tree_broker.invoke(tree_input),
-            repo_map_broker.invoke(repo_map_input)
+            repo_map_broker.invoke(repo_map_input),
+            keyword_broker.invoke(keyword_search_input)
         );
 
         let tree_output: ToolOutput = tree_result?;
         let repo_map_output: ToolOutput = repo_map_result?;
+        let keyword_output: ToolOutput = keyword_result?;
 
         let mut responses = Vec::new();
 
@@ -226,6 +216,13 @@ impl Tool for BigSearchBroker {
         match repo_map_output {
             ToolOutput::RepoMapSearch(important_symbols) => {
                 responses.push(important_symbols);
+            }
+            _ => {}
+        }
+
+        match keyword_output {
+            ToolOutput::KeywordSearch(response) => {
+                responses.push(response);
             }
             _ => {}
         }

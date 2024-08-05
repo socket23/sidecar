@@ -122,6 +122,15 @@ impl KeywordSearchQueryBroker {
 impl Tool for KeywordSearchQueryBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let request = input.keyword_search_query()?;
-        todo!();
+        if let Some(implementation) = self.llms.get(request.llm()) {
+            let reply = implementation
+                .get_keywords(request)
+                .await
+                .map_err(|e| ToolError::KeywordSearchError(e))?;
+
+            Ok(ToolOutput::KeywordSearch(reply))
+        } else {
+            Err(ToolError::LLMNotSupported)
+        }
     }
 }

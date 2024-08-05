@@ -146,6 +146,8 @@ impl Tool for BigSearchBroker {
             }
         };
 
+        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+
         let search_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
         let search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
             request.user_query().to_string(),
@@ -155,14 +157,15 @@ impl Tool for BigSearchBroker {
             request.root_directory().unwrap_or("").to_string(),
             request.root_request_id().to_string(),
             false,
+            tag_index.clone(), // using a reference causes lifetime headaches
         ));
 
         let search_result = search_broker.invoke(search_input).await?;
 
         match search_result {
             ToolOutput::KeywordSearch(reply) => {
-                let keywords = reply.keywords();
-                println!("Keywords: {:?}", keywords);
+                // let keywords = reply.keywords();
+                // println!("Keywords: {:?}", keywords);
             }
             _ => {}
         }
@@ -186,7 +189,6 @@ impl Tool for BigSearchBroker {
         ));
 
         // could be parallelized?
-        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
         let repo_map = RepoMap::new().with_map_tokens(10_000); // slower, but big > accurate
         let repo_map_string = repo_map
             .get_repo_map(&tag_index)

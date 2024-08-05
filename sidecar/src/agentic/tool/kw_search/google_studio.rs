@@ -116,7 +116,7 @@ keyword
 impl KeywordSearch for GoogleStudioKeywordSearch {
     async fn get_keywords(
         &self,
-        request: KeywordSearchQuery,
+        request: &KeywordSearchQuery,
     ) -> Result<KeywordsReply, KeywordsReplyError> {
         let root_request_id = request.root_request_id().to_owned();
         let model = request.llm().clone();

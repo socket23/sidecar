@@ -138,7 +138,7 @@ pub enum ToolOutput {
     // Filter the edit operations and its reponse
     FilterEditOperation(FilterEditOperationResponse),
     // Keyword search
-    KeywordSearch(KeywordsReply),
+    KeywordSearch(CodeSymbolImportantResponse),
 }
 
 impl ToolOutput {
@@ -518,7 +518,7 @@ impl ToolOutput {
         }
     }
 
-    pub fn get_keyword_search_reply(self) -> Option<KeywordsReply> {
+    pub fn get_keyword_search_reply(self) -> Option<CodeSymbolImportantResponse> {
         match self {
             ToolOutput::KeywordSearch(reply) => Some(reply),
             _ => None,

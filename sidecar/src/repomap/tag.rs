@@ -10,7 +10,7 @@ use super::file::errors::FileError;
 use super::file::git::GitWalker;
 use futures::{stream, StreamExt};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Tag {
     pub rel_fname: PathBuf,
     pub fname: PathBuf,
@@ -48,13 +48,14 @@ impl Tag {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum TagKind {
     Definition,
     Reference,
 }
 
 /// An index structure for managing tags across multiple files.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TagIndex {
     /// Maps tag names to the set of file paths where the tag is defined.
     ///

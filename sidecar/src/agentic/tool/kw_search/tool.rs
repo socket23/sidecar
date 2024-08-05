@@ -8,9 +8,21 @@ use llm_client::{
 };
 use thiserror::Error;
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+use crate::{
+    agentic::{
+        symbol::identifier::LLMProperties,
+        tool::{
+            code_symbol::important::{
+                CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+            },
+            errors::ToolError,
+            input::ToolInput,
+            kw_search::tag_search::TagSearch,
+            output::ToolOutput,
+            r#type::Tool,
+        },
+    },
+    repomap::tag::{Tag, TagIndex},
 };
 
 use super::{
@@ -27,6 +39,7 @@ pub struct KeywordSearchQuery {
     repo_name: String,
     root_request_id: String,
     case_sensitive: bool,
+    tag_index: TagIndex,
 }
 
 impl KeywordSearchQuery {
@@ -38,6 +51,7 @@ impl KeywordSearchQuery {
         repo_name: String,
         root_request_id: String,
         case_sensitive: bool,
+        tag_index: TagIndex,
     ) -> Self {
         Self {
             user_query,
@@ -47,6 +61,7 @@ impl KeywordSearchQuery {
             repo_name,
             root_request_id,
             case_sensitive,
+            tag_index,
         }
     }
 
@@ -77,6 +92,10 @@ impl KeywordSearchQuery {
     pub fn case_sensitive(&self) -> bool {
         self.case_sensitive
     }
+
+    pub fn tag_index(&self) -> &TagIndex {
+        &self.tag_index
+    }
 }
 
 pub struct KeywordSearchQueryResponse {
@@ -93,7 +112,7 @@ pub enum KeywordSearchQueryError {
 pub trait KeywordSearch {
     async fn get_keywords(
         &self,
-        request: KeywordSearchQuery,
+        request: &KeywordSearchQuery,
     ) -> Result<KeywordsReply, KeywordsReplyError>;
 }
 
@@ -132,12 +151,43 @@ impl Tool for KeywordSearchQueryBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let request = input.keyword_search_query()?;
         if let Some(implementation) = self.llms.get(request.llm()) {
-            let reply = implementation
-                .get_keywords(request)
+            let response = implementation
+                .get_keywords(&request)
                 .await
                 .map_err(|e| ToolError::KeywordSearchError(e))?;
 
-            Ok(ToolOutput::KeywordSearch(reply))
+            let tag_searcher = TagSearch::new();
+
+            let key_tags: Vec<&Tag> = response
+                .keywords()
+                .into_iter()
+                .flat_map(|kw| match tag_searcher.search(request.tag_index(), kw) {
+                    Ok(tag_set) => tag_set.into_iter().collect::<Vec<_>>(),
+                    Err(_) => Vec::new(),
+                })
+                .collect();
+
+            let symbols = key_tags
+                .iter()
+                .map(|tag| {
+                    CodeSymbolWithThinking::new(
+                        tag.name.to_string(),
+                        "".to_string(),
+                        "".to_string(),
+                    )
+                })
+                .collect();
+
+            let ordered_symbols = key_tags
+                .iter()
+                .map(|tag| {
+                    CodeSymbolWithSteps::new(tag.name.to_string(), vec![], false, "".to_string())
+                })
+                .collect();
+
+            let response = CodeSymbolImportantResponse::new(symbols, ordered_symbols);
+
+            Ok(ToolOutput::KeywordSearch(response))
         } else {
             Err(ToolError::LLMNotSupported)
         }

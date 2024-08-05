@@ -37,6 +37,7 @@ use super::{
         gotoimplementations::GoToImplementationRequest,
         gotoreferences::GoToReferencesRequest,
         grep_symbol::LSPGrepSymbolInCodebaseRequest,
+        inlay_hints::InlayHintsRequest,
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
@@ -107,6 +108,8 @@ pub enum ToolInput {
     BigSearch(BigSearchRequest),
     // checks if the edit operation needs to be performed or is an extra
     FilterEditOperation(FilterEditOperationRequest),
+    // inlay hints from the lsp/editor
+    InlayHints(InlayHintsRequest),
 }
 
 impl ToolInput {
@@ -161,6 +164,15 @@ impl ToolInput {
             ToolInput::ApplyOutlineEditToRange(_) => ToolType::ApplyOutlineEditToRange,
             ToolInput::BigSearch(_) => ToolType::BigSearch,
             ToolInput::FilterEditOperation(_) => ToolType::FilterEditOperation,
+            ToolInput::InlayHints(_) => ToolType::InLayHints,
+        }
+    }
+
+    pub fn inlay_hints_request(self) -> Result<InlayHintsRequest, ToolError> {
+        if let ToolInput::InlayHints(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::InLayHints))
         }
     }
 

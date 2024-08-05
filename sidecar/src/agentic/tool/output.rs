@@ -31,6 +31,7 @@ use super::{
         gotoimplementations::GoToImplementationResponse,
         gotoreferences::GoToReferencesResponse,
         grep_symbol::LSPGrepSymbolInCodebaseResponse,
+        inlay_hints::InlayHintsResponse,
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
@@ -136,9 +137,15 @@ pub enum ToolOutput {
     ApplyOutlineEditsToRange(ApplyOutlineEditsToRangeResponse),
     // Filter the edit operations and its reponse
     FilterEditOperation(FilterEditOperationResponse),
+    // Inlay hints response
+    InlayHints(InlayHintsResponse),
 }
 
 impl ToolOutput {
+    pub fn inlay_hints(response: InlayHintsResponse) -> Self {
+        ToolOutput::InlayHints(response)
+    }
+
     pub fn filter_edit_operation(response: FilterEditOperationResponse) -> Self {
         ToolOutput::FilterEditOperation(response)
     }

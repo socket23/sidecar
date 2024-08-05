@@ -95,7 +95,7 @@ async fn main() {
     // ];
     // let file_paths =
     //     vec!["/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs".to_owned()];
-    let _file_content_value = stream::iter(file_paths)
+    let file_content_value = stream::iter(file_paths)
         .map(|file_path| async move {
             let file_content = String::from_utf8(
                 tokio::fs::read(file_path.to_owned())
@@ -109,7 +109,7 @@ async fn main() {
         .collect::<Vec<_>>()
         .await;
 
-    let user_context = UserContext::new(vec![], vec![], None, vec![]);
+    let user_context = UserContext::new(vec![], file_content_value, None, vec![]);
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 

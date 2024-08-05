@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
 use llm_client::{
@@ -128,6 +128,7 @@ impl BigSearchBroker {
 #[async_trait]
 impl Tool for BigSearchBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
+        let start = Instant::now();
         let request = match input {
             ToolInput::BigSearch(req) => req,
             _ => {
@@ -228,6 +229,9 @@ impl Tool for BigSearchBroker {
         }
 
         let merged_output = CodeSymbolImportantResponse::merge(responses);
+
+        let duration = start.elapsed();
+        println!("BigSearchBroker::invoke::duration: {:?}", duration);
 
         Ok(ToolOutput::BigSearch(merged_output))
     }

@@ -4067,8 +4067,16 @@ instruction:
             .map(|language_config| language_config.get_language())
             .flatten()
             .unwrap_or("".to_owned());
-        let (above, below, in_range_selection) =
+        let (above, below, mut in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
+        in_range_selection = self
+            .apply_inlay_hints(
+                fs_file_path,
+                &in_range_selection,
+                selection_range,
+                request_id,
+            )
+            .await?;
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,

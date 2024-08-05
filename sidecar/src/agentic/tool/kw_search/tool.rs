@@ -114,6 +114,15 @@ impl KeywordSearchQueryBroker {
             )),
         );
 
+        // even when Sonnet is passed in user_query, we still want to use GeminiProFlash
+        llms.insert(
+            LLMType::ClaudeSonnet,
+            Box::new(GoogleStudioKeywordSearch::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+
         Self { llms }
     }
 }

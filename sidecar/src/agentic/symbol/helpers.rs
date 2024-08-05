@@ -1561,7 +1561,8 @@ mod tests {
     ))
 }"#;
         let interested_range = Range::new(Position::new(307, 0, 0), Position::new(400, 0, 0));
-        let inlay_hint_code = apply_inlay_hints_to_code(&code_to_check, interested_range, response);
+        let inlay_hint_code =
+            apply_inlay_hints_to_code(&code_to_check, &interested_range, response);
         let expected_code = r#"pub async fn code_editing(
     Extension(app: Application): Extension<Application>,
     Json(AgenticCodeEditing {

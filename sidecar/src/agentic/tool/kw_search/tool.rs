@@ -102,6 +102,12 @@ pub struct KeywordSearchQueryResponse {
     words: Vec<String>,
 }
 
+impl KeywordSearchQueryResponse {
+    pub fn words(&self) -> &[String] {
+        self.words.as_slice()
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum KeywordSearchQueryError {
     #[error("Wrong LLM for input: {0}")]

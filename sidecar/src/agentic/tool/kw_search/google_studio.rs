@@ -10,9 +10,7 @@ use async_trait::async_trait;
 use crate::agentic::{symbol::identifier::LLMProperties, tool::kw_search::types::KeywordsReply};
 
 use super::{
-    tool::{
-        KeywordSearch, KeywordSearchQuery, KeywordSearchQueryError, KeywordSearchQueryResponse,
-    },
+    tool::{KeywordSearch, KeywordSearchQuery},
     types::KeywordsReplyError,
 };
 

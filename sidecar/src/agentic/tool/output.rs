@@ -25,7 +25,6 @@ use super::{
         CodeToProbeSubSymbolList,
     },
     grep::file::FindInFileResponse,
-    kw_search::types::KeywordsReply,
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
         gotodefintion::GoToDefinitionResponse,

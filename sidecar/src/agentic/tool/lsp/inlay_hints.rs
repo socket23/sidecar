@@ -13,6 +13,16 @@ pub struct InlayHintsRequest {
     editor_url: String,
 }
 
+impl InlayHintsRequest {
+    pub fn new(fs_file_path: String, range: Range, editor_url: String) -> Self {
+        Self {
+            fs_file_path,
+            range,
+            editor_url,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InlayHintsResponseParts {
     position: Position,

@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use color_eyre::owo_colors::colors::Default;
-
 use crate::{
     agentic::tool::{
         code_symbol::models::anthropic::AskQuestionSymbolHint,
@@ -141,7 +139,7 @@ pub fn generate_hyperlink_from_snippet(
 /// Applies the inlay hints to the code which is already present
 pub fn apply_inlay_hints_to_code(
     code: &str,
-    code_range: Range,
+    code_range: &Range,
     inlay_hints: InlayHintsResponse,
 ) -> String {
     let range_start_line = code_range.start_line();

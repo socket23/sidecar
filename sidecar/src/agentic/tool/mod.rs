@@ -29,4 +29,5 @@ pub mod output;
 pub mod rerank;
 pub mod search;
 pub mod swe_bench;
+pub mod tag_search;
 pub mod r#type;

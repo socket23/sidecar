@@ -12,8 +12,20 @@ pub struct KeywordsReply {
 }
 
 impl KeywordsReply {
-    pub fn parse_response(response: &str) -> Result<KeywordsReply, KeywordsReplyError> {
-        todo!();
+    pub fn parse_response(response: &str) -> Result<Self, KeywordsReplyError> {
+        if response.is_empty() {
+            return Err(KeywordsReplyError::EmptyResponse);
+        }
+
+        let lines = response
+            .lines()
+            .skip_while(|line| !line.contains("<keywords>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</keywords>"))
+            .map(|line| line.to_owned())
+            .collect::<Vec<String>>();
+
+        Ok(Self { keywords: lines })
     }
 
     pub fn keywords(&self) -> &Vec<String> {

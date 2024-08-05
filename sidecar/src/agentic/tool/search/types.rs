@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use llm_client::{
@@ -13,15 +13,11 @@ use crate::agentic::{
     tool::{
         code_symbol::{
             important::CodeSymbolImportantResponse,
-            models::anthropic::AnthropicCodeSymbolImportant,
             repo_map_search::{RepoMapSearchBroker, RepoMapSearchQuery},
             types::CodeSymbolError,
         },
         errors::ToolError,
-        file::{
-            file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
-            models::anthropic::AnthropicFileFinder,
-        },
+        file::file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
         input::ToolInput,
         output::ToolOutput,
         r#type::Tool,
@@ -167,10 +163,9 @@ impl Tool for BigSearchBroker {
             tree_broker.invoke(tree_input),
             repo_map_broker.invoke(repo_map_input)
         );
-
         // Handle the results
-        let tree_output = tree_result?;
-        let repo_map_output = repo_map_result?;
+        let tree_output: ToolOutput = tree_result?;
+        let repo_map_output: ToolOutput = repo_map_result?;
 
         println!("tree_output: {:?}", tree_output);
         println!("repo_map_output: {:?}", repo_map_output);
@@ -178,6 +173,41 @@ impl Tool for BigSearchBroker {
         let elapsed_time = start_time.elapsed();
         println!("Elapsed time: {:?}", elapsed_time);
 
-        todo!();
+        let mut responses = Vec::new();
+
+        match tree_output {
+            ToolOutput::ImportantSymbols(important_symbols) => {
+                println!("tree_output");
+                important_symbols.print_symbol_count();
+                responses.push(important_symbols);
+            }
+            _ => {
+                // todo handle this
+                println!("Unexpected output type for tree_output");
+            }
+        }
+
+        println!("----------------------------------------");
+
+        match repo_map_output {
+            ToolOutput::RepoMapSearch(important_symbols) => {
+                println!("repo_map_output");
+                important_symbols.print_symbol_count();
+                responses.push(important_symbols);
+            }
+            _ => {
+                // todo handle this
+                println!("Unexpected output type for repo_map_output");
+            }
+        }
+
+        println!("----------------------------------------");
+
+        let merged_output = CodeSymbolImportantResponse::merge(responses);
+
+        println!("merged_output");
+        merged_output.print_symbol_count();
+
+        Ok(ToolOutput::BigSearch(merged_output))
     }
 }

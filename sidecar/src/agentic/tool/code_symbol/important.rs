@@ -1158,6 +1158,21 @@ impl CodeSymbolImportantResponse {
         }
     }
 
+    pub fn print_symbol_count(&self) {
+        println!("Symbols, (count: {:?}):", self.symbols().len());
+        for symbol in self.symbols() {
+            println!("{}", symbol.file_path());
+        }
+
+        println!(
+            "\nOrdered Symbols, (count: {:?}):",
+            self.ordered_symbols().len()
+        );
+        for ordered_symbol in self.ordered_symbols() {
+            println!("{}", ordered_symbol.file_path());
+        }
+    }
+
     pub fn merge_functional(response: Vec<CodeSymbolImportantResponse>) -> Self {
         let symbols = response
             .iter()

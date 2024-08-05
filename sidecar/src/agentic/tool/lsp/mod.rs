@@ -5,5 +5,6 @@ pub mod gotodefintion;
 pub mod gotoimplementations;
 pub mod gotoreferences;
 pub mod grep_symbol;
+pub mod inlay_hints;
 pub mod open_file;
 pub mod quick_fix;

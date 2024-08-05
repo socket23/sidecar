@@ -10,6 +10,8 @@ use thiserror::Error;
 
 use crate::agentic::symbol::identifier::LLMProperties;
 
+use super::types::{KeywordsReply, KeywordsReplyError};
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KeywordSearchQuery {
     user_query: String,
@@ -76,14 +78,17 @@ pub struct KeywordSearchQueryResponse {
 }
 
 #[derive(Debug, Error)]
-pub enum KeywordSearchQueryError {}
+pub enum KeywordSearchQueryError {
+    #[error("Wrong LLM for input: {0}")]
+    WrongLLM(LLMType),
+}
 
 #[async_trait]
 pub trait KeywordSearch {
     async fn get_keywords(
         &self,
         request: KeywordSearchQuery,
-    ) -> Result<KeywordSearchQueryResponse, KeywordSearchQueryError>;
+    ) -> Result<KeywordsReply, KeywordsReplyError>;
 }
 
 pub struct KeywordSearchQueryBroker {

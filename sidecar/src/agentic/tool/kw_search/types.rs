@@ -15,6 +15,10 @@ impl KeywordsReply {
     pub fn parse_response(response: &str) -> Result<KeywordsReply, KeywordsReplyError> {
         todo!();
     }
+
+    pub fn keywords(&self) -> &Vec<String> {
+        &self.keywords
+    }
 }
 
 #[derive(Debug)]

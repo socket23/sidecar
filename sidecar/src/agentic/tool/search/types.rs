@@ -20,6 +20,7 @@ use crate::{
             errors::ToolError,
             file::file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
             input::ToolInput,
+            kw_search::tool::{KeywordSearchQuery, KeywordSearchQueryBroker},
             output::ToolOutput,
             r#type::Tool,
         },
@@ -144,6 +145,29 @@ impl Tool for BigSearchBroker {
                 ))
             }
         };
+
+        let search_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
+        let search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
+            request.user_query().to_string(),
+            request.llm().clone(),
+            request.provider().clone(),
+            request.api_keys().clone(),
+            request.root_directory().unwrap_or("").to_string(),
+            request.root_request_id().to_string(),
+            false,
+        ));
+
+        let search_result = search_broker.invoke(search_input).await?;
+
+        match search_result {
+            ToolOutput::KeywordSearch(reply) => {
+                let keywords = reply.keywords();
+                println!("Keywords: {:?}", keywords);
+            }
+            _ => {}
+        }
+
+        todo!();
 
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 

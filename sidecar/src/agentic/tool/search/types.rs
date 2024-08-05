@@ -1,4 +1,8 @@
 use async_trait::async_trait;
+use llm_client::{
+    clients::types::LLMType,
+    provider::{LLMProvider, LLMProviderAPIKeys},
+};
 
 use crate::agentic::tool::{
     code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
@@ -16,9 +20,58 @@ pub enum SearchType {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct BigSearchRequest {}
+pub struct BigSearchRequest {
+    user_query: String,
+    llm: LLMType,
+    provider: LLMProvider,
+    api_keys: LLMProviderAPIKeys,
+    root_directory: Option<String>,
+    root_request_id: String,
+}
 
-impl BigSearchRequest {}
+impl BigSearchRequest {
+    pub fn new(
+        user_query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        root_directory: Option<String>,
+        root_request_id: String,
+    ) -> Self {
+        Self {
+            user_query,
+            llm,
+            provider,
+            api_keys,
+            root_directory,
+            root_request_id,
+        }
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
+    }
+
+    pub fn llm(&self) -> &LLMType {
+        &self.llm
+    }
+
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    pub fn api_keys(&self) -> &LLMProviderAPIKeys {
+        &self.api_keys
+    }
+
+    pub fn root_directory(&self) -> Option<&str> {
+        self.root_directory.as_deref()
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+}
 
 #[async_trait]
 pub trait BigSearch {

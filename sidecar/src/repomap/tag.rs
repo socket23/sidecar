@@ -272,5 +272,32 @@ impl TagIndex {
             .to_path_buf()
     }
 
-    // Add methods to query the index as needed
+    pub fn search_definitions(
+        &self,
+        search_term: &str,
+        case_sensitive: bool,
+    ) -> Vec<(&(PathBuf, String), &HashSet<Tag>)> {
+        self.definitions
+            .iter()
+            .filter(|((path, tag_name), _)| {
+                if case_sensitive {
+                    path.to_string_lossy().contains(search_term) || tag_name.contains(search_term)
+                } else {
+                    path.to_string_lossy().to_lowercase().contains(search_term)
+                        || tag_name.to_lowercase().contains(search_term)
+                }
+            })
+            .collect()
+    }
+
+    pub fn search_definitions_flattened(
+        &self,
+        search_term: &str,
+        case_sensitive: bool,
+    ) -> HashSet<&Tag> {
+        self.search_definitions(search_term, case_sensitive)
+            .into_iter()
+            .flat_map(|(_, tags)| tags)
+            .collect()
+    }
 }

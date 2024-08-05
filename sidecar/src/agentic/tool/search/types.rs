@@ -145,15 +145,11 @@ impl Tool for BigSearchBroker {
             }
         };
 
-        let start_time = std::time::Instant::now();
-
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 
         // could be parallelized?
         let (tree_string, _, _) =
             TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
-
-        println!("{}", tree_string);
 
         let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
             tree_string,
@@ -167,7 +163,7 @@ impl Tool for BigSearchBroker {
 
         // could be parallelized?
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
-        let repo_map = RepoMap::new().with_map_tokens(1_000);
+        let repo_map = RepoMap::new().with_map_tokens(10_000); // slower, but big > accurate
         let repo_map_string = repo_map
             .get_repo_map(&tag_index)
             .await
@@ -184,55 +180,31 @@ impl Tool for BigSearchBroker {
             request.root_request_id().to_string(),
         ));
 
-        // Run both invoke() methods in parallel
         let (tree_result, repo_map_result) = join!(
             tree_broker.invoke(tree_input),
             repo_map_broker.invoke(repo_map_input)
         );
-        // Handle the results
+
         let tree_output: ToolOutput = tree_result?;
         let repo_map_output: ToolOutput = repo_map_result?;
-
-        println!("tree_output: {:?}", tree_output);
-        println!("repo_map_output: {:?}", repo_map_output);
-
-        let elapsed_time = start_time.elapsed();
-        println!("Elapsed time: {:?}", elapsed_time);
 
         let mut responses = Vec::new();
 
         match tree_output {
             ToolOutput::ImportantSymbols(important_symbols) => {
-                println!("tree_output");
-                important_symbols.print_symbol_count();
                 responses.push(important_symbols);
             }
-            _ => {
-                // todo handle this
-                println!("Unexpected output type for tree_output");
-            }
+            _ => {}
         }
-
-        println!("----------------------------------------");
 
         match repo_map_output {
             ToolOutput::RepoMapSearch(important_symbols) => {
-                println!("repo_map_output");
-                important_symbols.print_symbol_count();
                 responses.push(important_symbols);
             }
-            _ => {
-                // todo handle this
-                println!("Unexpected output type for repo_map_output");
-            }
+            _ => {}
         }
 
-        println!("----------------------------------------");
-
         let merged_output = CodeSymbolImportantResponse::merge(responses);
-
-        println!("merged_output");
-        merged_output.print_symbol_count();
 
         Ok(ToolOutput::BigSearch(merged_output))
     }

@@ -199,10 +199,8 @@ impl SymbolInputEvent {
                     self.request_id.to_string(),
                 ))),
                 None => {
-                    // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
                         if self.big_search() {
-                            // todo
                             return Some(ToolInput::BigSearch(BigSearchRequest::new(
                                 self.user_query.to_string(),
                                 self.llm.clone(),

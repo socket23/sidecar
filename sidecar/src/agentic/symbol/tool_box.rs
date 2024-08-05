@@ -4667,12 +4667,12 @@ instruction:
         request_id: &str,
     ) -> Result<OpenFileResponse, SymbolError> {
         let request = ToolInput::OpenFile(OpenFileRequest::new(
-            fs_file_path,
+            fs_file_path.to_owned(),
             self.editor_url.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+        let _ = self.ui_events.send(UIEventWithID::open_file_event(
             request_id.to_owned(),
-            request.clone(),
+            fs_file_path,
         ));
         self.tools
             .invoke(request)

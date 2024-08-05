@@ -18,12 +18,36 @@ pub struct InlayHintsResponseParts {
     position: Position,
     padding_left: bool,
     padding_right: bool,
-    value: Vec<String>,
+    values: Vec<String>,
+}
+
+impl InlayHintsResponseParts {
+    pub fn position(&self) -> &Position {
+        &self.position
+    }
+
+    pub fn padding_left(&self) -> bool {
+        self.padding_left
+    }
+
+    pub fn padding_right(&self) -> bool {
+        self.padding_right
+    }
+
+    pub fn values(&self) -> &[String] {
+        self.values.as_slice()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InlayHintsResponse {
     parts: Vec<InlayHintsResponseParts>,
+}
+
+impl InlayHintsResponse {
+    pub fn parts(self) -> Vec<InlayHintsResponseParts> {
+        self.parts
+    }
 }
 
 pub struct InlayHints {

@@ -173,7 +173,7 @@ impl Tool for KeywordSearchQueryBroker {
                     CodeSymbolWithThinking::new(
                         tag.name.to_string(),
                         "".to_string(),
-                        "".to_string(),
+                        tag.fname.display().to_string(),
                     )
                 })
                 .collect();
@@ -181,7 +181,12 @@ impl Tool for KeywordSearchQueryBroker {
             let ordered_symbols = key_tags
                 .iter()
                 .map(|tag| {
-                    CodeSymbolWithSteps::new(tag.name.to_string(), vec![], false, "".to_string())
+                    CodeSymbolWithSteps::new(
+                        tag.name.to_string(),
+                        vec![],
+                        false,
+                        tag.fname.display().to_string(),
+                    )
                 })
                 .collect();
 

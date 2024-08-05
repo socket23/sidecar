@@ -35,7 +35,9 @@ impl GoogleStudioKeywordSearch {
 
 You will be provided with a user_query and a repository name.
 
-You will return a list of key words that will help you achieve the user_query.
+You will return a list of key words that will help you achieve the user_query. Focus on keywords that may be unique or idiosyncratic to the user_query's problem domain.
+
+Avoid returning keywords that may be too generic or common e.g. "new", "add", "remove", "update", "fix", "bug", "error", "issue", "problem", "solution", etc.
 
 Here is an example:
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use async_trait::async_trait;
 use llm_client::{
@@ -8,20 +8,24 @@ use llm_client::{
 };
 use tokio::join;
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{
-        code_symbol::{
-            important::CodeSymbolImportantResponse,
-            repo_map_search::{RepoMapSearchBroker, RepoMapSearchQuery},
-            types::CodeSymbolError,
+use crate::{
+    agentic::{
+        symbol::identifier::LLMProperties,
+        tool::{
+            code_symbol::{
+                important::CodeSymbolImportantResponse,
+                repo_map_search::{RepoMapSearchBroker, RepoMapSearchQuery},
+                types::CodeSymbolError,
+            },
+            errors::ToolError,
+            file::file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
+            input::ToolInput,
+            output::ToolOutput,
+            r#type::Tool,
         },
-        errors::ToolError,
-        file::file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
-        input::ToolInput,
-        output::ToolOutput,
-        r#type::Tool,
     },
+    repomap::{tag::TagIndex, types::RepoMap},
+    tree_printer::tree::TreePrinter,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -132,22 +136,46 @@ impl Tool for BigSearchBroker {
             }
         };
 
+        let root_directory = match request.root_directory() {
+            Some(dir) => dir,
+            None => {
+                return Err(ToolError::BigSearchError(
+                    "Root directory is required".to_string(),
+                ))
+            }
+        };
+
         let start_time = std::time::Instant::now();
 
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
+
+        // could be parallelized?
+        let (tree_string, _, _) =
+            TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
+
+        println!("{}", tree_string);
+
         let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
-            "tree".to_string(),
+            tree_string,
             request.user_query().to_string(),
             request.llm().clone(),
             request.provider().clone(),
             request.api_keys().clone(),
-            "reponame".to_string(),
+            root_directory.to_string(), // todo: this should be reponame
             request.root_request_id().to_string(),
         ));
 
+        // could be parallelized?
+        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+        let repo_map = RepoMap::new().with_map_tokens(1_000);
+        let repo_map_string = repo_map
+            .get_repo_map(&tag_index)
+            .await
+            .unwrap_or("".to_string());
+
         let repo_map_broker = RepoMapSearchBroker::new(self.llm_client(), self.fail_over_llm());
         let repo_map_input = ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
-            "repo_map".to_string(),
+            repo_map_string,
             request.user_query().to_string(),
             request.llm().clone(),
             request.provider().clone(),

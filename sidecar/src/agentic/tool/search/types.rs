@@ -6,6 +6,7 @@ use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
+use tokio::join;
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
@@ -137,6 +138,8 @@ impl Tool for BigSearchBroker {
             }
         };
 
+        let start_time = std::time::Instant::now();
+
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
         let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
             "tree".to_string(),
@@ -147,11 +150,6 @@ impl Tool for BigSearchBroker {
             "reponame".to_string(),
             request.root_request_id().to_string(),
         ));
-
-        let tree_output = tree_broker.invoke(tree_input).await?; // these are important symbols already...
-                                                                 // transpose to codesymbolImportantResponse
-
-        println!("tree_output: {:?}", tree_output);
 
         let repo_map_broker = RepoMapSearchBroker::new(self.llm_client(), self.fail_over_llm());
         let repo_map_input = ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
@@ -164,9 +162,21 @@ impl Tool for BigSearchBroker {
             request.root_request_id().to_string(),
         ));
 
-        let repo_map_output = repo_map_broker.invoke(repo_map_input).await?;
+        // Run both invoke() methods in parallel
+        let (tree_result, repo_map_result) = join!(
+            tree_broker.invoke(tree_input),
+            repo_map_broker.invoke(repo_map_input)
+        );
 
+        // Handle the results
+        let tree_output = tree_result?;
+        let repo_map_output = repo_map_result?;
+
+        println!("tree_output: {:?}", tree_output);
         println!("repo_map_output: {:?}", repo_map_output);
+
+        let elapsed_time = start_time.elapsed();
+        println!("Elapsed time: {:?}", elapsed_time);
 
         todo!();
     }

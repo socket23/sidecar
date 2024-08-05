@@ -2,7 +2,7 @@
 //! debugging and having better visibility to what ever is happening
 //! in the symbols
 
-use crate::{agentic::tool::input::ToolInput, chunking::text_document::Range};
+use crate::chunking::text_document::Range;
 
 use super::{
     events::input::SymbolInputEvent,
@@ -35,12 +35,6 @@ impl UIEventWithID {
         Self {
             request_id: request_id.to_owned(),
             event: UIEvent::EditRequestFinished(request_id),
-        }
-    }
-    pub fn from_tool_event(request_id: String, input: ToolInput) -> Self {
-        Self {
-            request_id,
-            event: UIEvent::from(input),
         }
     }
 
@@ -203,7 +197,6 @@ impl UIEventWithID {
 #[derive(Debug, serde::Serialize)]
 pub enum UIEvent {
     SymbolEvent(SymbolEventRequest),
-    ToolEvent(ToolInput),
     CodebaseEvent(SymbolInputEvent),
     SymbolLoctationUpdate(SymbolLocation),
     SymbolEventSubStep(SymbolEventSubStepRequest),
@@ -215,12 +208,6 @@ pub enum UIEvent {
 impl From<SymbolEventRequest> for UIEvent {
     fn from(req: SymbolEventRequest) -> Self {
         UIEvent::SymbolEvent(req)
-    }
-}
-
-impl From<ToolInput> for UIEvent {
-    fn from(input: ToolInput) -> Self {
-        UIEvent::ToolEvent(input)
     }
 }
 

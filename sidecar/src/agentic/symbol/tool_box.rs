@@ -304,7 +304,7 @@ impl ToolBox {
         &self,
         context: &str,
         llm_properties: LLMProperties,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<FindSymbolsToEditInContextResponse, SymbolError> {
         let tool_input =
             ToolInput::FindSymbolsToEditInContext(FindSymbolsToEditInContextRequest::new(
@@ -312,10 +312,6 @@ impl ToolBox {
                 llm_properties,
                 self.root_request_id.to_owned(),
             ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -327,15 +323,11 @@ impl ToolBox {
     pub async fn grep_symbols_in_ide(
         &self,
         symbol_name: &str,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<LSPGrepSymbolInCodebaseResponse, SymbolError> {
         let tool_input = ToolInput::GrepSymbolInCodebase(LSPGrepSymbolInCodebaseRequest::new(
             self.editor_url.to_owned(),
             symbol_name.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
         ));
         self.tools
             .invoke(tool_input)
@@ -463,16 +455,12 @@ impl ToolBox {
         fs_file_path: &str,
         code_in_selection: &str,
         range: &Range,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<String, SymbolError> {
         let inlay_hint_request = ToolInput::InlayHints(InlayHintsRequest::new(
             fs_file_path.to_owned(),
             range.clone(),
             self.editor_url.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            inlay_hint_request.clone(),
         ));
         let inlay_hints = self
             .tools
@@ -633,10 +621,6 @@ impl ToolBox {
                 self.root_request_id.to_owned(),
             ),
         );
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
 
         let code_symbol_outline_list = self
             .tools
@@ -819,10 +803,6 @@ impl ToolBox {
             code_content_in_range,
             self.root_request_id.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -838,7 +818,7 @@ impl ToolBox {
         llm_properties: LLMProperties,
         user_query: &str,
         probe_request: &str,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<String, SymbolError> {
         let tool_input =
             ToolInput::ProbeTryHardAnswerRequest(ProbeTryHardAnswerSymbolRequest::new(
@@ -848,10 +828,6 @@ impl ToolBox {
                 llm_properties,
                 self.root_request_id.to_owned(),
             ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -869,7 +845,7 @@ impl ToolBox {
         llm_properties: LLMProperties,
         user_query: &str,
         plan: String,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<NewSubSymbolRequiredResponse, SymbolError> {
         let tool_input = ToolInput::NewSubSymbolForCodeEditing(NewSubSymbolRequiredRequest::new(
             user_query.to_owned(),
@@ -878,10 +854,6 @@ impl ToolBox {
             symbol_content,
             llm_properties,
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
         ));
         self.tools
             .invoke(tool_input)
@@ -937,7 +909,7 @@ impl ToolBox {
         xml_string: String,
         symbol_name: String,
         llm_properties: LLMProperties,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<ProbeEnoughOrDeeperResponse, SymbolError> {
         let tool_input = ToolInput::ProbeEnoughOrDeeper(ProbeEnoughOrDeeperRequest::new(
             symbol_name,
@@ -945,10 +917,6 @@ impl ToolBox {
             query,
             llm_properties,
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
         ));
         self.tools
             .invoke(tool_input)
@@ -970,7 +938,7 @@ impl ToolBox {
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<CodeToProbeSubSymbolList, SymbolError> {
         let tool_input =
             ToolInput::ProbeFilterSnippetsSingleSymbol(CodeToProbeSubSymbolRequest::new(
@@ -981,10 +949,6 @@ impl ToolBox {
                 api_key,
                 self.root_request_id.to_owned(),
             ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -1004,7 +968,7 @@ impl ToolBox {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<CodeSymbolFollowInitialResponse, SymbolError> {
         let tool_input =
             ToolInput::CodeSymbolFollowInitialRequest(CodeSymbolFollowInitialRequest::new(
@@ -1015,10 +979,6 @@ impl ToolBox {
                 api_keys,
                 self.root_request_id.to_owned(),
             ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -1031,13 +991,9 @@ impl ToolBox {
     pub async fn probing_results_summarize(
         &self,
         request: CodeSymbolProbingSummarize,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<String, SymbolError> {
         let tool_input = ToolInput::ProbeSummarizeAnswerRequest(request);
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -1051,13 +1007,9 @@ impl ToolBox {
     pub async fn next_symbol_should_probe_request(
         &self,
         request: CodeSymbolFollowAlongForProbing,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<ProbeNextSymbol, SymbolError> {
         let tool_input = ToolInput::ProbeFollowAlongSymbol(request);
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -1451,10 +1403,6 @@ We also believe this symbol needs to be looked at more closesly because:
             ),
             self.root_request_id.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
-        ));
         // This is broken because of the types over here
         self.tools
             .invoke(request)
@@ -1504,10 +1452,6 @@ We also believe this symbol needs to be probed because of:
             ),
             self.root_request_id.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
-        ));
         self.tools
             .invoke(request)
             .await
@@ -1523,7 +1467,7 @@ We also believe this symbol needs to be probed because of:
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<CodeToProbeFilterResponse, SymbolError> {
         let probe_request = request.probe_request();
         let request = ToolInput::ProbeSubSymbol(CodeToEditFilterRequest::new(
@@ -1533,10 +1477,6 @@ We also believe this symbol needs to be probed because of:
             provider,
             api_key,
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -1979,10 +1919,6 @@ We also believe this symbol needs to be probed because of:
             self.root_request_id.to_owned(),
         );
         let tool_input = ToolInput::CodeSymbolUtilitySearch(request);
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         // These are the code symbols which are important from the global search
         // we might have some errors over here which we should fix later on, but we
         // will get on that
@@ -2616,13 +2552,9 @@ We also believe this symbol needs to be probed because of:
     async fn check_class_members_to_follow(
         &self,
         request: ClassSymbolFollowupRequest,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<ClassSymbolFollowupResponse, SymbolError> {
         let tool_input = ToolInput::ClassSymbolFollowup(request);
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -2966,16 +2898,12 @@ Please handle these changes as required."#
         &self,
         fs_file_path: &str,
         position: &Position,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<GoToReferencesResponse, SymbolError> {
         let input = ToolInput::GoToReference(GoToReferencesRequest::new(
             fs_file_path.to_owned(),
             position.clone(),
             self.editor_url.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            input.clone(),
         ));
         self.tools
             .invoke(input)
@@ -2988,14 +2916,10 @@ Please handle these changes as required."#
     async fn swe_bench_test_tool(
         &self,
         swe_bench_test_endpoint: &str,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<SWEBenchTestRepsonse, SymbolError> {
         let tool_input =
             ToolInput::SWEBenchTest(SWEBenchTestRequest::new(swe_bench_test_endpoint.to_owned()));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
-        ));
         self.tools
             .invoke(tool_input)
             .await
@@ -3914,7 +3838,7 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<String, SymbolError> {
         let (code_above, code_below, code_in_selection) =
             split_file_content_into_parts(fs_file_content, symbol_to_edit_range);
@@ -3933,10 +3857,6 @@ instruction:
             api_keys,
             code_edit_extra_context.to_owned(),
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            input.clone(),
         ));
         self.tools
             .invoke(input)
@@ -3958,7 +3878,7 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<String, SymbolError> {
         let (code_above, code_below, code_in_selection) =
             split_file_content_into_parts(fs_file_content, edited_range);
@@ -3975,10 +3895,6 @@ instruction:
             provider,
             api_keys,
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            code_editing_error_request.clone(),
         ));
         self.tools
             .invoke(code_editing_error_request)
@@ -4002,7 +3918,7 @@ instruction:
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         extra_symbol_plan: Option<&str>,
-        request_id: &str,
+        _request_id: &str,
         // TODO(skcd): a history parameter and play with the prompt over here so
         // the LLM does not over index on the history of the symbols which were edited
     ) -> Result<CodeCorrectnessAction, SymbolError> {
@@ -4024,10 +3940,6 @@ instruction:
             api_keys,
             extra_symbol_plan.map(|plan| plan.to_owned()),
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -4095,10 +4007,6 @@ instruction:
             // we want an outline edit
             true,
         ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
-        ));
         let response = self
             .tools
             .invoke(request)
@@ -4140,7 +4048,7 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
         swe_bench_initial_edit: bool,
         symbol_to_edit: Option<String>,
         is_new_sub_symbol: Option<String>,
@@ -4175,10 +4083,6 @@ instruction:
             self.root_request_id.to_owned(),
             // we want a complete edit over here
             false,
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -4246,16 +4150,12 @@ instruction:
         &self,
         quick_fix_index: i64,
         lsp_request_id: &str,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<LSPQuickFixInvocationResponse, SymbolError> {
         let request = ToolInput::QuickFixInvocationRequest(LSPQuickFixInvocationRequest::new(
             lsp_request_id.to_owned(),
             quick_fix_index,
             self.editor_url.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -4309,10 +4209,6 @@ instruction:
             language,
             query.to_owned(),
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         let response = self
             .tools
@@ -4412,17 +4308,13 @@ instruction:
         fs_file_path: &str,
         range: &Range,
         request_id: String,
-        tool_use_request_id: &str,
+        _tool_use_request_id: &str,
     ) -> Result<GetQuickFixResponse, SymbolError> {
         let request = ToolInput::QuickFixRequest(GetQuickFixRequest::new(
             fs_file_path.to_owned(),
             self.editor_url.to_owned(),
             range.clone(),
             request_id,
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            tool_use_request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -4436,16 +4328,12 @@ instruction:
         &self,
         fs_file_path: &str,
         range: &Range,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<LSPDiagnosticsOutput, SymbolError> {
         let input = ToolInput::LSPDiagnostics(LSPDiagnosticsInput::new(
             fs_file_path.to_owned(),
             range.clone(),
             self.editor_url.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            input.clone(),
         ));
         self.tools
             .invoke(input)
@@ -4460,17 +4348,13 @@ instruction:
         fs_file_path: &str,
         range: &Range,
         updated_code: &str,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<EditorApplyResponse, SymbolError> {
         let input = ToolInput::EditorApplyChange(EditorApplyRequest::new(
             fs_file_path.to_owned(),
             updated_code.to_owned(),
             range.clone(),
             self.editor_url.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            input.clone(),
         ));
         self.tools
             .invoke(input)
@@ -4484,16 +4368,12 @@ instruction:
         &self,
         symbol_name: &str,
         file_contents: &str,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<FindInFileResponse, SymbolError> {
         // Here we are going to get the position of the symbol
         let request = ToolInput::GrepSingleFile(FindInFileRequest::new(
             file_contents.to_owned(),
             symbol_name.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -4510,7 +4390,7 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<CodeToEditSymbolResponse, SymbolError> {
         let request =
             ToolInput::FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest::new(
@@ -4521,10 +4401,6 @@ instruction:
                 api_keys,
                 self.root_request_id.to_owned(),
             ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
-        ));
         self.tools
             .invoke(request)
             .await
@@ -4622,7 +4498,7 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<CodeToEditFilterResponse, SymbolError> {
         let request = ToolInput::FilterCodeSnippetsForEditing(CodeToEditFilterRequest::new(
             snippets,
@@ -4631,10 +4507,6 @@ instruction:
             provider,
             api_key,
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -4686,13 +4558,9 @@ instruction:
         &self,
         file_content: String,
         symbol: String,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<FindInFileResponse, SymbolError> {
         let request = ToolInput::GrepSingleFile(FindInFileRequest::new(file_content, symbol));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
-        ));
         self.tools
             .invoke(request)
             .await
@@ -4705,16 +4573,12 @@ instruction:
         &self,
         fs_file_path: &str,
         position: Position,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<GoToDefinitionResponse, SymbolError> {
         let request = ToolInput::GoToDefinition(GoToDefinitionRequest::new(
             fs_file_path.to_owned(),
             self.editor_url.to_owned(),
             position,
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
         ));
         self.tools
             .invoke(request)
@@ -4730,7 +4594,7 @@ instruction:
         &self,
         symbol_to_edit: &SymbolToEdit,
         symbol_content: &str,
-        request_id: &str,
+        _request_id: &str,
     ) -> Result<FilterEditOperationResponse, SymbolError> {
         let tool_input = ToolInput::FilterEditOperation(FilterEditOperationRequest::new(
             symbol_content.to_owned(),
@@ -4746,10 +4610,6 @@ instruction:
                 )),
             ),
             self.root_request_id.to_owned(),
-        ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            tool_input.clone(),
         ));
         let output = self
             .tools
@@ -4953,10 +4813,6 @@ instruction:
             llm_properties,
             self.root_request_id.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
-        ));
         let final_plan_list = self
             .tools
             .invoke(request)
@@ -5147,10 +5003,6 @@ instruction:
             position.clone(),
             self.editor_url.to_owned(),
         ));
-        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-            request_id.to_owned(),
-            request.clone(),
-        ));
         self.tools
             .invoke(request)
             .await
@@ -5194,10 +5046,6 @@ instruction:
                 fs_file_path.to_owned(),
                 position,
                 self.editor_url.to_owned(),
-            ));
-            let _ = self.ui_events.send(UIEventWithID::from_tool_event(
-                request_id.to_owned(),
-                request.clone(),
             ));
             self.tools
                 .invoke(request)

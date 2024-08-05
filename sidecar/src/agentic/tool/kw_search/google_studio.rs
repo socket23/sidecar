@@ -78,22 +78,22 @@ sympy/sympy
 </repository>
 
 And the response:
-<reply>
-__matmul__,
-matrix,
-__mul__,
-numpy,
-scalar,
-</reply>
+<keywords>
+__matmul__
+matrix
+__mul__
+numpy
+scalar
+</keywords>
 
 
 Respond in the following format:
 
-<reply>
-keyword,
-keyword,
-keyword,
-</reply>"#
+<keywords>
+keyword
+keyword
+keyword
+</keywords>"#
         )
     }
 
@@ -157,7 +157,6 @@ impl KeywordSearch for GoogleStudioKeywordSearch {
         let parsed_response = KeywordsReply::parse_response(&response);
 
         match parsed_response {
-            // Ok(parsed_response) => Ok(parsed_response.to_keyword_search_response()),
             Ok(parsed_response) => Ok(parsed_response),
             Err(e) => Err(e),
         }

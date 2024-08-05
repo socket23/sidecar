@@ -32,6 +32,7 @@ use super::{
         gotoimplementations::GoToImplementationResponse,
         gotoreferences::GoToReferencesResponse,
         grep_symbol::LSPGrepSymbolInCodebaseResponse,
+        inlay_hints::InlayHintsResponse,
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
@@ -139,9 +140,15 @@ pub enum ToolOutput {
     FilterEditOperation(FilterEditOperationResponse),
     // Keyword search
     KeywordSearch(CodeSymbolImportantResponse),
+    // Inlay hints response
+    InlayHints(InlayHintsResponse),
 }
 
 impl ToolOutput {
+    pub fn inlay_hints(response: InlayHintsResponse) -> Self {
+        ToolOutput::InlayHints(response)
+    }
+
     pub fn filter_edit_operation(response: FilterEditOperationResponse) -> Self {
         ToolOutput::FilterEditOperation(response)
     }
@@ -521,6 +528,13 @@ impl ToolOutput {
     pub fn get_keyword_search_reply(self) -> Option<CodeSymbolImportantResponse> {
         match self {
             ToolOutput::KeywordSearch(reply) => Some(reply),
+            _ => None,
+        }
+    }
+
+    pub fn get_inlay_hints_response(self) -> Option<InlayHintsResponse> {
+        match self {
+            ToolOutput::InlayHints(response) => Some(response),
             _ => None,
         }
     }

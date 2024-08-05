@@ -36,6 +36,7 @@ use super::{
         gotoimplementations::LSPGoToImplementation,
         gotoreferences::LSPGoToReferences,
         grep_symbol::GrepSymbolInCodebase,
+        inlay_hints::InlayHints,
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
     },
@@ -334,6 +335,7 @@ impl ToolBroker {
                 fail_over_llm.clone(),
             )),
         );
+        tools.insert(ToolType::InLayHints, Box::new(InlayHints::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

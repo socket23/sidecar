@@ -231,11 +231,12 @@ impl ToolBroker {
                 fail_over_llm.clone(),
             )),
         );
+        // todo
         tools.insert(
             ToolType::BigSearch,
             Box::new(BigSearchBroker::new(
-                // llm_client.clone(),
-                // fail_over_llm.clone(),
+                llm_client.clone(),
+                fail_over_llm.clone(),
             )),
         );
         tools.insert(

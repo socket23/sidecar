@@ -202,20 +202,17 @@ impl SymbolInputEvent {
                     // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
                         if self.big_search() {
+                            // todo
                             let repo_name = "remove this";
-                            // let request = BigSearchRequest::new(
-                            //     LLMType::GeminiProFlash,
-                            //     LLMProvider::GoogleAIStudio,
-                            //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                            //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                            //     )),
-                            //     self.request_id.to_string(),
-                            //     repo_name.to_string(),
-                            //     self.user_query().to_string(),
-                            //     root_directory.to_owned(),
-                            //     SearchType::Both("tree".to_string(), "repomap".to_string()),
-                            // );
-                            return Some(ToolInput::BigSearch(BigSearchRequest {}));
+                            return Some(ToolInput::BigSearch(BigSearchRequest::new(
+                                self.user_query.to_string(),
+                                self.llm.clone(),
+                                self.provider.clone(),
+                                self.api_keys.clone(),
+                                Some(repo_name.to_string()),
+                                self.request_id.to_string(),
+                                SearchType::Both("".to_string(), "".to_string()),
+                            )));
                         }
                     }
                     let outline_for_user_context = tool_box

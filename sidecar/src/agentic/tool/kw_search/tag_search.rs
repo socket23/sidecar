@@ -20,7 +20,7 @@ impl TagSearch {
 
         let tags = index.search_definitions_flattened(input, false);
 
-        println!("Search results for {input}: {:?}", tags.len());
+        println!("TagSearch::search:: Search for {input}: {:?}", tags.len());
 
         if tags.is_empty() {
             return Err(TagSearchError::NoTagsFound);

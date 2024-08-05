@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -203,15 +203,14 @@ impl SymbolInputEvent {
                     if let Some(root_directory) = self.root_directory.to_owned() {
                         if self.big_search() {
                             // todo
-                            let repo_name = "remove this";
                             return Some(ToolInput::BigSearch(BigSearchRequest::new(
                                 self.user_query.to_string(),
                                 self.llm.clone(),
                                 self.provider.clone(),
                                 self.api_keys.clone(),
-                                Some(repo_name.to_string()),
+                                Some(root_directory),
                                 self.request_id.to_string(),
-                                SearchType::Both("".to_string(), "".to_string()),
+                                SearchType::Both,
                             )));
                         }
                     }

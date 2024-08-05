@@ -26,9 +26,7 @@ use crate::agentic::{
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SearchType {
-    // Tree(String),
-    // Repomap(String),
-    Both(String, String),
+    Both,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

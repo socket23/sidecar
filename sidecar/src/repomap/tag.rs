@@ -10,7 +10,7 @@ use super::file::errors::FileError;
 use super::file::git::GitWalker;
 use futures::{stream, StreamExt};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Tag {
     pub rel_fname: PathBuf,
     pub fname: PathBuf,
@@ -48,13 +48,14 @@ impl Tag {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum TagKind {
     Definition,
     Reference,
 }
 
 /// An index structure for managing tags across multiple files.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TagIndex {
     /// Maps tag names to the set of file paths where the tag is defined.
     ///
@@ -272,5 +273,75 @@ impl TagIndex {
             .to_path_buf()
     }
 
-    // Add methods to query the index as needed
+    pub fn search_definitions(
+        &self,
+        search_term: &str,
+        case_sensitive: bool,
+        search_mode: SearchMode,
+    ) -> Vec<(&(PathBuf, String), &HashSet<Tag>)> {
+        let search_term = if case_sensitive {
+            search_term.to_owned()
+        } else {
+            search_term.to_lowercase()
+        };
+
+        self.definitions
+            .iter()
+            .filter(|((path, tag_name), _)| {
+                let file_name = path
+                    .file_name()
+                    .and_then(|os_str| os_str.to_str())
+                    .unwrap_or("");
+
+                let file_name = if case_sensitive {
+                    file_name.to_owned()
+                } else {
+                    file_name.to_lowercase()
+                };
+
+                let tag_name = if case_sensitive {
+                    tag_name.to_owned()
+                } else {
+                    tag_name.to_lowercase()
+                };
+
+                match search_mode {
+                    SearchMode::FileName => file_name.contains(&search_term),
+                    SearchMode::TagName => tag_name.contains(&search_term),
+                    SearchMode::Both => {
+                        file_name.contains(&search_term) || tag_name.contains(&search_term)
+                    }
+                    SearchMode::ExactFileName => file_name == search_term,
+                    SearchMode::ExactTagName => tag_name == search_term,
+                    SearchMode::StartsWith => {
+                        file_name.starts_with(&search_term) || tag_name.starts_with(&search_term)
+                    }
+                    SearchMode::EndsWith => {
+                        file_name.ends_with(&search_term) || tag_name.ends_with(&search_term)
+                    }
+                }
+            })
+            .collect()
+    }
+
+    pub fn search_definitions_flattened(
+        &self,
+        search_term: &str,
+        case_sensitive: bool,
+    ) -> HashSet<&Tag> {
+        self.search_definitions(search_term, case_sensitive, SearchMode::Both)
+            .into_iter()
+            .flat_map(|(_, tags)| tags)
+            .collect()
+    }
+}
+
+pub enum SearchMode {
+    FileName,
+    TagName,
+    Both,
+    ExactFileName,
+    ExactTagName,
+    StartsWith,
+    EndsWith,
 }

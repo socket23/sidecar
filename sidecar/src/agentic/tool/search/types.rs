@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
 use llm_client::{
@@ -20,6 +20,7 @@ use crate::{
             errors::ToolError,
             file::file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
             input::ToolInput,
+            kw_search::tool::{KeywordSearchQuery, KeywordSearchQueryBroker},
             output::ToolOutput,
             r#type::Tool,
         },
@@ -127,6 +128,7 @@ impl BigSearchBroker {
 #[async_trait]
 impl Tool for BigSearchBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
+        let start = Instant::now();
         let request = match input {
             ToolInput::BigSearch(req) => req,
             _ => {
@@ -145,6 +147,20 @@ impl Tool for BigSearchBroker {
             }
         };
 
+        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+
+        let keyword_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
+        let keyword_search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
+            request.user_query().to_string(),
+            request.llm().clone(),
+            request.provider().clone(),
+            request.api_keys().clone(),
+            request.root_directory().unwrap_or("").to_string(),
+            request.root_request_id().to_string(),
+            false,
+            tag_index.clone(), // using a reference causes lifetime headaches
+        ));
+
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 
         // could be parallelized?
@@ -162,7 +178,6 @@ impl Tool for BigSearchBroker {
         ));
 
         // could be parallelized?
-        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
         let repo_map = RepoMap::new().with_map_tokens(10_000); // slower, but big > accurate
         let repo_map_string = repo_map
             .get_repo_map(&tag_index)
@@ -180,13 +195,15 @@ impl Tool for BigSearchBroker {
             request.root_request_id().to_string(),
         ));
 
-        let (tree_result, repo_map_result) = join!(
+        let (tree_result, repo_map_result, keyword_result) = join!(
             tree_broker.invoke(tree_input),
-            repo_map_broker.invoke(repo_map_input)
+            repo_map_broker.invoke(repo_map_input),
+            keyword_broker.invoke(keyword_search_input)
         );
 
         let tree_output: ToolOutput = tree_result?;
         let repo_map_output: ToolOutput = repo_map_result?;
+        let keyword_output: ToolOutput = keyword_result?;
 
         let mut responses = Vec::new();
 
@@ -204,7 +221,17 @@ impl Tool for BigSearchBroker {
             _ => {}
         }
 
+        match keyword_output {
+            ToolOutput::KeywordSearch(response) => {
+                responses.push(response);
+            }
+            _ => {}
+        }
+
         let merged_output = CodeSymbolImportantResponse::merge(responses);
+
+        let duration = start.elapsed();
+        println!("BigSearchBroker::invoke::duration: {:?}", duration);
 
         Ok(ToolOutput::BigSearch(merged_output))
     }

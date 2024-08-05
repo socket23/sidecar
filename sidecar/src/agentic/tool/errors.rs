@@ -3,7 +3,8 @@ use thiserror::Error;
 
 use super::{
     code_symbol::types::CodeSymbolError, file::types::FileImportantError,
-    filtering::errors::CodeToEditFilteringError, r#type::ToolType, rerank::base::ReRankError,
+    filtering::errors::CodeToEditFilteringError, kw_search::types::KeywordsReplyError,
+    r#type::ToolType, rerank::base::ReRankError,
 };
 
 #[derive(Debug, Error)]
@@ -64,4 +65,7 @@ pub enum ToolError {
 
     #[error("Big search error: {0}")]
     BigSearchError(String),
+
+    #[error("Keyword search error: {0}")]
+    KeywordSearchError(KeywordsReplyError),
 }

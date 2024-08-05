@@ -31,6 +31,7 @@ use super::{
         CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToProbeSubSymbolRequest,
     },
     grep::file::FindInFileRequest,
+    kw_search::tool::KeywordSearchQuery,
     lsp::{
         diagnostics::LSPDiagnosticsInput,
         gotodefintion::GoToDefinitionRequest,
@@ -108,6 +109,8 @@ pub enum ToolInput {
     BigSearch(BigSearchRequest),
     // checks if the edit operation needs to be performed or is an extra
     FilterEditOperation(FilterEditOperationRequest),
+    // Keyword search
+    KeywordSearch(KeywordSearchQuery),
     // inlay hints from the lsp/editor
     InlayHints(InlayHintsRequest),
 }
@@ -164,6 +167,7 @@ impl ToolInput {
             ToolInput::ApplyOutlineEditToRange(_) => ToolType::ApplyOutlineEditToRange,
             ToolInput::BigSearch(_) => ToolType::BigSearch,
             ToolInput::FilterEditOperation(_) => ToolType::FilterEditOperation,
+            ToolInput::KeywordSearch(_) => ToolType::KeywordSearch,
             ToolInput::InlayHints(_) => ToolType::InLayHints,
         }
     }
@@ -347,6 +351,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::ImportantFilesFinder))
+        }
+    }
+
+    pub fn keyword_search_query(self) -> Result<KeywordSearchQuery, ToolError> {
+        if let ToolInput::KeywordSearch(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::KeywordSearch))
         }
     }
 

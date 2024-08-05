@@ -521,4 +521,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_inlay_hints_response(self) -> Option<InlayHintsResponse> {
+        match self {
+            ToolOutput::InlayHints(response) => Some(response),
+            _ => None,
+        }
+    }
 }

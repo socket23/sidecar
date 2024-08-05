@@ -9,7 +9,7 @@ use llm_client::provider::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::agentic::symbol::helpers::split_file_content_into_parts;
+use crate::agentic::symbol::helpers::{apply_inlay_hints_to_code, split_file_content_into_parts};
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::code_edit::filter_edit::{
     FilterEditOperationRequest, FilterEditOperationResponse,
@@ -75,6 +75,7 @@ use crate::agentic::tool::lsp::gotoreferences::{GoToReferencesRequest, GoToRefer
 use crate::agentic::tool::lsp::grep_symbol::{
     LSPGrepSymbolInCodebaseRequest, LSPGrepSymbolInCodebaseResponse,
 };
+use crate::agentic::tool::lsp::inlay_hints::InlayHintsRequest;
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
@@ -454,6 +455,40 @@ impl ToolBox {
         ))
     }
 
+    /// Applies the inlay hints if we are able to get that from the editor
+    ///
+    /// If the inlay-hints hook is not working, we fallback to the original string
+    async fn apply_inlay_hints(
+        &self,
+        fs_file_path: &str,
+        code_in_selection: &str,
+        range: &Range,
+        request_id: &str,
+    ) -> Result<String, SymbolError> {
+        let inlay_hint_request = ToolInput::InlayHints(InlayHintsRequest::new(
+            fs_file_path.to_owned(),
+            range.clone(),
+            self.editor_url.to_owned(),
+        ));
+        let _ = self.ui_events.send(UIEventWithID::from_tool_event(
+            request_id.to_owned(),
+            inlay_hint_request.clone(),
+        ));
+        let inlay_hints = self
+            .tools
+            .invoke(inlay_hint_request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_inlay_hints_response()
+            .ok_or(SymbolError::WrongToolOutput)?;
+
+        Ok(apply_inlay_hints_to_code(
+            code_in_selection,
+            range,
+            inlay_hints,
+        ))
+    }
+
     /// Compresses the symbol by removing function content if its present
     /// and leaves an outline which we can work on top of
     pub fn get_compressed_symbol_view(&self, content: &str, file_path: &str) -> String {
@@ -576,13 +611,16 @@ impl ToolBox {
         let file_contents = file_contents.contents();
         let range = sub_symbol.range();
         let (_, _, in_selection) = split_file_content_into_parts(&file_contents, range);
+        let selected_code_with_typehints = self
+            .apply_inlay_hints(sub_symbol.fs_file_path(), &in_selection, range, request_id)
+            .await?;
         let user_query = sub_symbol.instructions().join("\n");
         let tool_input = ToolInput::ReRankingCodeSnippetsForEditing(
             ReRankingSnippetsForCodeEditingRequest::new(
                 outline_nodes_for_query.to_vec(),
                 None,
                 None,
-                in_selection,
+                selected_code_with_typehints,
                 sub_symbol.fs_file_path().to_owned(),
                 user_query,
                 LLMProperties::new(

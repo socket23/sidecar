@@ -8,9 +8,15 @@ use llm_client::{
 };
 use thiserror::Error;
 
-use crate::agentic::symbol::identifier::LLMProperties;
+use crate::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+};
 
-use super::types::{KeywordsReply, KeywordsReplyError};
+use super::{
+    google_studio::GoogleStudioKeywordSearch,
+    types::{KeywordsReply, KeywordsReplyError},
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KeywordSearchQuery {
@@ -99,25 +105,23 @@ impl KeywordSearchQueryBroker {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         let mut llms: HashMap<LLMType, Box<dyn KeywordSearch + Send + Sync>> = Default::default();
 
-        // only smart models allowed
-        // llms.insert(
-        //     LLMType::ClaudeSonnet,
-        //     Box::new(AnthropicFileFinder::new(
-        //         llm_client.clone(),
-        //         fail_over_llm.clone(),
-        //     )),
-        // );
-        // llms.insert(
-        //     LLMType::GeminiPro,
-        //     Box::new(AnthropicFileFinder::new(
-        //         llm_client.clone(),
-        //         fail_over_llm.clone(),
-        //     )),
-        // );
-        // llms.insert(
-        //     LLMType::GeminiProFlash,
-        //     Box::new(AnthropicFileFinder::new(llm_client.clone(), fail_over_llm)),
-        // );
+        // flash all the wayyyy
+        llms.insert(
+            LLMType::GeminiProFlash,
+            Box::new(GoogleStudioKeywordSearch::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+
         Self { llms }
+    }
+}
+
+#[async_trait]
+impl Tool for KeywordSearchQueryBroker {
+    async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
+        let request = input.keyword_search_query()?;
+        todo!();
     }
 }

@@ -25,6 +25,7 @@ use super::{
         CodeToProbeSubSymbolList,
     },
     grep::file::FindInFileResponse,
+    kw_search::types::KeywordsReply,
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
         gotodefintion::GoToDefinitionResponse,
@@ -136,6 +137,8 @@ pub enum ToolOutput {
     ApplyOutlineEditsToRange(ApplyOutlineEditsToRangeResponse),
     // Filter the edit operations and its reponse
     FilterEditOperation(FilterEditOperationResponse),
+    // Keyword search
+    KeywordSearch(KeywordsReply),
 }
 
 impl ToolOutput {
@@ -511,6 +514,13 @@ impl ToolOutput {
     ) -> Option<ReRankingSnippetsForCodeEditingResponse> {
         match self {
             ToolOutput::ReRankedCodeSnippetsForCodeEditing(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_keyword_search_reply(self) -> Option<KeywordsReply> {
+        match self {
+            ToolOutput::KeywordSearch(reply) => Some(reply),
             _ => None,
         }
     }

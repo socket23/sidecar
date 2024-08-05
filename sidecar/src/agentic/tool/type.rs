@@ -81,6 +81,8 @@ pub enum ToolType {
     BigSearch,
     // Filter edit operation
     FilterEditOperation,
+    // Keyword search
+    KeywordSearch,
 }
 
 impl std::fmt::Display for ToolType {
@@ -139,6 +141,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ImportantFilesFinder => write!(f, "Important files finder"),
             ToolType::BigSearch => write!(f, "Big search"),
             ToolType::FilterEditOperation => write!(f, "Filter edit operation"),
+            ToolType::KeywordSearch => write!(f, "Keyword search"),
         }
     }
 }

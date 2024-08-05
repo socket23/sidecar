@@ -81,6 +81,8 @@ pub enum ToolType {
     BigSearch,
     // Filter edit operation
     FilterEditOperation,
+    // inlay hints for the code
+    InLayHints,
 }
 
 impl std::fmt::Display for ToolType {
@@ -139,6 +141,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ImportantFilesFinder => write!(f, "Important files finder"),
             ToolType::BigSearch => write!(f, "Big search"),
             ToolType::FilterEditOperation => write!(f, "Filter edit operation"),
+            ToolType::InLayHints => write!(f, "Inlay hints"),
         }
     }
 }

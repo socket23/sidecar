@@ -1,64 +1,72 @@
+use std::{path::Path, sync::Arc};
+
 use async_trait::async_trait;
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
-use std::{collections::HashMap, sync::Arc};
+use tokio::join;
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{
-        code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
-        errors::ToolError,
-        input::ToolInput,
-        output::ToolOutput,
-        r#type::Tool,
+use crate::{
+    agentic::{
+        symbol::identifier::LLMProperties,
+        tool::{
+            code_symbol::{
+                important::CodeSymbolImportantResponse,
+                repo_map_search::{RepoMapSearchBroker, RepoMapSearchQuery},
+                types::CodeSymbolError,
+            },
+            errors::ToolError,
+            file::file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
+            input::ToolInput,
+            output::ToolOutput,
+            r#type::Tool,
+        },
     },
+    repomap::{tag::TagIndex, types::RepoMap},
+    tree_printer::tree::TreePrinter,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SearchType {
-    Tree(String),
-    Repomap(String),
-    Both(String, String),
+    Both,
 }
-
-use super::models::google_studio::GoogleStudioBigSearch;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BigSearchRequest {
+    user_query: String,
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
+    root_directory: Option<String>,
     root_request_id: String,
-    repo_name: String,
-    user_query: String,
-    root_dir: String,
     search_type: SearchType,
 }
 
 impl BigSearchRequest {
     pub fn new(
+        user_query: String,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        root_directory: Option<String>,
         root_request_id: String,
-        repo_name: String,
-        user_query: String,
-        root_dir: String,
         search_type: SearchType,
     ) -> Self {
         Self {
+            user_query,
             llm,
             provider,
             api_keys,
+            root_directory,
             root_request_id,
-            repo_name,
-            user_query,
-            root_dir,
             search_type,
         }
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
     }
 
     pub fn llm(&self) -> &LLMType {
@@ -73,20 +81,12 @@ impl BigSearchRequest {
         &self.api_keys
     }
 
-    pub fn root_request_id(&self) -> &String {
+    pub fn root_directory(&self) -> Option<&str> {
+        self.root_directory.as_deref()
+    }
+
+    pub fn root_request_id(&self) -> &str {
         &self.root_request_id
-    }
-
-    pub fn repo_name(&self) -> &String {
-        &self.repo_name
-    }
-
-    pub fn user_query(&self) -> &String {
-        &self.user_query
-    }
-
-    pub fn root_dir(&self) -> &String {
-        &self.root_dir
     }
 
     pub fn search_type(&self) -> &SearchType {
@@ -103,39 +103,109 @@ pub trait BigSearch {
 }
 
 pub struct BigSearchBroker {
-    llms: HashMap<LLMType, Box<dyn BigSearch + Send + Sync>>,
+    llm_client: Arc<LLMBroker>,
+    fail_over_llm: LLMProperties,
 }
 
 impl BigSearchBroker {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
-        let mut llms: HashMap<LLMType, Box<dyn BigSearch + Send + Sync>> = Default::default();
+        Self {
+            llm_client,
+            fail_over_llm,
+        }
+    }
 
-        llms.insert(
-            LLMType::GeminiProFlash,
-            Box::new(GoogleStudioBigSearch::new(
-                llm_client.clone(),
-                fail_over_llm,
-            )),
-        );
+    pub fn llm_client(&self) -> Arc<LLMBroker> {
+        self.llm_client.clone()
+    }
 
-        Self { llms }
+    pub fn fail_over_llm(&self) -> LLMProperties {
+        self.fail_over_llm.clone()
     }
 }
 
 #[async_trait]
 impl Tool for BigSearchBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
-        let request = input.big_search_query()?;
+        let request = match input {
+            ToolInput::BigSearch(req) => req,
+            _ => {
+                return Err(ToolError::BigSearchError(
+                    "Expected BigSearch input".to_string(),
+                ))
+            }
+        };
 
-        if let Some(implementation) = self.llms.get(request.llm()) {
-            let output = implementation
-                .search(request)
-                .await
-                .map_err(|e| ToolError::CodeSymbolError(e))?;
+        let root_directory = match request.root_directory() {
+            Some(dir) => dir,
+            None => {
+                return Err(ToolError::BigSearchError(
+                    "Root directory is required".to_string(),
+                ))
+            }
+        };
 
-            Ok(ToolOutput::BigSearch(output))
-        } else {
-            Err(ToolError::LLMNotSupported)
+        let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
+
+        // could be parallelized?
+        let (tree_string, _, _) =
+            TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
+
+        let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
+            tree_string,
+            request.user_query().to_string(),
+            request.llm().clone(),
+            request.provider().clone(),
+            request.api_keys().clone(),
+            root_directory.to_string(), // todo: this should be reponame
+            request.root_request_id().to_string(),
+        ));
+
+        // could be parallelized?
+        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+        let repo_map = RepoMap::new().with_map_tokens(10_000); // slower, but big > accurate
+        let repo_map_string = repo_map
+            .get_repo_map(&tag_index)
+            .await
+            .unwrap_or("".to_string());
+
+        let repo_map_broker = RepoMapSearchBroker::new(self.llm_client(), self.fail_over_llm());
+        let repo_map_input = ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
+            repo_map_string,
+            request.user_query().to_string(),
+            request.llm().clone(),
+            request.provider().clone(),
+            request.api_keys().clone(),
+            request.root_directory().map(|d| d.to_string()),
+            request.root_request_id().to_string(),
+        ));
+
+        let (tree_result, repo_map_result) = join!(
+            tree_broker.invoke(tree_input),
+            repo_map_broker.invoke(repo_map_input)
+        );
+
+        let tree_output: ToolOutput = tree_result?;
+        let repo_map_output: ToolOutput = repo_map_result?;
+
+        let mut responses = Vec::new();
+
+        match tree_output {
+            ToolOutput::ImportantSymbols(important_symbols) => {
+                responses.push(important_symbols);
+            }
+            _ => {}
         }
+
+        match repo_map_output {
+            ToolOutput::RepoMapSearch(important_symbols) => {
+                responses.push(important_symbols);
+            }
+            _ => {}
+        }
+
+        let merged_output = CodeSymbolImportantResponse::merge(responses);
+
+        Ok(ToolOutput::BigSearch(merged_output))
     }
 }

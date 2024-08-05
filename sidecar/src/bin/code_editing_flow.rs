@@ -1,6 +1,5 @@
 use std::{path::PathBuf, sync::Arc};
 
-use futures::{stream, StreamExt};
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
@@ -19,7 +18,7 @@ use sidecar::{
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::{FileContentValue, UserContext},
+    user_context::types::UserContext,
 };
 
 fn default_index_dir() -> PathBuf {
@@ -80,7 +79,7 @@ async fn main() {
     ));
 
     // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
-    let file_paths =
+    let _file_paths =
         vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
     // let file_paths = vec![
     //     "/Users/skcd/test_repo/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
@@ -95,21 +94,21 @@ async fn main() {
     // ];
     // let file_paths =
     //     vec!["/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs".to_owned()];
-    let file_content_value = stream::iter(file_paths)
-        .map(|file_path| async move {
-            let file_content = String::from_utf8(
-                tokio::fs::read(file_path.to_owned())
-                    .await
-                    .expect("to work"),
-            )
-            .expect("to work");
-            FileContentValue::new(file_path, file_content, "rust".to_owned())
-        })
-        .buffer_unordered(2)
-        .collect::<Vec<_>>()
-        .await;
+    // let _file_content_value = stream::iter(file_paths)
+    //     .map(|file_path| async move {
+    //         let file_content = String::from_utf8(
+    //             tokio::fs::read(file_path.to_owned())
+    //                 .await
+    //                 .expect("to work"),
+    //         )
+    //         .expect("to work");
+    //         FileContentValue::new(file_path, file_content, "rust".to_owned())
+    //     })
+    //     .buffer_unordered(2)
+    //     .collect::<Vec<_>>()
+    //     .await;
 
-    let user_context = UserContext::new(vec![], file_content_value, None, vec![]);
+    let user_context = UserContext::new(vec![], vec![], None, vec![]);
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -130,7 +129,7 @@ async fn main() {
     // let problem_statement =
     //     "can you add another provider for grok for me we just need an api_key?".to_owned();
     // let problem_statement = "Add comments to RequestEvents".to_owned();
-    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
+    // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
     // let problem_statement =
@@ -139,7 +138,10 @@ async fn main() {
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
     //         .to_owned();
-    // let problem_statement = "Add support for mixtral model to LLMType".to_owned();
+    let problem_statement = "Add support for mixtral model to LLMType".to_owned();
+
+    let root_dir = "/Users/zi/codestory/sidecar/sidecar";
+
     let initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,
@@ -157,11 +159,10 @@ async fn main() {
         None,
         true, // full code editing
         false,
-        None,
+        Some(root_dir.to_string()),
         None,
         false,
-        false,
-        // Some(llama_70b_properties),
+        true, // big_search
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

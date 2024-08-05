@@ -42,6 +42,7 @@ use super::{
     output::ToolOutput,
     r#type::{Tool, ToolType},
     rerank::base::ReRankBroker,
+    search::types::BigSearchBroker,
     swe_bench::test_tool::SWEBenchTestTool,
 };
 
@@ -226,6 +227,14 @@ impl ToolBroker {
         tools.insert(
             ToolType::ImportantFilesFinder,
             Box::new(ImportantFilesFinderBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        // todo
+        tools.insert(
+            ToolType::BigSearch,
+            Box::new(BigSearchBroker::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

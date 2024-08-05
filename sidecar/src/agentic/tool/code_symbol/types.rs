@@ -57,4 +57,7 @@ pub enum CodeSymbolError {
 
     #[error("Wrong format: {0}")]
     WrongFormat(String),
+
+    #[error("No strategy found")]
+    NoStrategyFound,
 }

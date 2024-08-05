@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -17,6 +17,7 @@ use crate::{
                 important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
             },
             input::ToolInput,
+            search::types::{BigSearchRequest, SearchType},
         },
     },
     user_context::types::UserContext,
@@ -160,7 +161,7 @@ impl SymbolInputEvent {
     pub async fn tool_use_on_initial_invocation(
         self,
         tool_box: Arc<ToolBox>,
-        request_id: &str,
+        _request_id: &str,
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
@@ -177,9 +178,13 @@ impl SymbolInputEvent {
         // TODO(skcd): Toggle the request here depending on if we have the repo map
         if self.has_repo_map() || self.root_directory.is_some() {
             let contents = if self.has_repo_map() {
-                tokio::fs::read_to_string(self.repo_map_fs_path.expect("has_repo_map to not break"))
-                    .await
-                    .ok()
+                tokio::fs::read_to_string(
+                    self.repo_map_fs_path
+                        .clone()
+                        .expect("has_repo_map to not break"),
+                )
+                .await
+                .ok()
             } else {
                 None
             };
@@ -194,57 +199,17 @@ impl SymbolInputEvent {
                     self.request_id.to_string(),
                 ))),
                 None => {
-                    // try to fetch it from the root_directory using repo_search
                     if let Some(root_directory) = self.root_directory.to_owned() {
-                        // if self.big_search() {}
-
-                        // if self.file_important_search {
-                        //     let dir = Path::new(&root_directory);
-
-                        //     let repo_name = "sidecar";
-
-                        //     let api_key =
-                        //         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                        //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                        //         ));
-
-                        //     let (tree, _, _) = TreePrinter::to_string(dir).unwrap();
-
-                        //     println!("{}", tree);
-
-                        //     let llm_type = LLMType::GeminiProFlash;
-
-                        //     let finder_query = ImportantFilesFinderQuery::new(
-                        //         tree,
-                        //         self.user_query.to_owned(),
-                        //         llm_type,
-                        //         LLMProvider::GoogleAIStudio,
-                        //         api_key,
-                        //         repo_name.to_owned(),
-                        //         "".to_owned(),
-                        //     );
-
-                        //     return Some(ToolInput::ImportantFilesFinder(finder_query));
-                        // }
-                        if self.codebase_search {
-                            // here, search tool, repomap plus files
-                            println!("symbol_input::load_repo_map::start({})", &request_id);
-                            return tool_box
-                                .load_repo_map(&root_directory, request_id)
-                                .await
-                                .map(|repo_map| {
-                                    ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
-                                        repo_map,
-                                        self.user_query.to_owned(),
-                                        LLMType::GeminiProFlash,
-                                        LLMProvider::GoogleAIStudio,
-                                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                                        )),
-                                        Some(root_directory.to_owned()),
-                                        self.request_id.to_string(),
-                                    ))
-                                });
+                        if self.big_search() {
+                            return Some(ToolInput::BigSearch(BigSearchRequest::new(
+                                self.user_query.to_string(),
+                                self.llm.clone(),
+                                self.provider.clone(),
+                                self.api_keys.clone(),
+                                Some(root_directory),
+                                self.request_id.to_string(),
+                                SearchType::Both,
+                            )));
                         }
                     }
                     let outline_for_user_context = tool_box

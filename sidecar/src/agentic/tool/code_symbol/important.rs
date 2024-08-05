@@ -1141,6 +1141,53 @@ impl CodeSymbolImportantResponse {
             .collect::<Vec<_>>()
             .join("\n")
     }
+
+    pub fn merge(responses: Vec<CodeSymbolImportantResponse>) -> Self {
+        let (symbols, ordered_symbols) = responses.into_iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut symbols, mut ordered_symbols), response| {
+                symbols.extend(response.symbols);
+                ordered_symbols.extend(response.ordered_symbols);
+                (symbols, ordered_symbols)
+            },
+        );
+
+        CodeSymbolImportantResponse {
+            symbols,
+            ordered_symbols,
+        }
+    }
+
+    pub fn print_symbol_count(&self) {
+        println!("Symbols, (count: {:?}):", self.symbols().len());
+        for symbol in self.symbols() {
+            println!("{}", symbol.file_path());
+        }
+
+        println!(
+            "\nOrdered Symbols, (count: {:?}):",
+            self.ordered_symbols().len()
+        );
+        for ordered_symbol in self.ordered_symbols() {
+            println!("{}", ordered_symbol.file_path());
+        }
+    }
+
+    pub fn merge_functional(response: Vec<CodeSymbolImportantResponse>) -> Self {
+        let symbols = response
+            .iter()
+            .flat_map(|response| response.symbols.iter().cloned())
+            .collect();
+        let ordered_symbols = response
+            .iter()
+            .flat_map(|response| response.ordered_symbols.iter().cloned())
+            .collect();
+
+        CodeSymbolImportantResponse {
+            symbols,
+            ordered_symbols,
+        }
+    }
 }
 
 #[async_trait]

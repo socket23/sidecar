@@ -1,0 +1,88 @@
+use std::collections::HashMap;
+
+use async_trait::async_trait;
+use llm_client::{
+    clients::types::LLMType,
+    provider::{LLMProvider, LLMProviderAPIKeys},
+};
+use thiserror::Error;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct KeywordSearchQuery {
+    user_query: String,
+    llm: LLMType,
+    provider: LLMProvider,
+    api_keys: LLMProviderAPIKeys,
+    repo_name: String,
+    root_request_id: String,
+    case_sensitive: bool,
+}
+
+impl KeywordSearchQuery {
+    pub fn new(
+        user_query: String,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        repo_name: String,
+        root_request_id: String,
+        case_sensitive: bool,
+    ) -> Self {
+        Self {
+            user_query,
+            llm,
+            provider,
+            api_keys,
+            repo_name,
+            root_request_id,
+            case_sensitive,
+        }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
+    }
+
+    pub fn llm(&self) -> &LLMType {
+        &self.llm
+    }
+
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    pub fn api_keys(&self) -> &LLMProviderAPIKeys {
+        &self.api_keys
+    }
+
+    pub fn repo_name(&self) -> &str {
+        &self.repo_name
+    }
+
+    pub fn case_sensitive(&self) -> bool {
+        self.case_sensitive
+    }
+}
+
+pub struct KeywordSearchQueryResponse {
+    words: Vec<String>,
+}
+
+#[derive(Debug, Error)]
+pub enum KeywordSearchQueryError {}
+
+#[async_trait]
+pub trait KeywordSearch {
+    async fn get_keywords(
+        &self,
+        request: KeywordSearchQuery,
+    ) -> Result<KeywordSearchQueryResponse, KeywordSearchQueryError>;
+}
+
+pub struct KeywordSearchQueryBroker {
+    llms: HashMap<LLMType, Box<dyn KeywordSearch + Send + Sync>>,
+}

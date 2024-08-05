@@ -155,11 +155,6 @@ impl SymbolManager {
                 self.root_request_id.to_owned(),
                 outline,
             ));
-        // send the request on to the ui sender
-        let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
-            request_id_ref.to_owned(),
-            code_wide_search.clone(),
-        ));
         let output = {
             match variables {
                 Ok(variables) => ToolOutput::ImportantSymbols(variables),
@@ -359,10 +354,6 @@ impl SymbolManager {
             // send the tool input to the ui sender
             // we need some kind of cache here so we do not invoke the expensive
             // query so many times
-            let _ = self.ui_sender.send(UIEventWithID::from_tool_event(
-                request_id.to_owned(),
-                tool_input.clone(),
-            ));
             let important_symbols = if let Some(swe_bench_id) = swe_bench_id.to_owned() {
                 let symbols = self.long_context_cache.check_cache(&swe_bench_id).await;
                 if let Some(_git_dname) = swe_bench_git_dname {

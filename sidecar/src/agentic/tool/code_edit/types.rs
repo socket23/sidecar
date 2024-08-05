@@ -19,7 +19,7 @@ use crate::agentic::{
 
 use super::models::broker::CodeEditBroker;
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug)]
 pub struct CodeEdit {
     code_above: Option<String>,
     code_below: Option<String>,

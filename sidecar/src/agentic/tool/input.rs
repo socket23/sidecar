@@ -48,7 +48,7 @@ use super::{
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub enum ToolInput {
     CodeEditing(CodeEdit),
     LSPDiagnostics(LSPDiagnosticsInput),

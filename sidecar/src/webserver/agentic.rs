@@ -349,13 +349,13 @@ pub async fn code_editing(
         );
     }
 
-    let fs_file_path = "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned();
-    let file_bytes = tokio::fs::read(fs_file_path.to_owned())
-        .await
-        .expect("to work");
-    let file_content = String::from_utf8(file_bytes).expect("to work");
-    user_context =
-        user_context.update_file_content_map(fs_file_path, file_content, "rust".to_owned());
+    // let fs_file_path = "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned();
+    // let file_bytes = tokio::fs::read(fs_file_path.to_owned())
+    //     .await
+    //     .expect("to work");
+    // let file_content = String::from_utf8(file_bytes).expect("to work");
+    // user_context =
+    //     user_context.update_file_content_map(fs_file_path, file_content, "rust".to_owned());
 
     let _llama_70b_properties = LLMProperties::new(
         LLMType::Llama3_1_70bInstruct,

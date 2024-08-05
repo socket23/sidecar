@@ -1,11 +1,14 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use llm_client::{
+    broker::LLMBroker,
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 use thiserror::Error;
+
+use crate::agentic::symbol::identifier::LLMProperties;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KeywordSearchQuery {
@@ -85,4 +88,31 @@ pub trait KeywordSearch {
 
 pub struct KeywordSearchQueryBroker {
     llms: HashMap<LLMType, Box<dyn KeywordSearch + Send + Sync>>,
+}
+
+impl KeywordSearchQueryBroker {
+    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+        let mut llms: HashMap<LLMType, Box<dyn KeywordSearch + Send + Sync>> = Default::default();
+
+        // only smart models allowed
+        // llms.insert(
+        //     LLMType::ClaudeSonnet,
+        //     Box::new(AnthropicFileFinder::new(
+        //         llm_client.clone(),
+        //         fail_over_llm.clone(),
+        //     )),
+        // );
+        // llms.insert(
+        //     LLMType::GeminiPro,
+        //     Box::new(AnthropicFileFinder::new(
+        //         llm_client.clone(),
+        //         fail_over_llm.clone(),
+        //     )),
+        // );
+        // llms.insert(
+        //     LLMType::GeminiProFlash,
+        //     Box::new(AnthropicFileFinder::new(llm_client.clone(), fail_over_llm)),
+        // );
+        Self { llms }
+    }
 }

@@ -4,6 +4,19 @@ use thiserror::Error;
 
 use crate::user_context::types::UserContextError;
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "keywords")]
+pub struct KeywordsReply {
+    #[serde(default)]
+    keywords: Vec<String>,
+}
+
+impl KeywordsReply {
+    pub fn parse_response(response: &str) -> Result<KeywordsReply, KeywordsReplyError> {
+        todo!();
+    }
+}
+
 #[derive(Debug)]
 pub struct SerdeError {
     xml_error: serde_xml_rs::Error,
@@ -30,13 +43,6 @@ impl SerdeError {
     pub fn new(xml_error: serde_xml_rs::Error, content: String) -> Self {
         Self { xml_error, content }
     }
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "keywords")]
-pub struct KeywordsReply {
-    #[serde(default)]
-    keywords: Vec<String>,
 }
 
 #[derive(Debug, Error)]

@@ -410,7 +410,7 @@ pub async fn code_editing(
                 Some(root_directory),
                 None,
                 false,
-                false,
+                true, // big search
             ))
             .await;
     });

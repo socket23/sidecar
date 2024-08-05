@@ -187,6 +187,17 @@ impl UIEventWithID {
             )),
         }
     }
+
+    /// sends a open file request
+    pub fn open_file_event(request_id: String, fs_file_path: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::OpenFile(OpenFileRequest {
+                fs_file_path,
+                request_id,
+            })),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -452,10 +463,17 @@ impl InitialSearchSymbolEvent {
 }
 
 #[derive(Debug, serde::Serialize)]
+pub struct OpenFileRequest {
+    fs_file_path: String,
+    request_id: String,
+}
+
+#[derive(Debug, serde::Serialize)]
 pub enum FrameworkEvent {
     RepoMapGenerationStart(String),
     RepoMapGenerationFinished(String),
     LongContextSearchStart(String),
     LongContextSearchFinished(String),
     InitialSearchSymbols(InitialSearchSymbolEvent),
+    OpenFile(OpenFileRequest),
 }

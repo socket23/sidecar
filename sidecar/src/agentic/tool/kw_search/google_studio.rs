@@ -29,12 +29,86 @@ impl GoogleStudioKeywordSearch {
         }
     }
 
-    pub fn system_message_for_keyword_search(&self, request: &KeywordSearchQuery) -> String {
-        todo!()
+    pub fn system_message_for_keyword_search(&self, _request: &KeywordSearchQuery) -> String {
+        format!(
+            r#"You are a keyword search expert.
+
+You will be provided with a user_query and a repository name.
+
+You will return a list of key words that will help you achieve the user_query.
+
+Here is an example:
+
+<user_query>
+"
+@ (__matmul__) should fail if one argument is not a matrix
+```
+>>> A = Matrix([[1, 2], [3, 4]])
+>>> B = Matrix([[2, 3], [1, 2]])
+>>> A@B
+Matrix([
+[ 4,  7],
+[10, 17]])
+>>> 2@B
+Matrix([
+[4, 6],
+[2, 4]])
+```
+
+Right now `@` (`__matmul__`) just copies `__mul__`, but it should actually only work if the multiplication is actually a matrix multiplication. 
+
+This is also how NumPy works
+
+```
+>>> import numpy as np
+>>> a = np.array([[1, 2], [3, 4]])
+>>> 2*a
+array([[2, 4],
+        [6, 8]])
+>>> 2@a
+Traceback (most recent call last):
+    File ""<stdin>"", line 1, in <module>
+ValueError: Scalar operands are not allowed, use '*' instead
+```
+"
+</user_query>
+
+<repository>
+sympy/sympy
+</repository>
+
+And the response:
+<reply>
+__matmul__,
+matrix,
+__mul__,
+numpy,
+scalar,
+</reply>
+
+
+Respond in the following format:
+
+<reply>
+keyword,
+keyword,
+keyword,
+</reply>"#
+        )
     }
 
     pub fn user_message_for_keyword_search(&self, request: &KeywordSearchQuery) -> String {
-        todo!()
+        format!(
+            r#"<user_query>
+{}
+</user_query>
+
+<repository>
+{}
+</repository>"#,
+            request.user_query(),
+            request.repo_name()
+        )
     }
 }
 

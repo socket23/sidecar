@@ -11,7 +11,7 @@ use super::agentic::{
     GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse,
 };
 
-struct GoogleStudioPlanGenerator {
+pub struct GoogleStudioPlanGenerator {
     llm_client: Arc<LLMBroker>,
     _fail_over_llm: LLMProperties,
 }
@@ -101,6 +101,6 @@ impl GenerateSearchPlan for GoogleStudioPlanGenerator {
 
         println!("Keyword search response: {:?}", response);
 
-        todo!();
+        SearchPlanResponse::parse(&response)
     }
 }

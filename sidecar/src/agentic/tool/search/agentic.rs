@@ -25,6 +25,7 @@ use serde_xml_rs::from_str;
 use std::error::Error;
 use thiserror::Error;
 
+#[derive(Debug, Clone)]
 pub struct SearchPlanQuery {
     user_query: String,
     llm: LLMType,
@@ -136,6 +137,7 @@ pub trait GenerateSearchPlan {
     ) -> Result<SearchPlanResponse, GenerateSearchPlanError>;
 }
 
+#[derive(Debug, Clone)]
 pub enum SearchPlanContext {
     RepoTree(String),
 }

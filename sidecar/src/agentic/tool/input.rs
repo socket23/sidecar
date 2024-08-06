@@ -44,7 +44,7 @@ use super::{
     },
     r#type::ToolType,
     rerank::base::ReRankEntriesForBroker,
-    search::types::BigSearchRequest,
+    search::{agentic::SearchPlanQuery, types::BigSearchRequest},
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 
@@ -113,6 +113,8 @@ pub enum ToolInput {
     KeywordSearch(KeywordSearchQuery),
     // inlay hints from the lsp/editor
     InlayHints(InlayHintsRequest),
+    // Search plan
+    SearchPlan(SearchPlanQuery),
 }
 
 impl ToolInput {
@@ -169,6 +171,7 @@ impl ToolInput {
             ToolInput::FilterEditOperation(_) => ToolType::FilterEditOperation,
             ToolInput::KeywordSearch(_) => ToolType::KeywordSearch,
             ToolInput::InlayHints(_) => ToolType::InLayHints,
+            ToolInput::SearchPlan(_) => ToolType::SearchPlan,
         }
     }
 
@@ -367,6 +370,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::BigSearch))
+        }
+    }
+
+    pub fn search_plan_query(self) -> Result<SearchPlanQuery, ToolError> {
+        if let ToolInput::SearchPlan(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::SearchPlan))
         }
     }
 

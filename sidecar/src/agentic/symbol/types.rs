@@ -1625,22 +1625,6 @@ Satisfy the requirement either by making edits or gathering the required informa
             "symbol::edit_code_full::should_edit::start({})",
             self.symbol_name()
         );
-        let should_edit = self
-            .tools
-            .should_edit_symbol(sub_symbol, &content, request_id)
-            .await?;
-        println!(
-            "symbol::edit_code_full::should_edit::end({})::symbol_name({})::thinking({})",
-            should_edit.should_edit(),
-            self.symbol_name(),
-            should_edit.thinking(),
-        );
-
-        if !should_edit.should_edit() {
-            return Err(SymbolError::EditNotRequired(
-                should_edit.thinking().to_owned(),
-            ));
-        }
 
         // Here there are 2 steps which will need to happen:
         // - First we use a more powerful model for generating the outline of the changes
@@ -1763,25 +1747,6 @@ Satisfy the requirement either by making edits or gathering the required informa
             .find_sub_symbol_to_edit_with_name(self.symbol_name(), sub_symbol, request_id)
             .await?;
         let content = symbol_to_edit.content().to_owned();
-        println!(
-            "symbol::edit_code::should_edit_symbol::start({})",
-            self.symbol_name()
-        );
-        let should_edit = self
-            .tools
-            .should_edit_symbol(sub_symbol, &content, request_id)
-            .await?;
-        println!(
-            "symbol::edit_code::should_edit_symbol::({})::symbol_name({})::thinking({})",
-            should_edit.thinking(),
-            self.symbol_name(),
-            should_edit.thinking(),
-        );
-        if !should_edit.should_edit() {
-            return Err(SymbolError::EditNotRequired(
-                should_edit.thinking().to_owned(),
-            ));
-        }
         let (llm_properties, swe_bench_initial_edit) =
             if let Some(llm_properties) = self.tool_properties.get_swe_bench_code_editing_llm() {
                 // if the symbol is extremely long which we want to edit, fallback

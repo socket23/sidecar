@@ -1649,6 +1649,7 @@ Satisfy the requirement either by making edits or gathering the required informa
         let edited_code = self
             .tools
             .code_edit_outline(
+                sub_symbol,
                 sub_symbol.fs_file_path(),
                 file_content.contents_ref(),
                 symbol_to_edit.range(),
@@ -1694,6 +1695,7 @@ Satisfy the requirement either by making edits or gathering the required informa
         let edited_code = self
             .tools
             .code_edit_outline(
+                sub_symbol,
                 sub_symbol.fs_file_path(),
                 file_content.contents_ref(),
                 sub_symbol.range(),

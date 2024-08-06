@@ -656,11 +656,17 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
         let language = context.language();
         let fs_file_path = context.fs_file_path();
         let system_message = if context.is_outline_edit() {
-            self.system_message_for_code_editing_outline(
-                language,
-                fs_file_path,
-                context.symbol_to_edit_name(),
-            )
+            // new sub-symbol implies we are adding code, the system prompt
+            // looks a bit different for that case
+            if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
+                self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
+            } else {
+                self.system_message_for_code_editing_outline(
+                    language,
+                    fs_file_path,
+                    context.symbol_to_edit_name(),
+                )
+            }
         } else {
             if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
                 self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)

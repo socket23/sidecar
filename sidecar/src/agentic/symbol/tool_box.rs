@@ -3959,6 +3959,7 @@ instruction:
     /// - Use a weaker model to start applying the changes
     pub async fn code_edit_outline(
         &self,
+        sub_symbol: &SymbolToEdit,
         fs_file_path: &str,
         file_content: &str,
         selection_range: &Range,
@@ -4004,7 +4005,12 @@ instruction:
             llm_properties.provider().clone(),
             false,
             symbol_to_edit,
-            None,
+            // pass the symbol which we want to edit over here
+            if sub_symbol.is_new() {
+                Some(sub_symbol.symbol_name().to_owned())
+            } else {
+                None
+            },
             self.root_request_id.to_owned(),
             // we want an outline edit
             true,

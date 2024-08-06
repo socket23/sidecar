@@ -36,7 +36,7 @@ Follow the user's requirements carefully and to the letter.
 - The code present above the section you have to edit will be given in <code_above> section.
 - The code present below the section you have to edit will be given in <code_below> section.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
-- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
@@ -155,7 +155,7 @@ Follow the user's requirements carefully and to the letter.
 <code_below>
 </code_below>
 We are going to insert the code in the section <code_to_add> of the input, when you write the code for is_grok method we will replace the <code_to_add> section with what you generate.
-- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
@@ -312,7 +312,7 @@ Follow the user's requirements carefully and to the letter.
 - The code present above the section you have to edit will be given in <code_above> section.
 - The code present below the section you have to edit will be given in <code_below> section.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
-- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.

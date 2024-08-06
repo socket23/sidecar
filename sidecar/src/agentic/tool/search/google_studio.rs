@@ -26,7 +26,15 @@ impl GoogleStudioPlanGenerator {
 
     // todo(zi): add CoT to system
     fn system_message_for_keyword_search(&self, request: &SearchPlanQuery) -> String {
-        format!(r#"You will generate a search plan based on the provided context and user_query."#)
+        format!(
+            r#"You will generate a search plan based on the provided context and user_query.
+You will response with a search plan and a list of files that you want to search, in the following format:
+<search_plan>
+</search_plan>
+<files>
+</files>
+        "#
+        )
     }
 
     fn user_message_for_keyword_search(&self, request: &SearchPlanQuery) -> String {

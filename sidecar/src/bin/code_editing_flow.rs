@@ -79,8 +79,8 @@ async fn main() {
     ));
 
     // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
-    let _file_paths =
-        vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
+    // let _file_paths =
+    //     vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
     // let file_paths = vec![
     //     "/Users/skcd/test_repo/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned(),

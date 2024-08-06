@@ -23,6 +23,10 @@ use crate::{
             kw_search::tool::{KeywordSearchQuery, KeywordSearchQueryBroker},
             output::ToolOutput,
             r#type::Tool,
+            search::{
+                agentic::{SearchPlanContext, SearchPlanQuery},
+                broker::SearchPlanBroker,
+            },
         },
     },
     repomap::{tag::TagIndex, types::RepoMap},
@@ -147,10 +151,28 @@ impl Tool for BigSearchBroker {
             }
         };
 
-        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+        let (tree_string, _, _) =
+            TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
 
         // agentic search
         // let search_plan = SearchPlan
+        let search_plan_broker = SearchPlanBroker::new(self.llm_client(), self.fail_over_llm());
+        let search_plan_input = ToolInput::SearchPlan(SearchPlanQuery::new(
+            request.user_query().to_string(),
+            request.llm().clone(),
+            request.provider().clone(),
+            request.api_keys().clone(),
+            request.root_directory().unwrap_or("").to_string(), // repo_name
+            request.root_request_id().to_string(),
+            vec![SearchPlanContext::RepoTree(tree_string)],
+        ));
+
+        let search_plan_result = search_plan_broker.invoke(search_plan_input).await;
+
+        println!("search_plan_result: {:?}", search_plan_result);
+        todo!();
+
+        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
 
         let keyword_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
         let keyword_search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
@@ -167,8 +189,8 @@ impl Tool for BigSearchBroker {
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 
         // could be parallelized?
-        let (tree_string, _, _) =
-            TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
+        // let (tree_string, _, _) =
+        //     TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
 
         let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
             tree_string,

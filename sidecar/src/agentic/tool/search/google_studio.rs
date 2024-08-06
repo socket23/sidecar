@@ -88,7 +88,7 @@ impl GenerateSearchPlan for GoogleStudioPlanGenerator {
                 messages,
                 provider,
                 vec![
-                    ("event_type".to_owned(), "keyword_search".to_owned()),
+                    ("event_type".to_owned(), "generate_search_plan".to_owned()),
                     ("root_id".to_owned(), root_request_id),
                 ]
                 .into_iter()
@@ -97,9 +97,9 @@ impl GenerateSearchPlan for GoogleStudioPlanGenerator {
             )
             .await?;
 
-        println!("Keyword search response time: {:?}", start.elapsed());
+        println!("Generate search plan response time: {:?}", start.elapsed());
 
-        println!("Keyword search response: {:?}", response);
+        println!("Generate search plan response: {:?}", response);
 
         SearchPlanResponse::parse(&response)
     }

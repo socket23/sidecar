@@ -34,6 +34,17 @@ impl SearchPlanBroker {
 #[async_trait]
 impl Tool for SearchPlanBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
-        todo!();
+        let request = input.search_plan_query()?;
+
+        if let Some(implementation) = self.llms.get(request.llm()) {
+            let response = implementation
+                .generate_search_plan(&request)
+                .await
+                .map_err(|e| ToolError::SearchPlanError(e))?;
+
+            Ok(ToolOutput::SearchPlan(response))
+        } else {
+            Err(ToolError::LLMNotSupported)
+        }
     }
 }

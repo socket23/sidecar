@@ -37,6 +37,7 @@ Follow the user's requirements carefully and to the letter.
 - The code present below the section you have to edit will be given in <code_below> section.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
 - Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
@@ -156,6 +157,7 @@ Follow the user's requirements carefully and to the letter.
 </code_below>
 We are going to insert the code in the section <code_to_add> of the input, when you write the code for is_grok method we will replace the <code_to_add> section with what you generate.
 - Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
@@ -313,6 +315,7 @@ Follow the user's requirements carefully and to the letter.
 - The code present below the section you have to edit will be given in <code_below> section.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
 - Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
@@ -437,6 +440,16 @@ Notice how we rewrote the whole section of the code and only the portion which w
         );
         let in_range = self.selection_to_edit(context.code_to_edit());
         let mut user_message = "".to_owned();
+        let extra_symbols_to_be_created = context.symbols_which_will_be_added();
+        if let Some(extra_symbols_to_be_created) = extra_symbols_to_be_created {
+            user_message = user_message
+                + &format!(
+                    r#"<extra_symbols_will_be_created>
+{extra_symbols_to_be_created}
+</extra_symbols_will_be_created>"#
+                )
+                + "\n";
+        }
         user_message = user_message + &extra_data + "\n";
         if let Some(above) = above {
             user_message = user_message + &above + "\n";
@@ -463,6 +476,16 @@ Notice how we rewrote the whole section of the code and only the portion which w
         let above = self.above_selection(context.above_context());
         // let below = self.below_selection(context.below_context());
         let mut user_message = "".to_owned();
+        let extra_symbols_to_be_created = context.symbols_which_will_be_added();
+        if let Some(extra_symbols_to_be_created) = extra_symbols_to_be_created {
+            user_message = user_message
+                + &format!(
+                    r#"<extra_symbols_will_be_created>
+{extra_symbols_to_be_created}
+</extra_symbols_will_be_created>"#
+                )
+                + "\n";
+        }
         user_message = user_message + &extra_data + "\n";
         if let Some(above) = above {
             user_message = user_message + &above + "\n";

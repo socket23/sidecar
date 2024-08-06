@@ -1024,6 +1024,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     true,
                                     original_request.get_original_question().to_owned(),
+                                    original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec())
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1110,6 +1111,7 @@ Edit selection reason:
                                         false,
                                         true,
                                         original_request_ref.get_original_question().to_owned(),
+                                        original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({})::({:?})::({:?})", self.symbol_name(), &range, &fs_file_path);
@@ -1260,6 +1262,7 @@ Edit selection reason:
                                     true,
                                     false,
                                     original_request.get_original_question().to_owned(),
+                                    original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1376,6 +1379,7 @@ Reason to edit:
                                         false,
                                         false,
                                         original_request_ref.get_original_question().to_owned(),
+                                        original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);

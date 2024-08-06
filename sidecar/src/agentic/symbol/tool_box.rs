@@ -96,7 +96,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
-use super::events::initial_request::SymbolRequestHistoryItem;
+use super::events::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
@@ -4400,12 +4400,31 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        symbols_to_be_edited: Option<&[SymbolEditedItem]>,
         _request_id: &str,
     ) -> Result<CodeToEditSymbolResponse, SymbolError> {
+        let symbols_to_be_edited = symbols_to_be_edited.map(|symbols_to_be_edited| {
+            symbols_to_be_edited
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let symbol_name = symbol.name();
+                    let fs_file_path = symbol.fs_file_path();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         let request =
             ToolInput::FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest::new(
                 xml_string,
                 query,
+                symbols_to_be_edited,
                 llm,
                 provider,
                 api_keys,

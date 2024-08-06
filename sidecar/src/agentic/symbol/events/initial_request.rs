@@ -18,6 +18,18 @@ impl SymbolEditedItem {
             thinking,
         }
     }
+
+    pub fn name(&self) -> &str {
+        &self.symbol
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn is_new(&self) -> bool {
+        self.is_new
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -90,5 +102,11 @@ impl InitialRequestData {
 
     pub fn history(&self) -> &[SymbolRequestHistoryItem] {
         self.history.as_slice()
+    }
+
+    pub fn symbols_edited_list(&self) -> Option<&[SymbolEditedItem]> {
+        self.symbols_edited_list
+            .as_ref()
+            .map(|symbol_list| symbol_list.as_slice())
     }
 }

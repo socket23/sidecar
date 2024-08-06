@@ -933,6 +933,7 @@ Please provide the order along with the reason in 2 lists, one for code snippets
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
 - You should select a code section for editing if and only if you want to make changes to that section.
+- You are also given a list of extra symbols in <extra_symbols> which will be provided to you while making the changes, use this to be more sure about your reason for selection.
 - Adding new functionality is a very valid reason to select a sub-section for editing.
 - Editing or deleting some code is also a very valid reason for selecting a code section for editing.
 - First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words.
@@ -1183,11 +1184,19 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
         let request_llm = request.llm().clone();
         let request_provider = request.provider().clone();
         let request_api_key = request.api_key().clone();
+        let extra_symbols = request
+            .extra_symbols()
+            .map(|extra_symbols_string| extra_symbols_string.to_owned())
+            .unwrap_or("".to_owned());
         let xml_string = request.xml_string();
         let user_query = format!(
             r#"<user_query>
 {query}
 </user_query>
+
+<extra_symbols>
+{extra_symbols}
+</extra_symbols>
 
 {xml_string}"#
         );

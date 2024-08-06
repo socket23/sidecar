@@ -17,7 +17,7 @@ use crate::{
 use async_trait::async_trait;
 use llm_client::{
     broker::LLMBroker,
-    clients::types::LLMType,
+    clients::types::{LLMClientError, LLMType},
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 use thiserror::Error;
@@ -100,4 +100,6 @@ pub enum SearchPlanContext {
 pub enum GenerateSearchPlanError {
     #[error("generic error: {0}")]
     Generic(String),
+    #[error("LLM Client erorr: {0}")]
+    LLMClientError(#[from] LLMClientError),
 }

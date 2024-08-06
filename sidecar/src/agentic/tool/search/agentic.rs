@@ -84,12 +84,17 @@ impl SearchPlanQuery {
     }
 }
 
+pub struct SearchPlanResponse {
+    search_plan: String,
+    files: Vec<String>,
+}
+
 #[async_trait]
 pub trait GenerateSearchPlan {
     async fn generate_search_plan(
         &self,
         request: &SearchPlanQuery,
-    ) -> Result<String, GenerateSearchPlanError>;
+    ) -> Result<SearchPlanResponse, GenerateSearchPlanError>;
 }
 
 pub enum SearchPlanContext {

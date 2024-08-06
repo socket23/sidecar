@@ -7,7 +7,9 @@ use std::{sync::Arc, time::Instant};
 
 use crate::agentic::{symbol::identifier::LLMProperties, tool::search::agentic::SearchPlanContext};
 
-use super::agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery};
+use super::agentic::{
+    GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse,
+};
 
 struct GoogleStudioPlanGenerator {
     llm_client: Arc<LLMBroker>,
@@ -50,7 +52,7 @@ impl GenerateSearchPlan for GoogleStudioPlanGenerator {
     async fn generate_search_plan(
         &self,
         request: &SearchPlanQuery,
-    ) -> Result<String, GenerateSearchPlanError> {
+    ) -> Result<SearchPlanResponse, GenerateSearchPlanError> {
         let root_request_id = request.root_request_id().to_owned();
         let model = request.llm().clone();
         let provider = request.provider().clone();
@@ -86,6 +88,8 @@ impl GenerateSearchPlan for GoogleStudioPlanGenerator {
             .await?;
 
         println!("Keyword search response time: {:?}", start.elapsed());
+
+        println!("Keyword search response: {:?}", response);
 
         todo!();
     }

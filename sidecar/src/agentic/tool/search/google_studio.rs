@@ -29,10 +29,12 @@ impl GoogleStudioPlanGenerator {
         format!(
             r#"You will generate a search plan based on the provided context and user_query.
 You will response with a search plan and a list of files that you want to search, in the following format:
+<reply>
 <search_plan>
 </search_plan>
 <files>
 </files>
+</reply>
         "#
         )
     }

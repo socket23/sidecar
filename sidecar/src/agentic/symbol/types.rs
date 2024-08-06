@@ -1363,6 +1363,9 @@ Satisfy the requirement either by making edits or gathering the required informa
                 true,
                 false,
                 request_data.get_original_question().to_owned(),
+                request_data
+                    .symbols_edited_list()
+                    .map(|symbol_edited_list| symbol_edited_list.to_vec()),
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(
@@ -1549,6 +1552,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 swe_bench_initial_edit,
                 None,
                 Some(sub_symbol.symbol_name().to_owned()),
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))
@@ -1599,6 +1603,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.llm_properties.clone(),
                 request_id,
                 Some(symbol_to_edit.name().to_owned()),
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
 
@@ -1645,6 +1650,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.llm_properties.clone(),
                 request_id,
                 Some(sub_symbol.symbol_name().to_owned()),
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
         let _ = self.ui_sender.send(UIEventWithID::edited_code(
@@ -1741,6 +1747,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 swe_bench_initial_edit,
                 Some(symbol_to_edit.name().to_owned()),
                 None,
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))

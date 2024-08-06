@@ -1,6 +1,6 @@
 use crate::{agentic::symbol::identifier::SymbolIdentifier, chunking::text_document::Range};
 
-use super::initial_request::SymbolRequestHistoryItem;
+use super::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToEdit {
@@ -13,6 +13,7 @@ pub struct SymbolToEdit {
     // If this is a full symbol edit instead of being sub-symbol level
     is_full_edit: bool,
     original_user_query: String,
+    symbol_edited_list: Option<Vec<SymbolEditedItem>>,
 }
 
 impl SymbolToEdit {
@@ -25,6 +26,7 @@ impl SymbolToEdit {
         is_new: bool,
         is_full_edit: bool,
         original_user_query: String,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
     ) -> Self {
         Self {
             symbol_name,
@@ -35,7 +37,12 @@ impl SymbolToEdit {
             is_new,
             is_full_edit,
             original_user_query,
+            symbol_edited_list,
         }
+    }
+
+    pub fn symbol_edited_list(&self) -> Option<Vec<SymbolEditedItem>> {
+        self.symbol_edited_list.clone()
     }
 
     pub fn original_user_query(&self) -> &str {

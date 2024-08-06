@@ -30,9 +30,7 @@ use crate::{
             ui_event::{SymbolEventProbeRequest, SymbolEventSubStep, SymbolEventSubStepRequest},
         },
         tool::code_symbol::{
-            important::{
-                CodeSubSymbolProbingResult, CodeSymbolProbingSummarize, CodeSymbolWithThinking,
-            },
+            important::{CodeSubSymbolProbingResult, CodeSymbolProbingSummarize},
             models::anthropic::AskQuestionSymbolHint,
         },
     },
@@ -46,7 +44,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::SymbolToEdit,
-        initial_request::{InitialRequestData, SymbolRequestHistoryItem},
+        initial_request::{InitialRequestData, SymbolEditedItem, SymbolRequestHistoryItem},
         probe::{SymbolToProbeHistory, SymbolToProbeRequest},
         types::{AskQuestionRequest, SymbolEvent},
     },
@@ -154,6 +152,7 @@ impl SymbolEventRequest {
         // passing history to the symbols so we do not end up doing repeated work
         history: Vec<SymbolRequestHistoryItem>,
         tool_properties: ToolProperties,
+        symbols_edited_list: Option<Vec<SymbolEditedItem>>,
     ) -> Self {
         Self {
             symbol,
@@ -162,6 +161,7 @@ impl SymbolEventRequest {
                 None,
                 history,
                 tool_properties.get_full_symbol_request(),
+                symbols_edited_list,
             )),
             tool_properties,
         }
@@ -1363,6 +1363,9 @@ Satisfy the requirement either by making edits or gathering the required informa
                 true,
                 false,
                 request_data.get_original_question().to_owned(),
+                request_data
+                    .symbols_edited_list()
+                    .map(|symbol_edited_list| symbol_edited_list.to_vec()),
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(
@@ -1467,35 +1470,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 &self.tool_properties,
             )
             .await?;
-        let codebase_wide_search: Vec<Option<(CodeSymbolWithThinking, String)>> = vec![];
-        // disabling this for now
-        // let codebase_wide_search = self
-        //     .tools
-        //     .utlity_symbols_search(
-        //         &subsymbol.instructions().join("\n"),
-        //         interested_defintiions
-        //             .iter()
-        //             .filter_map(|interested_symbol| {
-        //                 if let Some((code_symbol, _)) = interested_symbol {
-        //                     Some(code_symbol)
-        //                 } else {
-        //                     None
-        //                 }
-        //             })
-        //             .collect::<Vec<_>>()
-        //             .as_slice(),
-        //         &symbol_to_edit,
-        //         &file_content,
-        //         &subsymbol.fs_file_path(),
-        //         self.mecha_code_symbol.user_context(),
-        //         &language,
-        //         self.llm_properties.llm().clone(),
-        //         self.llm_properties.provider().clone(),
-        //         self.llm_properties.api_key().clone(),
-        //         self.hub_sender.clone(),
-        //         request_id,
-        //     )
-        //     .await?;
 
         // cool now we have all the symbols which are necessary for making the edit
         // and more importantly we have all the context which is required
@@ -1510,20 +1484,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                     None
                 }
             })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .chain(
-                codebase_wide_search
-                    .iter()
-                    .filter_map(|codebase_wide_definitions| {
-                        if let Some(interested_definitions) = codebase_wide_definitions {
-                            Some(interested_definitions.1.to_owned())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
             .collect::<Vec<_>>();
         Ok(outlines)
     }
@@ -1592,6 +1552,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 swe_bench_initial_edit,
                 None,
                 Some(sub_symbol.symbol_name().to_owned()),
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))
@@ -1642,6 +1603,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.llm_properties.clone(),
                 request_id,
                 Some(symbol_to_edit.name().to_owned()),
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
 
@@ -1688,6 +1650,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.llm_properties.clone(),
                 request_id,
                 Some(sub_symbol.symbol_name().to_owned()),
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
         let _ = self.ui_sender.send(UIEventWithID::edited_code(
@@ -1784,6 +1747,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 swe_bench_initial_edit,
                 Some(symbol_to_edit.name().to_owned()),
                 None,
+                sub_symbol.symbol_edited_list(),
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))

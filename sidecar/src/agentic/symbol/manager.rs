@@ -10,7 +10,7 @@ use llm_client::provider::{GoogleAIStudioKey, LLMProvider};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
-use crate::agentic::symbol::events::initial_request::InitialRequestData;
+use crate::agentic::symbol::events::initial_request::{InitialRequestData, SymbolEditedItem};
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
@@ -513,6 +513,19 @@ impl SymbolManager {
                         .collect::<Vec<_>>()
                         .join(",")
                 );
+
+                let symbols_edited_list = important_symbols
+                    .ordered_symbols()
+                    .into_iter()
+                    .map(|symbol| {
+                        SymbolEditedItem::new(
+                            symbol.code_symbol().to_owned(),
+                            symbol.file_path().to_owned(),
+                            symbol.is_new(),
+                            symbol.steps().to_vec().join("\n"),
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 // TODO(skcd): the symbol here might belong to a class or it might be a global function
                 // we want to grab the largest node containing the symbol here instead of using
                 // the symbol directly since our algorithm would not work otherwise
@@ -537,12 +550,17 @@ impl SymbolManager {
                 let _ = stream::iter(
                     // we are loosing context about the changes which we want to make
                     // to the symbol over here
-                    symbols
-                        .into_iter()
-                        .map(|symbol| (symbol, request_id.to_owned(), user_query.to_owned())),
+                    symbols.into_iter().map(|symbol| {
+                        (
+                            symbol,
+                            request_id.to_owned(),
+                            user_query.to_owned(),
+                            symbols_edited_list.to_vec(),
+                        )
+                    }),
                 )
                 .map(
-                    |((symbol_request, steps), request_id, user_query)| async move {
+                    |((symbol_request, steps), request_id, user_query, symbols_edited_list)| async move {
                         let symbol_name = symbol_request.symbol_name().to_owned();
                         let symbol_identifier = self
                             .symbol_locker
@@ -562,6 +580,7 @@ impl SymbolManager {
                                     // request
                                     vec![],
                                     full_symbol_edit,
+                                    Some(symbols_edited_list),
                                 )),
                                 tool_properties_ref.clone(),
                             );

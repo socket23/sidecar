@@ -96,7 +96,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
-use super::events::initial_request::SymbolRequestHistoryItem;
+use super::events::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
@@ -3020,6 +3020,7 @@ instruction:
                         request.to_owned(),
                         history.to_vec(),
                         tool_properties.clone(),
+                        None,
                     ),
                     request_id.to_owned(),
                     sender,
@@ -3041,6 +3042,7 @@ instruction:
                         request.to_owned(),
                         history.to_vec(),
                         tool_properties.clone(),
+                        None,
                     ),
                     request_id.to_owned(),
                     sender,
@@ -3968,6 +3970,7 @@ instruction:
         llm_properties: LLMProperties,
         request_id: &str,
         symbol_to_edit: Option<String>,
+        symbols_edited_list: Option<Vec<SymbolEditedItem>>,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit_outline============");
         println!("tool_box::code_edit_outline::fs_file_path:{}", fs_file_path);
@@ -3992,6 +3995,23 @@ instruction:
                 request_id,
             )
             .await?;
+        let symbols_to_edit = symbols_edited_list.map(|symbols| {
+            symbols
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let fs_file_path = symbol.fs_file_path();
+                    let symbol_name = symbol.name();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -4014,6 +4034,7 @@ instruction:
             self.root_request_id.to_owned(),
             // we want an outline edit
             true,
+            symbols_to_edit,
         ));
         let response = self
             .tools
@@ -4060,6 +4081,7 @@ instruction:
         swe_bench_initial_edit: bool,
         symbol_to_edit: Option<String>,
         is_new_sub_symbol: Option<String>,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
         println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
@@ -4074,6 +4096,23 @@ instruction:
             .unwrap_or("".to_owned());
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
+        let new_symbols_edited = symbol_edited_list.map(|symbol_list| {
+            symbol_list
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let fs_file_path = symbol.fs_file_path();
+                    let symbol_name = symbol.name();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -4091,6 +4130,7 @@ instruction:
             self.root_request_id.to_owned(),
             // we want a complete edit over here
             false,
+            new_symbols_edited,
         ));
         self.tools
             .invoke(request)
@@ -4398,12 +4438,31 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        symbols_to_be_edited: Option<&[SymbolEditedItem]>,
         _request_id: &str,
     ) -> Result<CodeToEditSymbolResponse, SymbolError> {
+        let symbols_to_be_edited = symbols_to_be_edited.map(|symbols_to_be_edited| {
+            symbols_to_be_edited
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let symbol_name = symbol.name();
+                    let fs_file_path = symbol.fs_file_path();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         let request =
             ToolInput::FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest::new(
                 xml_string,
                 query,
+                symbols_to_be_edited,
                 llm,
                 provider,
                 api_keys,

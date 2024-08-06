@@ -1024,6 +1024,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     true,
                                     original_request.get_original_question().to_owned(),
+                                    original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec())
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1047,6 +1048,7 @@ impl MechaCodeSymbolThinking {
                         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new("AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned())),
                     )
                 };
+                let symbols_to_be_edited = original_request.symbols_edited_list();
                 let filtered_list = tool_box
                 .filter_code_snippets_in_symbol_for_editing(
                     ranked_xml_list,
@@ -1054,6 +1056,7 @@ impl MechaCodeSymbolThinking {
                     llm_properties_for_filtering.llm().clone(),
                     llm_properties_for_filtering.provider().clone(),
                     llm_properties_for_filtering.api_key().clone(),
+                    symbols_to_be_edited,
                     &request_id,
                 )
                 .await?;
@@ -1108,6 +1111,7 @@ Edit selection reason:
                                         false,
                                         true,
                                         original_request_ref.get_original_question().to_owned(),
+                                        original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({})::({:?})::({:?})", self.symbol_name(), &range, &fs_file_path);
@@ -1258,6 +1262,7 @@ Edit selection reason:
                                     true,
                                     false,
                                     original_request.get_original_question().to_owned(),
+                                    original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1302,6 +1307,7 @@ Edit selection reason:
                     "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::start({})",
                     self.symbol_name(),
                 );
+                let symbols_to_be_edited = original_request.symbols_edited_list();
                 let filtered_list = tool_box
                     .filter_code_snippets_in_symbol_for_editing(
                         ranked_xml_list,
@@ -1309,6 +1315,7 @@ Edit selection reason:
                         llm_properties_for_filtering.llm().clone(),
                         llm_properties_for_filtering.provider().clone(),
                         llm_properties_for_filtering.api_key().clone(),
+                        symbols_to_be_edited,
                         &request_id,
                     )
                     .await?;
@@ -1372,6 +1379,7 @@ Reason to edit:
                                         false,
                                         false,
                                         original_request_ref.get_original_question().to_owned(),
+                                        original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);

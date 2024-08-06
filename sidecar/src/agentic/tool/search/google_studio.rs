@@ -5,7 +5,7 @@ use llm_client::{
 };
 use std::{sync::Arc, time::Instant};
 
-use crate::agentic::symbol::identifier::LLMProperties;
+use crate::agentic::{symbol::identifier::LLMProperties, tool::search::agentic::SearchPlanContext};
 
 use super::agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery};
 
@@ -22,12 +22,26 @@ impl GoogleStudioPlanGenerator {
         }
     }
 
+    // todo(zi): add CoT to system
     fn system_message_for_keyword_search(&self, request: &SearchPlanQuery) -> String {
-        todo!()
+        format!(r#"You will generate a search plan based on the provided context and user_query."#)
     }
 
     fn user_message_for_keyword_search(&self, request: &SearchPlanQuery) -> String {
-        todo!()
+        let context = request
+            .context()
+            .iter()
+            .map(|c| match c {
+                SearchPlanContext::RepoTree(repo_tree) => format!("RepoTree:\n{}", repo_tree),
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        format!(
+            r#"User query: {}\nContext: {:?}"#,
+            request.user_query(),
+            context,
+        )
     }
 }
 

@@ -598,6 +598,8 @@ impl ToolBox {
             .await?;
         let file_contents = file_contents.contents();
         let range = sub_symbol.range();
+        // we might not have a range here to select from when we are adding a new
+        // symbol over here
         let (_, _, in_selection) = split_file_content_into_parts(&file_contents, range);
         let selected_code_with_typehints = self
             .apply_inlay_hints(sub_symbol.fs_file_path(), &in_selection, range, request_id)

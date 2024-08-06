@@ -27,6 +27,14 @@ impl SearchPlanBroker {
             )),
         );
 
+        llms.insert(
+            LLMType::ClaudeSonnet,
+            Box::new(GoogleStudioPlanGenerator::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+
         Self { llms }
     }
 }

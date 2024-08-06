@@ -273,6 +273,10 @@ impl TagIndex {
             .to_path_buf()
     }
 
+    pub fn definitions(&self) -> &HashMap<(PathBuf, String), HashSet<Tag>> {
+        &self.definitions
+    }
+
     pub fn search_definitions(
         &self,
         search_term: &str,
@@ -284,6 +288,8 @@ impl TagIndex {
         } else {
             search_term.to_lowercase()
         };
+
+        println!("searching for: {}", search_term);
 
         self.definitions
             .iter()
@@ -307,6 +313,7 @@ impl TagIndex {
 
                 match search_mode {
                     SearchMode::FileName => file_name.contains(&search_term),
+                    SearchMode::FilePath => path.to_str().unwrap().contains(&search_term),
                     SearchMode::TagName => tag_name.contains(&search_term),
                     SearchMode::Both => {
                         file_name.contains(&search_term) || tag_name.contains(&search_term)
@@ -328,8 +335,9 @@ impl TagIndex {
         &self,
         search_term: &str,
         case_sensitive: bool,
+        search_mode: SearchMode,
     ) -> HashSet<&Tag> {
-        self.search_definitions(search_term, case_sensitive, SearchMode::Both)
+        self.search_definitions(search_term, case_sensitive, search_mode)
             .into_iter()
             .flat_map(|(_, tags)| tags)
             .collect()
@@ -338,6 +346,7 @@ impl TagIndex {
 
 pub enum SearchMode {
     FileName,
+    FilePath,
     TagName,
     Both,
     ExactFileName,

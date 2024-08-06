@@ -4,7 +4,10 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, FireworksAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{
+        AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
+        OpenAIProvider,
+    },
 };
 use sidecar::{
     agentic::{
@@ -50,6 +53,9 @@ async fn main() {
             "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
         )),
     );
+    let _google_ai_studio_api_keys = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    ));
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(

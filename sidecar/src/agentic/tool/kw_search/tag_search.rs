@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::repomap::tag::{Tag, TagIndex};
+use crate::repomap::tag::{SearchMode, Tag, TagIndex};
 use thiserror::Error;
 pub struct TagSearch {}
 
@@ -18,7 +18,7 @@ impl TagSearch {
             return Err(TagSearchError::InputTooShort);
         }
 
-        let tags = index.search_definitions_flattened(input, false);
+        let tags = index.search_definitions_flattened(input, false, SearchMode::Both);
 
         println!("TagSearch::search:: Search for {input}: {:?}", tags.len());
 

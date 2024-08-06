@@ -29,7 +29,10 @@ use crate::{
             },
         },
     },
-    repomap::{tag::TagIndex, types::RepoMap},
+    repomap::{
+        tag::{SearchMode, TagIndex},
+        types::RepoMap,
+    },
     tree_printer::tree::TreePrinter,
 };
 
@@ -180,10 +183,25 @@ impl Tool for BigSearchBroker {
 
         let plan = search_plan.search_plan();
         println!("search_plan: {:?}", plan);
-        let files = search_plan.files();
-        println!("file count: {:?}", files.paths().len());
+        let files = search_plan.files().paths();
+        println!("file count: {:?}", files.len());
+
+        println!("files: {:?}", files);
 
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+
+        let tags = files
+            .iter()
+            .flat_map(|file| {
+                let tags =
+                    tag_index.search_definitions_flattened(file, false, SearchMode::FilePath);
+
+                tags
+            })
+            .collect::<Vec<_>>();
+
+        println!("tag count: {:?}", tags.len());
+        println!("tags: {:?}", tags);
 
         todo!();
         // let flat_files = files.iter().map(|file| file.path()).collect();

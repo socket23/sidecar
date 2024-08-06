@@ -90,7 +90,7 @@ async fn main() {
     //     "/Users/skcd/scratch/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned();
     let file_paths = vec![
-        // "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
+        "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
         "/Users/skcd/test_repo/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
     ];
     // let file_paths =

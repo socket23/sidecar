@@ -1859,9 +1859,8 @@ Satisfy the requirement either by making edits or gathering the required informa
             );
 
             let context_for_editing = if sub_symbol_to_edit.is_new() {
-                // TODO(skcd): This is wrong, because we want to still grab context over here
-                // even if its a new symbol
-                vec![]
+                self.grab_context_for_editing_faster(&sub_symbol_to_edit, &request_id_ref)
+                    .await?
             } else {
                 if sub_symbol_to_edit.is_full_edit() {
                     self.grab_context_for_editing_faster(&sub_symbol_to_edit, &request_id_ref)

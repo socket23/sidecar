@@ -33,7 +33,7 @@ use crate::{
         tag::{SearchMode, TagIndex},
         types::RepoMap,
     },
-    tree_printer::tree::TreePrinter,
+    tree_printer::tree::{self, TreePrinter},
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -196,12 +196,16 @@ impl Tool for BigSearchBroker {
                 let tags =
                     tag_index.search_definitions_flattened(file, false, SearchMode::FilePath);
 
-                tags
+                tags.into_iter().cloned()
             })
             .collect::<Vec<_>>();
 
         println!("tag count: {:?}", tags.len());
-        println!("tags: {:?}", tags);
+        // println!("tags: {:?}", tags);
+
+        let tree = RepoMap::to_tree(&tags);
+
+        println!("{}", tree);
 
         todo!();
         // let flat_files = files.iter().map(|file| file.path()).collect();

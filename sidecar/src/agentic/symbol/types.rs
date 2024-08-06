@@ -46,7 +46,7 @@ use super::{
     errors::SymbolError,
     events::{
         edit::SymbolToEdit,
-        initial_request::{InitialRequestData, SymbolRequestHistoryItem},
+        initial_request::{InitialRequestData, SymbolEditedItem, SymbolRequestHistoryItem},
         probe::{SymbolToProbeHistory, SymbolToProbeRequest},
         types::{AskQuestionRequest, SymbolEvent},
     },
@@ -154,6 +154,7 @@ impl SymbolEventRequest {
         // passing history to the symbols so we do not end up doing repeated work
         history: Vec<SymbolRequestHistoryItem>,
         tool_properties: ToolProperties,
+        symbols_edited_list: Option<Vec<SymbolEditedItem>>,
     ) -> Self {
         Self {
             symbol,
@@ -162,6 +163,7 @@ impl SymbolEventRequest {
                 None,
                 history,
                 tool_properties.get_full_symbol_request(),
+                symbols_edited_list,
             )),
             tool_properties,
         }

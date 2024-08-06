@@ -89,12 +89,18 @@ impl SearchPlanQuery {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-// #[serde(rename = "reply")]
+#[serde(rename = "reply")]
 pub struct SearchPlanResponse {
-    #[serde(rename = "search_plan")]
+    #[serde(default)]
     search_plan: String,
-    #[serde(rename = "files")]
-    files: Vec<String>,
+    #[serde(default)]
+    files: Vec<FilePath>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct FilePath {
+    #[serde(default)]
+    path: Vec<String>,
 }
 
 impl SearchPlanResponse {
@@ -103,7 +109,7 @@ impl SearchPlanResponse {
             return Err(GenerateSearchPlanError::EmptyResponse);
         }
 
-        let reply = response
+        let lines = response
             .lines()
             .skip_while(|line| !line.contains("<reply>"))
             .skip(1)
@@ -111,7 +117,11 @@ impl SearchPlanResponse {
             .collect::<Vec<&str>>()
             .join("\n");
 
-        println!("searchplanresponse::reply: {:?}", reply);
+        let reply = format!(
+            r#"<reply>
+{lines}
+</reply>"#
+        );
 
         let parsed_string = from_str::<SearchPlanResponse>(&reply).map_err(|e| {
             GenerateSearchPlanError::SerdeError(SerdeError::new(e, reply.to_string()))
@@ -124,7 +134,7 @@ impl SearchPlanResponse {
         &self.search_plan
     }
 
-    pub fn files(&self) -> &Vec<String> {
+    pub fn files(&self) -> &Vec<FilePath> {
         &self.files
     }
 }

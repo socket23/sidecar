@@ -33,6 +33,10 @@ You will response with a search plan and a list of files that you want to search
 <search_plan>
 </search_plan>
 <files>
+<path>
+</path>
+<path>
+</path>
 </files>
 </reply>
         "#
@@ -44,13 +48,19 @@ You will response with a search plan and a list of files that you want to search
             .context()
             .iter()
             .map(|c| match c {
-                SearchPlanContext::RepoTree(repo_tree) => format!("RepoTree:\n{}", repo_tree),
+                SearchPlanContext::RepoTree(repo_tree) => format!(
+                    r#"RepoTree:
+{}"#,
+                    repo_tree
+                ),
             })
             .collect::<Vec<String>>()
             .join("\n");
 
         format!(
-            r#"User query: {}\nContext: {:?}"#,
+            r#"User query: {}
+Context:
+{}"#,
             request.user_query(),
             context,
         )

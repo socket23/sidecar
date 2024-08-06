@@ -1,4 +1,4 @@
-name: Sidecar build for linux
+name: Sidecar build for linux arm64
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: linux-arm64  # Run this job on a linux environment
+    runs-on: ubuntu-latest  # Run this job on a linux environment
 
     steps:
     - uses: actions/checkout@v2
@@ -49,6 +49,6 @@ jobs:
         # Set your GCP project
         gcloud config set project $GCP_PROJECT_ID
         # Copy the built binary to the GCP bucket
-        gsutil cp sidecar.zip gs://sidecar-bin/linux/sidecar_arm64.zip
+        gsutil cp sidecar.zip gs://sidecar-bin/linux/sidecar.zip
         # Remove the service account key file
         rm gcp_sa_key.json

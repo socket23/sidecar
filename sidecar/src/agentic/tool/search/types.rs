@@ -149,6 +149,8 @@ impl Tool for BigSearchBroker {
 
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
 
+        // agentic search
+
         let keyword_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
         let keyword_search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
             request.user_query().to_string(),

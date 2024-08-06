@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Run this job on a linux environment
+    runs-on: linux-arm64  # Run this job on a linux environment
 
     steps:
     - uses: actions/checkout@v2

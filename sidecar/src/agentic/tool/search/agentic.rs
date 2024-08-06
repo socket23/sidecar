@@ -88,8 +88,7 @@ impl SearchPlanQuery {
 pub trait GenerateSearchPlan {
     async fn generate_search_plan(
         &self,
-        query: &str,
-        context: SearchPlanContext,
+        request: &SearchPlanQuery,
     ) -> Result<String, GenerateSearchPlanError>;
 }
 

@@ -1047,6 +1047,7 @@ impl MechaCodeSymbolThinking {
                         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new("AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned())),
                     )
                 };
+                let symbols_to_be_edited = original_request.symbols_edited_list();
                 let filtered_list = tool_box
                 .filter_code_snippets_in_symbol_for_editing(
                     ranked_xml_list,
@@ -1054,6 +1055,7 @@ impl MechaCodeSymbolThinking {
                     llm_properties_for_filtering.llm().clone(),
                     llm_properties_for_filtering.provider().clone(),
                     llm_properties_for_filtering.api_key().clone(),
+                    symbols_to_be_edited,
                     &request_id,
                 )
                 .await?;
@@ -1302,6 +1304,7 @@ Edit selection reason:
                     "mecha_code_symbol_thinking::filter_code_snippets_in_symbol_for_editing::start({})",
                     self.symbol_name(),
                 );
+                let symbols_to_be_edited = original_request.symbols_edited_list();
                 let filtered_list = tool_box
                     .filter_code_snippets_in_symbol_for_editing(
                         ranked_xml_list,
@@ -1309,6 +1312,7 @@ Edit selection reason:
                         llm_properties_for_filtering.llm().clone(),
                         llm_properties_for_filtering.provider().clone(),
                         llm_properties_for_filtering.api_key().clone(),
+                        symbols_to_be_edited,
                         &request_id,
                     )
                     .await?;

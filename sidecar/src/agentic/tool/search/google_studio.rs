@@ -37,6 +37,8 @@ You will response with a search plan and a list of files that you want to search
 </path>
 <path>
 </path>
+<path>
+</path>
 </files>
 </reply>
         "#
@@ -108,8 +110,6 @@ impl GenerateSearchPlan for GoogleStudioPlanGenerator {
             .await?;
 
         println!("Generate search plan response time: {:?}", start.elapsed());
-
-        println!("Generate search plan response: {:?}", response);
 
         SearchPlanResponse::parse(&response)
     }

@@ -93,14 +93,19 @@ impl SearchPlanQuery {
 pub struct SearchPlanResponse {
     #[serde(default)]
     search_plan: String,
-    #[serde(default)]
-    files: Vec<FilePath>,
+    files: Files,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct FilePath {
-    #[serde(default)]
-    path: Vec<String>,
+pub struct Files {
+    #[serde(rename = "path")]
+    paths: Vec<String>,
+}
+
+impl Files {
+    pub fn paths(&self) -> &Vec<String> {
+        &self.paths
+    }
 }
 
 impl SearchPlanResponse {
@@ -134,7 +139,7 @@ impl SearchPlanResponse {
         &self.search_plan
     }
 
-    pub fn files(&self) -> &Vec<FilePath> {
+    pub fn files(&self) -> &Files {
         &self.files
     }
 }
@@ -205,4 +210,7 @@ pub enum GenerateSearchPlanError {
 
     #[error("Wrong format: {0}")]
     WrongFormat(String),
+
+    #[error("Search plan error: {0}")]
+    Generic(String),
 }

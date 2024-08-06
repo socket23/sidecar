@@ -138,7 +138,7 @@ async fn main() {
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
     //         .to_owned();
-    let problem_statement = "Add a new method to google_studio".to_owned();
+    let problem_statement = "Add a new method to google_studio and anthropic".to_owned();
 
     let root_dir = "/Users/zi/codestory/sidecar/sidecar";
 

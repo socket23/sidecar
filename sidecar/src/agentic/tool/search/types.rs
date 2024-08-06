@@ -24,7 +24,7 @@ use crate::{
             output::ToolOutput,
             r#type::Tool,
             search::{
-                agentic::{SearchPlanContext, SearchPlanQuery},
+                agentic::{GenerateSearchPlanError, SearchPlanContext, SearchPlanQuery},
                 broker::SearchPlanBroker,
             },
         },
@@ -169,10 +169,24 @@ impl Tool for BigSearchBroker {
 
         let search_plan_result = search_plan_broker.invoke(search_plan_input).await;
 
-        println!("search_plan_result: {:?}", search_plan_result);
-        todo!();
+        let search_plan = match search_plan_result {
+            Ok(ToolOutput::SearchPlan(search_plan)) => search_plan,
+            _ => {
+                return Err(ToolError::SearchPlanError(
+                    GenerateSearchPlanError::Generic("Failed to get search plan".to_string()),
+                ));
+            }
+        };
+
+        let plan = search_plan.search_plan();
+        println!("search_plan: {:?}", plan);
+        let files = search_plan.files();
+        println!("file count: {:?}", files.paths().len());
 
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+
+        todo!();
+        // let flat_files = files.iter().map(|file| file.path()).collect();
 
         let keyword_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
         let keyword_search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
@@ -185,6 +199,9 @@ impl Tool for BigSearchBroker {
             false,
             tag_index.clone(), // using a reference causes lifetime headaches
         ));
+
+        // println!("search_plan_result: {:?}", search_plan_result);
+        todo!();
 
         let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 

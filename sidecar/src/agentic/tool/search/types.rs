@@ -196,9 +196,36 @@ impl Tool for BigSearchBroker {
         ));
 
         let (tree_result, repo_map_result, keyword_result) = join!(
-            tree_broker.invoke(tree_input),
-            repo_map_broker.invoke(repo_map_input),
-            keyword_broker.invoke(keyword_search_input)
+            async move {
+                let instant = std::time::Instant::now();
+                println!("big_search_broker::tree_broker::start");
+                let result = tree_broker.invoke(tree_input).await;
+                println!(
+                    "big_search_broker::tree_broker::end({})",
+                    instant.elapsed().as_secs()
+                );
+                result
+            },
+            async move {
+                let instant = std::time::Instant::now();
+                println!("big_search_broker::repo_map_broker::start");
+                let result = repo_map_broker.invoke(repo_map_input).await;
+                println!(
+                    "big_search_broker::repo_map_broker::end({})",
+                    instant.elapsed().as_secs()
+                );
+                result
+            },
+            async move {
+                let instant = std::time::Instant::now();
+                println!("big_search_broker::keyword_broker::start");
+                let result = keyword_broker.invoke(keyword_search_input).await;
+                println!(
+                    "big_search_broker::keyword_broker::end({})",
+                    instant.elapsed().as_secs()
+                );
+                result
+            }
         );
 
         let tree_output: ToolOutput = tree_result?;

@@ -141,7 +141,7 @@ impl ImportantFilesFinder for AnthropicFileFinder {
             )
             .await?;
 
-        println!("File important response time: {:?}", start.elapsed());
+        println!("file_important_broker::time_take({:?})", start.elapsed());
 
         let parsed_response = FileImportantReply::parse_response(&response);
 

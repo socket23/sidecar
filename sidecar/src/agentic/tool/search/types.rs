@@ -157,8 +157,8 @@ impl Tool for BigSearchBroker {
         let _tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 
         // could be parallelized?
-        let (tree_string, _, _) =
-            TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
+        let tree_string =
+            TreePrinter::to_string_stacked(Path::new(root_directory)).unwrap_or("".to_owned());
 
         let _tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
             tree_string,

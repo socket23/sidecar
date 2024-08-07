@@ -178,7 +178,7 @@ impl Tool for BigSearchBroker {
         ));
 
         // could be parallelized?
-        let repo_map = RepoMap::new().with_map_tokens(10_000); // slower, but big > accurate
+        let repo_map = RepoMap::new().with_map_tokens(20_000); // slower, but big > accurate
         let repo_map_string = repo_map
             .get_repo_map(&tag_index)
             .await

@@ -305,10 +305,6 @@ impl<'a> TreeContext<'a> {
 
             let line_output = format!("{}{}\n", spacer, &self.lines[index]);
 
-            // if self.line_number {
-            //     line_output = format!("{:3}{}", index + 1, line_output);
-            // }
-
             output.push_str(&line_output);
 
             dots = true;

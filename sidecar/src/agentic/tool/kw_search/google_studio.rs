@@ -152,7 +152,7 @@ impl KeywordSearch for GoogleStudioKeywordSearch {
             )
             .await?;
 
-        println!("Keyword search response time: {:?}", start.elapsed());
+        println!("keyword_search::response_time({:?})", start.elapsed());
 
         let parsed_response = KeywordsReply::parse_response(&response);
 

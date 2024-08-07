@@ -140,7 +140,7 @@ impl RepoMap {
                 // take() resets the lois to None, inner_lois may be used as value for render_tree
                 if let Some(inner_lois) = lois.take() {
                     output.push('\n');
-                    output.push_str(&cur_fname);
+                    output.push_str(&cur_abs_fname);
                     output.push_str(":\n");
                     let file_content = std::fs::read(&cur_abs_fname);
                     if let Err(_) = file_content {
@@ -156,7 +156,7 @@ impl RepoMap {
                     ));
                 } else if !cur_fname.is_empty() {
                     output.push('\n');
-                    output.push_str(&cur_fname);
+                    output.push_str(&cur_abs_fname);
                     output.push('\n');
                 }
 

@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 
 fn main() -> std::io::Result<()> {
-    let root = "/Users/skcd/scratch/sidecar"; // Start from the current directory
+    let root = "/Users/skcd/scratch/sidecar/llm_client"; // Start from the current directory
     print_directory_tree(root)?;
     Ok(())
 }

@@ -331,6 +331,7 @@ impl SymbolManager {
             input_event.clone(),
         ));
         let is_full_edit = input_event.full_symbol_edit();
+        let is_big_search = input_event.big_search();
         let swe_bench_id = input_event.swe_bench_instance_id();
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
@@ -402,7 +403,8 @@ impl SymbolManager {
             };
 
             if let ToolOutput::ImportantSymbols(important_symbols)
-            | ToolOutput::RepoMapSearch(important_symbols) = tool_output
+            | ToolOutput::RepoMapSearch(important_symbols)
+            | ToolOutput::BigSearch(important_symbols) = tool_output
             {
                 // The fix symbol name here helps us get the top-level symbol name
                 // if the LLM decides to have fun and spit out a.b.c instead of a or b or c individually
@@ -438,7 +440,7 @@ impl SymbolManager {
                 {
                     Some(important_symbols) => important_symbols,
                     None => {
-                        if is_full_edit {
+                        if is_full_edit && !is_big_search {
                             important_symbols
                         } else {
                             let important_symbols = self

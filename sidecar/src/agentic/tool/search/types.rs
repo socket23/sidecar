@@ -161,13 +161,13 @@ impl Tool for BigSearchBroker {
             tag_index.clone(), // using a reference causes lifetime headaches
         ));
 
-        let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
+        let _tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
 
         // could be parallelized?
         let (tree_string, _, _) =
             TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
 
-        let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
+        let _tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
             tree_string,
             request.user_query().to_string(),
             request.llm().clone(),
@@ -195,17 +195,18 @@ impl Tool for BigSearchBroker {
             request.root_request_id().to_string(),
         ));
 
-        let (tree_result, repo_map_result, keyword_result) = join!(
-            async move {
-                let instant = std::time::Instant::now();
-                println!("big_search_broker::tree_broker::start");
-                let result = tree_broker.invoke(tree_input).await;
-                println!(
-                    "big_search_broker::tree_broker::end({})",
-                    instant.elapsed().as_secs()
-                );
-                result
-            },
+        let (repo_map_result, keyword_result) = join!(
+            // let (tree_result, repo_map_result, keyword_result) = join!(
+            // async move {
+            //     let instant = std::time::Instant::now();
+            //     println!("big_search_broker::tree_broker::start");
+            //     let result = tree_broker.invoke(tree_input).await;
+            //     println!(
+            //         "big_search_broker::tree_broker::end({})",
+            //         instant.elapsed().as_secs()
+            //     );
+            //     result
+            // },
             async move {
                 let instant = std::time::Instant::now();
                 println!("big_search_broker::repo_map_broker::start");
@@ -228,18 +229,18 @@ impl Tool for BigSearchBroker {
             }
         );
 
-        let tree_output: ToolOutput = tree_result?;
+        // let tree_output: ToolOutput = tree_result?;
         let repo_map_output: ToolOutput = repo_map_result?;
         let keyword_output: ToolOutput = keyword_result?;
 
         let mut responses = Vec::new();
 
-        match tree_output {
-            ToolOutput::ImportantSymbols(important_symbols) => {
-                responses.push(important_symbols);
-            }
-            _ => {}
-        }
+        // match tree_output {
+        //     ToolOutput::ImportantSymbols(important_symbols) => {
+        //         responses.push(important_symbols);
+        //     }
+        //     _ => {}
+        // }
 
         match repo_map_output {
             ToolOutput::RepoMapSearch(important_symbols) => {

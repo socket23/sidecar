@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use llm_client::{
     clients::types::LLMType,
-    provider::{LLMProvider, LLMProviderAPIKeys},
+    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -203,9 +203,13 @@ impl SymbolInputEvent {
                         if self.big_search() {
                             return Some(ToolInput::BigSearch(BigSearchRequest::new(
                                 self.user_query.to_string(),
-                                self.llm.clone(),
-                                self.provider.clone(),
-                                self.api_keys.clone(),
+                                // override to the gemini pro flash model over here
+                                // for big search
+                                LLMType::GeminiProFlash,
+                                LLMProvider::GoogleAIStudio,
+                                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                                )),
                                 Some(root_directory),
                                 self.request_id.to_string(),
                                 SearchType::Both,

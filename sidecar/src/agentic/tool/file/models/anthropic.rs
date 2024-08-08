@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 use async_trait::async_trait;
 use llm_client::{
@@ -43,6 +47,32 @@ impl FileImportantReply {
         &self.files
     }
 
+    fn pathbuf_vec_to_string_vec(paths: Vec<PathBuf>) -> Vec<String> {
+        paths
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    pub fn prepend_root_dir(&self, root: &Path) -> Self {
+        let new_files: Vec<PathBuf> = self
+            .files
+            .iter()
+            .map(|file| {
+                let file_path = Path::new(file);
+                if file_path.is_absolute() {
+                    root.join(file_path.strip_prefix("/").unwrap_or(file_path))
+                } else {
+                    root.join(file_path)
+                }
+            })
+            .collect();
+
+        let new_files = FileImportantReply::pathbuf_vec_to_string_vec(new_files);
+
+        Self { files: new_files }
+    }
+
     pub fn to_file_important_response(self) -> FileImportantResponse {
         let files = self.files().clone();
         FileImportantResponse::new(files)
@@ -64,12 +94,16 @@ impl AnthropicFileFinder {
 
     fn system_message_for_file_important(
         &self,
-        file_important_request: &ImportantFilesFinderQuery,
+        _file_important_request: &ImportantFilesFinderQuery,
     ) -> String {
         format!(
-            r#"Observe the repository tree, and list the files you'd want might want to explore in order to solve the user query.
-Any file that may be relevant. 
-Use your existing knowledge and intuition of the {} repository
+            r#"Provided is a list of files in a repository.
+
+Your job is to list the files you'd want to explore in order to solve the user query. If you're unsure, make an educated guess.
+            
+You must return at least 1 file, but no more than 10, in order of relevance.
+
+Do not hallucinate files that do not exist in the provided tree.
             
 Respond in the following XML format:
 
@@ -86,7 +120,6 @@ Response:
 
 <files>
 "#,
-            file_important_request.repo_name()
         )
     }
 
@@ -143,10 +176,22 @@ impl ImportantFilesFinder for AnthropicFileFinder {
 
         println!("file_important_broker::time_take({:?})", start.elapsed());
 
+        println!("{}", response);
+
         let parsed_response = FileImportantReply::parse_response(&response);
 
+        if let Ok(response) = &parsed_response {
+            for (index, f) in response.files().iter().enumerate() {
+                println!("File {}: {}", index, f);
+            }
+        } else {
+            println!("could not parse response");
+        }
+
         match parsed_response {
-            Ok(parsed_response) => Ok(parsed_response.to_file_important_response()),
+            Ok(parsed_response) => Ok(parsed_response
+                .prepend_root_dir(Path::new(request.repo_name()))
+                .to_file_important_response()),
             Err(e) => Err(e),
         }
     }

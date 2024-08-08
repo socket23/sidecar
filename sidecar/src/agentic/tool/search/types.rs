@@ -160,6 +160,8 @@ impl Tool for BigSearchBroker {
         let tree_string =
             TreePrinter::to_string_stacked(Path::new(root_directory)).unwrap_or("".to_owned());
 
+        println!("{tree_string}");
+
         let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
             tree_string,
             request.user_query().to_string(),

@@ -88,7 +88,7 @@ impl FileImportantReply {
 
         match std::env::consts::OS {
             "windows" => PathBuf::from(path.to_string_lossy().replace('/', "\\")),
-            _ => PathBuf::from(path.to_string_lossy().replace('\\', "/")),
+            _ => path.to_path_buf(),
         }
     }
 
@@ -97,17 +97,10 @@ impl FileImportantReply {
             .files
             .iter()
             .map(|file| {
-                let file_path = PathBuf::from(&file.path);
+                let file_path = FileImportantReply::convert_path_for_os(&file.path);
+                let os_adapted_root = FileImportantReply::convert_path_for_os(root);
 
-                let file_path = FileImportantReply::convert_path_for_os(file_path);
-
-                println!("prepend_root_dir::file_path:{:?}", file_path);
-                let new_path = if file_path.is_absolute() {
-                    root.join(file_path.strip_prefix("/").unwrap_or(&file_path))
-                } else {
-                    root.join(file_path)
-                };
-                println!("prepend_root_dir::new_path:{:?}", new_path);
+                let new_path = os_adapted_root.join(file_path);
                 FileThinking {
                     path: new_path.to_string_lossy().into_owned(),
                     thinking: file.thinking.clone(),

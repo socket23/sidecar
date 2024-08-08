@@ -83,12 +83,24 @@ impl FileImportantReply {
         &self.files
     }
 
+    fn convert_path_for_os<P: AsRef<Path>>(path: P) -> PathBuf {
+        let path = path.as_ref();
+
+        match std::env::consts::OS {
+            "windows" => PathBuf::from(path.to_string_lossy().replace('/', "\\")),
+            _ => PathBuf::from(path.to_string_lossy().replace('\\', "/")),
+        }
+    }
+
     pub fn prepend_root_dir(&self, root: &Path) -> Self {
         let new_files: Vec<FileThinking> = self
             .files
             .iter()
             .map(|file| {
                 let file_path = PathBuf::from(&file.path);
+
+                let file_path = FileImportantReply::convert_path_for_os(file_path);
+
                 println!("prepend_root_dir::file_path:{:?}", file_path);
                 let new_path = if file_path.is_absolute() {
                     root.join(file_path.strip_prefix("/").unwrap_or(&file_path))

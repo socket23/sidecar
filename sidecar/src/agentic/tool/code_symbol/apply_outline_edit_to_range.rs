@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 
 use llm_client::{
     broker::LLMBroker,
@@ -10,17 +11,18 @@ use llm_client::{
 };
 
 use crate::agentic::{
-    symbol::identifier::LLMProperties,
+    symbol::{identifier::LLMProperties, ui_event::UIEventWithID},
     tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
 };
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct ApplyOutlineEditsToRangeRequest {
     user_instruction: String,
     code_in_selection: String,
     code_changes_outline: String,
     root_request_id: String,
     llm_properties: LLMProperties,
+    _ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl ApplyOutlineEditsToRangeRequest {
@@ -30,6 +32,7 @@ impl ApplyOutlineEditsToRangeRequest {
         code_changes_outline: String,
         root_request_id: String,
         llm_properties: LLMProperties,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             user_instruction,
@@ -37,6 +40,7 @@ impl ApplyOutlineEditsToRangeRequest {
             code_changes_outline,
             root_request_id,
             llm_properties,
+            _ui_sender: ui_sender,
         }
     }
 }
@@ -193,6 +197,7 @@ impl Tool for ApplyOutlineEditsToRange {
                             "apply_outline_edits_to_range".to_owned(),
                         ),
                         ("root_id".to_owned(), root_request_id.to_owned()),
+                        ("retries".to_owned(), retries.to_string()),
                     ]
                     .into_iter()
                     .collect(),

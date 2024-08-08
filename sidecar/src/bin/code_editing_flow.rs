@@ -146,7 +146,7 @@ async fn main() {
     //         .to_owned();
     let problem_statement = "Add a new method to google_studio and anthropic".to_owned();
 
-    let root_dir = "/Users/zi/codestory/sidecar/sidecar";
+    let root_dir = "/Users/zi/codestory/testing/sidecar/sidecar/src";
 
     let initial_request = SymbolInputEvent::new(
         user_context,

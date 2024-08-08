@@ -8,6 +8,8 @@ use llm_client::{
 };
 use tokio::join;
 
+use super::exp::Repository;
+
 use crate::{
     agentic::{
         symbol::identifier::LLMProperties,
@@ -156,6 +158,10 @@ impl Tool for BigSearchBroker {
 
         let (tree_string, _, _) =
             TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
+
+        let repository = Repository::new();
+        let mut system = IterativeSearchSystem::new("User query".to_string(), repository);
+        system.run();
 
         // agentic search
         // let search_plan = SearchPlan

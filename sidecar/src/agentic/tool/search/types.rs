@@ -160,8 +160,6 @@ impl Tool for BigSearchBroker {
         let tree_string =
             TreePrinter::to_string_stacked(Path::new(root_directory)).unwrap_or("".to_owned());
 
-        println!("{tree_string}");
-
         let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
             tree_string,
             request.user_query().to_string(),
@@ -195,6 +193,7 @@ impl Tool for BigSearchBroker {
                 let instant = std::time::Instant::now();
                 println!("big_search_broker::tree_broker::start");
                 let result = tree_broker.invoke(tree_input).await;
+                println!("Result: \n\n{:?}", result);
                 println!(
                     "big_search_broker::tree_broker::end({})",
                     instant.elapsed().as_secs()

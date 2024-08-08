@@ -1047,8 +1047,6 @@ impl From<FileImportantResponse> for CodeSymbolImportantResponse {
             })
             .collect();
 
-        println!("symbols: {:?}, ordered: {:?}", symbols, ordered_symbols);
-
         Self {
             symbols,
             ordered_symbols,

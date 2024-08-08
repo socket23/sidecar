@@ -203,6 +203,7 @@ impl Tool for BigSearchBroker {
         println!("tag count: {:?}", tags.len());
         // println!("tags: {:?}", tags);
 
+        // todo: consider whether entire file is better
         let tree = RepoMap::to_tree(&tags);
 
         println!("{}", tree);

@@ -1,4 +1,8 @@
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 use async_trait::async_trait;
 use llm_client::{
@@ -79,17 +83,24 @@ impl FileImportantReply {
         &self.files
     }
 
+    fn convert_path_for_os<P: AsRef<Path>>(path: P) -> PathBuf {
+        let path = path.as_ref();
+
+        match std::env::consts::OS {
+            "windows" => PathBuf::from(path.to_string_lossy().replace('/', "\\")),
+            _ => path.to_path_buf(),
+        }
+    }
+
     pub fn prepend_root_dir(&self, root: &Path) -> Self {
         let new_files: Vec<FileThinking> = self
             .files
             .iter()
             .map(|file| {
-                let file_path = Path::new(&file.path);
-                let new_path = if file_path.is_absolute() {
-                    root.join(file_path.strip_prefix("/").unwrap_or(file_path))
-                } else {
-                    root.join(file_path)
-                };
+                let file_path = FileImportantReply::convert_path_for_os(&file.path);
+                let os_adapted_root = FileImportantReply::convert_path_for_os(root);
+
+                let new_path = os_adapted_root.join(file_path);
                 FileThinking {
                     path: new_path.to_string_lossy().into_owned(),
                     thinking: file.thinking.clone(),

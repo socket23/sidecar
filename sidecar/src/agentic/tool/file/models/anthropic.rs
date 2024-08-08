@@ -128,13 +128,13 @@ impl AnthropicFileFinder {
         _file_important_request: &ImportantFilesFinderQuery,
     ) -> String {
         format!(
-            r#"Provided is a list of files in a repository.
+            r#"Consider the provided user query.
+        
+Select files from the provided repository tree that may be relevant to solving the user query.
 
-Your job is to list the files you'd want to explore in order to solve the user query. If you're unsure, make an educated guess.
-            
+Do not hallucinate files that do not appear in the tree.
+
 You must return at least 1 file, but no more than 10, in order of relevance.
-
-Do not hallucinate files that do not exist in the provided tree.
             
 Respond in the following XML format:
 
@@ -145,31 +145,6 @@ Respond in the following XML format:
 path/to/file1
 </path>
 <thinking>
-</thinking>
-</file>
-</files>
-</reply>
-
-Example:
-
-user_query: "Add a new LLM provider, GPT4, to the API"
-
-<reply>
-<files>
-<file>
-<path>
-path/to/claude.py
-</path>
-<thinking>
-Judging by its name, claude.py may contain logic that may be useful to implementing GPT4 provider.
-</thinking>
-</file>
-<file>
-<path>
-path/to/api.py
-</path>
-<thinking>
-I'm presuming that the API logic is located within this file.
 </thinking>
 </file>
 </files>

@@ -1,8 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Instant,
-};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
 use llm_client::{

@@ -1,4 +1,8 @@
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 use async_trait::async_trait;
 use llm_client::{
@@ -84,10 +88,10 @@ impl FileImportantReply {
             .files
             .iter()
             .map(|file| {
-                let file_path = Path::new(&file.path);
+                let file_path = PathBuf::from(&file.path);
                 println!("prepend_root_dir::file_path:{:?}", file_path);
                 let new_path = if file_path.is_absolute() {
-                    root.join(file_path.strip_prefix("/").unwrap_or(file_path))
+                    root.join(file_path.strip_prefix("/").unwrap_or(&file_path))
                 } else {
                     root.join(file_path)
                 };

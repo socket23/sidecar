@@ -9,21 +9,39 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
+use serde::{Deserialize, Serialize};
+use serde_xml_rs::from_str;
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::file::{
         file_finder::{ImportantFilesFinder, ImportantFilesFinderQuery},
         important::FileImportantResponse,
-        types::FileImportantError,
+        types::{FileImportantError, SerdeError},
     },
 };
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "files")]
 pub struct FileImportantReply {
-    #[serde(default)]
-    files: Vec<String>,
+    #[serde(rename = "file", default)]
+    files: Vec<FileThinking>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FileThinking {
+    path: String,
+    thinking: String,
+}
+
+impl FileThinking {
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    pub fn thinking(&self) -> &str {
+        &self.thinking
+    }
 }
 
 impl FileImportantReply {
@@ -34,48 +52,61 @@ impl FileImportantReply {
 
         let lines = response
             .lines()
-            .skip_while(|line| !line.contains("<files>"))
+            .skip_while(|line| !line.contains("<reply>"))
             .skip(1)
-            .take_while(|line| !line.contains("</files>"))
+            .take_while(|line| !line.contains("</reply>"))
             .map(|line| line.to_owned())
             .collect::<Vec<String>>();
 
-        Ok(Self { files: lines })
+        let line_string = lines.join("\n");
+
+        match from_str::<FileImportantReply>(&line_string) {
+            Ok(parsed) => Ok(parsed),
+            Err(e) => {
+                eprintln!("parsing error: {:?}", e);
+                Err(FileImportantError::SerdeError(SerdeError::new(
+                    e,
+                    line_string.to_owned(),
+                )))
+            }
+        }
     }
 
-    pub fn files(&self) -> &Vec<String> {
-        &self.files
-    }
-
-    fn pathbuf_vec_to_string_vec(paths: Vec<PathBuf>) -> Vec<String> {
-        paths
-            .into_iter()
-            .map(|path| path.to_string_lossy().into_owned())
+    pub fn get_paths(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .map(|file| file.path().to_string())
             .collect()
     }
 
+    pub fn files(&self) -> &Vec<FileThinking> {
+        &self.files
+    }
+
     pub fn prepend_root_dir(&self, root: &Path) -> Self {
-        let new_files: Vec<PathBuf> = self
+        let new_files: Vec<FileThinking> = self
             .files
             .iter()
             .map(|file| {
-                let file_path = Path::new(file);
-                if file_path.is_absolute() {
+                let file_path = Path::new(&file.path);
+                let new_path = if file_path.is_absolute() {
                     root.join(file_path.strip_prefix("/").unwrap_or(file_path))
                 } else {
                     root.join(file_path)
+                };
+                FileThinking {
+                    path: new_path.to_string_lossy().into_owned(),
+                    thinking: file.thinking.clone(),
                 }
             })
             .collect();
 
-        let new_files = FileImportantReply::pathbuf_vec_to_string_vec(new_files);
-
-        Self { files: new_files }
+        FileImportantReply { files: new_files }
     }
 
     pub fn to_file_important_response(self) -> FileImportantResponse {
-        let files = self.files().clone();
-        FileImportantResponse::new(files)
+        let paths = self.get_paths();
+        FileImportantResponse::new(paths)
     }
 }
 
@@ -107,12 +138,42 @@ Do not hallucinate files that do not exist in the provided tree.
             
 Respond in the following XML format:
 
+<reply>
 <files>
+<file>
+<path>
 path/to/file1
-path/to/file2
-path/to/file3
+</path>
+<thinking>
+</thinking>
+</file>
 </files>
+</reply>
 
+Example:
+
+user_query: "Add a new LLM provider, GPT4, to the API"
+
+<reply>
+<files>
+<file>
+<path>
+path/to/claude.py
+</path>
+<thinking>
+Judging by its name, claude.py may contain logic that may be useful to implementing GPT4 provider.
+</thinking>
+</file>
+<file>
+<path>
+path/to/api.py
+</path>
+<thinking>
+I'm presuming that the API logic is located within this file.
+</thinking>
+</file>
+</files>
+</reply>
 
 Notice how each xml tag ends with a new line, follow this format strictly.
 
@@ -176,17 +237,7 @@ impl ImportantFilesFinder for AnthropicFileFinder {
 
         println!("file_important_broker::time_take({:?})", start.elapsed());
 
-        println!("{}", response);
-
         let parsed_response = FileImportantReply::parse_response(&response);
-
-        if let Ok(response) = &parsed_response {
-            for (index, f) in response.files().iter().enumerate() {
-                println!("File {}: {}", index, f);
-            }
-        } else {
-            println!("could not parse response");
-        }
 
         match parsed_response {
             Ok(parsed_response) => Ok(parsed_response

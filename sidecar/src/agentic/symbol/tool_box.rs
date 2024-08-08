@@ -4050,12 +4050,15 @@ FILEPATH: {fs_file_path}
             response,
             self.root_request_id.to_owned(),
             LLMProperties::new(
+                // why are we using gpt4omini over here which is slow as shit, we should be using
+                // llama3.1-8b instead
                 LLMType::Gpt4OMini,
                 LLMProvider::OpenAI,
                 LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
                     "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".to_owned(),
                 )),
             ),
+            self.ui_events.clone(),
         ));
         let response = self
             .tools

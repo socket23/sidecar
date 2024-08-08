@@ -85,11 +85,13 @@ impl FileImportantReply {
             .iter()
             .map(|file| {
                 let file_path = Path::new(&file.path);
+                println!("prepend_root_dir::file_path:{:?}", file_path);
                 let new_path = if file_path.is_absolute() {
                     root.join(file_path.strip_prefix("/").unwrap_or(file_path))
                 } else {
                     root.join(file_path)
                 };
+                println!("prepend_root_dir::new_path:{:?}", new_path);
                 FileThinking {
                     path: new_path.to_string_lossy().into_owned(),
                     thinking: file.thinking.clone(),

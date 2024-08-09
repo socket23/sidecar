@@ -29,6 +29,7 @@ use crate::{
                 agentic::{GenerateSearchPlanError, SearchPlanContext, SearchPlanQuery},
                 broker::SearchPlanBroker,
                 exp::{Context, IterativeSearchQuery, IterativeSearchSystem},
+                google_studio::GoogleStudioLLM,
             },
         },
     },
@@ -167,17 +168,26 @@ impl Tool for BigSearchBroker {
         let iterative_search_context =
             Context::new(Vec::new(), request.user_query().to_owned(), "".to_owned());
 
-        let iterative_system_query = IterativeSearchQuery::new(
-            iterative_search_context,
-            repository,
+        let _iterative_system_query = IterativeSearchQuery::new(
+            iterative_search_context.to_owned(),
+            repository.to_owned(),
             request.llm().clone(),
             request.provider().clone(),
             request.api_keys().clone(),
-            request.root_directory().unwrap_or("").to_string(), // repo_name
+            request.root_directory().unwrap_or("").to_string(),
             request.root_request_id().to_string(),
         );
 
-        let mut system = IterativeSearchSystem::new(iterative_system_query);
+        let google_studio_llm_config = GoogleStudioLLM::new(
+            request.root_directory().unwrap_or("").to_owned(),
+            self.llm_client(),
+        );
+
+        let mut system = IterativeSearchSystem::new(
+            iterative_search_context,
+            repository,
+            google_studio_llm_config,
+        );
         system.run();
 
         todo!();

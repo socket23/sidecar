@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use gix::discover::repository;
 use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
@@ -71,6 +72,7 @@ struct SearchResult {
     files: Vec<File>,
 }
 
+#[derive(Debug, Clone)]
 pub struct Repository {
     tree: String,
     outline: String,
@@ -124,14 +126,30 @@ impl IterativeSearchQuery {
     }
 }
 
-// Main system struct
-pub struct IterativeSearchSystem {
-    query: IterativeSearchQuery,
+pub trait LLMOperations {
+    fn generate_search_query(&self, context: &Context) -> SearchQuery;
+    // fn identify_relevant_results(
+    //     &self,
+    //     context: &Context,
+    //     search_result: &SearchResult,
+    // ) -> Vec<RelevantFile>;
+    // fn decide_continue_search(&self, context: &Context) -> bool;
 }
 
-impl IterativeSearchSystem {
-    pub fn new(query: IterativeSearchQuery) -> Self {
-        Self { query }
+// Main system struct
+pub struct IterativeSearchSystem<T: LLMOperations> {
+    context: Context,
+    repository: Repository,
+    llm_ops: T,
+}
+
+impl<T: LLMOperations> IterativeSearchSystem<T> {
+    pub fn new(context: Context, repository: Repository, llm_ops: T) -> Self {
+        Self {
+            context,
+            repository,
+            llm_ops,
+        }
     }
 
     pub fn run(&mut self) {
@@ -139,7 +157,7 @@ impl IterativeSearchSystem {
         while count < 1 {
             println!("run loop #{}", count);
             let search_query = self.search();
-            let search_result = self.query.repository.execute_search(search_query);
+            let search_result = self.repository.execute_search(search_query);
             self.identify(&search_result);
             if !self.decide() {
                 break;

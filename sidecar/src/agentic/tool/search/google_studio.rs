@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use gix::attrs::Search;
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
+    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 use std::{sync::Arc, time::Instant};
 
@@ -10,8 +11,50 @@ use crate::agentic::{symbol::identifier::LLMProperties, tool::search::agentic::S
 
 use super::{
     agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse},
-    exp::{Context, SearchQuery},
+    exp::{Context, IterativeSearchQuery, LLMOperations, SearchQuery},
 };
+
+pub struct GoogleStudioLLM {
+    model: LLMType,
+    provider: LLMProvider,
+    api_keys: LLMProviderAPIKeys,
+    root_directory: String,
+    root_request_id: String,
+    client: Arc<LLMBroker>,
+}
+
+impl GoogleStudioLLM {
+    pub fn new(root_directory: String, client: Arc<LLMBroker>) -> Self {
+        Self {
+            model: LLMType::GeminiProFlash,
+            provider: LLMProvider::GoogleAIStudio,
+            api_keys: LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+            )),
+            root_directory,
+            root_request_id: "zi_test_id".to_owned(),
+            client,
+        }
+    }
+}
+
+impl LLMOperations for GoogleStudioLLM {
+    fn generate_search_query(&self, context: &Context) -> SearchQuery {
+        todo!();
+    }
+
+    // fn identify_relevant_results(
+    //     &self,
+    //     context: &Context,
+    //     search_result: &SearchResult,
+    // ) -> Vec<RelevantFile> {
+    //     // Anthropic-specific implementation
+    // }
+
+    // fn decide_continue_search(&self, context: &Context) -> bool {
+    //     // Anthropic-specific implementation
+    // }
+}
 
 pub struct GoogleStudioPlanGenerator {
     llm_client: Arc<LLMBroker>,
@@ -107,7 +150,8 @@ Set at least one of the search paramaters `query`, `code_snippet`, `class_name` 
         )
     }
 
-    pub fn generate_search_query(&self, context: Context) -> SearchQuery {
+    // todo: remove llm_query
+    pub async fn generate_search_query(&self, context: Context) -> SearchQuery {
         println!("googlestudioplangenerator::generate_search_plan");
 
         println!(
@@ -115,11 +159,53 @@ Set at least one of the search paramaters `query`, `code_snippet`, `class_name` 
             context
         );
 
-        let system_message = self.system_message_for_generate_search_query(&context);
-        let user_message = self.user_message_for_generate_search_query(&context);
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
+        let user_message =
+            LLMClientMessage::user(self.user_message_for_generate_search_query(&context));
 
-        println!("system_message: {}", system_message);
-        println!("user_message: {}", user_message);
+        let model = LLMType::GeminiProFlash;
+        let provider = LLMProvider::GoogleAIStudio;
+        let api_keys = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+        ));
+
+        let messages = LLMClientCompletionRequest::new(
+            model,
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
+
+        let root_request_id = "zi_test_id";
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                messages,
+                provider,
+                vec![
+                    ("event_type".to_owned(), "generate_search_plan".to_owned()),
+                    ("root_id".to_owned(), root_request_id.to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await;
+
+        match response {
+            Ok(response) => println!("{response}"),
+            Err(err) => eprintln!("{:?}", err),
+        }
+
+        todo!();
+
+        // Some(root_directory),
+        // self.request_id.to_string(),
 
         // run LLM call to return query
 

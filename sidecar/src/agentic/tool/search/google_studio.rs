@@ -7,11 +7,17 @@ use llm_client::{
 use serde_xml_rs::from_str;
 use std::{sync::Arc, time::Instant};
 
-use crate::agentic::{symbol::identifier::LLMProperties, tool::search::agentic::SearchPlanContext};
+use crate::{
+    agent::search,
+    agentic::{
+        symbol::identifier::LLMProperties,
+        tool::search::agentic::{SearchPlanContext, SerdeError},
+    },
+};
 
 use super::{
     agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse},
-    exp::{Context, LLMOperations, SearchQuery, SearchRequests},
+    exp::{Context, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests},
 };
 
 pub struct GoogleStudioLLM {
@@ -151,7 +157,7 @@ report
         match response {
             Ok(response) => {
                 println!("{response}");
-                GoogleStudioLLM::parse_response(&response);
+                let _ = GoogleStudioLLM::parse_response(&response);
             }
             Err(err) => eprintln!("{:?}", err),
         }
@@ -163,7 +169,7 @@ report
         // SearchQuery::new("some query".to_owned())
     }
 
-    fn parse_response(response: &str) -> Vec<SearchQuery> {
+    fn parse_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {
         let lines = response
             .lines()
             .skip_while(|l| !l.contains("<reply>"))
@@ -172,20 +178,10 @@ report
             .collect::<Vec<&str>>()
             .join("\n");
 
-        let parsed = from_str::<SearchRequests>(&lines);
-
-        match parsed {
-            Ok(result) => {
-                println!("parsed SearchRequests");
-                println!("{:?}", result);
-            }
-            Err(error) => {
-                eprintln!("error parsing");
-                eprintln!("{:?}", error);
-            }
-        }
-
-        todo!();
+        from_str::<SearchRequests>(&lines).map_err(|error| {
+            eprintln!("{:?}", error);
+            IterativeSearchError::SerdeError(SerdeError::new(error, lines))
+        })
     }
 }
 

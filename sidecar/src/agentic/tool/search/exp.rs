@@ -1,15 +1,16 @@
-use std::path::PathBuf;
-
-use gix::discover::repository;
 use llm_client::{
-    clients::types::LLMType,
+    clients::types::{LLMClientError, LLMType},
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
+use std::path::PathBuf;
+use thiserror::Error;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::repomap::tag::TagIndex;
+use crate::{repomap::tag::TagIndex, user_context::types::UserContextError};
+
+use super::agentic::SerdeError;
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -79,6 +80,33 @@ pub struct SearchQuery {
 pub struct SearchRequests {
     #[serde(rename = "request")]
     pub requests: Vec<SearchQuery>,
+}
+
+#[derive(Debug, Error)]
+pub enum IterativeSearchError {
+    #[error("LLM Client erorr: {0}")]
+    LLMClientError(#[from] LLMClientError),
+
+    #[error("Serde error: {0}")]
+    SerdeError(#[from] SerdeError),
+
+    #[error("Quick xml error: {0}")]
+    QuickXMLError(#[from] quick_xml::DeError),
+
+    #[error("User context error: {0}")]
+    UserContextError(#[from] UserContextError),
+
+    #[error("Exhausted retries")]
+    ExhaustedRetries,
+
+    #[error("Empty response")]
+    EmptyResponse,
+
+    #[error("Wrong LLM for input: {0}")]
+    WrongLLM(LLMType),
+
+    #[error("Wrong format: {0}")]
+    WrongFormat(String),
 }
 
 impl SearchQuery {

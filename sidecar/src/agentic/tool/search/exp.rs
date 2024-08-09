@@ -126,8 +126,8 @@ impl SearchQuery {
 }
 
 // todo(zi): think about this structure
-#[derive(Debug, Clone)]
-struct SearchResult {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchResult {
     path: PathBuf,
     thinking: String,
     snippet: String, // potentially useful for stronger reasoning
@@ -248,11 +248,11 @@ pub trait LLMOperations {
         &self,
         context: &Context,
     ) -> Result<Vec<SearchQuery>, IterativeSearchError>;
-    // fn identify_relevant_results(
-    //     &self,
-    //     context: &Context,
-    //     search_result: &SearchResult,
-    // ) -> Vec<RelevantFile>;
+    async fn identify_relevant_results(
+        &self,
+        context: &Context,
+        search_results: &[SearchResult],
+    ) -> Result<Vec<SearchResult>, IterativeSearchError>;
     // fn decide_continue_search(&self, context: &Context) -> bool;
 }
 
@@ -298,8 +298,8 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                     .join("\n")
             );
 
-            todo!();
-            // self.identify(&search_result);
+            let identify_results = self.identify(&search_results).await;
+
             if !self.decide() {
                 break;
             }
@@ -315,9 +315,13 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         self.llm_ops.generate_search_query(self.context()).await
     }
 
-    fn identify(&mut self, search_result: &SearchResult) {
-        // Implement identify logic
-        // Filter relevant results and add to self.context.files
+    async fn identify(
+        &mut self,
+        search_results: &[SearchResult],
+    ) -> Result<Vec<SearchResult>, IterativeSearchError> {
+        self.llm_ops
+            .identify_relevant_results(self.context(), search_results)
+            .await
     }
 
     fn decide(&mut self) -> bool {

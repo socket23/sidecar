@@ -17,7 +17,9 @@ use crate::{
 
 use super::{
     agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse},
-    exp::{Context, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests},
+    exp::{
+        Context, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests, SearchResult,
+    },
 };
 
 pub struct GoogleStudioLLM {
@@ -113,9 +115,72 @@ report
         )
     }
 
+    pub fn system_message_for_identify(&self, context: &Context) -> String {
+        format!(
+            r#"You are an autonomous AI assistant tasked with finding relevant code in an existing 
+codebase based on a reported issue. Your task is to identify the relevant code spans in the provided search 
+results and decide whether the search task is complete.
+
+# Input Structure:
+
+* <issue>: Contains the reported issue.
+* <file_context>: Contains the context of already identified files and code spans.
+* <search_results>: Contains the new search results with code divided into "...............".
+
+# Your Task:
+
+1. Analyze User Instructions:
+Carefully read the reported issue within the <issue> tag.
+
+2. Review Current Context:
+Examine the current file context provided in the <file_context> tag to understand already identified relevant files.
+
+3. Process New Search Results:
+3.1. Thoroughly analyze each code span in the <search_results> tag.
+3.2. Match the code spans with the key elements, functions, variables, or patterns identified in the reported issue.
+3.3. Evaluate the relevance of each code span based on how well it aligns with the reported issue and current file context.
+3.4. If the issue suggests new functions or classes, identify the existing code that might be relevant to be able to implement the new functionality.
+3.5. Review entire sections of code, not just isolated spans, to ensure you have a complete understanding before making a decision. It's crucial to see all code in a section to accurately determine relevance and completeness.
+3.6. Verify if there are references to other parts of the codebase that might be relevant but not found in the search results. 
+3.7. Identify and extract relevant code spans based on the reported issue. 
+
+4. Response format:
+<reply>
+<responses>
+<response>
+<path>
+</path>
+<thinking>
+</thinking>
+<snippet>
+</snippet>
+</response>
+<response>
+<path>
+</path>
+<thinking>
+</thinking>
+<snippet>
+</snippet>
+</response>
+<response>
+<path>
+</path>
+<thinking>
+</thinking>
+<snippet>
+</snippet>
+</response>
+</responses>
+</reply>
+
+Think step by step and write out your thoughts in the scratch_pad field."#
+        )
+    }
+
     pub async fn generate_search_queries(
         &self,
-        context: Context,
+        context: &Context,
     ) -> Result<Vec<SearchQuery>, IterativeSearchError> {
         let system_message =
             LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
@@ -167,6 +232,52 @@ report
             IterativeSearchError::SerdeError(SerdeError::new(error, lines))
         })
     }
+
+    pub async fn identify(
+        &self,
+        context: &Context,
+        search_results: &[SearchResult],
+    ) -> Result<Vec<SearchResult>, IterativeSearchError> {
+        println!("GoogleStudioLLM::identify");
+
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
+
+        // may need serde serialise!
+        let user_message =
+            LLMClientMessage::user(self.user_message_for_generate_search_query(&context));
+
+        let messages = LLMClientCompletionRequest::new(
+            self.model.to_owned(),
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
+
+        todo!();
+        // let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        // let response = self
+        //     .client
+        //     .stream_completion(
+        //         self.api_keys.to_owned(),
+        //         messages,
+        //         self.provider.to_owned(),
+        //         vec![
+        //             (
+        //                 "event_type".to_owned(),
+        //                 "generate_search_tool_query".to_owned(),
+        //             ),
+        //             ("root_id".to_owned(), self.root_request_id.to_string()),
+        //         ]
+        //         .into_iter()
+        //         .collect(),
+        //         sender,
+        //     )
+        //     .await?;
+
+        // Ok(GoogleStudioLLM::parse_response(&response)?.requests)
+    }
 }
 
 #[async_trait]
@@ -175,16 +286,16 @@ impl LLMOperations for GoogleStudioLLM {
         &self,
         context: &Context,
     ) -> Result<Vec<SearchQuery>, IterativeSearchError> {
-        self.generate_search_queries(context.to_owned()).await
+        self.generate_search_queries(context).await
     }
 
-    // fn identify_relevant_results(
-    //     &self,
-    //     context: &Context,
-    //     search_result: &SearchResult,
-    // ) -> Vec<RelevantFile> {
-    //     // Anthropic-specific implementation
-    // }
+    async fn identify_relevant_results(
+        &self,
+        context: &Context,
+        search_results: &[SearchResult],
+    ) -> Result<Vec<SearchResult>, IterativeSearchError> {
+        self.identify(context, search_results).await
+    }
 
     // fn decide_continue_search(&self, context: &Context) -> bool {
     //     // Anthropic-specific implementation

@@ -1643,7 +1643,9 @@ Satisfy the requirement either by making edits or gathering the required informa
             .tools
             .code_edit_outline(
                 sub_symbol,
-                &self.symbol_identifier,
+                // forcefully send the symbol identifier because we depend on the
+                // fs_file_path being non-null on the editor side
+                &SymbolIdentifier::with_file_path(self.symbol_name(), sub_symbol.fs_file_path()),
                 sub_symbol.fs_file_path(),
                 file_content.contents_ref(),
                 sub_symbol.range(),

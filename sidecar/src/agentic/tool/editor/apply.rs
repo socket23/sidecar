@@ -25,6 +25,8 @@ pub struct EditorApplyRequest {
     edited_content: String,
     selected_range: Range,
     editor_url: String,
+    // we want to apply the edits directly to the file and not stream it
+    direct_apply: bool,
 }
 
 impl EditorApplyRequest {
@@ -33,12 +35,14 @@ impl EditorApplyRequest {
         edited_content: String,
         selected_range: Range,
         editor_url: String,
+        direct_apply: bool,
     ) -> Self {
         Self {
             fs_file_path,
             edited_content,
             selected_range,
             editor_url,
+            direct_apply,
         }
     }
 
@@ -48,7 +52,7 @@ impl EditorApplyRequest {
             edited_content: self.edited_content,
             selected_range: self.selected_range,
             editor_url: self.editor_url,
-            apply_directly: apply_edits,
+            apply_directly: apply_edits || self.direct_apply,
         }
     }
 }
@@ -94,7 +98,7 @@ impl Tool for EditorApply {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let request = input.editor_apply_changes()?;
         let fs_file_path = request.fs_file_path.to_owned();
-        if self.apply_edits_directly {
+        if self.apply_edits_directly || request.direct_apply {
             self.apply_edits(request).await
         } else {
             Ok(ToolOutput::EditorApplyChanges(EditorApplyResponse {

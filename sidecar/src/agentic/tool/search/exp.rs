@@ -2,19 +2,56 @@ use std::path::PathBuf;
 
 use crate::repomap::tag::TagIndex;
 
+#[derive(Debug, Clone)]
 pub struct Context {
     files: Vec<File>,
     user_query: String,
     thoughts: String,
 }
-struct File {
+
+impl Context {
+    pub fn files(&self) -> &[File] {
+        &self.files
+    }
+
+    pub fn file_paths_as_strings(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .map(|f| f.path().to_string_lossy().into_owned())
+            .collect()
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
+    }
+
+    pub fn thoughts(&self) -> &str {
+        &self.thoughts
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct File {
     path: PathBuf,
     // content: String,
     // preview: String,
 }
 
-struct SearchQuery {
+impl File {
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
+// todo(zi): structure this based on available search tools
+pub struct SearchQuery {
     query: String,
+}
+
+impl SearchQuery {
+    pub fn new(query: String) -> Self {
+        Self { query }
+    }
 }
 
 struct SearchResult {
@@ -62,7 +99,7 @@ impl IterativeSearchSystem {
 
     pub fn run(&mut self) {
         let mut count = 0;
-        while count < 3 {
+        while count < 1 {
             println!("run loop #{}", count);
             let search_query = self.search();
             let search_result = self.repository.execute_search(search_query);
@@ -75,8 +112,14 @@ impl IterativeSearchSystem {
         }
     }
 
+    // this generates the search_query based on context
     fn search(&self) -> SearchQuery {
-        // Implement search logic
+        // construct LLM input for search
+
+        // execute LLM call
+
+        // execute_search (on repo)
+
         // Use self.context to generate a structured search query
         SearchQuery {
             query: String::new(),

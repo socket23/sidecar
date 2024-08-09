@@ -49,7 +49,7 @@ impl Repository {
 }
 
 impl IterativeSearchSystem {
-    fn new(user_query: String, repository: Repository) -> Self {
+    pub fn new(user_query: String, repository: Repository) -> Self {
         Self {
             context: Context {
                 files: Vec::new(),
@@ -60,14 +60,18 @@ impl IterativeSearchSystem {
         }
     }
 
-    fn run(&mut self) {
-        loop {
+    pub fn run(&mut self) {
+        let mut count = 0;
+        while count < 3 {
+            println!("run loop #{}", count);
             let search_query = self.search();
             let search_result = self.repository.execute_search(search_query);
             self.identify(&search_result);
             if !self.decide() {
                 break;
             }
+
+            count += 1;
         }
     }
 

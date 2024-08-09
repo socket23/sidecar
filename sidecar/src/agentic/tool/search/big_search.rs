@@ -28,6 +28,7 @@ use crate::{
             search::{
                 agentic::{GenerateSearchPlanError, SearchPlanContext, SearchPlanQuery},
                 broker::SearchPlanBroker,
+                exp::IterativeSearchSystem,
             },
         },
     },
@@ -159,9 +160,13 @@ impl Tool for BigSearchBroker {
         let (tree_string, _, _) =
             TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
 
-        let repository = Repository::new();
+        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+
+        let repository = Repository::new(tree_string, "outline".to_owned(), tag_index);
         let mut system = IterativeSearchSystem::new("User query".to_string(), repository);
         system.run();
+
+        todo!();
 
         // agentic search
         // let search_plan = SearchPlan
@@ -193,8 +198,6 @@ impl Tool for BigSearchBroker {
         println!("file count: {:?}", files.len());
 
         println!("files: {:?}", files);
-
-        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
 
         let tags = files
             .iter()

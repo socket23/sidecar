@@ -4,13 +4,14 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
     provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
+use serde_xml_rs::from_str;
 use std::{sync::Arc, time::Instant};
 
 use crate::agentic::{symbol::identifier::LLMProperties, tool::search::agentic::SearchPlanContext};
 
 use super::{
     agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse},
-    exp::{Context, IterativeSearchQuery, LLMOperations, SearchQuery},
+    exp::{Context, LLMOperations, SearchQuery, SearchRequests},
 };
 
 pub struct GoogleStudioLLM {
@@ -106,7 +107,7 @@ report
     }
 
     // todo: remove llm_query
-    pub async fn generate_search_query(&self, context: Context) -> SearchQuery {
+    pub async fn generate_search_queries(&self, context: Context) -> Vec<SearchQuery> {
         println!("googlestudioplangenerator::generate_search_plan");
 
         println!(
@@ -148,7 +149,10 @@ report
             .await;
 
         match response {
-            Ok(response) => println!("{response}"),
+            Ok(response) => {
+                println!("{response}");
+                GoogleStudioLLM::parse_response(&response);
+            }
             Err(err) => eprintln!("{:?}", err),
         }
 
@@ -158,13 +162,38 @@ report
 
         // SearchQuery::new("some query".to_owned())
     }
+
+    fn parse_response(response: &str) -> Vec<SearchQuery> {
+        let lines = response
+            .lines()
+            .skip_while(|l| !l.contains("<reply>"))
+            .skip(1)
+            .take_while(|l| !l.contains("</reply>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        let parsed = from_str::<SearchRequests>(&lines);
+
+        match parsed {
+            Ok(result) => {
+                println!("parsed SearchRequests");
+                println!("{:?}", result);
+            }
+            Err(error) => {
+                eprintln!("error parsing");
+                eprintln!("{:?}", error);
+            }
+        }
+
+        todo!();
+    }
 }
 
 #[async_trait]
 impl LLMOperations for GoogleStudioLLM {
     async fn generate_search_query(&self, context: &Context) -> SearchQuery {
         println!("LLMOperations::impl::GoogleStudioLLM");
-        self.generate_search_query(context.to_owned()).await;
+        let _ = self.generate_search_queries(context.to_owned()).await;
         todo!();
     }
 

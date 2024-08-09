@@ -61,7 +61,6 @@ impl File {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
 pub enum SearchToolType {
     File,
     Keyword,

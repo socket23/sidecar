@@ -13,3 +13,9 @@ pub struct IdentifiedFile {
     path: PathBuf,
     thinking: String,
 }
+
+impl IdentifiedFile {
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+}

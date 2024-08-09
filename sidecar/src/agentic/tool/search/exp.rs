@@ -38,6 +38,10 @@ impl Context {
         &self.files
     }
 
+    pub fn add_files(&mut self, files: Vec<File>) {
+        self.files.extend(files)
+    }
+
     pub fn file_paths_as_strings(&self) -> Vec<String> {
         self.files
             .iter()
@@ -62,6 +66,12 @@ pub struct File {
 }
 
 impl File {
+    pub fn new(path: &PathBuf) -> Self {
+        Self {
+            path: path.to_owned(),
+        }
+    }
+
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
@@ -300,8 +310,6 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             let identify_results = self.identify(&search_results).await?;
 
-            println!("identify results");
-
             println!(
                 "{}",
                 identify_results
@@ -310,6 +318,17 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                     .collect::<Vec<String>>()
                     .join("\n")
             );
+
+            self.context.add_files(
+                identify_results
+                    .iter()
+                    .map(|r| File::new(r.path()))
+                    .collect::<Vec<File>>(),
+            );
+
+            println!("Context::files: {:?}", self.context().files());
+
+            todo!();
 
             if !self.decide() {
                 break;

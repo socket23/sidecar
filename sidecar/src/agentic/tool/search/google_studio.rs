@@ -35,12 +35,105 @@ impl GoogleStudioLLM {
             client,
         }
     }
+    pub fn system_message_for_generate_search_query(&self, context: &Context) -> String {
+        format!(
+            r#"You are an autonomous AI assistant.
+Your task is to locate the code relevant to an issue.
+
+# Instructions:
+
+1. Understand The Issue:
+Read the <issue> tag to understand the issue.
+
+2. Review Current File Context:
+Examine the <file_context> tag to see which files and code spans have already been identified.
+If you believe that all relevant files have been identified, you can finish the search by setting complete to true.
+
+3. Consider the Necessary Search Parameters:
+Determine if specific file types, directories, function or class names or code patterns are mentioned in the issue.
+If you can you should always try to specify the search parameters as accurately as possible.
+You can do more than one search request at the same time so you can try different search parameters to cover all possible relevant code.
+
+4. Ensure At Least One Search Parameter:
+Make sure that at least one of query, code_snippet, class_name, or function_name is provided.
+
+5. Formulate the Search function:
+Set at least one of the search paramaters `query`, `code_snippet`, `class_name` or `function_name`."#
+        )
+    }
+
+    pub fn user_message_for_generate_search_query(&self, context: &Context) -> String {
+        format!(
+            r#"<issue>{}</issue>
+<file_context>{}</file_context>
+        "#,
+            context.user_query(),
+            context.file_paths_as_strings().join(", ")
+        )
+    }
+
+    // todo: remove llm_query
+    pub async fn generate_search_query(&self, context: Context) -> SearchQuery {
+        println!("googlestudioplangenerator::generate_search_plan");
+
+        println!(
+            "googlestudioplangenerator::generate_search_plan::context: \n{:?}",
+            context
+        );
+
+        let system_message =
+            LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
+        let user_message =
+            LLMClientMessage::user(self.user_message_for_generate_search_query(&context));
+
+        let messages = LLMClientCompletionRequest::new(
+            self.model.to_owned(),
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let response = self
+            .client
+            .stream_completion(
+                self.api_keys.to_owned(),
+                messages,
+                self.provider.to_owned(),
+                vec![
+                    ("event_type".to_owned(), "generate_search_plan".to_owned()),
+                    ("root_id".to_owned(), self.root_request_id.to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await;
+
+        match response {
+            Ok(response) => println!("{response}"),
+            Err(err) => eprintln!("{:?}", err),
+        }
+
+        todo!();
+
+        // Some(root_directory),
+        // self.request_id.to_string(),
+
+        // run LLM call to return query
+
+        // parse response into SearchQuery
+
+        SearchQuery::new("some query".to_owned())
+    }
 }
 
 #[async_trait]
 impl LLMOperations for GoogleStudioLLM {
     async fn generate_search_query(&self, context: &Context) -> SearchQuery {
         println!("LLMOperations::impl::GoogleStudioLLM");
+        self.generate_search_query(context.to_owned()).await;
         todo!();
     }
 
@@ -112,107 +205,6 @@ Context:
             request.user_query(),
             context,
         )
-    }
-
-    pub fn system_message_for_generate_search_query(&self, context: &Context) -> String {
-        format!(
-            r#"You are an autonomous AI assistant.
-Your task is to locate the code relevant to an issue.
-
-# Instructions:
-
-1. Understand The Issue:
-Read the <issue> tag to understand the issue.
-
-2. Review Current File Context:
-Examine the <file_context> tag to see which files and code spans have already been identified.
-If you believe that all relevant files have been identified, you can finish the search by setting complete to true.
-
-3. Consider the Necessary Search Parameters:
-Determine if specific file types, directories, function or class names or code patterns are mentioned in the issue.
-If you can you should always try to specify the search parameters as accurately as possible.
-You can do more than one search request at the same time so you can try different search parameters to cover all possible relevant code.
-
-4. Ensure At Least One Search Parameter:
-Make sure that at least one of query, code_snippet, class_name, or function_name is provided.
-
-5. Formulate the Search function:
-Set at least one of the search paramaters `query`, `code_snippet`, `class_name` or `function_name`."#
-        )
-    }
-
-    pub fn user_message_for_generate_search_query(&self, context: &Context) -> String {
-        format!(
-            r#"<issue>{}</issue>
-<file_context>{}</file_context>
-        "#,
-            context.user_query(),
-            context.file_paths_as_strings().join(", ")
-        )
-    }
-
-    // todo: remove llm_query
-    pub async fn generate_search_query(&self, context: Context) -> SearchQuery {
-        println!("googlestudioplangenerator::generate_search_plan");
-
-        println!(
-            "googlestudioplangenerator::generate_search_plan::context: \n{:?}",
-            context
-        );
-
-        let system_message =
-            LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
-        let user_message =
-            LLMClientMessage::user(self.user_message_for_generate_search_query(&context));
-
-        let model = LLMType::GeminiProFlash;
-        let provider = LLMProvider::GoogleAIStudio;
-        let api_keys = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-        ));
-
-        let messages = LLMClientCompletionRequest::new(
-            model,
-            vec![system_message.clone(), user_message.clone()],
-            0.2,
-            None,
-        );
-
-        let root_request_id = "zi_test_id";
-
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_keys,
-                messages,
-                provider,
-                vec![
-                    ("event_type".to_owned(), "generate_search_plan".to_owned()),
-                    ("root_id".to_owned(), root_request_id.to_string()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await;
-
-        match response {
-            Ok(response) => println!("{response}"),
-            Err(err) => eprintln!("{:?}", err),
-        }
-
-        todo!();
-
-        // Some(root_directory),
-        // self.request_id.to_string(),
-
-        // run LLM call to return query
-
-        // parse response into SearchQuery
-
-        SearchQuery::new("some query".to_owned())
     }
 }
 

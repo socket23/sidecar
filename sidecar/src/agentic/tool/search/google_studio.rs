@@ -23,7 +23,7 @@ pub struct GoogleStudioLLM {
 }
 
 impl GoogleStudioLLM {
-    pub fn new(root_directory: String, client: Arc<LLMBroker>) -> Self {
+    pub fn new(root_directory: String, client: Arc<LLMBroker>, root_request_id: String) -> Self {
         Self {
             model: LLMType::GeminiProFlash,
             provider: LLMProvider::GoogleAIStudio,
@@ -31,7 +31,7 @@ impl GoogleStudioLLM {
                 "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
             )),
             root_directory,
-            root_request_id: "zi_test_id".to_owned(),
+            root_request_id,
             client,
         }
     }
@@ -55,10 +55,43 @@ If you can you should always try to specify the search parameters as accurately 
 You can do more than one search request at the same time so you can try different search parameters to cover all possible relevant code.
 
 4. Ensure At Least One Search Parameter:
-Make sure that at least one of query, code_snippet, class_name, or function_name is provided.
+Make sure that at least one of File or Keyword is provided. File allows you to search for file names. Keyword allows you to search for symbols such as class and function names.
 
 5. Formulate the Search function:
-Set at least one of the search paramaters `query`, `code_snippet`, `class_name` or `function_name`."#
+For files, you do not need to provide the extension. For Keyword, use only uninterrupted strings, not phrases.
+
+6. Execute the Search:
+Execute the search by providing the search parameters and your thoughts on how to approach this task in XML. 
+
+Think step by step and write out your thoughts in the thinking field.
+
+Examples:
+
+User:
+The generate_report function sometimes produces incomplete reports under certain conditions. This function is part of the reporting module. Locate the generate_report function in the reports directory to debug and fix the issue.
+
+Assistant:
+<reply>
+<search_requests>
+<request>
+<thinking>
+</thinking>
+<search_tool>Keyword</search_tool>
+<query>
+generate_report
+</query>
+</request>
+<request>
+<thinking>
+</thinking>
+<search_tool>File</search_tool>
+<query>
+report
+</query>
+</request>
+</search_requests>
+</reply>
+"#
         )
     }
 
@@ -102,7 +135,10 @@ Set at least one of the search paramaters `query`, `code_snippet`, `class_name` 
                 messages,
                 self.provider.to_owned(),
                 vec![
-                    ("event_type".to_owned(), "generate_search_plan".to_owned()),
+                    (
+                        "event_type".to_owned(),
+                        "generate_search_tool_query".to_owned(),
+                    ),
                     ("root_id".to_owned(), self.root_request_id.to_string()),
                 ]
                 .into_iter()
@@ -118,14 +154,9 @@ Set at least one of the search paramaters `query`, `code_snippet`, `class_name` 
 
         todo!();
 
-        // Some(root_directory),
-        // self.request_id.to_string(),
-
-        // run LLM call to return query
-
         // parse response into SearchQuery
 
-        SearchQuery::new("some query".to_owned())
+        // SearchQuery::new("some query".to_owned())
     }
 }
 

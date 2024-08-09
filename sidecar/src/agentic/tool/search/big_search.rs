@@ -181,6 +181,7 @@ impl Tool for BigSearchBroker {
         let google_studio_llm_config = GoogleStudioLLM::new(
             request.root_directory().unwrap_or("").to_owned(),
             self.llm_client(),
+            request.root_request_id().to_owned(),
         );
 
         let mut system = IterativeSearchSystem::new(

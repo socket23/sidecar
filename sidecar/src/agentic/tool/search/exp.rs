@@ -7,8 +7,9 @@ use llm_client::{
 };
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
-use crate::{repo::iterator::RepositoryDirectory, repomap::tag::TagIndex};
+use crate::repomap::tag::TagIndex;
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -59,17 +60,39 @@ impl File {
     }
 }
 
-// todo(zi): structure this based on available search tools
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchToolType {
+    File,
+    Keyword,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SearchQuery {
-    query: String,
+    #[serde(default)]
+    pub thinking: String,
+    pub search_tool: SearchToolType,
+    pub query: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename = "search_requests")]
+pub struct SearchRequests {
+    #[serde(rename = "request")]
+    pub requests: Vec<SearchQuery>,
 }
 
 impl SearchQuery {
-    pub fn new(query: String) -> Self {
-        Self { query }
+    pub fn new(search_tool: SearchToolType, query: String, thinking: String) -> Self {
+        Self {
+            search_tool,
+            query,
+            thinking,
+        }
     }
 }
 
+// todo(zi): think about this structure
 struct SearchResult {
     files: Vec<File>,
 }
@@ -177,16 +200,10 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     // this generates the search_query based on context
     async fn search(&self) -> SearchQuery {
         let _ = self.llm_ops.generate_search_query(self.context()).await;
-        // construct LLM input for search
-
-        // execute LLM call
 
         // execute_search (on repo)
 
-        // Use self.context to generate a structured search query
-        SearchQuery {
-            query: String::new(),
-        }
+        todo!();
     }
 
     fn identify(&mut self, search_result: &SearchResult) {

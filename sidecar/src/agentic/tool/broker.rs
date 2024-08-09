@@ -326,6 +326,9 @@ impl ToolBroker {
             Box::new(ApplyOutlineEditsToRange::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
+                // if we are not applying directly, then we are going to stream
+                // the edits to the frontend
+                !tool_broker_config.apply_edits_directly,
             )),
         );
         tools.insert(

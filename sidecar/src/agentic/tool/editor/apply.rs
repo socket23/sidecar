@@ -65,14 +65,7 @@ pub struct EditorApplyRequestDirect {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EditorApplyResponse {
     fs_file_path: String,
-    new_range: Range,
     success: bool,
-}
-
-impl EditorApplyResponse {
-    pub fn range(&self) -> &Range {
-        &self.new_range
-    }
 }
 
 impl EditorApply {
@@ -100,6 +93,14 @@ impl EditorApply {
 impl Tool for EditorApply {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let request = input.editor_apply_changes()?;
-        self.apply_edits(request).await
+        let fs_file_path = request.fs_file_path.to_owned();
+        if self.apply_edits_directly {
+            self.apply_edits(request).await
+        } else {
+            Ok(ToolOutput::EditorApplyChanges(EditorApplyResponse {
+                fs_file_path,
+                success: true,
+            }))
+        }
     }
 }

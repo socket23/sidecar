@@ -112,15 +112,10 @@ report
         )
     }
 
-    // todo: remove llm_query
-    pub async fn generate_search_queries(&self, context: Context) -> Vec<SearchQuery> {
-        println!("googlestudioplangenerator::generate_search_plan");
-
-        println!(
-            "googlestudioplangenerator::generate_search_plan::context: \n{:?}",
-            context
-        );
-
+    pub async fn generate_search_queries(
+        &self,
+        context: Context,
+    ) -> Result<Vec<SearchQuery>, IterativeSearchError> {
         let system_message =
             LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
         let user_message =
@@ -152,21 +147,9 @@ report
                 .collect(),
                 sender,
             )
-            .await;
+            .await?;
 
-        match response {
-            Ok(response) => {
-                println!("{response}");
-                let _ = GoogleStudioLLM::parse_response(&response);
-            }
-            Err(err) => eprintln!("{:?}", err),
-        }
-
-        todo!();
-
-        // parse response into SearchQuery
-
-        // SearchQuery::new("some query".to_owned())
+        Ok(GoogleStudioLLM::parse_response(&response)?.requests)
     }
 
     fn parse_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {

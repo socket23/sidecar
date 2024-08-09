@@ -16,7 +16,7 @@ use crate::{
     user_context::types::UserContextError,
 };
 
-use super::agentic::SerdeError;
+use super::{agentic::SerdeError, identify::IdentifiedFile};
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -252,7 +252,7 @@ pub trait LLMOperations {
         &self,
         context: &Context,
         search_results: &[SearchResult],
-    ) -> Result<Vec<SearchResult>, IterativeSearchError>;
+    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError>;
     // fn decide_continue_search(&self, context: &Context) -> bool;
 }
 
@@ -298,7 +298,18 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                     .join("\n")
             );
 
-            let identify_results = self.identify(&search_results).await;
+            let identify_results = self.identify(&search_results).await?;
+
+            println!("identify results");
+
+            println!(
+                "{}",
+                identify_results
+                    .iter()
+                    .map(|r| format!("{:?}", r))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            );
 
             if !self.decide() {
                 break;
@@ -318,7 +329,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     async fn identify(
         &mut self,
         search_results: &[SearchResult],
-    ) -> Result<Vec<SearchResult>, IterativeSearchError> {
+    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError> {
         self.llm_ops
             .identify_relevant_results(self.context(), search_results)
             .await

@@ -1,9 +1,15 @@
-use super::exp::SearchResult;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "responses")]
 pub struct IdentifyResponse {
     #[serde(rename = "response")]
-    pub responses: Vec<SearchResult>,
+    pub responses: Vec<IdentifiedFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentifiedFile {
+    path: PathBuf,
+    thinking: String,
 }

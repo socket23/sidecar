@@ -4,14 +4,17 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
     provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
-use serde_xml_rs::from_str;
+use serde_xml_rs::{from_str, to_string};
 use std::{sync::Arc, time::Instant};
 
 use crate::{
     agent::search,
     agentic::{
         symbol::identifier::LLMProperties,
-        tool::search::agentic::{SearchPlanContext, SerdeError},
+        tool::search::{
+            agentic::{SearchPlanContext, SerdeError},
+            identify::IdentifyResponse,
+        },
     },
 };
 
@@ -20,6 +23,7 @@ use super::{
     exp::{
         Context, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests, SearchResult,
     },
+    identify::IdentifiedFile,
 };
 
 pub struct GoogleStudioLLM {
@@ -152,29 +156,56 @@ Examine the current file context provided in the <file_context> tag to understan
 </path>
 <thinking>
 </thinking>
-<snippet>
-</snippet>
 </response>
 <response>
 <path>
 </path>
 <thinking>
 </thinking>
-<snippet>
-</snippet>
 </response>
 <response>
 <path>
 </path>
 <thinking>
 </thinking>
-<snippet>
-</snippet>
 </response>
 </responses>
 </reply>
 
 Think step by step and write out your thoughts in the scratch_pad field."#
+        )
+    }
+
+    pub fn user_message_for_identify(
+        &self,
+        context: &Context,
+        search_results: &[SearchResult],
+    ) -> String {
+        let serialized_results: Vec<String> = search_results
+            .iter()
+            .filter_map(|r| match to_string(r) {
+                Ok(s) => Some(GoogleStudioLLM::strip_xml_declaration(&s).to_string()),
+                Err(e) => {
+                    eprintln!("Error serializing SearchResult: {:?}", e);
+                    None
+                }
+            })
+            .collect();
+
+        format!(
+            r#"<issue>
+{}
+</issue>
+<file_context>
+{}
+</file_context>
+<search_results>
+{}
+</search_results>
+"#,
+            context.user_query(),
+            context.file_paths_as_strings().join(", "),
+            serialized_results.join("\n")
         )
     }
 
@@ -215,10 +246,10 @@ Think step by step and write out your thoughts in the scratch_pad field."#
             )
             .await?;
 
-        Ok(GoogleStudioLLM::parse_response(&response)?.requests)
+        Ok(GoogleStudioLLM::parse_search_response(&response)?.requests)
     }
 
-    fn parse_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {
+    fn parse_search_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {
         let lines = response
             .lines()
             .skip_while(|l| !l.contains("<reply>"))
@@ -233,19 +264,35 @@ Think step by step and write out your thoughts in the scratch_pad field."#
         })
     }
 
+    fn parse_identify_response(response: &str) -> Result<IdentifyResponse, IterativeSearchError> {
+        let lines = response
+            .lines()
+            .skip_while(|l| !l.contains("<reply>"))
+            .skip(1)
+            .take_while(|l| !l.contains("</reply>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        println!("{}", lines);
+
+        from_str::<IdentifyResponse>(&lines).map_err(|error| {
+            eprintln!("{:?}", error);
+            IterativeSearchError::SerdeError(SerdeError::new(error, lines))
+        })
+    }
+
     pub async fn identify(
         &self,
         context: &Context,
         search_results: &[SearchResult],
-    ) -> Result<Vec<SearchResult>, IterativeSearchError> {
+    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError> {
         println!("GoogleStudioLLM::identify");
 
-        let system_message =
-            LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
+        let system_message = LLMClientMessage::system(self.system_message_for_identify(&context));
 
         // may need serde serialise!
         let user_message =
-            LLMClientMessage::user(self.user_message_for_generate_search_query(&context));
+            LLMClientMessage::user(self.user_message_for_identify(&context, search_results));
 
         let messages = LLMClientCompletionRequest::new(
             self.model.to_owned(),
@@ -254,29 +301,41 @@ Think step by step and write out your thoughts in the scratch_pad field."#
             None,
         );
 
-        todo!();
-        // let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        // let response = self
-        //     .client
-        //     .stream_completion(
-        //         self.api_keys.to_owned(),
-        //         messages,
-        //         self.provider.to_owned(),
-        //         vec![
-        //             (
-        //                 "event_type".to_owned(),
-        //                 "generate_search_tool_query".to_owned(),
-        //             ),
-        //             ("root_id".to_owned(), self.root_request_id.to_string()),
-        //         ]
-        //         .into_iter()
-        //         .collect(),
-        //         sender,
-        //     )
-        //     .await?;
+        let response = self
+            .client
+            .stream_completion(
+                self.api_keys.to_owned(),
+                messages,
+                self.provider.to_owned(),
+                vec![
+                    ("event_type".to_owned(), "identify".to_owned()),
+                    ("root_id".to_owned(), self.root_request_id.to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
 
-        // Ok(GoogleStudioLLM::parse_response(&response)?.requests)
+        Ok(GoogleStudioLLM::parse_identify_response(&response)?.responses)
+    }
+
+    fn strip_xml_declaration(input: &str) -> &str {
+        const XML_DECLARATION_START: &str = "<?xml";
+        const XML_DECLARATION_END: &str = "?>";
+
+        if input.starts_with(XML_DECLARATION_START) {
+            if let Some(end_pos) = input.find(XML_DECLARATION_END) {
+                let start_pos = end_pos + XML_DECLARATION_END.len();
+                input[start_pos..].trim_start()
+            } else {
+                input
+            }
+        } else {
+            input
+        }
     }
 }
 
@@ -293,7 +352,7 @@ impl LLMOperations for GoogleStudioLLM {
         &self,
         context: &Context,
         search_results: &[SearchResult],
-    ) -> Result<Vec<SearchResult>, IterativeSearchError> {
+    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError> {
         self.identify(context, search_results).await
     }
 

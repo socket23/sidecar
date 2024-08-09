@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{
-    FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider,
-};
+use llm_client::provider::{FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::{apply_inlay_hints_to_code, split_file_content_into_parts};
@@ -3962,6 +3960,7 @@ instruction:
     pub async fn code_edit_outline(
         &self,
         sub_symbol: &SymbolToEdit,
+        symbol_identifier: &SymbolIdentifier,
         fs_file_path: &str,
         file_content: &str,
         selection_range: &Range,
@@ -4046,18 +4045,23 @@ FILEPATH: {fs_file_path}
 
         let request = ToolInput::ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest::new(
             instruction,
+            symbol_identifier.clone(),
+            fs_file_path.to_owned(),
             in_range_selection,
             response,
             self.root_request_id.to_owned(),
+            selection_range.clone(),
             LLMProperties::new(
-                // why are we using gpt4omini over here which is slow as shit, we should be using
-                // llama3.1-8b instead
-                LLMType::Gpt4OMini,
-                LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                    "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".to_owned(),
+                // why are we using gpt4omini over here which is slow as shit, lets at the very
+                // least move over to gemini-flash
+                LLMType::GeminiProFlash,
+                LLMProvider::GoogleAIStudio,
+                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                 )),
             ),
+            // this is the special request id sent along with every edit which we want to make
+            uuid::Uuid::new_v4().to_string(),
             self.ui_events.clone(),
         ));
         let response = self

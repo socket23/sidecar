@@ -30,6 +30,10 @@ impl SymbolEditedItem {
     pub fn is_new(&self) -> bool {
         self.is_new
     }
+
+    pub fn thinking(&self) -> &str {
+        &self.thinking
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

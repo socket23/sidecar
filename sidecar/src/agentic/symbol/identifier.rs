@@ -1010,7 +1010,14 @@ impl MechaCodeSymbolThinking {
                 if reverse_lookup.len() == 1 {
                     let snippet = self.get_snippet().await.expect("to be present");
                     if snippet.is_single_block_language() {
-                        println!("single block language found, we should short-circuit over here");
+                        let step_instruction = original_request.symbols_edited_list().map(|symbol_request_list| 
+                            symbol_request_list.into_iter().find(|symbol_request| {
+                                symbol_request.name() == self.symbol_name() && symbol_request.fs_file_path() == self.fs_file_path()
+                            })
+                            .map(|symbol_request| symbol_request.thinking().to_owned()))
+                            .flatten()
+                            .into_iter()
+                            .collect::<Vec<_>>();
                         return Ok(SymbolEventRequest::new(
                             self.to_symbol_identifier(),
                             SymbolEvent::Edit(SymbolToEditRequest::new(
@@ -1019,7 +1026,7 @@ impl MechaCodeSymbolThinking {
                                     self.symbol_name().to_owned(),
                                     reverse_lookup.remove(0).range().clone(),
                                     self.fs_file_path().to_owned(),
-                                    vec!["This is where the symbol is present".to_owned()],
+                                    step_instruction,
                                     false,
                                     false,
                                     true,

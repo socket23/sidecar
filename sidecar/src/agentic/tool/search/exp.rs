@@ -11,7 +11,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    agentic::tool::code_symbol::important::CodeSymbolImportantResponse, repomap::tag::TagIndex,
+    agentic::tool::code_symbol::important::CodeSymbolImportantResponse,
+    repomap::tag::{SearchMode, TagIndex},
     user_context::types::UserContextError,
 };
 
@@ -125,6 +126,7 @@ impl SearchQuery {
 }
 
 // todo(zi): think about this structure
+#[derive(Debug, Clone)]
 struct SearchResult {
     path: PathBuf,
     thinking: String,
@@ -169,13 +171,14 @@ impl Repository {
             .map(|e| e.path().to_string_lossy().into_owned())
     }
 
-    fn execute_search(&self, search_query: &SearchQuery) -> SearchResult {
+    fn execute_search(&self, search_query: &SearchQuery) -> Vec<SearchResult> {
         // Implement repository search logic
         println!("repository::execute_search::query: {:?}", search_query);
 
         match search_query.tool {
             SearchToolType::File => {
                 println!("repository::execute_search::query::SearchToolType::File");
+
                 let file = self.find_file(&search_query.query);
 
                 println!(
@@ -183,16 +186,25 @@ impl Repository {
                     file
                 );
 
-                SearchResult::new(
+                vec![SearchResult::new(
                     PathBuf::from(file.unwrap_or("".to_string())),
                     &search_query.thinking,
                     "",
-                )
+                )]
             } // maybe give the thinking to TreeSearch...?
             SearchToolType::Keyword => {
                 println!("repository::execute_search::query::SearchToolType::Keyword");
 
-                todo!();
+                let result = self.tag_index.search_definitions_flattened(
+                    &search_query.query,
+                    false,
+                    SearchMode::ExactTagName,
+                );
+
+                result
+                    .iter()
+                    .map(|r| SearchResult::new(r.fname.to_owned(), &search_query.thinking, &r.name))
+                    .collect()
             }
         }
     }
@@ -273,8 +285,18 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             // todo(zi): this could be async
             let search_results: Vec<SearchResult> = search_queries
                 .iter()
-                .map(|q| self.repository.execute_search(q))
+                // maybe flat_mapping here works better
+                .flat_map(|q| self.repository.execute_search(q))
                 .collect();
+
+            println!(
+                "{}",
+                search_results
+                    .iter()
+                    .map(|r| format!("{:?}", r))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            );
 
             todo!();
             // self.identify(&search_result);

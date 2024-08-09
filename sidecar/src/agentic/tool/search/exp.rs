@@ -8,7 +8,10 @@ use thiserror::Error;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::{repomap::tag::TagIndex, user_context::types::UserContextError};
+use crate::{
+    agentic::tool::code_symbol::important::CodeSymbolImportantResponse, repomap::tag::TagIndex,
+    user_context::types::UserContextError,
+};
 
 use super::agentic::SerdeError;
 
@@ -140,8 +143,10 @@ impl Repository {
         }
     }
 
-    fn execute_search(&self, query: SearchQuery) -> SearchResult {
+    fn execute_search(&self, query: &SearchQuery) -> SearchResult {
         // Implement repository search logic
+        println!("repository::execute_search::query: {:?}", query);
+        todo!();
         SearchResult { files: Vec::new() }
     }
 }
@@ -180,7 +185,10 @@ impl IterativeSearchQuery {
 
 #[async_trait]
 pub trait LLMOperations {
-    async fn generate_search_query(&self, context: &Context) -> SearchQuery;
+    async fn generate_search_query(
+        &self,
+        context: &Context,
+    ) -> Result<Vec<SearchQuery>, IterativeSearchError>;
     // fn identify_relevant_results(
     //     &self,
     //     context: &Context,
@@ -209,28 +217,32 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         &self.context
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
         let mut count = 0;
         while count < 1 {
             println!("run loop #{}", count);
-            let search_query = self.search().await;
-            let search_result = self.repository.execute_search(search_query);
-            self.identify(&search_result);
+            let search_queries = self.search().await?;
+
+            let search_results: Vec<SearchResult> = search_queries
+                .iter()
+                .map(|q| self.repository.execute_search(q))
+                .collect();
+
+            todo!();
+            // self.identify(&search_result);
             if !self.decide() {
                 break;
             }
 
             count += 1;
         }
-    }
-
-    // this generates the search_query based on context
-    async fn search(&self) -> SearchQuery {
-        let _ = self.llm_ops.generate_search_query(self.context()).await;
-
-        // execute_search (on repo)
 
         todo!();
+    }
+
+    // this generates search queries
+    async fn search(&self) -> Result<Vec<SearchQuery>, IterativeSearchError> {
+        self.llm_ops.generate_search_query(self.context()).await
     }
 
     fn identify(&mut self, search_result: &SearchResult) {

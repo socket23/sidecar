@@ -170,10 +170,11 @@ report
 
 #[async_trait]
 impl LLMOperations for GoogleStudioLLM {
-    async fn generate_search_query(&self, context: &Context) -> SearchQuery {
-        println!("LLMOperations::impl::GoogleStudioLLM");
-        let _ = self.generate_search_queries(context.to_owned()).await;
-        todo!();
+    async fn generate_search_query(
+        &self,
+        context: &Context,
+    ) -> Result<Vec<SearchQuery>, IterativeSearchError> {
+        self.generate_search_queries(context.to_owned()).await
     }
 
     // fn identify_relevant_results(

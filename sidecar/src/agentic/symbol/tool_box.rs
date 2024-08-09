@@ -161,6 +161,7 @@ impl ToolBox {
                             &edit_range,
                             &format!("{}\n", last_line),
                             request_id,
+                            true,
                         )
                         .await;
                     // now that we have inserted a new line it should be safe to send
@@ -178,6 +179,7 @@ impl ToolBox {
                         &Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
                         "",
                         request_id,
+                        true,
                     )
                     .await?;
                 Ok(Position::new(0, 0, 0))
@@ -464,15 +466,22 @@ impl ToolBox {
             .tools
             .invoke(inlay_hint_request)
             .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .get_inlay_hints_response()
-            .ok_or(SymbolError::WrongToolOutput)?;
+            .map_err(|e| SymbolError::ToolError(e));
 
-        Ok(apply_inlay_hints_to_code(
-            code_in_selection,
-            range,
-            inlay_hints,
-        ))
+        match inlay_hints {
+            Ok(inlay_hints) => {
+                if let Some(inlay_hints) = inlay_hints.get_inlay_hints_response() {
+                    Ok(apply_inlay_hints_to_code(
+                        code_in_selection,
+                        range,
+                        inlay_hints,
+                    ))
+                } else {
+                    Ok(code_in_selection.to_owned())
+                }
+            }
+            Err(_e) => Ok(code_in_selection.to_owned()),
+        }
     }
 
     /// Compresses the symbol by removing function content if its present
@@ -3331,6 +3340,7 @@ instruction:
                     &range,
                     fresh_outline_node.content().content(),
                     request_id,
+                    false,
                 )
                 .await;
         }
@@ -3391,6 +3401,7 @@ instruction:
                                 .collect::<Vec<_>>()
                                 .join("\n"),
                             request_id,
+                            false,
                         )
                         .await;
                 }
@@ -3428,6 +3439,7 @@ instruction:
                     implementation_outline_node.range(),
                     edited_node.content().content(),
                     request_id,
+                    false,
                 )
                 .await;
         }
@@ -3582,7 +3594,13 @@ instruction:
                 // The range of the symbol before doing the edit
                 let edited_range = symbol_to_edit_range;
                 let _editor_response = self
-                    .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
+                    .apply_edits_to_editor(
+                        fs_file_path,
+                        &edited_range,
+                        &updated_code,
+                        request_id,
+                        false,
+                    )
                     .await?;
 
                 // after applying the edits to the editor, we will need to get the file
@@ -3675,6 +3693,7 @@ instruction:
                                 symbol_to_edit.range(),
                                 &corrected_code,
                                 request_id,
+                                false,
                             )
                             .await;
 
@@ -3776,7 +3795,13 @@ instruction:
                 // after this we have to apply the edits to the editor again and being
                 // the loop again
                 let _ = self
-                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code, request_id)
+                    .apply_edits_to_editor(
+                        fs_file_path,
+                        &edited_range,
+                        &fixed_code,
+                        request_id,
+                        false,
+                    )
                     .await?;
             } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
                 // over here we want to ping the other symbols and send them requests, there is a search
@@ -4404,12 +4429,15 @@ FILEPATH: {fs_file_path}
         range: &Range,
         updated_code: &str,
         _request_id: &str,
+        // if we should be applying these edits directly
+        apply_directly: bool,
     ) -> Result<EditorApplyResponse, SymbolError> {
         let input = ToolInput::EditorApplyChange(EditorApplyRequest::new(
             fs_file_path.to_owned(),
             updated_code.to_owned(),
             range.clone(),
             self.editor_url.to_owned(),
+            apply_directly,
         ));
         self.tools
             .invoke(input)

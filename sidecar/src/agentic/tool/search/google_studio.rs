@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use gix::attrs::Search;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
@@ -38,8 +37,10 @@ impl GoogleStudioLLM {
     }
 }
 
+#[async_trait]
 impl LLMOperations for GoogleStudioLLM {
-    fn generate_search_query(&self, context: &Context) -> SearchQuery {
+    async fn generate_search_query(&self, context: &Context) -> SearchQuery {
+        println!("LLMOperations::impl::GoogleStudioLLM");
         todo!();
     }
 

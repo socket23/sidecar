@@ -6,6 +6,8 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
+use async_trait::async_trait;
+
 use crate::{repo::iterator::RepositoryDirectory, repomap::tag::TagIndex};
 
 #[derive(Debug, Clone)]
@@ -126,8 +128,9 @@ impl IterativeSearchQuery {
     }
 }
 
+#[async_trait]
 pub trait LLMOperations {
-    fn generate_search_query(&self, context: &Context) -> SearchQuery;
+    async fn generate_search_query(&self, context: &Context) -> SearchQuery;
     // fn identify_relevant_results(
     //     &self,
     //     context: &Context,
@@ -152,11 +155,15 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         }
     }
 
-    pub fn run(&mut self) {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    pub async fn run(&mut self) {
         let mut count = 0;
         while count < 1 {
             println!("run loop #{}", count);
-            let search_query = self.search();
+            let search_query = self.search().await;
             let search_result = self.repository.execute_search(search_query);
             self.identify(&search_result);
             if !self.decide() {
@@ -168,7 +175,8 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     // this generates the search_query based on context
-    fn search(&self) -> SearchQuery {
+    async fn search(&self) -> SearchQuery {
+        let _ = self.llm_ops.generate_search_query(self.context()).await;
         // construct LLM input for search
 
         // execute LLM call

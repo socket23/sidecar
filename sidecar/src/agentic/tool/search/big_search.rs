@@ -188,7 +188,8 @@ impl Tool for BigSearchBroker {
             repository,
             google_studio_llm_config,
         );
-        system.run();
+
+        system.run().await;
 
         todo!();
 

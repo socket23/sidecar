@@ -144,7 +144,10 @@ async fn main() {
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
     //         .to_owned();
-    let problem_statement = "Incomplete implementation for GoogleStudioLLM and GoogleStudioPlanGenerator: missing functionality for generating search queries and plans. 
+    // let problem_statement = "Incomplete implementation for GoogleStudioLLM and GoogleStudioPlanGenerator: missing functionality for generating search queries and plans.
+    // ".to_owned();
+
+    let problem_statement = "We need to update the configuration settings for our application. The main configuration file is named 'exp.rs' and should be located in the root directory of our project. Please find this file so we can review and modify the settings.
     ".to_owned();
 
     let root_dir = "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic";

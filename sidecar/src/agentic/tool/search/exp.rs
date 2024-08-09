@@ -1,6 +1,11 @@
 use std::path::PathBuf;
 
-use crate::repomap::tag::TagIndex;
+use llm_client::{
+    clients::types::LLMType,
+    provider::{LLMProvider, LLMProviderAPIKeys},
+};
+
+use crate::{repo::iterator::RepositoryDirectory, repomap::tag::TagIndex};
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -10,6 +15,14 @@ pub struct Context {
 }
 
 impl Context {
+    pub fn new(files: Vec<File>, user_query: String, thoughts: String) -> Self {
+        Self {
+            files,
+            user_query,
+            thoughts,
+        }
+    }
+
     pub fn files(&self) -> &[File] {
         &self.files
     }
@@ -58,12 +71,6 @@ struct SearchResult {
     files: Vec<File>,
 }
 
-// Main system struct
-pub struct IterativeSearchSystem {
-    context: Context,
-    repository: Repository,
-}
-
 pub struct Repository {
     tree: String,
     outline: String,
@@ -85,16 +92,46 @@ impl Repository {
     }
 }
 
-impl IterativeSearchSystem {
-    pub fn new(user_query: String, repository: Repository) -> Self {
+pub struct IterativeSearchQuery {
+    context: Context,
+    repository: Repository,
+    llm: LLMType,
+    provider: LLMProvider,
+    api_keys: LLMProviderAPIKeys,
+    root_directory: String,
+    root_request_id: String,
+}
+
+impl IterativeSearchQuery {
+    pub fn new(
+        context: Context,
+        repository: Repository,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        root_directory: String,
+        root_request_id: String,
+    ) -> Self {
         Self {
-            context: Context {
-                files: Vec::new(),
-                user_query,
-                thoughts: String::new(),
-            },
+            context,
             repository,
+            llm,
+            provider,
+            api_keys,
+            root_directory,
+            root_request_id,
         }
+    }
+}
+
+// Main system struct
+pub struct IterativeSearchSystem {
+    query: IterativeSearchQuery,
+}
+
+impl IterativeSearchSystem {
+    pub fn new(query: IterativeSearchQuery) -> Self {
+        Self { query }
     }
 
     pub fn run(&mut self) {
@@ -102,7 +139,7 @@ impl IterativeSearchSystem {
         while count < 1 {
             println!("run loop #{}", count);
             let search_query = self.search();
-            let search_result = self.repository.execute_search(search_query);
+            let search_result = self.query.repository.execute_search(search_query);
             self.identify(&search_result);
             if !self.decide() {
                 break;

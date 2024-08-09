@@ -70,7 +70,7 @@ Context:
         )
     }
 
-    pub fn system_message_for_generate_search_plan(&self, context: &Context) -> String {
+    pub fn system_message_for_generate_search_query(&self, context: &Context) -> String {
         format!(
             r#"You are an autonomous AI assistant.
 Your task is to locate the code relevant to an issue.
@@ -97,7 +97,7 @@ Set at least one of the search paramaters `query`, `code_snippet`, `class_name` 
         )
     }
 
-    pub fn user_message_for_generate_search_plan(&self, context: &Context) -> String {
+    pub fn user_message_for_generate_search_query(&self, context: &Context) -> String {
         format!(
             r#"<issue>{}</issue>
 <file_context>{}</file_context>
@@ -107,7 +107,7 @@ Set at least one of the search paramaters `query`, `code_snippet`, `class_name` 
         )
     }
 
-    pub fn generate_search_plan(&self, context: Context) -> SearchQuery {
+    pub fn generate_search_query(&self, context: Context) -> SearchQuery {
         println!("googlestudioplangenerator::generate_search_plan");
 
         println!(
@@ -115,11 +115,15 @@ Set at least one of the search paramaters `query`, `code_snippet`, `class_name` 
             context
         );
 
-        let system_message = self.system_message_for_generate_search_plan(&context);
-        let user_message = self.user_message_for_generate_search_plan(&context);
+        let system_message = self.system_message_for_generate_search_query(&context);
+        let user_message = self.user_message_for_generate_search_query(&context);
 
         println!("system_message: {}", system_message);
         println!("user_message: {}", user_message);
+
+        // run LLM call to return query
+
+        // parse response into SearchQuery
 
         SearchQuery::new("some query".to_owned())
     }

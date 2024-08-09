@@ -28,7 +28,7 @@ use crate::{
             search::{
                 agentic::{GenerateSearchPlanError, SearchPlanContext, SearchPlanQuery},
                 broker::SearchPlanBroker,
-                exp::IterativeSearchSystem,
+                exp::{Context, IterativeSearchQuery, IterativeSearchSystem},
             },
         },
     },
@@ -163,7 +163,21 @@ impl Tool for BigSearchBroker {
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
 
         let repository = Repository::new(tree_string, "outline".to_owned(), tag_index);
-        let mut system = IterativeSearchSystem::new("User query".to_string(), repository);
+
+        let iterative_search_context =
+            Context::new(Vec::new(), request.user_query().to_owned(), "".to_owned());
+
+        let iterative_system_query = IterativeSearchQuery::new(
+            iterative_search_context,
+            repository,
+            request.llm().clone(),
+            request.provider().clone(),
+            request.api_keys().clone(),
+            request.root_directory().unwrap_or("").to_string(), // repo_name
+            request.root_request_id().to_string(),
+        );
+
+        let mut system = IterativeSearchSystem::new(iterative_system_query);
         system.run();
 
         todo!();

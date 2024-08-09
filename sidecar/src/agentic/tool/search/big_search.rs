@@ -1,4 +1,8 @@
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 use async_trait::async_trait;
 use llm_client::{
@@ -163,7 +167,12 @@ impl Tool for BigSearchBroker {
 
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
 
-        let repository = Repository::new(tree_string, "outline".to_owned(), tag_index);
+        let repository = Repository::new(
+            tree_string,
+            "outline".to_owned(),
+            tag_index,
+            PathBuf::from(request.root_directory().unwrap_or("").to_string()),
+        );
 
         let iterative_search_context =
             Context::new(Vec::new(), request.user_query().to_owned(), "".to_owned());

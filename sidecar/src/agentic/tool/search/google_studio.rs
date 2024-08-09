@@ -61,8 +61,9 @@ Determine if specific file types, directories, function or class names or code p
 If you can you should always try to specify the search parameters as accurately as possible.
 You can do more than one search request at the same time so you can try different search parameters to cover all possible relevant code.
 
-4. Ensure At Least One Search Parameter:
+4. Ensure At Least One Tool:
 Make sure that at least one of File or Keyword is provided. File allows you to search for file names. Keyword allows you to search for symbols such as class and function names.
+You may use a combination of both.
 
 5. Formulate the Search function:
 For files, you do not need to provide the extension. For Keyword, use only uninterrupted strings, not phrases.
@@ -83,7 +84,7 @@ Assistant:
 <request>
 <thinking>
 </thinking>
-<search_tool>Keyword</search_tool>
+<tool>Keyword</tool>
 <query>
 generate_report
 </query>
@@ -91,7 +92,7 @@ generate_report
 <request>
 <thinking>
 </thinking>
-<search_tool>File</search_tool>
+<tool>File</tool>
 <query>
 report
 </query>

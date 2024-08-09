@@ -2,7 +2,9 @@ use llm_client::{
     clients::types::{LLMClientError, LLMType},
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
-use std::path::PathBuf;
+use walkdir::WalkDir;
+
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use async_trait::async_trait;
@@ -74,7 +76,7 @@ pub enum SearchToolType {
 pub struct SearchQuery {
     #[serde(default)]
     pub thinking: String,
-    pub search_tool: SearchToolType,
+    pub tool: SearchToolType,
     pub query: String,
 }
 
@@ -113,9 +115,9 @@ pub enum IterativeSearchError {
 }
 
 impl SearchQuery {
-    pub fn new(search_tool: SearchToolType, query: String, thinking: String) -> Self {
+    pub fn new(tool: SearchToolType, query: String, thinking: String) -> Self {
         Self {
-            search_tool,
+            tool,
             query,
             thinking,
         }
@@ -124,7 +126,19 @@ impl SearchQuery {
 
 // todo(zi): think about this structure
 struct SearchResult {
-    files: Vec<File>,
+    path: PathBuf,
+    thinking: String,
+    snippet: String, // potentially useful for stronger reasoning
+}
+
+impl SearchResult {
+    pub fn new(path: PathBuf, thinking: &str, snippet: &str) -> Self {
+        Self {
+            path,
+            thinking: thinking.to_string(),
+            snippet: snippet.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -132,22 +146,55 @@ pub struct Repository {
     tree: String,
     outline: String,
     tag_index: TagIndex,
+    root: PathBuf,
 }
 
 impl Repository {
-    pub fn new(tree: String, outline: String, tag_index: TagIndex) -> Self {
+    pub fn new(tree: String, outline: String, tag_index: TagIndex, root: PathBuf) -> Self {
         Self {
             tree,
             outline,
             tag_index,
+            root,
         }
     }
 
-    fn execute_search(&self, query: &SearchQuery) -> SearchResult {
+    // todo(zi): file index would be useful here. Considered using tag_index's file_to_tags,
+    // but this would mean we'd always ignore .md files, which could contain useful information
+    fn find_file(&self, target: &str) -> Option<String> {
+        WalkDir::new(&self.root)
+            .into_iter()
+            .filter_map(Result::ok)
+            .find(|e| e.file_name().to_string_lossy() == target)
+            .map(|e| e.path().to_string_lossy().into_owned())
+    }
+
+    fn execute_search(&self, search_query: &SearchQuery) -> SearchResult {
         // Implement repository search logic
-        println!("repository::execute_search::query: {:?}", query);
-        todo!();
-        SearchResult { files: Vec::new() }
+        println!("repository::execute_search::query: {:?}", search_query);
+
+        match search_query.tool {
+            SearchToolType::File => {
+                println!("repository::execute_search::query::SearchToolType::File");
+                let file = self.find_file(&search_query.query);
+
+                println!(
+                    "repository::execute_search::query::SearchToolType::File::file: {:?}",
+                    file
+                );
+
+                SearchResult::new(
+                    PathBuf::from(file.unwrap_or("".to_string())),
+                    &search_query.thinking,
+                    "",
+                )
+            } // maybe give the thinking to TreeSearch...?
+            SearchToolType::Keyword => {
+                println!("repository::execute_search::query::SearchToolType::Keyword");
+
+                todo!();
+            }
+        }
     }
 }
 
@@ -223,6 +270,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("run loop #{}", count);
             let search_queries = self.search().await?;
 
+            // todo(zi): this could be async
             let search_results: Vec<SearchResult> = search_queries
                 .iter()
                 .map(|q| self.repository.execute_search(q))

@@ -418,9 +418,9 @@ impl OutlineNode {
                     });
                 });
                 self.children.iter().for_each(|children| {
-                    println!("{:?}", children.name());
-                    println!("{:?}", &children.body_range);
-                    println!("{:?}", &children.range);
+                    // println!("{:?}", children.name());
+                    // println!("{:?}", &children.body_range);
+                    // println!("{:?}", &children.range);
                     // we have the body range for the children
                     // but we are missing the range for the
 

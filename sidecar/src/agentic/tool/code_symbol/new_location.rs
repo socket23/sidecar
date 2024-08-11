@@ -30,7 +30,12 @@ impl CodeSymbolNewLocationResponse {
             .take_while(|line| !line.contains("</reply>"))
             .collect::<Vec<_>>()
             .join("\n");
-        from_str::<Self>(&lines).map_err(|_e| ToolError::SerdeConversionFailed)
+        let formatted_lines = format!(
+            r#"<reply>
+{lines}
+</reply>"#
+        );
+        from_str::<Self>(&formatted_lines).map_err(|_e| ToolError::SerdeConversionFailed)
     }
 
     pub fn thinking(&self) -> &str {

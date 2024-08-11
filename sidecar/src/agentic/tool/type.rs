@@ -87,6 +87,8 @@ pub enum ToolType {
     InLayHints,
     // code location for the new symbol
     CodeSymbolNewLocation,
+    // should edit the code or is it just a check
+    ShouldEditCode,
 }
 
 impl std::fmt::Display for ToolType {
@@ -148,6 +150,7 @@ impl std::fmt::Display for ToolType {
             ToolType::KeywordSearch => write!(f, "Keyword search"),
             ToolType::InLayHints => write!(f, "Inlay hints"),
             ToolType::CodeSymbolNewLocation => write!(f, "Code symbol new location"),
+            ToolType::ShouldEditCode => write!(f, "Should edit code"),
         }
     }
 }

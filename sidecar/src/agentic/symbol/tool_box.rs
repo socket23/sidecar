@@ -40,6 +40,7 @@ use crate::agentic::tool::code_symbol::models::anthropic::{
     AskQuestionSymbolHint, CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
     ProbeNextSymbol,
 };
+use crate::agentic::tool::code_symbol::new_location::CodeSymbolNewLocationRequest;
 use crate::agentic::tool::code_symbol::new_sub_symbol::{
     NewSubSymbolRequiredRequest, NewSubSymbolRequiredResponse,
 };
@@ -4537,6 +4538,93 @@ FILEPATH: {fs_file_path}
         // this gives us the outline we need for the outline of the symbol which
         // we are interested in
         response
+    }
+
+    /// Grabs the location where we should be adding the new symbol
+    ///
+    /// Instead of putting it at the end of the file, we can add it to the exact
+    /// location we are interested in which is detected by the LLM
+    pub async fn code_location_for_addition(
+        &self,
+        fs_file_path: &str,
+        symbol_identifer: &SymbolIdentifier,
+        add_request: &str,
+        request_id: &str,
+        // returns the line where we want to insert it and if we want to insert it
+        // before the line or after the line
+        // before case:
+        // <we_get_start_position_here>def something():
+        //     # pass
+        // so here we want to insert a new line at the start of the line and then
+        // insert it
+        // after case:
+        // def something():
+        //    # pass <we_get_start_position_here>
+        // we just insert a new line at the end of this line and then insert it
+        // the boolean here represents if we want to insert it at the start of the line
+        // or the end of the line
+    ) -> Result<(Position, bool), SymbolError> {
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let _ = self
+            .force_add_document(
+                fs_file_path,
+                file_contents.contents_ref(),
+                file_contents.language(),
+            )
+            .await?;
+        let outline_nodes: Vec<_> = self
+            .get_outline_nodes_grouped(fs_file_path)
+            .await
+            .unwrap_or_default();
+        let outline_nodes_range = outline_nodes
+            .iter()
+            .map(|outline_node| outline_node.range().clone())
+            .collect::<Vec<_>>();
+        let outline_nodes_str = outline_nodes
+            .into_iter()
+            .map(|outline_node| outline_node.get_outline_for_prompt())
+            .collect::<Vec<_>>();
+        let request = ToolInput::CodeSymbolNewLocation(CodeSymbolNewLocationRequest::new(
+            fs_file_path.to_owned(),
+            outline_nodes_str,
+            symbol_identifer.symbol_name().to_owned(),
+            add_request.to_owned(),
+            LLMProperties::new(
+                LLMType::Llama3_1_8bInstruct,
+                LLMProvider::FireworksAI,
+                LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+                    "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+                )),
+            ),
+            self.root_request_id.to_owned(),
+        ));
+        let response = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_symbol_new_location()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        let response_idx = response.idx();
+        // if we are at the end of the file, then we can just get the last line
+        // after the
+        if response_idx == outline_nodes_range.len() {
+            if outline_nodes_range.is_empty() {
+                Ok((Position::new(0, 0, 0), true))
+            } else {
+                Ok((
+                    outline_nodes_range[outline_nodes_range.len() - 1].end_position(),
+                    true,
+                ))
+            }
+        } else {
+            let outline_node_selected = outline_nodes_range.get(response_idx);
+            if let Some(outline_node) = outline_node_selected {
+                Ok((outline_node.end_position(), false))
+            } else {
+                Err(SymbolError::OutlineNodeEditingNotSupported)
+            }
+        }
     }
 
     pub async fn get_outline_nodes_grouped(&self, fs_file_path: &str) -> Option<Vec<OutlineNode>> {

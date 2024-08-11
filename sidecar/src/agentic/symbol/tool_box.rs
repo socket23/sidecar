@@ -132,6 +132,79 @@ impl ToolBox {
         }
     }
 
+    /// Inserts a new line at the locatiaon we want to, this is a smart way to
+    /// make space for the new symbol by looking at the line we want to insert it
+    /// and if we want to insert it at the start of the line or at the end of the line
+    pub async fn add_empty_line_at_line(
+        &self,
+        fs_file_path: &str,
+        line_number: usize,
+        at_start: bool,
+        request_id: &str,
+    ) -> Result<Position, SymbolError> {
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let file_lines = file_contents
+            .contents_ref()
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>();
+        // if we are inserting at the start of the line, then we can just insert
+        // a \n at the start of the line and it will be safe always
+        if at_start {
+            let _ = self
+                .apply_edits_to_editor(
+                    fs_file_path,
+                    &Range::new(
+                        Position::new(line_number, 0, 0),
+                        Position::new(line_number, 0, 0),
+                    ),
+                    "\n",
+                    request_id,
+                    true,
+                )
+                .await;
+            Ok(Position::new(line_number, 0, 0))
+        } else {
+            match file_lines.get(line_number) {
+                Some(line_content) => {
+                    if line_content.is_empty() {
+                        Ok(Position::new(line_number, 0, 0))
+                    } else {
+                        let edit_range = Range::new(
+                            Position::new(line_number, 0, 0),
+                            Position::new(line_number, line_content.chars().count(), 0),
+                        );
+                        let _ = self
+                            .apply_edits_to_editor(
+                                &fs_file_path,
+                                &edit_range,
+                                &format!("{}\n", line_content),
+                                request_id,
+                                true,
+                            )
+                            .await;
+                        Ok(Position::new(line_number + 1, 0, 0))
+                    }
+                }
+                // none here might refer to the fact that the line does not exist
+                // this almost always happens for empty files, so for now insert an empty
+                // line at 0, 0
+                None => {
+                    let _ = self
+                        .apply_edits_to_editor(
+                            fs_file_path,
+                            &Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                            "",
+                            request_id,
+                            true,
+                        )
+                        .await?;
+                    Ok(Position::new(0, 0, 0))
+                }
+            }
+        }
+    }
+
     /// Adds a new empty line at the end of the file and returns the start position
     /// of the newly added line
     pub async fn add_empty_line_end_of_file(
@@ -4563,7 +4636,12 @@ FILEPATH: {fs_file_path}
         // we just insert a new line at the end of this line and then insert it
         // the boolean here represents if we want to insert it at the start of the line
         // or the end of the line
+        // think of this as (Position, at_start)
     ) -> Result<(Position, bool), SymbolError> {
+        println!(
+            "too_box::code_location_for_addition::start::symbol({})",
+            symbol_identifer.symbol_name()
+        );
         let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
         let _ = self
             .force_add_document(
@@ -4610,17 +4688,17 @@ FILEPATH: {fs_file_path}
         // after the
         if response_idx == outline_nodes_range.len() {
             if outline_nodes_range.is_empty() {
-                Ok((Position::new(0, 0, 0), true))
+                Ok((Position::new(0, 0, 0), false))
             } else {
                 Ok((
                     outline_nodes_range[outline_nodes_range.len() - 1].end_position(),
-                    true,
+                    false,
                 ))
             }
         } else {
             let outline_node_selected = outline_nodes_range.get(response_idx);
             if let Some(outline_node) = outline_node_selected {
-                Ok((outline_node.end_position(), false))
+                Ok((outline_node.end_position(), true))
             } else {
                 Err(SymbolError::OutlineNodeEditingNotSupported)
             }

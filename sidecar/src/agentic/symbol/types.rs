@@ -1342,19 +1342,30 @@ Satisfy the requirement either by making edits or gathering the required informa
             };
             Ok(Some(request))
         } else {
-            // if this is a new symbol we want to insert a new line at the end
-            // of the file anyways so we can always work with the assumption
-            // that there is a new line at the end of the file
-            let end_position = self
+            let code_location_for_addition = self
                 .tools
-                .add_empty_line_end_of_file(self.fs_file_path(), &request_id)
+                .code_location_for_addition(
+                    self.fs_file_path(),
+                    &self.symbol_identifier,
+                    request_data.get_original_question(),
+                    &request_id,
+                )
+                .await?;
+            let code_position = self
+                .tools
+                .add_empty_line_at_line(
+                    self.fs_file_path(),
+                    code_location_for_addition.0.line(),
+                    code_location_for_addition.1,
+                    &request_id,
+                )
                 .await?;
 
             // if the last line is not empty, then we want to create an empty line
             // and then start inserting the code over there
             let sub_symbol_to_edit = SymbolToEdit::new(
                 self.symbol_name().to_owned(),
-                Range::new(end_position.clone(), end_position),
+                Range::new(code_position.clone(), code_position),
                 self.fs_file_path().to_owned(),
                 vec![request_data
                     .get_plan()

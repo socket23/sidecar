@@ -73,6 +73,8 @@ pub struct InitialRequestData {
     // in the future this will be a reference to some plan object which will
     // dynamically update the symbol edited items inside
     symbols_edited_list: Option<Vec<SymbolEditedItem>>,
+    // if this is a big search request
+    is_big_search_request: bool,
 }
 
 impl InitialRequestData {
@@ -82,6 +84,7 @@ impl InitialRequestData {
         history: Vec<SymbolRequestHistoryItem>,
         full_symbol_request: bool,
         symbols_edited_list: Option<Vec<SymbolEditedItem>>,
+        is_big_search_request: bool,
     ) -> Self {
         Self {
             original_question,
@@ -89,7 +92,12 @@ impl InitialRequestData {
             history,
             full_symbol_request,
             symbols_edited_list,
+            is_big_search_request,
         }
+    }
+
+    pub fn is_big_search_request(&self) -> bool {
+        self.is_big_search_request
     }
 
     pub fn full_symbol_request(&self) -> bool {

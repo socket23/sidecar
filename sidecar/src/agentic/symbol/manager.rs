@@ -583,6 +583,7 @@ impl SymbolManager {
                                     vec![],
                                     full_symbol_edit,
                                     Some(symbols_edited_list),
+                                    is_big_search,
                                 )),
                                 tool_properties_ref.clone(),
                             );

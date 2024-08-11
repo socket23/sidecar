@@ -153,6 +153,7 @@ impl SymbolEventRequest {
         history: Vec<SymbolRequestHistoryItem>,
         tool_properties: ToolProperties,
         symbols_edited_list: Option<Vec<SymbolEditedItem>>,
+        is_big_search: bool,
     ) -> Self {
         Self {
             symbol,
@@ -162,6 +163,7 @@ impl SymbolEventRequest {
                 history,
                 tool_properties.get_full_symbol_request(),
                 symbols_edited_list,
+                is_big_search,
             )),
             tool_properties,
         }

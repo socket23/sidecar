@@ -24,6 +24,7 @@ use super::{
         probe_question_for_symbol::ProbeQuestionForSymbol,
         probe_try_hard_answer::ProbeTryHardAnswer, repo_map_search::RepoMapSearchBroker,
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingContext,
+        should_edit::ShouldEditCodeSymbol,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -343,6 +344,13 @@ impl ToolBroker {
         tools.insert(
             ToolType::CodeSymbolNewLocation,
             Box::new(CodeSymbolNewLocation::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::ShouldEditCode,
+            Box::new(ShouldEditCodeSymbol::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

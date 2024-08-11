@@ -155,6 +155,26 @@ impl Snippet {
         &self.content
     }
 
+    pub fn to_prompt(&self) -> String {
+        let file_path = self.file_path();
+        let start_line = self.range().start_line();
+        let end_line = self.range().end_line();
+        let content = self.content();
+        let language = self.language();
+        format!(
+            r#"
+<file_path>
+{file_path}:{start_line}-{end_line}
+</file_path>
+<content>
+```{language}
+{content}
+```
+</content>"#
+        )
+        .to_owned()
+    }
+
     pub fn to_xml(&self) -> String {
         let name = &self.symbol_name;
         let file_path = self.file_path();
@@ -988,7 +1008,7 @@ impl MechaCodeSymbolThinking {
         tool_properties: &ToolProperties,
         _hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
         _ui_sender: UnboundedSender<UIEventWithID>,
-    ) -> Result<SymbolEventRequest, SymbolError> {
+    ) -> Result<Option<SymbolEventRequest>, SymbolError> {
         println!(
             "mecha_code_symbol_thinking::full_symbol::symbol_name({})",
             self.symbol_name(),
@@ -1000,10 +1020,26 @@ impl MechaCodeSymbolThinking {
             original_request.get_original_question().to_owned(),
         ));
 
+
         if self.is_snippet_present().await {
+            // if this is a big search request, we might have been over-eager and want
+            // to edit more than required, the best thing to do is self-reflect and check
+            // if we even need to edit this
+            if original_request.is_big_search_request() {
+                println!(
+                    "mecha_code_symbol_thinking::full_symbol::initial_request::big_search::should_edit::symbol_name({})", self.symbol_name()
+                );
+                if let Some(prompt_string) = self.to_llm_request_full_prompt().await {
+                    // if we do not have a need to edit, then bail early
+                    if !self.tool_box.edits_required_full_symbol(&prompt_string, original_request.get_original_question()).await.unwrap_or(true) {
+                        return Ok(None);
+                    }
+                }
+            }
+
             // let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
-            if let Some((ranked_xml_list, mut reverse_lookup)) = self.to_llm_requet_full(&request_id).await {
+            if let Some((ranked_xml_list, mut reverse_lookup)) = self.to_llm_requet_full_listwise(&request_id).await {
                 // if we just have a single element over here, then we do not need
                 // to do any lookups, especially if the code is in languages other than
                 // rust, since for them we always have a single snippet
@@ -1018,7 +1054,7 @@ impl MechaCodeSymbolThinking {
                             .flatten()
                             .into_iter()
                             .collect::<Vec<_>>();
-                        return Ok(SymbolEventRequest::new(
+                        return Ok(Some(SymbolEventRequest::new(
                             self.to_symbol_identifier(),
                             SymbolEvent::Edit(SymbolToEditRequest::new(
                                 // figure out what to fill over here
@@ -1037,7 +1073,7 @@ impl MechaCodeSymbolThinking {
                                 history,
                             )),
                             tool_properties.clone(),
-                        ));
+                        )));
                     }
                 }
                 // now we have to rerank the whole section
@@ -1130,7 +1166,7 @@ Edit selection reason:
                     })
                     .collect::<Vec<_>>()
                     .await;
-                Ok(SymbolEventRequest::new(
+                Ok(Some(SymbolEventRequest::new(
                     self.to_symbol_identifier(),
                     SymbolEvent::Edit(SymbolToEditRequest::new(
                         sub_symbols_to_edit,
@@ -1138,7 +1174,7 @@ Edit selection reason:
                         history,
                     )),
                     tool_properties.clone(),
-                ))
+                )))
             } else {
                 println!("mecha_code_symbol_thinking::missing_to_llm_request_full::({})", self.symbol_name());
                 Err(SymbolError::SnippetNotFound)
@@ -1487,10 +1523,65 @@ Reason to edit:
         }
     }
 
+    /// Generates the full symbol which we can put in a prompt for full symbol
+    /// analysis and decision making
+    /// 
+    /// We do not generate a list of anything just the full symbol over here
+    pub async fn to_llm_request_full_prompt(&self) -> Option<String> {
+        let snippet_maybe = {
+            self.snippet.lock().await.as_ref().map(|snippet| snippet.clone())
+        };
+        if let Some(snippet) = snippet_maybe {
+            println!(
+                "mecha_code_symbol_thinking::to_llm_request_full_prompt::symbol_as_ref({})",
+                &self.symbol_name()
+            );
+            let is_function = snippet
+                .outline_node_content
+                .outline_node_type()
+                .is_function();
+            let is_definition_assignment = snippet
+                .outline_node_content
+                .outline_node_type()
+                .is_definition_assignment();
+            if is_function || is_definition_assignment {
+                let function_body = snippet.to_prompt();
+                Some(function_body)
+            } else {
+                let implementations = self.get_implementations().await;
+                println!("mecha_code_symbol_thinking::implementations_for_symbol::({:?})::symbol({})", &implementations, self.symbol_name());
+                let snippets_ref = implementations.iter().collect::<Vec<_>>();
+                // Now we need to format this properly and send it back over to the LLM
+                let snippet_xml = snippets_ref.iter().enumerate().map(|(_idx, snippet)| {
+                    let file_path = snippet.file_path();
+                    let start_line = snippet.range().start_line();
+                    let end_line = snippet.range().end_line();
+                    let location = format!("{}:{}-{}", file_path, start_line, end_line);
+                    let language = snippet.language();
+                    let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
+                    format!(
+                        r#"
+<file_path>
+{location}
+</file_path>
+<content>
+```{language}
+{content}
+```
+</content>"#
+                    )
+                }).collect::<Vec<_>>().join("\n");
+                Some(snippet_xml)
+            }
+        } else {
+            None
+        }
+    }
+
     /// We generate the sections of the symbols here in full, which implies
     /// that we are not going to create sections of the symbol per function
     /// or in other logical units but as complete
-    pub async fn to_llm_requet_full(&self, _request_id: &str) -> Option<(String, Vec<SnippetReRankInformation>)> {
+    pub async fn to_llm_requet_full_listwise(&self, _request_id: &str) -> Option<(String, Vec<SnippetReRankInformation>)> {
         let snippet_maybe = {
             self.snippet.lock().await.as_ref().map(|snippet| snippet.clone())
         };

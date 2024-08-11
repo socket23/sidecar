@@ -22,6 +22,22 @@ pub struct ShouldEditCodeSymbolRequest {
     root_request_id: String,
 }
 
+impl ShouldEditCodeSymbolRequest {
+    pub fn new(
+        symbol_content: String,
+        request: String,
+        llm_properties: LLMProperties,
+        root_request_id: String,
+    ) -> Self {
+        Self {
+            symbol_content,
+            request,
+            llm_properties,
+            root_request_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename = "reply")]
 pub struct ShouldEditCodeSymbolResponse {

@@ -558,4 +558,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn should_edit_code_symbol_full(self) -> Option<ShouldEditCodeSymbolResponse> {
+        match self {
+            ToolOutput::ShouldEditCode(response) => Some(response),
+            _ => None,
+        }
+    }
 }

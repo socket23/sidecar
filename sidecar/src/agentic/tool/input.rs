@@ -16,6 +16,7 @@ use super::{
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
         initial_request_follow::CodeSymbolFollowInitialRequest,
+        new_location::CodeSymbolNewLocationRequest,
         new_sub_symbol::NewSubSymbolRequiredRequest,
         planning_before_code_edit::PlanningBeforeCodeEditRequest,
         probe::ProbeEnoughOrDeeperRequest,
@@ -113,6 +114,7 @@ pub enum ToolInput {
     KeywordSearch(KeywordSearchQuery),
     // inlay hints from the lsp/editor
     InlayHints(InlayHintsRequest),
+    CodeSymbolNewLocation(CodeSymbolNewLocationRequest),
 }
 
 impl ToolInput {
@@ -169,6 +171,15 @@ impl ToolInput {
             ToolInput::FilterEditOperation(_) => ToolType::FilterEditOperation,
             ToolInput::KeywordSearch(_) => ToolType::KeywordSearch,
             ToolInput::InlayHints(_) => ToolType::InLayHints,
+            ToolInput::CodeSymbolNewLocation(_) => ToolType::CodeSymbolNewLocation,
+        }
+    }
+
+    pub fn code_symbol_new_location(self) -> Result<CodeSymbolNewLocationRequest, ToolError> {
+        if let ToolInput::CodeSymbolNewLocation(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::CodeSymbolNewLocation))
         }
     }
 

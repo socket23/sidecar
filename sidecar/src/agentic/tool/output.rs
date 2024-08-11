@@ -13,6 +13,7 @@ use super::{
         models::anthropic::{
             CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
+        new_location::CodeSymbolNewLocationResponse,
         new_sub_symbol::NewSubSymbolRequiredResponse,
         planning_before_code_edit::PlanningBeforeCodeEditResponse,
         probe::ProbeEnoughOrDeeperResponse,
@@ -141,9 +142,15 @@ pub enum ToolOutput {
     KeywordSearch(CodeSymbolImportantResponse),
     // Inlay hints response
     InlayHints(InlayHintsResponse),
+    // code symbol new location
+    CodeSymbolNewLocation(CodeSymbolNewLocationResponse),
 }
 
 impl ToolOutput {
+    pub fn code_symbol_new_location(response: CodeSymbolNewLocationResponse) -> Self {
+        ToolOutput::CodeSymbolNewLocation(response)
+    }
+
     pub fn inlay_hints(response: InlayHintsResponse) -> Self {
         ToolOutput::InlayHints(response)
     }

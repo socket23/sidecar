@@ -544,4 +544,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_code_symbol_new_location(self) -> Option<CodeSymbolNewLocationResponse> {
+        match self {
+            ToolOutput::CodeSymbolNewLocation(response) => Some(response),
+            _ => None,
+        }
+    }
 }

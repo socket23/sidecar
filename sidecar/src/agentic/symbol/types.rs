@@ -1330,19 +1330,21 @@ Satisfy the requirement either by making edits or gathering the required informa
                     )
                     .await?
             } else {
-                self.mecha_code_symbol
-                    .initial_request(
-                        self.tools.clone(),
-                        &request_data,
-                        self.llm_properties.clone(),
-                        request_id,
-                        &self.tool_properties,
-                        self.hub_sender.clone(),
-                        self.ui_sender.clone(),
-                    )
-                    .await?
+                Some(
+                    self.mecha_code_symbol
+                        .initial_request(
+                            self.tools.clone(),
+                            &request_data,
+                            self.llm_properties.clone(),
+                            request_id,
+                            &self.tool_properties,
+                            self.hub_sender.clone(),
+                            self.ui_sender.clone(),
+                        )
+                        .await?,
+                )
             };
-            Ok(Some(request))
+            Ok(request)
         } else {
             let code_location_for_addition = self
                 .tools

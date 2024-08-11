@@ -53,6 +53,7 @@ use crate::agentic::tool::code_symbol::probe_try_hard_answer::ProbeTryHardAnswer
 use crate::agentic::tool::code_symbol::reranking_symbols_for_editing_context::{
     ReRankingCodeSnippetSymbolOutline, ReRankingSnippetsForCodeEditingRequest,
 };
+use crate::agentic::tool::code_symbol::should_edit::ShouldEditCodeSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
@@ -4856,6 +4857,33 @@ FILEPATH: {fs_file_path}
             .map_err(|e| SymbolError::ToolError(e))?
             .get_go_to_definition()
             .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn edits_required_full_symbol(
+        &self,
+        symbol_content: &str,
+        user_request: &str,
+    ) -> Result<bool, SymbolError> {
+        let tool_input = ToolInput::ShouldEditCode(ShouldEditCodeSymbolRequest::new(
+            symbol_content.to_owned(),
+            user_request.to_owned(),
+            LLMProperties::new(
+                LLMType::GeminiProFlash,
+                LLMProvider::GoogleAIStudio,
+                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                )),
+            ),
+            self.root_request_id.to_owned(),
+        ));
+        let output = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .should_edit_code_symbol_full()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(output.should_edit())
     }
 
     /// Used to make sure if the edit request should proceed as planned or we

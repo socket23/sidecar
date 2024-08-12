@@ -1008,7 +1008,7 @@ impl MechaCodeSymbolThinking {
         history.push(SymbolRequestHistoryItem::new(
             self.symbol_name().to_owned(),
             self.fs_file_path().to_owned(),
-            original_request.get_original_question().to_owned(),
+            original_request.get_plan().to_owned(),
         ));
 
 
@@ -1022,7 +1022,7 @@ impl MechaCodeSymbolThinking {
                 );
                 if let Some(prompt_string) = self.to_llm_request_full_prompt().await {
                     // if we do not have a need to edit, then bail early
-                    if !self.tool_box.edits_required_full_symbol(&prompt_string, original_request.get_original_question()).await.unwrap_or(true) {
+                    if !self.tool_box.edits_required_full_symbol(&prompt_string, &original_request.get_plan()).await.unwrap_or(true) {
                         return Ok(None);
                     }
                 }
@@ -1121,7 +1121,7 @@ Edit selection reason:
                         // Add one more check for the reason to edit, this time asking it to reject it
                         // this is reduce in the map operation so we can filter down
                         match found_reason_to_edit {
-                            Some(reason) => {
+                            Some(_reason) => {
                                 // TODO(skcd): We need to get the sub-symbol over
                                 // here instead of the original symbol name which
                                 // would not work
@@ -1140,7 +1140,7 @@ Edit selection reason:
                                         symbol,
                                         range.clone(),
                                         fs_file_path.to_owned(),
-                                        vec![reason],
+                                        vec![original_request_ref.get_plan()],
                                         outline,
                                         false,
                                         true,

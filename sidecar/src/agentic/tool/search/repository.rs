@@ -93,14 +93,13 @@ impl Repository {
                     }
                     false => {
                         println!("Tags found for file: {}", tags_in_file.len());
+
                         let search_results = tags_in_file
                             .iter()
                             .map(|t| {
-                                SearchResult::new(
-                                    t.fname.to_owned(),
-                                    &search_query.thinking,
-                                    &t.name,
-                                )
+                                let thinking_message =
+                                    format!("This file contains a {:?} named {}", t.kind, t.name);
+                                SearchResult::new(t.fname.to_owned(), &thinking_message, &t.name)
                             })
                             .collect::<Vec<SearchResult>>();
 
@@ -119,7 +118,11 @@ impl Repository {
 
                 result
                     .iter()
-                    .map(|r| SearchResult::new(r.fname.to_owned(), &search_query.thinking, &r.name))
+                    .map(|t| {
+                        let thinking_message =
+                            format!("This file contains a {:?} named {}", t.kind, t.name);
+                        SearchResult::new(t.fname.to_owned(), &thinking_message, &t.name)
+                    })
                     .collect()
             }
         }

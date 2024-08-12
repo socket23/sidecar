@@ -135,7 +135,7 @@ async fn main() {
     // let problem_statement =
     //     "can you add another provider for grok for me we just need an api_key?".to_owned();
     // let problem_statement = "Add comments to RequestEvents".to_owned();
-    // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
+    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
     // let problem_statement =
@@ -147,18 +147,17 @@ async fn main() {
     // let problem_statement = "Incomplete implementation for GoogleStudioLLM and GoogleStudioPlanGenerator: missing functionality for generating search queries and plans.
     // ".to_owned();
 
-    let problem_statement =
-        "Add an implementation for the decide() method in IterativeSearchSystem".to_owned();
+    // let problem_statement =
+    //     "Add an implementation for the decide() method in IterativeSearchSystem".to_owned();
 
     // let problem_statement =
     //     "Modify file_paths method and add new getter methods to repository.rs".to_owned();
 
     // let problem_statement = "Add instructions to find_me.md".to_owned();
 
-    // let problem_statement = "We need to update the configuration settings for our application. The main configuration file is named 'exp.rs' and should be located in the root directory of our project. Please find this file so we can review and modify the settings.
-    // ".to_owned();
+    // let problem_statement = "We need to update the configuration settings for our application. The main configuration file is named 'exp.rs'".to_owned();
 
-    let root_dir = "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic";
+    let root_dir = "/Users/zi/codestory/testing/sidecar/sidecar/src";
 
     let initial_request = SymbolInputEvent::new(
         user_context,

@@ -20,6 +20,7 @@ use crate::{
 
 use super::{
     agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse},
+    decide::DecideResponse,
     exp::{
         Context, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests, SearchResult,
     },
@@ -209,6 +210,70 @@ Think step by step and write out your thoughts in the scratch_pad field."#
         )
     }
 
+    pub fn system_message_for_decide(&self, context: &Context) -> String {
+        format!(
+            r#"You will be provided a reported issue and the file context containing existing code from the project's git repository. 
+Your task is to make a decision if the code related to a reported issue is provided in the file context. 
+
+# Input Structure:
+
+* <issue>: Contains the reported issue.
+* <file_context>: The file context.
+
+Instructions:
+    * Analyze the Issue:
+    * Review the reported issue to understand what functionality or bug fix is being requested.
+
+    * Analyze File Context:
+    * Examine the provided file context to identify if the relevant code for the reported issue is present.
+    * If the issue suggests that code should be implemented and doesn't yet exist in the code, consider the task completed if relevant code is found that would be modified to implement the new functionality.
+    * If relevant code in the file context points to other parts of the codebase not included, note these references.
+
+    * Make a Decision:
+    * Decide if the relevant code is found in the file context.
+    * If you believe all existing relevant code is identified, mark the task as complete.
+    * If the specific method or code required to fix the issue is not present, still mark the task as complete as long as the relevant class or area for modification is identified.
+    * If you believe more relevant code can be identified, mark the task as not complete and provide your suggestions on how to find the relevant code.
+
+Important:
+    * You CANNOT change the codebase. DO NOT modify or suggest changes to any code.
+    * Your task is ONLY to determine if the file context is complete. Do not go beyond this scope.
+    
+Response format: 
+<reply>
+<response>
+<suggestions>
+</suggestions>
+<complete>
+</complete>
+</response>
+</reply>
+    "#
+        )
+    }
+
+    pub fn user_message_for_decide(&self, context: &Context) -> String {
+        let files = context.files();
+        let serialised_files: Vec<String> = files
+            .iter()
+            .filter_map(|f| match to_string(f) {
+                Ok(s) => Some(GoogleStudioLLM::strip_xml_declaration(&s).to_string()),
+                Err(e) => {
+                    eprintln!("Error serializing Files: {:?}", e);
+                    None
+                }
+            })
+            .collect();
+
+        format!(
+            r#"<user_query>{}</user_query>
+{}
+        "#,
+            context.user_query(),
+            serialised_files.join("\n")
+        )
+    }
+
     pub async fn generate_search_queries(
         &self,
         context: &Context,
@@ -273,8 +338,6 @@ Think step by step and write out your thoughts in the scratch_pad field."#
             .collect::<Vec<&str>>()
             .join("\n");
 
-        println!("{}", lines);
-
         from_str::<IdentifyResponse>(&lines).map_err(|error| {
             eprintln!("{:?}", error);
             IterativeSearchError::SerdeError(SerdeError::new(error, lines))
@@ -322,6 +385,46 @@ Think step by step and write out your thoughts in the scratch_pad field."#
         Ok(GoogleStudioLLM::parse_identify_response(&response)?.responses)
     }
 
+    pub async fn decide(
+        &self,
+        context: &mut Context,
+    ) -> Result<DecideResponse, IterativeSearchError> {
+        println!("GoogleStudioLLM::decide");
+
+        let system_message = LLMClientMessage::system(self.system_message_for_decide(&context));
+
+        let user_message = LLMClientMessage::user(self.user_message_for_decide(&context));
+
+        let messages = LLMClientCompletionRequest::new(
+            self.model.to_owned(),
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let response = self
+            .client
+            .stream_completion(
+                self.api_keys.to_owned(),
+                messages,
+                self.provider.to_owned(),
+                vec![
+                    ("event_type".to_owned(), "decide".to_owned()),
+                    ("root_id".to_owned(), self.root_request_id.to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+
+        println!("{:?}", response);
+
+        todo!();
+    }
+
     fn strip_xml_declaration(input: &str) -> &str {
         const XML_DECLARATION_START: &str = "<?xml";
         const XML_DECLARATION_END: &str = "?>";
@@ -356,9 +459,12 @@ impl LLMOperations for GoogleStudioLLM {
         self.identify(context, search_results).await
     }
 
-    // fn decide_continue_search(&self, context: &Context) -> bool {
-    //     // Anthropic-specific implementation
-    // }
+    async fn decide_continue(
+        &self,
+        context: &mut Context,
+    ) -> Result<DecideResponse, IterativeSearchError> {
+        self.decide(context).await
+    }
 }
 
 pub struct GoogleStudioPlanGenerator {

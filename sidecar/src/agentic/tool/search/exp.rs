@@ -16,7 +16,7 @@ use crate::{
     user_context::types::UserContextError,
 };
 
-use super::{agentic::SerdeError, identify::IdentifiedFile};
+use super::{agentic::SerdeError, decide::DecideResponse, identify::IdentifiedFile};
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -58,7 +58,7 @@ impl Context {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct File {
     path: PathBuf,
     // content: String,
@@ -263,7 +263,10 @@ pub trait LLMOperations {
         context: &Context,
         search_results: &[SearchResult],
     ) -> Result<Vec<IdentifiedFile>, IterativeSearchError>;
-    // fn decide_continue_search(&self, context: &Context) -> bool;
+    async fn decide_continue(
+        &self,
+        context: &mut Context,
+    ) -> Result<DecideResponse, IterativeSearchError>;
 }
 
 // Main system struct
@@ -328,11 +331,9 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             println!("Context::files: {:?}", self.context().files());
 
-            todo!();
+            let decide_results = self.decide().await?;
 
-            if !self.decide() {
-                break;
-            }
+            println!("{:?}", decide_results);
 
             count += 1;
         }
@@ -345,6 +346,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         self.llm_ops.generate_search_query(self.context()).await
     }
 
+    // identifies keywords to keep
     async fn identify(
         &mut self,
         search_results: &[SearchResult],
@@ -354,10 +356,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             .await
     }
 
-    fn decide(&mut self) -> bool {
-        // Implement decision logic
-        // Update self.context.thoughts
-        // Return true if more searching is needed, false otherwise
-        true
+    async fn decide(&mut self) -> Result<DecideResponse, IterativeSearchError> {
+        self.llm_ops.decide_continue(&mut self.context).await
     }
 }

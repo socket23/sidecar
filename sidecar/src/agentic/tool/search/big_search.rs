@@ -10,36 +10,24 @@ use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
-use tokio::join;
 
 use crate::{
     agentic::{
         symbol::identifier::LLMProperties,
         tool::{
-            code_symbol::{
-                important::CodeSymbolImportantResponse,
-                repo_map_search::{RepoMapSearchBroker, RepoMapSearchQuery},
-                types::CodeSymbolError,
-            },
+            code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
             errors::ToolError,
-            file::file_finder::{ImportantFilesFinderBroker, ImportantFilesFinderQuery},
             input::ToolInput,
-            kw_search::tool::{KeywordSearchQuery, KeywordSearchQueryBroker},
             output::ToolOutput,
             r#type::Tool,
             search::{
-                agentic::{GenerateSearchPlanError, SearchPlanContext, SearchPlanQuery},
-                broker::SearchPlanBroker,
                 exp::{Context, IterativeSearchQuery, IterativeSearchSystem},
                 google_studio::GoogleStudioLLM,
                 repository::Repository,
             },
         },
     },
-    repomap::{
-        tag::{SearchMode, TagIndex},
-        types::RepoMap,
-    },
+    repomap::tag::TagIndex,
     tree_printer::tree::TreePrinter,
 };
 
@@ -199,151 +187,14 @@ impl Tool for BigSearchBroker {
             google_studio_llm_config,
         );
 
-        let results = system.run().await;
-
-        dbg!(results);
-
-        todo!();
-
-        // agentic search
-        // let search_plan = SearchPlan
-        let search_plan_broker = SearchPlanBroker::new(self.llm_client(), self.fail_over_llm());
-        let search_plan_input = ToolInput::SearchPlan(SearchPlanQuery::new(
-            request.user_query().to_string(),
-            request.llm().clone(),
-            request.provider().clone(),
-            request.api_keys().clone(),
-            request.root_directory().unwrap_or("").to_string(), // repo_name
-            request.root_request_id().to_string(),
-            vec![SearchPlanContext::RepoTree(tree_string)],
-        ));
-
-        let search_plan_result = search_plan_broker.invoke(search_plan_input).await;
-
-        let search_plan = match search_plan_result {
-            Ok(ToolOutput::SearchPlan(search_plan)) => search_plan,
-            _ => {
-                return Err(ToolError::SearchPlanError(
-                    GenerateSearchPlanError::Generic("Failed to get search plan".to_string()),
-                ));
-            }
-        };
-
-        let plan = search_plan.search_plan();
-        println!("search_plan: {:?}", plan);
-        let files = search_plan.files().paths();
-        println!("file count: {:?}", files.len());
-
-        println!("files: {:?}", files);
-
-        let tags = files
-            .iter()
-            .flat_map(|file| {
-                let tags =
-                    tag_index.search_definitions_flattened(file, false, SearchMode::FilePath);
-
-                tags.into_iter().cloned()
-            })
-            .collect::<Vec<_>>();
-
-        println!("tag count: {:?}", tags.len());
-        // println!("tags: {:?}", tags);
-
-        // todo: consider whether entire file is better
-        let tree = RepoMap::to_tree(&tags);
-
-        println!("{}", tree);
-
-        todo!();
-        // let flat_files = files.iter().map(|file| file.path()).collect();
-
-        let keyword_broker = KeywordSearchQueryBroker::new(self.llm_client(), self.fail_over_llm());
-        let keyword_search_input = ToolInput::KeywordSearch(KeywordSearchQuery::new(
-            request.user_query().to_string(),
-            request.llm().clone(),
-            request.provider().clone(),
-            request.api_keys().clone(),
-            request.root_directory().unwrap_or("").to_string(),
-            request.root_request_id().to_string(),
-            false,
-            tag_index.clone(), // using a reference causes lifetime headaches
-        ));
-
-        // println!("search_plan_result: {:?}", search_plan_result);
-        todo!();
-
-        let tree_broker = ImportantFilesFinderBroker::new(self.llm_client(), self.fail_over_llm());
-
-        // could be parallelized?
-        // let (tree_string, _, _) =
-        //     TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
-
-        let tree_input = ToolInput::ImportantFilesFinder(ImportantFilesFinderQuery::new(
-            tree_string,
-            request.user_query().to_string(),
-            request.llm().clone(),
-            request.provider().clone(),
-            request.api_keys().clone(),
-            root_directory.to_string(), // todo: this should be reponame
-            request.root_request_id().to_string(),
-        ));
-
-        // could be parallelized?
-        let repo_map = RepoMap::new().with_map_tokens(10_000); // slower, but big > accurate
-        let repo_map_string = repo_map
-            .get_repo_map(&tag_index)
+        let results = system
+            .run()
             .await
-            .unwrap_or("".to_string());
-
-        let repo_map_broker = RepoMapSearchBroker::new(self.llm_client(), self.fail_over_llm());
-        let repo_map_input = ToolInput::RepoMapSearch(RepoMapSearchQuery::new(
-            repo_map_string,
-            request.user_query().to_string(),
-            request.llm().clone(),
-            request.provider().clone(),
-            request.api_keys().clone(),
-            request.root_directory().map(|d| d.to_string()),
-            request.root_request_id().to_string(),
-        ));
-
-        let (tree_result, repo_map_result, keyword_result) = join!(
-            tree_broker.invoke(tree_input),
-            repo_map_broker.invoke(repo_map_input),
-            keyword_broker.invoke(keyword_search_input)
-        );
-
-        let tree_output: ToolOutput = tree_result?;
-        let repo_map_output: ToolOutput = repo_map_result?;
-        let keyword_output: ToolOutput = keyword_result?;
-
-        let mut responses = Vec::new();
-
-        match tree_output {
-            ToolOutput::ImportantSymbols(important_symbols) => {
-                responses.push(important_symbols);
-            }
-            _ => {}
-        }
-
-        match repo_map_output {
-            ToolOutput::RepoMapSearch(important_symbols) => {
-                responses.push(important_symbols);
-            }
-            _ => {}
-        }
-
-        match keyword_output {
-            ToolOutput::KeywordSearch(response) => {
-                responses.push(response);
-            }
-            _ => {}
-        }
-
-        let merged_output = CodeSymbolImportantResponse::merge(responses);
+            .map_err(|e| ToolError::IterativeSearchError(e))?;
 
         let duration = start.elapsed();
         println!("BigSearchBroker::invoke::duration: {:?}", duration);
 
-        Ok(ToolOutput::BigSearch(merged_output))
+        Ok(ToolOutput::BigSearch(results))
     }
 }

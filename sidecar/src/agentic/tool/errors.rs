@@ -2,9 +2,13 @@ use llm_client::clients::types::{LLMClientError, LLMType};
 use thiserror::Error;
 
 use super::{
-    code_symbol::types::CodeSymbolError, file::types::FileImportantError,
-    filtering::errors::CodeToEditFilteringError, kw_search::types::KeywordsReplyError,
-    r#type::ToolType, rerank::base::ReRankError, search::agentic::GenerateSearchPlanError,
+    code_symbol::types::CodeSymbolError,
+    file::types::FileImportantError,
+    filtering::errors::CodeToEditFilteringError,
+    kw_search::types::KeywordsReplyError,
+    r#type::ToolType,
+    rerank::base::ReRankError,
+    search::{agentic::GenerateSearchPlanError, exp::IterativeSearchError},
 };
 
 #[derive(Debug, Error)]
@@ -71,4 +75,7 @@ pub enum ToolError {
 
     #[error("Search plan error: {0}")]
     SearchPlanError(GenerateSearchPlanError),
+
+    #[error("IterativeSearch error: {0}")]
+    IterativeSearchError(IterativeSearchError),
 }

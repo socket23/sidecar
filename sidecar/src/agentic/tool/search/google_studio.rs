@@ -13,6 +13,7 @@ use crate::{
         symbol::identifier::LLMProperties,
         tool::search::{
             agentic::{SearchPlanContext, SerdeError},
+            exp::File,
             identify::IdentifyResponse,
         },
     },
@@ -111,12 +112,17 @@ report
     }
 
     pub fn user_message_for_generate_search_query(&self, context: &Context) -> String {
+        let file_context_string = File::serialise_files(context.files(), "\n");
         format!(
-            r#"<issue>{}</issue>
-<file_context>{}</file_context>
+            r#"<issue>
+{}
+</issue>
+<file_context>
+{}
+</file_context
         "#,
             context.user_query(),
-            context.file_paths_as_strings().join(", ")
+            file_context_string
         )
     }
 
@@ -267,23 +273,18 @@ false
 
     pub fn user_message_for_decide(&self, context: &Context) -> String {
         let files = context.files();
-        let serialised_files: Vec<String> = files
-            .iter()
-            .filter_map(|f| match to_string(f) {
-                Ok(s) => Some(GoogleStudioLLM::strip_xml_declaration(&s).to_string()),
-                Err(e) => {
-                    eprintln!("Error serializing Files: {:?}", e);
-                    None
-                }
-            })
-            .collect();
+        let serialised_files = File::serialise_files(files, "\n");
 
         format!(
-            r#"<user_query>{}</user_query>
+            r#"<user_query>
 {}
+</user_query>
+<file_context>
+{}
+</file_context
         "#,
             context.user_query(),
-            serialised_files.join("\n")
+            serialised_files
         )
     }
 
@@ -451,7 +452,7 @@ false
         Ok(GoogleStudioLLM::parse_decide_response(&response)?)
     }
 
-    fn strip_xml_declaration(input: &str) -> &str {
+    pub fn strip_xml_declaration(input: &str) -> &str {
         const XML_DECLARATION_START: &str = "<?xml";
         const XML_DECLARATION_END: &str = "?>";
 

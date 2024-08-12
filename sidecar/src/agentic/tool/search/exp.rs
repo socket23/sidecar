@@ -2,6 +2,7 @@ use llm_client::{
     clients::types::{LLMClientError, LLMType},
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
+use serde_xml_rs::to_string;
 use walkdir::WalkDir;
 
 use std::path::{Path, PathBuf};
@@ -16,7 +17,10 @@ use crate::{
     user_context::types::UserContextError,
 };
 
-use super::{agentic::SerdeError, decide::DecideResponse, identify::IdentifiedFile};
+use super::{
+    agentic::SerdeError, decide::DecideResponse, google_studio::GoogleStudioLLM,
+    identify::IdentifiedFile,
+};
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -79,6 +83,21 @@ impl File {
 
     pub fn path(&self) -> &PathBuf {
         &self.path
+    }
+
+    pub fn serialise_files(files: &[File], separator: &str) -> String {
+        let serialised_files: Vec<String> = files
+            .iter()
+            .filter_map(|f| match to_string(f) {
+                Ok(s) => Some(GoogleStudioLLM::strip_xml_declaration(&s).to_string()),
+                Err(e) => {
+                    eprintln!("Error serializing Files: {:?}", e);
+                    None
+                }
+            })
+            .collect();
+
+        serialised_files.join(separator)
     }
 }
 

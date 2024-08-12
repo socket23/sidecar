@@ -32,9 +32,6 @@ impl Repository {
     }
 
     pub fn execute_search(&self, search_query: &SearchQuery) -> Vec<SearchResult> {
-        // Implement repository search logic
-        println!("repository::execute_search::query: {:?}", search_query);
-
         match search_query.tool {
             SearchToolType::File => {
                 println!(
@@ -80,11 +77,7 @@ impl Repository {
                                 SearchResultSnippet::FileContent(contents),
                             )]
                         } else {
-                            vec![SearchResult::new(
-                                PathBuf::from("".to_string()),
-                                &search_query.thinking,
-                                SearchResultSnippet::FileContent(vec![]),
-                            )]
+                            vec![]
                         }
                     }
                     false => {

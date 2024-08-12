@@ -149,7 +149,7 @@ Carefully read the reported issue within the <issue> tag.
 Examine the current file context provided in the <file_context> tag to understand already identified relevant files.
 
 3. Process New Search Results:
-3.1. Thoroughly analyze each code span in the <search_results> tag.
+3.1. Thoroughly analyze each code span in the <search_results> tag. If there are no results, respect the response format while leaving the fields empty. Fill out the scratch_pad, though.
 3.2. Match the code items with the key elements, functions, variables, or patterns identified in the reported issue.
 3.3. Evaluate the relevance of each code span based on how well it aligns with the reported issue and current file context.
 3.4. If the issue suggests new functions or classes, identify the existing code that might be relevant to be able to implement the new functionality.
@@ -181,11 +181,11 @@ Examine the current file context provided in the <file_context> tag to understan
 </thinking>
 </item>
 <scratch_pad>
+Think step by step and write out your high-level thoughts about the state of the search here in the scratch_pad field.
 </scratch_pad>
 </response>
 </reply>
-
-Think step by step and write out your high-level thoughts about the state of the search in the scratch_pad field."#
+"#
         )
     }
 
@@ -240,9 +240,6 @@ Instructions:
     * Analyze the Issue:
     * Review the reported issue to understand what functionality or bug fix is being requested.
 
-    * Analyze the scratch_pad:
-    * Review the observations acquired through the search. It may contain crucial information about the files within.
-
     * Analyze File Context:
     * Examine the provided file context to identify if the relevant code for the reported issue is present.
     * If the issue suggests that code should be implemented and doesn't yet exist in the code, consider the task completed if relevant code is found that would be modified to implement the new functionality.
@@ -295,13 +292,9 @@ false
 <file_context>
 {}
 </file_context
-<scratch_pad>
-{}
-</scratch_pad>
         "#,
             context.user_query(),
             serialised_files,
-            context.scratch_pad(),
         )
     }
 

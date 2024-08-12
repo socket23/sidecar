@@ -4137,6 +4137,10 @@ FILEPATH: {fs_file_path}
             true,
             symbols_to_edit,
         ));
+        println!(
+            "tool_box::code_edit_outline::start::symbol_name({})",
+            sub_symbol.symbol_name()
+        );
         let response = self
             .tools
             .invoke(request)
@@ -4144,7 +4148,15 @@ FILEPATH: {fs_file_path}
             .map_err(|e| SymbolError::ToolError(e))?
             .get_code_edit_output()
             .ok_or(SymbolError::WrongToolOutput)?;
+        println!(
+            "tool_box::code_edit_outline::finish::symbol_name({})",
+            sub_symbol.symbol_name()
+        );
 
+        println!(
+            "tool_box::code_edit_outline::apply_outline_edit_to_range::start::({})",
+            sub_symbol.symbol_name()
+        );
         let request = ToolInput::ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest::new(
             instruction,
             symbol_identifier.clone(),
@@ -4166,13 +4178,17 @@ FILEPATH: {fs_file_path}
             uuid::Uuid::new_v4().to_string(),
             self.ui_events.clone(),
         ));
-        let response = self
+        let response = dbg!(self
             .tools
             .invoke(request)
             .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .get_apply_edits_to_range_response()
-            .ok_or(SymbolError::WrongToolOutput)?;
+            .map_err(|e| SymbolError::ToolError(e)))?
+        .get_apply_edits_to_range_response()
+        .ok_or(SymbolError::WrongToolOutput)?;
+        println!(
+            "tool_box::code_edit_outline::apply_outline_edit_to_range::finish::({})",
+            sub_symbol.symbol_name()
+        );
         Ok(response.code())
     }
 

@@ -1,7 +1,4 @@
-use llm_client::{
-    clients::types::{LLMClientError, LLMType},
-    provider::{LLMProvider, LLMProviderAPIKeys},
-};
+use llm_client::clients::types::{LLMClientError, LLMType};
 use serde_xml_rs::to_string;
 
 use std::path::PathBuf;
@@ -11,15 +8,18 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    agentic::tool::code_symbol::important::{
-        CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+    agentic::tool::{
+        code_symbol::important::{
+            CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+        },
+        kw_search::types::SerdeError,
     },
     user_context::types::UserContextError,
 };
 
 use super::{
-    agentic::SerdeError, decide::DecideResponse, google_studio::GoogleStudioLLM,
-    identify::IdentifyResponse, repository::Repository,
+    decide::DecideResponse, google_studio::GoogleStudioLLM, identify::IdentifyResponse,
+    repository::Repository,
 };
 
 #[derive(Debug, Clone)]
@@ -249,6 +249,9 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                     .collect::<Vec<String>>()
                     .join("\n")
             );
+
+            // add search thinking to context for identify...
+            // self.context().update_scratch_pad(search)
 
             let identify_results = self.identify(&search_results).await?;
 

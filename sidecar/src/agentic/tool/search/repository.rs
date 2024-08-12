@@ -1,22 +1,22 @@
 use std::{
-    fs::{self, read_to_string},
+    fs::{self},
     path::PathBuf,
 };
 
 use crate::{
-    agentic::tool::search::exp::{SearchResultSnippet, SearchToolType},
+    agentic::tool::search::iterative::{SearchResultSnippet, SearchToolType},
     repomap::{
         file::git::GitWalker,
         tag::{SearchMode, TagIndex},
     },
 };
 
-use super::exp::{SearchQuery, SearchResult};
+use super::iterative::{SearchQuery, SearchResult};
 
 #[derive(Debug, Clone)]
 pub struct Repository {
-    tree: String,
-    outline: String,
+    _tree: String,
+    _outline: String,
     tag_index: TagIndex,
     root: PathBuf,
 }
@@ -24,8 +24,8 @@ pub struct Repository {
 impl Repository {
     pub fn new(tree: String, outline: String, tag_index: TagIndex, root: PathBuf) -> Self {
         Self {
-            tree,
-            outline,
+            _tree: tree,
+            _outline: outline,
             tag_index,
             root,
         }

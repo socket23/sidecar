@@ -36,7 +36,6 @@ use super::{
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
     rerank::base::ReRankEntriesForBroker,
-    search::agentic::SearchPlanResponse,
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
 
@@ -142,8 +141,6 @@ pub enum ToolOutput {
     KeywordSearch(CodeSymbolImportantResponse),
     // Inlay hints response
     InlayHints(InlayHintsResponse),
-    // Search plan
-    SearchPlan(SearchPlanResponse),
 }
 
 impl ToolOutput {

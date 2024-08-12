@@ -5,32 +5,26 @@ use llm_client::{
     provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 use serde_xml_rs::{from_str, to_string};
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::search::{
-        agentic::{SearchPlanContext, SerdeError},
-        exp::File,
-        identify::IdentifyResponse,
-    },
+use crate::agentic::tool::{
+    kw_search::types::SerdeError,
+    search::{identify::IdentifyResponse, iterative::File},
 };
 
 use super::{
-    agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse},
     decide::DecideResponse,
-    exp::{
+    iterative::{
         IterativeSearchContext, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests,
         SearchResult,
     },
-    identify::IdentifiedFile,
 };
 
 pub struct GoogleStudioLLM {
     model: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
-    root_directory: String,
+    _root_directory: String,
     root_request_id: String,
     client: Arc<LLMBroker>,
 }
@@ -43,14 +37,14 @@ impl GoogleStudioLLM {
             api_keys: LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
                 "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
             )),
-            root_directory,
+            _root_directory: root_directory,
             root_request_id,
             client,
         }
     }
     pub fn system_message_for_generate_search_query(
         &self,
-        context: &IterativeSearchContext,
+        _context: &IterativeSearchContext,
     ) -> String {
         format!(
             r#"You are an autonomous AI assistant.
@@ -134,7 +128,7 @@ report
         )
     }
 
-    pub fn system_message_for_identify(&self, context: &IterativeSearchContext) -> String {
+    pub fn system_message_for_identify(&self, _context: &IterativeSearchContext) -> String {
         format!(
             r#"You are an autonomous AI assistant tasked with finding relevant code in an existing 
 codebase based on a reported issue. Your task is to identify the relevant code items in the provided search 
@@ -232,7 +226,7 @@ Think step by step and write out your high-level thoughts about the state of the
         )
     }
 
-    pub fn system_message_for_decide(&self, context: &IterativeSearchContext) -> String {
+    pub fn system_message_for_decide(&self, _context: &IterativeSearchContext) -> String {
         format!(
             r#"You will be provided a reported issue and the file context containing existing code from the project's git repository. 
 Your task is to make a decision if the code related to a reported issue is provided in the file context. 
@@ -514,109 +508,5 @@ impl LLMOperations for GoogleStudioLLM {
         context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError> {
         self.decide(context).await
-    }
-}
-
-pub struct GoogleStudioPlanGenerator {
-    llm_client: Arc<LLMBroker>,
-    _fail_over_llm: LLMProperties,
-}
-
-impl GoogleStudioPlanGenerator {
-    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
-        Self {
-            llm_client,
-            _fail_over_llm: fail_over_llm,
-        }
-    }
-
-    // todo(zi): add CoT to system
-    fn system_message_for_keyword_search(&self, request: &SearchPlanQuery) -> String {
-        format!(
-            r#"You will generate a search plan based on the provided context and user_query.
-You will response with a search plan and a list of files that you want to search, in the following format:
-<reply>
-<search_plan>
-</search_plan>
-<files>
-<path>
-</path>
-<path>
-</path>
-<path>
-</path>
-</files>
-</reply>
-        "#
-        )
-    }
-
-    fn user_message_for_keyword_search(&self, request: &SearchPlanQuery) -> String {
-        let context = request
-            .context()
-            .iter()
-            .map(|c| match c {
-                SearchPlanContext::RepoTree(repo_tree) => format!(
-                    r#"RepoTree:
-{}"#,
-                    repo_tree
-                ),
-            })
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        format!(
-            r#"User query: {}
-Context:
-{}"#,
-            request.user_query(),
-            context,
-        )
-    }
-}
-
-#[async_trait]
-impl GenerateSearchPlan for GoogleStudioPlanGenerator {
-    async fn generate_search_plan(
-        &self,
-        request: &SearchPlanQuery,
-    ) -> Result<SearchPlanResponse, GenerateSearchPlanError> {
-        let root_request_id = request.root_request_id().to_owned();
-        let model = request.llm().clone();
-        let provider = request.provider().clone();
-        let api_keys = request.api_keys().clone();
-
-        let system_message =
-            LLMClientMessage::system(self.system_message_for_keyword_search(&request));
-        let user_message = LLMClientMessage::user(self.user_message_for_keyword_search(&request));
-        let messages = LLMClientCompletionRequest::new(
-            model,
-            vec![system_message.clone(), user_message.clone()],
-            0.2,
-            None,
-        );
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let start = Instant::now();
-
-        let response = self
-            .llm_client
-            .stream_completion(
-                api_keys,
-                messages,
-                provider,
-                vec![
-                    ("event_type".to_owned(), "generate_search_plan".to_owned()),
-                    ("root_id".to_owned(), root_request_id),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
-
-        println!("Generate search plan response time: {:?}", start.elapsed());
-
-        SearchPlanResponse::parse(&response)
     }
 }

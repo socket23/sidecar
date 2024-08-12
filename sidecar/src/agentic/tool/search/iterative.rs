@@ -241,24 +241,10 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                 .flat_map(|q| self.repository.execute_search(q))
                 .collect();
 
-            println!(
-                "{}",
-                search_results
-                    .iter()
-                    .map(|r| format!("{:?}\n", r))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            );
-
-            // add search thinking to context for identify...
-            // self.context().update_scratch_pad(search)
-
             let identify_results = self.identify(&search_results).await?;
 
             self.context
                 .update_scratch_pad(&identify_results.scratch_pad);
-
-            println!("Scratch pad: \n{}", self.context.scratch_pad());
 
             println!(
                 "{}",
@@ -277,8 +263,6 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                     .map(|r| File::new(r.path(), r.thinking(), ""))
                     .collect::<Vec<File>>(),
             );
-
-            println!("Context::files: {:?}", self.context().files());
 
             let decision = self.decide().await?;
 

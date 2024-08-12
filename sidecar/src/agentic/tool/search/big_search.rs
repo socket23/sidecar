@@ -21,7 +21,7 @@ use crate::{
             output::ToolOutput,
             r#type::Tool,
             search::{
-                exp::{Context, IterativeSearchQuery, IterativeSearchSystem},
+                exp::{IterativeSearchContext, IterativeSearchSystem},
                 google_studio::GoogleStudioLLM,
                 repository::Repository,
             },
@@ -162,17 +162,7 @@ impl Tool for BigSearchBroker {
         );
 
         let iterative_search_context =
-            Context::new(Vec::new(), request.user_query().to_owned(), "".to_owned());
-
-        let _iterative_system_query = IterativeSearchQuery::new(
-            iterative_search_context.to_owned(),
-            repository.to_owned(),
-            request.llm().clone(),
-            request.provider().clone(),
-            request.api_keys().clone(),
-            request.root_directory().unwrap_or("").to_string(),
-            request.root_request_id().to_string(),
-        );
+            IterativeSearchContext::new(Vec::new(), request.user_query().to_owned(), "".to_owned());
 
         // google llm operations
         let google_studio_llm_config = GoogleStudioLLM::new(

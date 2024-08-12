@@ -20,7 +20,8 @@ use super::{
     agentic::{GenerateSearchPlan, GenerateSearchPlanError, SearchPlanQuery, SearchPlanResponse},
     decide::DecideResponse,
     exp::{
-        Context, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests, SearchResult,
+        IterativeSearchContext, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests,
+        SearchResult,
     },
     identify::IdentifiedFile,
 };
@@ -47,7 +48,10 @@ impl GoogleStudioLLM {
             client,
         }
     }
-    pub fn system_message_for_generate_search_query(&self, context: &Context) -> String {
+    pub fn system_message_for_generate_search_query(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> String {
         format!(
             r#"You are an autonomous AI assistant.
 Your task is to locate the code relevant to an issue.
@@ -108,7 +112,10 @@ report
         )
     }
 
-    pub fn user_message_for_generate_search_query(&self, context: &Context) -> String {
+    pub fn user_message_for_generate_search_query(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> String {
         let file_context_string = File::serialise_files(context.files(), "\n");
         format!(
             r#"<issue>
@@ -127,7 +134,7 @@ report
         )
     }
 
-    pub fn system_message_for_identify(&self, context: &Context) -> String {
+    pub fn system_message_for_identify(&self, context: &IterativeSearchContext) -> String {
         format!(
             r#"You are an autonomous AI assistant tasked with finding relevant code in an existing 
 codebase based on a reported issue. Your task is to identify the relevant code items in the provided search 
@@ -190,7 +197,7 @@ Think step by step and write out your high-level thoughts about the state of the
 
     pub fn user_message_for_identify(
         &self,
-        context: &Context,
+        context: &IterativeSearchContext,
         search_results: &[SearchResult],
     ) -> String {
         let serialized_results: Vec<String> = search_results
@@ -225,7 +232,7 @@ Think step by step and write out your high-level thoughts about the state of the
         )
     }
 
-    pub fn system_message_for_decide(&self, context: &Context) -> String {
+    pub fn system_message_for_decide(&self, context: &IterativeSearchContext) -> String {
         format!(
             r#"You will be provided a reported issue and the file context containing existing code from the project's git repository. 
 Your task is to make a decision if the code related to a reported issue is provided in the file context. 
@@ -283,7 +290,7 @@ false
         )
     }
 
-    pub fn user_message_for_decide(&self, context: &Context) -> String {
+    pub fn user_message_for_decide(&self, context: &IterativeSearchContext) -> String {
         let files = context.files();
         let serialised_files = File::serialise_files(files, "\n");
 
@@ -306,7 +313,7 @@ false
 
     pub async fn generate_search_queries(
         &self,
-        context: &Context,
+        context: &IterativeSearchContext,
     ) -> Result<Vec<SearchQuery>, IterativeSearchError> {
         let system_message =
             LLMClientMessage::system(self.system_message_for_generate_search_query(&context));
@@ -391,7 +398,7 @@ false
 
     pub async fn identify(
         &self,
-        context: &Context,
+        context: &IterativeSearchContext,
         search_results: &[SearchResult],
     ) -> Result<IdentifyResponse, IterativeSearchError> {
         println!("GoogleStudioLLM::identify");
@@ -432,7 +439,7 @@ false
 
     pub async fn decide(
         &self,
-        context: &mut Context,
+        context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError> {
         println!("GoogleStudioLLM::decide");
 
@@ -489,14 +496,14 @@ false
 impl LLMOperations for GoogleStudioLLM {
     async fn generate_search_query(
         &self,
-        context: &Context,
+        context: &IterativeSearchContext,
     ) -> Result<Vec<SearchQuery>, IterativeSearchError> {
         self.generate_search_queries(context).await
     }
 
     async fn identify_relevant_results(
         &self,
-        context: &Context,
+        context: &IterativeSearchContext,
         search_results: &[SearchResult],
     ) -> Result<IdentifyResponse, IterativeSearchError> {
         self.identify(context, search_results).await
@@ -504,7 +511,7 @@ impl LLMOperations for GoogleStudioLLM {
 
     async fn decide_continue(
         &self,
-        context: &mut Context,
+        context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError> {
         self.decide(context).await
     }

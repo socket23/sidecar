@@ -3,9 +3,8 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 use serde_xml_rs::to_string;
-use walkdir::WalkDir;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use thiserror::Error;
 
 use async_trait::async_trait;
@@ -15,26 +14,22 @@ use crate::{
     agentic::tool::code_symbol::important::{
         CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
     },
-    repomap::tag::{SearchMode, TagIndex},
     user_context::types::UserContextError,
 };
 
 use super::{
-    agentic::SerdeError,
-    decide::DecideResponse,
-    google_studio::GoogleStudioLLM,
-    identify::{IdentifiedFile, IdentifyResponse},
-    repository::Repository,
+    agentic::SerdeError, decide::DecideResponse, google_studio::GoogleStudioLLM,
+    identify::IdentifyResponse, repository::Repository,
 };
 
 #[derive(Debug, Clone)]
-pub struct Context {
+pub struct IterativeSearchContext {
     files: Vec<File>,
     user_query: String,
     scatch_pad: String,
 }
 
-impl Context {
+impl IterativeSearchContext {
     pub fn new(files: Vec<File>, user_query: String, scatch_pad: String) -> Self {
         Self {
             files,
@@ -173,47 +168,21 @@ impl SearchQuery {
 pub struct SearchResult {
     path: PathBuf,
     thinking: String,
-    snippet: String, // potentially useful for stronger reasoning
+    snippet: SearchResultSnippet,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SearchResultSnippet {
+    FileContent(Vec<u8>),
+    Tag(String),
 }
 
 impl SearchResult {
-    pub fn new(path: PathBuf, thinking: &str, snippet: &str) -> Self {
+    pub fn new(path: PathBuf, thinking: &str, snippet: SearchResultSnippet) -> Self {
         Self {
             path,
             thinking: thinking.to_string(),
-            snippet: snippet.to_string(),
-        }
-    }
-}
-
-pub struct IterativeSearchQuery {
-    context: Context,
-    repository: Repository,
-    llm: LLMType,
-    provider: LLMProvider,
-    api_keys: LLMProviderAPIKeys,
-    root_directory: String,
-    root_request_id: String,
-}
-
-impl IterativeSearchQuery {
-    pub fn new(
-        context: Context,
-        repository: Repository,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_keys: LLMProviderAPIKeys,
-        root_directory: String,
-        root_request_id: String,
-    ) -> Self {
-        Self {
-            context,
-            repository,
-            llm,
-            provider,
-            api_keys,
-            root_directory,
-            root_request_id,
+            snippet,
         }
     }
 }
@@ -222,29 +191,29 @@ impl IterativeSearchQuery {
 pub trait LLMOperations {
     async fn generate_search_query(
         &self,
-        context: &Context,
+        context: &IterativeSearchContext,
     ) -> Result<Vec<SearchQuery>, IterativeSearchError>;
     async fn identify_relevant_results(
         &self,
-        context: &Context,
+        context: &IterativeSearchContext,
         search_results: &[SearchResult],
     ) -> Result<IdentifyResponse, IterativeSearchError>;
     async fn decide_continue(
         &self,
-        context: &mut Context,
+        context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError>;
 }
 
 // Main system struct
 pub struct IterativeSearchSystem<T: LLMOperations> {
-    context: Context,
+    context: IterativeSearchContext,
     repository: Repository,
     llm_ops: T,
     complete: bool,
 }
 
 impl<T: LLMOperations> IterativeSearchSystem<T> {
-    pub fn new(context: Context, repository: Repository, llm_ops: T) -> Self {
+    pub fn new(context: IterativeSearchContext, repository: Repository, llm_ops: T) -> Self {
         Self {
             context,
             repository,
@@ -253,7 +222,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         }
     }
 
-    fn context(&self) -> &Context {
+    fn context(&self) -> &IterativeSearchContext {
         &self.context
     }
 

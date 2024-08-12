@@ -1,9 +1,12 @@
 use walkdir::WalkDir;
 
-use std::{fs::read_to_string, path::PathBuf};
+use std::{
+    fs::{self, read_to_string},
+    path::PathBuf,
+};
 
 use crate::{
-    agentic::tool::search::exp::SearchToolType,
+    agentic::tool::search::exp::{SearchResultSnippet, SearchToolType},
     repomap::tag::{SearchMode, TagIndex},
 };
 
@@ -70,24 +73,24 @@ impl Repository {
                                 "repository::execute_search::query::SearchToolType::File::Some(path): {:?}",
                                 path
                             );
-                            let contents = match read_to_string(&path) {
+                            let contents = match fs::read(&path) {
                                 Ok(content) => content,
                                 Err(error) => {
                                     eprintln!("Error reading file: {}", error);
-                                    "".to_owned()
+                                    vec![]
                                 }
                             };
 
                             vec![SearchResult::new(
                                 path,
-                                &search_query.thinking, // consider...
-                                &contents,
+                                &search_query.thinking,
+                                SearchResultSnippet::FileContent(contents),
                             )]
                         } else {
                             vec![SearchResult::new(
                                 PathBuf::from("".to_string()),
                                 &search_query.thinking,
-                                "",
+                                SearchResultSnippet::FileContent(vec![]),
                             )]
                         }
                     }
@@ -97,9 +100,17 @@ impl Repository {
                         let search_results = tags_in_file
                             .iter()
                             .map(|t| {
-                                let thinking_message =
-                                    format!("This file contains a {:?} named {}", t.kind, t.name);
-                                SearchResult::new(t.fname.to_owned(), &thinking_message, &t.name)
+                                // helps identify step understand the symbol
+                                let thinking_message = format!(
+                                    "This file contains a {:?} named {}",
+                                    t.kind,
+                                    t.name.to_owned()
+                                );
+                                SearchResult::new(
+                                    t.fname.to_owned(),
+                                    &thinking_message,
+                                    SearchResultSnippet::Tag(t.name.to_owned()),
+                                )
                             })
                             .collect::<Vec<SearchResult>>();
 
@@ -119,9 +130,14 @@ impl Repository {
                 result
                     .iter()
                     .map(|t| {
+                        // helps identify step understand the symbol
                         let thinking_message =
                             format!("This file contains a {:?} named {}", t.kind, t.name);
-                        SearchResult::new(t.fname.to_owned(), &thinking_message, &t.name)
+                        SearchResult::new(
+                            t.fname.to_owned(),
+                            &thinking_message,
+                            SearchResultSnippet::Tag(t.name.to_owned()),
+                        )
                     })
                     .collect()
             }

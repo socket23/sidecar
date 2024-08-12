@@ -142,13 +142,13 @@ impl Tool for BigSearchBroker {
             }
         };
 
-        let (tree_string, _, _) =
-            TreePrinter::to_string(Path::new(root_directory)).unwrap_or(("".to_string(), 0, 0));
+        let tree =
+            TreePrinter::to_string_stacked(Path::new(root_directory)).unwrap_or("".to_owned());
 
         let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
 
         let repository = Repository::new(
-            tree_string,
+            tree,
             "outline".to_owned(),
             tag_index,
             PathBuf::from(request.root_directory().unwrap_or("").to_string()),

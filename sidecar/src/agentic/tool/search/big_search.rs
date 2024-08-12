@@ -12,8 +12,6 @@ use llm_client::{
 };
 use tokio::join;
 
-use super::exp::Repository;
-
 use crate::{
     agentic::{
         symbol::identifier::LLMProperties,
@@ -34,6 +32,7 @@ use crate::{
                 broker::SearchPlanBroker,
                 exp::{Context, IterativeSearchQuery, IterativeSearchSystem},
                 google_studio::GoogleStudioLLM,
+                repository::Repository,
             },
         },
     },
@@ -41,7 +40,7 @@ use crate::{
         tag::{SearchMode, TagIndex},
         types::RepoMap,
     },
-    tree_printer::tree::{self, TreePrinter},
+    tree_printer::tree::TreePrinter,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

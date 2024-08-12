@@ -438,10 +438,6 @@ impl MechaCodeSymbolThinking {
     }
 
     pub async fn steps(&self) -> Vec<String> {
-        println!(
-            "mecha_code_symbol_thinking::steps::being({})",
-            &self.symbol_name()
-        );
         let results = self
             .steps
             .lock()
@@ -449,10 +445,6 @@ impl MechaCodeSymbolThinking {
             .iter()
             .map(|step| step.to_owned())
             .collect::<Vec<_>>();
-        println!(
-            "mecha_code_symbol_thinking::steps::end({})",
-            &self.symbol_name(),
-        );
         results
     }
 

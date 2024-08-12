@@ -200,6 +200,7 @@ impl Tool for ApplyOutlineEditsToRange {
         let retries_limit = if self.stream_apply { 1 } else { 4 };
         loop {
             if retries >= retries_limit {
+                println!("apply_outline_edits_to_range::retries_exhausted::retries({})::retries_limit({})", retries, retries_limit);
                 return Err(ToolError::RetriesExhausted);
             }
             let (llm, api_key, provider) = if retries % 2 == 0 {
@@ -236,7 +237,7 @@ impl Tool for ApplyOutlineEditsToRange {
                 ),
             );
 
-            let mut stream_result = None;
+            let stream_result;
 
             // send over a start event over here
             let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
@@ -254,6 +255,7 @@ impl Tool for ApplyOutlineEditsToRange {
                             Some(msg) => {
                                 let delta = msg.delta();
                                 if let Some(delta) = delta {
+                                    println!("apply_outline_edits_to_range::streaming");
                                     // we want to send over the delta over here
                                     let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
                                         root_request_id.to_owned(),
@@ -265,7 +267,9 @@ impl Tool for ApplyOutlineEditsToRange {
                                     ));
                                 }
                             }
-                            None => break, // Channel closed
+                            None => {
+                                // we still need to wait for the stream future to complete
+                            }, // Channel closed
                         }
                     }
                     result = &mut stream_future => {

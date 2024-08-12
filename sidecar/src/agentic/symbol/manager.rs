@@ -449,6 +449,7 @@ impl SymbolManager {
                                     &important_symbols,
                                     &user_query,
                                     self.llm_properties.clone(),
+                                    is_big_search,
                                     &request_id,
                                 )
                                 .await?

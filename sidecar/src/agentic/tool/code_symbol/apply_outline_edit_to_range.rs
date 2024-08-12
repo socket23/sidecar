@@ -255,7 +255,6 @@ impl Tool for ApplyOutlineEditsToRange {
                             Some(msg) => {
                                 let delta = msg.delta();
                                 if let Some(delta) = delta {
-                                    println!("apply_outline_edits_to_range::streaming");
                                     // we want to send over the delta over here
                                     let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
                                         root_request_id.to_owned(),

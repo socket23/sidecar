@@ -1086,7 +1086,7 @@ impl MechaCodeSymbolThinking {
                 let filtered_list = tool_box
                 .filter_code_snippets_in_symbol_for_editing(
                     ranked_xml_list,
-                    original_request.get_original_question().to_owned(),
+                    original_request.get_plan(),
                     llm_properties_for_filtering.llm().clone(),
                     llm_properties_for_filtering.provider().clone(),
                     llm_properties_for_filtering.api_key().clone(),

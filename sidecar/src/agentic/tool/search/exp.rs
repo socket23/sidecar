@@ -26,15 +26,15 @@ use super::{
 pub struct IterativeSearchContext {
     files: Vec<File>,
     user_query: String,
-    scatch_pad: String,
+    scratch_pad: String,
 }
 
 impl IterativeSearchContext {
-    pub fn new(files: Vec<File>, user_query: String, scatch_pad: String) -> Self {
+    pub fn new(files: Vec<File>, user_query: String, scratch_pad: String) -> Self {
         Self {
             files,
             user_query,
-            scatch_pad,
+            scratch_pad,
         }
     }
 
@@ -54,16 +54,16 @@ impl IterativeSearchContext {
     }
 
     // todo(zi): consider extending thoughts over replacing
-    pub fn update_scatch_pad(&mut self, scatch_pad: &str) {
-        self.scatch_pad = scatch_pad.to_string()
+    pub fn update_scratch_pad(&mut self, scratch_pad: &str) {
+        self.scratch_pad = scratch_pad.to_string()
     }
 
     pub fn user_query(&self) -> &str {
         &self.user_query
     }
 
-    pub fn scatch_pad(&self) -> &str {
-        &self.scatch_pad
+    pub fn scratch_pad(&self) -> &str {
+        &self.scratch_pad
     }
 }
 
@@ -252,9 +252,10 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             let identify_results = self.identify(&search_results).await?;
 
-            self.context.update_scatch_pad(&identify_results.scatch_pad);
+            self.context
+                .update_scratch_pad(&identify_results.scratch_pad);
 
-            println!("Scratch pad: \n{}", self.context.scatch_pad());
+            println!("Scratch pad: \n{}", self.context.scratch_pad());
 
             println!(
                 "{}",
@@ -280,7 +281,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             println!("{:?}", decision);
 
-            self.context.update_scatch_pad(decision.suggestions());
+            self.context.update_scratch_pad(decision.suggestions());
 
             self.complete = decision.complete();
 

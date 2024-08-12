@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use once_cell::sync::Lazy;
@@ -115,6 +115,14 @@ impl GitWalker {
             println!("Time taken: {}", start_time.elapsed().as_micros());
             Ok(values)
         }
+    }
+
+    pub fn find_file(&self, directory: &Path, target: &str) -> Option<PathBuf> {
+        let files = self.read_files(directory).ok()?;
+        files
+            .keys()
+            .find(|path| path.ends_with(target))
+            .map(PathBuf::from)
     }
 
     fn get_files_recursive(

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub struct IdentifyResponse {
     #[serde(rename = "item")]
     pub item: Vec<IdentifiedFile>,
-    pub scatch_pad: String,
+    pub scratch_pad: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,3 @@
-use walkdir::WalkDir;
-
 use std::{
     fs::{self, read_to_string},
     path::PathBuf,
@@ -7,7 +5,10 @@ use std::{
 
 use crate::{
     agentic::tool::search::exp::{SearchResultSnippet, SearchToolType},
-    repomap::tag::{SearchMode, TagIndex},
+    repomap::{
+        file::git::GitWalker,
+        tag::{SearchMode, TagIndex},
+    },
 };
 
 use super::exp::{SearchQuery, SearchResult};
@@ -28,16 +29,6 @@ impl Repository {
             tag_index,
             root,
         }
-    }
-
-    // todo(zi): file index would be useful here. Considered using tag_index's file_to_tags,
-    // but this would mean we'd always ignore .md files, which could contain useful information
-    pub fn find_file(&self, target: &str) -> Option<PathBuf> {
-        WalkDir::new(&self.root)
-            .into_iter()
-            .filter_map(Result::ok)
-            .find(|e| e.file_name().to_string_lossy() == target)
-            .map(|e| e.path().to_owned())
     }
 
     pub fn execute_search(&self, search_query: &SearchQuery) -> Vec<SearchResult> {
@@ -61,7 +52,9 @@ impl Repository {
                     true => {
                         println!("No tags for file: {}", search_query.query);
 
-                        let file = self.find_file(&search_query.query);
+                        let gitwalker = GitWalker {};
+
+                        let file = gitwalker.find_file(self.root.as_path(), &search_query.query);
 
                         println!(
                             "repository::execute_search::query::SearchToolType::File::file: {:?}",
@@ -99,6 +92,7 @@ impl Repository {
 
                         let search_results = tags_in_file
                             .iter()
+                            .take(20) // so we don't exceed token limits
                             .map(|t| {
                                 // helps identify step understand the symbol
                                 let thinking_message = format!(

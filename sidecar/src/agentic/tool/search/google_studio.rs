@@ -129,7 +129,7 @@ report
 </file_context
         "#,
             context.user_query(),
-            context.scatch_pad(),
+            context.scratch_pad(),
             file_context_string
         )
     }
@@ -186,7 +186,7 @@ Examine the current file context provided in the <file_context> tag to understan
 <thinking>
 </thinking>
 </item>
-<scatch_pad>
+<scratch_pad>
 </scratch_pad>
 </response>
 </reply>
@@ -223,12 +223,12 @@ Think step by step and write out your high-level thoughts about the state of the
 </search_results>
 <scratch_pad>
 {}
-</scatch_pad>
+</scratch_pad>
 "#,
             context.user_query(),
             File::serialise_files(context.files(), "\n"),
             serialized_results.join("\n"),
-            context.scatch_pad(),
+            context.scratch_pad(),
         )
     }
 
@@ -246,7 +246,7 @@ Instructions:
     * Analyze the Issue:
     * Review the reported issue to understand what functionality or bug fix is being requested.
 
-    * Analyze the scatch_pad:
+    * Analyze the scratch_pad:
     * Review the observations acquired through the search. It may contain crucial information about the files within.
 
     * Analyze File Context:
@@ -301,13 +301,13 @@ false
 <file_context>
 {}
 </file_context
-<scatch_pad>
+<scratch_pad>
 {}
 </scratch_pad>
         "#,
             context.user_query(),
             serialised_files,
-            context.scatch_pad(),
+            context.scratch_pad(),
         )
     }
 

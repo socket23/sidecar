@@ -1323,7 +1323,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                     .full_symbol_initial_request(
                         self.tools.clone(),
                         &request_data,
-                        self.llm_properties.clone(),
                         request_id,
                         &self.tool_properties,
                         self.hub_sender.clone(),

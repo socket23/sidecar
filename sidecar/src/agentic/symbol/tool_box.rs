@@ -57,9 +57,8 @@ use crate::agentic::tool::code_symbol::should_edit::ShouldEditCodeSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
-    CodeToEditFilterRequest, CodeToEditFilterResponse, CodeToEditSymbolRequest,
-    CodeToEditSymbolResponse, CodeToProbeFilterResponse, CodeToProbeSubSymbolList,
-    CodeToProbeSubSymbolRequest,
+    CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToEditSymbolResponse,
+    CodeToProbeFilterResponse, CodeToProbeSubSymbolList, CodeToProbeSubSymbolRequest,
 };
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::diagnostics::{
@@ -4805,32 +4804,6 @@ FILEPATH: {fs_file_path}
         self.symbol_broker
             .get_symbols_in_range(fs_file_path, range)
             .await
-    }
-
-    // TODO(skcd): Use this to ask the LLM for the code snippets which need editing
-    pub async fn filter_code_for_editing(
-        &self,
-        snippets: Vec<Snippet>,
-        query: String,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_key: LLMProviderAPIKeys,
-        _request_id: &str,
-    ) -> Result<CodeToEditFilterResponse, SymbolError> {
-        let request = ToolInput::FilterCodeSnippetsForEditing(CodeToEditFilterRequest::new(
-            snippets,
-            query,
-            llm,
-            provider,
-            api_key,
-            self.root_request_id.to_owned(),
-        ));
-        self.tools
-            .invoke(request)
-            .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .code_to_edit_filter()
-            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn force_add_document(

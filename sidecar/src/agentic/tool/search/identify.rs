@@ -19,4 +19,8 @@ impl IdentifiedFile {
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
+
+    pub fn thinking(&self) -> &str {
+        &self.thinking
+    }
 }

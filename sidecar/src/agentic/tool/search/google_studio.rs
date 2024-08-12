@@ -130,13 +130,13 @@ report
     pub fn system_message_for_identify(&self, context: &Context) -> String {
         format!(
             r#"You are an autonomous AI assistant tasked with finding relevant code in an existing 
-codebase based on a reported issue. Your task is to identify the relevant code spans in the provided search 
+codebase based on a reported issue. Your task is to identify the relevant code items in the provided search 
 results and decide whether the search task is complete.
 
 # Input Structure:
 
 * <issue>: Contains the reported issue.
-* <file_context>: Contains the context of already identified files and code spans.
+* <file_context>: Contains the context of already identified files and code items.
 * <search_results>: Contains the new search results with code divided into "...............".
 
 # Your Task:
@@ -149,14 +149,16 @@ Examine the current file context provided in the <file_context> tag to understan
 
 3. Process New Search Results:
 3.1. Thoroughly analyze each code span in the <search_results> tag.
-3.2. Match the code spans with the key elements, functions, variables, or patterns identified in the reported issue.
+3.2. Match the code items with the key elements, functions, variables, or patterns identified in the reported issue.
 3.3. Evaluate the relevance of each code span based on how well it aligns with the reported issue and current file context.
 3.4. If the issue suggests new functions or classes, identify the existing code that might be relevant to be able to implement the new functionality.
-3.5. Review entire sections of code, not just isolated spans, to ensure you have a complete understanding before making a decision. It's crucial to see all code in a section to accurately determine relevance and completeness.
+3.5. Review entire sections of code, not just isolated items, to ensure you have a complete understanding before making a decision. It's crucial to see all code in a section to accurately determine relevance and completeness.
 3.6. Verify if there are references to other parts of the codebase that might be relevant but not found in the search results. 
-3.7. Identify and extract relevant code spans based on the reported issue. 
+3.7. Identify and extract relevant code items based on the reported issue. 
 
-4. Response format:
+4. Important - in the thinking tag for each item, write a short analysis of its relevance to the issue. This will be relied upon by another system to understand the relevance of this file.
+
+5. Response format:
 <reply>
 <response>
 <item>
@@ -182,7 +184,7 @@ Examine the current file context provided in the <file_context> tag to understan
 </response>
 </reply>
 
-Think step by step and write out your thoughts in the scratch_pad field."#
+Think step by step and write out your high-level thoughts about the state of the search in the scratch_pad field."#
         )
     }
 

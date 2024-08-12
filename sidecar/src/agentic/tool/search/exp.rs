@@ -75,14 +75,18 @@ impl Context {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct File {
     path: PathBuf,
+    thinking: String,
+    snippet: String,
     // content: String,
     // preview: String,
 }
 
 impl File {
-    pub fn new(path: &PathBuf) -> Self {
+    pub fn new(path: &PathBuf, thinking: &str, snippet: &str) -> Self {
         Self {
             path: path.to_owned(),
+            thinking: thinking.to_owned(),
+            snippet: snippet.to_owned(),
         }
     }
 
@@ -297,7 +301,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                 identify_results
                     .item
                     .iter()
-                    .map(|r| File::new(r.path()))
+                    .map(|r| File::new(r.path(), r.thinking(), ""))
                     .collect::<Vec<File>>(),
             );
 

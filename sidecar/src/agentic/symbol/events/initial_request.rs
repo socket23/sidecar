@@ -64,7 +64,7 @@ impl SymbolRequestHistoryItem {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InitialRequestData {
     original_question: String,
-    plan_if_available: Option<String>,
+    plan: String,
     history: Vec<SymbolRequestHistoryItem>,
     /// We operate on the full symbol instead of the
     full_symbol_request: bool,
@@ -80,7 +80,7 @@ pub struct InitialRequestData {
 impl InitialRequestData {
     pub fn new(
         original_question: String,
-        plan_if_available: Option<String>,
+        plan: String,
         history: Vec<SymbolRequestHistoryItem>,
         full_symbol_request: bool,
         symbols_edited_list: Option<Vec<SymbolEditedItem>>,
@@ -88,7 +88,7 @@ impl InitialRequestData {
     ) -> Self {
         Self {
             original_question,
-            plan_if_available,
+            plan,
             history,
             full_symbol_request,
             symbols_edited_list,
@@ -108,8 +108,8 @@ impl InitialRequestData {
         &self.original_question
     }
 
-    pub fn get_plan(&self) -> Option<String> {
-        self.plan_if_available.clone()
+    pub fn get_plan(&self) -> String {
+        self.plan.to_owned()
     }
 
     pub fn history(&self) -> &[SymbolRequestHistoryItem] {

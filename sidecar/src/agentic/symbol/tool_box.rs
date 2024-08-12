@@ -3099,6 +3099,7 @@ instruction:
                 let _ = hub_sender.send((
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_name, symbol_file_path),
+                        thinking.to_owned(),
                         request.to_owned(),
                         history.to_vec(),
                         tool_properties.clone(),
@@ -3122,6 +3123,7 @@ instruction:
                 let _ = hub_sender.send((
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_to_edit, fs_file_path),
+                        thinking.to_owned(),
                         request.to_owned(),
                         history.to_vec(),
                         tool_properties.clone(),

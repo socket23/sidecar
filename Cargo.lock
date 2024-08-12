@@ -4719,7 +4719,6 @@ dependencies = [
  "tree_magic_mini",
  "url",
  "uuid",
- "walkdir",
  "whoami",
 ]
 

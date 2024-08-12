@@ -11,4 +11,8 @@ impl DecideResponse {
     pub fn suggestions(&self) -> &str {
         &self.suggestions
     }
+
+    pub fn complete(&self) -> bool {
+        self.complete
+    }
 }

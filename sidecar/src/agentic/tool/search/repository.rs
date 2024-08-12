@@ -43,12 +43,15 @@ impl Repository {
 
         match search_query.tool {
             SearchToolType::File => {
-                println!("repository::execute_search::query::SearchToolType::File");
+                println!(
+                    "repository::execute_search::query::SearchToolType::File, searching for {}",
+                    search_query.query
+                );
 
                 let tags_in_file = self.tag_index.search_definitions_flattened(
                     &search_query.query,
                     false,
-                    SearchMode::ExactFileName,
+                    SearchMode::FilePath,
                 );
 
                 match tags_in_file.is_empty() {

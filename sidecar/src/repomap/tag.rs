@@ -289,7 +289,9 @@ impl TagIndex {
             search_term.to_lowercase()
         };
 
+        println!("=========");
         println!("searching for: {}", search_term);
+        println!("=========");
 
         self.definitions
             .iter()

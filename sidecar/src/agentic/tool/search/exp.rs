@@ -298,6 +298,8 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             self.context.update_thoughts(decision.suggestions());
 
+            self.complete = decision.complete();
+
             count += 1;
         }
 

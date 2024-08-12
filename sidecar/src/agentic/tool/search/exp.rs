@@ -49,6 +49,11 @@ impl Context {
             .collect()
     }
 
+    // todo(zi): consider extending thoughts over replacing
+    pub fn update_thoughts(&mut self, thoughts: &str) {
+        self.thoughts = thoughts.to_string()
+    }
+
     pub fn user_query(&self) -> &str {
         &self.user_query
     }
@@ -274,6 +279,7 @@ pub struct IterativeSearchSystem<T: LLMOperations> {
     context: Context,
     repository: Repository,
     llm_ops: T,
+    complete: bool,
 }
 
 impl<T: LLMOperations> IterativeSearchSystem<T> {
@@ -282,6 +288,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             context,
             repository,
             llm_ops,
+            complete: false,
         }
     }
 
@@ -291,8 +298,10 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
         let mut count = 0;
-        while count < 1 {
+        while self.complete == false && count < 2 {
+            println!("===========");
             println!("run loop #{}", count);
+            println!("===========");
             let search_queries = self.search().await?;
 
             // todo(zi): this could be async
@@ -331,9 +340,11 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             println!("Context::files: {:?}", self.context().files());
 
-            let decide_results = self.decide().await?;
+            let decision = self.decide().await?;
 
-            println!("{:?}", decide_results);
+            println!("{:?}", decision);
+
+            self.context.update_thoughts(decision.suggestions());
 
             count += 1;
         }

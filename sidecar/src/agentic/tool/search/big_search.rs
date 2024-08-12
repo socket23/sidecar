@@ -187,6 +187,7 @@ impl Tool for BigSearchBroker {
             request.root_request_id().to_string(),
         );
 
+        // google llm operations
         let google_studio_llm_config = GoogleStudioLLM::new(
             request.root_directory().unwrap_or("").to_owned(),
             self.llm_client(),
@@ -199,7 +200,7 @@ impl Tool for BigSearchBroker {
             google_studio_llm_config,
         );
 
-        system.run().await;
+        let _ = system.run().await;
 
         todo!();
 

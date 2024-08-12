@@ -448,11 +448,7 @@ false
             )
             .await?;
 
-        let parsed_response = GoogleStudioLLM::parse_decide_response(&response)?;
-
-        println!("{:?}", parsed_response);
-
-        todo!();
+        Ok(GoogleStudioLLM::parse_decide_response(&response)?)
     }
 
     fn strip_xml_declaration(input: &str) -> &str {

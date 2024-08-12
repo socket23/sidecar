@@ -6,3 +6,9 @@ pub struct DecideResponse {
     suggestions: String,
     complete: bool,
 }
+
+impl DecideResponse {
+    pub fn suggestions(&self) -> &str {
+        &self.suggestions
+    }
+}

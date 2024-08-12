@@ -4178,13 +4178,13 @@ FILEPATH: {fs_file_path}
             uuid::Uuid::new_v4().to_string(),
             self.ui_events.clone(),
         ));
-        let response = dbg!(self
+        let response = self
             .tools
             .invoke(request)
             .await
-            .map_err(|e| SymbolError::ToolError(e)))?
-        .get_apply_edits_to_range_response()
-        .ok_or(SymbolError::WrongToolOutput)?;
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_apply_edits_to_range_response()
+            .ok_or(SymbolError::WrongToolOutput)?;
         println!(
             "tool_box::code_edit_outline::apply_outline_edit_to_range::finish::({})",
             sub_symbol.symbol_name()
@@ -4717,7 +4717,35 @@ FILEPATH: {fs_file_path}
         } else {
             let outline_node_selected = outline_nodes_range.get(response_idx);
             if let Some(outline_node) = outline_node_selected {
-                Ok((outline_node.end_position(), true))
+                let file_content_lines = file_contents
+                    .contents_ref()
+                    .lines()
+                    .enumerate()
+                    .collect::<Vec<_>>();
+                if outline_node.start_position().line() + 1 <= file_content_lines.len() {
+                    // we need to find the first empty line over here or if we have no
+                    // empty line, then we can just insert it at 0'th line number
+                    let mut check_start_line = outline_node.start_position().line();
+                    let start_line;
+                    loop {
+                        if check_start_line == 0 {
+                            start_line = 0;
+                            break;
+                        }
+                        // if line is empty, we are in luck we can start editing here
+                        if file_content_lines[check_start_line].1.is_empty() {
+                            start_line = check_start_line;
+                            break;
+                        } else {
+                            // line is not empty, so we have to go up a line
+                            check_start_line = check_start_line - 1;
+                        }
+                    }
+                    Ok((Position::new(start_line, 0, 0), true))
+                } else {
+                    // out of bound node position which is weird
+                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
+                }
             } else {
                 Err(SymbolError::OutlineNodeEditingNotSupported)
             }

@@ -485,6 +485,6 @@ pub enum RequestEvents {
 </reply>
         "#
         .to_owned();
-        let edit_code = CodeEditingTool::edit_code(&response, false, "").expect("to work");
+        let _ = CodeEditingTool::edit_code(&response, false, "").expect("to work");
     }
 }

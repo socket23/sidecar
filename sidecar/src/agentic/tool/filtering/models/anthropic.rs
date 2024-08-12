@@ -40,7 +40,85 @@ impl AnthropicCodeToEditFormatter {
         }
     }
 
-    fn example_message(&self) -> String {
+    fn example_message_for_filtering_code_edit_block(&self) -> String {
+        r#"<example>
+<user_query>
+We want to add a new method to add a new shipment made by the company.
+</user_query>
+
+<rerank_list>
+<rerank_entry>
+<id>
+0
+</id>
+<content>
+Code Location: company.rs
+```rust
+struct Company {
+    name: String,
+    shipments: usize,
+    size: usize,
+}
+```
+</content>
+</rerank_entry>
+<rerank_entry>
+<id>
+1
+</id>
+<content>
+Code Location: company_metadata.rs
+```rust
+impl Compnay {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+</content>
+</rerank_entry>
+<rerank_entry>
+<id>
+2
+</id>
+<content>
+Code Location: company_shipments.rs
+```rust
+impl Company {
+    fn get_snipments(&self) -> usize {
+        self.shipments
+    }
+}
+```
+</content>
+</rerank_entry>
+</rerank_list>
+
+Your reply should be:
+
+<thinking>
+The company_shipment implementation block handles everything related to the shipments of the company, so we want to edit that.
+</thinking>
+
+<code_to_edit_list>
+<code_to_edit>
+<id>
+2
+</id>
+<reason_to_edit>
+The company_shipment.rs implementation block of Company contains all the relevant code for the shipment tracking of the Company, so that's what we want to edit.
+</reason_to_edit>
+<id>
+</code_to_edit>
+</code_to_edit_list>
+</example>"#
+            .to_owned()
+    }
+
+    fn _example_message(&self) -> String {
         r#"<example>
 <user_query>
 The checkout process is broken. After entering payment info, the order doesn't get created and the user sees an error page.
@@ -928,8 +1006,53 @@ Please provide the order along with the reason in 2 lists, one for code snippets
         )
     }
 
-    fn system_message(&self) -> String {
-        let example_message = self.example_message();
+    fn system_message_code_to_edit_symbol_level(&self) -> String {
+        let example_message = self.example_message_for_filtering_code_edit_block();
+        format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
+- The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
+- You should select a code section for editing if and only if you want to make changes to that section.
+- You are also given a list of extra symbols in <extra_symbols> which will be provided to you while making the changes, use this to be more sure about your reason for selection.
+- Adding new functionality is a very valid reason to select a sub-section for editing.
+- Editing or deleting some code is also a very valid reason for selecting a code section for editing.
+- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words.
+- If you want to edit the code section with id 0 then you must output in the following format:
+<code_to_edit_list>
+<code_to_edit>
+<id>
+0
+</id>
+<reason_to_edit>
+{{your reason for editing}}
+</reason_to_edit>
+</code_to_edit>
+</code_to_edit_list>
+
+- If you want to edit more code sections follow the similar pattern as described above and as an example again:
+<code_to_edit_list>
+<code_to_edit>
+<id>
+{{id of the code snippet you are interested in}}
+</id>
+<reason_to_edit>
+{{your reason for editing}}
+</reason_to_edit>
+</code_to_edit>
+{{... more code sections here which you might want to select}}
+</code_to_edit_list>
+
+- The <id> section should ONLY contain an id from the listed code snippets.
+
+
+Here is an example contained in the <example> section.
+
+{example_message}
+
+This example is for reference. You must strictly follow the format show in the example when replying.
+Please provide the list of symbols which you want to edit."#).to_owned()
+    }
+
+    fn _system_message(&self) -> String {
+        let example_message = self._example_message();
         format!(r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
 - The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
 - You should select a code section for editing if and only if you want to make changes to that section.
@@ -1200,7 +1323,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
 
 {xml_string}"#
         );
-        let system_message = self.system_message();
+        let system_message = self.system_message_code_to_edit_symbol_level();
         let messages = vec![
             LLMClientMessage::system(system_message),
             LLMClientMessage::user(user_query),
@@ -1286,7 +1409,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
 {input_formatted}
 </rerank_list>"#
         );
-        let system_message = self.system_message();
+        let system_message = self.system_message_code_to_edit_symbol_level();
         let messages = vec![
             LLMClientMessage::system(system_message),
             LLMClientMessage::user(user_query),

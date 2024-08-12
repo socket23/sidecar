@@ -587,6 +587,13 @@ impl CodeToEditFormatterBroker {
         );
         llms.insert(
             LLMType::GeminiProFlash,
+            Box::new(AnthropicCodeToEditFormatter::new(
+                llm_broker.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        llms.insert(
+            LLMType::Llama3_1_8bInstruct,
             Box::new(AnthropicCodeToEditFormatter::new(llm_broker, fail_over_llm)),
         );
         Self { llms }

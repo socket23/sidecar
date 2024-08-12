@@ -8,7 +8,7 @@ use derivative::Derivative;
 use futures::{lock::Mutex, stream, StreamExt};
 use llm_client::{
     clients::types::LLMType,
-    provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{FireworksAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 use tokio::sync::{mpsc::UnboundedSender, oneshot::Sender};
 
@@ -994,7 +994,6 @@ impl MechaCodeSymbolThinking {
         &self,
         tool_box: Arc<ToolBox>,
         original_request: &InitialRequestData,
-        llm_properties: LLMProperties,
         request_id: String,
         tool_properties: &ToolProperties,
         _hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
@@ -1070,26 +1069,19 @@ impl MechaCodeSymbolThinking {
                 // now we have to rerank the whole section
                 // if the xml is too long, then use a beefier model otherwise use
                 // a weaker model for the reranking and selection
-                let llm_properties_for_filtering = if ranked_xml_list.lines().collect::<Vec<_>>().len() > 1000 {
-                    // use sonnet3.5 if this is too large
-                    llm_properties.clone()
-                } else {
-                    // use a smaller model for the filtering if this is a small
-                    // prompt
-                    LLMProperties::new(
-                        LLMType::GeminiProFlash,
-                        LLMProvider::GoogleAIStudio,
-                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new("AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned())),
-                    )
-                };
+                let llm_properties_for_code_snippet_to_edit = LLMProperties::new(
+                    LLMType::Llama3_1_8bInstruct,
+                    LLMProvider::FireworksAI,
+                    LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new("s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned())),
+                );
                 let symbols_to_be_edited = original_request.symbols_edited_list();
                 let filtered_list = tool_box
                 .filter_code_snippets_in_symbol_for_editing(
                     ranked_xml_list,
                     original_request.get_plan(),
-                    llm_properties_for_filtering.llm().clone(),
-                    llm_properties_for_filtering.provider().clone(),
-                    llm_properties_for_filtering.api_key().clone(),
+                    llm_properties_for_code_snippet_to_edit.llm().clone(),
+                    llm_properties_for_code_snippet_to_edit.provider().clone(),
+                    llm_properties_for_code_snippet_to_edit.api_key().clone(),
                     symbols_to_be_edited,
                     &request_id,
                 )

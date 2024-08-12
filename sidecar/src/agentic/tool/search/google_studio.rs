@@ -248,6 +248,19 @@ Response format:
 </complete>
 </response>
 </reply>
+
+Example:
+
+<reply>
+<response>
+<suggestions>
+We need to look for the method in another file
+</suggestions>
+<complete>
+false
+</complete>
+</response>
+</reply>
     "#
         )
     }
@@ -344,6 +357,21 @@ Response format:
         })
     }
 
+    fn parse_decide_response(response: &str) -> Result<DecideResponse, IterativeSearchError> {
+        let lines = response
+            .lines()
+            .skip_while(|l| !l.contains("<reply>"))
+            .skip(1)
+            .take_while(|l| !l.contains("</reply>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        from_str::<DecideResponse>(&lines).map_err(|error| {
+            eprintln!("{:?}", error);
+            IterativeSearchError::SerdeError(SerdeError::new(error, lines))
+        })
+    }
+
     pub async fn identify(
         &self,
         context: &Context,
@@ -420,7 +448,9 @@ Response format:
             )
             .await?;
 
-        println!("{:?}", response);
+        let parsed_response = GoogleStudioLLM::parse_decide_response(&response)?;
+
+        println!("{:?}", parsed_response);
 
         todo!();
     }

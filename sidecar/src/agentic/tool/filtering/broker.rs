@@ -448,6 +448,7 @@ pub struct CodeToEditFilterRequest {
 pub struct CodeToEditSymbolRequest {
     xml_symbol: String,
     query: String,
+    extra_symbols_present: Option<String>,
     llm: LLMType,
     provider: LLMProvider,
     api_key: LLMProviderAPIKeys,
@@ -458,6 +459,7 @@ impl CodeToEditSymbolRequest {
     pub fn new(
         xml_symbol: String,
         query: String,
+        extra_symbols_present: Option<String>,
         llm: LLMType,
         provider: LLMProvider,
         api_key: LLMProviderAPIKeys,
@@ -466,11 +468,16 @@ impl CodeToEditSymbolRequest {
         Self {
             xml_symbol,
             query,
+            extra_symbols_present,
             llm,
             api_key,
             provider,
             root_request_id,
         }
+    }
+
+    pub fn extra_symbols(&self) -> Option<&str> {
+        self.extra_symbols_present.as_deref()
     }
 
     pub fn root_request_id(&self) -> &str {
@@ -580,6 +587,13 @@ impl CodeToEditFormatterBroker {
         );
         llms.insert(
             LLMType::GeminiProFlash,
+            Box::new(AnthropicCodeToEditFormatter::new(
+                llm_broker.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        llms.insert(
+            LLMType::Llama3_1_8bInstruct,
             Box::new(AnthropicCodeToEditFormatter::new(llm_broker, fail_over_llm)),
         );
         Self { llms }

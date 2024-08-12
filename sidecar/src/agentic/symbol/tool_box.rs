@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{
-    FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider,
-};
+use llm_client::provider::{FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::{apply_inlay_hints_to_code, split_file_content_into_parts};
@@ -42,6 +40,7 @@ use crate::agentic::tool::code_symbol::models::anthropic::{
     AskQuestionSymbolHint, CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse,
     ProbeNextSymbol,
 };
+use crate::agentic::tool::code_symbol::new_location::CodeSymbolNewLocationRequest;
 use crate::agentic::tool::code_symbol::new_sub_symbol::{
     NewSubSymbolRequiredRequest, NewSubSymbolRequiredResponse,
 };
@@ -54,12 +53,12 @@ use crate::agentic::tool::code_symbol::probe_try_hard_answer::ProbeTryHardAnswer
 use crate::agentic::tool::code_symbol::reranking_symbols_for_editing_context::{
     ReRankingCodeSnippetSymbolOutline, ReRankingSnippetsForCodeEditingRequest,
 };
+use crate::agentic::tool::code_symbol::should_edit::ShouldEditCodeSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
 use crate::agentic::tool::filtering::broker::{
-    CodeToEditFilterRequest, CodeToEditFilterResponse, CodeToEditSymbolRequest,
-    CodeToEditSymbolResponse, CodeToProbeFilterResponse, CodeToProbeSubSymbolList,
-    CodeToProbeSubSymbolRequest,
+    CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToEditSymbolResponse,
+    CodeToProbeFilterResponse, CodeToProbeSubSymbolList, CodeToProbeSubSymbolRequest,
 };
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::diagnostics::{
@@ -96,7 +95,7 @@ use crate::{
 
 use super::errors::SymbolError;
 use super::events::edit::SymbolToEdit;
-use super::events::initial_request::SymbolRequestHistoryItem;
+use super::events::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
@@ -133,6 +132,79 @@ impl ToolBox {
         }
     }
 
+    /// Inserts a new line at the locatiaon we want to, this is a smart way to
+    /// make space for the new symbol by looking at the line we want to insert it
+    /// and if we want to insert it at the start of the line or at the end of the line
+    pub async fn add_empty_line_at_line(
+        &self,
+        fs_file_path: &str,
+        line_number: usize,
+        at_start: bool,
+        request_id: &str,
+    ) -> Result<Position, SymbolError> {
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let file_lines = file_contents
+            .contents_ref()
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>();
+        // if we are inserting at the start of the line, then we can just insert
+        // a \n at the start of the line and it will be safe always
+        if at_start {
+            let _ = self
+                .apply_edits_to_editor(
+                    fs_file_path,
+                    &Range::new(
+                        Position::new(line_number, 0, 0),
+                        Position::new(line_number, 0, 0),
+                    ),
+                    "\n",
+                    request_id,
+                    true,
+                )
+                .await;
+            Ok(Position::new(line_number, 0, 0))
+        } else {
+            match file_lines.get(line_number) {
+                Some(line_content) => {
+                    if line_content.is_empty() {
+                        Ok(Position::new(line_number, 0, 0))
+                    } else {
+                        let edit_range = Range::new(
+                            Position::new(line_number, 0, 0),
+                            Position::new(line_number, line_content.chars().count(), 0),
+                        );
+                        let _ = self
+                            .apply_edits_to_editor(
+                                &fs_file_path,
+                                &edit_range,
+                                &format!("{}\n", line_content),
+                                request_id,
+                                true,
+                            )
+                            .await;
+                        Ok(Position::new(line_number + 1, 0, 0))
+                    }
+                }
+                // none here might refer to the fact that the line does not exist
+                // this almost always happens for empty files, so for now insert an empty
+                // line at 0, 0
+                None => {
+                    let _ = self
+                        .apply_edits_to_editor(
+                            fs_file_path,
+                            &Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                            "",
+                            request_id,
+                            true,
+                        )
+                        .await?;
+                    Ok(Position::new(0, 0, 0))
+                }
+            }
+        }
+    }
+
     /// Adds a new empty line at the end of the file and returns the start position
     /// of the newly added line
     pub async fn add_empty_line_end_of_file(
@@ -163,6 +235,7 @@ impl ToolBox {
                             &edit_range,
                             &format!("{}\n", last_line),
                             request_id,
+                            true,
                         )
                         .await;
                     // now that we have inserted a new line it should be safe to send
@@ -180,6 +253,7 @@ impl ToolBox {
                         &Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
                         "",
                         request_id,
+                        true,
                     )
                     .await?;
                 Ok(Position::new(0, 0, 0))
@@ -466,15 +540,22 @@ impl ToolBox {
             .tools
             .invoke(inlay_hint_request)
             .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .get_inlay_hints_response()
-            .ok_or(SymbolError::WrongToolOutput)?;
+            .map_err(|e| SymbolError::ToolError(e));
 
-        Ok(apply_inlay_hints_to_code(
-            code_in_selection,
-            range,
-            inlay_hints,
-        ))
+        match inlay_hints {
+            Ok(inlay_hints) => {
+                if let Some(inlay_hints) = inlay_hints.get_inlay_hints_response() {
+                    Ok(apply_inlay_hints_to_code(
+                        code_in_selection,
+                        range,
+                        inlay_hints,
+                    ))
+                } else {
+                    Ok(code_in_selection.to_owned())
+                }
+            }
+            Err(_e) => Ok(code_in_selection.to_owned()),
+        }
     }
 
     /// Compresses the symbol by removing function content if its present
@@ -3017,9 +3098,12 @@ instruction:
                 let _ = hub_sender.send((
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_name, symbol_file_path),
+                        thinking.to_owned(),
                         request.to_owned(),
                         history.to_vec(),
                         tool_properties.clone(),
+                        None,
+                        false,
                     ),
                     request_id.to_owned(),
                     sender,
@@ -3038,9 +3122,12 @@ instruction:
                 let _ = hub_sender.send((
                     SymbolEventRequest::initial_request(
                         SymbolIdentifier::with_file_path(symbol_to_edit, fs_file_path),
+                        thinking.to_owned(),
                         request.to_owned(),
                         history.to_vec(),
                         tool_properties.clone(),
+                        None,
+                        false,
                     ),
                     request_id.to_owned(),
                     sender,
@@ -3331,6 +3418,7 @@ instruction:
                     &range,
                     fresh_outline_node.content().content(),
                     request_id,
+                    false,
                 )
                 .await;
         }
@@ -3391,6 +3479,7 @@ instruction:
                                 .collect::<Vec<_>>()
                                 .join("\n"),
                             request_id,
+                            false,
                         )
                         .await;
                 }
@@ -3428,6 +3517,7 @@ instruction:
                     implementation_outline_node.range(),
                     edited_node.content().content(),
                     request_id,
+                    false,
                 )
                 .await;
         }
@@ -3582,7 +3672,13 @@ instruction:
                 // The range of the symbol before doing the edit
                 let edited_range = symbol_to_edit_range;
                 let _editor_response = self
-                    .apply_edits_to_editor(fs_file_path, &edited_range, &updated_code, request_id)
+                    .apply_edits_to_editor(
+                        fs_file_path,
+                        &edited_range,
+                        &updated_code,
+                        request_id,
+                        false,
+                    )
                     .await?;
 
                 // after applying the edits to the editor, we will need to get the file
@@ -3675,6 +3771,7 @@ instruction:
                                 symbol_to_edit.range(),
                                 &corrected_code,
                                 request_id,
+                                false,
                             )
                             .await;
 
@@ -3776,7 +3873,13 @@ instruction:
                 // after this we have to apply the edits to the editor again and being
                 // the loop again
                 let _ = self
-                    .apply_edits_to_editor(fs_file_path, &edited_range, &fixed_code, request_id)
+                    .apply_edits_to_editor(
+                        fs_file_path,
+                        &edited_range,
+                        &fixed_code,
+                        request_id,
+                        false,
+                    )
                     .await?;
             } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
                 // over here we want to ping the other symbols and send them requests, there is a search
@@ -3959,6 +4062,8 @@ instruction:
     /// - Use a weaker model to start applying the changes
     pub async fn code_edit_outline(
         &self,
+        sub_symbol: &SymbolToEdit,
+        symbol_identifier: &SymbolIdentifier,
         fs_file_path: &str,
         file_content: &str,
         selection_range: &Range,
@@ -3967,6 +4072,7 @@ instruction:
         llm_properties: LLMProperties,
         request_id: &str,
         symbol_to_edit: Option<String>,
+        symbols_edited_list: Option<Vec<SymbolEditedItem>>,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit_outline============");
         println!("tool_box::code_edit_outline::fs_file_path:{}", fs_file_path);
@@ -3991,6 +4097,23 @@ instruction:
                 request_id,
             )
             .await?;
+        let symbols_to_edit = symbols_edited_list.map(|symbols| {
+            symbols
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let fs_file_path = symbol.fs_file_path();
+                    let symbol_name = symbol.name();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -4004,11 +4127,21 @@ instruction:
             llm_properties.provider().clone(),
             false,
             symbol_to_edit,
-            None,
+            // pass the symbol which we want to edit over here
+            if sub_symbol.is_new() {
+                Some(sub_symbol.symbol_name().to_owned())
+            } else {
+                None
+            },
             self.root_request_id.to_owned(),
             // we want an outline edit
             true,
+            symbols_to_edit,
         ));
+        println!(
+            "tool_box::code_edit_outline::start::symbol_name({})",
+            sub_symbol.symbol_name()
+        );
         let response = self
             .tools
             .invoke(request)
@@ -4016,19 +4149,35 @@ instruction:
             .map_err(|e| SymbolError::ToolError(e))?
             .get_code_edit_output()
             .ok_or(SymbolError::WrongToolOutput)?;
+        println!(
+            "tool_box::code_edit_outline::finish::symbol_name({})",
+            sub_symbol.symbol_name()
+        );
 
+        println!(
+            "tool_box::code_edit_outline::apply_outline_edit_to_range::start::({})",
+            sub_symbol.symbol_name()
+        );
         let request = ToolInput::ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest::new(
             instruction,
+            symbol_identifier.clone(),
+            fs_file_path.to_owned(),
             in_range_selection,
             response,
             self.root_request_id.to_owned(),
+            selection_range.clone(),
             LLMProperties::new(
-                LLMType::Gpt4OMini,
-                LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                    "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".to_owned(),
+                // why are we using gpt4omini over here which is slow as shit, lets at the very
+                // least move over to gemini-flash
+                LLMType::GeminiProFlash,
+                LLMProvider::GoogleAIStudio,
+                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                 )),
             ),
+            // this is the special request id sent along with every edit which we want to make
+            uuid::Uuid::new_v4().to_string(),
+            self.ui_events.clone(),
         ));
         let response = self
             .tools
@@ -4037,6 +4186,10 @@ instruction:
             .map_err(|e| SymbolError::ToolError(e))?
             .get_apply_edits_to_range_response()
             .ok_or(SymbolError::WrongToolOutput)?;
+        println!(
+            "tool_box::code_edit_outline::apply_outline_edit_to_range::finish::({})",
+            sub_symbol.symbol_name()
+        );
         Ok(response.code())
     }
 
@@ -4054,6 +4207,7 @@ instruction:
         swe_bench_initial_edit: bool,
         symbol_to_edit: Option<String>,
         is_new_sub_symbol: Option<String>,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
         println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
@@ -4068,6 +4222,23 @@ instruction:
             .unwrap_or("".to_owned());
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
+        let new_symbols_edited = symbol_edited_list.map(|symbol_list| {
+            symbol_list
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let fs_file_path = symbol.fs_file_path();
+                    let symbol_name = symbol.name();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -4085,6 +4256,7 @@ instruction:
             self.root_request_id.to_owned(),
             // we want a complete edit over here
             false,
+            new_symbols_edited,
         ));
         self.tools
             .invoke(request)
@@ -4351,12 +4523,15 @@ instruction:
         range: &Range,
         updated_code: &str,
         _request_id: &str,
+        // if we should be applying these edits directly
+        apply_directly: bool,
     ) -> Result<EditorApplyResponse, SymbolError> {
         let input = ToolInput::EditorApplyChange(EditorApplyRequest::new(
             fs_file_path.to_owned(),
             updated_code.to_owned(),
             range.clone(),
             self.editor_url.to_owned(),
+            apply_directly,
         ));
         self.tools
             .invoke(input)
@@ -4392,12 +4567,31 @@ instruction:
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
+        symbols_to_be_edited: Option<&[SymbolEditedItem]>,
         _request_id: &str,
     ) -> Result<CodeToEditSymbolResponse, SymbolError> {
+        let symbols_to_be_edited = symbols_to_be_edited.map(|symbols_to_be_edited| {
+            symbols_to_be_edited
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let symbol_name = symbol.name();
+                    let fs_file_path = symbol.fs_file_path();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         let request =
             ToolInput::FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest::new(
                 xml_string,
                 query,
+                symbols_to_be_edited,
                 llm,
                 provider,
                 api_keys,
@@ -4437,6 +4631,126 @@ instruction:
         // this gives us the outline we need for the outline of the symbol which
         // we are interested in
         response
+    }
+
+    /// Grabs the location where we should be adding the new symbol
+    ///
+    /// Instead of putting it at the end of the file, we can add it to the exact
+    /// location we are interested in which is detected by the LLM
+    pub async fn code_location_for_addition(
+        &self,
+        fs_file_path: &str,
+        symbol_identifer: &SymbolIdentifier,
+        add_request: &str,
+        request_id: &str,
+        // returns the line where we want to insert it and if we want to insert it
+        // before the line or after the line
+        // before case:
+        // <we_get_start_position_here>def something():
+        //     # pass
+        // so here we want to insert a new line at the start of the line and then
+        // insert it
+        // after case:
+        // def something():
+        //    # pass <we_get_start_position_here>
+        // we just insert a new line at the end of this line and then insert it
+        // the boolean here represents if we want to insert it at the start of the line
+        // or the end of the line
+        // think of this as (Position, at_start)
+    ) -> Result<(Position, bool), SymbolError> {
+        println!(
+            "too_box::code_location_for_addition::start::symbol({})",
+            symbol_identifer.symbol_name()
+        );
+        let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await?;
+        let _ = self
+            .force_add_document(
+                fs_file_path,
+                file_contents.contents_ref(),
+                file_contents.language(),
+            )
+            .await?;
+        let outline_nodes: Vec<_> = self
+            .get_outline_nodes_grouped(fs_file_path)
+            .await
+            .unwrap_or_default();
+        let outline_nodes_range = outline_nodes
+            .iter()
+            .map(|outline_node| outline_node.range().clone())
+            .collect::<Vec<_>>();
+        let outline_nodes_str = outline_nodes
+            .into_iter()
+            .map(|outline_node| outline_node.get_outline_for_prompt())
+            .collect::<Vec<_>>();
+        let request = ToolInput::CodeSymbolNewLocation(CodeSymbolNewLocationRequest::new(
+            fs_file_path.to_owned(),
+            outline_nodes_str,
+            symbol_identifer.symbol_name().to_owned(),
+            add_request.to_owned(),
+            LLMProperties::new(
+                LLMType::Llama3_1_8bInstruct,
+                LLMProvider::FireworksAI,
+                LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+                    "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
+                )),
+            ),
+            self.root_request_id.to_owned(),
+        ));
+        let response = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_symbol_new_location()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        let response_idx = response.idx();
+        // if we are at the end of the file, then we can just get the last line
+        // after the
+        if response_idx == outline_nodes_range.len() {
+            if outline_nodes_range.is_empty() {
+                Ok((Position::new(0, 0, 0), false))
+            } else {
+                Ok((
+                    outline_nodes_range[outline_nodes_range.len() - 1].end_position(),
+                    false,
+                ))
+            }
+        } else {
+            let outline_node_selected = outline_nodes_range.get(response_idx);
+            if let Some(outline_node) = outline_node_selected {
+                let file_content_lines = file_contents
+                    .contents_ref()
+                    .lines()
+                    .enumerate()
+                    .collect::<Vec<_>>();
+                if outline_node.start_position().line() + 1 <= file_content_lines.len() {
+                    // we need to find the first empty line over here or if we have no
+                    // empty line, then we can just insert it at 0'th line number
+                    let mut check_start_line = outline_node.start_position().line();
+                    let start_line;
+                    loop {
+                        if check_start_line == 0 {
+                            start_line = 0;
+                            break;
+                        }
+                        // if line is empty, we are in luck we can start editing here
+                        if file_content_lines[check_start_line].1.is_empty() {
+                            start_line = check_start_line;
+                            break;
+                        } else {
+                            // line is not empty, so we have to go up a line
+                            check_start_line = check_start_line - 1;
+                        }
+                    }
+                    Ok((Position::new(start_line, 0, 0), true))
+                } else {
+                    // out of bound node position which is weird
+                    Err(SymbolError::NoOutlineNodeSatisfyPosition)
+                }
+            } else {
+                Err(SymbolError::OutlineNodeEditingNotSupported)
+            }
+        }
     }
 
     pub async fn get_outline_nodes_grouped(&self, fs_file_path: &str) -> Option<Vec<OutlineNode>> {
@@ -4490,32 +4804,6 @@ instruction:
         self.symbol_broker
             .get_symbols_in_range(fs_file_path, range)
             .await
-    }
-
-    // TODO(skcd): Use this to ask the LLM for the code snippets which need editing
-    pub async fn filter_code_for_editing(
-        &self,
-        snippets: Vec<Snippet>,
-        query: String,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_key: LLMProviderAPIKeys,
-        _request_id: &str,
-    ) -> Result<CodeToEditFilterResponse, SymbolError> {
-        let request = ToolInput::FilterCodeSnippetsForEditing(CodeToEditFilterRequest::new(
-            snippets,
-            query,
-            llm,
-            provider,
-            api_key,
-            self.root_request_id.to_owned(),
-        ));
-        self.tools
-            .invoke(request)
-            .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .code_to_edit_filter()
-            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn force_add_document(
@@ -4588,6 +4876,33 @@ instruction:
             .map_err(|e| SymbolError::ToolError(e))?
             .get_go_to_definition()
             .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn edits_required_full_symbol(
+        &self,
+        symbol_content: &str,
+        user_request: &str,
+    ) -> Result<bool, SymbolError> {
+        let tool_input = ToolInput::ShouldEditCode(ShouldEditCodeSymbolRequest::new(
+            symbol_content.to_owned(),
+            user_request.to_owned(),
+            LLMProperties::new(
+                LLMType::GeminiProFlash,
+                LLMProvider::GoogleAIStudio,
+                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                )),
+            ),
+            self.root_request_id.to_owned(),
+        ));
+        let output = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .should_edit_code_symbol_full()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(output.should_edit())
     }
 
     /// Used to make sure if the edit request should proceed as planned or we
@@ -4776,6 +5091,8 @@ instruction:
         important_symbols: &CodeSymbolImportantResponse,
         user_query: &str,
         llm_properties: LLMProperties,
+        // we need to change our prompt when we are doing big search
+        _is_big_search: bool,
         request_id: &str,
     ) -> Result<CodeSymbolImportantResponse, SymbolError> {
         let ordered_symbol_file_paths = important_symbols

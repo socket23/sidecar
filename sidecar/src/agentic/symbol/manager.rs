@@ -10,7 +10,7 @@ use llm_client::provider::{GoogleAIStudioKey, LLMProvider};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
-use crate::agentic::symbol::events::initial_request::InitialRequestData;
+use crate::agentic::symbol::events::initial_request::{InitialRequestData, SymbolEditedItem};
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
@@ -331,6 +331,7 @@ impl SymbolManager {
             input_event.clone(),
         ));
         let is_full_edit = input_event.full_symbol_edit();
+        let is_big_search = input_event.big_search();
         let swe_bench_id = input_event.swe_bench_instance_id();
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
@@ -402,7 +403,8 @@ impl SymbolManager {
             };
 
             if let ToolOutput::ImportantSymbols(important_symbols)
-            | ToolOutput::RepoMapSearch(important_symbols) = tool_output
+            | ToolOutput::RepoMapSearch(important_symbols)
+            | ToolOutput::BigSearch(important_symbols) = tool_output
             {
                 // The fix symbol name here helps us get the top-level symbol name
                 // if the LLM decides to have fun and spit out a.b.c instead of a or b or c individually
@@ -438,7 +440,7 @@ impl SymbolManager {
                 {
                     Some(important_symbols) => important_symbols,
                     None => {
-                        if is_full_edit {
+                        if is_full_edit && !is_big_search {
                             important_symbols
                         } else {
                             let important_symbols = self
@@ -447,6 +449,7 @@ impl SymbolManager {
                                     &important_symbols,
                                     &user_query,
                                     self.llm_properties.clone(),
+                                    is_big_search,
                                     &request_id,
                                 )
                                 .await?
@@ -513,6 +516,19 @@ impl SymbolManager {
                         .collect::<Vec<_>>()
                         .join(",")
                 );
+
+                let symbols_edited_list = important_symbols
+                    .ordered_symbols()
+                    .into_iter()
+                    .map(|symbol| {
+                        SymbolEditedItem::new(
+                            symbol.code_symbol().to_owned(),
+                            symbol.file_path().to_owned(),
+                            symbol.is_new(),
+                            symbol.steps().to_vec().join("\n"),
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 // TODO(skcd): the symbol here might belong to a class or it might be a global function
                 // we want to grab the largest node containing the symbol here instead of using
                 // the symbol directly since our algorithm would not work otherwise
@@ -537,12 +553,17 @@ impl SymbolManager {
                 let _ = stream::iter(
                     // we are loosing context about the changes which we want to make
                     // to the symbol over here
-                    symbols
-                        .into_iter()
-                        .map(|symbol| (symbol, request_id.to_owned(), user_query.to_owned())),
+                    symbols.into_iter().map(|symbol| {
+                        (
+                            symbol,
+                            request_id.to_owned(),
+                            user_query.to_owned(),
+                            symbols_edited_list.to_vec(),
+                        )
+                    }),
                 )
                 .map(
-                    |((symbol_request, steps), request_id, user_query)| async move {
+                    |((symbol_request, steps), request_id, user_query, symbols_edited_list)| async move {
                         let symbol_name = symbol_request.symbol_name().to_owned();
                         let symbol_identifier = self
                             .symbol_locker
@@ -557,11 +578,13 @@ impl SymbolManager {
                                 symbol_identifier.clone(),
                                 SymbolEvent::InitialRequest(InitialRequestData::new(
                                     user_query.to_owned(),
-                                    Some(steps.join("\n")),
+                                    steps.join("\n"),
                                     // empty history when symbol manager sends the initial
                                     // request
                                     vec![],
                                     full_symbol_edit,
+                                    Some(symbols_edited_list),
+                                    is_big_search,
                                 )),
                                 tool_properties_ref.clone(),
                             );

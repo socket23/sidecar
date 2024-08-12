@@ -13,10 +13,12 @@ use super::{
         models::anthropic::{
             CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse, ProbeNextSymbol,
         },
+        new_location::CodeSymbolNewLocationResponse,
         new_sub_symbol::NewSubSymbolRequiredResponse,
         planning_before_code_edit::PlanningBeforeCodeEditResponse,
         probe::ProbeEnoughOrDeeperResponse,
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingResponse,
+        should_edit::ShouldEditCodeSymbolResponse,
     },
     editor::apply::EditorApplyResponse,
     file::important::FileImportantResponse,
@@ -141,9 +143,21 @@ pub enum ToolOutput {
     KeywordSearch(CodeSymbolImportantResponse),
     // Inlay hints response
     InlayHints(InlayHintsResponse),
+    // code symbol new location
+    CodeSymbolNewLocation(CodeSymbolNewLocationResponse),
+    // should edit the code
+    ShouldEditCode(ShouldEditCodeSymbolResponse),
 }
 
 impl ToolOutput {
+    pub fn should_edit_code(response: ShouldEditCodeSymbolResponse) -> Self {
+        ToolOutput::ShouldEditCode(response)
+    }
+
+    pub fn code_symbol_new_location(response: CodeSymbolNewLocationResponse) -> Self {
+        ToolOutput::CodeSymbolNewLocation(response)
+    }
+
     pub fn inlay_hints(response: InlayHintsResponse) -> Self {
         ToolOutput::InlayHints(response)
     }
@@ -534,6 +548,20 @@ impl ToolOutput {
     pub fn get_inlay_hints_response(self) -> Option<InlayHintsResponse> {
         match self {
             ToolOutput::InlayHints(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_code_symbol_new_location(self) -> Option<CodeSymbolNewLocationResponse> {
+        match self {
+            ToolOutput::CodeSymbolNewLocation(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn should_edit_code_symbol_full(self) -> Option<ShouldEditCodeSymbolResponse> {
+        match self {
+            ToolOutput::ShouldEditCode(response) => Some(response),
             _ => None,
         }
     }

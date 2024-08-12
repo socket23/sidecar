@@ -3,40 +3,62 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+use crate::{
+    agentic::{
+        symbol::{
+            identifier::{LLMProperties, SymbolIdentifier},
+            ui_event::UIEventWithID,
+        },
+        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    },
+    chunking::text_document::Range,
 };
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct ApplyOutlineEditsToRangeRequest {
     user_instruction: String,
+    symbol_identifier: SymbolIdentifier,
+    edited_file: String,
     code_in_selection: String,
     code_changes_outline: String,
     root_request_id: String,
+    outline_range: Range,
     llm_properties: LLMProperties,
+    edit_request_id: String,
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl ApplyOutlineEditsToRangeRequest {
     pub fn new(
         user_instruction: String,
+        symbol_identifier: SymbolIdentifier,
+        edited_file: String,
         code_in_selection: String,
         code_changes_outline: String,
         root_request_id: String,
+        outline_range: Range,
         llm_properties: LLMProperties,
+        edit_request_id: String,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             user_instruction,
+            symbol_identifier,
+            edited_file,
             code_in_selection,
             code_changes_outline,
             root_request_id,
+            outline_range,
             llm_properties,
+            edit_request_id,
+            ui_sender,
         }
     }
 }
@@ -72,13 +94,19 @@ impl ApplyOutlineEditsToRangeResponse {
 pub struct ApplyOutlineEditsToRange {
     llm_client: Arc<LLMBroker>,
     fail_over_llm: LLMProperties,
+    stream_apply: bool,
 }
 
 impl ApplyOutlineEditsToRange {
-    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+    pub fn new(
+        llm_client: Arc<LLMBroker>,
+        fail_over_llm: LLMProperties,
+        stream_apply: bool,
+    ) -> Self {
         Self {
             llm_client,
             fail_over_llm,
+            stream_apply,
         }
     }
 
@@ -151,8 +179,13 @@ def subtract(a, b, logger):
 impl Tool for ApplyOutlineEditsToRange {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.apply_outline_edits_to_range()?;
+        let ui_sender = context.ui_sender.clone();
+        let symbol_identifier = context.symbol_identifier.clone();
+        let edited_range = context.outline_range.clone();
+        let edit_request_id = context.edit_request_id.to_owned();
         let root_request_id = context.root_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
+        let fs_file_path = context.edited_file.to_owned();
         let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
         let llm_request = LLMClientCompletionRequest::new(
@@ -162,8 +195,12 @@ impl Tool for ApplyOutlineEditsToRange {
             None,
         );
         let mut retries = 0;
+        // if we are stream applying the changes, we get a single chance over here
+        // otherwise we can take our time and give multiple tries over here
+        let retries_limit = if self.stream_apply { 1 } else { 4 };
         loop {
-            if retries >= 4 {
+            if retries >= retries_limit {
+                println!("apply_outline_edits_to_range::retries_exhausted::retries({})::retries_limit({})", retries, retries_limit);
                 return Err(ToolError::RetriesExhausted);
             }
             let (llm, api_key, provider) = if retries % 2 == 0 {
@@ -180,10 +217,9 @@ impl Tool for ApplyOutlineEditsToRange {
                 )
             };
             let cloned_message = llm_request.clone().set_llm(llm);
-            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-            let response = self
-                .llm_client
-                .stream_completion(
+            let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+            let mut stream_future = Box::pin(
+                self.llm_client.stream_completion(
                     api_key,
                     cloned_message,
                     provider,
@@ -193,14 +229,63 @@ impl Tool for ApplyOutlineEditsToRange {
                             "apply_outline_edits_to_range".to_owned(),
                         ),
                         ("root_id".to_owned(), root_request_id.to_owned()),
+                        ("retries".to_owned(), retries.to_string()),
                     ]
                     .into_iter()
                     .collect(),
                     sender,
-                )
-                .await;
-            match response {
-                Ok(response) => {
+                ),
+            );
+
+            let stream_result;
+
+            // send over a start event over here
+            let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
+                root_request_id.to_owned(),
+                symbol_identifier.clone(),
+                edit_request_id.to_owned(),
+                edited_range.clone(),
+                fs_file_path.to_owned(),
+            ));
+
+            loop {
+                tokio::select! {
+                    stream_msg = receiver.recv() => {
+                        match stream_msg {
+                            Some(msg) => {
+                                let delta = msg.delta();
+                                if let Some(delta) = delta {
+                                    // we want to send over the delta over here
+                                    let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                                        root_request_id.to_owned(),
+                                        symbol_identifier.clone(),
+                                        delta.to_owned(),
+                                        edit_request_id.to_owned(),
+                                        edited_range.clone(),
+                                        fs_file_path.to_owned(),
+                                    ));
+                                }
+                            }
+                            None => {
+                                // we still need to wait for the stream future to complete
+                            }, // Channel closed
+                        }
+                    }
+                    result = &mut stream_future => {
+                        let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
+                            root_request_id.to_owned(),
+                            symbol_identifier.clone(),
+                            edit_request_id.to_owned(),
+                            edited_range.clone(),
+                            fs_file_path.to_owned(),
+                        ));
+                        stream_result = Some(result);
+                        break;
+                    }
+                }
+            }
+            match stream_result {
+                Some(Ok(response)) => {
                     if let Ok(parsed_response) =
                         ApplyOutlineEditsToRangeResponse::parse_response(&response)
                     {
@@ -210,7 +295,7 @@ impl Tool for ApplyOutlineEditsToRange {
                         continue;
                     }
                 }
-                Err(_e) => {
+                _ => {
                     retries = retries + 1;
                     continue;
                 }

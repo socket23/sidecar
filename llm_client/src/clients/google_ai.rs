@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -29,7 +31,7 @@ impl GoogleAIStdioClient {
     // we cannot use the streaming endpoint yet since the data returned is not
     // a new line json which you would expect from a data stream
     pub fn get_api_endpoint(&self, model: &str, api_key: &str) -> String {
-        format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}").to_owned()
+        format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={api_key}").to_owned()
     }
 
     fn model(&self, model: &LLMType) -> Option<String> {
@@ -207,7 +209,7 @@ impl LLMClient for GoogleAIStdioClient {
         &self,
         provider_api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
-        _sender: UnboundedSender<LLMClientCompletionResponse>,
+        sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
         let model = self.model(request.model());
         if model.is_none() {
@@ -240,10 +242,6 @@ impl LLMClient for GoogleAIStdioClient {
                 ),
             ],
         };
-        // println!(
-        //     "{}",
-        //     serde_json::to_string(&request).expect("to always work")
-        // );
         let _token_count_request = GeminiProTokenCountRequestBody {
             // system_instructions: system_message,
             contents: messages,
@@ -255,44 +253,35 @@ impl LLMClient for GoogleAIStdioClient {
         }
         let api_key = api_key.expect("to be present");
 
-        // let count_tokens = self
-        //     .client
-        //     .post(self.count_tokens_endpoint(&model, &api_key))
-        //     .header("Content-Type", "application/json")
-        //     .json(&token_count_request)
-        //     .send()
-        //     .await?;
-        // let count_tokens_result = count_tokens
-        //     .bytes()
-        //     .await
-        //     .map(|bytes| String::from_utf8(bytes.to_vec()));
-        // println!("Gemini pro tokens: {:?}", count_tokens_result);
         // now we need to send a request to the gemini pro api here
-        let mut response = self
+        let response = self
             .client
             .post(self.get_api_endpoint(&model, &api_key))
             .header("Content-Type", "application/json")
             .json(&request)
             .send()
-            .await?
-            .json::<GeminiProResponse>()
-            .await
-            .map_err(|e| LLMClientError::ReqwestError(e))?;
-        if response.candidates.is_empty() {
-            Err(LLMClientError::FailedToGetResponse)
-        } else {
-            let mut first_candidate = response.candidates.remove(0).content.parts;
-            if first_candidate.is_empty() {
-                Err(LLMClientError::FailedToGetResponse)
-            } else {
-                let response = first_candidate
-                    .remove(0)
-                    .remove("text")
-                    .ok_or(LLMClientError::FailedToGetResponse);
-                // println!("{:?}", &response);
-                response
+            .await?;
+        if !response.status().is_success() {
+            return Err(LLMClientError::FailedToGetResponse);
+        }
+
+        let mut buffered_string = "".to_owned();
+        let mut response_stream = response.bytes_stream().eventsource();
+        while let Some(event) = response_stream.next().await {
+            if let Ok(event) = event {
+                let parsed_event =
+                    serde_json::from_slice::<GeminiProResponse>(event.data.as_bytes())?;
+                if let Some(text_part) = parsed_event.candidates[0].content.parts[0].get("text") {
+                    buffered_string = buffered_string + text_part;
+                    sender.send(LLMClientCompletionResponse::new(
+                        buffered_string.clone(),
+                        Some(text_part.to_owned()),
+                        model.to_owned(),
+                    ))?;
+                }
             }
         }
+        Ok(buffered_string)
     }
 
     async fn completion(

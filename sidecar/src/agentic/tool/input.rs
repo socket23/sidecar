@@ -16,6 +16,7 @@ use super::{
             CodeSymbolToAskQuestionsRequest, CodeSymbolUtilityRequest,
         },
         initial_request_follow::CodeSymbolFollowInitialRequest,
+        new_location::CodeSymbolNewLocationRequest,
         new_sub_symbol::NewSubSymbolRequiredRequest,
         planning_before_code_edit::PlanningBeforeCodeEditRequest,
         probe::ProbeEnoughOrDeeperRequest,
@@ -23,6 +24,7 @@ use super::{
         probe_try_hard_answer::ProbeTryHardAnswerSymbolRequest,
         repo_map_search::RepoMapSearchQuery,
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingRequest,
+        should_edit::ShouldEditCodeSymbolRequest,
     },
     editor::apply::EditorApplyRequest,
     errors::ToolError,
@@ -113,6 +115,9 @@ pub enum ToolInput {
     KeywordSearch(KeywordSearchQuery),
     // inlay hints from the lsp/editor
     InlayHints(InlayHintsRequest),
+    CodeSymbolNewLocation(CodeSymbolNewLocationRequest),
+    // should edit the code symbol
+    ShouldEditCode(ShouldEditCodeSymbolRequest),
 }
 
 impl ToolInput {
@@ -169,6 +174,24 @@ impl ToolInput {
             ToolInput::FilterEditOperation(_) => ToolType::FilterEditOperation,
             ToolInput::KeywordSearch(_) => ToolType::KeywordSearch,
             ToolInput::InlayHints(_) => ToolType::InLayHints,
+            ToolInput::CodeSymbolNewLocation(_) => ToolType::CodeSymbolNewLocation,
+            ToolInput::ShouldEditCode(_) => ToolType::ShouldEditCode,
+        }
+    }
+
+    pub fn should_edit_code(self) -> Result<ShouldEditCodeSymbolRequest, ToolError> {
+        if let ToolInput::ShouldEditCode(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ShouldEditCode))
+        }
+    }
+
+    pub fn code_symbol_new_location(self) -> Result<CodeSymbolNewLocationRequest, ToolError> {
+        if let ToolInput::CodeSymbolNewLocation(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::CodeSymbolNewLocation))
         }
     }
 

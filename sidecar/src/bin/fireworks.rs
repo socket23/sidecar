@@ -9,119 +9,211 @@ use sidecar::agentic::symbol::identifier::LLMProperties;
 
 #[tokio::main]
 async fn main() {
-    let system_message = r#"You are an expert senior software engineer whose is going to check if we should proceed with making changes ONLY to ProbeStopRequest given the reason for edit picked by another junior engineer.
-
-- You are working with a junior engineer who is a fast coder but might repeat work they have already done.
-- The edit is part of a bigger plan to accomplish the goal of the user which is provided in <user_instruction>
-- We are right now focussed on ProbeStopRequest and can only make changes to ProbeStopRequest
-- Your job is to look at the code present in <code_which_we_can_edit> section and the reason for editing which is given in <reason_to_edit> section and reply with true or false in xml format (which we will show you) and your thinking
-- Before replying you should think for a bit less than 2 sentences and then decide if you want to edit or not and put `true` or `false` in the <should_edit> section
-- You have to be extremely careful when deciding if we can proceed with the edit and take the following points into consideration:
-- - We are right now working with ProbeStopRequest so if the edit instruction does not require changes to ProbeStopRequest we SHOULD REJECT it
-- - If the <reason_to_edit> is talking about creating or editing part of the code which DOES NOT belong to ProbeStopRequest we SHOULD NOT go forward with the edit
-- - If the changes to ProbeStopRequest are already done to satisfy the task then we should reject it
-- - If the instruction is to introduce a new structure or functionality which does not belong to ProbeStopRequest you should NOT ALLOW this edit to happen
-- - Just be careful since you are the senior engineer and you have to provide feedback to the junior engineer and let them know the reason for your verdict which will be true or false
-- - Think step by step first and put your thinking in <thinking> section
-
-Now to show you the reply format:
-<reply>
-<thinking>
-{your thoughts here if the edit reason is correct and we can proceed with the editing ProbeStopRequest}
-</thinking>
-<should_edit>
-{true or false}
-</should_edit>
-</reply>
-
-The input will be in the following format:
-<user_instruction>
-{the goal of the user}
-</user_instruction>
+    let system_message = r#"You are a powerful code filtering engine. You must order the code snippets in the order in you want to edit them, and only those code snippets which should be edited.
+- The code snippets will be provided to you in <code_snippet> section which will also have an id in the <id> section.
+- You should select a code section for editing if and only if you want to make changes to that section.
+- You are also given a list of extra symbols in <extra_symbols> which will be provided to you while making the changes, use this to be more sure about your reason for selection.
+- Adding new functionality is a very valid reason to select a sub-section for editing.
+- Editing or deleting some code is also a very valid reason for selecting a code section for editing.
+- First think step by step on how you want to go about selecting the code snippets which are relevant to the user query in max 50 words.
+- If you want to edit the code section with id 0 then you must output in the following format:
+<code_to_edit_list>
+<code_to_edit>
+<id>
+0
+</id>
 <reason_to_edit>
-{the reason for selecting this section of code for editing}
+{your reason for editing}
 </reason_to_edit>
-<code_symbol_we_can_edit>
-{the code symbol which we can edit right now, anything beyond this can not be edited}
-</code_symbol_we_can_edit>
-<code_which_can_be_edited>
-{code which we want to edit}
-</code_which_can_be_edited>
+</code_to_edit>
+</code_to_edit_list>
 
-We are also going to show you an example:
-<user_instruction>
-I want to support other kind of mathematical operations
-</user_instruction>
+- If you want to edit more code sections follow the similar pattern as described above and as an example again:
+<code_to_edit_list>
+<code_to_edit>
+<id>
+{id of the code snippet you are interested in}
+</id>
 <reason_to_edit>
-we should look at how we accept input for add to figure out how to implement subtract
+{your reason for editing}
 </reason_to_edit>
-<code_symbol_we_can_edit>
-add
-</code_symbol_we_can_edit>
-<code_which_can_be_edited>
-```py
-FILEPATH: maths.py
-def add(a: int, b: int) -> int:
-    return a + b
-```
-</code_which_can_be_edited>
+</code_to_edit>
+{... more code sections here which you might want to select}
+</code_to_edit_list>
 
-Your reply should be:
-<reply>
-<thinking>
-the reason to edit talks about implementing subtract but we can only edit add, so we should not edit shit section of the code
-</thinking>
-<should_edit>
-false
-</should_edit>
-</reply>
+- The <id> section should ONLY contain an id from the listed code snippets.
 
-Another example:
-<user_instruction>
-support postgres db similar to how we use sqlite
-</user_instruction>
-<reason_to_edit>
-we need to define a new request object for postgres similar to how `SqliteRequest` is created. This will be used to handle postgres db
-</reason_to_edit>
-<code_symbol_we_can_edit>
-SqliteRequest
-</code_symbol_we_can_edit>
-<code_which_can_be_edited>
-```py
-FILEPATH: sqlite.py
-class SqliteRequest:
-    id
-    query
-```
-</code_which_can_be_edited>
 
-Your reply should be:
-<reply>
-<thinking>
-the reason to edit is to define a new request object but since we can only edit `SqliteRequest` so this edit is NOT relevant and is more of a request to understand how SqliteRequest works
-</thinking>
-<should_edit>
-false
-</should_edit>
-</reply>"#;
-    let user_message = r#"<user_instruction>
-Add support for a new stop_code_editing endpoint and implement it similar to probing stop
-</user_instruction>
-<reason_to_edit>
-We need to define a new request structure for the `stop_code_editing` endpoint similar to `ProbeStopRequest`. This will be used to handle the new endpoint.
-</reason_to_edit>
-<code_symbol_we_can_edit>
-ProbeStopRequest
-</code_symbol_we_can_edit>
-<code_which_can_be_edited>
+Here is an example contained in the <example> section.
+
+<example>
+<user_query>
+We want to add a new method to add a new shipment made by the company.
+</user_query>
+
+<rerank_list>
+<rerank_entry>
+<id>
+0
+</id>
+<content>
+Code Location: company.rs
 ```rust
-FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProbeStopRequest {
-    request_id: String,
+struct Company {
+    name: String,
+    shipments: usize,
+    size: usize,
 }
 ```
-</code_which_can_be_edited>"#;
+</content>
+</rerank_entry>
+<rerank_entry>
+<id>
+1
+</id>
+<content>
+Code Location: company_metadata.rs
+```rust
+impl Compnay {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+</content>
+</rerank_entry>
+<rerank_entry>
+<id>
+2
+</id>
+<content>
+Code Location: company_shipments.rs
+```rust
+impl Company {
+    fn get_snipments(&self) -> usize {
+        self.shipments
+    }
+}
+```
+</content>
+</rerank_entry>
+</rerank_list>
+
+Your reply should be:
+
+<thinking>
+The company_shipment implementation block handles everything related to the shipments of the company, so we want to edit that.
+</thinking>
+
+<code_to_edit_list>
+<code_to_edit>
+<id>
+2
+</id>
+<reason_to_edit>
+The company_shipment.rs implementation block of Company contains all the relevant code for the shipment tracking of the Company, so that's what we want to edit.
+</reason_to_edit>
+<id>
+</code_to_edit>
+</code_to_edit_list>
+</example>
+
+This example is for reference. You must strictly follow the format show in the example when replying.
+Please provide the list of symbols which you want to edit."#;
+    let user_message = r#"<user_query>
+Add a new method to UIEventWithID for creating a Document event
+</user_query>
+
+<extra_symbols>
+<symbol>
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs
+SymbolEventDocumentRequest
+</symbol>
+</extra_symbols>
+
+<rerank_entry>
+<id>
+0
+</id>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs:12-16
+</file_path>
+<content>
+```
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs
+#[derive(Debug, serde::Serialize)]
+pub struct UIEventWithID {
+    request_id: String,
+    event: UIEvent,
+}
+```
+</content>
+</rerank_entry>
+<rerank_entry>
+<id>
+1
+</id>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs:19-190
+</file_path>
+<content>
+```
+FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs
+impl UIEventWithID {
+    /// Repo map search start
+    /// Repo map generation end
+    /// Sends the initial search event to the editor
+    pub fn start_long_context_search(request_id: String) -> Self {
+    pub fn finish_long_context_search(request_id: String) -> Self {
+    pub fn finish_edit_request(request_id: String) -> Self {
+    pub fn from_tool_event(request_id: String, input: ToolInput) -> Self {
+    pub fn repo_map_gen_start(request_id: String) -> Self {
+    pub fn repo_map_gen_end(request_id: String) -> Self {
+    pub fn from_symbol_event(request_id: String, input: SymbolEventRequest) -> Self {
+    pub fn for_codebase_event(request_id: String, input: SymbolInputEvent) -> Self {
+    pub fn symbol_location(request_id: String, symbol_location: SymbolLocation) -> Self {
+    pub fn sub_symbol_step(
+        request_id: String,
+        sub_symbol_request: SymbolEventSubStepRequest,
+    ) -> Self {
+    pub fn probe_answer_event(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        probe_answer: String,
+    ) -> Self {
+    pub fn probing_started_event(request_id: String) -> Self {
+    pub fn probing_finished_event(request_id: String, response: String) -> Self {
+    pub fn range_selection_for_edit(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
+    pub fn edited_code(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+        edited_code: String,
+    ) -> Self {
+    pub fn code_correctness_action(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        range: Range,
+        fs_file_path: String,
+        tool_use_thinking: String,
+    ) -> Self {
+    pub fn initial_search_symbol_event(
+        request_id: String,
+        symbols: Vec<InitialSearchSymbolInformation>,
+    ) -> Self {
+}
+```
+</content>
+</rerank_entry>"#;
     // let gemini_llm_prperties = LLMProperties::new(
     //     LLMType::GeminiPro,
     //     LLMProvider::GoogleAIStudio,
@@ -136,10 +228,42 @@ pub struct ProbeStopRequest {
             "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
         )),
     );
+    let few_shot_user_instruction = r#"<code_in_selection>
+```py
+def add_values(a, b):
+    return a + b
+
+def subtract(a, b):
+    return a - b
+```
+</code_in_selection>
+
+<code_changes_outline>
+def add_values(a, b, logger):
+    logger.info(a, b)
+    # rest of the code
+
+def subtract(a, b, logger):
+    logger.info(a, b)
+    # rest of the code
+</code_changes_outline>"#;
+    let few_shot_output = r#"<reply>
+```py
+def add_values(a, b, logger):
+    logger.info(a, b)
+    return a + b
+
+def subtract(a, b, logger):
+    logger.info(a, b)
+    return a - b
+```
+</reply>"#;
     let llm_request = LLMClientCompletionRequest::new(
         fireworks_ai.llm().clone(),
         vec![
             LLMClientMessage::system(system_message.to_owned()),
+            // LLMClientMessage::user(few_shot_user_instruction.to_owned()),
+            // LLMClientMessage::assistant(few_shot_output.to_owned()),
             LLMClientMessage::user(user_message.to_owned()),
         ],
         0.0,

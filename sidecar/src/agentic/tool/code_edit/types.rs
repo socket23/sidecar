@@ -38,6 +38,7 @@ pub struct CodeEdit {
     // If this edit is just generating an outline of the changes which need to happen
     // in the symbol and not the complete change which needs to happen
     is_outline_edit: bool,
+    new_symbols: Option<String>,
 }
 
 impl CodeEdit {
@@ -57,6 +58,7 @@ impl CodeEdit {
         is_new_symbol_request: Option<String>,
         root_request_id: String,
         is_outline_edit: bool,
+        new_symbols: Option<String>,
     ) -> Self {
         Self {
             code_above,
@@ -74,6 +76,7 @@ impl CodeEdit {
             is_new_symbol_request,
             root_request_id,
             is_outline_edit,
+            new_symbols,
         }
     }
 }
@@ -205,6 +208,11 @@ impl CodeEdit {
     /// we want to perform
     pub fn is_outline_edit(&self) -> bool {
         self.is_outline_edit
+    }
+
+    /// Contains the xml string which has symbols which will be edited
+    pub fn symbols_which_will_be_added(&self) -> Option<String> {
+        self.new_symbols.clone()
     }
 }
 
@@ -477,6 +485,6 @@ pub enum RequestEvents {
 </reply>
         "#
         .to_owned();
-        let edit_code = CodeEditingTool::edit_code(&response, false, "").expect("to work");
+        let _ = CodeEditingTool::edit_code(&response, false, "").expect("to work");
     }
 }

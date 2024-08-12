@@ -425,7 +425,7 @@ impl Tool for ReRankingSnippetsForCodeEditingContext {
             if retries >= 4 {
                 return Err(ToolError::RetriesExhausted);
             }
-            let (llm, api_key, provider) = if retries % 2 == 1 {
+            let (llm, api_key, provider) = if retries % 2 == 0 {
                 (
                     llm_properties.llm().clone(),
                     llm_properties.api_key().clone(),

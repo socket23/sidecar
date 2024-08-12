@@ -68,11 +68,35 @@ async fn main() {
 
     // our outline node fetching is going wonky because of the decorators
     // present on top of classes in rust
-    let range = Range::new(Position::new(27, 0, 0), Position::new(40, 1, 0));
+    let _range = Range::new(Position::new(27, 0, 0), Position::new(40, 1, 0));
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/provider.rs";
-    let request_id = "something";
-    let result = tool_box
-        .get_outline_node_for_range(&range, &fs_file_path, request_id)
+    let file_open_response = tool_box
+        .file_open(fs_file_path.to_owned(), "")
+        .await
+        .expect("to work");
+    let _ = tool_box
+        .force_add_document(
+            fs_file_path,
+            file_open_response.contents_ref(),
+            file_open_response.language(),
+        )
         .await;
-    assert!(result.is_ok());
+    let outline_nodes = tool_box
+        .get_outline_nodes_grouped(fs_file_path)
+        .await
+        .expect("to be present");
+    outline_nodes
+        .into_iter()
+        .enumerate()
+        .for_each(|(idx, outline_node)| {
+            let prompt_data = outline_node.get_outline_for_prompt();
+            println!("<idx {}>", idx);
+            println!("{}", prompt_data);
+            println!("</idx>");
+        });
+    // let request_id = "something";
+    // let result = tool_box
+    //     .get_outline_node_for_range(&range, &fs_file_path, request_id)
+    //     .await;
+    // assert!(result.is_ok());
 }

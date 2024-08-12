@@ -36,13 +36,15 @@ Follow the user's requirements carefully and to the letter.
 - The code present above the section you have to edit will be given in <code_above> section.
 - The code present below the section you have to edit will be given in <code_below> section.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
-- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
 - You must always answer in {language} code.
+- If you do not have to make any changes to the code, then leave it intact, no need to leave comments explaining that you do not have to make changes. Only use comments or leave comments when you are going to make changes, otherwise do not do it
 - Your reply should be contained in the <reply> tags.
-- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.
+- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section should not be more than 3 lines and the edited code is present in <code_edited> section.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - You are not allowed to do edits which fall in the following bucket:
 - - Renaming: We do not allow renaming since the user has explicitly asked us to never change the name of any of the class, enum, type, method or function.
@@ -155,13 +157,14 @@ Follow the user's requirements carefully and to the letter.
 <code_below>
 </code_below>
 We are going to insert the code in the section <code_to_add> of the input, when you write the code for is_grok method we will replace the <code_to_add> section with what you generate.
-- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
 - You must always answer in {language} code.
 - Your reply should be contained in the <reply> tags.
-- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the added code will be present in <code_to_add> section.
+- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section should not be more than 3 lines and the code to add should be written code in <code_to_add> section.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - Make sure to add the new method in <code_to_add> section without leaving any comments or placeholder values.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
@@ -312,7 +315,8 @@ Follow the user's requirements carefully and to the letter.
 - The code present above the section you have to edit will be given in <code_above> section.
 - The code present below the section you have to edit will be given in <code_below> section.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
-- User the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
+- There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
 - The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
@@ -437,6 +441,16 @@ Notice how we rewrote the whole section of the code and only the portion which w
         );
         let in_range = self.selection_to_edit(context.code_to_edit());
         let mut user_message = "".to_owned();
+        let extra_symbols_to_be_created = context.symbols_which_will_be_added();
+        if let Some(extra_symbols_to_be_created) = extra_symbols_to_be_created {
+            user_message = user_message
+                + &format!(
+                    r#"<extra_symbols_will_be_created>
+{extra_symbols_to_be_created}
+</extra_symbols_will_be_created>"#
+                )
+                + "\n";
+        }
         user_message = user_message + &extra_data + "\n";
         if let Some(above) = above {
             user_message = user_message + &above + "\n";
@@ -463,6 +477,16 @@ Notice how we rewrote the whole section of the code and only the portion which w
         let above = self.above_selection(context.above_context());
         // let below = self.below_selection(context.below_context());
         let mut user_message = "".to_owned();
+        let extra_symbols_to_be_created = context.symbols_which_will_be_added();
+        if let Some(extra_symbols_to_be_created) = extra_symbols_to_be_created {
+            user_message = user_message
+                + &format!(
+                    r#"<extra_symbols_will_be_created>
+{extra_symbols_to_be_created}
+</extra_symbols_will_be_created>"#
+                )
+                + "\n";
+        }
         user_message = user_message + &extra_data + "\n";
         if let Some(above) = above {
             user_message = user_message + &above + "\n";
@@ -656,11 +680,17 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
         let language = context.language();
         let fs_file_path = context.fs_file_path();
         let system_message = if context.is_outline_edit() {
-            self.system_message_for_code_editing_outline(
-                language,
-                fs_file_path,
-                context.symbol_to_edit_name(),
-            )
+            // new sub-symbol implies we are adding code, the system prompt
+            // looks a bit different for that case
+            if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
+                self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
+            } else {
+                self.system_message_for_code_editing_outline(
+                    language,
+                    fs_file_path,
+                    context.symbol_to_edit_name(),
+                )
+            }
         } else {
             if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
                 self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)

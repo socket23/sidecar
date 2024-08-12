@@ -131,14 +131,7 @@ impl BigSearchBroker {
 impl Tool for BigSearchBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let start = Instant::now();
-        let request = match input {
-            ToolInput::BigSearch(req) => req,
-            _ => {
-                return Err(ToolError::BigSearchError(
-                    "Expected BigSearch input".to_string(),
-                ))
-            }
-        };
+        let request = input.big_search_query()?;
 
         let root_directory = match request.root_directory() {
             Some(dir) => dir,

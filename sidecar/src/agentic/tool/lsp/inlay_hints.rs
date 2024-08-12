@@ -58,6 +58,10 @@ impl InlayHintsResponse {
     pub fn parts(self) -> Vec<InlayHintsResponseParts> {
         self.parts
     }
+
+    pub fn new() -> Self {
+        Self { parts: vec![] }
+    }
 }
 
 pub struct InlayHints {

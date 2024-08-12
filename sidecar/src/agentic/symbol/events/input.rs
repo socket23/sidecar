@@ -203,7 +203,9 @@ impl SymbolInputEvent {
                         if self.big_search() {
                             return Some(ToolInput::BigSearch(BigSearchRequest::new(
                                 self.user_query.to_string(),
-                                LLMType::GeminiProFlash, // using Flash for everything
+                                // override to the gemini pro flash model over here
+                                // for big search
+                                LLMType::GeminiProFlash,
                                 LLMProvider::GoogleAIStudio,
                                 LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
                                     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),

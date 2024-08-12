@@ -192,6 +192,69 @@ impl UIEventWithID {
             })),
         }
     }
+
+    // start the edit streaming
+    pub fn start_edit_streaming(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        edit_request_id: String,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(
+                SymbolEventSubStepRequest::edited_code_stream_start(
+                    symbol_identifier,
+                    edit_request_id,
+                    range,
+                    fs_file_path,
+                ),
+            ),
+        }
+    }
+
+    // end the edit streaming
+    pub fn end_edit_streaming(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        edit_request_id: String,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::edited_code_stream_end(
+                symbol_identifier,
+                edit_request_id,
+                range,
+                fs_file_path,
+            )),
+        }
+    }
+
+    // send delta from the edit stream
+    pub fn delta_edit_streaming(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        delta: String,
+        edit_request_id: String,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(
+                SymbolEventSubStepRequest::edited_code_stream_delta(
+                    symbol_identifier,
+                    edit_request_id,
+                    range,
+                    fs_file_path,
+                    delta,
+                ),
+            ),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -291,6 +354,21 @@ impl CodeCorrectionToolSelection {
     }
 }
 
+#[derive(Debug, serde::Serialize)]
+pub enum EditedCodeStreamingEvent {
+    Start,
+    Delta(String),
+    End,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct EditedCodeStreamingRequest {
+    edit_request_id: String,
+    range: Range,
+    fs_file_path: String,
+    event: EditedCodeStreamingEvent,
+}
+
 /// We have range selection and then the edited code, we should also show the
 /// events which the AI is using for the tool correction and whats it is planning
 /// on doing for that
@@ -301,6 +379,7 @@ pub enum SymbolEventEditRequest {
     InsertCode(InsertCodeForEditRequest),
     EditCode(EditedCodeForEditRequest),
     CodeCorrectionTool(CodeCorrectionToolSelection),
+    EditCodeStreaming(EditedCodeStreamingRequest),
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -370,6 +449,64 @@ impl SymbolEventSubStepRequest {
             symbol_identifier,
             event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCode(
                 EditedCodeForEditRequest::new(range, fs_file_path, edited_code),
+            )),
+        }
+    }
+
+    pub fn edited_code_stream_start(
+        symbol_identifier: SymbolIdentifier,
+        edit_request_id: String,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCodeStreaming(
+                EditedCodeStreamingRequest {
+                    edit_request_id,
+                    range,
+                    fs_file_path,
+                    event: EditedCodeStreamingEvent::Start,
+                },
+            )),
+        }
+    }
+
+    pub fn edited_code_stream_end(
+        symbol_identifier: SymbolIdentifier,
+        edit_request_id: String,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCodeStreaming(
+                EditedCodeStreamingRequest {
+                    edit_request_id,
+                    range,
+                    fs_file_path,
+                    event: EditedCodeStreamingEvent::End,
+                },
+            )),
+        }
+    }
+
+    pub fn edited_code_stream_delta(
+        symbol_identifier: SymbolIdentifier,
+        edit_request_id: String,
+        range: Range,
+        fs_file_path: String,
+        delta: String,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCodeStreaming(
+                EditedCodeStreamingRequest {
+                    edit_request_id,
+                    range,
+                    fs_file_path,
+                    event: EditedCodeStreamingEvent::Delta(delta),
+                },
             )),
         }
     }

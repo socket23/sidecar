@@ -19,10 +19,12 @@ use super::{
         find_symbols_to_edit_in_context::FindSymbolsToEditInContext,
         followup::ClassSymbolFollowupBroker, important::CodeSymbolImportantBroker,
         initial_request_follow::CodeSymbolFollowInitialRequestBroker,
-        new_sub_symbol::NewSubSymbolRequired, planning_before_code_edit::PlanningBeforeCodeEdit,
-        probe::ProbeEnoughOrDeeper, probe_question_for_symbol::ProbeQuestionForSymbol,
+        new_location::CodeSymbolNewLocation, new_sub_symbol::NewSubSymbolRequired,
+        planning_before_code_edit::PlanningBeforeCodeEdit, probe::ProbeEnoughOrDeeper,
+        probe_question_for_symbol::ProbeQuestionForSymbol,
         probe_try_hard_answer::ProbeTryHardAnswer, repo_map_search::RepoMapSearchBroker,
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingContext,
+        should_edit::ShouldEditCodeSymbol,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -326,6 +328,9 @@ impl ToolBroker {
             Box::new(ApplyOutlineEditsToRange::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
+                // if we are not applying directly, then we are going to stream
+                // the edits to the frontend
+                !tool_broker_config.apply_edits_directly,
             )),
         );
         tools.insert(
@@ -336,6 +341,20 @@ impl ToolBroker {
             )),
         );
         tools.insert(ToolType::InLayHints, Box::new(InlayHints::new()));
+        tools.insert(
+            ToolType::CodeSymbolNewLocation,
+            Box::new(CodeSymbolNewLocation::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::ShouldEditCode,
+            Box::new(ShouldEditCodeSymbol::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

@@ -49,6 +49,6 @@ jobs:
         # Set your GCP project
         gcloud config set project $GCP_PROJECT_ID
         # Copy the built binary to the GCP bucket
-        gsutil cp sidecar.zip gs://sidecar-bin/linux/sidecar.zip
+        gsutil cp sidecar.zip gs://sidecar-bin/linux/sidecar_64.zip
         # Remove the service account key file
         rm gcp_sa_key.json

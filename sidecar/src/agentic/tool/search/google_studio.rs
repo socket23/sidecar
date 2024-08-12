@@ -7,15 +7,12 @@ use llm_client::{
 use serde_xml_rs::{from_str, to_string};
 use std::{sync::Arc, time::Instant};
 
-use crate::{
-    agent::search,
-    agentic::{
-        symbol::identifier::LLMProperties,
-        tool::search::{
-            agentic::{SearchPlanContext, SerdeError},
-            exp::File,
-            identify::IdentifyResponse,
-        },
+use crate::agentic::{
+    symbol::identifier::LLMProperties,
+    tool::search::{
+        agentic::{SearchPlanContext, SerdeError},
+        exp::File,
+        identify::IdentifyResponse,
     },
 };
 
@@ -117,11 +114,15 @@ report
             r#"<issue>
 {}
 </issue>
+<thoughts>
+{}
+</thoughts>
 <file_context>
 {}
 </file_context
         "#,
             context.user_query(),
+            context.thoughts(),
             file_context_string
         )
     }
@@ -211,7 +212,7 @@ Think step by step and write out your thoughts in the scratch_pad field."#
 </search_results>
 "#,
             context.user_query(),
-            context.file_paths_as_strings().join(", "),
+            File::serialise_files(context.files(), "\n"),
             serialized_results.join("\n")
         )
     }

@@ -267,7 +267,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                 "{}",
                 search_results
                     .iter()
-                    .map(|r| format!("{:?}", r))
+                    .map(|r| format!("{:?}\n", r))
                     .collect::<Vec<String>>()
                     .join("\n")
             );
@@ -278,7 +278,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                 "{}",
                 identify_results
                     .iter()
-                    .map(|r| format!("{:?}", r))
+                    .map(|r| format!("{:?}\n", r))
                     .collect::<Vec<String>>()
                     .join("\n")
             );

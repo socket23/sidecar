@@ -1,6 +1,6 @@
 use walkdir::WalkDir;
 
-use std::path::PathBuf;
+use std::{fs::read_to_string, path::PathBuf};
 
 use crate::{
     agentic::tool::search::exp::SearchToolType,
@@ -29,12 +29,12 @@ impl Repository {
 
     // todo(zi): file index would be useful here. Considered using tag_index's file_to_tags,
     // but this would mean we'd always ignore .md files, which could contain useful information
-    pub fn find_file(&self, target: &str) -> Option<String> {
+    pub fn find_file(&self, target: &str) -> Option<PathBuf> {
         WalkDir::new(&self.root)
             .into_iter()
             .filter_map(Result::ok)
             .find(|e| e.file_name().to_string_lossy() == target)
-            .map(|e| e.path().to_string_lossy().into_owned())
+            .map(|e| e.path().to_owned())
     }
 
     pub fn execute_search(&self, search_query: &SearchQuery) -> Vec<SearchResult> {
@@ -45,18 +45,65 @@ impl Repository {
             SearchToolType::File => {
                 println!("repository::execute_search::query::SearchToolType::File");
 
-                let file = self.find_file(&search_query.query);
-
-                println!(
-                    "repository::execute_search::query::SearchToolType::File::file: {:?}",
-                    file
+                let tags_in_file = self.tag_index.search_definitions_flattened(
+                    &search_query.query,
+                    false,
+                    SearchMode::ExactFileName,
                 );
 
-                vec![SearchResult::new(
-                    PathBuf::from(file.unwrap_or("".to_string())),
-                    &search_query.thinking,
-                    "",
-                )]
+                match tags_in_file.is_empty() {
+                    true => {
+                        println!("No tags for file: {}", search_query.query);
+
+                        let file = self.find_file(&search_query.query);
+
+                        println!(
+                            "repository::execute_search::query::SearchToolType::File::file: {:?}",
+                            file
+                        );
+
+                        if let Some(path) = file {
+                            println!(
+                                "repository::execute_search::query::SearchToolType::File::Some(path): {:?}",
+                                path
+                            );
+                            let contents = match read_to_string(&path) {
+                                Ok(content) => content,
+                                Err(error) => {
+                                    eprintln!("Error reading file: {}", error);
+                                    "".to_owned()
+                                }
+                            };
+
+                            vec![SearchResult::new(
+                                path,
+                                &search_query.thinking, // consider...
+                                &contents,
+                            )]
+                        } else {
+                            vec![SearchResult::new(
+                                PathBuf::from("".to_string()),
+                                &search_query.thinking,
+                                "",
+                            )]
+                        }
+                    }
+                    false => {
+                        println!("Tags found for file: {}", tags_in_file.len());
+                        let search_results = tags_in_file
+                            .iter()
+                            .map(|t| {
+                                SearchResult::new(
+                                    t.fname.to_owned(),
+                                    &search_query.thinking,
+                                    &t.name,
+                                )
+                            })
+                            .collect::<Vec<SearchResult>>();
+
+                        search_results
+                    }
+                }
             } // maybe give the thinking to TreeSearch...?
             SearchToolType::Keyword => {
                 println!("repository::execute_search::query::SearchToolType::Keyword");

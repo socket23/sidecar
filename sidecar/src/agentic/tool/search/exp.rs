@@ -12,7 +12,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    agentic::tool::code_symbol::important::CodeSymbolImportantResponse,
+    agentic::tool::code_symbol::important::{
+        CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+    },
     repomap::tag::{SearchMode, TagIndex},
     user_context::types::UserContextError,
 };
@@ -253,7 +255,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
         let mut count = 0;
-        while self.complete == false && count < 2 {
+        while self.complete == false && count < 3 {
             println!("===========");
             println!("run loop #{}", count);
             println!("===========");
@@ -312,7 +314,23 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             count += 1;
         }
 
-        todo!();
+        let symbols = self
+            .context()
+            .file_paths_as_strings()
+            .iter()
+            .map(|path| CodeSymbolWithThinking::from_path(path))
+            .collect();
+
+        let ordered_symbols = self
+            .context()
+            .file_paths_as_strings()
+            .iter()
+            .map(|path| CodeSymbolWithSteps::from_path(path))
+            .collect();
+
+        let response = CodeSymbolImportantResponse::new(symbols, ordered_symbols);
+
+        Ok(response)
     }
 
     // this generates search queries

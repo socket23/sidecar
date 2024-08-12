@@ -237,6 +237,9 @@ Instructions:
     * Analyze the Issue:
     * Review the reported issue to understand what functionality or bug fix is being requested.
 
+    * Analyze the scatch_pad:
+    * Review the observations acquired through the search. It may contain crucial information about the files within.
+
     * Analyze File Context:
     * Examine the provided file context to identify if the relevant code for the reported issue is present.
     * If the issue suggests that code should be implemented and doesn't yet exist in the code, consider the task completed if relevant code is found that would be modified to implement the new functionality.
@@ -289,9 +292,13 @@ false
 <file_context>
 {}
 </file_context
+<scatch_pad>
+{}
+</scratch_pad>
         "#,
             context.user_query(),
-            serialised_files
+            serialised_files,
+            context.scatch_pad(),
         )
     }
 

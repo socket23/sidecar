@@ -199,7 +199,9 @@ impl Tool for BigSearchBroker {
             google_studio_llm_config,
         );
 
-        let _ = system.run().await;
+        let results = system.run().await;
+
+        dbg!(results);
 
         todo!();
 

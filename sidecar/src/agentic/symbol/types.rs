@@ -148,6 +148,7 @@ impl SymbolEventRequest {
 
     pub fn initial_request(
         symbol: SymbolIdentifier,
+        original_user_query: String,
         request: String,
         // passing history to the symbols so we do not end up doing repeated work
         history: Vec<SymbolRequestHistoryItem>,
@@ -158,8 +159,8 @@ impl SymbolEventRequest {
         Self {
             symbol,
             event: SymbolEvent::InitialRequest(InitialRequestData::new(
+                original_user_query,
                 request,
-                None,
                 history,
                 tool_properties.get_full_symbol_request(),
                 symbols_edited_list,
@@ -1371,9 +1372,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.symbol_name().to_owned(),
                 Range::new(code_position.clone(), code_position),
                 self.fs_file_path().to_owned(),
-                vec![request_data
-                    .get_plan()
-                    .unwrap_or(request_data.get_original_question().to_owned())],
+                vec![request_data.get_plan()],
                 false,
                 true,
                 false,

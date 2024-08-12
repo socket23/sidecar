@@ -578,7 +578,7 @@ impl SymbolManager {
                                 symbol_identifier.clone(),
                                 SymbolEvent::InitialRequest(InitialRequestData::new(
                                     user_query.to_owned(),
-                                    Some(steps.join("\n")),
+                                    steps.join("\n"),
                                     // empty history when symbol manager sends the initial
                                     // request
                                     vec![],

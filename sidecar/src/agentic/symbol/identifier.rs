@@ -969,8 +969,7 @@ impl MechaCodeSymbolThinking {
                 llm_properties,
                 original_request.get_original_question(),
                 original_request
-                    .get_plan()
-                    .unwrap_or("not yet planned".to_owned()),
+                    .get_plan(),
                 request_id,
             )
             .await?;

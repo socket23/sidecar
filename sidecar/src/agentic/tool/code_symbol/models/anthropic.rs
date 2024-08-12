@@ -6296,4 +6296,40 @@ Establishes a connection to the MongoDB database.
         println!("{:?}", &parsed_reply);
         assert!(parsed_reply.is_ok());
     }
+
+    #[test]
+    fn test_parsing_code_symbol_important() {
+        let response = r#"<reply>
+<thinking>
+We need to add a new variant to SymbolEventSubStep enum and create corresponding structs and implementations.
+</thinking>
+<step_by_step>
+<step_list>
+<name>SymbolEventSubStep</name>
+<file_path>/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs</file_path>
+<step>Add a new Document variant to the SymbolEventSubStep enum</step>
+</step_list>
+<step_list>
+<name>SymbolEventDocumentRequest</name>
+<file_path>/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs</file_path>
+<new>true</new>
+<step>Create a new struct SymbolEventDocumentRequest similar to SymbolEventEditRequest</step>
+</step_list>
+<step_list>
+<name>DocumentationForSymbolRequest</name>
+<file_path>/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs</file_path>
+<new>true</new>
+<step>Create a new struct DocumentationForSymbolRequest to hold documentation details</step>
+</step_list>
+<step_list>
+<name>SymbolEventSubStepRequest</name>
+<file_path>/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs</file_path>
+<step>Add a new method to implement documentation functionality in SymbolEventSubStepRequest</step>
+</step_list>
+</step_by_step>
+</reply>"#;
+        let parsed_response = Reply::parse_response(response);
+        println!("{:?}", parsed_response);
+        assert!(parsed_response.is_ok());
+    }
 }

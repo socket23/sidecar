@@ -164,7 +164,7 @@ We are going to insert the code in the section <code_to_add> of the input, when 
 - Each code block starts with ```{language}.
 - You must always answer in {language} code.
 - Your reply should be contained in the <reply> tags.
-- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section should not be more than 3 lines and the edited code is present in <code_edited> section.
+- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section should not be more than 3 lines and the code to add should be written code in <code_to_add> section.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - Make sure to add the new method in <code_to_add> section without leaving any comments or placeholder values.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.

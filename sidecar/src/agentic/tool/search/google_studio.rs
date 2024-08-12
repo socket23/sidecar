@@ -122,7 +122,7 @@ report
 </file_context
         "#,
             context.user_query(),
-            context.thoughts(),
+            context.scatch_pad(),
             file_context_string
         )
     }
@@ -158,26 +158,28 @@ Examine the current file context provided in the <file_context> tag to understan
 
 4. Response format:
 <reply>
-<responses>
 <response>
+<item>
 <path>
 </path>
 <thinking>
 </thinking>
-</response>
-<response>
+</item>
+<item>
 <path>
 </path>
 <thinking>
 </thinking>
-</response>
-<response>
+</item>
+<item>
 <path>
 </path>
 <thinking>
 </thinking>
+</item>
+<scatch_pad>
+</scratch_pad>
 </response>
-</responses>
 </reply>
 
 Think step by step and write out your thoughts in the scratch_pad field."#
@@ -210,10 +212,14 @@ Think step by step and write out your thoughts in the scratch_pad field."#
 <search_results>
 {}
 </search_results>
+<scratch_pad>
+{}
+</scatch_pad>
 "#,
             context.user_query(),
             File::serialise_files(context.files(), "\n"),
-            serialized_results.join("\n")
+            serialized_results.join("\n"),
+            context.scatch_pad(),
         )
     }
 
@@ -378,7 +384,7 @@ false
         &self,
         context: &Context,
         search_results: &[SearchResult],
-    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError> {
+    ) -> Result<IdentifyResponse, IterativeSearchError> {
         println!("GoogleStudioLLM::identify");
 
         let system_message = LLMClientMessage::system(self.system_message_for_identify(&context));
@@ -412,7 +418,7 @@ false
             )
             .await?;
 
-        Ok(GoogleStudioLLM::parse_identify_response(&response)?.responses)
+        Ok(GoogleStudioLLM::parse_identify_response(&response)?)
     }
 
     pub async fn decide(
@@ -483,7 +489,7 @@ impl LLMOperations for GoogleStudioLLM {
         &self,
         context: &Context,
         search_results: &[SearchResult],
-    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError> {
+    ) -> Result<IdentifyResponse, IterativeSearchError> {
         self.identify(context, search_results).await
     }
 

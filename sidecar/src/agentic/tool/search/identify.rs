@@ -2,10 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename = "responses")]
+#[serde(rename = "response")]
 pub struct IdentifyResponse {
-    #[serde(rename = "response")]
-    pub responses: Vec<IdentifiedFile>,
+    #[serde(rename = "item")]
+    pub item: Vec<IdentifiedFile>,
+    pub scatch_pad: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

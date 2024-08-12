@@ -18,23 +18,26 @@ use crate::{
 };
 
 use super::{
-    agentic::SerdeError, decide::DecideResponse, google_studio::GoogleStudioLLM,
-    identify::IdentifiedFile, repository::Repository,
+    agentic::SerdeError,
+    decide::DecideResponse,
+    google_studio::GoogleStudioLLM,
+    identify::{IdentifiedFile, IdentifyResponse},
+    repository::Repository,
 };
 
 #[derive(Debug, Clone)]
 pub struct Context {
     files: Vec<File>,
     user_query: String,
-    thoughts: String,
+    scatch_pad: String,
 }
 
 impl Context {
-    pub fn new(files: Vec<File>, user_query: String, thoughts: String) -> Self {
+    pub fn new(files: Vec<File>, user_query: String, scatch_pad: String) -> Self {
         Self {
             files,
             user_query,
-            thoughts,
+            scatch_pad,
         }
     }
 
@@ -54,16 +57,16 @@ impl Context {
     }
 
     // todo(zi): consider extending thoughts over replacing
-    pub fn update_thoughts(&mut self, thoughts: &str) {
-        self.thoughts = thoughts.to_string()
+    pub fn update_scatch_pad(&mut self, scatch_pad: &str) {
+        self.scatch_pad = scatch_pad.to_string()
     }
 
     pub fn user_query(&self) -> &str {
         &self.user_query
     }
 
-    pub fn thoughts(&self) -> &str {
-        &self.thoughts
+    pub fn scatch_pad(&self) -> &str {
+        &self.scatch_pad
     }
 }
 
@@ -219,7 +222,7 @@ pub trait LLMOperations {
         &self,
         context: &Context,
         search_results: &[SearchResult],
-    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError>;
+    ) -> Result<IdentifyResponse, IterativeSearchError>;
     async fn decide_continue(
         &self,
         context: &mut Context,
@@ -274,9 +277,14 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             let identify_results = self.identify(&search_results).await?;
 
+            self.context.update_scatch_pad(&identify_results.scatch_pad);
+
+            println!("Scratch pad: \n{}", self.context.scatch_pad());
+
             println!(
                 "{}",
                 identify_results
+                    .item
                     .iter()
                     .map(|r| format!("{:?}\n", r))
                     .collect::<Vec<String>>()
@@ -285,6 +293,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             self.context.add_files(
                 identify_results
+                    .item
                     .iter()
                     .map(|r| File::new(r.path()))
                     .collect::<Vec<File>>(),
@@ -296,7 +305,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             println!("{:?}", decision);
 
-            self.context.update_thoughts(decision.suggestions());
+            self.context.update_scatch_pad(decision.suggestions());
 
             self.complete = decision.complete();
 
@@ -315,7 +324,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     async fn identify(
         &mut self,
         search_results: &[SearchResult],
-    ) -> Result<Vec<IdentifiedFile>, IterativeSearchError> {
+    ) -> Result<IdentifyResponse, IterativeSearchError> {
         self.llm_ops
             .identify_relevant_results(self.context(), search_results)
             .await

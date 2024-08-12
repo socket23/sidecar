@@ -153,7 +153,7 @@ async fn main() {
     // let problem_statement =
     // "Modify file_paths method and add new getter methods to repository.rs".to_owned();
 
-    let problem_statement = "Add instructions to help.md".to_owned();
+    let problem_statement = "Add instructions to find_me.md".to_owned();
 
     // let problem_statement = "We need to update the configuration settings for our application. The main configuration file is named 'exp.rs' and should be located in the root directory of our project. Please find this file so we can review and modify the settings.
     // ".to_owned();

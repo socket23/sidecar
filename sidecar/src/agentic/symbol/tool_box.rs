@@ -5072,6 +5072,8 @@ FILEPATH: {fs_file_path}
         important_symbols: &CodeSymbolImportantResponse,
         user_query: &str,
         llm_properties: LLMProperties,
+        // we need to change our prompt when we are doing big search
+        _is_big_search: bool,
         request_id: &str,
     ) -> Result<CodeSymbolImportantResponse, SymbolError> {
         let ordered_symbol_file_paths = important_symbols

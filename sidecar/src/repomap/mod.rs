@@ -1,6 +1,6 @@
 pub mod analyser;
 pub mod error;
-mod file;
+pub mod file;
 pub mod files;
 pub mod graph;
 pub mod helpers;

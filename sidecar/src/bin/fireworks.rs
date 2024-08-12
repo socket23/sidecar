@@ -228,7 +228,7 @@ impl UIEventWithID {
             "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
         )),
     );
-    let few_shot_user_instruction = r#"<code_in_selection>
+    let _few_shot_user_instruction = r#"<code_in_selection>
 ```py
 def add_values(a, b):
     return a + b
@@ -247,7 +247,7 @@ def subtract(a, b, logger):
     logger.info(a, b)
     # rest of the code
 </code_changes_outline>"#;
-    let few_shot_output = r#"<reply>
+    let _few_shot_output = r#"<reply>
 ```py
 def add_values(a, b, logger):
     logger.info(a, b)

@@ -17,7 +17,7 @@ use crate::{
                 important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
             },
             input::ToolInput,
-            search::types::{BigSearchRequest, SearchType},
+            search::big_search::{BigSearchRequest, SearchType},
         },
     },
     user_context::types::UserContext,

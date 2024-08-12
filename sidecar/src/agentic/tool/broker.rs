@@ -45,7 +45,7 @@ use super::{
     output::ToolOutput,
     r#type::{Tool, ToolType},
     rerank::base::ReRankBroker,
-    search::types::BigSearchBroker,
+    search::big_search::BigSearchBroker,
     swe_bench::test_tool::SWEBenchTestTool,
 };
 

@@ -70,7 +70,7 @@ impl RepoMap {
             println!("  Middle: {}", middle);
 
             // The clone here is very very expensive
-            let tree = self.to_tree(&ranked_tags[..middle].to_vec());
+            let tree = RepoMap::to_tree(&ranked_tags[..middle].to_vec());
             let num_tokens = self.get_token_count(&tree);
 
             println!("  Tree tokens: {}", num_tokens);
@@ -120,7 +120,7 @@ impl RepoMap {
         Ok(tree)
     }
 
-    fn to_tree(&self, tags: &Vec<Tag>) -> String {
+    pub fn to_tree(tags: &Vec<Tag>) -> String {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));
         tags.push(Tag::dummy());
@@ -148,7 +148,7 @@ impl RepoMap {
                     }
                     let file_content = file_content.expect("file_content to be present");
                     // read the file content and keep track of it
-                    output.push_str(&self.render_tree(
+                    output.push_str(&RepoMap::render_tree(
                         &cur_abs_fname,
                         &cur_fname,
                         &inner_lois,
@@ -187,8 +187,7 @@ impl RepoMap {
         output
     }
 
-    fn render_tree(
-        &self,
+    pub fn render_tree(
         abs_fname: &str,
         _rel_fname: &str,
         lois: &Vec<usize>,

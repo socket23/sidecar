@@ -46,7 +46,7 @@ use super::{
     },
     r#type::ToolType,
     rerank::base::ReRankEntriesForBroker,
-    search::types::BigSearchRequest,
+    search::big_search::BigSearchRequest,
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 

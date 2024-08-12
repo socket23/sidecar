@@ -4,7 +4,10 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{AnthropicAPIKey, FireworksAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{
+        AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
+        OpenAIProvider,
+    },
 };
 use sidecar::{
     agentic::{
@@ -50,6 +53,9 @@ async fn main() {
             "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
         )),
     );
+    let _google_ai_studio_api_keys = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    ));
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -79,8 +85,8 @@ async fn main() {
     ));
 
     // let file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs";
-    let _file_paths =
-        vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
+    // let _file_paths =
+    //     vec!["/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs".to_owned()];
     // let file_paths = vec![
     //     "/Users/skcd/test_repo/ide/src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts"
     //         .to_owned(),
@@ -129,7 +135,7 @@ async fn main() {
     // let problem_statement =
     //     "can you add another provider for grok for me we just need an api_key?".to_owned();
     // let problem_statement = "Add comments to RequestEvents".to_owned();
-    // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
+    let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implement it similar to the Edit one".to_owned();
     // let problem_statement = "Implement a new SymbolEventSubStep called Document that documents symbols, implemented similar to the Edit substep".to_owned();
     // let problem_statement = "Make it possible to have an auxbar panel without a title".to_owned();
     // let problem_statement =
@@ -138,9 +144,20 @@ async fn main() {
     // let problem_statement =
     //     "Add method to AuxiliaryBarPart which returns \"hello\" and is called test function"
     //         .to_owned();
-    let problem_statement = "Add a new method to google_studio".to_owned();
+    // let problem_statement = "Incomplete implementation for GoogleStudioLLM and GoogleStudioPlanGenerator: missing functionality for generating search queries and plans.
+    // ".to_owned();
 
-    let root_dir = "/Users/zi/codestory/aider";
+    // let problem_statement =
+    //     "Add an implementation for the decide() method in IterativeSearchSystem".to_owned();
+
+    // let problem_statement =
+    //     "Modify file_paths method and add new getter methods to repository.rs".to_owned();
+
+    // let problem_statement = "Add instructions to find_me.md".to_owned();
+
+    // let problem_statement = "We need to update the configuration settings for our application. The main configuration file is named 'exp.rs'".to_owned();
+
+    let root_dir = "/Users/zi/codestory/testing/sidecar/sidecar/src";
 
     let initial_request = SymbolInputEvent::new(
         user_context,

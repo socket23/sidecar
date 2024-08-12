@@ -811,6 +811,14 @@ impl CodeSymbolWithThinking {
         }
     }
 
+    pub fn from_path(path: &str) -> Self {
+        Self {
+            code_symbol: "".to_owned(),
+            thinking: "".to_owned(),
+            file_path: path.to_owned(),
+        }
+    }
+
     pub fn fs_prefix(mut self, fs_prefix: &str) -> Self {
         self.file_path = fs_prefix.to_owned() + "/" + &self.file_path;
         self
@@ -918,6 +926,15 @@ impl CodeSymbolWithSteps {
             steps,
             is_new,
             file_path,
+        }
+    }
+
+    pub fn from_path(path: &str) -> Self {
+        Self {
+            code_symbol: "".to_string(),
+            steps: vec![],
+            is_new: false,
+            file_path: path.to_owned(),
         }
     }
 

@@ -151,6 +151,9 @@ pub enum IterativeSearchError {
 
     #[error("Wrong format: {0}")]
     WrongFormat(String),
+
+    #[error("No seed provided")]
+    NoSeed(),
 }
 
 impl SearchQuery {
@@ -233,7 +236,19 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         &self.context
     }
 
+    pub fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
+        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed)?;
+
+        match seed {
+            IterativeSearchSeed::Tree(tree_string) => {
+                println!("tree string: {}", tree_string);
+                Ok(())
+            }
+        }
+    }
+
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
+        self.apply_seed()?;
         let mut count = 0;
         while self.complete == false && count < 3 {
             println!("===========");

@@ -1,7 +1,10 @@
 //! Contains the output of a tool which can be used by any of the callers
 
 use super::{
-    code_edit::filter_edit::FilterEditOperationResponse,
+    code_edit::{
+        filter_edit::FilterEditOperationResponse,
+        search_and_replace::SearchAndReplaceEditingResponse,
+    },
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRangeResponse,
         correctness::CodeCorrectnessAction,
@@ -147,9 +150,15 @@ pub enum ToolOutput {
     CodeSymbolNewLocation(CodeSymbolNewLocationResponse),
     // should edit the code
     ShouldEditCode(ShouldEditCodeSymbolResponse),
+    // search and replace editing
+    SearchAndReplaceEditing(SearchAndReplaceEditingResponse),
 }
 
 impl ToolOutput {
+    pub fn search_and_replace_editing(response: SearchAndReplaceEditingResponse) -> Self {
+        ToolOutput::SearchAndReplaceEditing(response)
+    }
+
     pub fn should_edit_code(response: ShouldEditCodeSymbolResponse) -> Self {
         ToolOutput::ShouldEditCode(response)
     }

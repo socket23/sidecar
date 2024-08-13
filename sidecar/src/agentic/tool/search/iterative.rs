@@ -18,8 +18,8 @@ use crate::{
 };
 
 use super::{
-    decide::DecideResponse, google_studio::GoogleStudioLLM, identify::IdentifyResponse,
-    repository::Repository,
+    big_search::IterativeSearchSeed, decide::DecideResponse, google_studio::GoogleStudioLLM,
+    identify::IdentifyResponse, repository::Repository,
 };
 
 #[derive(Debug, Clone)]
@@ -210,6 +210,7 @@ pub struct IterativeSearchSystem<T: LLMOperations> {
     repository: Repository,
     llm_ops: T,
     complete: bool,
+    seed: Option<IterativeSearchSeed>,
 }
 
 impl<T: LLMOperations> IterativeSearchSystem<T> {
@@ -219,7 +220,13 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             repository,
             llm_ops,
             complete: false,
+            seed: None,
         }
+    }
+
+    pub fn with_seed(mut self, seed: IterativeSearchSeed) -> Self {
+        self.seed = Some(seed);
+        self
     }
 
     fn context(&self) -> &IterativeSearchContext {

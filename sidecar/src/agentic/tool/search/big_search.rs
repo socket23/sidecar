@@ -181,6 +181,7 @@ impl Tool for BigSearchBroker {
 
         let repository = self.create_repository(&root_directory).await?;
 
+        // todo(zi): get tree
         let tree_seed = IterativeSearchSeed::Tree("tree".to_owned());
 
         let system = self.create_search_system(repository, &request)?;

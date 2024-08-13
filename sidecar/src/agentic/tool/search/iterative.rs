@@ -12,7 +12,10 @@ use crate::{
         code_symbol::important::{
             CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
-        kw_search::types::SerdeError,
+        file::{
+            important::FileImportantResponse,
+            types::{FileImportantError, SerdeError},
+        },
     },
     user_context::types::UserContextError,
 };
@@ -156,6 +159,23 @@ pub enum IterativeSearchError {
     NoSeed(),
 }
 
+impl From<FileImportantError> for IterativeSearchError {
+    fn from(error: FileImportantError) -> Self {
+        match error {
+            FileImportantError::WrongLLM(llm_type) => IterativeSearchError::WrongLLM(llm_type),
+            FileImportantError::LLMClientError(err) => IterativeSearchError::LLMClientError(err),
+            FileImportantError::SerdeError(err) => IterativeSearchError::SerdeError(err),
+            FileImportantError::QuickXMLError(err) => IterativeSearchError::QuickXMLError(err),
+            FileImportantError::UserContextError(err) => {
+                IterativeSearchError::UserContextError(err)
+            }
+            FileImportantError::ExhaustedRetries => IterativeSearchError::ExhaustedRetries,
+            FileImportantError::EmptyResponse => IterativeSearchError::EmptyResponse,
+            FileImportantError::WrongFormat(msg) => IterativeSearchError::WrongFormat(msg),
+        }
+    }
+}
+
 impl SearchQuery {
     pub fn new(tool: SearchToolType, query: String, thinking: String) -> Self {
         Self {
@@ -205,6 +225,11 @@ pub trait LLMOperations {
         &self,
         context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError>;
+    async fn query_relevant_files(
+        &self,
+        user_query: &str,
+        seed: IterativeSearchSeed,
+    ) -> Result<FileImportantResponse, IterativeSearchError>;
 }
 
 // Main system struct
@@ -236,19 +261,18 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         &self.context
     }
 
-    pub fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
-        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed())?;
+    pub async fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
+        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed())?; // seed not used elsewhere
 
-        match seed {
-            IterativeSearchSeed::Tree(tree_string) => {
-                println!("tree string: {}", tree_string);
-                Ok(())
-            }
-        }
+        self.llm_ops
+            .query_relevant_files(&self.context.user_query(), seed)
+            .await?;
+
+        todo!();
     }
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
-        self.apply_seed()?;
+        self.apply_seed().await?;
         let mut count = 0;
         while self.complete == false && count < 3 {
             println!("===========");

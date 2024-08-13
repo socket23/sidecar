@@ -1600,26 +1600,17 @@ Satisfy the requirement either by making edits or gathering the required informa
             self.symbol_name()
         );
 
-        // Here there are 2 steps which will need to happen:
-        // - First we use a more powerful model for generating the outline of the changes
-        // which need to be done
-        // - Second: we use a weaker model to generate the final outline of the changes which will be done
-        // TODO(skcd): use code_editing_with_search_and_replace over here instead which takes care of applying the edits
-        // what should we do when it comes to code correction tho? cause we also want to make edits when doing that
-        // and get back how the new code will look like? should we edit it live.. it becomes more crumbersome at that point
         let edited_code = self
             .tools
-            .code_edit_outline(
+            .code_editing_with_search_and_replace(
                 sub_symbol,
-                &self.symbol_identifier,
                 sub_symbol.fs_file_path(),
                 file_content.contents_ref(),
                 symbol_to_edit.range(),
                 context.join("\n"),
                 sub_symbol.instructions().join("\n"),
-                self.llm_properties.clone(),
                 request_id,
-                Some(symbol_to_edit.name().to_owned()),
+                &self.symbol_identifier,
                 sub_symbol.symbol_edited_list(),
             )
             .await?;

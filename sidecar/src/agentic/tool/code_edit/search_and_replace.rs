@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 
 use llm_client::{
     broker::LLMBroker,
@@ -10,10 +11,13 @@ use llm_client::{
 
 use crate::{
     agentic::{
-        symbol::identifier::LLMProperties,
+        symbol::{
+            identifier::{LLMProperties, SymbolIdentifier},
+            ui_event::UIEventWithID,
+        },
         tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     },
-    chunking::text_document::Range,
+    chunking::text_document::{Position, Range},
 };
 
 const SURROUNDING_CONTEXT_LIMIT: usize = 200;
@@ -37,7 +41,7 @@ impl SearchAndReplaceEditingResponse {
 pub struct SearchAndReplaceEditingRequest {
     fs_file_path: String,
     // TODO(skcd): we use this to detect the range where we want to perform the edits
-    _edit_range: Range,
+    edit_range: Range,
     context_in_edit_selection: String,
     code_above: Option<String>,
     code_below: Option<String>,
@@ -47,6 +51,9 @@ pub struct SearchAndReplaceEditingRequest {
     new_symbols: Option<String>,
     instructions: String,
     root_request_id: String,
+    symbol_identifier: SymbolIdentifier,
+    edit_request_id: String,
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -62,10 +69,13 @@ impl SearchAndReplaceEditingRequest {
         new_symbols: Option<String>,
         instructions: String,
         root_request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        edit_request_id: String,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             fs_file_path,
-            _edit_range: edit_range,
+            edit_range,
             context_in_edit_selection,
             code_above,
             code_below,
@@ -75,6 +85,9 @@ impl SearchAndReplaceEditingRequest {
             new_symbols,
             instructions,
             root_request_id,
+            symbol_identifier,
+            edit_request_id,
+            ui_sender,
         }
     }
 }
@@ -309,6 +322,12 @@ mathweb/flask/app.py
 impl Tool for SearchAndReplaceEditing {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.should_search_and_replace_editing()?;
+        let code_to_edit = context.context_in_edit_selection.to_owned();
+        let code_to_edit_range = context.edit_range.clone();
+        let symbol_identifier = context.symbol_identifier.clone();
+        let ui_sender = context.ui_sender.clone();
+        let fs_file_path = context.fs_file_path.to_owned();
+        let edit_request_id = context.edit_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let root_request_id = context.root_request_id.to_owned();
         let system_message = LLMClientMessage::system(self.system_message(&context.language));
@@ -324,10 +343,9 @@ impl Tool for SearchAndReplaceEditing {
             0.2,
             None,
         );
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let response = self
-            .llm_client
-            .stream_completion(
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut llm_response = Box::pin(
+            self.llm_client.stream_completion(
                 llm_properties.api_key().clone(),
                 request,
                 llm_properties.provider().clone(),
@@ -336,16 +354,332 @@ impl Tool for SearchAndReplaceEditing {
                         "event_type".to_owned(),
                         "search_and_replace_editing".to_owned(),
                     ),
-                    ("root_id".to_owned(), root_request_id),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
                 ]
                 .into_iter()
                 .collect(),
                 sender,
-            )
-            .await
-            .map_err(|e| ToolError::LLMClientError(e))?;
-        Ok(ToolOutput::search_and_replace_editing(
-            SearchAndReplaceEditingResponse::new(response),
-        ))
+            ),
+        );
+        let stream_result;
+
+        let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            code_to_edit,
+            code_to_edit_range.start_line(),
+            edits_sender,
+        );
+
+        // now we can bring it all together and use the answer accumulator over here
+        // to start the processing completely
+
+        loop {
+            tokio::select! {
+                stream_msg = receiver.recv() => {
+                    match stream_msg {
+                        Some(msg) => {
+                            let delta = msg.delta();
+                            if let Some(delta) = delta {
+                                // we have some delta over here which we can process
+                                search_and_replace_accumulator.add_delta(delta.to_owned());
+                            }
+                        }
+                        None => {
+                            // we should flush the accumualtor over here
+                            // channel is probably closed over here?
+                        },
+                    }
+                }
+                edits_response = edits_receiver.recv() => {
+                    match edits_response {
+                        Some(EditDelta::EditStarted(range)) => {
+                            println!("search_and_replace_editing::start_streaming::range({:?})", &range);
+                            let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
+                                root_request_id.to_owned(),
+                                symbol_identifier.clone(),
+                                edit_request_id.to_owned(),
+                                range,
+                                fs_file_path.to_owned(),
+                            ));
+                            // we need to send this ``` since thats the detection string
+                            // we use for making sure that we are inside a code-block on the
+                            // editor
+                            let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                                root_request_id.to_owned(),
+                                symbol_identifier.clone(),
+                                "```\n".to_owned(),
+                                edit_request_id.to_owned(),
+                                range,
+                                fs_file_path.to_owned(),
+                            ));
+                        }
+                        Some(EditDelta::EditDelta((range, delta))) => {
+                            println!("search_and_replace_editing::edit_delta({})", &delta);
+                            let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                                root_request_id.to_owned(),
+                                symbol_identifier.clone(),
+                                delta,
+                                edit_request_id.to_owned(),
+                                range,
+                                fs_file_path.to_owned(),
+                            ));
+                        }
+                        Some(EditDelta::EditEnd(range)) => {
+                            let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                                root_request_id.to_owned(),
+                                symbol_identifier.clone(),
+                                "\n```".to_owned(),
+                                edit_request_id.to_owned(),
+                                range,
+                                fs_file_path.to_owned(),
+                            ));
+                            println!("search_and_replace_editing::edit_end({:?})", &range);
+                            let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
+                                root_request_id.to_owned(),
+                                symbol_identifier.clone(),
+                                edit_request_id.to_owned(),
+                                range,
+                                fs_file_path.to_owned(),
+                            ));
+                        }
+                        None => {
+
+                        }
+                    }
+                }
+                result = &mut llm_response => {
+                    stream_result = Some(result);
+                    break;
+                }
+            }
+        }
+        match stream_result {
+            Some(Ok(response)) => Ok(ToolOutput::search_and_replace_editing(
+                SearchAndReplaceEditingResponse::new(response),
+            )),
+            // wrong error over here but its fine for now
+            _ => Err(ToolError::RetriesExhausted),
+        }
     }
+}
+
+enum EditDelta {
+    EditStarted(Range),
+    EditDelta((Range, String)),
+    EditEnd(Range),
+}
+
+#[derive(Debug, Clone)]
+enum SearchBlockStatus {
+    NoBlock,
+    BlockStart,
+    BlockAccumulate(String),
+    BlockFound((String, Range)),
+}
+
+struct SearchAndReplaceAccumulator {
+    code_lines: Vec<String>,
+    start_line: usize,
+    answer_up_until_now: String,
+    previous_answer_line_number: Option<usize>,
+    search_block_status: SearchBlockStatus,
+    updated_block: Option<String>,
+    sender: UnboundedSender<EditDelta>,
+}
+
+impl SearchAndReplaceAccumulator {
+    pub fn new(
+        code_to_edit: String,
+        start_line: usize,
+        sender: UnboundedSender<EditDelta>,
+    ) -> Self {
+        Self {
+            code_lines: code_to_edit
+                .lines()
+                .into_iter()
+                .map(|line| line.to_owned())
+                .collect::<Vec<_>>(),
+            start_line,
+            answer_up_until_now: "".to_owned(),
+            previous_answer_line_number: None,
+            search_block_status: SearchBlockStatus::NoBlock,
+            updated_block: None,
+            sender,
+        }
+    }
+
+    fn add_delta(&mut self, delta: String) {
+        self.answer_up_until_now.push_str(&delta);
+        self.process_answer();
+        // check if we have a new search block starting here
+    }
+
+    fn process_answer(&mut self) {
+        // so there are 2 cases over here which we want to handle
+        // - we haven't even started processing the lines yet which sucks kinda
+        // - we have started processing the lines but we do not have any lines with us
+        // right now
+        let head = "<<<<<<< SEARCH";
+        let divider = "=======";
+        let updated = ">>>>>>> REPLACE";
+
+        // no complete line right now, keep going
+        let line_number_to_process = get_last_newline_line_number(&self.answer_up_until_now);
+        if line_number_to_process.is_none() {
+            return;
+        }
+        // we get this value as the last line number always, so better to subtract here and if its none we are returning early
+        let line_number_to_process_until = line_number_to_process.expect("to work") - 1;
+        let answer_lines = self
+            .answer_up_until_now
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        // line number we can proceed until:
+        let start_index = if self.previous_answer_line_number.is_none() {
+            0
+        } else {
+            self.previous_answer_line_number
+                .expect("if_none above to work")
+                + 1
+        };
+
+        // println!("process_answer::start_index({})", start_index);
+
+        for line_number in start_index..=line_number_to_process_until {
+            // update our answer lines right now
+            self.previous_answer_line_number = Some(line_number);
+            let answer_line_at_index = answer_lines[line_number];
+            // println!(
+            //     "process_answer::line_number({})::block_status({:?})::line_content({})",
+            //     line_number, &self.search_block_status, &answer_line_at_index
+            // );
+            // clone here is bad, we should try and get rid of it
+            match self.search_block_status.clone() {
+                SearchBlockStatus::NoBlock => {
+                    if answer_line_at_index == head {
+                        self.search_block_status = SearchBlockStatus::BlockStart;
+                    }
+                    continue;
+                }
+                SearchBlockStatus::BlockStart => {
+                    self.search_block_status =
+                        SearchBlockStatus::BlockAccumulate(answer_line_at_index.to_owned());
+                }
+                SearchBlockStatus::BlockAccumulate(accumulated) => {
+                    if answer_line_at_index == divider {
+                        // we also have to find the range in the code where this block is present
+                        // since that will be our edit range
+                        let range = get_range_for_search_block(
+                            &self.code_lines.join("\n"),
+                            self.start_line,
+                            &accumulated,
+                        );
+                        match range {
+                            Some(range) => {
+                                self.search_block_status = SearchBlockStatus::BlockFound((
+                                    accumulated.to_owned(),
+                                    range.clone(),
+                                ));
+                                let _ = self.sender.send(EditDelta::EditStarted(range));
+                            }
+                            None => {
+                                // if we do not find any replacement block, then we give up
+                                // and keep going forward for now
+                                self.search_block_status = SearchBlockStatus::NoBlock;
+                            }
+                        };
+                    } else {
+                        self.search_block_status = SearchBlockStatus::BlockAccumulate(format!(
+                            "{}\n{}",
+                            accumulated, answer_line_at_index
+                        ));
+                    }
+                }
+                SearchBlockStatus::BlockFound((_, block_range)) => {
+                    if answer_line_at_index == updated {
+                        // neat we found when to close, so we can do that now
+                        // return an event which stops the edit stream
+                        self.search_block_status = SearchBlockStatus::NoBlock;
+                        // we need to update the answer lines with the new replace block
+                        if let Some(updated_answer) = self.updated_block.clone() {
+                            let updated_range_start_line =
+                                block_range.start_line() - self.start_line;
+                            let updated_range_end_line = block_range.end_line() - self.start_line;
+                            let mut updated_code_lines =
+                                self.code_lines[..updated_range_start_line].join("\n");
+                            updated_code_lines.push('\n');
+                            updated_code_lines.push_str(&updated_answer);
+                            updated_code_lines.push('\n');
+                            updated_code_lines
+                                .push_str(&self.code_lines[updated_range_end_line..].join("\n"));
+                            self.code_lines = updated_code_lines
+                                .lines()
+                                .into_iter()
+                                .map(|line| line.to_owned())
+                                .collect::<Vec<_>>();
+                        }
+                        self.updated_block = None;
+                        let _ = self.sender.send(EditDelta::EditEnd(block_range.clone()));
+                    } else {
+                        if self.updated_block.is_none() {
+                            self.updated_block = Some(answer_line_at_index.to_owned());
+                            let _ = self.sender.send(EditDelta::EditDelta((
+                                block_range.clone(),
+                                answer_line_at_index.to_owned(),
+                            )));
+                        } else {
+                            self.updated_block = Some(
+                                self.updated_block.clone().expect("is_none to hold")
+                                    + "\n"
+                                    + answer_line_at_index,
+                            );
+                            let _ = self.sender.send(EditDelta::EditDelta((
+                                block_range.clone(),
+                                ("\n".to_owned() + answer_line_at_index).to_owned(),
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Hels to get the last line number which has a \n
+fn get_last_newline_line_number(s: &str) -> Option<usize> {
+    s.rfind('\n')
+        .map(|last_index| s[..=last_index].chars().filter(|&c| c == '\n').count())
+}
+
+fn get_range_for_search_block(
+    code_to_look_at: &str,
+    start_line: usize,
+    search_block: &str,
+) -> Option<Range> {
+    let code_to_look_at_lines = code_to_look_at
+        .lines()
+        .into_iter()
+        .enumerate()
+        .map(|(idx, line)| (idx + start_line, line.to_owned()))
+        .collect::<Vec<_>>();
+
+    let search_block_lines = search_block.lines().into_iter().collect::<Vec<_>>();
+    let search_block_len = search_block_lines.len();
+    for i in 0..=code_to_look_at_lines.len() - search_block_len {
+        if code_to_look_at_lines[i..i + search_block_len]
+            .iter()
+            .map(|(_, content)| content)
+            .collect::<Vec<_>>()
+            == search_block_lines
+        {
+            // we have our answer over here, now return the range
+            return Some(Range::new(
+                Position::new(code_to_look_at_lines[i].0, 0, 0),
+                Position::new(code_to_look_at_lines[i + search_block_len - 1].0, 0, 0),
+            ));
+        }
+    }
+    None
 }

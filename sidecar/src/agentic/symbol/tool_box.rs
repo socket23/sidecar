@@ -9,7 +9,9 @@ use llm_client::provider::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::agentic::symbol::helpers::{apply_inlay_hints_to_code, split_file_content_into_parts};
+use crate::agentic::symbol::helpers::{
+    apply_inlay_hints_to_code, search_and_replace_generator, split_file_content_into_parts,
+};
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::code_edit::filter_edit::{
     FilterEditOperationRequest, FilterEditOperationResponse,
@@ -4073,14 +4075,16 @@ instruction:
         extra_context: String,
         instruction: String,
         request_id: &str,
+        symbol_identifier: &SymbolIdentifier,
         symbols_edited_list: Option<Vec<SymbolEditedItem>>,
-    ) -> Result<(), SymbolError> {
-        println!("============tool_box::code_edit_outline============");
+    ) -> Result<String, SymbolError> {
+        println!("============tool_box::code_edit_search_and_replace============");
         println!(
             "tool_box::code_edit_search_and_replace::fs_file_path({})::symbol_name({})",
             fs_file_path,
             sub_symbol.symbol_name(),
         );
+        println!("============");
         let language = self
             .editor_parsing
             .for_file_path(fs_file_path)
@@ -4089,6 +4093,7 @@ instruction:
             .unwrap_or("".to_owned());
         let (above, below, mut in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
+        let original_in_range_selection = in_range_selection.to_owned();
         in_range_selection = self
             .apply_inlay_hints(
                 fs_file_path,
@@ -4130,23 +4135,42 @@ FILEPATH: {fs_file_path}
             symbols_to_edit,
             instruction,
             self.root_request_id.to_owned(),
+            symbol_identifier.clone(),
+            uuid::Uuid::new_v4().to_string(),
+            self.ui_events.clone(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
             sub_symbol.symbol_name()
         );
-        let _response = self
+        let response = self
             .tools
             .invoke(request)
             .await
             .map_err(|e| SymbolError::ToolError(e))?
-            .get_code_edit_output()
+            .get_search_and_replace_output()
             .ok_or(SymbolError::WrongToolOutput)?;
+        let updated_code = search_and_replace_generator(
+            response.response(),
+            &original_in_range_selection,
+            selection_range,
+        );
+
+        // Now we can apply the edits to the editor
+        let _ = self
+            .apply_edits_to_editor(
+                fs_file_path,
+                selection_range,
+                &updated_code,
+                request_id,
+                false,
+            )
+            .await?;
         println!(
             "tool_box::search_and_replace::finish::symbol_name({})",
             sub_symbol.symbol_name()
         );
-        Ok(())
+        Ok(updated_code)
     }
 
     /// This uses a more powerful LLM to plan out the changes and generate

@@ -235,7 +235,6 @@ pub trait LLMOperations {
     ) -> Result<QueryRelevantFilesResponse, IterativeSearchError>;
 }
 
-// Main system struct
 pub struct IterativeSearchSystem<T: LLMOperations> {
     context: IterativeSearchContext,
     repository: Repository,
@@ -267,11 +266,14 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     pub async fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
         let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed())?; // seed not used elsewhere
 
-        self.llm_ops
+        let scratch_pad_thinking = self
+            .llm_ops
             .query_relevant_files(&self.context.user_query(), seed)
-            .await?;
+            .await?
+            .scratch_pad;
 
-        todo!();
+        self.context.update_scratch_pad(&scratch_pad_thinking);
+        Ok(())
     }
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {

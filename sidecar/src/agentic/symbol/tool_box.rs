@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys};
+use llm_client::provider::{
+    AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
+};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::symbol::helpers::{apply_inlay_hints_to_code, split_file_content_into_parts};
@@ -12,6 +14,7 @@ use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::code_edit::filter_edit::{
     FilterEditOperationRequest, FilterEditOperationResponse,
 };
+use crate::agentic::tool::code_edit::search_and_replace::SearchAndReplaceEditingRequest;
 use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionRequest;
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
@@ -4052,6 +4055,98 @@ instruction:
             .map_err(|e| SymbolError::ToolError(e))?
             .get_code_correctness_action()
             .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    /// This uses the search and replace mechanism to make edits
+    ///
+    /// This works really well for long symbols and symbols in general where
+    /// we want to make edits to the wider codebase
+    ///
+    /// - Use anything >= sonnet3.5 level of intelligence or perf on diff-style
+    /// editing for this mode
+    pub async fn code_editing_with_search_and_replace(
+        &self,
+        sub_symbol: &SymbolToEdit,
+        fs_file_path: &str,
+        file_content: &str,
+        selection_range: &Range,
+        extra_context: String,
+        instruction: String,
+        request_id: &str,
+        symbols_edited_list: Option<Vec<SymbolEditedItem>>,
+    ) -> Result<(), SymbolError> {
+        println!("============tool_box::code_edit_outline============");
+        println!(
+            "tool_box::code_edit_search_and_replace::fs_file_path({})::symbol_name({})",
+            fs_file_path,
+            sub_symbol.symbol_name(),
+        );
+        let language = self
+            .editor_parsing
+            .for_file_path(fs_file_path)
+            .map(|language_config| language_config.get_language())
+            .flatten()
+            .unwrap_or("".to_owned());
+        let (above, below, mut in_range_selection) =
+            split_file_content_into_parts(file_content, selection_range);
+        in_range_selection = self
+            .apply_inlay_hints(
+                fs_file_path,
+                &in_range_selection,
+                selection_range,
+                request_id,
+            )
+            .await?;
+        let symbols_to_edit = symbols_edited_list.map(|symbols| {
+            symbols
+                .into_iter()
+                .filter(|symbol| symbol.is_new())
+                .map(|symbol| {
+                    let fs_file_path = symbol.fs_file_path();
+                    let symbol_name = symbol.name();
+                    format!(
+                        r#"<symbol>
+FILEPATH: {fs_file_path}
+{symbol_name}
+</symbol>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
+        let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
+            fs_file_path.to_owned(),
+            selection_range.clone(),
+            in_range_selection,
+            above,
+            below,
+            extra_context,
+            LLMProperties::new(
+                LLMType::ClaudeSonnet,
+                LLMProvider::Anthropic,
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            ),
+            language,
+            symbols_to_edit,
+            instruction,
+            self.root_request_id.to_owned(),
+        ));
+        println!(
+            "tool_box::code_edit_outline::start::symbol_name({})",
+            sub_symbol.symbol_name()
+        );
+        let _response = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_code_edit_output()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        println!(
+            "tool_box::search_and_replace::finish::symbol_name({})",
+            sub_symbol.symbol_name()
+        );
+        Ok(())
     }
 
     /// This uses a more powerful LLM to plan out the changes and generate

@@ -13,7 +13,7 @@ use crate::{
         code_symbol::important::{
             CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
-        file::types::{FileImportantError, SerdeError},
+        file::types::SerdeError,
     },
     user_context::types::UserContextError,
 };
@@ -158,24 +158,6 @@ pub enum IterativeSearchError {
 
     #[error("Tree printing failed for: {0}")]
     PrintTreeError(String),
-}
-
-impl From<FileImportantError> for IterativeSearchError {
-    fn from(error: FileImportantError) -> Self {
-        match error {
-            FileImportantError::WrongLLM(llm_type) => IterativeSearchError::WrongLLM(llm_type),
-            FileImportantError::LLMClientError(err) => IterativeSearchError::LLMClientError(err),
-            FileImportantError::SerdeError(err) => IterativeSearchError::SerdeError(err),
-            FileImportantError::QuickXMLError(err) => IterativeSearchError::QuickXMLError(err),
-            FileImportantError::UserContextError(err) => {
-                IterativeSearchError::UserContextError(err)
-            }
-            FileImportantError::ExhaustedRetries => IterativeSearchError::ExhaustedRetries,
-            FileImportantError::EmptyResponse => IterativeSearchError::EmptyResponse,
-            FileImportantError::WrongFormat(msg) => IterativeSearchError::WrongFormat(msg),
-            FileImportantError::PrintTreeError(path) => IterativeSearchError::PrintTreeError(path),
-        }
-    }
 }
 
 impl SearchQuery {

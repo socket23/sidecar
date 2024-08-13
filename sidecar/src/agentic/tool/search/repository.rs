@@ -15,6 +15,8 @@ use crate::{
 
 use super::iterative::{SearchQuery, SearchResult};
 
+pub const SNIPPET_LINE_BUDGET: usize = 20; // arbitrary budget
+
 #[derive(Debug, Clone)]
 pub struct Repository {
     _tree: String,
@@ -42,7 +44,7 @@ impl Repository {
     pub fn get_tag_snippet(&self, path: &PathBuf, tag_name: &str) -> Option<String> {
         self.get_tag(path, tag_name)
             .and_then(|tag_set| tag_set.iter().next())
-            .and_then(|tag| RepoMap::get_tag_snippet(tag, 20).ok())
+            .and_then(|tag| RepoMap::get_tag_snippet(tag, SNIPPET_LINE_BUDGET).ok())
     }
 
     pub fn execute_search(&self, search_query: &SearchQuery) -> Vec<SearchResult> {

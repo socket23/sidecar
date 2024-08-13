@@ -157,6 +157,9 @@ pub enum IterativeSearchError {
 
     #[error("No seed provided")]
     NoSeed(),
+
+    #[error("Tree printing failed for: {0}")]
+    PrintTreeError(String),
 }
 
 impl From<FileImportantError> for IterativeSearchError {
@@ -172,6 +175,7 @@ impl From<FileImportantError> for IterativeSearchError {
             FileImportantError::ExhaustedRetries => IterativeSearchError::ExhaustedRetries,
             FileImportantError::EmptyResponse => IterativeSearchError::EmptyResponse,
             FileImportantError::WrongFormat(msg) => IterativeSearchError::WrongFormat(msg),
+            FileImportantError::PrintTreeError(path) => IterativeSearchError::PrintTreeError(path),
         }
     }
 }
@@ -186,7 +190,6 @@ impl SearchQuery {
     }
 }
 
-// todo(zi): think about this structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     path: PathBuf,

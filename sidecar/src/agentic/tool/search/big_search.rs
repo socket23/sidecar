@@ -149,6 +149,7 @@ impl BigSearchBroker {
         &self,
         repository: Repository,
         request: &BigSearchRequest,
+        seed: IterativeSearchSeed,
     ) -> Result<IterativeSearchSystem<GoogleStudioLLM>, ToolError> {
         let iterative_search_context =
             IterativeSearchContext::new(Vec::new(), request.user_query().to_owned(), String::new());
@@ -167,6 +168,10 @@ impl BigSearchBroker {
     }
 }
 
+pub enum IterativeSearchSeed {
+    Tree(String),
+}
+
 #[async_trait]
 impl Tool for BigSearchBroker {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
@@ -177,7 +182,9 @@ impl Tool for BigSearchBroker {
 
         let repository = self.create_repository(&root_directory).await?;
 
-        let mut system = self.create_search_system(repository, &request)?;
+        let tree_seed = IterativeSearchSeed::Tree("tree".to_owned());
+
+        let mut system = self.create_search_system(repository, &request, tree_seed)?;
 
         let results = system
             .run()

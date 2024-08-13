@@ -237,7 +237,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     pub fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
-        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed)?;
+        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed())?;
 
         match seed {
             IterativeSearchSeed::Tree(tree_string) => {

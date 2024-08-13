@@ -11,7 +11,8 @@ use crate::{
 use super::{
     code_edit::{
         filter_edit::FilterEditOperationBroker, find::FindCodeSectionsToEdit,
-        models::broker::CodeEditBroker, test_correction::TestCorrection, types::CodeEditingTool,
+        models::broker::CodeEditBroker, search_and_replace::SearchAndReplaceEditing,
+        test_correction::TestCorrection, types::CodeEditingTool,
     },
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRange, correctness::CodeCorrectnessBroker,
@@ -351,6 +352,13 @@ impl ToolBroker {
         tools.insert(
             ToolType::ShouldEditCode,
             Box::new(ShouldEditCodeSymbol::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
+        );
+        tools.insert(
+            ToolType::SearchAndReplaceEditing,
+            Box::new(SearchAndReplaceEditing::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),

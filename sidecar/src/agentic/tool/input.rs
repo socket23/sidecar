@@ -1,6 +1,7 @@
 use super::{
     code_edit::{
         filter_edit::FilterEditOperationRequest, find::FindCodeSelectionInput,
+        search_and_replace::SearchAndReplaceEditingRequest,
         test_correction::TestOutputCorrectionRequest, types::CodeEdit,
     },
     code_symbol::{
@@ -118,6 +119,8 @@ pub enum ToolInput {
     CodeSymbolNewLocation(CodeSymbolNewLocationRequest),
     // should edit the code symbol
     ShouldEditCode(ShouldEditCodeSymbolRequest),
+    // search and replace blocks
+    SearchAndReplaceEditing(SearchAndReplaceEditingRequest),
 }
 
 impl ToolInput {
@@ -176,6 +179,17 @@ impl ToolInput {
             ToolInput::InlayHints(_) => ToolType::InLayHints,
             ToolInput::CodeSymbolNewLocation(_) => ToolType::CodeSymbolNewLocation,
             ToolInput::ShouldEditCode(_) => ToolType::ShouldEditCode,
+            ToolInput::SearchAndReplaceEditing(_) => ToolType::SearchAndReplaceEditing,
+        }
+    }
+
+    pub fn should_search_and_replace_editing(
+        self,
+    ) -> Result<SearchAndReplaceEditingRequest, ToolError> {
+        if let ToolInput::SearchAndReplaceEditing(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::SearchAndReplaceEditing))
         }
     }
 

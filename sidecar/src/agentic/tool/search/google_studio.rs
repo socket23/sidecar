@@ -490,8 +490,8 @@ false
     fn system_message_for_file_important(&self) -> String {
         format!(
             r#"
-You are an autonomous AI assistant tasked with finding relevant code in an existing 
-codebase based on a reported issue.
+You are a resourceful, autonomous AI assistant tasked with finding relevant files in an existing 
+codebase based on a reported issue and repository's tree representation.
 
 # Instructions:
 
@@ -514,15 +514,46 @@ Return at least 1 file, but no more than 10, in order of relevance.
 If fewer than 10 relevant files are found, explain why no more could be identified.
 If no relevant files are found, explain the reasoning and suggest next steps.
 
-6. Scratch Pad Usage:
-6.1 The scratch_pad field serves as a meta-analysis space. Use it to:
-6.2. Summarize overall patterns or insights noticed in the codebase structure.
-6.3. Suggest high-level areas or components that might be relevant to the issue.
-6.4. Propose potential keywords, search terms, or file names that could be useful for further investigation.
-6.5. Highlight any architectural or design patterns that seem pertinent to the reported issue.
-6.6. Note any limitations in your analysis or areas where human insight might be particularly valuable.
-
-This information will be used as a seed for another system with file name and keyword search capabilities. Your goal is to provide clues, point the system in the right direction, and set it up with the best chances for success in further analyzing the codebase.
+6. Scratch Pad Usage - Use the scratch_pad field as a meta-analysis space, focusing solely on the repository structure and file names:
+6.1. Analyze overall codebase structure:
+- Identify the depth and breadth of the directory structure.
+- Recognize patterns in directory naming and organization.
+- Infer potential architectural approaches (e.g., modular, flat, feature-based).
+6.2. Deduce file and module relationships:
+- Identify potential entry points (e.g., main.rs, lib.rs, mod.rs files).
+- Recognize module hierarchies and potential dependencies.
+- Infer possible component or service boundaries.
+6.3. Interpret naming conventions:
+- Identify consistent prefixes, suffixes, or patterns in file names.
+- Infer potential functionality or purpose from file names.
+- Recognize naming patterns that might indicate specific types of components (e.g., controllers, services, models).
+6.4. Infer technology stack and language features:
+- Deduce programming languages used based on file extensions.
+- Identify potential build tools or package managers from configuration files.
+- Recognize patterns that might indicate use of specific frameworks or libraries.
+6.5. Identify potential areas of interest related to the issue:
+- Suggest directories or files that might be relevant based on their names.
+- Propose keywords or patterns to search for in file names.
+- Highlight areas that seem to align with the reported issue's domain.
+6.6. Recognize testing and documentation patterns:
+- Identify potential test directories or files.
+- Recognize documentation files or directories.
+- Infer the project's approach to testing and documentation from the structure.
+6.7. Analyze error handling and logging:
+- Identify files or directories that might be related to error handling or logging.
+- Infer the project's approach to managing errors and logs.
+6.8. Suggest areas for further investigation:
+- Propose specific files or directories that warrant closer examination.
+- Identify patterns or naming conventions that might yield more insights if searched for.
+- Suggest potential relationships between files or modules that might be relevant to the issue.
+6.9. Acknowledge limitations and uncertainties:
+- Clearly state that analysis is based solely on directory structure and file names.
+- Highlight areas where file contents would be particularly helpful for better understanding.
+- Suggest specific questions about the codebase that could provide valuable context.
+6.10. Synthesize insights:
+- Summarize key observations about the codebase structure and organization.
+- Propose hypotheses about the codebase architecture and design based on structural evidence.
+- Relate structural insights to the reported issue, suggesting potential areas of focus.
 
 Do not hallucinate files that do not appear in the provided repository structure.
             
@@ -540,7 +571,7 @@ path/to/file1
 </file>
 </files>
 <scratch_pad>
-Use this to summarize overall patterns or insights noticed in the codebase structure.
+Write your analysis here.
 </scratch_pad>
 <response>
 </reply>

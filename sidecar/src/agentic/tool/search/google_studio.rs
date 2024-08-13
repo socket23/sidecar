@@ -507,7 +507,7 @@ codebase based on a reported issue.
 
 4. Reasoning Process:
    Think step-by-step and clearly articulate your reasoning in the thinking field for each file.
-   Include a confidence level (0-100%) for each file selection in the thinking field.
+   Include a confidence level (Uncertain, Tentative, Probable, Confident, Certain) for each file selection in the thinking field.
 
 5. File Selection:
 Return at least 1 file, but no more than 10, in order of relevance.

@@ -149,7 +149,6 @@ impl BigSearchBroker {
         &self,
         repository: Repository,
         request: &BigSearchRequest,
-        seed: IterativeSearchSeed,
     ) -> Result<IterativeSearchSystem<GoogleStudioLLM>, ToolError> {
         let iterative_search_context =
             IterativeSearchContext::new(Vec::new(), request.user_query().to_owned(), String::new());
@@ -184,9 +183,10 @@ impl Tool for BigSearchBroker {
 
         let tree_seed = IterativeSearchSeed::Tree("tree".to_owned());
 
-        let mut system = self.create_search_system(repository, &request, tree_seed)?;
+        let system = self.create_search_system(repository, &request)?;
 
         let results = system
+            .with_seed(tree_seed)
             .run()
             .await
             .map_err(|e| ToolError::IterativeSearchError(e))?;

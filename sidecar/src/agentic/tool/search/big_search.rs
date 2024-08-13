@@ -17,6 +17,7 @@ use crate::{
         tool::{
             code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
             errors::ToolError,
+            file::types::FileImportantError,
             input::ToolInput,
             output::ToolOutput,
             r#type::Tool,
@@ -125,6 +126,50 @@ impl BigSearchBroker {
     pub fn fail_over_llm(&self) -> LLMProperties {
         self.fail_over_llm.clone()
     }
+
+    fn validate_root_directory(&self, request: &BigSearchRequest) -> Result<String, ToolError> {
+        request
+            .root_directory()
+            .ok_or_else(|| ToolError::BigSearchError("Root directory is required".to_string()))
+            .map(|s| s.to_string())
+    }
+
+    async fn create_repository(&self, root_directory: &str) -> Result<Repository, ToolError> {
+        let tree = TreePrinter::to_string_stacked(Path::new(root_directory)).unwrap_or_default();
+        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+
+        Ok(Repository::new(
+            tree,
+            "outline".to_owned(),
+            tag_index,
+            PathBuf::from(root_directory),
+        ))
+    }
+
+    fn create_search_system(
+        &self,
+        repository: Repository,
+        request: &BigSearchRequest,
+    ) -> Result<IterativeSearchSystem<GoogleStudioLLM>, ToolError> {
+        let iterative_search_context =
+            IterativeSearchContext::new(Vec::new(), request.user_query().to_owned(), String::new());
+
+        let google_studio_llm_config = GoogleStudioLLM::new(
+            request.root_directory().unwrap_or_default().to_owned(),
+            self.llm_client(),
+            request.root_request_id().to_owned(),
+        );
+
+        Ok(IterativeSearchSystem::new(
+            iterative_search_context,
+            repository,
+            google_studio_llm_config,
+        ))
+    }
+}
+
+pub enum IterativeSearchSeed {
+    Tree(String),
 }
 
 #[async_trait]
@@ -133,44 +178,21 @@ impl Tool for BigSearchBroker {
         let start = Instant::now();
         let request = input.big_search_query()?;
 
-        let root_directory = match request.root_directory() {
-            Some(dir) => dir,
-            None => {
-                return Err(ToolError::BigSearchError(
-                    "Root directory is required".to_string(),
-                ))
-            }
-        };
+        let root_directory = self.validate_root_directory(&request)?;
 
-        let tree =
-            TreePrinter::to_string_stacked(Path::new(root_directory)).unwrap_or("".to_owned());
+        let repository = self.create_repository(&root_directory).await?;
 
-        let tag_index = TagIndex::from_path(Path::new(root_directory)).await;
+        let tree_string =
+            TreePrinter::to_string_stacked(Path::new(&root_directory)).map_err(|_| {
+                ToolError::FileImportantError(FileImportantError::PrintTreeError(root_directory))
+            })?;
 
-        let repository = Repository::new(
-            tree,
-            "outline".to_owned(),
-            tag_index,
-            PathBuf::from(request.root_directory().unwrap_or("").to_string()),
-        );
+        let tree_seed = IterativeSearchSeed::Tree(tree_string);
 
-        let iterative_search_context =
-            IterativeSearchContext::new(Vec::new(), request.user_query().to_owned(), "".to_owned());
-
-        // google llm operations
-        let google_studio_llm_config = GoogleStudioLLM::new(
-            request.root_directory().unwrap_or("").to_owned(),
-            self.llm_client(),
-            request.root_request_id().to_owned(),
-        );
-
-        let mut system = IterativeSearchSystem::new(
-            iterative_search_context,
-            repository,
-            google_studio_llm_config,
-        );
+        let system = self.create_search_system(repository, &request)?;
 
         let results = system
+            .with_seed(tree_seed)
             .run()
             .await
             .map_err(|e| ToolError::IterativeSearchError(e))?;

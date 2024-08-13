@@ -2,6 +2,7 @@ use llm_client::clients::types::{LLMClientError, LLMType};
 use serde_xml_rs::to_string;
 
 use std::path::PathBuf;
+use std::time::Instant;
 use thiserror::Error;
 
 use async_trait::async_trait;
@@ -12,14 +13,14 @@ use crate::{
         code_symbol::important::{
             CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
-        kw_search::types::SerdeError,
+        file::types::SerdeError,
     },
     user_context::types::UserContextError,
 };
 
 use super::{
-    decide::DecideResponse, google_studio::GoogleStudioLLM, identify::IdentifyResponse,
-    repository::Repository,
+    big_search::IterativeSearchSeed, decide::DecideResponse, google_studio::GoogleStudioLLM,
+    identify::IdentifyResponse, relevant_files::QueryRelevantFilesResponse, repository::Repository,
 };
 
 #[derive(Debug, Clone)]
@@ -151,6 +152,12 @@ pub enum IterativeSearchError {
 
     #[error("Wrong format: {0}")]
     WrongFormat(String),
+
+    #[error("No seed provided")]
+    NoSeed(),
+
+    #[error("Tree printing failed for: {0}")]
+    PrintTreeError(String),
 }
 
 impl SearchQuery {
@@ -163,7 +170,6 @@ impl SearchQuery {
     }
 }
 
-// todo(zi): think about this structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     path: PathBuf,
@@ -202,14 +208,19 @@ pub trait LLMOperations {
         &self,
         context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError>;
+    async fn query_relevant_files(
+        &self,
+        user_query: &str,
+        seed: IterativeSearchSeed,
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError>;
 }
 
-// Main system struct
 pub struct IterativeSearchSystem<T: LLMOperations> {
     context: IterativeSearchContext,
     repository: Repository,
     llm_ops: T,
     complete: bool,
+    seed: Option<IterativeSearchSeed>,
 }
 
 impl<T: LLMOperations> IterativeSearchSystem<T> {
@@ -219,29 +230,58 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             repository,
             llm_ops,
             complete: false,
+            seed: None,
         }
+    }
+
+    pub fn with_seed(mut self, seed: IterativeSearchSeed) -> Self {
+        self.seed = Some(seed);
+        self
     }
 
     fn context(&self) -> &IterativeSearchContext {
         &self.context
     }
 
+    pub async fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
+        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed())?; // seed not used elsewhere
+
+        let scratch_pad_thinking = self
+            .llm_ops
+            .query_relevant_files(&self.context.user_query(), seed)
+            .await?
+            .scratch_pad;
+
+        self.context.update_scratch_pad(&scratch_pad_thinking);
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
+        let start_time = Instant::now();
+
+        self.apply_seed().await?;
+        println!("Seed applied in {:?}", start_time.elapsed());
+
         let mut count = 0;
-        while self.complete == false && count < 3 {
+        while !self.complete && count < 3 {
+            let loop_start = Instant::now();
             println!("===========");
             println!("run loop #{}", count);
             println!("===========");
-            let search_queries = self.search().await?;
 
-            // todo(zi): this could be async
+            let search_queries = self.search().await?;
+            println!("Search queries generated in {:?}", loop_start.elapsed());
+
+            let search_start = Instant::now();
             let search_results: Vec<SearchResult> = search_queries
                 .iter()
-                // maybe flat_mapping here works better
                 .flat_map(|q| self.repository.execute_search(q))
                 .collect();
+            println!("Search executed in {:?}", search_start.elapsed());
 
+            let identify_start = Instant::now();
             let identify_results = self.identify(&search_results).await?;
+            println!("Identification completed in {:?}", identify_start.elapsed());
 
             self.context
                 .update_scratch_pad(&identify_results.scratch_pad);
@@ -260,11 +300,13 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                 identify_results
                     .item
                     .iter()
-                    .map(|r| File::new(r.path(), r.thinking(), ""))
-                    .collect::<Vec<File>>(),
+                    .map(|r| File::new(r.path(), r.thinking(), "")) // todo(zi) add real snippet?
+                    .collect(),
             );
 
+            let decision_start = Instant::now();
             let decision = self.decide().await?;
+            println!("Decision made in {:?}", decision_start.elapsed());
 
             println!("{:?}", decision);
 
@@ -273,6 +315,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             self.complete = decision.complete();
 
             count += 1;
+            println!("Loop {} completed in {:?}", count, loop_start.elapsed());
         }
 
         let symbols = self
@@ -290,6 +333,8 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             .collect();
 
         let response = CodeSymbolImportantResponse::new(symbols, ordered_symbols);
+
+        println!("Total execution time: {:?}", start_time.elapsed());
 
         Ok(response)
     }

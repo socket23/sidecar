@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs::{self},
     path::PathBuf,
 };
@@ -7,11 +8,14 @@ use crate::{
     agentic::tool::search::iterative::{SearchResultSnippet, SearchToolType},
     repomap::{
         file::git::GitWalker,
-        tag::{SearchMode, TagIndex},
+        tag::{SearchMode, Tag, TagIndex},
+        types::RepoMap,
     },
 };
 
 use super::iterative::{SearchQuery, SearchResult};
+
+pub const SNIPPET_LINE_BUDGET: usize = 20; // arbitrary budget
 
 #[derive(Debug, Clone)]
 pub struct Repository {
@@ -29,6 +33,18 @@ impl Repository {
             tag_index,
             root,
         }
+    }
+
+    pub fn get_tag(&self, path: &PathBuf, tag_name: &str) -> Option<&HashSet<Tag>> {
+        self.tag_index
+            .definitions()
+            .get(&(path.to_owned(), tag_name.to_string()))
+    }
+
+    pub fn get_tag_snippet(&self, path: &PathBuf, tag_name: &str) -> Option<String> {
+        self.get_tag(path, tag_name)
+            .and_then(|tag_set| tag_set.iter().next())
+            .and_then(|tag| RepoMap::get_tag_snippet(tag, SNIPPET_LINE_BUDGET).ok())
     }
 
     pub fn execute_search(&self, search_query: &SearchQuery) -> Vec<SearchResult> {
@@ -93,10 +109,14 @@ impl Repository {
                                     t.kind,
                                     t.name.to_owned()
                                 );
+
+                                // todo(zi): make async/parallel
+                                let snippet = self.get_tag_snippet(&t.fname, &t.name);
+
                                 SearchResult::new(
                                     t.fname.to_owned(),
                                     &thinking_message,
-                                    SearchResultSnippet::Tag(t.name.to_owned()),
+                                    SearchResultSnippet::Tag(snippet.unwrap_or(t.name.to_owned())),
                                 )
                             })
                             .collect::<Vec<SearchResult>>();

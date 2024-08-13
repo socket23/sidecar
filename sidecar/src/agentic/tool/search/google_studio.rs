@@ -8,11 +8,14 @@ use serde_xml_rs::{from_str, to_string};
 use std::sync::Arc;
 
 use crate::agentic::tool::{
-    kw_search::types::SerdeError,
-    search::{identify::IdentifyResponse, iterative::File},
+    file::types::SerdeError,
+    search::{
+        identify::IdentifyResponse, iterative::File, relevant_files::QueryRelevantFilesResponse,
+    },
 };
 
 use super::{
+    big_search::IterativeSearchSeed,
     decide::DecideResponse,
     iterative::{
         IterativeSearchContext, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests,
@@ -339,13 +342,7 @@ false
     }
 
     fn parse_search_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {
-        let lines = response
-            .lines()
-            .skip_while(|l| !l.contains("<reply>"))
-            .skip(1)
-            .take_while(|l| !l.contains("</reply>"))
-            .collect::<Vec<&str>>()
-            .join("\n");
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
         from_str::<SearchRequests>(&lines).map_err(|error| {
             eprintln!("{:?}", error);
@@ -354,13 +351,7 @@ false
     }
 
     fn parse_identify_response(response: &str) -> Result<IdentifyResponse, IterativeSearchError> {
-        let lines = response
-            .lines()
-            .skip_while(|l| !l.contains("<reply>"))
-            .skip(1)
-            .take_while(|l| !l.contains("</reply>"))
-            .collect::<Vec<&str>>()
-            .join("\n");
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
         from_str::<IdentifyResponse>(&lines).map_err(|error| {
             eprintln!("{:?}", error);
@@ -368,18 +359,33 @@ false
         })
     }
 
-    fn parse_decide_response(response: &str) -> Result<DecideResponse, IterativeSearchError> {
-        let lines = response
+    fn get_reply_tags_contents(response: &str) -> String {
+        response
             .lines()
             .skip_while(|l| !l.contains("<reply>"))
             .skip(1)
             .take_while(|l| !l.contains("</reply>"))
             .collect::<Vec<&str>>()
-            .join("\n");
+            .join("\n")
+    }
+
+    fn parse_decide_response(response: &str) -> Result<DecideResponse, IterativeSearchError> {
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
         from_str::<DecideResponse>(&lines).map_err(|error| {
             eprintln!("{:?}", error);
             IterativeSearchError::SerdeError(SerdeError::new(error, lines))
+        })
+    }
+
+    fn parse_query_relevant_files_response(
+        response: &str,
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
+
+        from_str::<QueryRelevantFilesResponse>(&lines).map_err(|e| {
+            eprintln!("{:?}", e);
+            IterativeSearchError::SerdeError(SerdeError::new(e, lines))
         })
     }
 
@@ -477,6 +483,153 @@ false
             input
         }
     }
+
+    fn system_message_for_file_important(&self) -> String {
+        format!(
+            r#"
+You are a resourceful, autonomous AI assistant tasked with finding relevant files in an existing 
+codebase based on a reported issue and repository's tree representation.
+
+# Instructions:
+
+1. Analyze Issue Description:
+   Carefully read and understand the reported issue in the user query.
+
+2. Analyze Repository Structure:
+   Examine the repository structure, including directories and file names.
+
+3. Identify Potentially Relevant Files:
+   Explain why certain files might be relevant based on their name, location, and potential relation to the issue.
+   Consider naming conventions, file types, and architectural patterns.
+
+4. Reasoning Process:
+   Think step-by-step and clearly articulate your reasoning in the thinking field for each file.
+   Include a confidence level (Uncertain, Tentative, Probable, Confident, Certain) for each file selection in the thinking field.
+
+5. File Selection:
+Return at least 1 file, but no more than 10, in order of relevance.
+If fewer than 10 relevant files are found, explain why no more could be identified.
+If no relevant files are found, explain the reasoning and suggest next steps.
+
+6. Scratch Pad Usage - Use the scratch_pad field as a meta-analysis space, focusing solely on the repository structure and file names:
+6.1. Analyze overall codebase structure:
+- Identify the depth and breadth of the directory structure.
+- Recognize patterns in directory naming and organization.
+- Infer potential architectural approaches (e.g., modular, flat, feature-based).
+6.2. Deduce file and module relationships:
+- Identify potential entry points (e.g., main.rs, lib.rs, mod.rs files).
+- Recognize module hierarchies and potential dependencies.
+- Infer possible component or service boundaries.
+6.3. Interpret naming conventions:
+- Identify consistent prefixes, suffixes, or patterns in file names.
+- Infer potential functionality or purpose from file names.
+- Recognize naming patterns that might indicate specific types of components (e.g., controllers, services, models).
+6.4. Infer technology stack and language features:
+- Deduce programming languages used based on file extensions.
+- Identify potential build tools or package managers from configuration files.
+- Recognize patterns that might indicate use of specific frameworks or libraries.
+6.5. Identify potential areas of interest related to the issue:
+- Suggest directories or files that might be relevant based on their names.
+- Propose keywords or patterns to search for in file names.
+- Highlight areas that seem to align with the reported issue's domain.
+6.6. Recognize testing and documentation patterns:
+- Identify potential test directories or files.
+- Recognize documentation files or directories.
+- Infer the project's approach to testing and documentation from the structure.
+6.7. Analyze error handling and logging:
+- Identify files or directories that might be related to error handling or logging.
+- Infer the project's approach to managing errors and logs.
+6.8. Suggest areas for further investigation:
+- Propose specific files or directories that warrant closer examination.
+- Identify patterns or naming conventions that might yield more insights if searched for.
+- Suggest potential relationships between files or modules that might be relevant to the issue.
+6.9. Acknowledge limitations and uncertainties:
+- Clearly state that analysis is based solely on directory structure and file names.
+- Highlight areas where file contents would be particularly helpful for better understanding.
+- Suggest specific questions about the codebase that could provide valuable context.
+6.10. Synthesize insights:
+- Summarize key observations about the codebase structure and organization.
+- Propose hypotheses about the codebase architecture and design based on structural evidence.
+- Relate structural insights to the reported issue, suggesting potential areas of focus.
+
+Do not hallucinate files that do not appear in the provided repository structure.
+            
+Respond in the following XML format:
+
+<reply>
+<response>
+<files>
+<file>
+<path>
+path/to/file1
+</path>
+<thinking>
+</thinking>
+</file>
+</files>
+<scratch_pad>
+Write your analysis here.
+</scratch_pad>
+<response>
+</reply>
+
+Notice how each xml tag ends with a new line, follow this format strictly.
+
+Response:
+
+<files>
+"#,
+        )
+    }
+
+    fn user_message_for_file_important(&self, user_query: &str, tree: &str) -> String {
+        format!("User query: {}\n\nTree:\n{}", user_query, tree,)
+    }
+
+    pub async fn query_relevant_files(
+        &self,
+        user_query: &str,
+        seed: IterativeSearchSeed,
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
+        match seed {
+            IterativeSearchSeed::Tree(tree_string) => {
+                let system_message =
+                    LLMClientMessage::system(self.system_message_for_file_important());
+                let user_message = LLMClientMessage::user(
+                    self.user_message_for_file_important(user_query, &tree_string),
+                );
+
+                let messages = LLMClientCompletionRequest::new(
+                    self.model.to_owned(),
+                    vec![system_message.clone(), user_message.clone()],
+                    0.2,
+                    None,
+                );
+
+                let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+                let response = self
+                    .client
+                    .stream_completion(
+                        self.api_keys.to_owned(),
+                        messages,
+                        self.provider.to_owned(),
+                        vec![
+                            ("event_type".to_owned(), "query_relevant_files".to_owned()),
+                            ("root_id".to_owned(), self.root_request_id.to_string()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        sender,
+                    )
+                    .await?;
+
+                Ok(GoogleStudioLLM::parse_query_relevant_files_response(
+                    &response,
+                )?)
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -501,5 +654,13 @@ impl LLMOperations for GoogleStudioLLM {
         context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError> {
         self.decide(context).await
+    }
+
+    async fn query_relevant_files(
+        &self,
+        user_query: &str,
+        seed: IterativeSearchSeed,
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
+        self.query_relevant_files(user_query, seed).await
     }
 }

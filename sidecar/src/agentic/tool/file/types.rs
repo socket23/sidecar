@@ -57,4 +57,7 @@ pub enum FileImportantError {
 
     #[error("Wrong format: {0}")]
     WrongFormat(String),
+
+    #[error("Tree printing failed for: {0}")]
+    PrintTreeError(String),
 }

@@ -12,7 +12,9 @@ use crate::agentic::tool::{
         file_finder::ImportantFilesFinderQuery, important::FileImportantResponse,
         models::anthropic::FileImportantReply, types::SerdeError,
     },
-    search::{identify::IdentifyResponse, iterative::File},
+    search::{
+        identify::IdentifyResponse, iterative::File, relevant_files::QueryRelevantFilesResponse,
+    },
 };
 
 use super::{
@@ -343,13 +345,7 @@ false
     }
 
     fn parse_search_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {
-        let lines = response
-            .lines()
-            .skip_while(|l| !l.contains("<reply>"))
-            .skip(1)
-            .take_while(|l| !l.contains("</reply>"))
-            .collect::<Vec<&str>>()
-            .join("\n");
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
         from_str::<SearchRequests>(&lines).map_err(|error| {
             eprintln!("{:?}", error);
@@ -358,13 +354,7 @@ false
     }
 
     fn parse_identify_response(response: &str) -> Result<IdentifyResponse, IterativeSearchError> {
-        let lines = response
-            .lines()
-            .skip_while(|l| !l.contains("<reply>"))
-            .skip(1)
-            .take_while(|l| !l.contains("</reply>"))
-            .collect::<Vec<&str>>()
-            .join("\n");
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
         from_str::<IdentifyResponse>(&lines).map_err(|error| {
             eprintln!("{:?}", error);
@@ -372,18 +362,33 @@ false
         })
     }
 
-    fn parse_decide_response(response: &str) -> Result<DecideResponse, IterativeSearchError> {
-        let lines = response
+    fn get_reply_tags_contents(response: &str) -> String {
+        response
             .lines()
             .skip_while(|l| !l.contains("<reply>"))
             .skip(1)
             .take_while(|l| !l.contains("</reply>"))
             .collect::<Vec<&str>>()
-            .join("\n");
+            .join("\n")
+    }
+
+    fn parse_decide_response(response: &str) -> Result<DecideResponse, IterativeSearchError> {
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
         from_str::<DecideResponse>(&lines).map_err(|error| {
             eprintln!("{:?}", error);
             IterativeSearchError::SerdeError(SerdeError::new(error, lines))
+        })
+    }
+
+    fn parse_query_relevant_files_response(
+        response: &str,
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
+
+        from_str::<QueryRelevantFilesResponse>(&lines).map_err(|e| {
+            eprintln!("{:?}", e);
+            IterativeSearchError::SerdeError(SerdeError::new(e, lines))
         })
     }
 
@@ -484,17 +489,47 @@ false
 
     fn system_message_for_file_important(&self) -> String {
         format!(
-            r#"Consider the provided user query.
-        
-Select files from the provided repository tree that may be relevant to solving the user query.
+            r#"
+You are an autonomous AI assistant tasked with finding relevant code in an existing 
+codebase based on a reported issue.
 
-Do not hallucinate files that do not appear in the tree.
+# Instructions:
 
-You must return at least 1 file, but no more than 10, in order of relevance.
+1. Analyze Issue Description:
+   Carefully read and understand the reported issue in the user query.
+
+2. Analyze Repository Structure:
+   Examine the repository structure, including directories and file names.
+
+3. Identify Potentially Relevant Files:
+   Explain why certain files might be relevant based on their name, location, and potential relation to the issue.
+   Consider naming conventions, file types, and architectural patterns.
+
+4. Reasoning Process:
+   Think step-by-step and clearly articulate your reasoning in the thinking field for each file.
+   Include a confidence level (0-100%) for each file selection in the thinking field.
+
+5. File Selection:
+Return at least 1 file, but no more than 10, in order of relevance.
+If fewer than 10 relevant files are found, explain why no more could be identified.
+If no relevant files are found, explain the reasoning and suggest next steps.
+
+6. Scratch Pad Usage:
+6.1 The scratch_pad field serves as a meta-analysis space. Use it to:
+6.2. Summarize overall patterns or insights noticed in the codebase structure.
+6.3. Suggest high-level areas or components that might be relevant to the issue.
+6.4. Propose potential keywords, search terms, or file names that could be useful for further investigation.
+6.5. Highlight any architectural or design patterns that seem pertinent to the reported issue.
+6.6. Note any limitations in your analysis or areas where human insight might be particularly valuable.
+
+This information will be used as a seed for another system with file name and keyword search capabilities. Your goal is to provide clues, point the system in the right direction, and set it up with the best chances for success in further analyzing the codebase.
+
+Do not hallucinate files that do not appear in the provided repository structure.
             
 Respond in the following XML format:
 
 <reply>
+<response>
 <files>
 <file>
 <path>
@@ -504,6 +539,10 @@ path/to/file1
 </thinking>
 </file>
 </files>
+<scratch_pad>
+Use this to summarize overall patterns or insights noticed in the codebase structure.
+</scratch_pad>
+<response>
 </reply>
 
 Notice how each xml tag ends with a new line, follow this format strictly.
@@ -523,7 +562,7 @@ Response:
         &self,
         user_query: &str,
         seed: IterativeSearchSeed,
-    ) -> Result<FileImportantResponse, IterativeSearchError> {
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
         match seed {
             IterativeSearchSeed::Tree(tree_string) => {
                 let system_message =
@@ -557,15 +596,13 @@ Response:
                     )
                     .await?;
 
-                let parsed_response = FileImportantReply::parse_response(&response)
-                    .map_err(IterativeSearchError::from)?;
+                println!("{:?}", response);
 
-                println!("{:?}", &parsed_response);
-
-                todo!();
+                Ok(GoogleStudioLLM::parse_query_relevant_files_response(
+                    &response,
+                )?)
             }
         }
-        todo!();
     }
 }
 
@@ -597,7 +634,7 @@ impl LLMOperations for GoogleStudioLLM {
         &self,
         user_query: &str,
         seed: IterativeSearchSeed,
-    ) -> Result<FileImportantResponse, IterativeSearchError> {
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
         self.query_relevant_files(user_query, seed).await
     }
 }

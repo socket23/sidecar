@@ -120,6 +120,20 @@ impl RepoMap {
         Ok(tree)
     }
 
+    pub fn get_tag_snippet(tag: &Tag, max_lines: usize) -> Result<String, RepoMapError> {
+        let file_content = std::fs::read(&tag.fname).map_err(|_| RepoMapError::IoError)?;
+
+        let code = String::from_utf8_lossy(&file_content).to_string();
+        let lines: Vec<&str> = code.lines().collect();
+
+        let start_line = tag.line.saturating_sub(1); // 0-based index
+        let end_line = std::cmp::min(start_line + max_lines, lines.len());
+
+        let snippet: String = lines[start_line..end_line].join("\n");
+
+        Ok(snippet)
+    }
+
     pub fn to_tree(tags: &Vec<Tag>) -> String {
         let mut tags = tags.clone();
         tags.sort_by(|a, b| a.rel_fname.cmp(&b.rel_fname));

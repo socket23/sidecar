@@ -22,7 +22,7 @@ use crate::{
 
 use super::{
     big_search::IterativeSearchSeed, decide::DecideResponse, google_studio::GoogleStudioLLM,
-    identify::IdentifyResponse, repository::Repository,
+    identify::IdentifyResponse, relevant_files::QueryRelevantFilesResponse, repository::Repository,
 };
 
 #[derive(Debug, Clone)]
@@ -232,7 +232,7 @@ pub trait LLMOperations {
         &self,
         user_query: &str,
         seed: IterativeSearchSeed,
-    ) -> Result<FileImportantResponse, IterativeSearchError>;
+    ) -> Result<QueryRelevantFilesResponse, IterativeSearchError>;
 }
 
 // Main system struct

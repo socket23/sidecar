@@ -5,6 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use color_eyre::Section;
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
@@ -17,6 +18,7 @@ use crate::{
         tool::{
             code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
             errors::ToolError,
+            file::types::FileImportantError,
             input::ToolInput,
             output::ToolOutput,
             r#type::Tool,
@@ -181,8 +183,12 @@ impl Tool for BigSearchBroker {
 
         let repository = self.create_repository(&root_directory).await?;
 
-        // todo(zi): get tree
-        let tree_seed = IterativeSearchSeed::Tree("tree".to_owned());
+        let tree_string =
+            TreePrinter::to_string_stacked(Path::new(&root_directory)).map_err(|_| {
+                ToolError::FileImportantError(FileImportantError::PrintTreeError(root_directory))
+            })?;
+
+        let tree_seed = IterativeSearchSeed::Tree(tree_string);
 
         let system = self.create_search_system(repository, &request)?;
 

@@ -5,7 +5,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use color_eyre::Section;
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,

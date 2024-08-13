@@ -8,10 +8,7 @@ use serde_xml_rs::{from_str, to_string};
 use std::sync::Arc;
 
 use crate::agentic::tool::{
-    file::{
-        file_finder::ImportantFilesFinderQuery, important::FileImportantResponse,
-        models::anthropic::FileImportantReply, types::SerdeError,
-    },
+    file::types::SerdeError,
     search::{
         identify::IdentifyResponse, iterative::File, relevant_files::QueryRelevantFilesResponse,
     },

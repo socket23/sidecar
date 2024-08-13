@@ -7,7 +7,6 @@ use std::{
 use crate::{
     agentic::tool::search::iterative::{SearchResultSnippet, SearchToolType},
     repomap::{
-        error::RepoMapError,
         file::git::GitWalker,
         tag::{SearchMode, Tag, TagIndex},
         types::RepoMap,

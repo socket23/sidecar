@@ -13,10 +13,7 @@ use crate::{
         code_symbol::important::{
             CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
-        file::{
-            important::FileImportantResponse,
-            types::{FileImportantError, SerdeError},
-        },
+        file::types::{FileImportantError, SerdeError},
     },
     user_context::types::UserContextError,
 };

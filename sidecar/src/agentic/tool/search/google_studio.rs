@@ -596,8 +596,6 @@ Response:
                     )
                     .await?;
 
-                println!("{:?}", response);
-
                 Ok(GoogleStudioLLM::parse_query_relevant_files_response(
                     &response,
                 )?)

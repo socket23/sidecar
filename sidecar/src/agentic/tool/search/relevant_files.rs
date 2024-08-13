@@ -5,8 +5,8 @@ use std::path::PathBuf;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "response")]
 pub struct QueryRelevantFilesResponse {
-    files: QueryRelevantFiles,
-    scratch_pad: String,
+    pub files: QueryRelevantFiles,
+    pub scratch_pad: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

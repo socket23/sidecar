@@ -8,11 +8,15 @@ use serde_xml_rs::{from_str, to_string};
 use std::sync::Arc;
 
 use crate::agentic::tool::{
-    kw_search::types::SerdeError,
+    file::{
+        file_finder::ImportantFilesFinderQuery, important::FileImportantResponse,
+        models::anthropic::FileImportantReply, types::SerdeError,
+    },
     search::{identify::IdentifyResponse, iterative::File},
 };
 
 use super::{
+    big_search::IterativeSearchSeed,
     decide::DecideResponse,
     iterative::{
         IterativeSearchContext, IterativeSearchError, LLMOperations, SearchQuery, SearchRequests,
@@ -477,6 +481,92 @@ false
             input
         }
     }
+
+    fn system_message_for_file_important(&self) -> String {
+        format!(
+            r#"Consider the provided user query.
+        
+Select files from the provided repository tree that may be relevant to solving the user query.
+
+Do not hallucinate files that do not appear in the tree.
+
+You must return at least 1 file, but no more than 10, in order of relevance.
+            
+Respond in the following XML format:
+
+<reply>
+<files>
+<file>
+<path>
+path/to/file1
+</path>
+<thinking>
+</thinking>
+</file>
+</files>
+</reply>
+
+Notice how each xml tag ends with a new line, follow this format strictly.
+
+Response:
+
+<files>
+"#,
+        )
+    }
+
+    fn user_message_for_file_important(&self, user_query: &str, tree: &str) -> String {
+        format!("User query: {}\n\nTree:\n{}", user_query, tree,)
+    }
+
+    pub async fn query_relevant_files(
+        &self,
+        user_query: &str,
+        seed: IterativeSearchSeed,
+    ) -> Result<FileImportantResponse, IterativeSearchError> {
+        match seed {
+            IterativeSearchSeed::Tree(tree_string) => {
+                let system_message =
+                    LLMClientMessage::system(self.system_message_for_file_important());
+                let user_message = LLMClientMessage::user(
+                    self.user_message_for_file_important(user_query, &tree_string),
+                );
+
+                let messages = LLMClientCompletionRequest::new(
+                    self.model.to_owned(),
+                    vec![system_message.clone(), user_message.clone()],
+                    0.2,
+                    None,
+                );
+
+                let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+                let response = self
+                    .client
+                    .stream_completion(
+                        self.api_keys.to_owned(),
+                        messages,
+                        self.provider.to_owned(),
+                        vec![
+                            ("event_type".to_owned(), "query_relevant_files".to_owned()),
+                            ("root_id".to_owned(), self.root_request_id.to_string()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        sender,
+                    )
+                    .await?;
+
+                let parsed_response = FileImportantReply::parse_response(&response)
+                    .map_err(IterativeSearchError::from)?;
+
+                println!("{:?}", &parsed_response);
+
+                todo!();
+            }
+        }
+        todo!();
+    }
 }
 
 #[async_trait]
@@ -501,5 +591,13 @@ impl LLMOperations for GoogleStudioLLM {
         context: &mut IterativeSearchContext,
     ) -> Result<DecideResponse, IterativeSearchError> {
         self.decide(context).await
+    }
+
+    async fn query_relevant_files(
+        &self,
+        user_query: &str,
+        seed: IterativeSearchSeed,
+    ) -> Result<FileImportantResponse, IterativeSearchError> {
+        self.query_relevant_files(user_query, seed).await
     }
 }

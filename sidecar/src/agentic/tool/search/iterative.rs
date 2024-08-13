@@ -2,6 +2,7 @@ use llm_client::clients::types::{LLMClientError, LLMType};
 use serde_xml_rs::to_string;
 
 use std::path::PathBuf;
+use std::time::Instant;
 use thiserror::Error;
 
 use async_trait::async_trait;
@@ -277,22 +278,31 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
+        let start_time = Instant::now();
+
         self.apply_seed().await?;
+        println!("Seed applied in {:?}", start_time.elapsed());
+
         let mut count = 0;
-        while self.complete == false && count < 3 {
+        while !self.complete && count < 3 {
+            let loop_start = Instant::now();
             println!("===========");
             println!("run loop #{}", count);
             println!("===========");
-            let search_queries = self.search().await?;
 
-            // todo(zi): this could be async
+            let search_queries = self.search().await?;
+            println!("Search queries generated in {:?}", loop_start.elapsed());
+
+            let search_start = Instant::now();
             let search_results: Vec<SearchResult> = search_queries
                 .iter()
-                // maybe flat_mapping here works better
                 .flat_map(|q| self.repository.execute_search(q))
                 .collect();
+            println!("Search executed in {:?}", search_start.elapsed());
 
+            let identify_start = Instant::now();
             let identify_results = self.identify(&search_results).await?;
+            println!("Identification completed in {:?}", identify_start.elapsed());
 
             self.context
                 .update_scratch_pad(&identify_results.scratch_pad);
@@ -311,11 +321,13 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                 identify_results
                     .item
                     .iter()
-                    .map(|r| File::new(r.path(), r.thinking(), ""))
-                    .collect::<Vec<File>>(),
+                    .map(|r| File::new(r.path(), r.thinking(), "")) // todo(zi) add real snippet?
+                    .collect(),
             );
 
+            let decision_start = Instant::now();
             let decision = self.decide().await?;
+            println!("Decision made in {:?}", decision_start.elapsed());
 
             println!("{:?}", decision);
 
@@ -324,6 +336,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             self.complete = decision.complete();
 
             count += 1;
+            println!("Loop {} completed in {:?}", count, loop_start.elapsed());
         }
 
         let symbols = self
@@ -341,6 +354,8 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             .collect();
 
         let response = CodeSymbolImportantResponse::new(symbols, ordered_symbols);
+
+        println!("Total execution time: {:?}", start_time.elapsed());
 
         Ok(response)
     }

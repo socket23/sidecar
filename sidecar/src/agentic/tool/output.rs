@@ -574,4 +574,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn get_search_and_replace_output(self) -> Option<SearchAndReplaceEditingResponse> {
+        match self {
+            ToolOutput::SearchAndReplaceEditing(response) => Some(response),
+            _ => None,
+        }
+    }
 }

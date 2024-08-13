@@ -393,7 +393,6 @@ impl Tool for SearchAndReplaceEditing {
                 edits_response = edits_receiver.recv() => {
                     match edits_response {
                         Some(EditDelta::EditStarted(range)) => {
-                            println!("search_and_replace_editing::start_streaming::range({:?})", &range);
                             let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
                                 root_request_id.to_owned(),
                                 symbol_identifier.clone(),
@@ -414,7 +413,6 @@ impl Tool for SearchAndReplaceEditing {
                             ));
                         }
                         Some(EditDelta::EditDelta((range, delta))) => {
-                            println!("search_and_replace_editing::edit_delta({})", &delta);
                             let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
                                 root_request_id.to_owned(),
                                 symbol_identifier.clone(),
@@ -433,7 +431,6 @@ impl Tool for SearchAndReplaceEditing {
                                 range,
                                 fs_file_path.to_owned(),
                             ));
-                            println!("search_and_replace_editing::edit_end({:?})", &range);
                             let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
                                 root_request_id.to_owned(),
                                 symbol_identifier.clone(),

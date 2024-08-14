@@ -14,6 +14,12 @@ use crate::{
             CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
         file::types::SerdeError,
+        human::{
+            cli::CliCommunicator,
+            error::CommunicationError,
+            human::Human,
+            qa::{Choice, Question},
+        },
     },
     user_context::types::UserContextError,
 };
@@ -158,6 +164,9 @@ pub enum IterativeSearchError {
 
     #[error("Tree printing failed for: {0}")]
     PrintTreeError(String),
+
+    #[error("Human communication error: {0}")]
+    HumanCommunicationError(#[from] CommunicationError),
 }
 
 impl SearchQuery {
@@ -257,6 +266,24 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
+        let cli = CliCommunicator {};
+
+        let human_tool = Human::new(cli);
+
+        let choices = vec![
+            Choice::new("0", "15"),
+            Choice::new("1", "30"),
+            Choice::new("2", "45"),
+        ];
+
+        let question = Question::new("What's your age?", &choices);
+
+        let answer = human_tool.ask(question)?;
+
+        println!("{}", answer.choice_id());
+
+        todo!();
+
         let start_time = Instant::now();
 
         self.apply_seed().await?;

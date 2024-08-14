@@ -11,16 +11,16 @@ pub trait Communicator {
     fn ask_question(&self, question: &Question) -> Result<Answer, CommunicationError>;
 }
 
-struct HumanTool<T: Communicator> {
+pub struct Human<T: Communicator> {
     communicator: T,
 }
 
-impl<T: Communicator> HumanTool<T> {
-    fn new(communicator: T) -> Self {
+impl<T: Communicator> Human<T> {
+    pub fn new(communicator: T) -> Self {
         Self { communicator }
     }
 
-    fn ask(&self, question: Question) -> Result<Answer, CommunicationError> {
+    pub fn ask(&self, question: Question) -> Result<Answer, CommunicationError> {
         self.communicator.ask_question(&question)
     }
 }

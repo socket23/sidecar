@@ -22,6 +22,15 @@ pub struct Choice {
     text: String,
 }
 
+impl Choice {
+    pub fn new(id: &str, text: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            text: text.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Answer {
     choice_id: String,

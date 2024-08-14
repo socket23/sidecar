@@ -141,44 +141,10 @@ impl ReRankingSnippetsForCodeEditingContext {
         }
     }
 
-    fn system_message(&self) -> String {
-        format!(
-            r"You are an expert software eningeer who never writes incorrect code and is tasked with selecting code symbols whose definitions you can use for editing.
-The editor has stopped working for you, so we get no help with auto-complete when writing code, hence we want to make sure that we select all the code symbols which are necessary.
-As a first step before making changes, you are tasked with collecting all the definitions of the various code symbols whose methods or parameters you will be using when editing the code in the selection.
-- You will be given the original user query in <user_query>
-- You will be provided the code snippet you will be editing in <code_snippet_to_edit> section.
-- The various definitions of the class, method or function (just the high level outline of it) will be given to you as a list in <code_symbol_outline_list>. When writing code you will reuse the methods from here to make the edits, so be very careful when selecting the symbol outlines you are interested in.
-- Pay attention to the <code_snippet_to_edit> section and select code symbols accordingly, do not select symbols which we will not be using for making edits.
-- Each code_symbol_outline entry is in the following format:
-```
-<code_symbol>
-<name>
-{{name of the code symbol over here}}
-</name>
-<content>
-{{the outline content for the code symbol over here}}
-</content>
-</code_symbol>
-```
-- You have to decide which code symbols you will be using when doing the edits and select those code symbols.
-Your reply should be in the following format:
-<reply>
-<thinking>
-</thinking>
-<code_symbol_outline_list>
-<code_symbol>
-<name>
-</name>
-<file_path>
-</file_path>
-</code_symbol>
-... more code_symbol sections over here as per your requirement
-</code_symbol_outline_list>
-<reply>
-
-Now we will show you an example of how the output should look like:
-<user_query>
+    fn few_shot_examples(&self) -> Vec<LLMClientMessage> {
+        vec![
+            LLMClientMessage::user(
+                r#"<user_query>
 We want to implement a new method on symbol event which exposes the initial request question
 </user_query>
 <code_snippet_to_edit>
@@ -314,10 +280,10 @@ impl SymbolToProbeRequest {{
 }}
 </content>
 </code_symbol>
-</code_symbol_outline_list>
-
-Your reply should be:
-<reply>
+</code_symbol_outline_list>"#
+                    .to_owned(),
+            ),
+            LLMClientMessage::assistant(r#"<reply>
 <thinking>
 The request talks about implementing new methods for the initial request data, so we need to include the initial request data symbol in the context when trying to edit the code.
 </thinking>
@@ -331,7 +297,45 @@ InitialRequestData
 </file_path>
 </code_symbol>
 </code_symbol_outline_list>
-</reply>"
+</reply>"#.to_owned()),
+        ]
+    }
+
+    fn system_message(&self) -> String {
+        format!(
+            r"You are an expert software eningeer who never writes incorrect code and is tasked with selecting code symbols whose definitions you can use for editing.
+The editor has stopped working for you, so we get no help with auto-complete when writing code, hence we want to make sure that we select all the code symbols which are necessary.
+As a first step before making changes, you are tasked with collecting all the definitions of the various code symbols whose methods or parameters you will be using when editing the code in the selection.
+- You will be given the original user query in <user_query>
+- You will be provided the code snippet you will be editing in <code_snippet_to_edit> section.
+- The various definitions of the class, method or function (just the high level outline of it) will be given to you as a list in <code_symbol_outline_list>. When writing code you will reuse the methods from here to make the edits, so be very careful when selecting the symbol outlines you are interested in.
+- Pay attention to the <code_snippet_to_edit> section and select code symbols accordingly, do not select symbols which we will not be using for making edits.
+- Each code_symbol_outline entry is in the following format:
+```
+<code_symbol>
+<name>
+{{name of the code symbol over here}}
+</name>
+<content>
+{{the outline content for the code symbol over here}}
+</content>
+</code_symbol>
+```
+- You have to decide which code symbols you will be using when doing the edits and select those code symbols.
+Your reply should be in the following format:
+<reply>
+<thinking>
+</thinking>
+<code_symbol_outline_list>
+<code_symbol>
+<name>
+</name>
+<file_path>
+</file_path>
+</code_symbol>
+... more code_symbol sections over here as per your requirement
+</code_symbol_outline_list>
+<reply>"
         )
     }
 
@@ -416,7 +420,11 @@ impl Tool for ReRankingSnippetsForCodeEditingContext {
         let user_message = LLMClientMessage::user(self.user_message(&context));
         let llm_request = LLMClientCompletionRequest::new(
             llm_properties.llm().clone(),
-            vec![system_message, user_message],
+            vec![system_message]
+                .into_iter()
+                .chain(self.few_shot_examples())
+                .chain(vec![user_message])
+                .collect::<Vec<_>>(),
             0.2,
             None,
         );

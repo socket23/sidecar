@@ -1334,7 +1334,7 @@ impl CodeToEditFilterFormatter for AnthropicCodeToEditFormatter {
             if retries >= 4 {
                 return Err(CodeToEditFilteringError::RetriesExhausted);
             }
-            let (llm, api_key, provider) = if retries % 2 == 1 {
+            let (llm, api_key, provider) = if retries % 2 == 0 {
                 (
                     request_llm.clone(),
                     request_api_key.clone(),

@@ -8,7 +8,7 @@ use derivative::Derivative;
 use futures::{lock::Mutex, stream, StreamExt};
 use llm_client::{
     clients::types::LLMType,
-    provider::{FireworksAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{LLMProvider, LLMProviderAPIKeys},
 };
 use tokio::sync::{mpsc::UnboundedSender, oneshot::Sender};
 
@@ -992,7 +992,6 @@ impl MechaCodeSymbolThinking {
     /// - after the outline we generate a full code edit on the symbol
     pub async fn full_symbol_initial_request(
         &self,
-        tool_box: Arc<ToolBox>,
         original_request: &InitialRequestData,
         request_id: String,
         tool_properties: &ToolProperties,
@@ -1029,7 +1028,7 @@ impl MechaCodeSymbolThinking {
 
             // let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
-            if let Some((ranked_xml_list, mut reverse_lookup)) = self.to_llm_requet_full_listwise(&request_id).await {
+            if let Some((_ranked_xml_list, mut reverse_lookup)) = self.to_llm_requet_full_listwise(&request_id).await {
                 // if we just have a single element over here, then we do not need
                 // to do any lookups, especially if the code is in languages other than
                 // rust, since for them we always have a single snippet
@@ -1066,85 +1065,32 @@ impl MechaCodeSymbolThinking {
                         )));
                     }
                 }
-                // now we have to rerank the whole section
-                // if the xml is too long, then use a beefier model otherwise use
-                // a weaker model for the reranking and selection
-                let llm_properties_for_code_snippet_to_edit = LLMProperties::new(
-                    LLMType::Llama3_1_8bInstruct,
-                    LLMProvider::FireworksAI,
-                    LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new("s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned())),
-                );
-                let symbols_to_be_edited = original_request.symbols_edited_list();
-                let filtered_list = tool_box
-                .filter_code_snippets_in_symbol_for_editing(
-                    ranked_xml_list,
-                    original_request.get_plan(),
-                    llm_properties_for_code_snippet_to_edit.llm().clone(),
-                    llm_properties_for_code_snippet_to_edit.provider().clone(),
-                    llm_properties_for_code_snippet_to_edit.api_key().clone(),
-                    symbols_to_be_edited,
-                    &request_id,
-                )
-                .await?;
-                let code_to_edit_list = filtered_list.code_to_edit_list();
                 let original_request_ref = &original_request;
                 let sub_symbols_to_edit = stream::iter(reverse_lookup)
                     .filter_map(|reverse_lookup| async move {
-                        let idx = reverse_lookup.idx();
                         let range = reverse_lookup.range();
                         let fs_file_path = reverse_lookup.fs_file_path();
                         let outline = reverse_lookup.is_outline();
-                        let found_reason_to_edit = code_to_edit_list
-                            .snippets()
-                            .into_iter()
-                            .find(|snippet| snippet.id() == idx)
-                            .map(|snippet| {
-                                let original_question =
-                                    original_request_ref.get_original_question();
-                                let reason_to_edit = snippet.reason_to_edit().to_owned();
-                                format!(
-                                    r#"Original user query:
-{original_question}
-
-Edit selection reason:
-{reason_to_edit}"#
-                                )
-                            });
-                        // Add one more check for the reason to edit, this time asking it to reject it
-                        // this is reduce in the map operation so we can filter down
-                        match found_reason_to_edit {
-                            Some(_reason) => {
-                                // TODO(skcd): We need to get the sub-symbol over
-                                // here instead of the original symbol name which
-                                // would not work
-                                println!("mecha_code_symbol_thinking::full_symbol_initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
-                                // TODO(skcd): Shoudn't this use the search by name
-                                // instead of the using the range for searching
-                                let symbol_in_range = 
-                                    self.find_symbol_in_range(
-                                        range,
-                                        fs_file_path,
-                                    )
-                                    .await;
-                                if let Some(symbol) = symbol_in_range {
-                                    println!("mecha_code_symbol_thinking::full_symbol_initial_request::symbol_in_range::({})", self.symbol_name());
-                                    Some(SymbolToEdit::new(
-                                        symbol,
-                                        range.clone(),
-                                        fs_file_path.to_owned(),
-                                        vec![original_request_ref.get_plan()],
-                                        outline,
-                                        false,
-                                        true,
-                                        original_request_ref.get_original_question().to_owned(),
-                                        original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
-                                    ))
-                                } else {
-                                    println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({})::({:?})::({:?})", self.symbol_name(), &range, &fs_file_path);
-                                    None
-                                }
-                            }
-                            None => None,
+                        let symbol_in_range = 
+                            self.find_symbol_in_range(
+                                range,
+                                fs_file_path,
+                            )
+                            .await;
+                        if let Some(symbol) = symbol_in_range {
+                            Some(SymbolToEdit::new(
+                                symbol,
+                                range.clone(),
+                                fs_file_path.to_owned(),
+                                vec![original_request_ref.get_plan()],
+                                outline,
+                                false,
+                                true,
+                                original_request_ref.get_original_question().to_owned(),
+                                original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                            ))
+                        } else {
+                            None
                         }
                     })
                     .collect::<Vec<_>>()
@@ -1609,7 +1555,8 @@ Reason to edit:
                     let end_line = snippet.range().end_line();
                     let location = format!("{}:{}-{}", file_path, start_line, end_line);
                     let language = snippet.language();
-                    let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
+                    let content = snippet.content();
+                    // let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
                     format!(
                         r#"<rerank_entry>
 <id>

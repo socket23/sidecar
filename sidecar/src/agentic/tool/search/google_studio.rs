@@ -726,6 +726,7 @@ oranges
         &self,
         system_message: &str,
         user_message: &str,
+        request_label: &str,
     ) -> Result<String, IterativeSearchError> {
         let system_message = LLMClientMessage::system(system_message.to_string());
         let user_message = LLMClientMessage::user(user_message.to_string());
@@ -746,7 +747,7 @@ oranges
                 messages,
                 self.provider.to_owned(),
                 vec![
-                    ("event_type".to_owned(), "query_relevant_files".to_owned()),
+                    ("event_type".to_owned(), request_label.to_owned()),
                     ("root_id".to_owned(), self.root_request_id.to_string()),
                 ]
                 .into_iter()
@@ -776,7 +777,9 @@ oranges
         let system_message = self.system_message_for_generate_human_question();
         let user_message = self.user_message_for_generate_human_question(context);
 
-        let response = self.make_llm_call(&system_message, &user_message).await?;
+        let response = self
+            .make_llm_call(&system_message, &user_message, "generate_human_question")
+            .await?;
 
         GoogleStudioLLM::parse_generate_human_question_response(&response)
     }

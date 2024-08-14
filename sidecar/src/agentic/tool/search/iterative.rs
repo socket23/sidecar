@@ -66,6 +66,11 @@ impl IterativeSearchContext {
         self.scratch_pad = scratch_pad.to_string()
     }
 
+    pub fn extend_scratch_pad(&mut self, info: &str) {
+        self.scratch_pad.push('\n');
+        self.scratch_pad.push_str(info);
+    }
+
     pub fn user_query(&self) -> &str {
         &self.user_query
     }
@@ -364,9 +369,15 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                         IterativeSearchError::MissingQuestionChoiceError(choice_id.to_string())
                     })?;
 
-                println!("{}", answer_text);
+                let scratch_pad_entry = format!(
+                    r#"- Critical information to solving the issue:
+Question: {}
+Answer: {}"#,
+                    question.text(),
+                    answer_text
+                );
 
-                self.context.update_scratch_pad(answer_text);
+                self.context.extend_scratch_pad(&scratch_pad_entry);
             }
 
             count += 1;

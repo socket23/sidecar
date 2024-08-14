@@ -304,15 +304,7 @@ impl ToolBox {
                 .into_iter()
                 .filter(|implementation| {
                     // only those implementations which are of class type and
-                    // are not part of the trait implementation yet, we have to figure
-                    // out the trait implementation logic afterwards, for now
-                    // we assume its free of the trait implementation, but this will break
-                    // for sure cause we have no guarding logic aginst the success case
                     implementation.outline_node_content().is_class_type()
-                        && implementation
-                            .outline_node_content()
-                            .has_trait_implementation()
-                            .is_none()
                 })
                 .filter_map(|implementation| {
                     // check if the implementation config contains `impl ` just this
@@ -1789,7 +1781,9 @@ We also believe this symbol needs to be probed because of:
     /// we are interested in
     ///
     /// This gives us back the full symbol instead of the sub-symbol we are interested
-    /// in
+    /// in, this is a bit broken right now and we have to figure out how to fix this:
+    /// when editing a struct and its impl right below, if the struct edits make it start
+    /// overlapping with the impl edits then we get in a bad state over here
     pub async fn find_symbol_to_edit_closest_to_range(
         &self,
         symbol_to_edit: &SymbolToEdit,

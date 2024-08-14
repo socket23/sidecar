@@ -208,7 +208,7 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
 
     fn user_message(&self, context: SearchAndReplaceEditingRequest) -> String {
         let extra_data = self.extra_data(&context.extra_data);
-        let above = self.above_selection(
+        let _above = self.above_selection(
             context
                 .code_above
                 .map(|code_above| {
@@ -221,7 +221,7 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
                 })
                 .as_deref(),
         );
-        let below = self.below_selection(
+        let _below = self.below_selection(
             context
                 .code_below
                 .map(|code_below| {
@@ -242,12 +242,14 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
                 );
         }
         user_message = user_message + &extra_data + "\n";
-        if let Some(above) = above {
-            user_message = user_message + &above + "\n";
-        }
-        if let Some(below) = below {
-            user_message = user_message + &below + "\n";
-        }
+        // TODO(skcd): Disable the code above and below, while we figure out
+        // what snippets we want to show the llm as inspiration
+        // if let Some(above) = above {
+        //     user_message = user_message + &above + "\n";
+        // }
+        // if let Some(below) = below {
+        //     user_message = user_message + &below + "\n";
+        // }
         user_message = user_message + &in_range + "\n";
         let instructions = context.instructions;
         let fs_file_path = context.fs_file_path;
@@ -664,6 +666,10 @@ fn get_range_for_search_block(
 
     let search_block_lines = search_block.lines().into_iter().collect::<Vec<_>>();
     let search_block_len = search_block_lines.len();
+    if code_to_look_at_lines.len() <= search_block_len {
+        // return early over here if we do not want to edit this
+        return None;
+    }
     for i in 0..=code_to_look_at_lines.len() - search_block_len {
         if code_to_look_at_lines[i..i + search_block_len]
             .iter()

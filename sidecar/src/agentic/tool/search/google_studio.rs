@@ -512,7 +512,7 @@ Return at least 1 file, but no more than 10, in order of relevance.
 If fewer than 10 relevant files are found, explain why no more could be identified.
 If no relevant files are found, explain the reasoning and suggest next steps.
 
-6. Scratch Pad Usage - Use the scratch_pad field as a meta-analysis space, focusing solely on the repository structure and file names:
+6. Scratch Pad Usage - Use the scratch_pad field as a meta-analysis space:
 6.1. Analyze overall codebase structure:
 - Identify the depth and breadth of the directory structure.
 - Recognize patterns in directory naming and organization.
@@ -530,8 +530,6 @@ If no relevant files are found, explain the reasoning and suggest next steps.
 - Identify potential build tools or package managers from configuration files.
 - Recognize patterns that might indicate use of specific frameworks or libraries.
 6.5. Identify potential areas of interest related to the issue:
-- Suggest directories or files that might be relevant based on their names.
-- Propose keywords or patterns to search for in file names.
 - Highlight areas that seem to align with the reported issue's domain.
 6.6. Recognize testing and documentation patterns:
 - Identify potential test directories or files.
@@ -541,17 +539,15 @@ If no relevant files are found, explain the reasoning and suggest next steps.
 - Identify files or directories that might be related to error handling or logging.
 - Infer the project's approach to managing errors and logs.
 6.8. Suggest areas for further investigation:
-- Propose specific files or directories that warrant closer examination.
 - Identify patterns or naming conventions that might yield more insights if searched for.
 - Suggest potential relationships between files or modules that might be relevant to the issue.
 6.9. Acknowledge limitations and uncertainties:
-- Clearly state that analysis is based solely on directory structure and file names.
 - Highlight areas where file contents would be particularly helpful for better understanding.
 - Suggest specific questions about the codebase that could provide valuable context.
 6.10. Synthesize insights:
 - Summarize key observations about the codebase structure and organization.
 - Propose hypotheses about the codebase architecture and design based on structural evidence.
-- Relate structural insights to the reported issue, suggesting potential areas of focus.
+- Relate structural insights to the reported issue.
 
 Do not hallucinate files that do not appear in the provided repository structure.
             

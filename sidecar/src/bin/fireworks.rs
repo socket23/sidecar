@@ -124,14 +124,11 @@ The company_shipment.rs implementation block of Company contains all the relevan
 This example is for reference. You must strictly follow the format show in the example when replying.
 Please provide the list of symbols which you want to edit."#;
     let user_message = r#"<user_query>
-Add a new method to UIEventWithID for creating a Document event
+Add a new variant called AskHuman to the ToolType enum
 </user_query>
 
 <extra_symbols>
-<symbol>
-FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs
-SymbolEventDocumentRequest
-</symbol>
+
 </extra_symbols>
 
 <rerank_entry>
@@ -139,15 +136,97 @@ SymbolEventDocumentRequest
 0
 </id>
 <file_path>
-/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs:12-16
+/Users/skcd/test_repo/sidecar/sidecar/src/agentic/tool/type.rs:6-93
 </file_path>
 <content>
 ```
-FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs
-#[derive(Debug, serde::Serialize)]
-pub struct UIEventWithID {
-    request_id: String,
-    event: UIEvent,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum ToolType {
+    // AskDocumentation,
+    // AskUser,
+    PlanningBeforeCodeEdit,
+    CodeEditing,
+    OpenFile,
+    // Search,
+    GoToDefinitions,
+    GoToReferences,
+    // FileSystem,
+    // FolderOutline,
+    // Terminal,
+    LSPDiagnostics,
+    ReRank,
+    // WebScrape,
+    // searches of different kind are over here
+    FindCodeSnippets,
+    RequestImportantSymbols,
+    FindCodeSymbolsCodeBaseWide,
+    UtilityCodeSymbolSearch,
+    GrepInFile,
+    GoToImplementations,
+    // filtering queries go here
+    FilterCodeSnippetsForEditing,
+    FilterCodeSnippetsSingleSymbolForEditing,
+    // editor requests
+    EditorApplyEdits,
+    // quick fix options
+    GetQuickFix,
+    // apply quick fix
+    ApplyQuickFix,
+    // Error correction tool selection
+    CodeCorrectnessActionSelection,
+    CodeEditingForError,
+    // Followup decision
+    ClassSymbolFollowup,
+    // COT chains
+    CodeEditingCOT,
+    // Probe operation
+    ProbeCreateQuestionForSymbol,
+    ProbeEnoughOrDeeper,
+    ProbeSubSymbolFiltering,
+    ProbePossible,
+    ProbeQuestion,
+    ProbeSubSymbol,
+    ProbeFollowAlongSymbol,
+    ProbeSummarizeAnswer,
+    ProbeTryHardAnswer,
+    // Repo map Search
+    RepoMapSearch,
+    // Get important files by inferring from repo tree
+    ImportantFilesFinder,
+    // SWE Bench tool endpoint
+    SWEBenchToolEndpoint,
+    // Test correction
+    TestCorrection,
+    // Code symbols which we want to follow
+    CodeSymbolsToFollowInitialRequest,
+    // Tool to use to generate the final probe answer
+    ProbeFinalAnswerSummary,
+    // New sub symbol in class for code editing
+    NewSubSymbolRequired,
+    // Find symbol in the codebase using the vscode api
+    GrepSymbolInCodebase,
+    // Find new symbol file location
+    FindFileForNewSymbol,
+    // Find symbol to edit in user context
+    FindSymbolsToEditInContext,
+    // ReRanking code snippets for code editing context
+    ReRankingCodeSnippetsForCodeEditingContext,
+    // Apply the outline of the changes to the range we are interested in
+    ApplyOutlineEditToRange,
+    // Big search
+    BigSearch,
+    // Filter edit operation
+    FilterEditOperation,
+    // Keyword search
+    KeywordSearch,
+    // inlay hints for the code
+    InLayHints,
+    // code location for the new symbol
+    CodeSymbolNewLocation,
+    // should edit the code or is it just a check
+    ShouldEditCode,
+    // use search and replace blocks for edits
+    SearchAndReplaceEditing,
 }
 ```
 </content>
@@ -157,59 +236,73 @@ pub struct UIEventWithID {
 1
 </id>
 <file_path>
-/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs:19-190
+/Users/skcd/test_repo/sidecar/sidecar/src/agentic/tool/type.rs:95-158
 </file_path>
 <content>
 ```
-FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/ui_event.rs
-impl UIEventWithID {
-    /// Repo map search start
-    /// Repo map generation end
-    /// Sends the initial search event to the editor
-    pub fn start_long_context_search(request_id: String) -> Self {
-    pub fn finish_long_context_search(request_id: String) -> Self {
-    pub fn finish_edit_request(request_id: String) -> Self {
-    pub fn from_tool_event(request_id: String, input: ToolInput) -> Self {
-    pub fn repo_map_gen_start(request_id: String) -> Self {
-    pub fn repo_map_gen_end(request_id: String) -> Self {
-    pub fn from_symbol_event(request_id: String, input: SymbolEventRequest) -> Self {
-    pub fn for_codebase_event(request_id: String, input: SymbolInputEvent) -> Self {
-    pub fn symbol_location(request_id: String, symbol_location: SymbolLocation) -> Self {
-    pub fn sub_symbol_step(
-        request_id: String,
-        sub_symbol_request: SymbolEventSubStepRequest,
-    ) -> Self {
-    pub fn probe_answer_event(
-        request_id: String,
-        symbol_identifier: SymbolIdentifier,
-        probe_answer: String,
-    ) -> Self {
-    pub fn probing_started_event(request_id: String) -> Self {
-    pub fn probing_finished_event(request_id: String, response: String) -> Self {
-    pub fn range_selection_for_edit(
-        request_id: String,
-        symbol_identifier: SymbolIdentifier,
-        range: Range,
-        fs_file_path: String,
-    ) -> Self {
-    pub fn edited_code(
-        request_id: String,
-        symbol_identifier: SymbolIdentifier,
-        range: Range,
-        fs_file_path: String,
-        edited_code: String,
-    ) -> Self {
-    pub fn code_correctness_action(
-        request_id: String,
-        symbol_identifier: SymbolIdentifier,
-        range: Range,
-        fs_file_path: String,
-        tool_use_thinking: String,
-    ) -> Self {
-    pub fn initial_search_symbol_event(
-        request_id: String,
-        symbols: Vec<InitialSearchSymbolInformation>,
-    ) -> Self {
+impl std::fmt::Display for ToolType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ToolType::CodeEditing => write!(f, "Code Editing"),
+            ToolType::OpenFile => write!(f, "Open File"),
+            ToolType::GoToDefinitions => write!(f, "Go To Definitions"),
+            ToolType::GoToReferences => write!(f, "Go To References"),
+            ToolType::LSPDiagnostics => write!(f, "LSP Diagnostics"),
+            ToolType::ReRank => write!(f, "Re-Rank"),
+            ToolType::FindCodeSnippets => write!(f, "Find Code Snippets"),
+            ToolType::RequestImportantSymbols => write!(f, "Request Important Symbols"),
+            ToolType::FindCodeSymbolsCodeBaseWide => write!(f, "Find Code Symbols Code Base Wide"),
+            ToolType::UtilityCodeSymbolSearch => write!(f, "Utility Code Symbol Search"),
+            ToolType::GrepInFile => write!(f, "Grep In File"),
+            ToolType::GoToImplementations => write!(f, "Go To Implementations"),
+            ToolType::FilterCodeSnippetsForEditing => write!(f, "Filter Code Snippets For Editing"),
+            ToolType::FilterCodeSnippetsSingleSymbolForEditing => {
+                write!(f, "Filter Code Snippets Single Symbol For Editing")
+            }
+            ToolType::EditorApplyEdits => write!(f, "Editor Apply Edits"),
+            ToolType::GetQuickFix => write!(f, "Get Quick Fix"),
+            ToolType::ApplyQuickFix => write!(f, "Apply Quick Fix"),
+            ToolType::CodeCorrectnessActionSelection => {
+                write!(f, "Code Correctness Action Selection")
+            }
+            ToolType::CodeEditingForError => write!(f, "Code Editing For Error"),
+            ToolType::ClassSymbolFollowup => write!(f, "Class Symbol Followup"),
+            ToolType::ProbePossible => write!(f, "Probe Possible"),
+            ToolType::ProbeQuestion => write!(f, "Probe Question"),
+            ToolType::ProbeSubSymbol => write!(f, "Probe Sub Symbol"),
+            ToolType::ProbeFollowAlongSymbol => write!(f, "Probe Follow Along Symbol"),
+            ToolType::ProbeSummarizeAnswer => write!(f, "Probe Summarize Answer"),
+            ToolType::RepoMapSearch => write!(f, "Repo Map Search"),
+            ToolType::SWEBenchToolEndpoint => write!(f, "SWE Bench Tool Endpoint"),
+            ToolType::TestCorrection => write!(f, "Test Correction"),
+            ToolType::CodeEditingCOT => write!(f, "Code editing COT"),
+            ToolType::CodeSymbolsToFollowInitialRequest => {
+                write!(f, "Code Symbols to follow initial request")
+            }
+            ToolType::ProbeFinalAnswerSummary => write!(f, "Probe final answer summary"),
+            ToolType::ProbeSubSymbolFiltering => write!(f, "Probe sub symbol filtering request"),
+            ToolType::ProbeEnoughOrDeeper => write!(f, "Probe enough information or go deeper"),
+            ToolType::ProbeCreateQuestionForSymbol => write!(f, "Probe create question for symbol"),
+            ToolType::PlanningBeforeCodeEdit => write!(f, "Planning before code edit"),
+            ToolType::NewSubSymbolRequired => write!(f, "New sub symbol required for code editing"),
+            ToolType::ProbeTryHardAnswer => write!(f, "Probe try hard answer"),
+            ToolType::GrepSymbolInCodebase => write!(f, "Grep symbol in the codebase"),
+            ToolType::FindFileForNewSymbol => write!(f, "Find file for new symbol"),
+            ToolType::FindSymbolsToEditInContext => write!(f, "Find Symbols to edit in context"),
+            ToolType::ReRankingCodeSnippetsForCodeEditingContext => {
+                write!(f, "ReRanking code snippets for code editing")
+            }
+            ToolType::ApplyOutlineEditToRange => write!(f, "Apply outline edit to range"),
+            ToolType::ImportantFilesFinder => write!(f, "Important files finder"),
+            ToolType::BigSearch => write!(f, "Big search"),
+            ToolType::FilterEditOperation => write!(f, "Filter edit operation"),
+            ToolType::KeywordSearch => write!(f, "Keyword search"),
+            ToolType::InLayHints => write!(f, "Inlay hints"),
+            ToolType::CodeSymbolNewLocation => write!(f, "Code symbol new location"),
+            ToolType::ShouldEditCode => write!(f, "Should edit code"),
+            ToolType::SearchAndReplaceEditing => write!(f, "Search and replace editing"),
+        }
+    }
 }
 ```
 </content>

@@ -1321,7 +1321,6 @@ Satisfy the requirement either by making edits or gathering the required informa
             let request = if request_data.full_symbol_request() {
                 self.mecha_code_symbol
                     .full_symbol_initial_request(
-                        self.tools.clone(),
                         &request_data,
                         request_id,
                         &self.tool_properties,

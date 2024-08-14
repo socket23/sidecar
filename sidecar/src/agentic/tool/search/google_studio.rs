@@ -632,10 +632,155 @@ Response:
         }
     }
 
+    // todo(zi): make this more nuanced
+    fn system_message_for_generate_human_question(&self) -> String {
+        format!(
+            r#"You are a helpful AI assistant with expert reasoning skills.
+
+You will be provided a reported issue and the file context containing existing code from the project's git repository. 
+Your task is to generate a single multiple-choice question that may help the system determine the most relevant files to solve the issue. 
+The question will be answered by the human who provided the issue.
+
+            
+# Input Structure:
+<issue>: Contains the reported issue.
+<file_context>: The file context from the project's git repository.
+<scratch_pad>: The system's thinking and notes.
+
+# Instructions:
+
+1. Analyze the Issue:
+1.1 Carefully review the reported issue to understand the requested functionality or bug fix.
+1.2 Identify key terms, components, or concepts mentioned in the issue.
+
+
+2. Examine the provided file context to identify if the relevant code for the reported issue is present.
+2.1 If the issue suggests that code should be implemented and doesn't yet exist in the code, consider the task completed if relevant code is found that would be modified to implement the new functionality.
+2.2 Note any references to other parts of the codebase not included in the context.
+
+
+3. Evaluate the Scratch Pad:
+3.1 Identify areas where the system needs clarification or additional information.
+3.2 Recognize potential misconceptions or incorrect assumptions in the system's thinking.
+3.3 Determine what information would most effectively guide the system towards identifying relevant files.
+
+4. Formulate the Question:
+4.1 Craft a single, focused multiple-choice question that addresses the most critical information gap.
+4.2 Ensure the question directly relates to identifying relevant files for solving the issue.
+
+5. Design answer choices that:
+5.1 Are mutually exclusive and collectively exhaustive.
+5.2 Provide maximum information gain regardless of which is selected.
+5.3 Include plausible distractors to validate understanding.
+
+6. Optimize for Relevance:
+6.1 Prioritize questions about file locations, code structure, or system architecture.
+6.2 Avoid questions about implementation details unless directly relevant to file identification.
+
+Include 2-4 choices, each with a unique ID and clear, concise text.
+
+Remember: The goal is to help the system pinpoint the most relevant files for addressing the reported issue. Your question should be designed to provide the most valuable information for this purpose.
+                
+Response format: 
+<reply>
+<response>
+<text>
+question goes here
+</text>
+<choices>
+<choice>
+<id>
+0
+</id>
+<text>
+apples
+</text>
+</choice>
+<choice>
+<id>
+1
+</id>
+<text>
+oranges
+</text>
+</choice>
+</choices>
+</response>
+</reply>"#
+        ) // this is for testing
+    }
+
+    fn user_message_for_generate_human_question(&self, context: &IterativeSearchContext) -> String {
+        let files = context.files();
+        let serialised_files = File::serialise_files(files, "\n");
+        let scratch_pad = context.scratch_pad();
+
+        format!(
+            r#"<user_query>
+{}
+</user_query>
+<file_context>
+{}
+</file_context
+<scratch_pad>
+{}
+</scratch_pad>
+        "#,
+            context.user_query(),
+            serialised_files,
+            scratch_pad,
+        )
+    }
+
+    async fn make_llm_call(
+        &self,
+        system_message: &str,
+        user_message: &str,
+    ) -> Result<String, IterativeSearchError> {
+        let system_message = LLMClientMessage::system(system_message.to_string());
+        let user_message = LLMClientMessage::user(user_message.to_string());
+
+        let messages = LLMClientCompletionRequest::new(
+            self.model.to_owned(),
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let response = self
+            .client
+            .stream_completion(
+                self.api_keys.to_owned(),
+                messages,
+                self.provider.to_owned(),
+                vec![
+                    ("event_type".to_owned(), "query_relevant_files".to_owned()),
+                    ("root_id".to_owned(), self.root_request_id.to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+
+        Ok(response)
+    }
+
     pub async fn generate_human_question(
         &self,
         context: &IterativeSearchContext,
     ) -> Result<Question, IterativeSearchError> {
+        let system_message = self.system_message_for_generate_human_question();
+        let user_message = self.user_message_for_generate_human_question(context);
+
+        let response = self.make_llm_call(&system_message, &user_message).await?;
+
+        println!("{}", response);
+
+        // parse;
+
         todo!();
     }
 }

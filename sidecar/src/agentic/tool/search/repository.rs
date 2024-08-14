@@ -35,6 +35,10 @@ impl Repository {
         }
     }
 
+    pub fn get_file_tags(&self, path: &PathBuf) -> Option<Vec<Tag>> {
+        self.tag_index.get_tags_for_file(path)
+    }
+
     pub fn get_tag(&self, path: &PathBuf, tag_name: &str) -> Option<&HashSet<Tag>> {
         self.tag_index
             .definitions()

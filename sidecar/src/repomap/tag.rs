@@ -250,14 +250,17 @@ impl TagIndex {
         }
     }
 
-    pub fn get_tags_for_file(&self, file_name: &Path) -> Option<Vec<(PathBuf, String)>> {
-        let tag_ids = self.file_to_tags.get(file_name)?;
-        Some(
+    pub fn get_tags_for_file(&self, file_name: &Path) -> Option<Vec<Tag>> {
+        self.file_to_tags.get(file_name).map(|tag_ids| {
             tag_ids
                 .iter()
-                .map(|(relative_path, tag_name)| (relative_path.clone(), tag_name.clone()))
-                .collect(),
-        )
+                .filter_map(|(relative_path, tag_name)| {
+                    self.definitions
+                        .get(&(relative_path.clone(), tag_name.clone()))
+                        .and_then(|tags| tags.iter().next().cloned())
+                })
+                .collect()
+        })
     }
 
     pub fn print_file_to_tag_keys(&self) {

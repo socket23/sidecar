@@ -21,6 +21,7 @@ use crate::{
             qa::{Choice, GenerateHumanQuestionResponse, Question},
         },
     },
+    repomap::types::RepoMap,
     user_context::types::UserContextError,
 };
 
@@ -170,6 +171,9 @@ pub enum IterativeSearchError {
 
     #[error("Missing question choice, choice_id: {0}")]
     MissingQuestionChoiceError(String),
+
+    #[error("No tags found for file: {0}")]
+    NoTagsForFile(PathBuf),
 }
 
 impl SearchQuery {
@@ -302,22 +306,28 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             self.context
                 .update_scratch_pad(&identify_results.scratch_pad);
 
-            println!(
-                "{}",
-                identify_results
-                    .item
-                    .iter()
-                    .map(|r| format!("{:?}\n", r))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            );
-
+            let generate_file_outline = Instant::now();
             self.context.add_files(
                 identify_results
-                    .item
+                    .items
                     .iter()
-                    .map(|r| File::new(r.path(), r.thinking(), "")) // todo(zi) add real snippet?
+                    .map(|f| {
+                        let path = f.path();
+                        let tags = self.repository.get_file_tags(path);
+
+                        let snippet = if let Some(tags) = tags {
+                            RepoMap::to_tree(&tags)
+                        } else {
+                            "".to_string()
+                        };
+
+                        File::new(f.path(), f.thinking(), &snippet)
+                    }) // todo(zi) add real snippet?
                     .collect(),
+            );
+            println!(
+                "File outline generation completed in {:?}",
+                generate_file_outline.elapsed()
             );
 
             let decision_start = Instant::now();
@@ -325,7 +335,6 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("Decision made in {:?}", decision_start.elapsed());
 
             self.context.update_scratch_pad(decision.suggestions());
-
             self.complete = decision.complete();
 
             println!("===========");

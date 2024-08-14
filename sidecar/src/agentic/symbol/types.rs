@@ -1566,6 +1566,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 None,
                 Some(sub_symbol.symbol_name().to_owned()),
                 sub_symbol.symbol_edited_list(),
+                &self.symbol_identifier,
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))
@@ -1662,6 +1663,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 request_id,
                 Some(sub_symbol.symbol_name().to_owned()),
                 sub_symbol.symbol_edited_list(),
+                true,
             )
             .await?;
         let _ = self.ui_sender.send(UIEventWithID::edited_code(
@@ -1759,6 +1761,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 Some(symbol_to_edit.name().to_owned()),
                 None,
                 sub_symbol.symbol_edited_list(),
+                &self.symbol_identifier,
             )
             .await?;
         Ok(EditedCodeSymbol::new(content, response))

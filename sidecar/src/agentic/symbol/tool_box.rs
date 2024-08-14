@@ -4192,6 +4192,10 @@ FILEPATH: {fs_file_path}
         request_id: &str,
         symbol_to_edit: Option<String>,
         symbols_edited_list: Option<Vec<SymbolEditedItem>>,
+        // if the outline edit is an addition, this implies that we can directly
+        // stream the output from the slow-llm instead of waiting on the slow
+        // llm to rewrite the whole block
+        is_addition: bool,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit_outline============");
         println!("tool_box::code_edit_outline::fs_file_path:{}", fs_file_path);
@@ -4253,9 +4257,14 @@ FILEPATH: {fs_file_path}
                 None
             },
             self.root_request_id.to_owned(),
+            selection_range.clone(),
             // we want an outline edit
             true,
             symbols_to_edit,
+            // if its addition then we should stream the code edits at this point
+            is_addition,
+            symbol_identifier.clone(),
+            self.ui_events.clone(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -4277,39 +4286,43 @@ FILEPATH: {fs_file_path}
             "tool_box::code_edit_outline::apply_outline_edit_to_range::start::({})",
             sub_symbol.symbol_name()
         );
-        let request = ToolInput::ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest::new(
-            instruction,
-            symbol_identifier.clone(),
-            fs_file_path.to_owned(),
-            in_range_selection,
-            response,
-            self.root_request_id.to_owned(),
-            selection_range.clone(),
-            LLMProperties::new(
-                // why are we using gpt4omini over here which is slow as shit, lets at the very
-                // least move over to gemini-flash
-                LLMType::GeminiProFlash,
-                LLMProvider::GoogleAIStudio,
-                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                )),
-            ),
-            // this is the special request id sent along with every edit which we want to make
-            uuid::Uuid::new_v4().to_string(),
-            self.ui_events.clone(),
-        ));
-        let response = self
-            .tools
-            .invoke(request)
-            .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .get_apply_edits_to_range_response()
-            .ok_or(SymbolError::WrongToolOutput)?;
-        println!(
-            "tool_box::code_edit_outline::apply_outline_edit_to_range::finish::({})",
-            sub_symbol.symbol_name()
-        );
-        Ok(response.code())
+        if is_addition {
+            Ok(response)
+        } else {
+            let request = ToolInput::ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest::new(
+                instruction,
+                symbol_identifier.clone(),
+                fs_file_path.to_owned(),
+                in_range_selection,
+                response,
+                self.root_request_id.to_owned(),
+                selection_range.clone(),
+                LLMProperties::new(
+                    // why are we using gpt4omini over here which is slow as shit, lets at the very
+                    // least move over to gemini-flash
+                    LLMType::GeminiProFlash,
+                    LLMProvider::GoogleAIStudio,
+                    LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+                        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                    )),
+                ),
+                // this is the special request id sent along with every edit which we want to make
+                uuid::Uuid::new_v4().to_string(),
+                self.ui_events.clone(),
+            ));
+            let response = self
+                .tools
+                .invoke(request)
+                .await
+                .map_err(|e| SymbolError::ToolError(e))?
+                .get_apply_edits_to_range_response()
+                .ok_or(SymbolError::WrongToolOutput)?;
+            println!(
+                "tool_box::code_edit_outline::apply_outline_edit_to_range::finish::({})",
+                sub_symbol.symbol_name()
+            );
+            Ok(response.code())
+        }
     }
 
     pub async fn code_edit(
@@ -4327,6 +4340,7 @@ FILEPATH: {fs_file_path}
         symbol_to_edit: Option<String>,
         is_new_sub_symbol: Option<String>,
         symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+        symbol_identifier: &SymbolIdentifier,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
         println!("tool_box::code_edit::fs_file_path:{}", fs_file_path);
@@ -4373,9 +4387,13 @@ FILEPATH: {fs_file_path}
             symbol_to_edit,
             is_new_sub_symbol,
             self.root_request_id.to_owned(),
+            selection_range.clone(),
             // we want a complete edit over here
             false,
             new_symbols_edited,
+            false,
+            symbol_identifier.clone(),
+            self.ui_events.clone(),
         ));
         self.tools
             .invoke(request)

@@ -11,10 +11,17 @@ use llm_client::{
     clients::types::LLMType,
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
+use tokio::sync::mpsc::UnboundedSender;
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+use crate::{
+    agentic::{
+        symbol::{
+            identifier::{LLMProperties, SymbolIdentifier},
+            ui_event::UIEventWithID,
+        },
+        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    },
+    chunking::text_document::Range,
 };
 
 use super::models::broker::CodeEditBroker;
@@ -35,10 +42,14 @@ pub struct CodeEdit {
     symbol_to_edit: Option<String>,
     is_new_symbol_request: Option<String>,
     root_request_id: String,
+    edit_range: Range,
     // If this edit is just generating an outline of the changes which need to happen
     // in the symbol and not the complete change which needs to happen
     is_outline_edit: bool,
     new_symbols: Option<String>,
+    should_stream: bool,
+    symbol_identifier: SymbolIdentifier,
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl CodeEdit {
@@ -57,8 +68,12 @@ impl CodeEdit {
         symbol_to_edit: Option<String>,
         is_new_symbol_request: Option<String>,
         root_request_id: String,
+        edit_range: Range,
         is_outline_edit: bool,
         new_symbols: Option<String>,
+        should_stream: bool,
+        symbol_identifier: SymbolIdentifier,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             code_above,
@@ -75,8 +90,12 @@ impl CodeEdit {
             symbol_to_edit,
             is_new_symbol_request,
             root_request_id,
+            edit_range,
             is_outline_edit,
             new_symbols,
+            should_stream,
+            symbol_identifier,
+            ui_sender,
         }
     }
 }
@@ -222,6 +241,11 @@ impl Tool for CodeEditingTool {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let code_edit_context = input.is_code_edit()?;
         let root_id = code_edit_context.root_request_id.to_owned();
+        let should_stream = code_edit_context.should_stream;
+        let ui_sender = code_edit_context.ui_sender.clone();
+        let symbol_identifier = code_edit_context.symbol_identifier.clone();
+        let selection_range = code_edit_context.edit_range.clone();
+        let fs_file_path = code_edit_context.fs_file_path.to_owned();
         let mut llm_message = self.broker.format_prompt(&code_edit_context)?;
         if let Some(llm_properties) = self.get_llm_properties() {
             llm_message = llm_message.set_llm(llm_properties.llm().clone());
@@ -254,8 +278,10 @@ impl Tool for CodeEditingTool {
             };
         llm_message = llm_message.set_llm(request_llm.clone());
         let mut retries = 0;
+        // if we are not streaming we get more tries over here
+        let retry_limit = if should_stream { 1 } else { 4 };
         loop {
-            if retries >= 4 {
+            if retries >= retry_limit {
                 return Err(ToolError::RetriesExhausted);
             }
             let (llm, api_key, provider) = if retries % 2 == 0 {
@@ -272,10 +298,11 @@ impl Tool for CodeEditingTool {
                 )
             };
             let cloned_llm_message = llm_message.clone().set_llm(llm);
-            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-            let result = self
-                .llm_client
-                .stream_completion(
+
+            let stream_result;
+            let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+            let mut llm_response = Box::pin(
+                self.llm_client.stream_completion(
                     api_key,
                     cloned_llm_message,
                     provider,
@@ -286,26 +313,196 @@ impl Tool for CodeEditingTool {
                     .into_iter()
                     .collect(),
                     sender,
-                )
-                .await
-                .map_err(|e| ToolError::LLMClientError(e))?;
-            let edited_code = Self::edit_code(
-                &result,
-                code_edit_context.is_new_sub_symbol().is_some(),
-                code_edit_context.code_to_edit(),
-            )
-            // we need to do post-processing here to remove all the gunk
-            // which usually gets added when we are editing code
-            .map(|result| ToolOutput::code_edit_output(result));
-            match edited_code {
-                Ok(response) => return Ok(response),
-                Err(_e) => {
+                ),
+            );
+
+            let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::unbounded_channel();
+            let mut answer_accumulator = CodeToAddAccumulator::new(edits_sender);
+            let edit_request_id = uuid::Uuid::new_v4().to_string();
+
+            loop {
+                tokio::select! {
+                    stream_msg = receiver.recv() => {
+                        match stream_msg {
+                            Some(msg) => {
+                                let delta = msg.delta();
+                                if let Some(delta) = delta {
+                                    answer_accumulator.add_delta(delta.to_owned());
+                                }
+                            }
+                            None => {
+                                // we are probably done over here and the channel is closed?
+                            }
+                        }
+                    }
+                    edits_response = edits_receiver.recv() => {
+                        if should_stream {
+                            match edits_response {
+                                Some(CodeBlockEditDelta::EditStarted) => {
+                                    let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
+                                        root_id.to_owned(),
+                                        symbol_identifier.clone(),
+                                        edit_request_id.to_owned(),
+                                        selection_range,
+                                        fs_file_path.to_owned(),
+                                    ));
+                                }
+                                Some(CodeBlockEditDelta::EditDelta(delta)) => {
+                                    let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                                        root_id.to_owned(),
+                                        symbol_identifier.clone(),
+                                        delta,
+                                        edit_request_id.to_owned(),
+                                        selection_range,
+                                        fs_file_path.to_owned(),
+                                    ));
+                                }
+                                Some(CodeBlockEditDelta::EditEnd) => {
+                                    let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
+                                        root_id.to_owned(),
+                                        symbol_identifier.clone(),
+                                        edit_request_id.to_owned(),
+                                        selection_range,
+                                        fs_file_path.to_owned(),
+                                    ));
+                                }
+                                None => {
+
+                                }
+                            }
+                        }
+                    }
+                    result = &mut llm_response => {
+                        stream_result = Some(result);
+                        break;
+                    }
+                }
+            }
+            match stream_result {
+                Some(Ok(response)) => {
+                    let edited_code = Self::edit_code(
+                        &response,
+                        code_edit_context.is_new_sub_symbol().is_some(),
+                        code_edit_context.code_to_edit(),
+                    )
+                    // we need to do post-processing here to remove all the gunk
+                    // which usually gets added when we are editing code
+                    .map(|result| ToolOutput::code_edit_output(result));
+                    match edited_code {
+                        Ok(response) => return Ok(response),
+                        Err(_e) => {
+                            retries = retries + 1;
+                            continue;
+                        }
+                    }
+                }
+                _ => {
                     retries = retries + 1;
                     continue;
                 }
             }
         }
     }
+}
+
+enum CodeBlockEditDelta {
+    EditStarted,
+    EditDelta(String),
+    EditEnd,
+}
+
+#[derive(Clone)]
+enum CodeToAddBlockStatus {
+    NoBlock,
+    BlockStart,
+    BlockAccumualtor(String),
+}
+
+struct CodeToAddAccumulator {
+    answer_up_until_now: String,
+    previous_answer_line_number: Option<usize>,
+    code_to_add_block_status: CodeToAddBlockStatus,
+    sender: UnboundedSender<CodeBlockEditDelta>,
+}
+
+impl CodeToAddAccumulator {
+    pub fn new(sender: UnboundedSender<CodeBlockEditDelta>) -> Self {
+        Self {
+            answer_up_until_now: "".to_owned(),
+            previous_answer_line_number: None,
+            code_to_add_block_status: CodeToAddBlockStatus::NoBlock,
+            sender,
+        }
+    }
+
+    fn add_delta(&mut self, delta: String) {
+        self.answer_up_until_now.push_str(&delta);
+        self.process_answer();
+    }
+
+    fn process_answer(&mut self) {
+        let head = "<code_to_add>";
+        let tail = "</code_to_add>";
+        let line_number_to_process = get_last_newline_line_number(&self.answer_up_until_now);
+        if line_number_to_process.is_none() {
+            return;
+        }
+        let line_number_to_process_until = line_number_to_process.expect("to work") - 1;
+        let answer_lines = self
+            .answer_up_until_now
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let start_index = if self.previous_answer_line_number.is_none() {
+            0
+        } else {
+            self.previous_answer_line_number
+                .expect("if_none above to work")
+                + 1
+        };
+
+        for line_number in start_index..=line_number_to_process_until {
+            self.previous_answer_line_number = Some(line_number);
+            let answer_line_at_index = answer_lines[line_number];
+
+            match self.code_to_add_block_status.clone() {
+                CodeToAddBlockStatus::NoBlock => {
+                    if answer_line_at_index == head {
+                        self.code_to_add_block_status = CodeToAddBlockStatus::BlockStart;
+                        let _ = self.sender.send(CodeBlockEditDelta::EditStarted);
+                    }
+                    continue;
+                }
+                CodeToAddBlockStatus::BlockStart => {
+                    self.code_to_add_block_status =
+                        CodeToAddBlockStatus::BlockAccumualtor(answer_line_at_index.to_owned());
+                    let _ = self.sender.send(CodeBlockEditDelta::EditDelta(
+                        answer_line_at_index.to_owned(),
+                    ));
+                }
+                CodeToAddBlockStatus::BlockAccumualtor(accumulated) => {
+                    if answer_line_at_index == tail {
+                        self.code_to_add_block_status = CodeToAddBlockStatus::NoBlock;
+                        let _ = self.sender.send(CodeBlockEditDelta::EditEnd);
+                        continue;
+                    } else {
+                        let _ = self.sender.send(CodeBlockEditDelta::EditDelta(
+                            "\n".to_owned() + &answer_line_at_index,
+                        ));
+                        self.code_to_add_block_status = CodeToAddBlockStatus::BlockAccumualtor(
+                            accumulated + "\n" + &answer_line_at_index,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn get_last_newline_line_number(s: &str) -> Option<usize> {
+    s.rfind('\n')
+        .map(|last_index| s[..=last_index].chars().filter(|&c| c == '\n').count())
 }
 
 #[cfg(test)]

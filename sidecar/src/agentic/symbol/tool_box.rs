@@ -692,10 +692,10 @@ impl ToolBox {
                 sub_symbol.fs_file_path().to_owned(),
                 user_query,
                 LLMProperties::new(
-                    LLMType::GeminiProFlash,
-                    LLMProvider::GoogleAIStudio,
-                    LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                    LLMType::Llama3_1_8bInstruct,
+                    LLMProvider::FireworksAI,
+                    LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
+                        "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
                     )),
                 ),
                 self.root_request_id.to_owned(),

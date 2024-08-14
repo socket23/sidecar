@@ -664,6 +664,10 @@ fn get_range_for_search_block(
 
     let search_block_lines = search_block.lines().into_iter().collect::<Vec<_>>();
     let search_block_len = search_block_lines.len();
+    if code_to_look_at_lines.len() <= search_block_len {
+        // return early over here if we do not want to edit this
+        return None;
+    }
     for i in 0..=code_to_look_at_lines.len() - search_block_len {
         if code_to_look_at_lines[i..i + search_block_len]
             .iter()

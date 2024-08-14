@@ -208,7 +208,7 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
 
     fn user_message(&self, context: SearchAndReplaceEditingRequest) -> String {
         let extra_data = self.extra_data(&context.extra_data);
-        let above = self.above_selection(
+        let _above = self.above_selection(
             context
                 .code_above
                 .map(|code_above| {
@@ -221,7 +221,7 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
                 })
                 .as_deref(),
         );
-        let below = self.below_selection(
+        let _below = self.below_selection(
             context
                 .code_below
                 .map(|code_below| {

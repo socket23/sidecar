@@ -20,7 +20,7 @@ impl<T: Communicator> Human<T> {
         Self { communicator }
     }
 
-    pub fn ask(&self, question: Question) -> Result<Answer, CommunicationError> {
-        self.communicator.ask_question(&question)
+    pub fn ask(&self, question: &Question) -> Result<Answer, CommunicationError> {
+        self.communicator.ask_question(question)
     }
 }

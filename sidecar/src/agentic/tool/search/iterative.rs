@@ -167,6 +167,9 @@ pub enum IterativeSearchError {
 
     #[error("Human communication error: {0}")]
     HumanCommunicationError(#[from] CommunicationError),
+
+    #[error("Missing question choice, choice_id: {0}")]
+    MissingQuestionChoiceError(String),
 }
 
 impl SearchQuery {
@@ -279,7 +282,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         while !self.complete && count < 3 {
             let loop_start = Instant::now();
             println!("===========");
-            println!("run loop #{}", count);
+            println!("search loop #{}", count);
             println!("===========");
 
             let search_queries = self.search().await?;
@@ -321,10 +324,14 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             let decision = self.decide().await?;
             println!("Decision made in {:?}", decision_start.elapsed());
 
-            println!("{:?}", decision);
+            self.context.update_scratch_pad(decision.suggestions());
 
-            // before updating scratch, consider getting human involved...
-            // sir, what are your thoughts?
+            self.complete = decision.complete();
+
+            println!("===========");
+            println!("Decision: {}", decision.complete());
+            println!("Suggestions: {}", decision.suggestions());
+            println!("===========");
 
             // todo(zi): proper condition
             if true {
@@ -332,23 +339,32 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
                 let human_tool = Human::new(cli);
 
-                let question = self
+                let question: Question = self
                     .llm_ops
                     .generate_human_question(&self.context)
                     .await?
                     .into();
 
-                let answer = human_tool.ask(question)?;
+                let answer = human_tool.ask(&question)?;
+                let choice_id = answer.choice_id();
 
-                println!("{}", answer.choice_id());
+                let answer_text = question
+                    .get_choice(choice_id)
+                    .map(|choice| choice.text())
+                    .ok_or_else(|| {
+                        IterativeSearchError::MissingQuestionChoiceError(choice_id.to_string())
+                    })?;
+
+                println!("{}", answer_text);
+
+                self.context.update_scratch_pad(answer_text);
             }
 
-            self.context.update_scratch_pad(decision.suggestions());
-
-            self.complete = decision.complete();
-
             count += 1;
+            println!("===========");
             println!("Loop {} completed in {:?}", count, loop_start.elapsed());
+            println!("Scratch_pad: {}", self.context.scratch_pad());
+            println!("===========");
         }
 
         let symbols = self

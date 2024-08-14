@@ -269,25 +269,28 @@ As a reminder the section in <prompt> where you have to make changes is over her
         LLMType::ClaudeHaiku,
         vec![
             LLMClientMessage::new(LLMClientRole::System, system_prompt.to_owned()),
-            LLMClientMessage::new(LLMClientRole::User, fim_request.to_owned()),
-            LLMClientMessage::new(
-                LLMClientRole::Assistant,
-                r#"<code_inserted>
-    }
+            LLMClientMessage::new(LLMClientRole::User, fim_request.to_owned()).cache_point(),
+            //         LLMClientMessage::new(
+            //             LLMClientRole::Assistant,
+            //             r#"<code_inserted>
+            // }
 
-    // check if the model is codellama"#
-                    .to_owned(),
-            ),
+            // // check if the model is codellama"#
+            //                 .to_owned(),
+            //         )
+            //         .cache_point(),
         ],
         0.1,
         None,
     )
     .set_max_tokens(4096);
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let start_instant = std::time::Instant::now();
     let response = anthropic_client
         .stream_completion(api_key, request, sender)
         .await;
     println!("{:?}", response);
+    println!("{}", start_instant.elapsed().as_millis());
     // let client = Client::new();
     // let url = "https://api.anthropic.com/v1/messages";
     // let api_key = "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";

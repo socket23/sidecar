@@ -11,15 +11,49 @@ use super::types::{
     LLMClientCompletionStringRequest, LLMClientError, LLMType,
 };
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum AnthropicCacheType {
+    #[serde(rename = "ephemeral")]
+    Ephemeral,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct AnthropicCacheControl {
+    r#type: AnthropicCacheType,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct AnthropicMessageContent {
+    r#type: String,
+    text: String,
+    cache_control: Option<AnthropicCacheControl>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 struct AnthropicMessage {
     role: String,
-    content: String,
+    content: Vec<AnthropicMessageContent>,
 }
 
 impl AnthropicMessage {
     pub fn new(role: String, content: String) -> Self {
-        Self { role, content }
+        Self {
+            role,
+            content: vec![AnthropicMessageContent {
+                r#type: "text".to_owned(),
+                text: content,
+                cache_control: None,
+            }],
+        }
+    }
+
+    pub fn enable_cache(mut self) -> Self {
+        if let Some(message) = self.content.get_mut(0) {
+            message.cache_control = Some(AnthropicCacheControl {
+                r#type: AnthropicCacheType::Ephemeral,
+            });
+        }
+        self
     }
 }
 
@@ -104,7 +138,7 @@ struct Usage {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 struct AnthropicRequest {
-    system: Option<String>,
+    system: Vec<AnthropicMessageContent>,
     messages: Vec<AnthropicMessage>,
     temperature: f32,
     stream: bool,
@@ -136,13 +170,31 @@ impl AnthropicRequest {
         let system_message = messages
             .iter()
             .find(|message| message.role().is_system())
-            .map(|message| message.content().to_owned());
+            .map(|message| {
+                let mut anthropic_message_content = AnthropicMessageContent {
+                    r#type: "text".to_owned(),
+                    text: message.content().to_owned(),
+                    cache_control: None,
+                };
+                if message.is_cache_point() {
+                    anthropic_message_content.cache_control = Some(AnthropicCacheControl {
+                        r#type: AnthropicCacheType::Ephemeral,
+                    });
+                }
+                vec![anthropic_message_content]
+            })
+            .unwrap_or_default();
 
         let normal_conversation = messages
             .into_iter()
             .filter(|message| message.role().is_user() || message.role().is_assistant())
             .map(|message| {
-                AnthropicMessage::new(message.role().to_string(), message.content().to_owned())
+                let mut anthropic_message =
+                    AnthropicMessage::new(message.role().to_string(), message.content().to_owned());
+                if message.is_cache_point() {
+                    anthropic_message = anthropic_message.enable_cache();
+                }
+                anthropic_message
             })
             .collect::<Vec<_>>();
         AnthropicRequest {
@@ -166,7 +218,7 @@ impl AnthropicRequest {
             completion_request.prompt().to_owned(),
         )];
         AnthropicRequest {
-            system: None,
+            system: vec![],
             messages,
             temperature,
             stream: true,
@@ -257,8 +309,6 @@ impl LLMClient for AnthropicClient {
         });
         let anthropic_request =
             AnthropicRequest::from_client_completion_request(request, model_str.to_owned());
-
-        // println!("{:?}", &anthropic_request);
 
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

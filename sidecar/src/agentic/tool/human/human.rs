@@ -1,8 +1,7 @@
-use std::io;
-
-use thiserror::Error;
-
-use super::qa::{Answer, Question};
+use super::{
+    error::CommunicationError,
+    qa::{Answer, Question},
+};
 
 pub enum CommunicationInterface {
     Cli,
@@ -12,11 +11,16 @@ pub trait Communicator {
     fn ask_question(&self, question: &Question) -> Result<Answer, CommunicationError>;
 }
 
-#[derive(Debug, Error)]
-pub enum CommunicationError {
-    #[error("Input Error: {0}")]
-    InputError(String),
+struct HumanTool<T: Communicator> {
+    communicator: T,
+}
 
-    #[error("IO Error: {0}")]
-    IoError(#[from] io::Error),
+impl<T: Communicator> HumanTool<T> {
+    fn new(communicator: T) -> Self {
+        Self { communicator }
+    }
+
+    fn ask(&self, question: Question) -> Result<Answer, CommunicationError> {
+        self.communicator.ask_question(&question)
+    }
 }

@@ -1,11 +1,12 @@
 use super::{
-    human::{CommunicationError, Communicator},
+    error::CommunicationError,
+    human::Communicator,
     qa::{Answer, Question},
 };
 
 use std::io::{self, Write};
 
-struct CliCommunicator;
+pub struct CliCommunicator;
 
 impl Communicator for CliCommunicator {
     fn ask_question(&self, question: &Question) -> Result<Answer, CommunicationError> {
@@ -27,22 +28,5 @@ impl Communicator for CliCommunicator {
         println!("Your response: {}", answer.choice_id());
 
         Ok(answer)
-    }
-}
-struct QuestionnaireSystem<T: Communicator> {
-    question: Question,
-    interface: T,
-}
-
-impl<T: Communicator> QuestionnaireSystem<T> {
-    fn new(question: Question, interface: T) -> Self {
-        Self {
-            question,
-            interface,
-        }
-    }
-
-    fn ask(&self) -> Result<Answer, CommunicationError> {
-        self.interface.ask_question(&self.question)
     }
 }

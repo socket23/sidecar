@@ -315,7 +315,8 @@ mathweb/flask/app.py
 >>>>>>> REPLACE
 ```"#
                     .to_owned(),
-            ),
+            )
+            .cache_point(),
         ]
     }
 }

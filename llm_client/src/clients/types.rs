@@ -261,6 +261,8 @@ pub struct LLMClientMessage {
     message: String,
     function_call: Option<LLMClientMessageFunctionCall>,
     function_return: Option<LLMClientMessageFunctionReturn>,
+    // if this message marks a caching point in the overall message
+    cache_point: bool,
 }
 
 impl LLMClientMessage {
@@ -270,6 +272,7 @@ impl LLMClientMessage {
             message,
             function_call: None,
             function_return: None,
+            cache_point: false,
         }
     }
 
@@ -291,6 +294,7 @@ impl LLMClientMessage {
                 Some(function_return) => Some(function_return),
                 None => self.function_return,
             },
+            cache_point: self.cache_point | other.cache_point,
         }
     }
 
@@ -300,6 +304,7 @@ impl LLMClientMessage {
             message: "".to_owned(),
             function_call: Some(LLMClientMessageFunctionCall { name, arguments }),
             function_return: None,
+            cache_point: false,
         }
     }
 
@@ -309,6 +314,7 @@ impl LLMClientMessage {
             message: "".to_owned(),
             function_call: None,
             function_return: Some(LLMClientMessageFunctionReturn { name, content }),
+            cache_point: false,
         }
     }
 
@@ -348,6 +354,15 @@ impl LLMClientMessage {
 
     pub fn get_function_return(&self) -> Option<&LLMClientMessageFunctionReturn> {
         self.function_return.as_ref()
+    }
+
+    pub fn cache_point(mut self) -> Self {
+        self.cache_point = true;
+        self
+    }
+
+    pub fn is_cache_point(&self) -> bool {
+        self.cache_point
     }
 }
 

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::agentic::tool::{
     file::types::SerdeError,
-    human::qa::Question,
+    human::qa::{GenerateHumanQuestionResponse, Question},
     search::{
         identify::IdentifyResponse, iterative::File, relevant_files::QueryRelevantFilesResponse,
     },
@@ -768,20 +768,27 @@ oranges
         Ok(response)
     }
 
+    fn parse_generate_human_question_response(
+        response: &str,
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError> {
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
+
+        from_str::<GenerateHumanQuestionResponse>(&lines).map_err(|e| {
+            eprintln!("{:?}", e);
+            IterativeSearchError::SerdeError(SerdeError::new(e, lines))
+        })
+    }
+
     pub async fn generate_human_question(
         &self,
         context: &IterativeSearchContext,
-    ) -> Result<Question, IterativeSearchError> {
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError> {
         let system_message = self.system_message_for_generate_human_question();
         let user_message = self.user_message_for_generate_human_question(context);
 
         let response = self.make_llm_call(&system_message, &user_message).await?;
 
-        println!("{}", response);
-
-        // parse;
-
-        todo!();
+        GoogleStudioLLM::parse_generate_human_question_response(&response)
     }
 }
 
@@ -820,7 +827,7 @@ impl LLMOperations for GoogleStudioLLM {
     async fn generate_human_question(
         &self,
         context: &IterativeSearchContext,
-    ) -> Result<Question, IterativeSearchError> {
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError> {
         self.generate_human_question(context).await
     }
 }

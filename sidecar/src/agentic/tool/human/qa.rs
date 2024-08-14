@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 pub struct Question {
     text: String,
     choices: Vec<Choice>,
@@ -28,7 +30,7 @@ impl Question {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Choice {
     id: String,
     text: String,
@@ -63,5 +65,26 @@ impl Answer {
 
     pub fn choice_id(&self) -> &str {
         &self.choice_id
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename = "response")]
+pub struct GenerateHumanQuestionResponse {
+    pub text: String,
+    pub choices: Choices,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Choices {
+    pub choice: Vec<Choice>,
+}
+
+impl From<GenerateHumanQuestionResponse> for Question {
+    fn from(response: GenerateHumanQuestionResponse) -> Self {
+        Question {
+            text: response.text,
+            choices: response.choices.choice,
+        }
     }
 }

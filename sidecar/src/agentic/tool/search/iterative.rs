@@ -18,7 +18,7 @@ use crate::{
             cli::CliCommunicator,
             error::CommunicationError,
             human::Human,
-            qa::{Choice, Question},
+            qa::{Choice, GenerateHumanQuestionResponse, Question},
         },
     },
     user_context::types::UserContextError,
@@ -225,7 +225,7 @@ pub trait LLMOperations {
     async fn generate_human_question(
         &self,
         context: &IterativeSearchContext,
-    ) -> Result<Question, IterativeSearchError>;
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError>;
 }
 
 pub struct IterativeSearchSystem<T: LLMOperations> {
@@ -332,7 +332,11 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
                 let human_tool = Human::new(cli);
 
-                let question = self.llm_ops.generate_human_question(&self.context).await?;
+                let question = self
+                    .llm_ops
+                    .generate_human_question(&self.context)
+                    .await?
+                    .into();
 
                 let answer = human_tool.ask(question)?;
 

@@ -266,7 +266,7 @@ As a reminder the section in <prompt> where you have to make changes is over her
 </reminder>"#
         .to_owned();
     let request = LLMClientCompletionRequest::new(
-        LLMType::ClaudeHaiku,
+        LLMType::ClaudeSonnet,
         vec![
             LLMClientMessage::new(LLMClientRole::System, system_prompt.to_owned()),
             LLMClientMessage::new(LLMClientRole::User, fim_request.to_owned()).cache_point(),

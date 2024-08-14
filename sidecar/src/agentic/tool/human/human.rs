@@ -1,30 +1,22 @@
+use std::io;
+
 use thiserror::Error;
 
-pub struct Question {
-    text: String,
-    choices: Vec<Choice>,
-}
+use super::qa::{Answer, Question};
 
-pub struct Choice {
-    id: String,
-    text: String,
-}
-
-pub struct Answer {
-    question_id: String,
-    choice_id: String,
-}
-
-enum CommunicationInterface {
+pub enum CommunicationInterface {
     Cli,
 }
 
-trait Communicator {
+pub trait Communicator {
     fn ask_question(&self, question: &Question) -> Result<Answer, CommunicationError>;
 }
 
 #[derive(Debug, Error)]
-enum CommunicationError {
+pub enum CommunicationError {
     #[error("Input Error: {0}")]
     InputError(String),
+
+    #[error("IO Error: {0}")]
+    IoError(#[from] io::Error),
 }

@@ -273,6 +273,12 @@ impl LLMClient for AnthropicClient {
             )
             .header("anthropic-version".to_owned(), "2023-06-01".to_owned())
             .header("content-type".to_owned(), "application/json".to_owned())
+            // anthropic-beta: prompt-caching-2024-07-31
+            // enables prompt caching: https://arc.net/l/quote/qtlllqgf
+            .header(
+                "anthropic-beta".to_owned(),
+                "prompt-caching-2024-07-31".to_owned(),
+            )
             .json(&anthropic_request)
             .send()
             .await

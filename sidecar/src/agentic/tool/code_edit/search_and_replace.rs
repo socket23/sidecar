@@ -242,12 +242,14 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
                 );
         }
         user_message = user_message + &extra_data + "\n";
-        if let Some(above) = above {
-            user_message = user_message + &above + "\n";
-        }
-        if let Some(below) = below {
-            user_message = user_message + &below + "\n";
-        }
+        // TODO(skcd): Disable the code above and below, while we figure out
+        // what snippets we want to show the llm as inspiration
+        // if let Some(above) = above {
+        //     user_message = user_message + &above + "\n";
+        // }
+        // if let Some(below) = below {
+        //     user_message = user_message + &below + "\n";
+        // }
         user_message = user_message + &in_range + "\n";
         let instructions = context.instructions;
         let fs_file_path = context.fs_file_path;

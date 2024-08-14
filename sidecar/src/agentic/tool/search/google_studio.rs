@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::agentic::tool::{
     file::types::SerdeError,
+    human::qa::Question,
     search::{
         identify::IdentifyResponse, iterative::File, relevant_files::QueryRelevantFilesResponse,
     },
@@ -630,6 +631,13 @@ Response:
             }
         }
     }
+
+    pub async fn generate_human_question(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> Result<Question, IterativeSearchError> {
+        todo!();
+    }
 }
 
 #[async_trait]
@@ -662,5 +670,12 @@ impl LLMOperations for GoogleStudioLLM {
         seed: IterativeSearchSeed,
     ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
         self.query_relevant_files(user_query, seed).await
+    }
+
+    async fn generate_human_question(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> Result<Question, IterativeSearchError> {
+        self.generate_human_question(context).await
     }
 }

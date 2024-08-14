@@ -222,6 +222,10 @@ pub trait LLMOperations {
         user_query: &str,
         seed: IterativeSearchSeed,
     ) -> Result<QueryRelevantFilesResponse, IterativeSearchError>;
+    async fn generate_human_question(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> Result<Question, IterativeSearchError>;
 }
 
 pub struct IterativeSearchSystem<T: LLMOperations> {
@@ -266,24 +270,6 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
-        let cli = CliCommunicator {};
-
-        let human_tool = Human::new(cli);
-
-        let choices = vec![
-            Choice::new("0", "15"),
-            Choice::new("1", "30"),
-            Choice::new("2", "45"),
-        ];
-
-        let question = Question::new("What's your age?", &choices);
-
-        let answer = human_tool.ask(question)?;
-
-        println!("{}", answer.choice_id());
-
-        todo!();
-
         let start_time = Instant::now();
 
         self.apply_seed().await?;
@@ -336,6 +322,22 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("Decision made in {:?}", decision_start.elapsed());
 
             println!("{:?}", decision);
+
+            // before updating scratch, consider getting human involved...
+            // sir, what are your thoughts?
+
+            // todo(zi): proper condition
+            if true {
+                let cli = CliCommunicator {};
+
+                let human_tool = Human::new(cli);
+
+                let question = self.llm_ops.generate_human_question(&self.context).await?;
+
+                let answer = human_tool.ask(question)?;
+
+                println!("{}", answer.choice_id());
+            }
 
             self.context.update_scratch_pad(decision.suggestions());
 

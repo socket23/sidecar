@@ -63,19 +63,21 @@ Read the <issue> tag to understand the issue.
 Examine the <file_context> tag to see which files and code spans have already been identified.
 If you believe that all relevant files have been identified, you can finish the search by setting complete to true.
 
-3. Consider the Necessary Search Parameters:
+3. Understand the scratch_pad information - it contains useful information about the repository, the issue, and what to search for next.
+
+4. Consider the Necessary Search Parameters:
 Determine if specific file types, directories, function or class names or code patterns are mentioned in the issue.
 If you can you should always try to specify the search parameters as accurately as possible.
 You can do more than one search request at the same time so you can try different search parameters to cover all possible relevant code.
 
-4. Ensure At Least One Tool:
+5. Use both tools if possible:
 Make sure that at least one of File or Keyword is provided. File allows you to search for file names. Keyword allows you to search for symbols such as class and function names.
-You may use a combination of both.
+You should use a combination of both.
 
-5. Formulate the Search function:
+6. Formulate the Search function:
 For files, you do not need to provide the extension. For Keyword, use only uninterrupted strings, not phrases.
 
-6. Execute the Search:
+7. Execute the Search:
 Execute the search by providing the search parameters and your thoughts on how to approach this task in XML. 
 
 Think step by step and write out your thoughts in the thinking field.
@@ -119,9 +121,9 @@ report
             r#"<issue>
 {}
 </issue>
-<thoughts>
+<scratch_pad>
 {}
-</thoughts>
+</scratch_pad>
 <file_context>
 {}
 </file_context
@@ -219,14 +221,10 @@ Think step by step and write out your high-level thoughts about the state of the
 <search_results>
 {}
 </search_results>
-<scratch_pad>
-{}
-</scratch_pad>
 "#,
             context.user_query(),
             File::serialise_files(context.files(), "\n"),
             serialized_results.join("\n"),
-            context.scratch_pad(),
         )
     }
 
@@ -571,10 +569,6 @@ Write your analysis here.
 </reply>
 
 Notice how each xml tag ends with a new line, follow this format strictly.
-
-Response:
-
-<files>
 "#,
         )
     }

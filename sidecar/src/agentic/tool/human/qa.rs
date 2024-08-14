@@ -11,8 +11,20 @@ impl Question {
         }
     }
 
+    pub fn choices(&self) -> &[Choice] {
+        &self.choices
+    }
+
+    pub fn get_choice(&self, id: &str) -> Option<&Choice> {
+        self.choices.iter().find(|choice| choice.id() == id)
+    }
+
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    pub fn is_valid_choice(&self, choice_id: &str) -> bool {
+        self.choices.iter().any(|choice| choice.id() == choice_id)
     }
 }
 
@@ -28,6 +40,14 @@ impl Choice {
             id: id.to_string(),
             text: text.to_string(),
         }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 

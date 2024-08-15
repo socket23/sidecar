@@ -12,6 +12,7 @@ async fn main() {
     let anthropic_api_key = "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".to_owned();
     let anthropic_client = AnthropicClient::new();
     let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(anthropic_api_key));
+    let uuid = uuid::Uuid::new_v4().to_string();
     let system_prompt = r#"Act as an expert software developer.
 Always use best practices when coding.
 Respect and use existing conventions, libraries, etc that are already present in the code base.
@@ -69,11 +70,15 @@ You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
 ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
 You always put your thinking in <thinking> section before you suggest *SEARCH/REPLACE* blocks"#;
-    fn example_messages() -> Vec<LLMClientMessage> {
+    fn example_messages(uuid: String) -> Vec<LLMClientMessage> {
         vec![
             LLMClientMessage::user(r#"Change get_factorial() to use math.factorial"#.to_owned()),
             LLMClientMessage::assistant(
-                r#"<thinking>
+                format!(
+                    r#"<uuid>
+{uuid}
+</uuid>
+<thinking>
 To make this change we need to modify `mathweb/flask/app.py` to:
 
 1. Import the math package.
@@ -116,9 +121,9 @@ return str(factorial(n))
 return str(math.factorial(n))
 >>>>>>> REPLACE
 ```"#
-                    .to_owned(),
-            )
-            .cache_point(),
+                )
+                .to_owned(),
+            ),
         ]
     }
     let user_request = r#"<extra_symbols_will_be_created>
@@ -151,6 +156,9 @@ We can reuse the existing ProbeStopRequest struct for the new API as it already 
     let file_paths = vec![
         "/Users/skcd/scratch/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
         "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
+        "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
+        "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
+        "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
     ];
     let file_content_prompt = stream::iter(file_paths)
         .map(|file_path| async move {
@@ -174,12 +182,14 @@ We can reuse the existing ProbeStopRequest struct for the new API as it already 
     let context_message = vec![
         LLMClientMessage::user(format!(
             r#"You can use the code in these files are inspiration for the coding style and writing out the code in the same way as present in the codebase:
+<uuid>
+{uuid}
+</uuid>
 {file_content_prompt}"#
         )),
         LLMClientMessage::assistant(
             "I will use these files and follow the coding style present in them".to_owned(),
-        )
-        .cache_point(),
+        ),
     ];
     let request = LLMClientCompletionRequest::new(
         LLMType::ClaudeSonnet,
@@ -188,13 +198,12 @@ We can reuse the existing ProbeStopRequest struct for the new API as it already 
             system_prompt.to_owned(),
         )]
         .into_iter()
-        .chain(example_messages())
+        .chain(example_messages(uuid.to_owned()))
         .chain(context_message)
         .chain(vec![LLMClientMessage::new(
             LLMClientRole::User,
             user_request.to_owned(),
-        )
-        .cache_point()])
+        )])
         .collect::<Vec<_>>(),
         0.1,
         None,

@@ -254,7 +254,7 @@ Instructions:
     * Decide if the relevant code is found in the file context.
     * If you believe all existing relevant code is identified, mark the task as complete.
     * If the specific method or code required to fix the issue is not present, still mark the task as complete as long as the relevant class or area for modification is identified.
-    * If you believe more relevant code can be identified, mark the task as not complete and provide your suggestions on how to find the relevant code.
+    * If you believe more relevant code can be identified, mark the task as not complete and provide your suggestions on how to find the relevant code, including any relevant information such as file names, symbol names, that you've already seen.
 
 Important:
     * You CANNOT change the codebase. DO NOT modify or suggest changes to any code.
@@ -630,7 +630,7 @@ Notice how each xml tag ends with a new line, follow this format strictly.
         format!(
             r#"You are a helpful AI assistant with expert reasoning skills.
 
-You will be provided a reported issue and the file context containing existing code from the project's git repository. 
+You will be provided a reported issue and the file context containing existing code from the project's git repository.
 Your task is to generate a single multiple-choice question that may help the system determine the most relevant files to solve the issue. 
 The question will be answered by the human who provided the issue.
 
@@ -670,7 +670,7 @@ The question will be answered by the human who provided the issue.
 6.1 Prioritize questions about file locations, code structure, or system architecture.
 6.2 Avoid questions about implementation details unless directly relevant to file identification.
 
-Include 2-4 choices, each with a unique ID and clear, concise text.
+Include 3 choices, and always include a "None" option, each with a unique ID and clear, concise text.
 
 Remember: The goal is to help the system pinpoint the most relevant files for addressing the reported issue. Your question should be designed to provide the most valuable information for this purpose.
                 
@@ -697,10 +697,18 @@ apples
 oranges
 </text>
 </choice>
+<choice>
+<id>
+2
+</id>
+<text>
+None
+</text>
+</choice>
 </choices>
 </response>
 </reply>"#
-        ) // this is for testing
+        )
     }
 
     fn user_message_for_generate_human_question(&self, context: &IterativeSearchContext) -> String {

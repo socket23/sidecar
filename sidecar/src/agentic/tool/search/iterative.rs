@@ -269,15 +269,18 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     pub async fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
-        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed())?; // seed not used elsewhere
+        if let Some(seed) = self.seed.take() {
+            let scratch_pad_thinking = self
+                .llm_ops
+                .query_relevant_files(&self.context.user_query(), seed)
+                .await?
+                .scratch_pad;
 
-        let scratch_pad_thinking = self
-            .llm_ops
-            .query_relevant_files(&self.context.user_query(), seed)
-            .await?
-            .scratch_pad;
-
-        self.context.update_scratch_pad(&scratch_pad_thinking);
+            self.context.update_scratch_pad(&scratch_pad_thinking);
+            println!("Seed applied successfully");
+        } else {
+            println!("No seed provided, skipping seed application");
+        }
         Ok(())
     }
 

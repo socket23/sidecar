@@ -158,7 +158,8 @@ async fn main() {
     // let problem_statement = "We need to update the configuration settings for our application. The main configuration file is named 'exp.rs'".to_owned();
 
     // let problem_statement = "in the IterativeSearchSystem, transfer the thinking from search_results into identify_results".to_owned();
-    let problem_statement = "consider big_search.rs and iterative.rs - suggest how we can refactor so that IterativeSearchSystem can accept a 'seed' String input".to_owned();
+    // let problem_statement = "consider big_search.rs and iterative.rs - suggest how we can refactor so that IterativeSearchSystem can accept a 'seed' String input".to_owned();
+    let problem_statement = "add a new SearchToolType called Human, which uses the CliCommunicator to ask the human a multiple choice question via cli".to_owned();
 
     let root_dir = "/Users/zi/codestory/testing/sidecar/sidecar/src";
 

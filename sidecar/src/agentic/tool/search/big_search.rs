@@ -17,7 +17,6 @@ use crate::{
         tool::{
             code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
             errors::ToolError,
-            file::types::FileImportantError,
             input::ToolInput,
             output::ToolOutput,
             r#type::Tool,
@@ -182,17 +181,16 @@ impl Tool for BigSearchBroker {
 
         let repository = self.create_repository(&root_directory).await?;
 
-        let tree_string =
-            TreePrinter::to_string_stacked(Path::new(&root_directory)).map_err(|_| {
-                ToolError::FileImportantError(FileImportantError::PrintTreeError(root_directory))
-            })?;
+        // let tree_string =
+        //     TreePrinter::to_string_stacked(Path::new(&root_directory)).map_err(|_| {
+        //         ToolError::FileImportantError(FileImportantError::PrintTreeError(root_directory))
+        //     })?;
 
-        let tree_seed = IterativeSearchSeed::Tree(tree_string);
+        // let tree_seed = IterativeSearchSeed::Tree(tree_string);
 
-        let system = self.create_search_system(repository, &request)?;
+        let mut system = self.create_search_system(repository, &request)?;
 
         let results = system
-            .with_seed(tree_seed)
             .run()
             .await
             .map_err(|e| ToolError::IterativeSearchError(e))?;

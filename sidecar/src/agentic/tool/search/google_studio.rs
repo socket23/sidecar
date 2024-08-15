@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::agentic::tool::{
     file::types::SerdeError,
+    human::qa::GenerateHumanQuestionResponse,
     search::{
         identify::IdentifyResponse, iterative::File, relevant_files::QueryRelevantFilesResponse,
     },
@@ -60,24 +61,25 @@ Read the <issue> tag to understand the issue.
 
 2. Review Current File Context:
 Examine the <file_context> tag to see which files and code spans have already been identified.
-If you believe that all relevant files have been identified, you can finish the search by setting complete to true.
 
-3. Consider the Necessary Search Parameters:
+3. Understand the scratch_pad information - it contains useful information about the repository's files and structure.
+
+4. Consider the Necessary Search Parameters:
 Determine if specific file types, directories, function or class names or code patterns are mentioned in the issue.
 If you can you should always try to specify the search parameters as accurately as possible.
 You can do more than one search request at the same time so you can try different search parameters to cover all possible relevant code.
 
-4. Ensure At Least One Tool:
-Make sure that at least one of File or Keyword is provided. File allows you to search for file names. Keyword allows you to search for symbols such as class and function names.
-You may use a combination of both.
+5. Search tools:
+- "File" allows you to search for file names.
+- "Keyword" allows you to search for symbol names.
 
-5. Formulate the Search function:
-For files, you do not need to provide the extension. For Keyword, use only uninterrupted strings, not phrases.
+6. Formulate the Search function:
+For Keyword, use only single strings, not phrases or multiple words. Preserve casing i.e. if symbol/file uses snake_case, use snake_case
 
-6. Execute the Search:
-Execute the search by providing the search parameters and your thoughts on how to approach this task in XML. 
+7. Execute the Search:
+Execute the search by providing the query. 
 
-Think step by step and write out your thoughts in the thinking field.
+Think step by step and write out your reasoning in the thinking field.
 
 Examples:
 
@@ -90,7 +92,9 @@ Assistant:
 <request>
 <thinking>
 </thinking>
-<tool>Keyword</tool>
+<tool>
+Keyword
+</tool>
 <query>
 generate_report
 </query>
@@ -98,7 +102,9 @@ generate_report
 <request>
 <thinking>
 </thinking>
-<tool>File</tool>
+<tool>
+File
+</tool>
 <query>
 report
 </query>
@@ -118,9 +124,9 @@ report
             r#"<issue>
 {}
 </issue>
-<thoughts>
+<scratch_pad>
 {}
-</thoughts>
+</scratch_pad>
 <file_context>
 {}
 </file_context
@@ -218,14 +224,10 @@ Think step by step and write out your high-level thoughts about the state of the
 <search_results>
 {}
 </search_results>
-<scratch_pad>
-{}
-</scratch_pad>
 "#,
             context.user_query(),
             File::serialise_files(context.files(), "\n"),
             serialized_results.join("\n"),
-            context.scratch_pad(),
         )
     }
 
@@ -252,7 +254,7 @@ Instructions:
     * Decide if the relevant code is found in the file context.
     * If you believe all existing relevant code is identified, mark the task as complete.
     * If the specific method or code required to fix the issue is not present, still mark the task as complete as long as the relevant class or area for modification is identified.
-    * If you believe more relevant code can be identified, mark the task as not complete and provide your suggestions on how to find the relevant code.
+    * If you believe more relevant code can be identified, mark the task as not complete and provide your suggestions on how to find the relevant code, including any relevant information such as file names, symbol names, that you've already seen.
 
 Important:
     * You CANNOT change the codebase. DO NOT modify or suggest changes to any code.
@@ -570,10 +572,6 @@ Write your analysis here.
 </reply>
 
 Notice how each xml tag ends with a new line, follow this format strictly.
-
-Response:
-
-<files>
 "#,
         )
     }
@@ -626,6 +624,176 @@ Response:
             }
         }
     }
+
+    // todo(zi): improve.
+    fn system_message_for_generate_human_question(&self) -> String {
+        format!(
+            r#"You are a helpful AI assistant with expert reasoning skills.
+
+You will be provided a reported issue and the file context containing existing code from the project's git repository.
+Your task is to generate a single multiple-choice question that may help the system determine the most relevant files to solve the issue. 
+The question will be answered by the human who provided the issue.
+
+            
+# Input Structure:
+<issue>: Contains the reported issue.
+<file_context>: The file context from the project's git repository.
+<scratch_pad>: The system's thinking and notes.
+
+# Instructions:
+
+1. Analyze the Issue:
+1.1 Carefully review the reported issue to understand the requested functionality or bug fix.
+1.2 Identify key terms, components, or concepts mentioned in the issue.
+
+
+2. Examine the provided file context to identify if the relevant code for the reported issue is present.
+2.1 If the issue suggests that code should be implemented and doesn't yet exist in the code, consider the task completed if relevant code is found that would be modified to implement the new functionality.
+2.2 Note any references to other parts of the codebase not included in the context.
+
+
+3. Evaluate the Scratch Pad:
+3.1 Identify areas where the system needs clarification or additional information.
+3.2 Recognize potential misconceptions or incorrect assumptions in the system's thinking.
+3.3 Determine what information would most effectively guide the system towards identifying relevant files.
+
+4. Formulate the Question:
+4.1 Craft a single, focused multiple-choice question that addresses the most critical information gap.
+4.2 Ensure the question directly relates to identifying relevant files for solving the issue.
+
+5. Design answer choices that:
+5.1 Are mutually exclusive and collectively exhaustive.
+5.2 Provide maximum information gain regardless of which is selected.
+5.3 Include plausible distractors to validate understanding.
+
+6. Optimize for Relevance:
+6.1 Prioritize questions about file locations, code structure, or system architecture.
+6.2 Avoid questions about implementation details unless directly relevant to file identification.
+
+Include 3 choices, and always include a "None" option, each with a unique ID and clear, concise text.
+
+Remember: The goal is to help the system pinpoint the most relevant files for addressing the reported issue. Your question should be designed to provide the most valuable information for this purpose.
+                
+Response format: 
+<reply>
+<response>
+<text>
+question goes here
+</text>
+<choices>
+<choice>
+<id>
+0
+</id>
+<text>
+apples
+</text>
+</choice>
+<choice>
+<id>
+1
+</id>
+<text>
+oranges
+</text>
+</choice>
+<choice>
+<id>
+2
+</id>
+<text>
+None
+</text>
+</choice>
+</choices>
+</response>
+</reply>"#
+        )
+    }
+
+    fn user_message_for_generate_human_question(&self, context: &IterativeSearchContext) -> String {
+        let files = context.files();
+        let serialised_files = File::serialise_files(files, "\n");
+        let scratch_pad = context.scratch_pad();
+
+        format!(
+            r#"<user_query>
+{}
+</user_query>
+<file_context>
+{}
+</file_context
+<scratch_pad>
+{}
+</scratch_pad>
+        "#,
+            context.user_query(),
+            serialised_files,
+            scratch_pad,
+        )
+    }
+
+    async fn make_llm_call(
+        &self,
+        system_message: &str,
+        user_message: &str,
+        request_label: &str,
+    ) -> Result<String, IterativeSearchError> {
+        let system_message = LLMClientMessage::system(system_message.to_string());
+        let user_message = LLMClientMessage::user(user_message.to_string());
+
+        let messages = LLMClientCompletionRequest::new(
+            self.model.to_owned(),
+            vec![system_message.clone(), user_message.clone()],
+            0.2,
+            None,
+        );
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let response = self
+            .client
+            .stream_completion(
+                self.api_keys.to_owned(),
+                messages,
+                self.provider.to_owned(),
+                vec![
+                    ("event_type".to_owned(), request_label.to_owned()),
+                    ("root_id".to_owned(), self.root_request_id.to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+
+        Ok(response)
+    }
+
+    fn parse_generate_human_question_response(
+        response: &str,
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError> {
+        let lines = GoogleStudioLLM::get_reply_tags_contents(response);
+
+        from_str::<GenerateHumanQuestionResponse>(&lines).map_err(|e| {
+            eprintln!("{:?}", e);
+            IterativeSearchError::SerdeError(SerdeError::new(e, lines))
+        })
+    }
+
+    pub async fn generate_human_question(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError> {
+        let system_message = self.system_message_for_generate_human_question();
+        let user_message = self.user_message_for_generate_human_question(context);
+
+        let response = self
+            .make_llm_call(&system_message, &user_message, "generate_human_question")
+            .await?;
+
+        GoogleStudioLLM::parse_generate_human_question_response(&response)
+    }
 }
 
 #[async_trait]
@@ -658,5 +826,12 @@ impl LLMOperations for GoogleStudioLLM {
         seed: IterativeSearchSeed,
     ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
         self.query_relevant_files(user_query, seed).await
+    }
+
+    async fn generate_human_question(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError> {
+        self.generate_human_question(context).await
     }
 }

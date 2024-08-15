@@ -14,7 +14,14 @@ use crate::{
             CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
         file::types::SerdeError,
+        human::{
+            cli::CliCommunicator,
+            error::CommunicationError,
+            human::Human,
+            qa::{Choice, GenerateHumanQuestionResponse, Question},
+        },
     },
+    repomap::types::RepoMap,
     user_context::types::UserContextError,
 };
 
@@ -54,9 +61,13 @@ impl IterativeSearchContext {
             .collect()
     }
 
-    // todo(zi): consider extending thoughts over replacing
     pub fn update_scratch_pad(&mut self, scratch_pad: &str) {
         self.scratch_pad = scratch_pad.to_string()
+    }
+
+    pub fn extend_scratch_pad(&mut self, info: &str) {
+        self.scratch_pad.push('\n');
+        self.scratch_pad.push_str(info);
     }
 
     pub fn user_query(&self) -> &str {
@@ -158,6 +169,15 @@ pub enum IterativeSearchError {
 
     #[error("Tree printing failed for: {0}")]
     PrintTreeError(String),
+
+    #[error("Human communication error: {0}")]
+    HumanCommunicationError(#[from] CommunicationError),
+
+    #[error("Missing question choice, choice_id: {0}")]
+    MissingQuestionChoiceError(String),
+
+    #[error("No tags found for file: {0}")]
+    NoTagsForFile(PathBuf),
 }
 
 impl SearchQuery {
@@ -213,6 +233,10 @@ pub trait LLMOperations {
         user_query: &str,
         seed: IterativeSearchSeed,
     ) -> Result<QueryRelevantFilesResponse, IterativeSearchError>;
+    async fn generate_human_question(
+        &self,
+        context: &IterativeSearchContext,
+    ) -> Result<GenerateHumanQuestionResponse, IterativeSearchError>;
 }
 
 pub struct IterativeSearchSystem<T: LLMOperations> {
@@ -244,15 +268,18 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     pub async fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {
-        let seed = self.seed.take().ok_or(IterativeSearchError::NoSeed())?; // seed not used elsewhere
+        if let Some(seed) = self.seed.take() {
+            let scratch_pad_thinking = self
+                .llm_ops
+                .query_relevant_files(&self.context.user_query(), seed)
+                .await?
+                .scratch_pad;
 
-        let scratch_pad_thinking = self
-            .llm_ops
-            .query_relevant_files(&self.context.user_query(), seed)
-            .await?
-            .scratch_pad;
-
-        self.context.update_scratch_pad(&scratch_pad_thinking);
+            self.context.update_scratch_pad(&scratch_pad_thinking);
+            println!("Seed applied successfully");
+        } else {
+            println!("No seed provided, skipping seed application");
+        }
         Ok(())
     }
 
@@ -266,7 +293,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         while !self.complete && count < 3 {
             let loop_start = Instant::now();
             println!("===========");
-            println!("run loop #{}", count);
+            println!("search loop #{}", count);
             println!("===========");
 
             let search_queries = self.search().await?;
@@ -286,36 +313,80 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             self.context
                 .update_scratch_pad(&identify_results.scratch_pad);
 
-            println!(
-                "{}",
-                identify_results
-                    .item
-                    .iter()
-                    .map(|r| format!("{:?}\n", r))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            );
-
+            let generate_file_outline = Instant::now();
             self.context.add_files(
                 identify_results
-                    .item
+                    .items
                     .iter()
-                    .map(|r| File::new(r.path(), r.thinking(), "")) // todo(zi) add real snippet?
+                    .map(|f| {
+                        let path = f.path();
+                        let tags = self.repository.get_file_tags(path);
+
+                        let snippet = if let Some(tags) = tags {
+                            RepoMap::to_tree(&tags)
+                        } else {
+                            "".to_string()
+                        };
+
+                        File::new(f.path(), f.thinking(), &snippet)
+                    })
                     .collect(),
+            );
+            println!(
+                "File outline generation completed in {:?}",
+                generate_file_outline.elapsed()
             );
 
             let decision_start = Instant::now();
             let decision = self.decide().await?;
             println!("Decision made in {:?}", decision_start.elapsed());
 
-            println!("{:?}", decision);
-
             self.context.update_scratch_pad(decision.suggestions());
-
             self.complete = decision.complete();
 
+            println!("===========");
+            println!("Decision: {}", decision.complete());
+            println!("Suggestions: {}", decision.suggestions());
+            println!("===========");
+
+            // todo(zi): proper condition
+            // if true {
+            //     let cli = CliCommunicator {};
+
+            //     let human_tool = Human::new(cli);
+
+            //     let question: Question = self
+            //         .llm_ops
+            //         .generate_human_question(&self.context)
+            //         .await?
+            //         .into();
+
+            //     let answer = human_tool.ask(&question)?;
+            //     let choice_id = answer.choice_id();
+
+            //     let answer_text = question
+            //         .get_choice(choice_id)
+            //         .map(|choice| choice.text())
+            //         .ok_or_else(|| {
+            //             IterativeSearchError::MissingQuestionChoiceError(choice_id.to_string())
+            //         })?;
+
+            //     let scratch_pad_entry = format!(
+            //         r#"- Critical information to solving the issue:
+            // Question: {}
+            // Answer: {}"#,
+            //         question.text(),
+            //         answer_text
+            //     );
+
+            //     self.context.extend_scratch_pad(&scratch_pad_entry);
+            // }
+
             count += 1;
+            println!("===========");
             println!("Loop {} completed in {:?}", count, loop_start.elapsed());
+            println!("Scratch_pad: {}", self.context.scratch_pad());
+            println!("===========");
         }
 
         let symbols = self

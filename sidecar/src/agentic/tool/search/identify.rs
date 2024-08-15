@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[serde(rename = "response")]
 pub struct IdentifyResponse {
     #[serde(rename = "item")]
-    pub item: Vec<IdentifiedFile>,
+    pub items: Vec<IdentifiedFile>,
     pub scratch_pad: String,
 }
 

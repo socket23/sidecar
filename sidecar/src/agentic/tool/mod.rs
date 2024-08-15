@@ -22,6 +22,7 @@ pub mod errors;
 pub mod file;
 pub mod filtering;
 pub mod grep;
+pub mod human;
 pub mod input;
 pub mod jitter;
 pub mod kw_search;

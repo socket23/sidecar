@@ -65,7 +65,7 @@ enum AnthropicEvent {
     #[serde(rename = "message_start")]
     MessageStart {
         #[serde(rename = "message")]
-        _message: MessageData,
+        message: MessageData,
     },
     #[serde(rename = "content_block_start")]
     ContentBlockStart {
@@ -107,7 +107,7 @@ struct MessageData {
     // model: String,
     // stop_reason: Option<String>,
     // stop_sequence: Option<String>,
-    // usage: Usage,
+    usage: Usage,
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +134,7 @@ struct MessageDeltaData {
 struct Usage {
     // input_tokens: u32,
     // output_tokens: u32,
+    cache_read_input_tokens: u32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -373,6 +374,12 @@ impl LLMClient for AnthropicClient {
                         Some(delta.text),
                         model_str.to_owned(),
                     ));
+                }
+                Ok(AnthropicEvent::MessageStart { message }) => {
+                    println!(
+                        "anthropic::cache_hit::{}",
+                        message.usage.cache_read_input_tokens
+                    );
                 }
                 Err(_e) => {
                     // dbg!(e);

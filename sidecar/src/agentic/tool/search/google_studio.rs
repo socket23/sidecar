@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::agentic::tool::{
     file::types::SerdeError,
-    human::qa::{GenerateHumanQuestionResponse, Question},
+    human::qa::GenerateHumanQuestionResponse,
     search::{
         identify::IdentifyResponse, iterative::File, relevant_files::QueryRelevantFilesResponse,
     },

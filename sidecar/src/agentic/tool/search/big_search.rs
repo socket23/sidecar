@@ -17,7 +17,6 @@ use crate::{
         tool::{
             code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
             errors::ToolError,
-            file::types::FileImportantError,
             input::ToolInput,
             output::ToolOutput,
             r#type::Tool,

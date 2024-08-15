@@ -61,7 +61,6 @@ impl IterativeSearchContext {
             .collect()
     }
 
-    // todo(zi): consider extending thoughts over replacing
     pub fn update_scratch_pad(&mut self, scratch_pad: &str) {
         self.scratch_pad = scratch_pad.to_string()
     }
@@ -330,7 +329,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                         };
 
                         File::new(f.path(), f.thinking(), &snippet)
-                    }) // todo(zi) add real snippet?
+                    })
                     .collect(),
             );
             println!(

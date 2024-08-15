@@ -625,7 +625,7 @@ Notice how each xml tag ends with a new line, follow this format strictly.
         }
     }
 
-    // todo(zi): make this more nuanced
+    // todo(zi): improve.
     fn system_message_for_generate_human_question(&self) -> String {
         format!(
             r#"You are a helpful AI assistant with expert reasoning skills.

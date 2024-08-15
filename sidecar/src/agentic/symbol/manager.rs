@@ -121,6 +121,10 @@ impl SymbolManager {
         }
     }
 
+    pub fn tool_box(&self) -> &ToolBox {
+        &self.tool_box
+    }
+
     pub async fn probe_request_from_user_context(
         &self,
         query: String,

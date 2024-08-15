@@ -315,7 +315,8 @@ mathweb/flask/app.py
 >>>>>>> REPLACE
 ```"#
                     .to_owned(),
-            ),
+            )
+            .cache_point(),
         ]
     }
 }
@@ -395,6 +396,7 @@ impl Tool for SearchAndReplaceEditing {
                 edits_response = edits_receiver.recv() => {
                     match edits_response {
                         Some(EditDelta::EditStarted(range)) => {
+                            println!("tool_box::search_and_replace::start_streaming::symbol_name({})", symbol_identifier.symbol_name());
                             let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
                                 root_request_id.to_owned(),
                                 symbol_identifier.clone(),
@@ -666,7 +668,7 @@ fn get_range_for_search_block(
 
     let search_block_lines = search_block.lines().into_iter().collect::<Vec<_>>();
     let search_block_len = search_block_lines.len();
-    if code_to_look_at_lines.len() <= search_block_len {
+    if code_to_look_at_lines.len() < search_block_len {
         // return early over here if we do not want to edit this
         return None;
     }

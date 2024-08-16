@@ -1807,6 +1807,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                     .await?
             } else {
                 if sub_symbol_to_edit.is_full_edit() {
+                    // TODO(skcd): Limit this so we are fast enough over here, do something
+                    // anything about this on the fast path
                     self.grab_context_for_editing_faster(&sub_symbol_to_edit, &request_id_ref)
                         .await?
                 } else {

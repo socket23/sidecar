@@ -4,14 +4,14 @@ use super::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolToEdit {
-    outline: bool,
+    outline: bool, // todo(zi): remove this mfer, test case
     range: Range,
     fs_file_path: String,
     symbol_name: String,
     instructions: Vec<String>,
     is_new: bool,
     // If this is a full symbol edit instead of being sub-symbol level
-    is_full_edit: bool,
+    is_full_edit: bool, // todo(zi): remove this mfer, test case 2
     original_user_query: String,
     symbol_edited_list: Option<Vec<SymbolEditedItem>>,
 }

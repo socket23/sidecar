@@ -6,10 +6,11 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{GoogleAIStudioKey, LLMProvider};
+use llm_client::provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
+use crate::agentic::symbol::events::edit::SymbolToEdit;
 use crate::agentic::symbol::events::initial_request::{InitialRequestData, SymbolEditedItem};
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
@@ -20,6 +21,7 @@ use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::languages::TSLanguageParsing;
+use crate::chunking::text_document::{Position, Range};
 use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
@@ -118,6 +120,75 @@ impl SymbolManager {
             long_context_cache: LongContextSearchCache::new(),
             root_request_id: request_id.to_owned(),
         }
+    }
+
+    pub async fn impls_test(&self) {
+        // simulating an edit has occured in range
+        let path =
+            "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
+        let start_position = Position::new(81, 0, 420);
+        let end_position = Position::new(89, 0, 420);
+        let edited_range = Range::new(start_position, end_position);
+
+        let outline_node = self
+            .tool_box
+            .get_outline_node_for_range(&edited_range, &path, "request_id")
+            .await
+            .unwrap();
+
+        let node_name = outline_node.name();
+        let original_code = outline_node.content().content();
+        let outline_node_range = outline_node.range();
+
+        let identifier_range = outline_node.identifier_range();
+
+        let symbol_to_edit = SymbolToEdit::new(
+            node_name.to_string(),
+            identifier_range.to_owned(), // symbol range is the the outline node's identifier range
+            path.to_string(),
+            vec!["some instruction, cook eggs".to_string()],
+            false,
+            false,
+            false,
+            "please cook eggs".to_string(),
+            None,
+        );
+
+        let _ = self
+            .tool_box
+            .check_for_followups(
+                node_name,
+                &symbol_to_edit,
+                original_code,
+                LLMType::Gpt4O,
+                LLMProvider::OpenAI,
+                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                )),
+                self.symbol_locker.hub_sender.clone(),
+                &self.root_request_id,
+                &ToolProperties::new(),
+            )
+            .await;
+
+        // println!("{path}");
+        // println!("start position: \n{:?}", &identifier_range.start_position());
+
+        // let references = self
+        //     .tool_box
+        //     .go_to_references(
+        //         path,
+        //         &identifier_range.start_position(),
+        //         &self.root_request_id,
+        //     )
+        //     .await
+        //     .unwrap();
+
+        // println!("{:?}", references);
+    }
+
+    pub fn tool_box(&self) -> &ToolBox {
+        &self.tool_box
     }
 
     pub async fn probe_request_from_user_context(

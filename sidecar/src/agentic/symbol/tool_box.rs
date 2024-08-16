@@ -2319,6 +2319,8 @@ We also believe this symbol needs to be probed because of:
                     tool_properties,
                 )
                 .await;
+
+            // this returns positions with byte_offset 0, which fks .contains
             let references = self
                 .go_to_references(
                     symbol_edited.fs_file_path(),
@@ -2326,6 +2328,18 @@ We also believe this symbol needs to be probed because of:
                     request_id,
                 )
                 .await?;
+
+            println!(
+                "references from go_to_references: \n\n{}",
+                references
+                    .clone()
+                    .locations()
+                    .iter()
+                    .map(|loc| format!("{}", loc.fs_file_path()))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            );
+
             let _ = self
                 .invoke_followup_on_references(
                     symbol_edited,
@@ -2370,6 +2384,7 @@ We also believe this symbol needs to be probed because of:
         request_id: &str,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!("toolbox::invoke_references_check_for_class_definition");
         // we need to first ask the LLM for the class properties if any we have
         // to followup on if they changed
         let request = ClassSymbolFollowupRequest::new(
@@ -2392,7 +2407,7 @@ We also believe this symbol needs to be probed because of:
             .into_iter()
             .map(|(index, line)| (index + start_line, line.to_owned()))
             .collect::<Vec<_>>();
-        let class_memebers_to_follow = self
+        let class_members_to_follow = self
             .check_class_members_to_follow(request, request_id)
             .await?
             .members();
@@ -2400,7 +2415,7 @@ We also believe this symbol needs to be probed because of:
         // we might ber using this class
         // Now we have to get the position of the members which we want to follow-along, this is important
         // since we might have multiple members here and have to make sure that we can go-to-refernces for this
-        let members_with_position = class_memebers_to_follow
+        let members_with_position = class_members_to_follow
             .into_iter()
             .filter_map(|member| {
                 // find the position in the content where we have this member and keep track of that
@@ -2780,11 +2795,23 @@ We also believe this symbol needs to be probed because of:
             file_paths
                 .clone()
                 .into_iter()
-                .map(|fs_file_path| (fs_file_path, ui_sender.clone())),
+                .map(|data| (data, ui_sender.clone())),
         )
-        .map(|(fs_file_path, ui_sender)| async {
+        .map(|(fs_file_path, ui_sender)| async move {
             // get the file content
-            let _ = self.file_open(fs_file_path, request_id, ui_sender).await;
+            let file_contents = self
+                .file_open(fs_file_path.to_owned(), request_id, ui_sender)
+                .await;
+            if let Ok(file_contents) = file_contents {
+                let _ = self
+                    .force_add_document(
+                        // this is critical to avoiding race conditions
+                        &fs_file_path,
+                        file_contents.contents_ref(),
+                        file_contents.language(),
+                    )
+                    .await;
+            }
             ()
         })
         .buffer_unordered(100)
@@ -2994,6 +3021,7 @@ Please handle these changes as required."#
         });
         match outline_node_possible {
             Some(outline_node) => {
+                println!("outline node found: {}", &outline_node.name());
                 // we try to find the smallest node over here which contains the position
                 let child_node_possible =
                     outline_node
@@ -3053,7 +3081,7 @@ Please handle these changes as required."#
                             })
                             .collect::<Vec<_>>()
                             .join("\n");
-                        let instruction_prompt = self.create_instruction_prompt_for_followup(
+                        let _instruction_prompt = self.create_instruction_prompt_for_followup(
                             original_code,
                             edited_code,
                             symbol_to_edit,
@@ -3068,14 +3096,50 @@ Please handle these changes as required."#
                         );
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
+
+                        //                         println!("=========");
+                        //                         println!("outline node: {:?}", outline_node.name());
+                        //                         println!("=========");
+
+                        //                         let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        // pub struct File {
+                        //     path: PathBuf,
+                        //     thinking: String,
+                        //     snippet: String,
+                        //     // content: String,
+                        //     // preview: String,
+                        // }"#;
+
+                        //                         let edited_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        // pub struct File {
+                        //     path: PathBuf,
+                        //     thinking: String,
+                        //     snippet: String,
+                        //     fury: usize,
+                        //     // content: String,
+                        //     // preview: String,
+                        // }"#;
+
+                        // println!("original code: \n{}", original_code);
+                        // println!("=========");
+                        // println!("edited code: \n{}", edited_code);
+
                         let _ = hub_sender.send((
-                            SymbolEventRequest::ask_question(
+                            SymbolEventRequest::initial_request(
                                 SymbolIdentifier::with_file_path(
                                     outline_node.name(),
                                     outline_node.fs_file_path(),
                                 ),
-                                instruction_prompt,
+                                // todo(skcd) can we do sthing heree...
+                                format!(
+                                    "This class has changed.\nFrom: {}\nTo: {}\n\nGiven that you depend on it, ensure necessary changes are made to accommodate the changes.",
+                                    original_code, edited_code
+                                ), // original user query - should be some custom prompt?
+                                request_id.to_string(),
+                                vec![], // history...
                                 tool_properties.clone(),
+                                Some(vec![]),
+                                false,
                             ),
                             uuid::Uuid::new_v4().to_string(),
                             ui_sender.clone(),
@@ -3106,12 +3170,16 @@ Please handle these changes as required."#
             None => {
                 // if there is no such outline node, then what should we do? cause we still
                 // need an outline of sorts
+                println!(
+                    "could not find outline node for {}",
+                    &symbol_to_edit.symbol_name()
+                );
                 return Err(SymbolError::NoOutlineNodeSatisfyPosition);
             }
         }
     }
 
-    async fn go_to_references(
+    pub async fn go_to_references(
         &self,
         fs_file_path: &str,
         position: &Position,

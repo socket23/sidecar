@@ -326,10 +326,6 @@ impl SymbolManager {
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
         let user_context = input_event.provided_context().clone();
         let request_id = input_event.request_id().to_owned();
-        let _ = self.ui_sender.send(UIEventWithID::for_codebase_event(
-            request_id.to_owned(),
-            input_event.clone(),
-        ));
         let is_full_edit = input_event.full_symbol_edit();
         let is_big_search = input_event.big_search();
         let swe_bench_id = input_event.swe_bench_instance_id();

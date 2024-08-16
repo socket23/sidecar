@@ -156,12 +156,9 @@ async fn main() {
         None,
         None,
         None,
-        None,
         true, // full code editing
-        false,
         Some(root_dir.to_string()),
         None,
-        false,
         false, // big_search
     );
 

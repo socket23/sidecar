@@ -23,7 +23,7 @@ use crate::{
     user_context::types::UserContext,
 };
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct SymbolInputEvent {
     context: UserContext,
     llm: LLMType,
@@ -34,20 +34,17 @@ pub struct SymbolInputEvent {
     // Here we have properties for swe bench which we are sending for testing
     swe_bench_test_endpoint: Option<String>,
     repo_map_fs_path: Option<String>,
-    gcloud_access_token: Option<String>,
     swe_bench_id: Option<String>,
     swe_bench_git_dname: Option<String>,
     swe_bench_code_editing: Option<LLMProperties>,
     swe_bench_gemini_api_keys: Option<LLMProperties>,
     swe_bench_long_context_editing: Option<LLMProperties>,
     full_symbol_edit: bool,
-    codebase_search: bool,
     root_directory: Option<String>,
     /// The properties for the llm which does fast and stable
     /// code symbol selection on an initial context, this can be used
     /// when we are not using full codebase context search
     fast_code_symbol_search_llm: Option<LLMProperties>,
-    file_important_search: bool, // todo: this currently conflicts with repomap search
     big_search: bool,
 }
 
@@ -61,17 +58,14 @@ impl SymbolInputEvent {
         request_id: String,
         swe_bench_test_endpoint: Option<String>,
         repo_map_fs_path: Option<String>,
-        gcloud_access_token: Option<String>,
         swe_bench_id: Option<String>,
         swe_bench_git_dname: Option<String>,
         swe_bench_code_editing: Option<LLMProperties>,
         swe_bench_gemini_api_keys: Option<LLMProperties>,
         swe_bench_long_context_editing: Option<LLMProperties>,
         full_symbol_edit: bool,
-        codebase_search: bool,
         root_directory: Option<String>,
         fast_code_symbol_search_llm: Option<LLMProperties>,
-        file_important_search: bool,
         big_search: bool,
     ) -> Self {
         Self {
@@ -83,17 +77,14 @@ impl SymbolInputEvent {
             user_query,
             swe_bench_test_endpoint,
             repo_map_fs_path,
-            gcloud_access_token,
             swe_bench_id,
             swe_bench_git_dname,
             swe_bench_code_editing,
             swe_bench_gemini_api_keys,
             swe_bench_long_context_editing,
             full_symbol_edit,
-            codebase_search,
             root_directory,
             fast_code_symbol_search_llm,
-            file_important_search,
             big_search,
         }
     }

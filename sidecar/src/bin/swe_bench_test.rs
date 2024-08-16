@@ -170,17 +170,14 @@ async fn main() {
         instance_id.to_owned(),
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
-        Some(input.gemini_api_key.to_owned()),
         Some(instance_id.to_owned()),
         Some(folder_path.to_owned()),
         Some(gpt4o_config),
         Some(gemini_llm_properties),
         Some(long_code_editing_llm),
         true,
-        false,
         None,
         None,
-        false,
         false,
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

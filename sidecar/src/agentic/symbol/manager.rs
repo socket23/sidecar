@@ -126,8 +126,8 @@ impl SymbolManager {
     pub async fn impls_test(&self) {
         // simulating an edit has occured in range
         let path = "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
-        let start_position = Position::new(81, 0, 0);
-        let end_position = Position::new(88, 0, 0);
+        let start_position = Position::new(81, 0, 420);
+        let end_position = Position::new(88, 0, 420);
         let edited_range = Range::new(start_position, end_position);
 
         let outline_node = self
@@ -154,14 +154,6 @@ impl SymbolManager {
             None,
         );
 
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
-            SymbolEventRequest,
-            String,
-            tokio::sync::oneshot::Sender<SymbolEventResponse>,
-        )>();
-
-        println!("checking for followups");
-
         let _ = self
             .tool_box
             .check_for_followups(
@@ -173,7 +165,7 @@ impl SymbolManager {
                 LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
                     "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
                 )),
-                sender.clone(),
+                self.symbol_locker.hub_sender.clone(),
                 &self.root_request_id,
                 &ToolProperties::new(),
             )

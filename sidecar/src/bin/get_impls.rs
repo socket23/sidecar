@@ -106,5 +106,31 @@ async fn main() {
         request_id.to_string(),
     );
 
-    let _ = symbol_manager.impls_test().await;
+    let mut impls_test = Box::pin(symbol_manager.impls_test());
+
+    loop {
+        tokio::select! {
+            event = receiver.recv() => {
+                if let Some(_event) = event {
+                    // info!("event: {:?}", event);
+                } else {
+                    break; // Receiver closed, exit the loop
+                }
+            }
+            result = &mut impls_test => {
+                println!("Result: {:?}", result);
+                // match result {
+                //     Ok(_) => {
+                //         // The task completed successfully
+                //         // Handle the result if needed
+                //     }
+                //     Err(e) => {
+                //         // An error occurred while running the task
+                //         eprintln!("Error in initial_request_task: {}", e);
+                //         // Handle the error appropriately (e.g., log, retry, or exit)
+                //     }
+                // }
+            }
+        }
+    }
 }

@@ -310,8 +310,9 @@ impl Range {
         self.start_position().before_other(position) && self.end_position().after_other(position)
     }
 
+    // this used to compare against byte_offsets, which we are deprecating.
     pub fn contains(&self, other: &Range) -> bool {
-        self.start_byte() <= other.start_byte() && self.end_byte() >= other.end_byte()
+        self.contains_check_line_column(other)
     }
 
     pub fn contains_check_line(&self, other: &Range) -> bool {

@@ -48,7 +48,7 @@ pub struct SymbolLocker {
     >,
     // this is the main communication channel which we can use to send requests
     // to the right symbol
-    hub_sender: UnboundedSender<(
+    pub hub_sender: UnboundedSender<(
         SymbolEventRequest,
         String,
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
@@ -119,6 +119,9 @@ impl SymbolLocker {
                     )
                     .await;
                 if let Ok(snippet) = snippet {
+                    println!("snippet found");
+
+                    println!("{:?}", &snippet);
                     // the symbol does not exist so we have to make sure that we can send it over somehow
                     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
                         symbol_identifier.symbol_name().to_owned(),
@@ -132,6 +135,7 @@ impl SymbolLocker {
                     );
                     // we create the symbol over here, but what about the context, I want
                     // to pass it to the symbol over here
+                    println!("create_symbol_agent");
                     let _ = self
                         .create_symbol_agent(
                             mecha_code_symbol_thinking,

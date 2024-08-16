@@ -23,7 +23,7 @@ impl AskQuestionRequest {
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum SymbolEvent {
     InitialRequest(InitialRequestData),
-    AskQuestion(AskQuestionRequest),
+    AskQuestion(AskQuestionRequest), // todo(zi) remove this shit everywhere...
     UserFeedback,
     Delete,
     Edit(SymbolToEditRequest),

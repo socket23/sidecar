@@ -2235,11 +2235,7 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await;
 
-            println!("symbol_edited: \n{:?}", symbol_edited.fs_file_path());
-            println!(
-                "symbol_edited range start position: {:?}",
-                symbol_edited.range().start_position()
-            );
+            // this returns positions with byte_offset 0, which fks .contains
             let references = self
                 .go_to_references(
                     symbol_edited.fs_file_path(),
@@ -2248,7 +2244,6 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await?;
 
-            println!("{:?}", references);
             let _ = self
                 .invoke_followup_on_references(
                     symbol_edited,
@@ -2313,7 +2308,7 @@ We also believe this symbol needs to be probed because of:
             .into_iter()
             .map(|(index, line)| (index + start_line, line.to_owned()))
             .collect::<Vec<_>>();
-        let class_memebers_to_follow = self
+        let class_members_to_follow = self
             .check_class_members_to_follow(request, request_id)
             .await?
             .members();
@@ -2321,7 +2316,7 @@ We also believe this symbol needs to be probed because of:
         // we might ber using this class
         // Now we have to get the position of the members which we want to follow-along, this is important
         // since we might have multiple members here and have to make sure that we can go-to-refernces for this
-        let members_with_position = class_memebers_to_follow
+        let members_with_position = class_members_to_follow
             .into_iter()
             .filter_map(|member| {
                 // find the position in the content where we have this member and keep track of that
@@ -2668,9 +2663,7 @@ We also believe this symbol needs to be probed because of:
         request_id: &str,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
-        println!("toolbox::invoke_followup_on_references");
         let reference_locations = references.locations();
-        println!("{:?}", reference_locations);
         let file_paths = reference_locations
             .iter()
             .map(|reference| reference.fs_file_path().to_owned())
@@ -2871,6 +2864,7 @@ Please handle these changes as required."#
         });
         match outline_node_possible {
             Some(outline_node) => {
+                println!("outline node found: {}", &outline_node.name());
                 // we try to find the smallest node over here which contains the position
                 let child_node_possible =
                     outline_node
@@ -2946,13 +2940,17 @@ Please handle these changes as required."#
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
                         let _ = hub_sender.send((
-                            SymbolEventRequest::ask_question(
+                            SymbolEventRequest::initial_request(
                                 SymbolIdentifier::with_file_path(
                                     outline_node.name(),
                                     outline_node.fs_file_path(),
                                 ),
-                                instruction_prompt,
+                                "Make sure this conforms with the latest change / update to the function {x}".to_string(), // original user query - should be some custom prompt?
+                                request_id.to_string(),
+                                vec![], // history...
                                 tool_properties.clone(),
+                                Some(vec![]),
+                                false,
                             ),
                             uuid::Uuid::new_v4().to_string(),
                             sender,

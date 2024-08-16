@@ -13,12 +13,12 @@ pub struct GoToReferencesRequest {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct RefereneceLocation {
+pub struct ReferenceLocation {
     fs_file_path: String,
     range: Range,
 }
 
-impl RefereneceLocation {
+impl ReferenceLocation {
     pub fn fs_file_path(&self) -> &str {
         &self.fs_file_path
     }
@@ -30,11 +30,11 @@ impl RefereneceLocation {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GoToReferencesResponse {
-    reference_locations: Vec<RefereneceLocation>,
+    reference_locations: Vec<ReferenceLocation>,
 }
 
 impl GoToReferencesResponse {
-    pub fn locations(self) -> Vec<RefereneceLocation> {
+    pub fn locations(self) -> Vec<ReferenceLocation> {
         self.reference_locations
     }
 }

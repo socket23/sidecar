@@ -2234,6 +2234,12 @@ We also believe this symbol needs to be probed because of:
                     tool_properties,
                 )
                 .await;
+
+            println!("symbol_edited: \n{:?}", symbol_edited.fs_file_path());
+            println!(
+                "symbol_edited range start position: {:?}",
+                symbol_edited.range().start_position()
+            );
             let references = self
                 .go_to_references(
                     symbol_edited.fs_file_path(),
@@ -2241,6 +2247,8 @@ We also believe this symbol needs to be probed because of:
                     request_id,
                 )
                 .await?;
+
+            println!("{:?}", references);
             let _ = self
                 .invoke_followup_on_references(
                     symbol_edited,
@@ -2282,6 +2290,7 @@ We also believe this symbol needs to be probed because of:
         request_id: &str,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!("toolbox::invoke_references_check_for_class_definition");
         // we need to first ask the LLM for the class properties if any we have
         // to followup on if they changed
         let request = ClassSymbolFollowupRequest::new(
@@ -2659,7 +2668,9 @@ We also believe this symbol needs to be probed because of:
         request_id: &str,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!("toolbox::invoke_followup_on_references");
         let reference_locations = references.locations();
+        println!("{:?}", reference_locations);
         let file_paths = reference_locations
             .iter()
             .map(|reference| reference.fs_file_path().to_owned())

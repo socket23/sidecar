@@ -144,7 +144,7 @@ impl SymbolManager {
 
         let symbol_to_edit = SymbolToEdit::new(
             node_name.to_string(),
-            outline_node_range.to_owned(),
+            identifier_range.to_owned(), // symbol range is the the outline node's identifier range
             path.to_string(),
             vec!["some instruction, cook eggs".to_string()],
             false,
@@ -178,6 +178,9 @@ impl SymbolManager {
                 &ToolProperties::new(),
             )
             .await;
+
+        // println!("{path}");
+        // println!("start position: \n{:?}", &identifier_range.start_position());
 
         // let references = self
         //     .tool_box

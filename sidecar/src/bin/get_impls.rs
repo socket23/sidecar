@@ -118,5 +118,12 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("{}", outline_node.content().content());
+    let identifier_range = outline_node.identifier_range();
+
+    let references = tool_box
+        .go_to_references(path, &identifier_range.start_position(), &request_id_str)
+        .await
+        .unwrap();
+
+    println!("{:?}", references);
 }

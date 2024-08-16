@@ -62,7 +62,6 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
@@ -71,7 +70,7 @@ async fn main() {
     let _range = Range::new(Position::new(27, 0, 0), Position::new(40, 1, 0));
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/provider.rs";
     let file_open_response = tool_box
-        .file_open(fs_file_path.to_owned(), "")
+        .file_open(fs_file_path.to_owned(), "", sender)
         .await
         .expect("to work");
     let _ = tool_box

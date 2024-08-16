@@ -133,7 +133,6 @@ pub async fn probe_request(
         app.symbol_tracker.clone(),
         app.editor_parsing.clone(),
         editor_url.to_owned(),
-        sender,
         LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::CodeStory(Default::default()),
@@ -147,7 +146,7 @@ pub async fn probe_request(
     // spawn a background thread to keep polling the probe_request future
     let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
-            .probe_request_from_user_context(query, user_context)
+            .probe_request_from_user_context(query, user_context, sender.clone())
             .await;
     });
 
@@ -229,7 +228,6 @@ pub async fn swe_bench(
         app.symbol_tracker.clone(),
         app.editor_parsing.clone(),
         editor_url.to_owned(),
-        sender,
         LLMProperties::new(
             model.clone(),
             provider_type.clone(),
@@ -264,6 +262,7 @@ pub async fn swe_bench(
                     None,
                     None,
                     false,
+                    sender,
                 )
                 .set_swe_bench_id(swe_bench_id),
             )
@@ -372,7 +371,6 @@ pub async fn code_editing(
         app.symbol_tracker.clone(),
         app.editor_parsing.clone(),
         editor_url.to_owned(),
-        sender,
         LLMProperties::new(
             model.clone(),
             provider_type.clone(),
@@ -407,6 +405,7 @@ pub async fn code_editing(
                 Some(root_directory),
                 None,
                 codebase_search, // big search
+                sender,
             ))
             .await;
     });

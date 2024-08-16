@@ -60,7 +60,6 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
     // This is what I have to debug
@@ -79,6 +78,7 @@ async fn main() {
                 None,
             ),
             "",
+            sender,
         )
         .await;
     println!("{:?}", response);

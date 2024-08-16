@@ -60,7 +60,6 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
@@ -71,7 +70,14 @@ async fn main() {
     let symbol_to_search = "Agent".to_owned();
     // This is what I have to debug
     let response = tool_box
-        .go_to_definition_using_symbol(&range, &fs_file_path, &line_content, &symbol_to_search, "")
+        .go_to_definition_using_symbol(
+            &range,
+            &fs_file_path,
+            &line_content,
+            &symbol_to_search,
+            "",
+            sender,
+        )
         .await;
     println!("{:?}", response);
 }

@@ -58,7 +58,6 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
@@ -66,7 +65,7 @@ async fn main() {
     let symbol_name = "Agent";
 
     let response = tool_box
-        .go_to_implementation(file_path, symbol_name, "")
+        .go_to_implementation(file_path, symbol_name, "", sender)
         .await;
     println!("{:?}", response);
 }

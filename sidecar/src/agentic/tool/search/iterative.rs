@@ -14,12 +14,7 @@ use crate::{
             CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
         },
         file::types::SerdeError,
-        human::{
-            cli::CliCommunicator,
-            error::CommunicationError,
-            human::Human,
-            qa::{Choice, GenerateHumanQuestionResponse, Question},
-        },
+        human::{error::CommunicationError, qa::GenerateHumanQuestionResponse},
     },
     repomap::types::RepoMap,
     user_context::types::UserContextError,

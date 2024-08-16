@@ -328,9 +328,10 @@ impl MechaCodeSymbolThinking {
         provided_user_context: UserContext,
         tools: Arc<ToolBox>,
         request_id: &str,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Option<Self> {
         let snippet_maybe = tools
-            .find_snippet_for_symbol(file_path, symbol_name, request_id)
+            .find_snippet_for_symbol(file_path, symbol_name, request_id, ui_sender)
             .await;
         match snippet_maybe {
             Ok(snippet) => Some(MechaCodeSymbolThinking::new(
@@ -382,10 +383,11 @@ impl MechaCodeSymbolThinking {
         range: &Range,
         fs_file_path: &str,
         request_id: &str,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<String, SymbolError> {
         let file_open_result = self
             .tool_box
-            .file_open(fs_file_path.to_owned(), request_id)
+            .file_open(fs_file_path.to_owned(), request_id, ui_sender)
             .await?;
         let _ = self
             .tool_box
@@ -545,10 +547,11 @@ impl MechaCodeSymbolThinking {
         _query: &str,
         _llm_properties: LLMProperties,
         request_id: &str,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<(), SymbolError> {
         if self.is_snippet_present().await {
             if let Some((_ranked_xml_list, _reverse_lookup)) =
-                self.to_llm_request(&request_id).await
+                self.to_llm_request(&request_id, ui_sender.clone()).await
             {
                 // ask the LLM if we have enough information to answer the user query
                 // or we need to look and understand deeper into one of the sub-symbols
@@ -564,10 +567,11 @@ impl MechaCodeSymbolThinking {
         query: &str,
         llm_properties: LLMProperties,
         request_id: String,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<ProbeEnoughOrDeeperResponseParsed, SymbolError> {
         let request_id_ref = &request_id;
         if self.is_snippet_present().await {
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id, ui_sender.clone()).await
             {
                 let response = self
                     .tool_box
@@ -585,8 +589,8 @@ impl MechaCodeSymbolThinking {
                     }
                     Ok(ProbeEnoughOrDeeperResponse::ProbeDeeper(probe_deeper_list)) => {
                         let probe_deeper_list_ref = probe_deeper_list.get_snippets();
-                        let sub_symbols_to_probe = stream::iter(reverse_lookup)
-                            .filter_map(|reverse_lookup| async move {
+                        let sub_symbols_to_probe = stream::iter(reverse_lookup.into_iter().map(|data| (data, ui_sender.clone())))
+                            .filter_map(|(reverse_lookup, ui_sender)| async move {
                                 let idx = reverse_lookup.idx();
                                 let range = reverse_lookup.range();
                                 let fs_file_path = reverse_lookup.fs_file_path();
@@ -605,6 +609,7 @@ impl MechaCodeSymbolThinking {
                                                 range,
                                                 fs_file_path,
                                                 request_id_ref,
+                                                ui_sender.clone(),
                                             )
                                             .await;
                                         if let Ok(symbol) = symbol_in_range {
@@ -642,6 +647,7 @@ impl MechaCodeSymbolThinking {
         query: &str,
         llm_properties: LLMProperties,
         request_id: String,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<Vec<SubSymbolToProbe>, SymbolError> {
         let request_id_ref = &request_id;
         // early exit if this is a function
@@ -663,7 +669,7 @@ impl MechaCodeSymbolThinking {
                 "mecha_code_symbol_thinking::probe_sub_symbol::is_snippet_present::({})",
                 self.symbol_name()
             );
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id, ui_sender.clone()).await
             {
                 println!("mecha_code_symbol_thinking::probe_sub_symbol::filter_code_snippets_subsymbol_for_probing::({})", self.symbol_name());
                 let filtered_list = self
@@ -680,8 +686,8 @@ impl MechaCodeSymbolThinking {
 
                 let filtered_list_ref = &filtered_list;
 
-                let sub_symbols_to_edit = stream::iter(reverse_lookup)
-                    .filter_map(|reverse_lookup| async move {
+                let sub_symbols_to_edit = stream::iter(reverse_lookup.into_iter().map(|data| (data, ui_sender.clone())))
+                    .filter_map(|(reverse_lookup, ui_sender)| async move {
                         let idx = reverse_lookup.idx();
                         let range = reverse_lookup.range();
                         let fs_file_path = reverse_lookup.fs_file_path();
@@ -697,7 +703,7 @@ impl MechaCodeSymbolThinking {
                                 // here instead of the original symbol name which
                                 // would not work
                                 let symbol_in_range = self
-                                    .find_sub_symbol_in_range(range, fs_file_path, request_id_ref)
+                                    .find_sub_symbol_in_range(range, fs_file_path, request_id_ref, ui_sender)
                                     .await;
                                 if let Ok(symbol) = symbol_in_range {
                                     Some(SubSymbolToProbe::new(
@@ -751,7 +757,7 @@ impl MechaCodeSymbolThinking {
         Ok(())
     }
 
-    pub async fn grab_implementations(&self, tools: Arc<ToolBox>, symbol_identifier: SymbolIdentifier, request_id: &str) -> Result<(), SymbolError> {
+    pub async fn grab_implementations(&self, tools: Arc<ToolBox>, symbol_identifier: SymbolIdentifier, request_id: &str, ui_sender: UnboundedSender<UIEventWithID>) -> Result<(), SymbolError> {
         let snippet_file_path: Option<String>;
         {
             snippet_file_path = self
@@ -778,6 +784,7 @@ impl MechaCodeSymbolThinking {
                     &snippet_file_path,
                     symbol_identifier.symbol_name(),
                     request_id,
+                    ui_sender.clone(),
                 )
                 .await?;
             let unique_files = implementations
@@ -787,11 +794,11 @@ impl MechaCodeSymbolThinking {
                 .collect::<HashSet<String>>();
             let cloned_tools = tools.clone();
             // once we have the unique files we have to request to open these locations
-            let file_content_map = stream::iter(unique_files.clone())
+            let file_content_map = stream::iter(unique_files.clone().into_iter().map(|fs_file_path| (fs_file_path, ui_sender.clone())))
                 .map(|file_path| (file_path, cloned_tools.clone()))
-                .map(|(file_path, tool_box)| async move {
+                .map(|((file_path, ui_sender), tool_box)| async move {
                     let file_path = file_path.to_owned();
-                    let file_content = tool_box.file_open(file_path.to_owned(), request_id).await;
+                    let file_content = tool_box.file_open(file_path.to_owned(), request_id, ui_sender).await;
                     // we will also force add the file to the symbol broker
                     if let Ok(file_content) = &file_content {
                         let _ = tool_box
@@ -812,15 +819,15 @@ impl MechaCodeSymbolThinking {
                 .collect::<HashMap<String, Result<OpenFileResponse, SymbolError>>>();
             // grab the outline nodes as well
             let outline_nodes = stream::iter(unique_files)
-                .map(|file_path| (file_path, cloned_tools.clone()))
-                .map(|(file_path, tool_box)| async move {
+                .map(|file_path| (file_path, cloned_tools.clone(), ui_sender.clone()))
+                .map(|(file_path, tool_box, ui_sender)| async move {
                     (
                         file_path.to_owned(),
                         // TODO(skcd): One of the bugs here is that we are also
                         // returning the node containing the full outline
                         // which wins over any other node, so this breaks the rest of the
                         // flow, what should we do here??
-                        tool_box.get_outline_nodes(&file_path, request_id).await,
+                        tool_box.get_outline_nodes(&file_path, request_id, ui_sender).await,
                     )
                 })
                 .buffer_unordered(1)
@@ -917,7 +924,7 @@ impl MechaCodeSymbolThinking {
         // do we really have to do this? or can we get away from this just by
         // not worrying about things?
         let snippet = self.tool_box
-            .find_snippet_for_symbol(self.fs_file_path(), self.symbol_name(), &request_id)
+            .find_snippet_for_symbol(self.fs_file_path(), self.symbol_name(), &request_id, ui_sender.clone())
             .await;
         // if we do have a snippet here which is present update it, otherwise its a pretty
         // bad sign that we had the snippet before but do not have it now
@@ -929,7 +936,7 @@ impl MechaCodeSymbolThinking {
             ));
         }
         // now grab the implementations again
-        let _ = self.grab_implementations(self.tool_box.clone(), self.to_symbol_identifier(), &request_id).await;
+        let _ = self.grab_implementations(self.tool_box.clone(), self.to_symbol_identifier(), &request_id, ui_sender).await;
     }
 
     /// Grabs the list of new sub-symbols if any that we have to create
@@ -995,7 +1002,7 @@ impl MechaCodeSymbolThinking {
         original_request: &InitialRequestData,
         request_id: String,
         tool_properties: &ToolProperties,
-        _hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
+        _hub_sender: UnboundedSender<(SymbolEventRequest, String, tokio::sync::mpsc::UnboundedSender<UIEventWithID>, Sender<SymbolEventResponse>)>,
         _ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<Option<SymbolEventRequest>, SymbolError> {
         println!(
@@ -1124,7 +1131,7 @@ impl MechaCodeSymbolThinking {
         llm_properties: LLMProperties,
         request_id: String,
         tool_properties: &ToolProperties,
-        hub_sender: UnboundedSender<(SymbolEventRequest, String, Sender<SymbolEventResponse>)>,
+        hub_sender: UnboundedSender<(SymbolEventRequest, String, tokio::sync::mpsc::UnboundedSender<UIEventWithID>, Sender<SymbolEventResponse>)>,
         ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<SymbolEventRequest, SymbolError> {
         println!(
@@ -1244,7 +1251,7 @@ impl MechaCodeSymbolThinking {
                     tool_properties.clone(),
                 );
                 let (sender, receiver) = tokio::sync::oneshot::channel();
-                let _ = hub_sender.send((new_symbol_request, request_id.to_owned(), sender));
+                let _ = hub_sender.send((new_symbol_request, request_id.to_owned(), ui_sender.clone(), sender));
                 let _ = receiver.await;
             }
             println!(
@@ -1253,9 +1260,9 @@ impl MechaCodeSymbolThinking {
             );
             // TODO(skcd): We have to refresh our state over here so we get the
             // latest implementation of the symbol
-            let _ = self.refresh_state(ui_sender, &request_id).await;
+            let _ = self.refresh_state(ui_sender.clone(), &request_id).await;
 
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id).await
+            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(&request_id, ui_sender.clone()).await
             {
                 let is_too_long = if reverse_lookup.len() > 100 {
                     true
@@ -1304,8 +1311,8 @@ impl MechaCodeSymbolThinking {
                 // be editing and then send those are requests to the hub
                 // which will forward it to the right symbol
                 let original_request_ref = &original_request;
-                let sub_symbols_to_edit = stream::iter(reverse_lookup)
-                    .filter_map(|reverse_lookup| async move {
+                let sub_symbols_to_edit = stream::iter(reverse_lookup.into_iter().map(|data| (data, ui_sender.clone())))
+                    .filter_map(|(reverse_lookup, ui_sender)| async move {
                         let idx = reverse_lookup.idx();
                         let range = reverse_lookup.range();
                         let fs_file_path = reverse_lookup.fs_file_path();
@@ -1338,7 +1345,8 @@ Reason to edit:
                                     self.find_sub_symbol_in_range(
                                         range,
                                         fs_file_path,
-                                        request_id_ref
+                                        request_id_ref,
+                                        ui_sender.clone(),
                                     )
                                     .await;
                                 if let Ok(symbol) = symbol_in_range {
@@ -1610,6 +1618,7 @@ Reason to edit:
     pub async fn to_llm_request(
         &self,
         request_id: &str,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Option<(String, Vec<SnippetReRankInformation>)> {
         let snippet_maybe = {
             // take owernship of the snippet over here
@@ -1666,7 +1675,7 @@ Reason to edit:
                     // TODO(skcd): we are not getting the correct outline node over here :|
                     let outline_node = self
                         .tool_box
-                        .get_outline_node_from_snippet(implementation_snippet, request_id)
+                        .get_outline_node_from_snippet(implementation_snippet, request_id, ui_sender.clone())
                         .await;
                     if let Ok(outline_node) = outline_node {
                         outline_nodes.push(outline_node);

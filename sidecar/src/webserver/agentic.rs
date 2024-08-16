@@ -133,7 +133,6 @@ pub async fn probe_request(
         app.symbol_tracker.clone(),
         app.editor_parsing.clone(),
         editor_url.to_owned(),
-        sender,
         LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::CodeStory(Default::default()),
@@ -147,7 +146,7 @@ pub async fn probe_request(
     // spawn a background thread to keep polling the probe_request future
     let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
-            .probe_request_from_user_context(query, user_context)
+            .probe_request_from_user_context(query, user_context, sender.clone())
             .await;
     });
 
@@ -199,7 +198,7 @@ pub async fn swe_bench(
         editor_url,
         test_endpoint,
         repo_map_file,
-        gcloud_access_token,
+        gcloud_access_token: _glcoud_access_token,
         swe_bench_id,
     }): axumQuery<SWEBenchRequest>,
     Extension(app): Extension<Application>,
@@ -229,7 +228,6 @@ pub async fn swe_bench(
         app.symbol_tracker.clone(),
         app.editor_parsing.clone(),
         editor_url.to_owned(),
-        sender,
         LLMProperties::new(
             model.clone(),
             provider_type.clone(),
@@ -255,18 +253,16 @@ pub async fn swe_bench(
                     "web_server_input".to_owned(),
                     Some(test_endpoint),
                     repo_map_file,
-                    Some(gcloud_access_token),
                     None,
                     None,
                     None,
                     None,
                     None,
                     false,
-                    false,
                     None,
                     None,
                     false,
-                    false,
+                    sender,
                 )
                 .set_swe_bench_id(swe_bench_id),
             )
@@ -349,6 +345,8 @@ pub async fn code_editing(
         );
     }
 
+    println!("{:?}", &user_context);
+
     // let fs_file_path = "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned();
     // let file_bytes = tokio::fs::read(fs_file_path.to_owned())
     //     .await
@@ -373,7 +371,6 @@ pub async fn code_editing(
         app.symbol_tracker.clone(),
         app.editor_parsing.clone(),
         editor_url.to_owned(),
-        sender,
         LLMProperties::new(
             model.clone(),
             provider_type.clone(),
@@ -404,13 +401,11 @@ pub async fn code_editing(
                 None,
                 None,
                 None,
-                None,
                 true,
-                codebase_search,
                 Some(root_directory),
                 None,
-                false,
                 codebase_search, // big search
+                sender,
             ))
             .await;
     });

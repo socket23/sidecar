@@ -56,13 +56,12 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
     let fs_file_path = "/Users/skcd/test_repo/sidecar/llm_client/src/provider.rs".to_owned();
     let file_open_request = tool_box
-        .file_open(fs_file_path.to_owned(), "")
+        .file_open(fs_file_path.to_owned(), "", sender)
         .await
         .expect("to work");
     let _ = tool_box

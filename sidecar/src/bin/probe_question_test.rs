@@ -89,7 +89,6 @@ async fn main() {
         symbol_broker.clone(),
         editor_parsing,
         editor_url.to_owned(),
-        sender,
         // This is where we are setting the LLM properties
         anthropic_llm_properties.clone(),
         user_context.clone(),
@@ -128,7 +127,7 @@ async fn main() {
         probe_request,
         ToolProperties::new(),
     );
-    let mut probe_task = Box::pin(symbol_manager.probe_request(probe_request));
+    let mut probe_task = Box::pin(symbol_manager.probe_request(probe_request, sender));
 
     loop {
         tokio::select! {

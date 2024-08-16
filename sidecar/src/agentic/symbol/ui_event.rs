@@ -5,7 +5,6 @@
 use crate::chunking::text_document::Range;
 
 use super::{
-    events::input::SymbolInputEvent,
     identifier::SymbolIdentifier,
     types::{SymbolEventRequest, SymbolLocation},
 };
@@ -58,13 +57,6 @@ impl UIEventWithID {
         Self {
             request_id: request_id,
             event: UIEvent::SymbolEvent(input),
-        }
-    }
-
-    pub fn for_codebase_event(request_id: String, input: SymbolInputEvent) -> Self {
-        Self {
-            request_id,
-            event: UIEvent::CodebaseEvent(input),
         }
     }
 
@@ -260,7 +252,6 @@ impl UIEventWithID {
 #[derive(Debug, serde::Serialize)]
 pub enum UIEvent {
     SymbolEvent(SymbolEventRequest),
-    CodebaseEvent(SymbolInputEvent),
     SymbolLoctationUpdate(SymbolLocation),
     SymbolEventSubStep(SymbolEventSubStepRequest),
     RequestEvent(RequestEvents),

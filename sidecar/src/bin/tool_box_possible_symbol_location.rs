@@ -76,14 +76,11 @@ async fn main() {
     println!("What are the clickable nodes::????");
     println!("{:?}", &clickable_nodes);
 
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
     let tool_box = Arc::new(ToolBox::new(
         tool_broker,
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 

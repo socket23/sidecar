@@ -60,7 +60,6 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
@@ -89,7 +88,12 @@ async fn main() {
     //     .await;
 
     let result = tool_box
-        .find_sub_symbol_to_probe_with_name(parent_symbol_name, &sub_symbol_probe, "testing")
+        .find_sub_symbol_to_probe_with_name(
+            parent_symbol_name,
+            &sub_symbol_probe,
+            "testing",
+            sender,
+        )
         .await;
     println!("{:?}", result);
 }

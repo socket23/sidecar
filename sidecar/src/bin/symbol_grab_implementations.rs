@@ -67,14 +67,11 @@ async fn main() {
         ),
     ));
 
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
     let tool_box = Arc::new(ToolBox::new(
         tool_broker,
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
@@ -123,18 +120,18 @@ async fn main() {
                 "".to_owned(),
             )),
         ),
-        ui_sender,
         "".to_owned(),
         ToolProperties::new(),
+        ui_sender.clone(),
     )
     .await
     .expect("to work");
 
     let implementations = symbol
         .mecha_code_symbol()
-        .grab_implementations(tool_box, symbol_identifier, "testing")
+        .grab_implementations(tool_box, symbol_identifier, "testing", ui_sender.clone())
         .await;
     println!("implementations: {:?}", implementations);
     let mecha_code_symbol = symbol.mecha_code_symbol();
-    dbg!(mecha_code_symbol.to_llm_request("testing").await);
+    dbg!(mecha_code_symbol.to_llm_request("testing", ui_sender).await);
 }

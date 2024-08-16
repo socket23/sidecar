@@ -840,12 +840,14 @@ impl CodeSymbolWithThinking {
     /// just the a instead of the whole string since we always work on the
     /// top level symbol
     pub fn fix_symbol_name(self, ts_parsing: Arc<TSLanguageParsing>) -> Self {
-        if self.file_path().ends_with("py") {
+        let language_config = ts_parsing.for_file_path(self.file_path());
+        if language_config.is_none() {
+            return self;
+        }
+        let language_config = language_config.expect("is_none to hold");
+        if language_config.is_python() || language_config.is_js_like() {
             if self.code_symbol.contains(".") {
-                let language = "python";
-                let ts_language_config = ts_parsing
-                    .for_lang(language)
-                    .expect("language config to be present");
+                let ts_language_config = language_config;
 
                 if let Some(range) =
                     ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
@@ -963,34 +965,40 @@ impl CodeSymbolWithSteps {
     /// just the a instead of the whole string since we always work on the
     /// top level symbol
     pub fn fix_symbol_name(self, ts_parsing: Arc<TSLanguageParsing>) -> Self {
-        if self.file_path().ends_with("py") {
-            let language = "python";
-            let ts_language_config = ts_parsing
-                .for_lang(language)
-                .expect("language config to be present");
+        let language_config = ts_parsing.for_file_path(self.file_path());
+        if language_config.is_none() {
+            return self;
+        }
+        let language_config = language_config.expect("is_none to hold");
+        if language_config.is_python() || language_config.is_js_like() {
+            if self.code_symbol.contains(".") {
+                let ts_language_config = language_config;
 
-            if let Some(range) =
-                ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
-            {
-                let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
-                Self {
-                    code_symbol: object_qualifier.to_string(),
-                    file_path: self.file_path,
-                    steps: self.steps,
-                    is_new: self.is_new,
-                }
-            } else {
-                let mut code_symbol_parts = self.code_symbol.split(".").collect::<Vec<_>>();
-                if code_symbol_parts.is_empty() {
-                    self
-                } else {
+                if let Some(range) =
+                    ts_language_config.generate_object_qualifier(self.code_symbol.as_bytes())
+                {
+                    let object_qualifier = &self.code_symbol[range.start_byte()..range.end_byte()];
                     Self {
-                        code_symbol: code_symbol_parts.remove(0).to_owned(),
+                        code_symbol: object_qualifier.to_string(),
                         steps: self.steps,
                         is_new: self.is_new,
                         file_path: self.file_path,
                     }
+                } else {
+                    let mut code_symbol_parts = self.code_symbol.split(".").collect::<Vec<_>>();
+                    if code_symbol_parts.is_empty() {
+                        self
+                    } else {
+                        Self {
+                            code_symbol: code_symbol_parts.remove(0).to_owned(),
+                            steps: self.steps,
+                            is_new: self.is_new,
+                            file_path: self.file_path,
+                        }
+                    }
                 }
+            } else {
+                self
             }
         } else if self.file_path().ends_with("rs") {
             // we get inputs in the format: "struct::function_inside_struct"
@@ -1260,7 +1268,10 @@ pub trait CodeSymbolImportant {
 mod tests {
     use std::sync::Arc;
 
-    use crate::chunking::languages::TSLanguageParsing;
+    use crate::{
+        agentic::tool::code_symbol::important::CodeSymbolWithSteps,
+        chunking::languages::TSLanguageParsing,
+    };
 
     use super::{CodeSymbolImportantResponse, CodeSymbolWithThinking};
 
@@ -1276,5 +1287,31 @@ mod tests {
         );
         response = response.fix_symbol_names(Arc::new(TSLanguageParsing::init()));
         assert_eq!(response.symbols.remove(0).code_symbol, "LLMBroker");
+    }
+
+    #[test]
+    fn fixing_code_symbols_work_for_ts() {
+        let mut response = CodeSymbolImportantResponse::new(
+            vec![CodeSymbolWithThinking::new(
+                "CSAuthenticationService.createSession".to_owned(),
+                "".to_owned(),
+                "/tmp/something.ts".to_owned(),
+            )],
+            vec![CodeSymbolWithSteps::new(
+                "CSAuthenticationService.createSession".to_owned(),
+                vec![],
+                false,
+                "/tmp/something.ts".to_owned(),
+            )],
+        );
+        response = response.fix_symbol_names(Arc::new(TSLanguageParsing::init()));
+        assert_eq!(
+            response.symbols.remove(0).code_symbol,
+            "CSAuthenticationService"
+        );
+        assert_eq!(
+            response.ordered_symbols.remove(0).code_symbol,
+            "CSAuthenticationService"
+        );
     }
 }

@@ -123,7 +123,6 @@ async fn main() {
         symbol_broker.clone(),
         editor_parsing,
         editor_url.to_owned(),
-        sender,
         anthropic_llm_properties.clone(),
         user_context.clone(),
         request_id.to_string(),
@@ -177,13 +176,11 @@ async fn main() {
         None,
         None,
         None,
-        None,
         true, // full code editing
-        false,
         Some(root_dir.to_string()),
         None,
-        false,
         true, // big_search
+        sender,
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

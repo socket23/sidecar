@@ -106,24 +106,5 @@ async fn main() {
         request_id.to_string(),
     );
 
-    let tool_box = symbol_manager.tool_box();
-
-    let path = "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
-    let start_position = Position::new(81, 0, 0);
-    let end_position = Position::new(88, 0, 0);
-    let range = Range::new(start_position, end_position);
-
-    let outline_node = tool_box
-        .get_outline_node_for_range(&range, &path, "request_id")
-        .await
-        .unwrap();
-
-    let identifier_range = outline_node.identifier_range();
-
-    let references = tool_box
-        .go_to_references(path, &identifier_range.start_position(), &request_id_str)
-        .await
-        .unwrap();
-
-    println!("{:?}", references);
+    let _ = symbol_manager.impls_test().await;
 }

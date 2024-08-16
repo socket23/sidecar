@@ -2976,7 +2976,7 @@ Please handle these changes as required."#
         }
     }
 
-    async fn go_to_references(
+    pub async fn go_to_references(
         &self,
         fs_file_path: &str,
         position: &Position,

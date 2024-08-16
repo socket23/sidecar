@@ -42,6 +42,9 @@ pub struct SymbolManager {
     _sender: UnboundedSender<(
         SymbolEventRequest,
         String,
+        // This is the ui sender which we send along, because each request the
+        // agent is working on can be part of a different query from the server
+        tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
         tokio::sync::oneshot::Sender<SymbolEventResponse>,
     )>,
     // this is the channel where the various symbols will use to talk to the manager
@@ -55,7 +58,6 @@ pub struct SymbolManager {
     tool_box: Arc<ToolBox>,
     _editor_url: String,
     llm_properties: LLMProperties,
-    ui_sender: UnboundedSender<UIEventWithID>,
     long_context_cache: LongContextSearchCache,
     root_request_id: String,
 }
@@ -66,7 +68,6 @@ impl SymbolManager {
         symbol_broker: Arc<SymbolTrackerInline>,
         editor_parsing: Arc<EditorParsing>,
         editor_url: String,
-        ui_sender: UnboundedSender<UIEventWithID>,
         llm_properties: LLMProperties,
         // This is a hack and not a proper one at that, we obviously want to
         // do better over here
@@ -76,6 +77,7 @@ impl SymbolManager {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<(
             SymbolEventRequest,
             String,
+            tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
             tokio::sync::oneshot::Sender<SymbolEventResponse>,
         )>();
         let tool_box = Arc::new(ToolBox::new(
@@ -83,7 +85,6 @@ impl SymbolManager {
             symbol_broker.clone(),
             editor_parsing.clone(),
             editor_url.to_owned(),
-            ui_sender.clone(),
             request_id.to_owned(),
         ));
         let symbol_locker = SymbolLocker::new(
@@ -91,7 +92,6 @@ impl SymbolManager {
             tool_box.clone(),
             llm_properties.clone(),
             user_context,
-            ui_sender.clone(),
         );
         let cloned_symbol_locker = symbol_locker.clone();
         tokio::spawn(async move {
@@ -115,7 +115,6 @@ impl SymbolManager {
             tool_box,
             _editor_url: editor_url,
             llm_properties,
-            ui_sender,
             long_context_cache: LongContextSearchCache::new(),
             root_request_id: request_id.to_owned(),
         }
@@ -125,22 +124,23 @@ impl SymbolManager {
         &self,
         query: String,
         user_context: UserContext,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Result<(), SymbolError> {
         println!("symbol_manager::probe_request_from_user_context::start");
         let request_id = uuid::Uuid::new_v4().to_string();
         let request_id_ref = &request_id;
-        let variables = dbg!(
-            self.tool_box
-                .grab_symbols_from_user_context(
-                    query.to_owned(),
-                    user_context.clone(),
-                    request_id.to_owned(),
-                )
-                .await
-        );
+        let variables = self
+            .tool_box
+            .grab_symbols_from_user_context(
+                query.to_owned(),
+                user_context.clone(),
+                request_id.to_owned(),
+                ui_sender.clone(),
+            )
+            .await;
         let outline = self
             .tool_box
-            .outline_for_user_context(&user_context, &request_id)
+            .outline_for_user_context(&user_context, &request_id, ui_sender.clone())
             .await;
         let code_wide_search =
             ToolInput::RequestImportantSymbolsCodeWide(CodeSymbolImportantWideSearch::new(
@@ -177,7 +177,12 @@ impl SymbolManager {
 
             let mut symbols = self
                 .tool_box
-                .important_symbols(&important_symbols, user_context.clone(), &request_id)
+                .important_symbols(
+                    &important_symbols,
+                    user_context.clone(),
+                    &request_id,
+                    ui_sender.clone(),
+                )
                 .await
                 .map_err(|e| e.into())?;
             // TODO(skcd): Another check over here is that we can search for the exact variable
@@ -199,30 +204,40 @@ impl SymbolManager {
                 println!("symbol_manager::grab_symbols_using_search");
                 symbols = self
                     .tool_box
-                    .grab_symbol_using_search(important_symbols, user_context.clone(), &request_id)
+                    .grab_symbol_using_search(
+                        important_symbols,
+                        user_context.clone(),
+                        &request_id,
+                        ui_sender.clone(),
+                    )
                     .await
                     .map_err(|e| e.into())?;
             }
 
             // Create all the symbol agents
-            let symbol_identifiers = stream::iter(symbols)
-                .map(|(symbol_request, _)| async move {
-                    let symbol_identifier = self
-                        .symbol_locker
-                        .create_symbol_agent(
-                            symbol_request,
-                            request_id_ref.to_owned(),
-                            ToolProperties::new(),
-                        )
-                        .await;
-                    symbol_identifier
-                })
-                .buffer_unordered(100)
-                .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .filter_map(|s| s.ok())
-                .collect::<Vec<_>>();
+            let symbol_identifiers = stream::iter(
+                symbols
+                    .into_iter()
+                    .map(|symbol| (symbol, ui_sender.clone())),
+            )
+            .map(|((symbol_request, _), ui_sender)| async move {
+                let symbol_identifier = self
+                    .symbol_locker
+                    .create_symbol_agent(
+                        symbol_request,
+                        request_id_ref.to_owned(),
+                        ToolProperties::new(),
+                        ui_sender,
+                    )
+                    .await;
+                symbol_identifier
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|s| s.ok())
+            .collect::<Vec<_>>();
 
             println!(
                 "symbol_manager::probe_request_from_user_context::len({})",
@@ -248,17 +263,23 @@ impl SymbolManager {
                         ),
                         ToolProperties::new(),
                     ),
+                    ui_sender.clone(),
                 )
             }))
             .map(
-                |(symbol_identifier, request_id, symbol_event_request)| async move {
+                |(symbol_identifier, request_id, symbol_event_request, ui_sender)| async move {
                     let (sender, receiver) = tokio::sync::oneshot::channel();
                     dbg!(
                         "sending initial request to symbol: {:?}",
                         &symbol_identifier
                     );
                     self.symbol_locker
-                        .process_request((symbol_event_request, request_id, sender))
+                        .process_request((
+                            symbol_event_request,
+                            request_id,
+                            ui_sender.clone(),
+                            sender,
+                        ))
                         .await;
                     let response = receiver.await;
                     dbg!(
@@ -298,7 +319,7 @@ impl SymbolManager {
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            let _ = self.ui_sender.send(UIEventWithID::probing_finished_event(
+            let _ = ui_sender.send(UIEventWithID::probing_finished_event(
                 request_id_ref.to_owned(),
                 final_answer,
             ));
@@ -309,12 +330,16 @@ impl SymbolManager {
     }
 
     // This is just for testing out the flow for single input events
-    pub async fn probe_request(&self, input_event: SymbolEventRequest) -> Result<(), SymbolError> {
+    pub async fn probe_request(
+        &self,
+        input_event: SymbolEventRequest,
+        ui_sender: UnboundedSender<UIEventWithID>,
+    ) -> Result<(), SymbolError> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let request_id = uuid::Uuid::new_v4().to_string();
         let _ = self
             .symbol_locker
-            .process_request((input_event, request_id, sender))
+            .process_request((input_event, request_id, ui_sender.clone(), sender))
             .await;
         let response = receiver.await;
         println!("{:?}", response.expect("to work"));
@@ -325,6 +350,7 @@ impl SymbolManager {
     // mode once, we have the symbols from it we can use them to spin up sub-symbols as well
     pub async fn initial_request(&self, input_event: SymbolInputEvent) -> Result<(), SymbolError> {
         let user_context = input_event.provided_context().clone();
+        let ui_sender = input_event.ui_sender();
         let request_id = input_event.request_id().to_owned();
         let is_full_edit = input_event.full_symbol_edit();
         let is_big_search = input_event.big_search();
@@ -373,21 +399,17 @@ impl SymbolManager {
                 Some(important_symbols) => ToolOutput::RepoMapSearch(important_symbols),
                 None => {
                     if tool_input.is_repo_map_search() {
-                        let _ = self
-                            .ui_sender
-                            .send(UIEventWithID::start_long_context_search(
-                                request_id.to_owned(),
-                            ));
+                        let _ = ui_sender.send(UIEventWithID::start_long_context_search(
+                            request_id.to_owned(),
+                        ));
                         let result = self
                             .tools
                             .invoke(tool_input)
                             .await
                             .map_err(|e| SymbolError::ToolError(e));
-                        let _ = self
-                            .ui_sender
-                            .send(UIEventWithID::finish_long_context_search(
-                                request_id.to_owned(),
-                            ));
+                        let _ = ui_sender.send(UIEventWithID::finish_long_context_search(
+                            request_id.to_owned(),
+                        ));
                         result?
                     } else {
                         self.tools
@@ -447,6 +469,7 @@ impl SymbolManager {
                                     self.llm_properties.clone(),
                                     is_big_search,
                                     &request_id,
+                                    ui_sender.clone(),
                                 )
                                 .await?
                                 .fix_symbol_names(self.ts_parsing.clone());
@@ -485,7 +508,12 @@ impl SymbolManager {
                 // does not even see the code and what changes need to be made
                 let mut symbols = self
                     .tool_box
-                    .important_symbols(&important_symbols, user_context.clone(), &request_id)
+                    .important_symbols(
+                        &important_symbols,
+                        user_context.clone(),
+                        &request_id,
+                        ui_sender.clone(),
+                    )
                     .await
                     .map_err(|e| e.into())?;
 
@@ -505,12 +533,10 @@ impl SymbolManager {
                             .map(|snippet| snippet.range().clone()),
                     ));
                 }
-                let _ = self
-                    .ui_sender
-                    .send(UIEventWithID::initial_search_symbol_event(
-                        request_id.to_owned(),
-                        initial_symbol_search_information,
-                    ));
+                let _ = ui_sender.send(UIEventWithID::initial_search_symbol_event(
+                    request_id.to_owned(),
+                    initial_symbol_search_information,
+                ));
                 // TODO(skcd): Another check over here is that we can search for the exact variable
                 // and then ask for the edit
                 println!(
@@ -547,6 +573,7 @@ impl SymbolManager {
                             important_symbols,
                             user_context.clone(),
                             &request_id,
+                            ui_sender.clone(),
                         )
                         .await
                         .map_err(|e| e.into())?;
@@ -564,11 +591,18 @@ impl SymbolManager {
                             request_id.to_owned(),
                             user_query.to_owned(),
                             symbols_edited_list.to_vec(),
+                            ui_sender.clone(),
                         )
                     }),
                 )
                 .map(
-                    |((symbol_request, steps), request_id, user_query, symbols_edited_list)| async move {
+                    |(
+                        (symbol_request, steps),
+                        request_id,
+                        user_query,
+                        symbols_edited_list,
+                        ui_sender,
+                    )| async move {
                         let symbol_name = symbol_request.symbol_name().to_owned();
                         let symbol_identifier = self
                             .symbol_locker
@@ -576,6 +610,7 @@ impl SymbolManager {
                                 symbol_request,
                                 request_id.to_owned(),
                                 tool_properties_ref.clone(),
+                                ui_sender.clone(),
                             )
                             .await;
                         if let Ok(symbol_identifier) = symbol_identifier {
@@ -602,6 +637,7 @@ impl SymbolManager {
                                 .process_request((
                                     symbol_event_request,
                                     request_id.to_owned(),
+                                    ui_sender.clone(),
                                     sender,
                                 ))
                                 .await;
@@ -629,9 +665,7 @@ impl SymbolManager {
             println!("this is wrong, please look at the comment here");
         }
         println!("symbol_manager::initial_request::finish");
-        let _ = self
-            .ui_sender
-            .send(UIEventWithID::finish_edit_request(request_id));
+        let _ = ui_sender.send(UIEventWithID::finish_edit_request(request_id));
         Ok(())
     }
 }

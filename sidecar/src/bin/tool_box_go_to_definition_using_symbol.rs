@@ -60,7 +60,6 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
@@ -78,6 +77,7 @@ async fn main() {
             line_content,
             symbol_to_search,
             request_id,
+            sender,
         )
         .await;
     println!("{:?}", &response);

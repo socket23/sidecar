@@ -76,7 +76,6 @@ async fn main() {
         symbol_broker.clone(),
         editor_parsing,
         editor_url.to_owned(),
-        sender,
         llm_properties,
         user_context.clone(),
         "".to_owned(),
@@ -99,6 +98,7 @@ async fn main() {
         None,
         None,
         false,
+        sender,
     );
 
     // execute input on manager

@@ -118,7 +118,6 @@ async fn main() {
         symbol_broker.clone(),
         editor_parsing,
         editor_url.to_owned(),
-        sender,
         anthropic_llm_properties.clone(),
         user_context.clone(),
         request_id.to_string(),
@@ -160,6 +159,7 @@ async fn main() {
         Some(root_dir.to_string()),
         None,
         false, // big_search
+        sender,
     );
 
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));

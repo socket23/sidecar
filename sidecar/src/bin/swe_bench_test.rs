@@ -147,7 +147,6 @@ async fn main() {
         symbol_broker.clone(),
         editor_parsing,
         editor_url.to_owned(),
-        sender,
         // This is where we are setting the LLM properties
         anthropic_llm_properties.clone(),
         user_context.clone(),
@@ -179,6 +178,7 @@ async fn main() {
         None,
         None,
         false,
+        sender,
     );
     let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
 

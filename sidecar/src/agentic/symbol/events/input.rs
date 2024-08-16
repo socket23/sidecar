@@ -8,10 +8,11 @@ use llm_client::{
     clients::types::LLMType,
     provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     agentic::{
-        symbol::{identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{identifier::LLMProperties, tool_box::ToolBox, ui_event::UIEventWithID},
         tool::{
             code_symbol::{
                 important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
@@ -46,6 +47,7 @@ pub struct SymbolInputEvent {
     /// when we are not using full codebase context search
     fast_code_symbol_search_llm: Option<LLMProperties>,
     big_search: bool,
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl SymbolInputEvent {
@@ -67,6 +69,7 @@ impl SymbolInputEvent {
         root_directory: Option<String>,
         fast_code_symbol_search_llm: Option<LLMProperties>,
         big_search: bool,
+        ui_sender: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             context,
@@ -86,7 +89,12 @@ impl SymbolInputEvent {
             root_directory,
             fast_code_symbol_search_llm,
             big_search,
+            ui_sender,
         }
+    }
+
+    pub fn ui_sender(&self) -> UnboundedSender<UIEventWithID> {
+        self.ui_sender.clone()
     }
 
     pub fn full_symbol_edit(&self) -> bool {
@@ -208,7 +216,11 @@ impl SymbolInputEvent {
                         }
                     }
                     let outline_for_user_context = tool_box
-                        .outline_for_user_context(&self.context, &self.request_id)
+                        .outline_for_user_context(
+                            &self.context,
+                            &self.request_id,
+                            self.ui_sender.clone(),
+                        )
                         .await;
                     let code_wide_search: CodeSymbolImportantWideSearch =
                         CodeSymbolImportantWideSearch::new(
@@ -226,7 +238,7 @@ impl SymbolInputEvent {
             }
         } else {
             let outline_for_user_context = tool_box
-                .outline_for_user_context(&self.context, &self.request_id)
+                .outline_for_user_context(&self.context, &self.request_id, self.ui_sender.clone())
                 .await;
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(

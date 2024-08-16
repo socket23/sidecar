@@ -60,7 +60,6 @@ async fn main() {
         symbol_broker,
         editor_parsing,
         editor_url,
-        sender,
         "".to_owned(),
     ));
 
@@ -94,6 +93,6 @@ async fn main() {
     );
     let user_context = UserContext::new(vec![], vec![], None, vec![]);
     let _ = tool_box
-        .important_symbols(&important_symbols, user_context, "")
+        .important_symbols(&important_symbols, user_context, "", sender)
         .await;
 }

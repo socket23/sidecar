@@ -125,9 +125,10 @@ impl SymbolManager {
 
     pub async fn impls_test(&self) {
         // simulating an edit has occured in range
-        let path = "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
+        let path =
+            "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
         let start_position = Position::new(81, 0, 420);
-        let end_position = Position::new(88, 0, 420);
+        let end_position = Position::new(89, 0, 420);
         let edited_range = Range::new(start_position, end_position);
 
         let outline_node = self

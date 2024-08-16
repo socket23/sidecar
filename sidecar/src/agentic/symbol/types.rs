@@ -160,7 +160,7 @@ impl SymbolEventRequest {
             symbol,
             event: SymbolEvent::InitialRequest(InitialRequestData::new(
                 original_user_query,
-                request,
+                request, // we're passing request_id to plan...
                 history,
                 tool_properties.get_full_symbol_request(),
                 symbols_edited_list,

@@ -2244,6 +2244,17 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await?;
 
+            println!(
+                "references from go_to_references: \n\n{}",
+                references
+                    .clone()
+                    .locations()
+                    .iter()
+                    .map(|loc| format!("{}", loc.fs_file_path()))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            );
+
             let _ = self
                 .invoke_followup_on_references(
                     symbol_edited,
@@ -2670,9 +2681,19 @@ We also believe this symbol needs to be probed because of:
             .collect::<HashSet<String>>();
         // we invoke a request to open the file
         let _ = stream::iter(file_paths.clone())
-            .map(|fs_file_path| async {
+            .map(|fs_file_path| async move {
                 // get the file content
-                let _ = self.file_open(fs_file_path, request_id).await;
+                let file_contents = self.file_open(fs_file_path.to_owned(), request_id).await;
+                if let Ok(file_contents) = file_contents {
+                    let _ = self
+                        .force_add_document(
+                            // this is critical to avoiding race conditions
+                            &fs_file_path,
+                            file_contents.contents_ref(),
+                            file_contents.language(),
+                        )
+                        .await;
+                }
                 ()
             })
             .buffer_unordered(100)
@@ -2924,7 +2945,7 @@ Please handle these changes as required."#
                             })
                             .collect::<Vec<_>>()
                             .join("\n");
-                        let instruction_prompt = self.create_instruction_prompt_for_followup(
+                        let _instruction_prompt = self.create_instruction_prompt_for_followup(
                             original_code,
                             edited_code,
                             symbol_to_edit,
@@ -2939,13 +2960,45 @@ Please handle these changes as required."#
                         );
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
+
+                        //                         println!("=========");
+                        //                         println!("outline node: {:?}", outline_node.name());
+                        //                         println!("=========");
+
+                        //                         let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        // pub struct File {
+                        //     path: PathBuf,
+                        //     thinking: String,
+                        //     snippet: String,
+                        //     // content: String,
+                        //     // preview: String,
+                        // }"#;
+
+                        //                         let edited_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        // pub struct File {
+                        //     path: PathBuf,
+                        //     thinking: String,
+                        //     snippet: String,
+                        //     fury: usize,
+                        //     // content: String,
+                        //     // preview: String,
+                        // }"#;
+
+                        // println!("original code: \n{}", original_code);
+                        // println!("=========");
+                        // println!("edited code: \n{}", edited_code);
+
                         let _ = hub_sender.send((
                             SymbolEventRequest::initial_request(
                                 SymbolIdentifier::with_file_path(
                                     outline_node.name(),
                                     outline_node.fs_file_path(),
                                 ),
-                                "Make sure this conforms with the latest change / update to the function {x}".to_string(), // original user query - should be some custom prompt?
+                                // todo(skcd) can we do sthing heree...
+                                format!(
+                                    "This class has changed.\nFrom: {}\nTo: {}\n\nGiven that you depend on it, ensure necessary changes are made to accommodate the changes.",
+                                    original_code, edited_code
+                                ), // original user query - should be some custom prompt?
                                 request_id.to_string(),
                                 vec![], // history...
                                 tool_properties.clone(),
@@ -2980,6 +3033,10 @@ Please handle these changes as required."#
             None => {
                 // if there is no such outline node, then what should we do? cause we still
                 // need an outline of sorts
+                println!(
+                    "could not find outline node for {}",
+                    &symbol_to_edit.symbol_name()
+                );
                 return Err(SymbolError::NoOutlineNodeSatisfyPosition);
             }
         }

@@ -349,6 +349,8 @@ pub async fn code_editing(
         );
     }
 
+    println!("{:?}", &user_context);
+
     // let fs_file_path = "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned();
     // let file_bytes = tokio::fs::read(fs_file_path.to_owned())
     //     .await

@@ -132,6 +132,14 @@ pub struct TSLanguageConfig {
 }
 
 impl TSLanguageConfig {
+    pub fn is_python(&self) -> bool {
+        self.language_ids.contains(&"python")
+    }
+
+    pub fn is_js_like(&self) -> bool {
+        self.language_ids.contains(&"javascript") || self.language_ids.contains(&"typescript")
+    }
+
     pub fn get_language(&self) -> Option<String> {
         self.language_ids.first().map(|s| s.to_string())
     }

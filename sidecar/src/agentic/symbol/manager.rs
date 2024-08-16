@@ -472,6 +472,15 @@ impl SymbolManager {
                     .clone()
                     .set_plan_for_input(Some(updated_tool_properties));
                 let tool_properties_ref = &tool_properties;
+                println!(
+                    "symbol_manager::tool_box::important_symbols::search({})",
+                    important_symbols
+                        .ordered_symbols()
+                        .into_iter()
+                        .map(|code_symbol| code_symbol.code_symbol())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
 
                 // Lets first start another round of COT over here to figure out
                 // how to go about making the changes, I know this is a bit orthodox

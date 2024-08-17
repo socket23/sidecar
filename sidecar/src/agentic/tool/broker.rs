@@ -363,6 +363,7 @@ impl ToolBroker {
                 fail_over_llm.clone(),
             )),
         );
+        // tools.insert(ToolType::GitDiff, Box::new(GitDiffClient::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

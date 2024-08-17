@@ -32,6 +32,7 @@ pub struct SymbolInputEvent {
     api_keys: LLMProviderAPIKeys,
     user_query: String,
     request_id: String,
+    root_request_id: String,
     // Here we have properties for swe bench which we are sending for testing
     swe_bench_test_endpoint: Option<String>,
     repo_map_fs_path: Option<String>,
@@ -58,6 +59,7 @@ impl SymbolInputEvent {
         api_keys: LLMProviderAPIKeys,
         user_query: String,
         request_id: String,
+        root_request_id: String,
         swe_bench_test_endpoint: Option<String>,
         repo_map_fs_path: Option<String>,
         swe_bench_id: Option<String>,
@@ -77,6 +79,7 @@ impl SymbolInputEvent {
             provider,
             api_keys,
             request_id,
+            root_request_id,
             user_query,
             swe_bench_test_endpoint,
             repo_map_fs_path,
@@ -91,6 +94,10 @@ impl SymbolInputEvent {
             big_search,
             ui_sender,
         }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
     }
 
     pub fn ui_sender(&self) -> UnboundedSender<UIEventWithID> {

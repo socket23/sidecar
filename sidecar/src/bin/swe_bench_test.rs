@@ -167,6 +167,7 @@ async fn main() {
         anthropic_api_keys,
         problem_statement,
         instance_id.to_owned(),
+        instance_id.to_owned(),
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
         Some(instance_id.to_owned()),

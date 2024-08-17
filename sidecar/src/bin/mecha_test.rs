@@ -89,6 +89,7 @@ async fn main() {
         api_key,
         current_query.to_owned(),
         "mecha_test".to_owned(),
+        "mecha_test".to_owned(),
         None,
         None,
         None,

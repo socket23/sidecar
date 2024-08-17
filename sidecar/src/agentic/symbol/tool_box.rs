@@ -6259,50 +6259,192 @@ FILEPATH: {fs_file_path}
         if language_config.is_none() {
             return Ok(vec![]);
         }
+
         let language_config = language_config.expect("is_none to hold");
-        let older_outline_nodes = language_config
+        let mut older_outline_nodes: HashMap<SymbolIdentifier, Vec<OutlineNode>> =
+            Default::default();
+        language_config
             .generate_outline_fresh(file_changes.old_version().as_bytes(), fs_file_path)
             .into_iter()
-            .map(|outline_node| {
-                (
-                    SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path),
-                    outline_node,
-                )
-            })
-            .collect::<HashMap<SymbolIdentifier, OutlineNode>>();
-        let newer_outline_nodes = language_config
+            .for_each(|outline_node| {
+                let symbol_identifier =
+                    SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path);
+                if let Some(outline_nodes_older) = older_outline_nodes.get_mut(&symbol_identifier) {
+                    outline_nodes_older.push(outline_node);
+                } else {
+                    older_outline_nodes.insert(symbol_identifier, vec![outline_node]);
+                }
+            });
+        let mut newer_outline_nodes: HashMap<SymbolIdentifier, Vec<OutlineNode>> =
+            Default::default();
+        language_config
             .generate_outline_fresh(file_changes.new_version().as_bytes(), fs_file_path)
             .into_iter()
-            .map(|outline_node| {
-                (
-                    dbg!(SymbolIdentifier::with_file_path(
-                        outline_node.name(),
-                        fs_file_path
-                    )),
-                    outline_node,
-                )
-            })
-            .collect::<HashMap<SymbolIdentifier, OutlineNode>>();
+            .for_each(|outline_node| {
+                let symbol_identifier =
+                    SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path);
+                if let Some(new_outline_nodes) = newer_outline_nodes.get_mut(&symbol_identifier) {
+                    new_outline_nodes.push(outline_node);
+                } else {
+                    newer_outline_nodes.insert(symbol_identifier, vec![outline_node]);
+                }
+            });
 
-        // now just try to delta them together by iterating over the older and newer ones
+        // instead of figuring out the delta, use a simple huristic to map the outline nodes
+        // together based on their properties
         let changed_nodes = newer_outline_nodes
             .into_iter()
-            .filter_map(|(symbol_identifier, new_content)| {
-                match older_outline_nodes.get(&symbol_identifier) {
-                    Some(older_content) => {
-                        if older_content.content().content() != new_content.content().content() {
-                            Some((
-                                symbol_identifier,
-                                Some(older_content.to_owned()),
-                                Some(new_content),
-                            ))
+            .filter_map(|(symbol_identifier, mut new_outline_nodes)| {
+                match older_outline_nodes.get_mut(&symbol_identifier) {
+                    Some(older_outline_nodes) => {
+                        // if there is a single new node, and if we have many older
+                        // nodes or something, then its a case of code-deletion
+                        // in this case we want to grab the outline node from older
+                        // which is either a class or function node
+                        if new_outline_nodes.len() == 1 {
+                            if older_outline_nodes.len() == 1 {
+                                Some(vec![(
+                                    symbol_identifier,
+                                    Some(older_outline_nodes.remove(0)),
+                                    Some(new_outline_nodes.remove(0)),
+                                )])
+                            } else {
+                                if older_outline_nodes.is_empty() {
+                                    return Some(vec![(
+                                        symbol_identifier,
+                                        None,
+                                        Some(new_outline_nodes[0].clone()),
+                                    )]);
+                                }
+                                // if will be either of the following:
+                                // is_func and is_class_delcaration are special one
+                                // if this is a class then we are in js/py land
+                                if new_outline_nodes[0].is_class_definition()
+                                    || new_outline_nodes[0].is_funciton()
+                                {
+                                    older_outline_nodes
+                                        .into_iter()
+                                        .find(|outline_node| {
+                                            outline_node.is_class_definition()
+                                                || outline_node.is_funciton()
+                                        })
+                                        .map(|older_outline_node| {
+                                            vec![(
+                                                symbol_identifier,
+                                                Some(older_outline_node.clone()),
+                                                Some(new_outline_nodes[0].clone()),
+                                            )]
+                                        })
+                                } else {
+                                    // otherwise we are in js/py land so also grab the first
+                                    // entry and return it over here
+                                    Some(vec![(
+                                        symbol_identifier,
+                                        Some(older_outline_nodes.remove(0)),
+                                        Some(new_outline_nodes.remove(0)),
+                                    )])
+                                }
+                            }
                         } else {
-                            None
+                            // if we have multiple nodes, then we are in rust/golang land
+                            // in this case we can easily search for the symbols and make that work
+                            // we want to find the node which might be part of the implementation node
+                            // we can have multiple implementations in the same file but separated by the trait
+                            // so that can act as our key, and for the ones which are the same that should just work
+                            let class_definition_new = new_outline_nodes
+                                .iter()
+                                .find(|outline_node| outline_node.is_class_definition());
+                            let class_definition_old = older_outline_nodes
+                                .iter()
+                                .find(|outline_node| outline_node.is_class_definition());
+                            let mut entries = vec![];
+
+                            // if we have a class definition on the new, then we should
+                            // get it
+                            if let Some(class_definition_new) = class_definition_new {
+                                entries.push((
+                                    symbol_identifier.clone(),
+                                    class_definition_old.map(|data| data.clone()),
+                                    Some(class_definition_new.clone()),
+                                ));
+                            }
+
+                            // now we might have entries over here which are just class types which we want to match
+                            // but matching them will be hard, but what we can do instead is match them on trait implementations
+                            let new_outline_nodes_implementations = new_outline_nodes
+                                .iter()
+                                .filter(|outline_node| outline_node.is_class())
+                                .collect::<Vec<_>>();
+                            let old_outline_nodes_implementations = older_outline_nodes
+                                .iter()
+                                .filter(|outline_node| outline_node.is_class())
+                                .collect::<Vec<_>>();
+
+                            // now we try to match the outline nodes together
+                            let changed_nodes = new_outline_nodes_implementations
+                                .into_iter()
+                                .map(|new_outline_node| {
+                                    let trait_implementation =
+                                        new_outline_node.content().has_trait_implementation();
+                                    let matching_older_nodes = old_outline_nodes_implementations
+                                        .iter()
+                                        .filter(|outline_node| {
+                                            &outline_node.content().has_trait_implementation()
+                                                == &trait_implementation
+                                        })
+                                        .collect::<Vec<_>>();
+
+                                    if matching_older_nodes.is_empty() {
+                                        vec![(
+                                            symbol_identifier.clone(),
+                                            None,
+                                            Some(new_outline_node.clone()),
+                                        )]
+                                    } else if matching_older_nodes.len() == 1 {
+                                        vec![(
+                                            symbol_identifier.clone(),
+                                            Some((*matching_older_nodes[0]).clone()),
+                                            Some(new_outline_node.clone()),
+                                        )]
+                                    } else {
+                                        // now we have multiple outline nodes, which makes
+                                        // it hard to find where the function overlaps with the
+                                        // outline node, an easy test for this is to literlly
+                                        // look at the children nodes and see which ones are matching
+                                        // up but this is a hard problem cause the functions can move
+                                        // around in the outline nodes
+                                        // for now we take the easy route and just compare against the
+                                        // first older outline node
+                                        vec![(
+                                            symbol_identifier.clone(),
+                                            matching_older_nodes
+                                                .get(0)
+                                                .map(|outline_node| (**outline_node).clone()),
+                                            Some(new_outline_node.clone()),
+                                        )]
+                                    }
+                                })
+                                .flatten()
+                                .collect::<Vec<_>>();
+                            entries.extend(changed_nodes.into_iter());
+                            Some(entries)
                         }
                     }
-                    None => Some((symbol_identifier, None, Some(new_content))),
+                    None => {
+                        // just flat out all the outline nodes and send them over for checking what to do
+                        // with the data
+                        Some(
+                            new_outline_nodes
+                                .into_iter()
+                                .map(|outline_node| {
+                                    (symbol_identifier.clone(), None, Some(outline_node))
+                                })
+                                .collect::<Vec<_>>(),
+                        )
+                    }
                 }
             })
+            .flatten()
             .collect::<Vec<_>>();
 
         // right now we just focus on the function symbols, we will handle the class

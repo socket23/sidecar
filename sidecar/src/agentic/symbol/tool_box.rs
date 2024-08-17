@@ -65,6 +65,7 @@ use crate::agentic::tool::filtering::broker::{
     CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToEditSymbolResponse,
     CodeToProbeFilterResponse, CodeToProbeSubSymbolList, CodeToProbeSubSymbolRequest,
 };
+use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClientResponse};
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::diagnostics::{
     Diagnostic, LSPDiagnosticsInput, LSPDiagnosticsOutput,
@@ -6204,5 +6205,26 @@ FILEPATH: {fs_file_path}
         }
         let language_parsing = language_parsing.expect("if let None to hold");
         Ok(language_parsing.hoverable_nodes(source_code.as_bytes()))
+    }
+
+    /// Gets the changed contents of the file using git-diff
+    pub async fn get_file_changes(
+        &self,
+        root_directory: &str,
+        fs_file_path: &str,
+    ) -> Result<GitDiffClientResponse, SymbolError> {
+        let tool_input = ToolInput::GitDiff(GitDiffClientRequest::new(
+            root_directory.to_owned(),
+            fs_file_path.to_owned(),
+        ));
+        let output = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_git_diff_output()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        println!("tool_output::{:?}", output);
+        Ok(output)
     }
 }

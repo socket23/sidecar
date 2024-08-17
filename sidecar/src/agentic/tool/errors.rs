@@ -71,4 +71,7 @@ pub enum ToolError {
 
     #[error("IterativeSearch error: {0}")]
     IterativeSearchError(IterativeSearchError),
+
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
 }

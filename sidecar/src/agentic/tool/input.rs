@@ -33,6 +33,7 @@ use super::{
     filtering::broker::{
         CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToProbeSubSymbolRequest,
     },
+    git::diff_client::GitDiffClientRequest,
     grep::file::FindInFileRequest,
     kw_search::tool::KeywordSearchQuery,
     lsp::{
@@ -121,6 +122,8 @@ pub enum ToolInput {
     ShouldEditCode(ShouldEditCodeSymbolRequest),
     // search and replace blocks
     SearchAndReplaceEditing(SearchAndReplaceEditingRequest),
+    // git diff request
+    GitDiff(GitDiffClientRequest),
 }
 
 impl ToolInput {
@@ -180,6 +183,15 @@ impl ToolInput {
             ToolInput::CodeSymbolNewLocation(_) => ToolType::CodeSymbolNewLocation,
             ToolInput::ShouldEditCode(_) => ToolType::ShouldEditCode,
             ToolInput::SearchAndReplaceEditing(_) => ToolType::SearchAndReplaceEditing,
+            ToolInput::GitDiff(_) => ToolType::GitDiff,
+        }
+    }
+
+    pub fn should_git_diff(self) -> Result<GitDiffClientRequest, ToolError> {
+        if let ToolInput::GitDiff(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::GitDiff))
         }
     }
 

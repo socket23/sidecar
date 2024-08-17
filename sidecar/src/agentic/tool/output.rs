@@ -29,6 +29,7 @@ use super::{
         CodeToEditFilterResponse, CodeToEditSymbolResponse, CodeToProbeFilterResponse,
         CodeToProbeSubSymbolList,
     },
+    git::diff_client::GitDiffClientResponse,
     grep::file::FindInFileResponse,
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
@@ -152,9 +153,15 @@ pub enum ToolOutput {
     ShouldEditCode(ShouldEditCodeSymbolResponse),
     // search and replace editing
     SearchAndReplaceEditing(SearchAndReplaceEditingResponse),
+    // git diff response
+    GitDiff(GitDiffClientResponse),
 }
 
 impl ToolOutput {
+    pub fn git_diff_response(response: GitDiffClientResponse) -> Self {
+        ToolOutput::GitDiff(response)
+    }
+
     pub fn search_and_replace_editing(response: SearchAndReplaceEditingResponse) -> Self {
         ToolOutput::SearchAndReplaceEditing(response)
     }
@@ -578,6 +585,13 @@ impl ToolOutput {
     pub fn get_search_and_replace_output(self) -> Option<SearchAndReplaceEditingResponse> {
         match self {
             ToolOutput::SearchAndReplaceEditing(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_git_diff_output(self) -> Option<GitDiffClientResponse> {
+        match self {
+            ToolOutput::GitDiff(response) => Some(response),
             _ => None,
         }
     }

@@ -31,6 +31,7 @@ use super::{
     errors::ToolError,
     file::file_finder::ImportantFilesFinderBroker,
     filtering::broker::CodeToEditFormatterBroker,
+    git::diff_client::GitDiffClient,
     grep::file::FindInFile,
     input::ToolInput,
     lsp::{
@@ -363,7 +364,7 @@ impl ToolBroker {
                 fail_over_llm.clone(),
             )),
         );
-        // tools.insert(ToolType::GitDiff, Box::new(GitDiffClient::new()));
+        tools.insert(ToolType::GitDiff, Box::new(GitDiffClient::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

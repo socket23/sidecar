@@ -6224,7 +6224,7 @@ FILEPATH: {fs_file_path}
             .map_err(|e| SymbolError::ToolError(e))?
             .get_git_diff_output()
             .ok_or(SymbolError::WrongToolOutput)?;
-        println!("tool_output::{:?}", output);
+        // println!("tool_output::{:?}", output);
         Ok(output)
     }
 
@@ -6233,6 +6233,14 @@ FILEPATH: {fs_file_path}
     /// information about it:
     /// - the previous content
     /// - the new content
+    /// Some problems: This overwrites when the symbol names are the same, so we need
+    /// to account for the range of the symbol as well, its not as straightforward as
+    /// comparsing the parent symbol name
+    /// imagine this case
+    /// struct Something {}
+    /// impl Something {}
+    /// ^ for both of these we will have the same symbol-identifier ...
+    /// but this works when changing the function of a symbol
     pub async fn grab_changed_symbols_in_file(
         &self,
         root_directory: &str,
@@ -6267,7 +6275,10 @@ FILEPATH: {fs_file_path}
             .into_iter()
             .map(|outline_node| {
                 (
-                    SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path),
+                    dbg!(SymbolIdentifier::with_file_path(
+                        outline_node.name(),
+                        fs_file_path
+                    )),
                     outline_node,
                 )
             })
@@ -6305,6 +6316,7 @@ FILEPATH: {fs_file_path}
                 let symbol_identifier = changed_node.0;
                 let original_outline_node = changed_node.1;
                 let changed_outline_node = changed_node.2;
+                println!("symbol_identifier::({})::original_present({})::changed_present({})", symbol_identifier.symbol_name(), original_outline_node.is_some(), changed_outline_node.is_some());
                 let symbol_edits = match (original_outline_node, changed_outline_node) {
                     (None, None) => {
                         // nothing to do, both sides are empty
@@ -6363,29 +6375,34 @@ FILEPATH: {fs_file_path}
                                 .collect::<Vec<_>>();
                             Some(symbol_edits_which_happened)
                         } else {
+                            println!("is_class_definition::({})", current_node.name());
                             // in this case, we have to send for reference check the whole class
                             let original_content = original_node.content().content();
                             let current_content = current_node.content().content();
-                            Some(vec![(SymbolToEdit::new(
-                                symbol_identifier.symbol_name().to_owned(),
-                                current_node.range().clone(),
-                                fs_file_path.to_owned(),
-                                vec![format!(
-                                    r#"The following changes were made:
-{fs_file_path}
-<<<<<<<<
-{original_content}
-=====
-{current_content}
->>>>>>>>"#
-                                )
-                                .to_owned()],
-                                false,
-                                false,
-                                true,
-                                "Edits have happened, you have to understand the reason".to_owned(),
-                                None,
-                            ), original_content.to_owned())])
+                            if original_content != current_content {
+                                Some(vec![(SymbolToEdit::new(
+                                    symbol_identifier.symbol_name().to_owned(),
+                                    current_node.range().clone(),
+                                    fs_file_path.to_owned(),
+                                    vec![format!(
+                                        r#"The following changes were made:
+    {fs_file_path}
+    <<<<<<<<
+    {original_content}
+    =====
+    {current_content}
+    >>>>>>>>"#
+                                    )
+                                    .to_owned()],
+                                    false,
+                                    false,
+                                    true,
+                                    "Edits have happened, you have to understand the reason".to_owned(),
+                                    None,
+                                ), original_content.to_owned())])
+                            } else {
+                                None
+                            }
                         }
                     }
                     (None, Some(_current_node)) => {

@@ -59,8 +59,15 @@ async fn main() {
         "".to_owned(),
     ));
 
+    // Use this to get back the parent-symbol and the child symbols which have
+    // been edited in a file
+    // so iteration is literally making changes and having any kind of changes
+    // on a file, we can hook this up with the implementations/references test
+
+    // Your root directory
     let root_directory = "/Users/skcd/scratch/sidecar";
-    let fs_file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/tool_box.rs";
+    // File where you have made changes
+    let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/clients/types.rs";
     let output = tool_box
         .grab_changed_symbols_in_file(root_directory, fs_file_path)
         .await

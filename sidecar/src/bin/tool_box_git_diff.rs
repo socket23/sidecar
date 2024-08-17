@@ -63,6 +63,22 @@ async fn main() {
     let fs_file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/tool_box.rs";
     let output = tool_box
         .grab_changed_symbols_in_file(root_directory, fs_file_path)
-        .await;
-    println!("{:?}", &output);
+        .await
+        .expect("to work");
+
+    // from here we have to go a level deeper into the sub-symbol of the symbol where
+    // the changed values are present and then invoke a followup at that point
+    // println!("{:?}", &output);
+    // a more readable output
+    output.into_iter().for_each(|(symbol_name, edits)| {
+        println!(
+            "symbol_name::({})::children({})",
+            symbol_name,
+            edits
+                .into_iter()
+                .map(|(symbol_to_edit, _)| symbol_to_edit.symbol_name().to_owned())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    })
 }

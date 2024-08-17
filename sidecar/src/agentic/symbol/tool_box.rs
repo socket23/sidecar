@@ -6237,7 +6237,7 @@ FILEPATH: {fs_file_path}
         &self,
         root_directory: &str,
         fs_file_path: &str,
-    ) -> Result<Vec<(SymbolIdentifier, Option<String>, Option<String>)>, SymbolError> {
+    ) -> Result<Vec<(String, Vec<(SymbolToEdit, String)>)>, SymbolError> {
         let file_changes = self.get_file_changes(root_directory, fs_file_path).await?;
 
         // Now we need to parse the new and old version of the files and get the changed
@@ -6258,28 +6258,28 @@ FILEPATH: {fs_file_path}
             .map(|outline_node| {
                 (
                     SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path),
-                    outline_node.content().content().to_owned(),
+                    outline_node,
                 )
             })
-            .collect::<HashMap<SymbolIdentifier, String>>();
+            .collect::<HashMap<SymbolIdentifier, OutlineNode>>();
         let newer_outline_nodes = language_config
             .generate_outline_fresh(file_changes.new_version().as_bytes(), fs_file_path)
             .into_iter()
             .map(|outline_node| {
                 (
                     SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path),
-                    outline_node.content().content().to_owned(),
+                    outline_node,
                 )
             })
-            .collect::<HashMap<SymbolIdentifier, String>>();
+            .collect::<HashMap<SymbolIdentifier, OutlineNode>>();
 
         // now just try to delta them together by iterating over the older and newer ones
-        Ok(newer_outline_nodes
+        let changed_nodes = newer_outline_nodes
             .into_iter()
             .filter_map(|(symbol_identifier, new_content)| {
                 match older_outline_nodes.get(&symbol_identifier) {
                     Some(older_content) => {
-                        if older_content != &new_content {
+                        if older_content.content().content() != new_content.content().content() {
                             Some((
                                 symbol_identifier,
                                 Some(older_content.to_owned()),
@@ -6292,6 +6292,116 @@ FILEPATH: {fs_file_path}
                     None => Some((symbol_identifier, None, Some(new_content))),
                 }
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
+        // right now we just focus on the function symbols, we will handle the class
+        // memeber symbols differently
+        // Vec<(String, Vec<(SymbolToEdit, String)>)>
+        // we get back the a vec of parent_symbol_names, the children symbols which need to be edited
+        // in case of class it will be the same symbol and the original content
+        let changed_nodes_followups = changed_nodes
+            .into_iter()
+            .filter_map(|changed_node| {
+                let symbol_identifier = changed_node.0;
+                let original_outline_node = changed_node.1;
+                let changed_outline_node = changed_node.2;
+                let symbol_edits = match (original_outline_node, changed_outline_node) {
+                    (None, None) => {
+                        // nothing to do, both sides are empty
+                        None
+                    }
+                    (Some(original_node), Some(current_node)) => {
+                        // hell yeah, lets gooo
+                        if current_node.is_class() {
+                            println!("current_node::is_class({})", current_node.name());
+                            // in this case we have to send the functions inside for reference checks
+                            // cause one of them has changed
+                            // look at all the children inside and get them instead over here
+                            let symbol_edits_which_happened = current_node
+                                .children()
+                                .into_iter()
+                                .filter_map(|children_node| {
+                                    let original_child_present = original_node.children().into_iter().find(|original_child| {
+                                        original_child.name() == children_node.name()
+                                    });
+                                    match original_child_present {
+                                        Some(original_child) => {
+                                            if original_child.content() == children_node.content() {
+                                                None
+                                            } else {
+                                                // create a symbol to edit request here
+                                                let original_content = original_child.content();
+                                                let current_content = children_node.content();
+                                                Some((SymbolToEdit::new(
+                                                    children_node.name().to_owned(),
+                                                    children_node.range().clone(),
+                                                    fs_file_path.to_owned(),
+                                                    vec![format!(
+                                                        r#"The following changes were made:
+{fs_file_path}
+<<<<<<<<
+{original_content}
+=====
+{current_content}
+>>>>>>>>"#
+                                                    )
+                                                    .to_owned()],
+                                                    false,
+                                                    false,
+                                                    true,
+                                                    "Edits have happened, you have to understand the reason".to_owned(),
+                                                    None,
+                                                ), original_content.to_owned()))
+                                            }
+                                        }
+                                        None => {
+                                            // this is a new child, no need to trigger followups
+                                            None
+                                        }
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            Some(symbol_edits_which_happened)
+                        } else {
+                            // in this case, we have to send for reference check the whole class
+                            let original_content = original_node.content().content();
+                            let current_content = current_node.content().content();
+                            Some(vec![(SymbolToEdit::new(
+                                symbol_identifier.symbol_name().to_owned(),
+                                current_node.range().clone(),
+                                fs_file_path.to_owned(),
+                                vec![format!(
+                                    r#"The following changes were made:
+{fs_file_path}
+<<<<<<<<
+{original_content}
+=====
+{current_content}
+>>>>>>>>"#
+                                )
+                                .to_owned()],
+                                false,
+                                false,
+                                true,
+                                "Edits have happened, you have to understand the reason".to_owned(),
+                                None,
+                            ), original_content.to_owned())])
+                        }
+                    }
+                    (None, Some(_current_node)) => {
+                        // new symbol which didn't exist before, safe to bet we don't
+                        // have followups for it
+                        None
+                    }
+                    (Some(_original_node), None) => {
+                        // code deletion, this is another can of worms
+                        None
+                    }
+                };
+                symbol_edits.map(|edits| (symbol_identifier.symbol_name().to_owned(), edits))
+            })
+            .collect::<Vec<_>>();
+
+        Ok(changed_nodes_followups)
     }
 }

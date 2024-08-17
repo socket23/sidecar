@@ -144,7 +144,7 @@ impl SymbolManager {
 
         let symbol_to_edit = SymbolToEdit::new(
             node_name.to_string(),
-            identifier_range.to_owned(), // symbol range is the the outline node's identifier range
+            identifier_range.to_owned(), // symbol range is the the outline node's range (complete range)
             path.to_string(),
             vec!["some instruction, cook eggs".to_string()],
             false,

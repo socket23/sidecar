@@ -62,7 +62,7 @@ async fn main() {
     let root_directory = "/Users/skcd/scratch/sidecar";
     let fs_file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agentic/symbol/tool_box.rs";
     let output = tool_box
-        .get_file_changes(root_directory, fs_file_path)
+        .grab_changed_symbols_in_file(root_directory, fs_file_path)
         .await;
     println!("{:?}", &output);
 }

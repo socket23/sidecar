@@ -6227,4 +6227,71 @@ FILEPATH: {fs_file_path}
         println!("tool_output::{:?}", output);
         Ok(output)
     }
+
+    /// Grabs the changed symbols present in a file
+    /// We get back the symbol identifier and the following
+    /// information about it:
+    /// - the previous content
+    /// - the new content
+    pub async fn grab_changed_symbols_in_file(
+        &self,
+        root_directory: &str,
+        fs_file_path: &str,
+    ) -> Result<Vec<(SymbolIdentifier, Option<String>, Option<String>)>, SymbolError> {
+        let file_changes = self.get_file_changes(root_directory, fs_file_path).await?;
+
+        // Now we need to parse the new and old version of the files and get the changed
+        // nodes which are present in them or which have been completely added or deleted
+        // TODO(codestory): This is still wrong btw, the true meaning of a symbol-identifier
+        // is where the symbol is really defined, not where its present in a file
+        // remember that we can have impls and symbol definitions in different files
+        // for now we are testing only on cases where the symbol is assumed to be defined
+        // in the file
+        let language_config = self.editor_parsing.for_file_path(fs_file_path);
+        if language_config.is_none() {
+            return Ok(vec![]);
+        }
+        let language_config = language_config.expect("is_none to hold");
+        let older_outline_nodes = language_config
+            .generate_outline_fresh(file_changes.old_version().as_bytes(), fs_file_path)
+            .into_iter()
+            .map(|outline_node| {
+                (
+                    SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path),
+                    outline_node.content().content().to_owned(),
+                )
+            })
+            .collect::<HashMap<SymbolIdentifier, String>>();
+        let newer_outline_nodes = language_config
+            .generate_outline_fresh(file_changes.new_version().as_bytes(), fs_file_path)
+            .into_iter()
+            .map(|outline_node| {
+                (
+                    SymbolIdentifier::with_file_path(outline_node.name(), fs_file_path),
+                    outline_node.content().content().to_owned(),
+                )
+            })
+            .collect::<HashMap<SymbolIdentifier, String>>();
+
+        // now just try to delta them together by iterating over the older and newer ones
+        Ok(newer_outline_nodes
+            .into_iter()
+            .filter_map(|(symbol_identifier, new_content)| {
+                match older_outline_nodes.get(&symbol_identifier) {
+                    Some(older_content) => {
+                        if older_content != &new_content {
+                            Some((
+                                symbol_identifier,
+                                Some(older_content.to_owned()),
+                                Some(new_content),
+                            ))
+                        } else {
+                            None
+                        }
+                    }
+                    None => Some((symbol_identifier, None, Some(new_content))),
+                }
+            })
+            .collect::<Vec<_>>())
+    }
 }

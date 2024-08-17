@@ -25,14 +25,32 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
+pub struct SymbolEventRequestId {
+    request_id: String,
+    root_request_id: String,
+}
+
+impl SymbolEventRequestId {
+    pub fn new(request_id: String, root_request_id: String) -> Self {
+        Self {
+            request_id,
+            root_request_id,
+        }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SymbolInputEvent {
     context: UserContext,
     llm: LLMType,
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
     user_query: String,
-    request_id: String,
-    root_request_id: String,
+    request_id: SymbolEventRequestId,
     // Here we have properties for swe bench which we are sending for testing
     swe_bench_test_endpoint: Option<String>,
     repo_map_fs_path: Option<String>,
@@ -78,8 +96,7 @@ impl SymbolInputEvent {
             llm,
             provider,
             api_keys,
-            request_id,
-            root_request_id,
+            request_id: SymbolEventRequestId::new(request_id, root_request_id),
             user_query,
             swe_bench_test_endpoint,
             repo_map_fs_path,
@@ -97,7 +114,7 @@ impl SymbolInputEvent {
     }
 
     pub fn root_request_id(&self) -> &str {
-        &self.root_request_id
+        &self.request_id.root_request_id
     }
 
     pub fn ui_sender(&self) -> UnboundedSender<UIEventWithID> {
@@ -154,7 +171,7 @@ impl SymbolInputEvent {
     }
 
     pub fn request_id(&self) -> &str {
-        &self.request_id
+        &self.request_id.request_id
     }
 
     pub fn big_search(&self) -> bool {
@@ -202,7 +219,7 @@ impl SymbolInputEvent {
                     LLMProvider::Anthropic,
                     self.api_keys.clone(),
                     None,
-                    self.request_id.to_string(),
+                    self.request_id.root_request_id().to_string(),
                 ))),
                 None => {
                     if let Some(root_directory) = self.root_directory.to_owned() {
@@ -217,7 +234,7 @@ impl SymbolInputEvent {
                                     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                                 )),
                                 Some(root_directory),
-                                self.request_id.to_string(),
+                                self.request_id.root_request_id().to_string(),
                                 SearchType::Both,
                             )));
                         }
@@ -225,7 +242,7 @@ impl SymbolInputEvent {
                     let outline_for_user_context = tool_box
                         .outline_for_user_context(
                             &self.context,
-                            &self.request_id,
+                            &self.request_id.root_request_id().to_string(),
                             self.ui_sender.clone(),
                         )
                         .await;
@@ -236,7 +253,7 @@ impl SymbolInputEvent {
                             llm_properties_for_symbol_search.llm().clone(),
                             llm_properties_for_symbol_search.provider().clone(),
                             llm_properties_for_symbol_search.api_key().clone(),
-                            self.request_id.to_string(),
+                            self.request_id.root_request_id().to_string(),
                             outline_for_user_context,
                         );
                     // just symbol search instead for quick access
@@ -245,7 +262,11 @@ impl SymbolInputEvent {
             }
         } else {
             let outline_for_user_context = tool_box
-                .outline_for_user_context(&self.context, &self.request_id, self.ui_sender.clone())
+                .outline_for_user_context(
+                    &self.context,
+                    self.request_id.root_request_id(),
+                    self.ui_sender.clone(),
+                )
                 .await;
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(
@@ -254,7 +275,7 @@ impl SymbolInputEvent {
                     llm_properties_for_symbol_search.llm().clone(),
                     llm_properties_for_symbol_search.provider().clone(),
                     llm_properties_for_symbol_search.api_key().clone(),
-                    self.request_id.to_string(),
+                    self.request_id.root_request_id().to_string(),
                     outline_for_user_context,
                 );
             // Now we try to generate the tool input for this

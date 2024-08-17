@@ -3726,6 +3726,7 @@ enum Something {
             "/tmp/something.rs".to_owned(),
         );
         assert_eq!(outline_nodes.len(), 1);
+        assert!(outline_nodes[0].is_class_definition());
         let compressed_node = outline_nodes[0].get_outline_node_compressed();
         assert!(compressed_node.is_some());
         let compressed_node = compressed_node.expect("is_some to hold");

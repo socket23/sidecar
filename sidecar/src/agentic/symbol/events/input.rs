@@ -41,6 +41,10 @@ impl SymbolEventRequestId {
     pub fn root_request_id(&self) -> &str {
         &self.root_request_id
     }
+
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
 }
 
 #[derive(Debug, Clone)]

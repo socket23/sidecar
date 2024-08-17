@@ -21,6 +21,7 @@ pub mod editor;
 pub mod errors;
 pub mod file;
 pub mod filtering;
+pub mod git;
 pub mod grep;
 pub mod human;
 pub mod input;

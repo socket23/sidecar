@@ -5416,6 +5416,22 @@ FILEPATH: {fs_file_path}
         }
     }
 
+    /// Finds the changed symbols which are present in the file using simple git-diff
+    ///
+    /// Coming soon:
+    /// - can anchor on a range instead
+    /// - has history of the changes
+    /// - will be a stream based input instead of ping based as is now
+    pub async fn find_changed_symbols(
+        &self,
+        _file_paths: Vec<String>,
+        _request_id: &str,
+        _ui_sender: UnboundedSender<UIEventWithID>,
+    ) -> Result<Vec<(MechaCodeSymbolThinking, Vec<String>)>, SymbolError> {
+        // we raw execute git dif commands here (not recommended but ... whatever)
+        todo!();
+    }
+
     /// If we cannot find the symbol using normal mechanisms we just search
     /// for the symbol by hand in the file and grab the outline node which contains
     /// the symbols

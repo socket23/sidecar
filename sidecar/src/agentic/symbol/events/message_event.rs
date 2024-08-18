@@ -8,15 +8,34 @@ use crate::agentic::symbol::{
 
 use super::input::SymbolEventRequestId;
 
+/// The properties which get sent along with each symbol event
+pub struct SymbolEventMessageProperties {
+    request_id: SymbolEventRequestId,
+    ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
+    response_sender: tokio::sync::oneshot::Sender<SymbolEventResponse>,
+}
+
+impl SymbolEventMessageProperties {
+    pub fn new(
+        request_id: SymbolEventRequestId,
+        ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
+        response_sender: tokio::sync::oneshot::Sender<SymbolEventResponse>,
+    ) -> Self {
+        Self {
+            request_id,
+            ui_sender,
+            response_sender,
+        }
+    }
+}
+
 /// The properties which get sent along with a symbol request across
 /// the channels
 ///
 /// This also carries the metadata and request_id as well
 pub struct SymbolEventMessage {
     symbol_event_request: SymbolEventRequest,
-    request_id: SymbolEventRequestId,
-    ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
-    response_sender: tokio::sync::oneshot::Sender<SymbolEventResponse>,
+    properties: SymbolEventMessageProperties,
 }
 
 impl SymbolEventMessage {
@@ -28,9 +47,7 @@ impl SymbolEventMessage {
     ) -> Self {
         Self {
             symbol_event_request,
-            request_id,
-            ui_sender,
-            response_sender,
+            properties: SymbolEventMessageProperties::new(request_id, ui_sender, response_sender),
         }
     }
 
@@ -39,18 +56,18 @@ impl SymbolEventMessage {
     }
 
     pub fn request_id(&self) -> &str {
-        self.request_id.request_id()
+        self.properties.request_id.request_id()
     }
 
     pub fn root_request_id(&self) -> &str {
-        self.request_id.root_request_id()
+        self.properties.request_id.root_request_id()
     }
 
     pub fn ui_sender(&self) -> tokio::sync::mpsc::UnboundedSender<UIEventWithID> {
-        self.ui_sender.clone()
+        self.properties.ui_sender.clone()
     }
 
     pub fn response_sender(&self) -> &tokio::sync::oneshot::Sender<SymbolEventResponse> {
-        &self.response_sender
+        &self.properties.response_sender
     }
 }

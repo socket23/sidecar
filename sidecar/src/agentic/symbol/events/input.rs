@@ -24,6 +24,8 @@ use crate::{
     user_context::types::UserContext,
 };
 
+use super::message_event::SymbolEventMessageProperties;
+
 #[derive(Debug, Clone)]
 pub struct SymbolEventRequestId {
     request_id: String,
@@ -44,6 +46,11 @@ impl SymbolEventRequestId {
 
     pub fn request_id(&self) -> &str {
         &self.request_id
+    }
+
+    pub fn set_request_id(mut self, request_id: String) -> Self {
+        self.request_id = request_id;
+        self
     }
 }
 
@@ -188,7 +195,7 @@ impl SymbolInputEvent {
     pub async fn tool_use_on_initial_invocation(
         self,
         tool_box: Arc<ToolBox>,
-        _request_id: &str,
+        message_properties: SymbolEventMessageProperties,
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
@@ -244,11 +251,7 @@ impl SymbolInputEvent {
                         }
                     }
                     let outline_for_user_context = tool_box
-                        .outline_for_user_context(
-                            &self.context,
-                            &self.request_id.root_request_id().to_string(),
-                            self.ui_sender.clone(),
-                        )
+                        .outline_for_user_context(&self.context, message_properties.clone())
                         .await;
                     let code_wide_search: CodeSymbolImportantWideSearch =
                         CodeSymbolImportantWideSearch::new(
@@ -266,11 +269,7 @@ impl SymbolInputEvent {
             }
         } else {
             let outline_for_user_context = tool_box
-                .outline_for_user_context(
-                    &self.context,
-                    self.request_id.root_request_id(),
-                    self.ui_sender.clone(),
-                )
+                .outline_for_user_context(&self.context, message_properties.clone())
                 .await;
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(

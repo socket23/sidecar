@@ -4,7 +4,11 @@
 use std::sync::Arc;
 
 use llm_client::{
-    broker::LLMBroker, config::LLMBrokerConfiguration, tokenizer::tokenizer::LLMTokenizer,
+    broker::LLMBroker,
+    clients::types::LLMType,
+    config::LLMBrokerConfiguration,
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    tokenizer::tokenizer::LLMTokenizer,
 };
 use llm_prompts::{
     answer_model::LLMAnswerModelBroker, chat::broker::LLMChatModelBroker,
@@ -15,6 +19,13 @@ use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
 use crate::{
+    agentic::{
+        symbol::{identifier::LLMProperties, manager::SymbolManager},
+        tool::{
+            broker::{ToolBroker, ToolBrokerConfiguration},
+            code_edit::models::broker::CodeEditBroker,
+        },
+    },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     db::sqlite::{self, SqlDb},
     inline_completion::{state::FillInMiddleState, symbols_tracker::SymbolTrackerInline},
@@ -59,6 +70,7 @@ pub struct Application {
     pub fill_in_middle_state: Arc<FillInMiddleState>,
     pub symbol_tracker: Arc<SymbolTrackerInline>,
     pub probe_request_tracker: Arc<ProbeRequestTracker>,
+    pub symbol_manager: Arc<SymbolManager>,
 }
 
 impl Application {
@@ -76,7 +88,7 @@ impl Application {
         let semantic_client = SemanticClient::new(config.clone(), language_parsing.clone()).await;
         let posthog_client = posthog_client(&config.user_id);
         let llm_broker =
-            LLMBroker::new(LLMBrokerConfiguration::new(config.index_dir.clone())).await?;
+            Arc::new(LLMBroker::new(LLMBrokerConfiguration::new(config.index_dir.clone())).await?);
         let llm_tokenizer = Arc::new(LLMTokenizer::new()?);
         let chat_broker = Arc::new(LLMChatModelBroker::init());
         let reranker = Arc::new(ReRankBroker::new());
@@ -85,6 +97,32 @@ impl Application {
         let editor_parsing = Arc::new(EditorParsing::default());
         let fill_in_middle_state = Arc::new(FillInMiddleState::new());
         let symbol_tracker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
+
+        let tool_broker = Arc::new(ToolBroker::new(
+            llm_broker.clone(),
+            Arc::new(CodeEditBroker::new()),
+            symbol_tracker.clone(),
+            language_parsing.clone(),
+            // do not apply the edits directly
+            ToolBrokerConfiguration::new(None, false),
+            LLMProperties::new(
+                LLMType::Gpt4O,
+                LLMProvider::OpenAI,
+                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                )),
+            ),
+        ));
+        let symbol_manager = Arc::new(SymbolManager::new(
+            tool_broker,
+            symbol_tracker.clone(),
+            editor_parsing.clone(),
+            LLMProperties::new(
+                LLMType::ClaudeSonnet,
+                LLMProvider::Anthropic,
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            ),
+        ));
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -103,7 +141,7 @@ impl Application {
             sql: sql_db,
             posthog_client: Arc::new(posthog_client),
             user_id: config.user_id.clone(),
-            llm_broker: Arc::new(llm_broker),
+            llm_broker,
             inline_prompt_edit: Arc::new(InLineEditPromptBroker::new()),
             llm_tokenizer,
             fill_in_middle_broker,
@@ -114,6 +152,7 @@ impl Application {
             fill_in_middle_state,
             symbol_tracker,
             probe_request_tracker: Arc::new(ProbeRequestTracker::new()),
+            symbol_manager,
         })
     }
 

@@ -29,7 +29,6 @@ fn default_index_dir() -> PathBuf {
 async fn main() {
     // we want to grab the implementations of the symbols over here which we are
     // interested in
-    let editor_url = "http://localhost:42423".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -51,13 +50,7 @@ async fn main() {
         ),
     ));
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     // Use this to get back the parent-symbol and the child symbols which have
     // been edited in a file

@@ -15,7 +15,11 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{identifier::LLMProperties, manager::SymbolManager},
+        symbol::{
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            manager::SymbolManager,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -23,7 +27,6 @@ use sidecar::{
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::UserContext,
 };
 
 fn default_index_dir() -> PathBuf {
@@ -86,20 +89,20 @@ async fn main() {
            // ),
     ));
 
-    let user_context = UserContext::new(vec![], vec![], None, vec![]);
-
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
-        editor_url.to_owned(),
         anthropic_llm_properties.clone(),
-        user_context.clone(),
-        request_id.to_string(),
     );
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut impls_test = Box::pin(symbol_manager.impls_test(sender));
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+    let mut impls_test = Box::pin(symbol_manager.impls_test(event_properties));
 
     loop {
         tokio::select! {

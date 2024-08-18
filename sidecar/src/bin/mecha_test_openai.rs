@@ -11,7 +11,12 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
-            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
+            events::{
+                input::{SymbolEventRequestId, SymbolInputEvent},
+                message_event::SymbolEventMessageProperties,
+            },
+            identifier::LLMProperties,
+            manager::SymbolManager,
         },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
@@ -71,14 +76,16 @@ async fn main() {
     ));
     let llm_properties = LLMProperties::new(LLMType::Gpt4O, LLMProvider::OpenAI, api_key.clone());
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
-        editor_url.to_owned(),
         llm_properties,
-        user_context.clone(),
-        "".to_owned(),
     );
     let symbol_input = SymbolInputEvent::new(
         user_context,
@@ -103,7 +110,9 @@ async fn main() {
     );
 
     // execute input on manager
-    let _ = symbol_manager.initial_request(symbol_input).await;
+    let _ = symbol_manager
+        .initial_request(symbol_input, event_properties)
+        .await;
 
     // after the initial request this is the reply we get back, so lets try to make this work end to end for this case
 

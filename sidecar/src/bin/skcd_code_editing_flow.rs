@@ -10,7 +10,12 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
-            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
+            events::{
+                input::{SymbolEventRequestId, SymbolInputEvent},
+                message_event::SymbolEventMessageProperties,
+            },
+            identifier::LLMProperties,
+            manager::SymbolManager,
         },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
@@ -113,14 +118,17 @@ async fn main() {
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
-        editor_url.to_owned(),
         anthropic_llm_properties.clone(),
-        user_context.clone(),
-        request_id.to_string(),
     );
 
     // let problem_statement =
@@ -163,7 +171,8 @@ async fn main() {
         sender,
     );
 
-    let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
+    let mut initial_request_task =
+        Box::pin(symbol_manager.initial_request(initial_request, event_properties));
 
     loop {
         tokio::select! {

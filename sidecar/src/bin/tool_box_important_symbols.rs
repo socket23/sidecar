@@ -8,7 +8,11 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            tool_box::ToolBox,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -19,7 +23,6 @@ use sidecar::{
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::UserContext,
 };
 
 fn default_index_dir() -> PathBuf {
@@ -55,13 +58,13 @@ async fn main() {
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     let important_symbols = CodeSymbolImportantResponse::new(
         vec![
@@ -91,8 +94,7 @@ async fn main() {
             ),
         ],
     );
-    let user_context = UserContext::new(vec![], vec![], None, vec![]);
     let _ = tool_box
-        .important_symbols(&important_symbols, user_context, "", sender)
+        .important_symbols(&important_symbols, event_properties)
         .await;
 }

@@ -8,7 +8,14 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{events::edit::SymbolToEdit, identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{
+            events::{
+                edit::SymbolToEdit, input::SymbolEventRequestId,
+                message_event::SymbolEventMessageProperties,
+            },
+            identifier::LLMProperties,
+            tool_box::ToolBox,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -55,13 +62,13 @@ async fn main() {
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
     // This is what I have to debug
     let response = tool_box
         .find_sub_symbol_to_edit_with_name(
@@ -77,8 +84,7 @@ async fn main() {
                 "".to_owned(),
                 None,
             ),
-            "",
-            sender,
+            event_properties,
         )
         .await;
     println!("{:?}", response);

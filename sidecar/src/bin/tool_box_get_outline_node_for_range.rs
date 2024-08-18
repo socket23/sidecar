@@ -10,7 +10,11 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            tool_box::ToolBox,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -57,20 +61,20 @@ async fn main() {
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     // our outline node fetching is going wonky because of the decorators
     // present on top of classes in rust
     let _range = Range::new(Position::new(27, 0, 0), Position::new(40, 1, 0));
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/provider.rs";
     let file_open_response = tool_box
-        .file_open(fs_file_path.to_owned(), "", sender)
+        .file_open(fs_file_path.to_owned(), message_properties.clone())
         .await
         .expect("to work");
     let _ = tool_box

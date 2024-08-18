@@ -8,7 +8,11 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            tool_box::ToolBox,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -76,19 +80,24 @@ async fn main() {
     println!("What are the clickable nodes::????");
     println!("{:?}", &clickable_nodes);
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     let mut final_files = vec![];
     let fs_file_path_ref = &fs_file_path;
     for clickable_node in clickable_nodes.into_iter() {
         let go_to_definition_response = tool_box
-            .go_to_definition(fs_file_path_ref, clickable_node.end_position(), "")
+            .go_to_definition(
+                fs_file_path_ref,
+                clickable_node.end_position(),
+                event_properties.clone(),
+            )
             .await;
         if let Ok(go_to_definition) = go_to_definition_response {
             final_files.extend(

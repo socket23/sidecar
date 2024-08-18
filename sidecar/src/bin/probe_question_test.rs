@@ -13,7 +13,10 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
-            events::probe::SymbolToProbeRequest,
+            events::{
+                input::SymbolEventRequestId, message_event::SymbolEventMessage,
+                probe::SymbolToProbeRequest,
+            },
             identifier::{LLMProperties, SymbolIdentifier},
             manager::SymbolManager,
             tool_properties::ToolProperties,
@@ -27,7 +30,6 @@ use sidecar::{
     application::logging::tracing::tracing_subscribe_default,
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::UserContext,
 };
 
 fn default_index_dir() -> PathBuf {
@@ -43,12 +45,6 @@ fn default_index_dir() -> PathBuf {
 async fn main() {
     tracing_subscribe_default();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-    let user_context = UserContext::new(
-        vec![],
-        vec![],
-        None,
-        vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
-    );
     let gemini_pro_keys = LLMProviderAPIKeys::GeminiPro(GeminiProAPIKey::new("ya29.a0AXooCguiRZP_3G8vUxvkKgrEfcTyGu-xdqdv5SyXsgvWKuaxJSjjTTRH7_cvzsYrOqyyZ_P7-gQFw_L1VRsl1xITfFsvTbVJLsaYUqVGBwKNG4d8obg6OQctm36QxeWwTGYNvke10k_oMW1ygkhIzjIsogk_d_PnBfecn8TubmkaCgYKAeMSARESFQHGX2MiUhp9vFKvNq1Lp7CMO-x2pA0178".to_owned(), "anton-390822".to_owned()));
     // this is the current running debuggable editor
     let editor_url = "http://localhost:42423".to_owned();
@@ -88,11 +84,8 @@ async fn main() {
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
-        editor_url.to_owned(),
         // This is where we are setting the LLM properties
         anthropic_llm_properties.clone(),
-        user_context.clone(),
-        "".to_owned(),
     );
 
     let webserver_symbol_identifier = SymbolIdentifier::with_file_path(
@@ -127,7 +120,17 @@ async fn main() {
         probe_request,
         ToolProperties::new(),
     );
-    let mut probe_task = Box::pin(symbol_manager.probe_request(probe_request, sender));
+
+    let (response_sender, response_receiver) = tokio::sync::oneshot::channel();
+    let symbol_message_request = SymbolEventMessage::new(
+        probe_request,
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender,
+        response_sender,
+        editor_url.to_owned(),
+    );
+    let mut probe_task =
+        Box::pin(symbol_manager.probe_request(symbol_message_request, response_receiver));
 
     loop {
         tokio::select! {

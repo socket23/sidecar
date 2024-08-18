@@ -8,7 +8,11 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            tool_box::ToolBox,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -55,20 +59,19 @@ async fn main() {
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     let snippet_range = Range::new(Position::new(151, 0, 0), Position::new(167, 1, 0));
     let fs_file_path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs";
     let line_content =
         "\"/hybrid_search\",\n            get(sidecar::webserver::agent::hybrid_search),";
     let symbol_to_search = "hybrid_search";
-    let request_id = "testing";
 
     let response = tool_box
         .go_to_definition_using_symbol(
@@ -76,8 +79,7 @@ async fn main() {
             fs_file_path,
             line_content,
             symbol_to_search,
-            request_id,
-            sender,
+            event_properties,
         )
         .await;
     println!("{:?}", &response);

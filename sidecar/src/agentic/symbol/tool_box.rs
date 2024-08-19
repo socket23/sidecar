@@ -2540,6 +2540,13 @@ We also believe this symbol needs to be probed because of:
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!("============");
+        println!(
+            "toolbox::invoke_foolowup_on_references: {}",
+            symbol_edited.symbol_name()
+        );
+        println!("============");
+
         let reference_locations = references.locations();
         let file_paths = reference_locations
             .iter()
@@ -2762,6 +2769,12 @@ Please handle these changes as required."#
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!("=====================");
+        println!(
+            "sending request for follow up. Symbol to edit: {}",
+            symbol_to_edit.symbol_name()
+        );
+        println!("=====================");
         let outline_node_possible = outline_nodes.into_iter().find(|outline_node| {
             // we need to check if the outline node contains the range we are interested in
             outline_node.range().contains(&Range::new(
@@ -2846,25 +2859,6 @@ Please handle these changes as required."#
                         );
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
-
-                        let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
-                        pub struct File {
-                            path: PathBuf,
-                            thinking: String,
-                            snippet: String,
-                            // content: String,
-                            // preview: String,
-                        }"#;
-
-                        let edited_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
-                        pub struct File {
-                            path: PathBuf,
-                            thinking: String,
-                            snippet: String,
-                            fury: usize,
-                            // content: String,
-                            // preview: String,
-                        }"#;
 
                         println!("original code: \n{}", original_code);
                         println!("=========");

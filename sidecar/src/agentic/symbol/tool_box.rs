@@ -6389,7 +6389,9 @@ FILEPATH: {fs_file_path}
                                 false,
                                 user_query.to_owned(),
                                 None,
-                                true,
+                                // since these are quick edits we do not want to spend
+                                // time gathering context
+                                false,
                             ))
                         } else {
                             None
@@ -6409,7 +6411,9 @@ FILEPATH: {fs_file_path}
                                         false,
                                         user_query.to_owned(),
                                         None,
-                                        true,
+                                        // since these are quick edits we do not
+                                        // want to spend time gathering context
+                                        false,
                                     ))
                                 } else {
                                     None

@@ -49,8 +49,6 @@ pub struct SymbolManager {
     // each symbol has its own receiver which is being used
     symbol_locker: SymbolLocker,
     tools: Arc<ToolBroker>,
-    _symbol_broker: Arc<SymbolTrackerInline>,
-    _editor_parsing: Arc<EditorParsing>,
     ts_parsing: Arc<TSLanguageParsing>,
     tool_box: Arc<ToolBox>,
     llm_properties: LLMProperties,
@@ -87,10 +85,8 @@ impl SymbolManager {
         Self {
             _sender: sender,
             symbol_locker,
-            _editor_parsing: editor_parsing,
             ts_parsing,
             tools,
-            _symbol_broker: symbol_broker,
             tool_box,
             llm_properties,
             long_context_cache: LongContextSearchCache::new(),

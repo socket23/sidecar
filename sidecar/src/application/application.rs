@@ -20,7 +20,7 @@ use tracing::{debug, warn};
 
 use crate::{
     agentic::{
-        symbol::{identifier::LLMProperties, manager::SymbolManager},
+        symbol::{identifier::LLMProperties, manager::SymbolManager, tool_box::ToolBox},
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -31,7 +31,7 @@ use crate::{
     inline_completion::{state::FillInMiddleState, symbols_tracker::SymbolTrackerInline},
     reporting::posthog::client::{posthog_client, PosthogClient},
     semantic_search::client::SemanticClient,
-    webserver::agentic::ProbeRequestTracker,
+    webserver::agentic::{AnchoredEditingTracker, ProbeRequestTracker},
 };
 use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
@@ -71,6 +71,8 @@ pub struct Application {
     pub symbol_tracker: Arc<SymbolTrackerInline>,
     pub probe_request_tracker: Arc<ProbeRequestTracker>,
     pub symbol_manager: Arc<SymbolManager>,
+    pub tool_box: Arc<ToolBox>,
+    pub anchored_request_trakcer: Arc<AnchoredEditingTracker>,
 }
 
 impl Application {
@@ -113,6 +115,11 @@ impl Application {
                 )),
             ),
         ));
+        let tool_box = Arc::new(ToolBox::new(
+            tool_broker.clone(),
+            symbol_tracker.clone(),
+            editor_parsing.clone(),
+        ));
         let symbol_manager = Arc::new(SymbolManager::new(
             tool_broker,
             symbol_tracker.clone(),
@@ -123,6 +130,8 @@ impl Application {
                 LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
             ),
         ));
+
+        let anchored_request_trakcer = Arc::new(AnchoredEditingTracker::new());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -153,6 +162,8 @@ impl Application {
             symbol_tracker,
             probe_request_tracker: Arc::new(ProbeRequestTracker::new()),
             symbol_manager,
+            tool_box,
+            anchored_request_trakcer,
         })
     }
 

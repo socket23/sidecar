@@ -6252,4 +6252,84 @@ FILEPATH: {fs_file_path}
 
         Ok(changed_nodes_followups)
     }
+
+    /// Gets a unique identifier or symbol edit request given the range which is selected
+    /// and where we want to edit it
+    pub async fn symbols_to_anchor(
+        &self,
+        user_context: &UserContext,
+        message_properties: SymbolEventMessageProperties,
+        // we return a vector which maps the parent symbol identifier to the children symbols
+        // which require editing over here
+    ) -> Result<Vec<(SymbolIdentifier, Vec<String>)>, SymbolError> {
+        let selection_variable = user_context
+            .variables
+            .iter()
+            .find(|variable| variable.is_selection());
+        if selection_variable.is_none() {
+            return Ok(vec![]);
+        }
+        let selection_variable = selection_variable.expect("is_none to hold above");
+        let selection_range = Range::new(
+            selection_variable.start_position,
+            selection_variable.end_position,
+        );
+        let fs_file_path = selection_variable.fs_file_path.to_owned();
+        let language_config = self.editor_parsing.for_file_path(&fs_file_path);
+        if language_config.is_none() {
+            return Ok(vec![]);
+        }
+        let language_config = language_config.expect("is_none to hold");
+        let file_contents = self
+            .file_open(fs_file_path.to_owned(), message_properties.clone())
+            .await?;
+        let outline_nodes = language_config
+            .generate_outline_fresh(file_contents.contents_ref().as_bytes(), &fs_file_path);
+
+        // now I have the outline nodes, I want to see which of them intersect with the range we are interested in
+        let intersecting_outline_nodes = outline_nodes
+            .into_iter()
+            .filter(|outline_node| {
+                outline_node
+                    .range()
+                    .intersects_without_byte(&selection_range)
+            })
+            .collect::<Vec<_>>();
+
+        let anchored_nodes = intersecting_outline_nodes
+            .into_iter()
+            .map(|outline_node| {
+                if outline_node.is_funciton() || outline_node.is_class_definition() {
+                    // then its a single unit of work, so its a bit easier
+                    (
+                        SymbolIdentifier::with_file_path(
+                            outline_node.name(),
+                            outline_node.fs_file_path(),
+                        ),
+                        vec![outline_node.name().to_owned()],
+                    )
+                } else {
+                    // we need to look at the children node and figure out where we are going to be making the edits
+                    let children_nodes = outline_node
+                        .children()
+                        .into_iter()
+                        .filter(|children| {
+                            children.range().intersects_without_byte(&selection_range)
+                        })
+                        .map(|child_outline_node| child_outline_node.name().to_owned())
+                        .collect::<Vec<_>>();
+                    (
+                        SymbolIdentifier::with_file_path(
+                            outline_node.name(),
+                            outline_node.fs_file_path(),
+                        ),
+                        children_nodes,
+                    )
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Now that we have the intersecting outline nodes we can create our own request types on top of this
+        Ok(anchored_nodes)
+    }
 }

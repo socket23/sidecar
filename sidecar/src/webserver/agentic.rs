@@ -1,5 +1,6 @@
 //! Contains the handler for agnetic requests and how they work
 
+use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::StreamExt;
@@ -16,6 +17,7 @@ use tokio::task::JoinHandle;
 
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
+use crate::agentic::symbol::identifier::SymbolIdentifier;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::{
     agentic::{
@@ -28,6 +30,7 @@ use crate::{
     user_context::types::UserContext,
 };
 
+use super::types::ApiResponse;
 use super::{model_selection::LLMClientConfig, types::Result};
 
 #[derive(Debug, Clone)]
@@ -52,6 +55,61 @@ impl ProbeRequestTracker {
         if let Some(response) = running_requests.get_mut(request_id) {
             // we abort the running requests
             response.abort();
+        }
+    }
+}
+
+/// Contains all the data which we will need to trigger the edits
+#[derive(Clone)]
+struct AnchoredEditingMetadata {
+    _message_properties: SymbolEventMessageProperties,
+    // These are the symbols where we are focussed on right now in the selection
+    _anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+}
+
+impl AnchoredEditingMetadata {
+    pub fn new(
+        message_properties: SymbolEventMessageProperties,
+        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+    ) -> Self {
+        Self {
+            _message_properties: message_properties,
+            _anchored_symbols: anchored_symbols,
+        }
+    }
+}
+
+pub struct AnchoredEditingTracker {
+    running_requests_properties: Arc<Mutex<HashMap<String, AnchoredEditingMetadata>>>,
+    running_requests: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
+}
+
+impl AnchoredEditingTracker {
+    pub fn new() -> Self {
+        Self {
+            running_requests_properties: Arc::new(Mutex::new(HashMap::new())),
+            running_requests: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    async fn get_properties(&self, request_id: &str) -> Option<AnchoredEditingMetadata> {
+        let running_requests = self.running_requests_properties.lock().await;
+        running_requests.get(request_id).map(|data| data.clone())
+    }
+
+    async fn track_new_request(
+        &self,
+        request_id: &str,
+        join_handle: JoinHandle<()>,
+        editing_metadata: AnchoredEditingMetadata,
+    ) {
+        {
+            let mut running_requests = self.running_requests.lock().await;
+            running_requests.insert(request_id.to_owned(), join_handle);
+        }
+        {
+            let mut running_request_properties = self.running_requests_properties.lock().await;
+            running_request_properties.insert(request_id.to_owned(), editing_metadata);
         }
     }
 }
@@ -279,6 +337,37 @@ pub async fn swe_bench(
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSculptingRequest {
+    request_id: String,
+    instruction: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSculptingResponse {
+    done: bool,
+}
+
+impl ApiResponse for CodeSculptingResponse {}
+
+pub async fn code_sculpting(
+    Extension(app): Extension<Application>,
+    Json(CodeSculptingRequest {
+        request_id,
+        instruction,
+    }): Json<CodeSculptingRequest>,
+) -> Result<impl IntoResponse> {
+    let anchor_tracker = app.anchored_request_trakcer.clone();
+    let anchor_properties = anchor_tracker.get_properties(&request_id).await;
+    println!("code_sculpting::instruction({})", instruction);
+    if anchor_properties.is_none() {
+        Ok(json_result(CodeSculptingResponse { done: false }))
+    } else {
+        let _anchor_properties = anchor_properties.expect("is_none to hold");
+        Ok(json_result(CodeSculptingResponse { done: true }))
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticCodeEditing {
     user_query: String,
     editor_url: String,
@@ -318,6 +407,12 @@ pub async fn code_editing(
         );
     }
 
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
+        sender.clone(),
+        editor_url,
+    );
+
     anchor_editing = anchor_editing || user_context.is_anchored_editing();
 
     println!("webserver::code_editing_flow::endpoint_hit");
@@ -326,22 +421,35 @@ pub async fn code_editing(
             "webserver::code_editing_flow::anchor_editing::({})",
             anchor_editing
         );
+        let symbols_to_anchor = app
+            .tool_box
+            .symbols_to_anchor(&user_context, message_properties.clone())
+            .await
+            .unwrap_or_default();
+        if !symbols_to_anchor.is_empty() {
+            // if we do not have any symbols to anchor on, then we are screwed over here
+            // we want to send the edit request directly over here cutting through
+            // the initial request parts
+            // let symbol_manager = app.symbol_manager.clone();
+            let join_handle = tokio::spawn(async move {
+                return;
+            });
+            let editing_metadata =
+                AnchoredEditingMetadata::new(message_properties, symbols_to_anchor);
+            let _ = app
+                .anchored_request_trakcer
+                .track_new_request(&request_id, join_handle, editing_metadata)
+                .await;
+        }
     } else {
         println!("webserver::code_editing_flow::agnetic_editing");
-    }
+        let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
+                                                  // Now we send the original request over here and then await on the sender like
+                                                  // before
 
-    let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
-                                              // Now we send the original request over here and then await on the sender like
-                                              // before
-
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
-        sender.clone(),
-        editor_url,
-    );
-    let symbol_manager = app.symbol_manager.clone();
-    let join_handle = tokio::spawn(async move {
-        let _ = symbol_manager
+        let symbol_manager = app.symbol_manager.clone();
+        let join_handle = tokio::spawn(async move {
+            let _ = symbol_manager
             .initial_request(
                 SymbolInputEvent::new(
                     user_context,
@@ -367,10 +475,11 @@ pub async fn code_editing(
                 message_properties,
             )
             .await;
-    });
-    let _ = edit_request_tracker
-        .track_new_request(&request_id, join_handle)
-        .await;
+        });
+        let _ = edit_request_tracker
+            .track_new_request(&request_id, join_handle)
+            .await;
+    }
 
     let event_stream = Sse::new(
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {

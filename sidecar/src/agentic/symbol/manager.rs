@@ -8,6 +8,7 @@ use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
 use tokio::sync::mpsc::UnboundedSender;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
 use crate::agentic::symbol::events::edit::SymbolToEdit;
@@ -97,69 +98,59 @@ impl SymbolManager {
         &self,
         // this contains all the request id related jazz over here
         message_properties: SymbolEventMessageProperties,
-    ) {
-        // simulating an edit has occured in range
+    ) -> Result<(), SymbolError> {
+        let root_dir = "/Users/zi/codestory/testing/sidecar";
         let path =
             "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
-        let start_position = Position::new(81, 0, 420);
-        let end_position = Position::new(89, 0, 420);
-        let edited_range = Range::new(start_position, end_position);
 
-        let outline_node = self
+        let symbol_change_set = self
             .tool_box
-            .get_outline_node_for_range(&edited_range, &path, message_properties.clone())
-            .await
-            .unwrap();
+            .grab_changed_symbols_in_file(&root_dir, &path)
+            .await?;
 
-        let node_name = outline_node.name();
-        let original_code = outline_node.content().content();
-        let _outline_node_range = outline_node.range();
+        println!("symbol_change_set: {:?}", &symbol_change_set);
 
-        let identifier_range = outline_node.identifier_range();
+        let futures = symbol_change_set
+            .changes()
+            .iter()
+            .flat_map(|change| change.changes().iter())
+            .map(|(symbol, original_code)| {
+                let message_properties = message_properties.clone();
+                let hub_sender = self.symbol_locker.hub_sender.clone();
 
-        let symbol_to_edit = SymbolToEdit::new(
-            node_name.to_string(),
-            identifier_range.to_owned(), // symbol range is the the outline node's range (complete range)
-            path.to_string(),
-            vec!["some instruction, cook eggs".to_string()],
-            false,
-            false,
-            false,
-            "please cook eggs".to_string(),
-            None,
-        );
+                println!("=====================");
+                println!("following up on");
 
-        let _ = self
-            .tool_box
-            .check_for_followups(
-                node_name,
-                &symbol_to_edit,
-                original_code,
-                LLMType::Gpt4O,
-                LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
-                )),
-                self.symbol_locker.hub_sender.clone(),
-                message_properties.clone(),
-                &ToolProperties::new(),
-            )
-            .await;
+                async move {
+                    self.tool_box
+                        .check_for_followups(
+                            symbol.symbol_name(),
+                            symbol,
+                            original_code,
+                            LLMType::Gpt4O,
+                            LLMProvider::OpenAI,
+                            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt"
+                                    .to_owned(),
+                            )),
+                            hub_sender,
+                            message_properties,
+                            &ToolProperties::new(),
+                        )
+                        .await
+                }
+            });
 
-        // println!("{path}");
-        // println!("start position: \n{:?}", &identifier_range.start_position());
+        for future in futures {
+            let _ = future.await;
+        }
 
-        // let references = self
-        //     .tool_box
-        //     .go_to_references(
-        //         path,
-        //         &identifier_range.start_position(),
-        //         &self.root_request_id,
-        //     )
-        //     .await
-        //     .unwrap();
+        // let _ = stream::iter(futures)
+        //     .buffer_unordered(10) // Process up to 10 requests in parallel
+        //     .collect::<Vec<_>>()
+        //     .await;
 
-        // println!("{:?}", references);
+        Ok(())
     }
 
     pub fn tool_box(&self) -> &ToolBox {

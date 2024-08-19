@@ -107,6 +107,7 @@ use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
 use super::tool_properties::ToolProperties;
+use super::toolbox::helpers::{SymbolChangeSet, SymbolChanges};
 use super::types::SymbolEventRequest;
 use super::ui_event::UIEventWithID;
 
@@ -2033,7 +2034,7 @@ We also believe this symbol needs to be probed because of:
             parent_symbol_name,
             symbol_edited.symbol_name()
         );
-        let symbol_to_edit = self
+        let outline_node = self
             .find_sub_symbol_to_edit_with_name(
                 parent_symbol_name,
                 symbol_edited,
@@ -2046,18 +2047,18 @@ We also believe this symbol needs to be probed because of:
             symbol_edited.symbol_name(),
         );
         // over here we have to check if its a function or a class
-        if symbol_to_edit.is_function_type() {
+        if outline_node.is_function_type() {
             println!(
                 "tool_box::check_for_followups::is_function_type::parent_symbol_name({})::symbol_to_edit({})",
                 parent_symbol_name,
-                symbol_to_edit.name(),
+                outline_node.name(),
             );
             // we do need to get the references over here for the function and
             // send them over as followups to check wherever they are being used
             let references = self
                 .go_to_references(
                     symbol_edited.fs_file_path(),
-                    &symbol_edited.range().start_position(),
+                    &outline_node.identifier_range().start_position(),
                     message_properties.clone(),
                 )
                 .await?;
@@ -2065,18 +2066,18 @@ We also believe this symbol needs to be probed because of:
                 .invoke_followup_on_references(
                     symbol_edited,
                     original_code,
-                    &symbol_to_edit,
+                    &outline_node,
                     references,
                     hub_sender,
                     message_properties.clone(),
                     tool_properties,
                 )
                 .await;
-        } else if symbol_to_edit.is_class_definition() {
+        } else if outline_node.is_class_definition() {
             println!(
                 "tool_box::check_for_followups::is_class_definition::parent_symbol_name({})::symbol_to_edit({})",
                 parent_symbol_name,
-                &symbol_to_edit.name()
+                &outline_node.name()
             );
             // TODO(skcd): There are several cases here which we can handle:
             // - we might have changed the definition of the symbol itself
@@ -2089,7 +2090,7 @@ We also believe this symbol needs to be probed because of:
                 .invoke_references_check_for_class_definition(
                     symbol_edited,
                     original_code,
-                    &symbol_to_edit,
+                    &outline_node,
                     language,
                     llm,
                     provider,
@@ -2104,7 +2105,7 @@ We also believe this symbol needs to be probed because of:
             let references = self
                 .go_to_references(
                     symbol_edited.fs_file_path(),
-                    &symbol_edited.range().start_position(),
+                    &outline_node.identifier_range().start_position(),
                     message_properties.clone(),
                 )
                 .await?;
@@ -2124,7 +2125,7 @@ We also believe this symbol needs to be probed because of:
                 .invoke_followup_on_references(
                     symbol_edited,
                     original_code,
-                    &symbol_to_edit,
+                    &outline_node,
                     references,
                     hub_sender,
                     message_properties,
@@ -2135,8 +2136,8 @@ We also believe this symbol needs to be probed because of:
             println!(
                 "tool_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
                 parent_symbol_name,
-                symbol_to_edit.name(),
-                symbol_to_edit.outline_node_type()
+                outline_node.name(),
+                outline_node.outline_node_type()
             );
             // something else over here, wonder what it could be
             return Err(SymbolError::NoContainingSymbolFound);
@@ -2846,32 +2847,28 @@ Please handle these changes as required."#
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
 
-                        //                         println!("=========");
-                        //                         println!("outline node: {:?}", outline_node.name());
-                        //                         println!("=========");
+                        let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        pub struct File {
+                            path: PathBuf,
+                            thinking: String,
+                            snippet: String,
+                            // content: String,
+                            // preview: String,
+                        }"#;
 
-                        //                         let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
-                        // pub struct File {
-                        //     path: PathBuf,
-                        //     thinking: String,
-                        //     snippet: String,
-                        //     // content: String,
-                        //     // preview: String,
-                        // }"#;
+                        let edited_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        pub struct File {
+                            path: PathBuf,
+                            thinking: String,
+                            snippet: String,
+                            fury: usize,
+                            // content: String,
+                            // preview: String,
+                        }"#;
 
-                        //                         let edited_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
-                        // pub struct File {
-                        //     path: PathBuf,
-                        //     thinking: String,
-                        //     snippet: String,
-                        //     fury: usize,
-                        //     // content: String,
-                        //     // preview: String,
-                        // }"#;
-
-                        // println!("original code: \n{}", original_code);
-                        // println!("=========");
-                        // println!("edited code: \n{}", edited_code);
+                        println!("original code: \n{}", original_code);
+                        println!("=========");
+                        println!("edited code: \n{}", edited_code);
 
                         let event = SymbolEventMessage::message_with_properties(
                             SymbolEventRequest::initial_request(
@@ -2939,6 +2936,7 @@ Please handle these changes as required."#
             position.clone(),
             message_properties.editor_url().to_owned(),
         ));
+
         self.tools
             .invoke(input)
             .await
@@ -5917,7 +5915,7 @@ FILEPATH: {fs_file_path}
         Ok(output)
     }
 
-    /// Grabs the changed symbols present in a file
+    /// Grabs the changed symbols present in a file:
     /// We get back the symbol identifier and the following
     /// information about it:
     /// - the previous content
@@ -5930,11 +5928,14 @@ FILEPATH: {fs_file_path}
     /// impl Something {}
     /// ^ for both of these we will have the same symbol-identifier ...
     /// but this works when changing the function of a symbol
+    ///
+    /// All file main nodes are returned, those with non-empty vecs have changes contained within.
+    /// Original contents storeed in (_, String)
     pub async fn grab_changed_symbols_in_file(
         &self,
         root_directory: &str,
         fs_file_path: &str,
-    ) -> Result<Vec<(String, Vec<(SymbolToEdit, String)>)>, SymbolError> {
+    ) -> Result<SymbolChangeSet, SymbolError> {
         let file_changes = self.get_file_changes(root_directory, fs_file_path).await?;
 
         // Now we need to parse the new and old version of the files and get the changed
@@ -5946,7 +5947,7 @@ FILEPATH: {fs_file_path}
         // in the file
         let language_config = self.editor_parsing.for_file_path(fs_file_path);
         if language_config.is_none() {
-            return Ok(vec![]);
+            return Ok(SymbolChangeSet::default());
         }
 
         let language_config = language_config.expect("is_none to hold");
@@ -6250,7 +6251,12 @@ FILEPATH: {fs_file_path}
             })
             .collect::<Vec<_>>();
 
-        Ok(changed_nodes_followups)
+        let symbol_change_set = changed_nodes_followups
+            .into_iter()
+            .map(|(symbol_name, changes)| SymbolChanges::new(symbol_name, changes))
+            .collect::<Vec<_>>();
+
+        Ok(SymbolChangeSet::new(symbol_change_set))
     }
 
     /// Gets a unique identifier or symbol edit request given the range which is selected

@@ -93,9 +93,6 @@ impl SymbolLocker {
                     )
                     .await;
                 if let Ok(snippet) = snippet {
-                    println!("snippet found");
-
-                    println!("{:?}", &snippet);
                     // the symbol does not exist so we have to make sure that we can send it over somehow
                     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
                         symbol_identifier.symbol_name().to_owned(),
@@ -108,7 +105,6 @@ impl SymbolLocker {
                     );
                     // we create the symbol over here, but what about the context, I want
                     // to pass it to the symbol over here
-                    println!("create_symbol_agent");
                     let _ = self
                         .create_symbol_agent(
                             mecha_code_symbol_thinking,
@@ -119,11 +115,6 @@ impl SymbolLocker {
                 } else {
                     // we are fucked over here since we didn't find a snippet for the symbol
                     // which is supposed to have some presence in the file
-                    println!(
-                        "Snippet not found for: {} in {}",
-                        symbol_identifier.symbol_name(),
-                        fs_file_path
-                    );
                     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
                         symbol_identifier.symbol_name().to_owned(),
                         vec![],

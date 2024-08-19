@@ -368,7 +368,11 @@ pub async fn code_sculpting(
         let anchor_tracker = app.anchored_request_tracker.clone();
         anchor_properties = anchor_tracker.get_properties(&request_id).await;
     }
-    println!("code_sculpting::instruction({})", instruction);
+    println!(
+        "code_sculpting::instruction({})::properties_present({})",
+        instruction,
+        anchor_properties.is_some()
+    );
     if anchor_properties.is_none() {
         Ok(json_result(CodeSculptingResponse { done: false }))
     } else {
@@ -420,7 +424,7 @@ pub async fn code_editing(
         mut anchor_editing,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
-    println!("webserver::code_editing_start");
+    println!("webserver::code_editing_start::request_id({})", &request_id);
     let edit_request_tracker = app.probe_request_tracker.clone();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     if let Some(active_window_data) = active_window_data {
@@ -439,7 +443,10 @@ pub async fn code_editing(
 
     anchor_editing = anchor_editing || user_context.is_anchored_editing();
 
-    println!("webserver::code_editing_flow::endpoint_hit");
+    println!(
+        "webserver::code_editing_flow::endpoint_hit::anchor_editing({})",
+        anchor_editing
+    );
     if anchor_editing {
         println!(
             "webserver::code_editing_flow::anchor_editing::({})",
@@ -454,7 +461,6 @@ pub async fn code_editing(
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through
             // the initial request parts
-            // let symbol_manager = app.symbol_manager.clone();
             let editing_metadata =
                 AnchoredEditingMetadata::new(message_properties.clone(), symbols_to_anchor);
             let anchored_symbols = app
@@ -472,6 +478,15 @@ pub async fn code_editing(
                 .anchored_request_tracker
                 .track_new_request(&request_id, join_handle, editing_metadata)
                 .await;
+            let properties_present = app
+                .anchored_request_tracker
+                .get_properties(&request_id)
+                .await;
+            println!(
+                "webserver::anchored_edits::request_id({})::properties_present({})",
+                &request_id,
+                properties_present.is_some()
+            );
         }
     } else {
         println!("webserver::code_editing_flow::agnetic_editing");

@@ -24,6 +24,36 @@ use crate::{
     user_context::types::UserContext,
 };
 
+use super::message_event::SymbolEventMessageProperties;
+
+#[derive(Debug, Clone)]
+pub struct SymbolEventRequestId {
+    request_id: String,
+    root_request_id: String,
+}
+
+impl SymbolEventRequestId {
+    pub fn new(request_id: String, root_request_id: String) -> Self {
+        Self {
+            request_id,
+            root_request_id,
+        }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.root_request_id
+    }
+
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    pub fn set_request_id(mut self, request_id: String) -> Self {
+        self.request_id = request_id;
+        self
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SymbolInputEvent {
     context: UserContext,
@@ -31,7 +61,7 @@ pub struct SymbolInputEvent {
     provider: LLMProvider,
     api_keys: LLMProviderAPIKeys,
     user_query: String,
-    request_id: String,
+    request_id: SymbolEventRequestId,
     // Here we have properties for swe bench which we are sending for testing
     swe_bench_test_endpoint: Option<String>,
     repo_map_fs_path: Option<String>,
@@ -58,6 +88,7 @@ impl SymbolInputEvent {
         api_keys: LLMProviderAPIKeys,
         user_query: String,
         request_id: String,
+        root_request_id: String,
         swe_bench_test_endpoint: Option<String>,
         repo_map_fs_path: Option<String>,
         swe_bench_id: Option<String>,
@@ -76,7 +107,7 @@ impl SymbolInputEvent {
             llm,
             provider,
             api_keys,
-            request_id,
+            request_id: SymbolEventRequestId::new(request_id, root_request_id),
             user_query,
             swe_bench_test_endpoint,
             repo_map_fs_path,
@@ -91,6 +122,10 @@ impl SymbolInputEvent {
             big_search,
             ui_sender,
         }
+    }
+
+    pub fn root_request_id(&self) -> &str {
+        &self.request_id.root_request_id
     }
 
     pub fn ui_sender(&self) -> UnboundedSender<UIEventWithID> {
@@ -147,7 +182,7 @@ impl SymbolInputEvent {
     }
 
     pub fn request_id(&self) -> &str {
-        &self.request_id
+        &self.request_id.request_id
     }
 
     pub fn big_search(&self) -> bool {
@@ -160,7 +195,7 @@ impl SymbolInputEvent {
     pub async fn tool_use_on_initial_invocation(
         self,
         tool_box: Arc<ToolBox>,
-        _request_id: &str,
+        message_properties: SymbolEventMessageProperties,
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
         // model (if they are using their own api-keys and even the codestory provider)
@@ -195,7 +230,7 @@ impl SymbolInputEvent {
                     LLMProvider::Anthropic,
                     self.api_keys.clone(),
                     None,
-                    self.request_id.to_string(),
+                    self.request_id.root_request_id().to_string(),
                 ))),
                 None => {
                     if let Some(root_directory) = self.root_directory.to_owned() {
@@ -210,17 +245,13 @@ impl SymbolInputEvent {
                                     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
                                 )),
                                 Some(root_directory),
-                                self.request_id.to_string(),
+                                self.request_id.root_request_id().to_string(),
                                 SearchType::Both,
                             )));
                         }
                     }
                     let outline_for_user_context = tool_box
-                        .outline_for_user_context(
-                            &self.context,
-                            &self.request_id,
-                            self.ui_sender.clone(),
-                        )
+                        .outline_for_user_context(&self.context, message_properties.clone())
                         .await;
                     let code_wide_search: CodeSymbolImportantWideSearch =
                         CodeSymbolImportantWideSearch::new(
@@ -229,7 +260,7 @@ impl SymbolInputEvent {
                             llm_properties_for_symbol_search.llm().clone(),
                             llm_properties_for_symbol_search.provider().clone(),
                             llm_properties_for_symbol_search.api_key().clone(),
-                            self.request_id.to_string(),
+                            self.request_id.root_request_id().to_string(),
                             outline_for_user_context,
                         );
                     // just symbol search instead for quick access
@@ -238,7 +269,7 @@ impl SymbolInputEvent {
             }
         } else {
             let outline_for_user_context = tool_box
-                .outline_for_user_context(&self.context, &self.request_id, self.ui_sender.clone())
+                .outline_for_user_context(&self.context, message_properties.clone())
                 .await;
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(
@@ -247,7 +278,7 @@ impl SymbolInputEvent {
                     llm_properties_for_symbol_search.llm().clone(),
                     llm_properties_for_symbol_search.provider().clone(),
                     llm_properties_for_symbol_search.api_key().clone(),
-                    self.request_id.to_string(),
+                    self.request_id.root_request_id().to_string(),
                     outline_for_user_context,
                 );
             // Now we try to generate the tool input for this

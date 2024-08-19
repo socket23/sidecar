@@ -17,7 +17,12 @@ use serde_json::json;
 use sidecar::{
     agentic::{
         symbol::{
-            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
+            events::{
+                input::{SymbolEventRequestId, SymbolInputEvent},
+                message_event::SymbolEventMessageProperties,
+            },
+            identifier::LLMProperties,
+            manager::SymbolManager,
         },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
@@ -110,13 +115,6 @@ async fn main() {
             "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".to_owned(),
         )),
     );
-    // this is the current running debuggable editor
-    let user_context = UserContext::new(
-        vec![],
-        vec![],
-        None,
-        vec!["/Users/skcd/scratch/sidecar/sidecar/".to_owned()],
-    );
 
     // editor running
     let editor_url = "http://localhost:6897".to_owned();
@@ -142,15 +140,18 @@ async fn main() {
     ));
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(instance_id.to_owned(), instance_id.to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
-        editor_url.to_owned(),
         // This is where we are setting the LLM properties
         anthropic_llm_properties.clone(),
-        user_context.clone(),
-        instance_id.to_owned(),
     );
 
     // I should create symlinks for these so its easier to query as well :|
@@ -167,6 +168,7 @@ async fn main() {
         anthropic_api_keys,
         problem_statement,
         instance_id.to_owned(),
+        instance_id.to_owned(),
         Some("http://localhost:6897/run_tests".to_owned()),
         Some(repo_map_fs_path.to_owned()),
         Some(instance_id.to_owned()),
@@ -180,7 +182,8 @@ async fn main() {
         false,
         sender,
     );
-    let mut initial_request_task = Box::pin(symbol_manager.initial_request(initial_request));
+    let mut initial_request_task =
+        Box::pin(symbol_manager.initial_request(initial_request, event_properties.clone()));
 
     loop {
         tokio::select! {

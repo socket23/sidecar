@@ -8,7 +8,11 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            tool_box::ToolBox,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -53,18 +57,19 @@ async fn main() {
         ),
     ));
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
+
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
 
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs".to_owned();
     let lsp_range = Range::new(Position::new(51, 0, 0), Position::new(89, 0, 0));
     let response = tool_box
-        .get_lsp_diagnostics(&fs_file_path, &lsp_range, "")
+        .get_lsp_diagnostics(&fs_file_path, &lsp_range, event_properties)
         .await;
     println!("{:?}", &response);
 }

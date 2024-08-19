@@ -12,6 +12,7 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
             identifier::{LLMProperties, MechaCodeSymbolThinking, Snippet, SymbolIdentifier},
             tool_box::ToolBox,
             tool_properties::ToolProperties,
@@ -29,7 +30,6 @@ use sidecar::{
         types::OutlineNodeContent,
     },
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::UserContext,
 };
 
 fn default_index_dir() -> PathBuf {
@@ -67,13 +67,7 @@ async fn main() {
         ),
     ));
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
         "ConfigurationRegistry".to_owned(),
@@ -98,12 +92,17 @@ async fn main() {
             ),
         )),
         vec![],
-        UserContext::new(vec![], vec![], None, vec![]),
         tool_box.clone(),
     );
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
     let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        ui_sender,
+        editor_url.to_owned(),
+    );
 
     let symbol_identifier =
         SymbolIdentifier::with_file_path("ConfigurationRegistry", &fs_file_path);
@@ -120,18 +119,17 @@ async fn main() {
                 "".to_owned(),
             )),
         ),
-        "".to_owned(),
         ToolProperties::new(),
-        ui_sender.clone(),
+        event_properties.clone(),
     )
     .await
     .expect("to work");
 
     let implementations = symbol
         .mecha_code_symbol()
-        .grab_implementations(tool_box, symbol_identifier, "testing", ui_sender.clone())
+        .grab_implementations(tool_box, symbol_identifier, event_properties.clone())
         .await;
     println!("implementations: {:?}", implementations);
     let mecha_code_symbol = symbol.mecha_code_symbol();
-    dbg!(mecha_code_symbol.to_llm_request("testing", ui_sender).await);
+    dbg!(mecha_code_symbol.to_llm_request(event_properties).await);
 }

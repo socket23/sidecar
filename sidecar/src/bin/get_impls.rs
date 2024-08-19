@@ -1,9 +1,6 @@
-use std::sync::Arc;
+// fn main() {}
 
-use sidecar::{
-    agentic::symbol::tool_box,
-    chunking::text_document::{Position, Range},
-};
+use std::sync::Arc;
 
 use std::path::PathBuf;
 
@@ -19,7 +16,9 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
-            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            manager::SymbolManager,
         },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
@@ -91,17 +90,44 @@ async fn main() {
            // ),
     ));
 
-    let user_context = UserContext::new(vec![], vec![], None, vec![]);
-
     let symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
-        editor_url.to_owned(),
         anthropic_llm_properties.clone(),
-        user_context.clone(),
-        request_id.to_string(),
     );
 
-    let mut impls_test = Box::pin(symbol_manager.impls_test());
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+    let mut impls_test = Box::pin(symbol_manager.impls_test(event_properties));
+
+    loop {
+        tokio::select! {
+            event = receiver.recv() => {
+                if let Some(_event) = event {
+                    // info!("event: {:?}", event);
+                } else {
+                    break; // Receiver closed, exit the loop
+                }
+            }
+            result = &mut impls_test => {
+                println!("Result: {:?}", result);
+                // match result {
+                //     Ok(_) => {
+                //         // The task completed successfully
+                //         // Handle the result if needed
+                //     }
+                //     Err(e) => {
+                //         // An error occurred while running the task
+                //         eprintln!("Error in initial_request_task: {}", e);
+                //         // Handle the error appropriately (e.g., log, retry, or exit)
+                //     }
+                // }
+            }
+        }
+    }
 }

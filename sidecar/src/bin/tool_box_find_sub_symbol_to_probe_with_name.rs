@@ -8,7 +8,14 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{events::probe::SubSymbolToProbe, identifier::LLMProperties, tool_box::ToolBox},
+        symbol::{
+            events::{
+                input::SymbolEventRequestId, message_event::SymbolEventMessageProperties,
+                probe::SubSymbolToProbe,
+            },
+            identifier::LLMProperties,
+            tool_box::ToolBox,
+        },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -55,13 +62,13 @@ async fn main() {
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let tool_box = Arc::new(ToolBox::new(
-        tool_broker,
-        symbol_broker,
-        editor_parsing,
-        editor_url,
-        "".to_owned(),
-    ));
+    let event_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+    );
+
+    let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     let file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agent/search.rs".to_owned();
     let sub_symbol_probe = SubSymbolToProbe::new(
@@ -88,12 +95,7 @@ async fn main() {
     //     .await;
 
     let result = tool_box
-        .find_sub_symbol_to_probe_with_name(
-            parent_symbol_name,
-            &sub_symbol_probe,
-            "testing",
-            sender,
-        )
+        .find_sub_symbol_to_probe_with_name(parent_symbol_name, &sub_symbol_probe, event_properties)
         .await;
     println!("{:?}", result);
 }

@@ -91,6 +91,8 @@ pub enum ToolType {
     ShouldEditCode,
     // use search and replace blocks for edits
     SearchAndReplaceEditing,
+    // Grabs the git-diff
+    GitDiff,
 }
 
 impl std::fmt::Display for ToolType {
@@ -154,6 +156,10 @@ impl std::fmt::Display for ToolType {
             ToolType::CodeSymbolNewLocation => write!(f, "Code symbol new location"),
             ToolType::ShouldEditCode => write!(f, "Should edit code"),
             ToolType::SearchAndReplaceEditing => write!(f, "Search and replace editing"),
+            ToolType::GitDiff => write!(
+                f,
+                "Gets the git diff output for a certain file, also returns the original version"
+            ),
         }
     }
 }

@@ -3,7 +3,7 @@
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::StreamExt;
-use llm_client::provider::{FireworksAPIKey, GoogleAIStudioKey, OpenAIProvider};
+use llm_client::provider::GoogleAIStudioKey;
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -14,6 +14,8 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+use crate::agentic::symbol::events::input::SymbolEventRequestId;
+use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::{
     agentic::{
@@ -104,18 +106,6 @@ pub async fn probe_request(
 ) -> Result<impl IntoResponse> {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let probe_request_tracker = app.probe_request_tracker.clone();
-    let tool_broker = Arc::new(ToolBroker::new(
-        app.llm_broker.clone(),
-        Arc::new(CodeEditBroker::new()),
-        app.symbol_tracker.clone(),
-        app.language_parsing.clone(),
-        ToolBrokerConfiguration::new(None, false),
-        LLMProperties::new(
-            LLMType::GeminiPro,
-            LLMProvider::CodeStory(Default::default()),
-            LLMProviderAPIKeys::CodeStory,
-        ),
-    ));
     if let Some(active_window_data) = active_window_data {
         user_context = user_context.update_file_content_map(
             active_window_data.file_path,
@@ -128,25 +118,18 @@ pub async fn probe_request(
         .map(|provider| provider.clone())
         .ok_or(anyhow::anyhow!("missing provider for slow model"))?;
     let _provider_type = provider_keys.provider_type();
-    let symbol_manager = SymbolManager::new(
-        tool_broker,
-        app.symbol_tracker.clone(),
-        app.editor_parsing.clone(),
-        editor_url.to_owned(),
-        LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::CodeStory(Default::default()),
-            LLMProviderAPIKeys::CodeStory,
-        ),
-        // LLMProperties::new(model_config.slow_model, provider_type, provider_keys),
-        user_context.clone(),
-        request_id.to_owned(),
+    let event_message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
+        sender.clone(),
+        editor_url,
     );
+
+    let symbol_manager = app.symbol_manager.clone();
 
     // spawn a background thread to keep polling the probe_request future
     let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
-            .probe_request_from_user_context(query, user_context, sender.clone())
+            .probe_request_from_user_context(query, user_context, event_message_properties.clone())
             .await;
     });
 
@@ -227,14 +210,17 @@ pub async fn swe_bench(
         tool_broker,
         app.symbol_tracker.clone(),
         app.editor_parsing.clone(),
-        editor_url.to_owned(),
         LLMProperties::new(
             model.clone(),
             provider_type.clone(),
             anthropic_api_keys.clone(),
         ),
-        user_context.clone(),
-        swe_bench_id.to_owned(),
+    );
+
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(swe_bench_id.to_owned(), swe_bench_id.to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
     );
 
     println!("we are getting a hit at this endpoint");
@@ -251,6 +237,7 @@ pub async fn swe_bench(
                     anthropic_api_keys,
                     problem_statement,
                     "web_server_input".to_owned(),
+                    "web_server_input".to_owned(),
                     Some(test_endpoint),
                     repo_map_file,
                     None,
@@ -265,6 +252,7 @@ pub async fn swe_bench(
                     sender,
                 )
                 .set_swe_bench_id(swe_bench_id),
+                message_properties,
             )
             .await;
     });
@@ -314,29 +302,8 @@ pub async fn code_editing(
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start");
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let edit_request_tracker = app.probe_request_tracker.clone();
-    let tool_broker = Arc::new(ToolBroker::new(
-        app.llm_broker.clone(),
-        Arc::new(CodeEditBroker::new()),
-        app.symbol_tracker.clone(),
-        app.language_parsing.clone(),
-        // do not apply the edits directly
-        ToolBrokerConfiguration::new(None, false),
-        LLMProperties::new(
-            LLMType::Gpt4O,
-            LLMProvider::OpenAI,
-            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
-            )),
-        ), // LLMProperties::new(
-           //     LLMType::GeminiPro,
-           //     LLMProvider::GoogleAIStudio,
-           //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-           //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-           //     )),
-           // ),
-    ));
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     if let Some(active_window_data) = active_window_data {
         user_context = user_context.update_file_content_map(
             active_window_data.file_path,
@@ -347,66 +314,44 @@ pub async fn code_editing(
 
     println!("{:?}", &user_context);
 
-    // let fs_file_path = "/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs".to_owned();
-    // let file_bytes = tokio::fs::read(fs_file_path.to_owned())
-    //     .await
-    //     .expect("to work");
-    // let file_content = String::from_utf8(file_bytes).expect("to work");
-    // user_context =
-    //     user_context.update_file_content_map(fs_file_path, file_content, "rust".to_owned());
-
-    let _llama_70b_properties = LLMProperties::new(
-        LLMType::Llama3_1_70bInstruct,
-        LLMProvider::FireworksAI,
-        LLMProviderAPIKeys::FireworksAI(FireworksAPIKey::new(
-            "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
-        )),
-    );
-
-    let model = LLMType::ClaudeSonnet;
-    let provider_type = LLMProvider::Anthropic;
-    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-    let symbol_manager = SymbolManager::new(
-        tool_broker,
-        app.symbol_tracker.clone(),
-        app.editor_parsing.clone(),
-        editor_url.to_owned(),
-        LLMProperties::new(
-            model.clone(),
-            provider_type.clone(),
-            anthropic_api_keys.clone(),
-        ),
-        user_context.clone(),
-        request_id.to_owned(),
-    );
-
     println!("webserver::code_editing_flow::endpoint_hit");
 
     let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
                                               // Now we send the original request over here and then await on the sender like
                                               // before
+
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
+        sender.clone(),
+        editor_url,
+    );
+    let symbol_manager = app.symbol_manager.clone();
     let join_handle = tokio::spawn(async move {
         let _ = symbol_manager
-            .initial_request(SymbolInputEvent::new(
-                user_context,
-                model,
-                provider_type,
-                anthropic_api_keys,
-                user_query,
-                edit_request_id,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                true,
-                Some(root_directory),
-                None,
-                codebase_search, // big search
-                sender,
-            ))
+            .initial_request(
+                SymbolInputEvent::new(
+                    user_context,
+                    LLMType::ClaudeSonnet,
+                    LLMProvider::Anthropic,
+                    LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                    user_query,
+                    edit_request_id.to_owned(),
+                    edit_request_id,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    true,
+                    Some(root_directory),
+                    None,
+                    codebase_search, // big search
+                    sender,
+                ),
+                message_properties,
+            )
             .await;
     });
     let _ = edit_request_tracker

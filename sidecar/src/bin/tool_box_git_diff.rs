@@ -8,11 +8,7 @@ use llm_client::{
 };
 use sidecar::{
     agentic::{
-        symbol::{
-            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
-            identifier::LLMProperties,
-            tool_box::ToolBox,
-        },
+        symbol::{identifier::LLMProperties, tool_box::ToolBox},
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -33,7 +29,6 @@ fn default_index_dir() -> PathBuf {
 async fn main() {
     // we want to grab the implementations of the symbols over here which we are
     // interested in
-    let editor_url = "http://localhost:42423".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -55,21 +50,35 @@ async fn main() {
         ),
     ));
 
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
-    let event_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
-        sender.clone(),
-        editor_url.to_owned(),
-    );
-
     let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
-    let file_path = "/Users/skcd/scratch/sidecar/sidecar/src/agent/types.rs";
-    let symbol_name = "Agent";
+    // Use this to get back the parent-symbol and the child symbols which have
+    // been edited in a file
+    // so iteration is literally making changes and having any kind of changes
+    // on a file, we can hook this up with the implementations/references test
 
-    let response = tool_box
-        .go_to_implementation(file_path, symbol_name, event_properties)
-        .await;
-    println!("{:?}", response);
+    // Your root directory
+    let root_directory = "/Users/skcd/scratch/sidecar";
+    // File where you have made changes
+    let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/clients/types.rs";
+    let output = tool_box
+        .grab_changed_symbols_in_file(root_directory, fs_file_path)
+        .await
+        .expect("to work");
+
+    // from here we have to go a level deeper into the sub-symbol of the symbol where
+    // the changed values are present and then invoke a followup at that point
+    // println!("{:?}", &output);
+    // a more readable output
+    output.into_iter().for_each(|(symbol_name, edits)| {
+        println!(
+            "symbol_name::({})::children({})",
+            symbol_name,
+            edits
+                .into_iter()
+                .map(|(symbol_to_edit, _)| symbol_to_edit.symbol_name().to_owned())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    })
 }

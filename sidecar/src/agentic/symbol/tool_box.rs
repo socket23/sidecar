@@ -2872,8 +2872,20 @@ Please handle these changes as required."#
                                 ),
                                 // todo(skcd) can we do sthing heree...
                                 format!(
-                                    "This class has changed.\nFrom: {}\nTo: {}\n\nGiven that you depend on it, ensure necessary changes are made to accommodate the changes.",
-                                    original_code, edited_code
+                                    "A dependency of this code has changed.\n\
+                                     Dependent class/method: {}\n\
+                                     Original implementation:\n```\n{}\n```\n\
+                                     Updated implementation:\n```\n{}\n```\n\n\
+                                     Please update this code to accommodate these changes. Consider:\n\
+                                     1. Method signature changes (parameters, return types)\n\
+                                     2. Behavioral changes in the dependency\n\
+                                     3. Potential side effects or new exceptions\n\
+                                     4. Any new methods or properties that should be utilized\n\
+                                     5. Deprecated features that should no longer be used\n\
+                                     Explain your changes and any assumptions you make.",
+                                    outline_node.name(),
+                                    original_code,
+                                    edited_code
                                 ), // original user query - should be some custom prompt?
                                 message_properties.request_id_str().to_string(),
                                 vec![], // history...

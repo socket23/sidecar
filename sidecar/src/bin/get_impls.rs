@@ -27,7 +27,6 @@ use sidecar::{
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::UserContext,
 };
 
 fn default_index_dir() -> PathBuf {

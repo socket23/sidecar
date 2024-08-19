@@ -8,10 +8,8 @@ use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
 use tokio::sync::mpsc::UnboundedSender;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
-use crate::agentic::symbol::events::edit::SymbolToEdit;
 use crate::agentic::symbol::events::initial_request::{InitialRequestData, SymbolEditedItem};
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
@@ -23,7 +21,6 @@ use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::languages::TSLanguageParsing;
-use crate::chunking::text_document::{Position, Range};
 use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},

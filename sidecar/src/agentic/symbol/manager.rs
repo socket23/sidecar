@@ -28,7 +28,7 @@ use crate::{
 };
 
 use super::events::message_event::{SymbolEventMessage, SymbolEventMessageProperties};
-use super::identifier::LLMProperties;
+use super::identifier::{LLMProperties, SymbolIdentifier};
 use super::tool_box::ToolBox;
 use super::ui_event::UIEventWithID;
 use super::{
@@ -91,6 +91,47 @@ impl SymbolManager {
         }
     }
 
+    pub async fn anchor_edits(
+        &self,
+        user_query: String,
+        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        let symbols_to_edit_request = self
+            .tool_box
+            .symbol_to_edit_request(anchored_symbols, &user_query, message_properties.clone())
+            .await?;
+
+        // Now we can send over these requests to the symbol locker to manager
+        let _ = stream::iter(
+            symbols_to_edit_request
+                .into_iter()
+                .map(|data| (data, message_properties.clone())),
+        )
+        .map(|(symbol_to_edit_request, message_properties)| async {
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            let symbol_event_request = SymbolEventRequest::new(
+                symbol_to_edit_request.symbol_identifier().clone(),
+                SymbolEvent::Edit(symbol_to_edit_request),
+                ToolProperties::new(),
+            );
+            let event = SymbolEventMessage::message_with_properties(
+                symbol_event_request,
+                message_properties,
+                sender,
+            );
+            let _ = self.symbol_locker.process_request(event).await;
+            receiver.await
+        })
+        // run 10 edit requests in parallel
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await;
+        Ok(())
+    }
+
+    // TODO(codestory): This is hardcoded function, we of course want to follow
+    // something similar but make it more generic later on
     pub async fn impls_test(
         &self,
         // this contains all the request id related jazz over here

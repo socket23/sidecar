@@ -4354,7 +4354,8 @@ FILEPATH: {fs_file_path}
             // we want a complete edit over here
             false,
             new_symbols_edited,
-            false,
+            // should we stream the edits we are making over here
+            true,
             symbol_identifier.clone(),
             message_properties.ui_sender(),
         ));

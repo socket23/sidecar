@@ -83,6 +83,7 @@ async fn main() {
                 false,
                 "".to_owned(),
                 None,
+                true,
             ),
             event_properties,
         )

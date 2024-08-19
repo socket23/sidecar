@@ -997,7 +997,8 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     true,
                                     original_request.get_original_question().to_owned(),
-                                    original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec())
+                                    original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                                    true,
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1029,6 +1030,7 @@ impl MechaCodeSymbolThinking {
                                 true,
                                 original_request_ref.get_original_question().to_owned(),
                                 original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                                true,
                             ))
                         } else {
                             None
@@ -1159,6 +1161,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     original_request.get_original_question().to_owned(),
                                     original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                                    true,
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1281,6 +1284,7 @@ Reason to edit:
                                         false,
                                         original_request_ref.get_original_question().to_owned(),
                                         original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                                        true,
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);

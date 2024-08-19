@@ -99,7 +99,7 @@ async fn main() {
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let event_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        SymbolEventRequestId::new(request_id_str.clone(), request_id_str.clone()),
         sender.clone(),
         editor_url.to_owned(),
     );

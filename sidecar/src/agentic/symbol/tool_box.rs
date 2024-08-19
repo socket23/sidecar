@@ -2847,10 +2847,6 @@ Please handle these changes as required."#
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
 
-                        println!("=========");
-                        println!("outline node: {:?}", outline_node.name());
-                        println!("=========");
-
                         let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
                         pub struct File {
                             path: PathBuf,

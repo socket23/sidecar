@@ -122,6 +122,9 @@ impl SymbolManager {
                 let message_properties = message_properties.clone();
                 let hub_sender = self.symbol_locker.hub_sender.clone();
 
+                println!("=====================");
+                println!("following up on");
+
                 async move {
                     self.tool_box
                         .check_for_followups(
@@ -142,10 +145,14 @@ impl SymbolManager {
                 }
             });
 
-        let _ = stream::iter(futures)
-            .buffer_unordered(10) // Process up to 10 requests in parallel
-            .collect::<Vec<_>>()
-            .await;
+        for future in futures {
+            let _ = future.await;
+        }
+
+        // let _ = stream::iter(futures)
+        //     .buffer_unordered(10) // Process up to 10 requests in parallel
+        //     .collect::<Vec<_>>()
+        //     .await;
 
         Ok(())
     }

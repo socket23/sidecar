@@ -62,9 +62,9 @@ impl ProbeRequestTracker {
 /// Contains all the data which we will need to trigger the edits
 #[derive(Clone)]
 struct AnchoredEditingMetadata {
-    _message_properties: SymbolEventMessageProperties,
+    message_properties: SymbolEventMessageProperties,
     // These are the symbols where we are focussed on right now in the selection
-    _anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+    anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
 }
 
 impl AnchoredEditingMetadata {
@@ -73,8 +73,8 @@ impl AnchoredEditingMetadata {
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
     ) -> Self {
         Self {
-            _message_properties: message_properties,
-            _anchored_symbols: anchored_symbols,
+            message_properties,
+            anchored_symbols,
         }
     }
 }
@@ -110,6 +110,13 @@ impl AnchoredEditingTracker {
         {
             let mut running_request_properties = self.running_requests_properties.lock().await;
             running_request_properties.insert(request_id.to_owned(), editing_metadata);
+        }
+    }
+
+    pub async fn override_running_request(&self, request_id: &str, join_handle: JoinHandle<()>) {
+        {
+            let mut running_requests = self.running_requests.lock().await;
+            running_requests.insert(request_id.to_owned(), join_handle);
         }
     }
 }
@@ -356,13 +363,30 @@ pub async fn code_sculpting(
         instruction,
     }): Json<CodeSculptingRequest>,
 ) -> Result<impl IntoResponse> {
-    let anchor_tracker = app.anchored_request_trakcer.clone();
-    let anchor_properties = anchor_tracker.get_properties(&request_id).await;
+    let anchor_properties;
+    {
+        let anchor_tracker = app.anchored_request_tracker.clone();
+        anchor_properties = anchor_tracker.get_properties(&request_id).await;
+    }
     println!("code_sculpting::instruction({})", instruction);
     if anchor_properties.is_none() {
         Ok(json_result(CodeSculptingResponse { done: false }))
     } else {
-        let _anchor_properties = anchor_properties.expect("is_none to hold");
+        let anchor_properties = anchor_properties.expect("is_none to hold");
+        let symbol_manager = app.symbol_manager.clone();
+        let join_handle = tokio::spawn(async move {
+            let anchored_symbols = anchor_properties.anchored_symbols;
+            let message_properties = anchor_properties.message_properties;
+            let _ = symbol_manager
+                .anchor_edits(instruction, anchored_symbols, message_properties)
+                .await;
+        });
+        {
+            let anchor_tracker = app.anchored_request_tracker.clone();
+            let _ = anchor_tracker
+                .override_running_request(&request_id, join_handle)
+                .await;
+        }
         Ok(json_result(CodeSculptingResponse { done: true }))
     }
 }
@@ -431,13 +455,21 @@ pub async fn code_editing(
             // we want to send the edit request directly over here cutting through
             // the initial request parts
             // let symbol_manager = app.symbol_manager.clone();
-            let join_handle = tokio::spawn(async move {
-                return;
-            });
             let editing_metadata =
-                AnchoredEditingMetadata::new(message_properties, symbols_to_anchor);
+                AnchoredEditingMetadata::new(message_properties.clone(), symbols_to_anchor);
+            let anchored_symbols = app
+                .tool_box
+                .symbols_to_anchor(&user_context, message_properties.clone())
+                .await
+                .unwrap_or_default();
+            let symbol_manager = app.symbol_manager.clone();
+            let join_handle = tokio::spawn(async move {
+                let _ = symbol_manager
+                    .anchor_edits(user_query, anchored_symbols, message_properties)
+                    .await;
+            });
             let _ = app
-                .anchored_request_trakcer
+                .anchored_request_tracker
                 .track_new_request(&request_id, join_handle, editing_metadata)
                 .await;
         }

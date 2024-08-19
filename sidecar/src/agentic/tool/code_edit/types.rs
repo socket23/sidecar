@@ -441,8 +441,8 @@ impl CodeToAddAccumulator {
     }
 
     fn process_answer(&mut self) {
-        let head = "<code_to_add>";
-        let tail = "</code_to_add>";
+        let head = vec!["<code_to_add>", "<code_edited>"];
+        let tail = vec!["</code_to_add>", "</code_edited>"];
         let line_number_to_process = get_last_newline_line_number(&self.answer_up_until_now);
         if line_number_to_process.is_none() {
             return;
@@ -468,7 +468,11 @@ impl CodeToAddAccumulator {
 
             match self.code_to_add_block_status.clone() {
                 CodeToAddBlockStatus::NoBlock => {
-                    if answer_line_at_index == head {
+                    if head
+                        .iter()
+                        .find(|head| **head == answer_line_at_index)
+                        .is_some()
+                    {
                         self.code_to_add_block_status = CodeToAddBlockStatus::BlockStart;
                         let _ = self.sender.send(CodeBlockEditDelta::EditStarted);
                     }
@@ -482,7 +486,11 @@ impl CodeToAddAccumulator {
                     ));
                 }
                 CodeToAddBlockStatus::BlockAccumualtor(accumulated) => {
-                    if answer_line_at_index == tail {
+                    if tail
+                        .iter()
+                        .find(|tail| **tail == answer_line_at_index)
+                        .is_some()
+                    {
                         self.code_to_add_block_status = CodeToAddBlockStatus::NoBlock;
                         let _ = self.sender.send(CodeBlockEditDelta::EditEnd);
                         continue;

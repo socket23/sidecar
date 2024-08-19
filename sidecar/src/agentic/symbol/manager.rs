@@ -8,10 +8,8 @@ use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
 use tokio::sync::mpsc::UnboundedSender;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
-use crate::agentic::symbol::events::edit::SymbolToEdit;
 use crate::agentic::symbol::events::initial_request::{InitialRequestData, SymbolEditedItem};
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
@@ -23,7 +21,6 @@ use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::languages::TSLanguageParsing;
-use crate::chunking::text_document::{Position, Range};
 use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
@@ -31,7 +28,7 @@ use crate::{
 };
 
 use super::events::message_event::{SymbolEventMessage, SymbolEventMessageProperties};
-use super::identifier::LLMProperties;
+use super::identifier::{LLMProperties, SymbolIdentifier};
 use super::tool_box::ToolBox;
 use super::ui_event::UIEventWithID;
 use super::{
@@ -94,6 +91,47 @@ impl SymbolManager {
         }
     }
 
+    pub async fn anchor_edits(
+        &self,
+        user_query: String,
+        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        let symbols_to_edit_request = self
+            .tool_box
+            .symbol_to_edit_request(anchored_symbols, &user_query, message_properties.clone())
+            .await?;
+
+        // Now we can send over these requests to the symbol locker to manager
+        let _ = stream::iter(
+            symbols_to_edit_request
+                .into_iter()
+                .map(|data| (data, message_properties.clone())),
+        )
+        .map(|(symbol_to_edit_request, message_properties)| async {
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            let symbol_event_request = SymbolEventRequest::new(
+                symbol_to_edit_request.symbol_identifier().clone(),
+                SymbolEvent::Edit(symbol_to_edit_request),
+                ToolProperties::new(),
+            );
+            let event = SymbolEventMessage::message_with_properties(
+                symbol_event_request,
+                message_properties,
+                sender,
+            );
+            let _ = self.symbol_locker.process_request(event).await;
+            receiver.await
+        })
+        // run 10 edit requests in parallel
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await;
+        Ok(())
+    }
+
+    // TODO(codestory): This is hardcoded function, we of course want to follow
+    // something similar but make it more generic later on
     pub async fn impls_test(
         &self,
         // this contains all the request id related jazz over here

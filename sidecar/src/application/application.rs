@@ -72,7 +72,7 @@ pub struct Application {
     pub probe_request_tracker: Arc<ProbeRequestTracker>,
     pub symbol_manager: Arc<SymbolManager>,
     pub tool_box: Arc<ToolBox>,
-    pub anchored_request_trakcer: Arc<AnchoredEditingTracker>,
+    pub anchored_request_tracker: Arc<AnchoredEditingTracker>,
 }
 
 impl Application {
@@ -131,7 +131,7 @@ impl Application {
             ),
         ));
 
-        let anchored_request_trakcer = Arc::new(AnchoredEditingTracker::new());
+        let anchored_request_tracker = Arc::new(AnchoredEditingTracker::new());
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
@@ -163,7 +163,7 @@ impl Application {
             probe_request_tracker: Arc::new(ProbeRequestTracker::new()),
             symbol_manager,
             tool_box,
-            anchored_request_trakcer,
+            anchored_request_tracker,
         })
     }
 

@@ -100,7 +100,7 @@ use crate::{
 };
 
 use super::errors::SymbolError;
-use super::events::edit::SymbolToEdit;
+use super::events::edit::{SymbolToEdit, SymbolToEditRequest};
 use super::events::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 use super::events::message_event::{SymbolEventMessage, SymbolEventMessageProperties};
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
@@ -4366,7 +4366,8 @@ FILEPATH: {fs_file_path}
             // we want a complete edit over here
             false,
             new_symbols_edited,
-            false,
+            // should we stream the edits we are making over here
+            true,
             symbol_identifier.clone(),
             message_properties.ui_sender(),
         ));
@@ -6343,5 +6344,95 @@ FILEPATH: {fs_file_path}
 
         // Now that we have the intersecting outline nodes we can create our own request types on top of this
         Ok(anchored_nodes)
+    }
+
+    /// Uses the anchored symbols to grab the symbols which require editing
+    pub async fn symbol_to_edit_request(
+        &self,
+        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        user_query: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
+        let mut symbol_to_edit_request = vec![];
+        for (symbol_identifier, child_symbols) in anchored_symbols.into_iter() {
+            // if no file path is present we should keep moving forward
+            let fs_file_path = symbol_identifier.fs_file_path();
+            if fs_file_path.is_none() {
+                continue;
+            }
+            let fs_file_path = fs_file_path.expect("is_none to hold");
+            let file_content = self
+                .file_open(fs_file_path.to_owned(), message_properties.clone())
+                .await?;
+            let language_config = self.editor_parsing.for_file_path(&fs_file_path);
+            if language_config.is_none() {
+                continue;
+            }
+            let language_config = language_config.expect("is_none to hold");
+            let outline_nodes = language_config
+                .generate_outline_fresh(file_content.contents_ref().as_bytes(), &fs_file_path)
+                .into_iter()
+                .filter(|outline_node| outline_node.name() == symbol_identifier.symbol_name())
+                .collect::<Vec<_>>();
+
+            // Now we loop over the children and try to find the matching entries
+            // for each one of them along with the range
+            // the child might share the same name as the outline-node in which case
+            // its a function or a class definition
+            let symbols_to_edit = child_symbols
+                .into_iter()
+                .filter_map(|child_symbol| {
+                    if child_symbol == symbol_identifier.symbol_name() {
+                        // this is a spcial case where the child symbol is of the same name as the symbol name
+                        // representing a class definition or function
+                        let possible_outline_node = outline_nodes.iter().find(|outline_node| {
+                            outline_node.is_class_definition() || outline_node.is_funciton()
+                        });
+                        if let Some(outline_node) = possible_outline_node {
+                            Some(SymbolToEdit::new(
+                                child_symbol.to_owned(),
+                                outline_node.range().clone(),
+                                outline_node.fs_file_path().to_owned(),
+                                vec![user_query.to_owned()],
+                                false,
+                                false,
+                                false,
+                                user_query.to_owned(),
+                                None,
+                            ))
+                        } else {
+                            None
+                        }
+                    } else {
+                        // iterate over the children of the outline nodes and try to find the matching node for us
+                        outline_nodes.iter().find_map(|outline_node| {
+                            outline_node.children().into_iter().find_map(|child_node| {
+                                if child_node.name() == &child_symbol {
+                                    Some(SymbolToEdit::new(
+                                        child_symbol.to_owned(),
+                                        child_node.range().clone(),
+                                        child_node.fs_file_path().to_owned(),
+                                        vec![user_query.to_owned()],
+                                        false,
+                                        false,
+                                        false,
+                                        user_query.to_owned(),
+                                        None,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                    }
+                })
+                .collect::<Vec<_>>();
+            symbol_to_edit_request.push(SymbolToEditRequest::new(
+                symbols_to_edit,
+                symbol_identifier,
+                vec![],
+            ))
+        }
+        Ok(symbol_to_edit_request)
     }
 }

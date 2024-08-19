@@ -107,6 +107,7 @@ use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet};
 use super::identifier::{LLMProperties, MechaCodeSymbolThinking};
 use super::tool_properties::ToolProperties;
+use super::toolbox::helpers::{SymbolChangeSet, SymbolChanges};
 use super::types::SymbolEventRequest;
 use super::ui_event::UIEventWithID;
 
@@ -5917,7 +5918,7 @@ FILEPATH: {fs_file_path}
         Ok(output)
     }
 
-    /// Grabs the changed symbols present in a file
+    /// Grabs the changed symbols present in a file:
     /// We get back the symbol identifier and the following
     /// information about it:
     /// - the previous content
@@ -5930,11 +5931,14 @@ FILEPATH: {fs_file_path}
     /// impl Something {}
     /// ^ for both of these we will have the same symbol-identifier ...
     /// but this works when changing the function of a symbol
+    ///
+    /// All file main nodes are returned, those with non-empty vecs have changes contained within.
+    /// Original contents storeed in (_, String)
     pub async fn grab_changed_symbols_in_file(
         &self,
         root_directory: &str,
         fs_file_path: &str,
-    ) -> Result<Vec<(String, Vec<(SymbolToEdit, String)>)>, SymbolError> {
+    ) -> Result<SymbolChangeSet, SymbolError> {
         let file_changes = self.get_file_changes(root_directory, fs_file_path).await?;
 
         // Now we need to parse the new and old version of the files and get the changed
@@ -5946,7 +5950,7 @@ FILEPATH: {fs_file_path}
         // in the file
         let language_config = self.editor_parsing.for_file_path(fs_file_path);
         if language_config.is_none() {
-            return Ok(vec![]);
+            return Ok(SymbolChangeSet::default());
         }
 
         let language_config = language_config.expect("is_none to hold");
@@ -6250,6 +6254,11 @@ FILEPATH: {fs_file_path}
             })
             .collect::<Vec<_>>();
 
-        Ok(changed_nodes_followups)
+        let symbol_change_set = changed_nodes_followups
+            .into_iter()
+            .map(|(symbol_name, changes)| SymbolChanges::new(symbol_name, changes))
+            .collect::<Vec<_>>();
+
+        Ok(SymbolChangeSet::new(symbol_change_set))
     }
 }

@@ -70,15 +70,16 @@ async fn main() {
     // the changed values are present and then invoke a followup at that point
     // println!("{:?}", &output);
     // a more readable output
-    output.into_iter().for_each(|(symbol_name, edits)| {
+    output.changes().iter().for_each(|symbol_changes| {
         println!(
             "symbol_name::({})::children({})",
-            symbol_name,
-            edits
-                .into_iter()
+            symbol_changes.symbol_name(),
+            symbol_changes
+                .changes()
+                .iter()
                 .map(|(symbol_to_edit, _)| symbol_to_edit.symbol_name().to_owned())
                 .collect::<Vec<_>>()
                 .join(",")
         );
-    })
+    });
 }

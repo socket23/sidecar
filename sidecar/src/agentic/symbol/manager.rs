@@ -102,69 +102,52 @@ impl SymbolManager {
         &self,
         // this contains all the request id related jazz over here
         message_properties: SymbolEventMessageProperties,
-    ) {
-        // simulating an edit has occured in range
+    ) -> Result<(), SymbolError> {
+        let root_dir = "/Users/zi/codestory/testing/sidecar";
         let path =
             "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
-        let start_position = Position::new(81, 0, 420);
-        let end_position = Position::new(89, 0, 420);
-        let edited_range = Range::new(start_position, end_position);
 
-        let outline_node = self
+        let symbol_change_set = self
             .tool_box
-            .get_outline_node_for_range(&edited_range, &path, message_properties.clone())
-            .await
-            .unwrap();
+            .grab_changed_symbols_in_file(&root_dir, &path)
+            .await?;
 
-        let node_name = outline_node.name();
-        let original_code = outline_node.content().content();
-        let _outline_node_range = outline_node.range();
+        println!("symbol_change_set: {:?}", &symbol_change_set);
 
-        let identifier_range = outline_node.identifier_range();
+        for change in symbol_change_set.changes() {
+            let symbol_name = change.symbol_name();
+            let changes = change.changes();
+            println!("Symbol: {} has {} edits", symbol_name, changes.len());
+            for (symbol_to_edit, _original_content) in changes {
+                println!("Symbol to Edit {}:", symbol_to_edit.symbol_name());
+            }
+        }
 
-        let symbol_to_edit = SymbolToEdit::new(
-            node_name.to_string(),
-            identifier_range.to_owned(), // symbol range is the the outline node's range (complete range)
-            path.to_string(),
-            vec!["some instruction, cook eggs".to_string()],
-            false,
-            false,
-            false,
-            "please cook eggs".to_string(),
-            None,
-        );
+        todo!();
 
-        let _ = self
-            .tool_box
-            .check_for_followups(
-                node_name,
-                &symbol_to_edit,
-                original_code,
-                LLMType::Gpt4O,
-                LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
-                )),
-                self.symbol_locker.hub_sender.clone(),
-                message_properties.clone(),
-                &ToolProperties::new(),
-            )
-            .await;
+        // if let Some(edited_symbol) = changed_symbols.first() {
+        //     println!("first_edited_symbol: {:?}", &edited_symbol);
+        //     let _ = self
+        //         .tool_box
+        //         .check_for_followups(
+        //             edited_symbol.1, // parent_symbol_name - care
+        //             &symbol_to_edit,
+        //             original_code,
+        //             LLMType::Gpt4O,
+        //             LLMProvider::OpenAI,
+        //             LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+        //                 "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+        //             )),
+        //             self.symbol_locker.hub_sender.clone(),
+        //             message_properties.clone(),
+        //             &ToolProperties::new(),
+        //         )
+        //         .await;
+        // } else {
+        //     todo!();
+        // }
 
-        // println!("{path}");
-        // println!("start position: \n{:?}", &identifier_range.start_position());
-
-        // let references = self
-        //     .tool_box
-        //     .go_to_references(
-        //         path,
-        //         &identifier_range.start_position(),
-        //         &self.root_request_id,
-        //     )
-        //     .await
-        //     .unwrap();
-
-        // println!("{:?}", references);
+        Ok(())
     }
 
     pub fn tool_box(&self) -> &ToolBox {

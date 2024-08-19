@@ -287,6 +287,8 @@ pub struct AgenticCodeEditing {
     active_window_data: Option<ProbeRequestActiveWindow>,
     root_directory: String,
     codebase_search: bool,
+    // If we are editing based on an anchor position
+    anchor_editing: bool,
 }
 
 pub async fn code_editing(
@@ -299,6 +301,10 @@ pub async fn code_editing(
         active_window_data,
         root_directory,
         codebase_search,
+        // this is not properly hooked up yet, we need to figure out
+        // how to handle this better on the editor side, right now our proxy
+        // is having a selection item in the user_context
+        mut anchor_editing,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start");
@@ -312,9 +318,17 @@ pub async fn code_editing(
         );
     }
 
-    println!("{:?}", &user_context);
+    anchor_editing = anchor_editing || user_context.is_anchored_editing();
 
     println!("webserver::code_editing_flow::endpoint_hit");
+    if anchor_editing {
+        println!(
+            "webserver::code_editing_flow::anchor_editing::({})",
+            anchor_editing
+        );
+    } else {
+        println!("webserver::code_editing_flow::agnetic_editing");
+    }
 
     let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
                                               // Now we send the original request over here and then await on the sender like

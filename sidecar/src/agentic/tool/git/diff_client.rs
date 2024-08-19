@@ -75,7 +75,7 @@ async fn run_command(
         .current_dir(root_directory)
         .arg("diff")
         .arg("--no-prefix")
-        .arg("-U7000")
+        .arg("-U8000")
         .stdout(Stdio::from(StdFile::create(&tmpfile_path)?))
         .status()
         .await?;

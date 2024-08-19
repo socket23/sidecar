@@ -114,38 +114,38 @@ impl SymbolManager {
 
         println!("symbol_change_set: {:?}", &symbol_change_set);
 
-        for change in symbol_change_set.changes() {
-            let symbol_name = change.symbol_name();
-            let changes = change.changes();
-            println!("Symbol: {} has {} edits", symbol_name, changes.len());
-            for (symbol_to_edit, _original_content) in changes {
-                println!("Symbol to Edit {}:", symbol_to_edit.symbol_name());
-            }
-        }
+        let futures = symbol_change_set
+            .changes()
+            .iter()
+            .flat_map(|change| change.changes().iter())
+            .map(|(symbol, original_code)| {
+                let message_properties = message_properties.clone();
+                let hub_sender = self.symbol_locker.hub_sender.clone();
 
-        todo!();
+                async move {
+                    self.tool_box
+                        .check_for_followups(
+                            symbol.symbol_name(),
+                            symbol,
+                            original_code,
+                            LLMType::Gpt4O,
+                            LLMProvider::OpenAI,
+                            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt"
+                                    .to_owned(),
+                            )),
+                            hub_sender,
+                            message_properties,
+                            &ToolProperties::new(),
+                        )
+                        .await
+                }
+            });
 
-        // if let Some(edited_symbol) = changed_symbols.first() {
-        //     println!("first_edited_symbol: {:?}", &edited_symbol);
-        //     let _ = self
-        //         .tool_box
-        //         .check_for_followups(
-        //             edited_symbol.1, // parent_symbol_name - care
-        //             &symbol_to_edit,
-        //             original_code,
-        //             LLMType::Gpt4O,
-        //             LLMProvider::OpenAI,
-        //             LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-        //                 "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
-        //             )),
-        //             self.symbol_locker.hub_sender.clone(),
-        //             message_properties.clone(),
-        //             &ToolProperties::new(),
-        //         )
-        //         .await;
-        // } else {
-        //     todo!();
-        // }
+        let _ = stream::iter(futures)
+            .buffer_unordered(10) // Process up to 10 requests in parallel
+            .collect::<Vec<_>>()
+            .await;
 
         Ok(())
     }

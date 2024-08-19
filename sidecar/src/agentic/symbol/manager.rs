@@ -157,7 +157,9 @@ impl SymbolManager {
                 let hub_sender = self.symbol_locker.hub_sender.clone();
 
                 println!("=====================");
-                println!("following up on");
+                println!("following up on {}", symbol.symbol_name());
+                println!("=====================");
+
                 async move {
                     self.tool_box
                         .check_for_followups(

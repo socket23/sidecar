@@ -411,7 +411,7 @@ enum CodeBlockEditDelta {
     EditEnd,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum CodeToAddBlockStatus {
     NoBlock,
     BlockStart,
@@ -479,11 +479,20 @@ impl CodeToAddAccumulator {
                     continue;
                 }
                 CodeToAddBlockStatus::BlockStart => {
-                    self.code_to_add_block_status =
-                        CodeToAddBlockStatus::BlockAccumualtor(answer_line_at_index.to_owned());
-                    let _ = self.sender.send(CodeBlockEditDelta::EditDelta(
-                        answer_line_at_index.to_owned(),
-                    ));
+                    if !answer_line_at_index.starts_with("```") {
+                        let answer_string = format!("```\n{}", answer_line_at_index);
+                        self.code_to_add_block_status =
+                            CodeToAddBlockStatus::BlockAccumualtor(answer_string.to_owned());
+                        let _ = self
+                            .sender
+                            .send(CodeBlockEditDelta::EditDelta(answer_string.to_owned()));
+                    } else {
+                        self.code_to_add_block_status =
+                            CodeToAddBlockStatus::BlockAccumualtor(answer_line_at_index.to_owned());
+                        let _ = self.sender.send(CodeBlockEditDelta::EditDelta(
+                            answer_line_at_index.to_owned(),
+                        ));
+                    }
                 }
                 CodeToAddBlockStatus::BlockAccumualtor(accumulated) => {
                     if tail
@@ -491,6 +500,11 @@ impl CodeToAddAccumulator {
                         .find(|tail| **tail == answer_line_at_index)
                         .is_some()
                     {
+                        if !accumulated.ends_with("```") {
+                            let _ = self
+                                .sender
+                                .send(CodeBlockEditDelta::EditDelta("\n```".to_owned()));
+                        }
                         self.code_to_add_block_status = CodeToAddBlockStatus::NoBlock;
                         let _ = self.sender.send(CodeBlockEditDelta::EditEnd);
                         continue;

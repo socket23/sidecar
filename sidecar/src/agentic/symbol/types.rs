@@ -1779,6 +1779,11 @@ Satisfy the requirement either by making edits or gathering the required informa
         // want to edit the private members of the class and its an outline
         // instead if we pass the outline over here we get back the whole symbol
         // instead
+        println!(
+            "symbol::edit_code::symbol_name({})::sub_symbol_name({})",
+            self.symbol_name(),
+            sub_symbol.symbol_name()
+        );
         let symbol_to_edit = self
             .tools
             .find_sub_symbol_to_edit_with_name(
@@ -1893,6 +1898,11 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol_to_edit.is_new(),
             );
 
+            println!(
+                "symbol::edit_implementation::gather_definitions_for_editing::({})::should_grab({})",
+                self.symbol_name(),
+                sub_symbol_to_edit.should_gather_definitions_for_editing(),
+            );
             let context_for_editing = self
                 .gather_definitions_for_editing(&sub_symbol_to_edit, message_properties.clone())
                 .await?;

@@ -3097,32 +3097,32 @@ Please handle these changes as required."#
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
 
-                        //                         println!("=========");
-                        //                         println!("outline node: {:?}", outline_node.name());
-                        //                         println!("=========");
+                        println!("=========");
+                        println!("outline node: {:?}", outline_node.name());
+                        println!("=========");
 
-                        //                         let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
-                        // pub struct File {
-                        //     path: PathBuf,
-                        //     thinking: String,
-                        //     snippet: String,
-                        //     // content: String,
-                        //     // preview: String,
-                        // }"#;
+                        let original_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        pub struct File {
+                            path: PathBuf,
+                            thinking: String,
+                            snippet: String,
+                            // content: String,
+                            // preview: String,
+                        }"#;
 
-                        //                         let edited_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
-                        // pub struct File {
-                        //     path: PathBuf,
-                        //     thinking: String,
-                        //     snippet: String,
-                        //     fury: usize,
-                        //     // content: String,
-                        //     // preview: String,
-                        // }"#;
+                        let edited_code = r#"#[derive(Debug, Clone, Serialize, Deserialize)]
+                        pub struct File {
+                            path: PathBuf,
+                            thinking: String,
+                            snippet: String,
+                            fury: usize,
+                            // content: String,
+                            // preview: String,
+                        }"#;
 
-                        // println!("original code: \n{}", original_code);
-                        // println!("=========");
-                        // println!("edited code: \n{}", edited_code);
+                        println!("original code: \n{}", original_code);
+                        println!("=========");
+                        println!("edited code: \n{}", edited_code);
 
                         let _ = hub_sender.send((
                             SymbolEventRequest::initial_request(

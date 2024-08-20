@@ -4086,6 +4086,7 @@ instruction:
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
         let original_in_range_selection = in_range_selection.to_owned();
+        // disable inlay hints, cause it causes the LLM to mess up the code
         // in_range_selection = self
         //     .apply_inlay_hints(
         //         fs_file_path,

@@ -1969,8 +1969,6 @@ We also believe this symbol needs to be probed because of:
                 .into_iter()
                 .find(|child_node| child_node.name() == symbol_to_edit.symbol_name());
 
-            dbg!(&child_node);
-
             if let Some(child_node) = child_node {
                 Ok(child_node.clone())
             } else {
@@ -1989,8 +1987,6 @@ We also believe this symbol needs to be probed because of:
                         )
                     })
                     .collect::<Vec<_>>();
-
-                dbg!(&outline_nodes_with_distance);
 
                 outline_nodes_with_distance.sort_by_key(|(distance, _)| *distance);
                 if outline_nodes_with_distance.is_empty() {
@@ -2047,8 +2043,6 @@ We also believe this symbol needs to be probed because of:
                 message_properties.clone(),
             )
             .await?;
-
-        dbg!(&outline_node);
 
         println!(
             "tool_box::check_for_followups::found_sub_symbol_edited::parent_symbol_name({})::symbol_edited({})",

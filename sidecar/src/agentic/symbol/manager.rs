@@ -192,7 +192,7 @@ impl SymbolManager {
             });
 
         for future in futures {
-            let result = future.await;
+            let _result = future.await;
 
             // dbg!(&result);
         }

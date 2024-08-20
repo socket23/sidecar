@@ -113,7 +113,7 @@ async fn main() {
                     break; // Receiver closed, exit the loop
                 }
             }
-            result = &mut impls_test => {
+            _result = &mut impls_test => {
             }
         }
     }

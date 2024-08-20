@@ -2907,6 +2907,7 @@ Please handle these changes as required."#
                             true,
                             "".to_string(),
                             None,
+                            false,
                         );
 
                         let event = SymbolEventMessage::message_with_properties(

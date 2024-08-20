@@ -134,15 +134,14 @@ impl SymbolManager {
     // something similar but make it more generic later on
     pub async fn impls_test(
         &self,
+        root_dir: &str,
+        fs_file_path: &str,
         // this contains all the request id related jazz over here
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
-        let root_dir = "/Users/zi/codestory/testing/sidecar";
-        let path = "/Users/zi/codestory/testing/sidecar/llm_client/src/clients/types.rs";
-
         let symbol_change_set = self
             .tool_box
-            .grab_changed_symbols_in_file(&root_dir, &path)
+            .grab_changed_symbols_in_file(&root_dir, &fs_file_path)
             .await?;
 
         println!("symbol_change_set: {}", &symbol_change_set);
@@ -166,9 +165,9 @@ impl SymbolManager {
                             async move {
                                 println!("=====================");
                                 println!(
-                                    "following up on {} (parent: {})",
+                                    "symbol_manager::impls_test::({})::parent:({})",
                                     symbol.symbol_name(),
-                                    parent_symbol_name
+                                    parent_symbol_name,
                                 );
                                 println!("=====================");
 

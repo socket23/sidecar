@@ -99,7 +99,7 @@ def subtract(a, b, logger):
 ```
 </reply>"#;
     let llm_request = LLMClientCompletionRequest::new(
-        LLMType::Llama3_1_8bInstruct,
+        LLMType::Llama3_1_70bInstruct,
         vec![
             LLMClientMessage::system(system_message.to_owned()),
             LLMClientMessage::user(few_shot_user_instruction.to_owned()),

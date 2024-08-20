@@ -14,6 +14,8 @@ pub struct SymbolToEdit {
     is_full_edit: bool, // todo(zi): remove this mfer, test case 2
     original_user_query: String,
     symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+    // If we should gather definitions for editing
+    gather_definitions_for_editing: bool,
 }
 
 impl SymbolToEdit {
@@ -27,6 +29,7 @@ impl SymbolToEdit {
         is_full_edit: bool,
         original_user_query: String,
         symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+        gather_definitions_for_editing: bool,
     ) -> Self {
         Self {
             symbol_name,
@@ -38,7 +41,12 @@ impl SymbolToEdit {
             is_full_edit,
             original_user_query,
             symbol_edited_list,
+            gather_definitions_for_editing,
         }
+    }
+
+    pub fn should_gather_definitions_for_editing(&self) -> bool {
+        self.gather_definitions_for_editing
     }
 
     pub fn symbol_edited_list(&self) -> Option<Vec<SymbolEditedItem>> {

@@ -1430,6 +1430,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 request_data
                     .symbols_edited_list()
                     .map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                true,
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(
@@ -1794,6 +1795,11 @@ Satisfy the requirement either by making edits or gathering the required informa
         // want to edit the private members of the class and its an outline
         // instead if we pass the outline over here we get back the whole symbol
         // instead
+        println!(
+            "symbol::edit_code::symbol_name({})::sub_symbol_name({})",
+            self.symbol_name(),
+            sub_symbol.symbol_name()
+        );
         let symbol_to_edit = self
             .tools
             .find_sub_symbol_to_edit_with_name(
@@ -1850,6 +1856,30 @@ Satisfy the requirement either by making edits or gathering the required informa
         Ok(EditedCodeSymbol::new(content, response))
     }
 
+    async fn gather_definitions_for_editing(
+        &self,
+        sub_symbol_to_edit: &SymbolToEdit,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<String>, SymbolError> {
+        if !sub_symbol_to_edit.should_gather_definitions_for_editing() {
+            return Ok(vec![]);
+        }
+        if sub_symbol_to_edit.is_new() {
+            self.grab_context_for_editing_faster(sub_symbol_to_edit, message_properties.clone())
+                .await
+        } else {
+            if sub_symbol_to_edit.is_full_edit() {
+                // TODO(skcd): Limit this so we are fast enough over here, do something
+                // anything about this on the fast path
+                self.grab_context_for_editing_faster(sub_symbol_to_edit, message_properties.clone())
+                    .await
+            } else {
+                self.grab_context_for_editing(sub_symbol_to_edit, message_properties.clone())
+                    .await
+            }
+        }
+    }
+
     // we are going to edit the symbols over here
     // some challenges:
     // - we want this to be fully parallel first of all
@@ -1884,28 +1914,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol_to_edit.is_new(),
             );
 
-            // let context_for_editing = if sub_symbol_to_edit.is_new() {
-            //     self.grab_context_for_editing_faster(
-            //         &sub_symbol_to_edit,
-            //         message_properties.clone(),
-            //     )
-            //     .await?
-            // } else {
-            //     if sub_symbol_to_edit.is_full_edit() {
-            //         // TODO(skcd): Limit this so we are fast enough over here, do something
-            //         // anything about this on the fast path
-            //         self.grab_context_for_editing_faster(
-            //             &sub_symbol_to_edit,
-            //             message_properties.clone(),
-            //         )
-            //         .await?
-            //     } else {
-            //         self.grab_context_for_editing(&sub_symbol_to_edit, message_properties.clone())
-            //             .await?
-            //     }
-            // };
-
-            let context_for_editing = vec!["".to_string()];
+            println!(
+                "symbol::edit_implementation::gather_definitions_for_editing::({})::should_grab({})",
+                self.symbol_name(),
+                sub_symbol_to_edit.should_gather_definitions_for_editing(),
+            );
+            let context_for_editing = self
+                .gather_definitions_for_editing(&sub_symbol_to_edit, message_properties.clone())
+                .await?;
 
             // if this is a new sub-symbol we have to create we have to diverge the
             // implementations a bit or figure out how to edit with a new line added

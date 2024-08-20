@@ -6225,6 +6225,7 @@ FILEPATH: {fs_file_path}
                                                     true,
                                                     "Edits have happened, you have to understand the reason".to_owned(),
                                                     None,
+                                                    true,
                                                 ), original_content.to_owned()))
                                             }
                                         }
@@ -6261,6 +6262,7 @@ FILEPATH: {fs_file_path}
                                     true,
                                     "Edits have happened, you have to understand the reason".to_owned(),
                                     None,
+                                    true,
                                 ), original_content.to_owned())])
                             } else {
                                 None
@@ -6422,6 +6424,9 @@ FILEPATH: {fs_file_path}
                                 false,
                                 user_query.to_owned(),
                                 None,
+                                // since these are quick edits we do not want to spend
+                                // time gathering context
+                                false,
                             ))
                         } else {
                             None
@@ -6441,6 +6446,9 @@ FILEPATH: {fs_file_path}
                                         false,
                                         user_query.to_owned(),
                                         None,
+                                        // since these are quick edits we do not
+                                        // want to spend time gathering context
+                                        false,
                                     ))
                                 } else {
                                     None

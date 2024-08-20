@@ -2068,7 +2068,7 @@ We also believe this symbol needs to be probed because of:
                 .await?;
             let _ = self
                 .invoke_followup_on_references(
-                    symbol_edited,
+                    symbol_edited.symbol_name(),
                     original_code,
                     &outline_node,
                     references,
@@ -2127,7 +2127,7 @@ We also believe this symbol needs to be probed because of:
 
             let _ = self
                 .invoke_followup_on_references(
-                    symbol_edited,
+                    symbol_edited.symbol_name(),
                     original_code,
                     &outline_node,
                     references,
@@ -2137,8 +2137,10 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await;
         } else {
-            // we are always editing the code in full, so we need to figure out
-            // how to handle this part properly
+            // we are always editing the symbol in full and are interested in the
+            // fields which are present in the code
+            // we want to go over the child nodes which have changed and then invoke
+            // followups on that
             println!(
                 "tool_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
                 parent_symbol_name,
@@ -2538,7 +2540,7 @@ We also believe this symbol needs to be probed because of:
 
     async fn invoke_followup_on_references(
         &self,
-        symbol_edited: &SymbolToEdit,
+        original_symbol_name: &str,
         original_code: &str,
         original_symbol: &OutlineNodeContent,
         references: GoToReferencesResponse,
@@ -2655,7 +2657,7 @@ We also believe this symbol needs to be probed because of:
                     self.send_request_for_followup(
                         original_code,
                         edited_code,
-                        symbol_edited,
+                        original_symbol_name,
                         outline_node,
                         hub_sender,
                         message_properties,
@@ -2723,7 +2725,7 @@ Make the necessary changes if required making sure that nothing breaks"#
         &self,
         original_code: &str,
         edited_code: &str,
-        symbol_to_edit: &SymbolToEdit,
+        original_symbol_name: &str,
         // This is pretty expensive to copy again and again
         outline_node: OutlineNode,
         // this is becoming annoying now cause we will need a drain for this while
@@ -2735,7 +2737,7 @@ Make the necessary changes if required making sure that nothing breaks"#
         println!("=====================");
         println!(
             "sending request for follow up. Symbol to edit: {}",
-            symbol_to_edit.symbol_name()
+            original_symbol_name
         );
         println!("=====================");
         // we try to find the smallest node over here which contains the position

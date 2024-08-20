@@ -76,7 +76,9 @@ use crate::agentic::tool::lsp::gotodefintion::{
 use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
-use crate::agentic::tool::lsp::gotoreferences::{GoToReferencesRequest, GoToReferencesResponse};
+use crate::agentic::tool::lsp::gotoreferences::{
+    GoToReferencesRequest, GoToReferencesResponse, ReferenceLocation,
+};
 use crate::agentic::tool::lsp::grep_symbol::{
     LSPGrepSymbolInCodebaseRequest, LSPGrepSymbolInCodebaseResponse,
 };
@@ -2009,7 +2011,7 @@ We also believe this symbol needs to be probed because of:
         parent_symbol_name: &str,
         symbol_edited: &SymbolToEdit,
         original_code: &str,
-        _edited_code: &str,
+        edited_code: &str,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
@@ -2061,8 +2063,8 @@ We also believe this symbol needs to be probed because of:
             // send them over as followups to check wherever they are being used
             let references = self
                 .go_to_references(
-                    symbol_edited.fs_file_path(),
-                    &outline_node.identifier_range().start_position(),
+                    symbol_edited.fs_file_path().to_owned(),
+                    outline_node.identifier_range().start_position(),
                     message_properties.clone(),
                 )
                 .await?;
@@ -2071,7 +2073,7 @@ We also believe this symbol needs to be probed because of:
                     symbol_edited.symbol_name(),
                     original_code,
                     &outline_node,
-                    references,
+                    references.locations(),
                     hub_sender,
                     message_properties.clone(),
                     tool_properties,
@@ -2108,8 +2110,8 @@ We also believe this symbol needs to be probed because of:
             // this returns positions with byte_offset 0, which fks .contains
             let references = self
                 .go_to_references(
-                    symbol_edited.fs_file_path(),
-                    &outline_node.identifier_range().start_position(),
+                    symbol_edited.fs_file_path().to_owned(),
+                    outline_node.identifier_range().start_position(),
                     message_properties.clone(),
                 )
                 .await?;
@@ -2130,7 +2132,7 @@ We also believe this symbol needs to be probed because of:
                     symbol_edited.symbol_name(),
                     original_code,
                     &outline_node,
-                    references,
+                    references.locations(),
                     hub_sender,
                     message_properties,
                     tool_properties,
@@ -2141,14 +2143,79 @@ We also believe this symbol needs to be probed because of:
             // fields which are present in the code
             // we want to go over the child nodes which have changed and then invoke
             // followups on that
-            println!(
-                "tool_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
-                parent_symbol_name,
-                outline_node.name(),
-                outline_node.outline_node_type()
-            );
-            // something else over here, wonder what it could be
-            return Err(SymbolError::NoContainingSymbolFound);
+            // we can compare each of the child nodes and figure out what changes were made
+            // to each of the child
+            let language_config = self
+                .editor_parsing
+                .for_file_path(symbol_edited.fs_file_path());
+            if language_config.is_none() {
+                return Ok(());
+            }
+            let language_config = language_config.expect("to be present");
+            let older_outline_nodes = language_config
+                .generate_outline_fresh(original_code.as_bytes(), symbol_edited.fs_file_path())
+                .into_iter()
+                .find(|outline_node| outline_node.name() == parent_symbol_name);
+            let newer_outline_nodes = language_config
+                .generate_outline_fresh(edited_code.as_bytes(), symbol_edited.fs_file_path())
+                .into_iter()
+                .find(|outline_node| outline_node.name() == parent_symbol_name);
+
+            // our outline nodes are matching up over here
+            if let (Some(new_outline_node), Some(old_outline_node)) =
+                (newer_outline_nodes, older_outline_nodes)
+            {
+                // now find the child nodes which are also present on the old outline nodes
+                let changed_function_nodes = new_outline_node
+                    .children()
+                    .into_iter()
+                    .filter_map(|new_child_outline_node| {
+                        let old_child_outline_node =
+                            old_outline_node.children().iter().find(|old_child_node| {
+                                old_child_node.name() == new_child_outline_node.name()
+                            });
+                        if let Some(old_child_outline_node) = old_child_outline_node {
+                            if old_child_outline_node.content() != new_child_outline_node.content()
+                            {
+                                Some(new_child_outline_node)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                // go over the children now and go to the references for each of them which have changed, these will
+                // be our reference locations
+                let fs_file_path = symbol_edited.fs_file_path();
+                let mut reference_locations = vec![];
+                for outline_node in changed_function_nodes.into_iter() {
+                    let references = self
+                        .go_to_references(
+                            fs_file_path.to_owned(),
+                            outline_node.range().start_position(),
+                            message_properties.clone(),
+                        )
+                        .await;
+                    if let Ok(references) = references {
+                        reference_locations.extend(references.locations());
+                    }
+                }
+
+                let _ = self
+                    .invoke_followup_on_references(
+                        symbol_edited.symbol_name(),
+                        original_code,
+                        &outline_node,
+                        reference_locations,
+                        hub_sender,
+                        message_properties,
+                        tool_properties,
+                    )
+                    .await;
+            }
         }
         Ok(())
     }
@@ -2267,7 +2334,11 @@ We also believe this symbol needs to be probed because of:
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
         let references = self
-            .go_to_references(fs_file_path, &position, message_properties.clone())
+            .go_to_references(
+                fs_file_path.to_owned(),
+                position.clone(),
+                message_properties.clone(),
+            )
             .await?;
         let reference_locations = references.locations();
         let file_paths = reference_locations
@@ -2543,12 +2614,11 @@ We also believe this symbol needs to be probed because of:
         original_symbol_name: &str,
         original_code: &str,
         original_symbol: &OutlineNodeContent,
-        references: GoToReferencesResponse,
+        reference_locations: Vec<ReferenceLocation>,
         hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
-        let reference_locations = references.locations();
         let file_paths = reference_locations
             .iter()
             .map(|reference| reference.fs_file_path().to_owned())
@@ -2827,13 +2897,13 @@ Make the necessary changes if required making sure that nothing breaks"#
 
     pub async fn go_to_references(
         &self,
-        fs_file_path: &str,
-        position: &Position,
+        fs_file_path: String,
+        position: Position,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<GoToReferencesResponse, SymbolError> {
         let input = ToolInput::GoToReference(GoToReferencesRequest::new(
-            fs_file_path.to_owned(),
-            position.clone(),
+            fs_file_path,
+            position,
             message_properties.editor_url().to_owned(),
         ));
 

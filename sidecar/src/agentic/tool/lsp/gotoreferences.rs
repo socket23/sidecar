@@ -37,6 +37,25 @@ impl GoToReferencesResponse {
     pub fn locations(self) -> Vec<ReferenceLocation> {
         self.reference_locations
     }
+
+    /// filters out the locations which are pointing to the same location where we
+    /// are checking for the references
+    pub fn filter_out_same_position_location(
+        mut self,
+        fs_file_path: &str,
+        position: &Position,
+    ) -> Self {
+        let range_to_check = Range::new(position.clone(), position.clone());
+        self.reference_locations = self
+            .reference_locations
+            .into_iter()
+            .filter(|location| {
+                !(location.fs_file_path == fs_file_path
+                    && location.range().contains_check_line_column(&range_to_check))
+            })
+            .collect::<Vec<_>>();
+        self
+    }
 }
 
 impl GoToReferencesRequest {

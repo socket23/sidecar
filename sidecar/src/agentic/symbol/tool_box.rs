@@ -2902,17 +2902,19 @@ Make the necessary changes if required making sure that nothing breaks"#
         message_properties: SymbolEventMessageProperties,
     ) -> Result<GoToReferencesResponse, SymbolError> {
         let input = ToolInput::GoToReference(GoToReferencesRequest::new(
-            fs_file_path,
-            position,
+            fs_file_path.to_owned(),
+            position.clone(),
             message_properties.editor_url().to_owned(),
         ));
 
-        self.tools
+        let reference_locations = self
+            .tools
             .invoke(input)
             .await
             .map_err(|e| SymbolError::ToolError(e))?
             .get_references()
-            .ok_or(SymbolError::WrongToolOutput)
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(reference_locations.filter_out_same_position_location(&fs_file_path, &position))
     }
 
     async fn swe_bench_test_tool(

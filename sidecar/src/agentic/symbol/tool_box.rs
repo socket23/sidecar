@@ -4148,8 +4148,6 @@ FILEPATH: {fs_file_path}
             selection_range,
         );
 
-        dbg!(&updated_code);
-
         // Now we can apply the edits to the editor
         let _ = self
             .apply_edits_to_editor(

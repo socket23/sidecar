@@ -344,7 +344,11 @@ impl Range {
     }
 
     pub fn intersects_without_byte(&self, other: &Range) -> bool {
-        if self.start_line() <= other.end_line() && self.end_line() >= other.start_line() {
+        if self.start_line() <= other.end_line() && self.start_line() >= other.start_line() {
+            true
+        } else if self.end_line() <= other.end_line() && self.end_line() >= other.start_line() {
+            true
+        } else if self.start_line() <= other.end_line() && self.end_line() >= other.start_line() {
             true
         } else if other.start_line() <= self.end_line() && other.end_line() >= self.start_line() {
             true

@@ -6411,4 +6411,23 @@ FILEPATH: {fs_file_path}
         }
         Ok(symbol_to_edit_request)
     }
+
+    /// We try to warmup the user context over here with the context the user has
+    /// added for context, this allows for faster and more accurate edits based
+    /// on the model's in-context learning
+    ///
+    /// This will take a while to resolve, but when it does the output will be always
+    /// correct
+    ///
+    /// We should have good visual toggles to show people how much cache we are using
+    /// and how long is it taking, we can keep a deep and a simple version of this for
+    /// outline editing (would be interesting to see how that plays out)
+    pub fn warmpup_context(&self, user_context: &UserContext) {
+        // the first warm up we can do over here is to literally feed the code editing
+        // with this context, so we can generate the right code for it
+        // I want to measure the latency hits and also figure out how to use the user
+        // context in the code editing, I think we have some extra context tag we could use
+        // that instead of code editing which is not necessary and probably the context should not
+        // be in xml as well since llms deviate from their natural attention span
+    }
 }

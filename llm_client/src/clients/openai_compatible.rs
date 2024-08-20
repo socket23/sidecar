@@ -47,6 +47,7 @@ impl OpenAICompatibleClient {
             LLMType::DeepSeekCoder6BInstruct => Some("deepseek-coder-6b".to_owned()),
             LLMType::CodeLlama13BInstruct => Some("codellama-13b".to_owned()),
             LLMType::Llama3_1_8bInstruct => Some("llama-3.1-8b-instant".to_owned()),
+            LLMType::Llama3_1_70bInstruct => Some("llama-3.1-70b-versatile".to_owned()),
             _ => None,
         }
     }

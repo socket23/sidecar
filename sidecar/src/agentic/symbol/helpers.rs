@@ -249,6 +249,11 @@ pub fn search_and_replace_generator(
             .map(|line| line.to_owned())
             .collect::<Vec<_>>();
         let original_lines_len = original.lines().collect::<Vec<_>>().len();
+        println!(
+            "code_lines_len::({})::original_lines_len({})",
+            code_lines.len(),
+            original_lines_len
+        );
         for i in 0..=code_lines.len() - original_lines_len {
             if code_lines[i..i + original_lines_len] == original_lines {
                 let mut result = code_lines[..i].join("\n");

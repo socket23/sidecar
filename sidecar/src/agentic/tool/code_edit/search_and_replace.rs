@@ -110,6 +110,8 @@ impl SearchAndReplaceEditing {
 Always use best practices when coding.
 Respect and use existing conventions, libraries, etc that are already present in the code base.
 You are diligent and tireless!
+Write as little code as possible, opting for tiny, incremental changes. Add more code as last resort. Respond diligently to removing and editing code as well as adding.
+The most important principle is to keep it simple. Always opt for the simplest, smallest changes.
 You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
 You will be presented with a single file and the code which you can EDIT will be given in a <code_to_edit_section>.
@@ -687,4 +689,227 @@ fn get_range_for_search_block(
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SearchAndReplaceAccumulator;
+
+    /// TODO(skcd): Broken test here to debug multiple search and replace blocks being
+    /// part of the same edit
+    #[test]
+    fn test_multiple_search_and_edit_blocks() {
+        let input_data = r#"impl LLMClientMessage {
+    pub async fn new(role: LLMClientRole, message: String) -> Self {
+        Self {
+            role,
+            message,
+            function_call: None,
+            function_return: None,
+        }
+    }
+
+    pub fn concat_message(&mut self, message: &str) {
+        self.message = self.message.to_owned() + "\n" + message;
+    }
+
+    pub fn concat(self, other: Self) -> Self {
+        // We are going to concatenate the 2 llm client messages togehter, at this moment
+        // we are just gonig to join the message with a \n
+        Self {
+            role: self.role,
+            message: self.message + "\n" + &other.message,
+            function_call: match self.function_call {
+                Some(function_call) => Some(function_call),
+                None => other.function_call,
+            },
+            function_return: match other.function_return {
+                Some(function_return) => Some(function_return),
+                None => self.function_return,
+            },
+        }
+    }
+
+    pub fn function_call(name: String, arguments: String) -> Self {
+        Self {
+            role: LLMClientRole::Assistant,
+            message: "".to_owned(),
+            function_call: Some(LLMClientMessageFunctionCall { name, arguments }),
+            function_return: None,
+        }
+    }
+
+    pub fn function_return(name: String, content: String) -> Self {
+        Self {
+            role: LLMClientRole::Function,
+            message: "".to_owned(),
+            function_call: None,
+            function_return: Some(LLMClientMessageFunctionReturn { name, content }),
+        }
+    }
+
+    pub fn user(message: String) -> Self {
+        Self::new(LLMClientRole::User, message)
+    }
+
+    pub fn assistant(message: String) -> Self {
+        Self::new(LLMClientRole::Assistant, message)
+    }
+
+    pub fn system(message: String) -> Self {
+        Self::new(LLMClientRole::System, message)
+    }
+
+    pub fn content(&self) -> &str {
+        &self.message
+    }
+
+    pub fn set_empty_content(&mut self) {
+        self.message =
+            "empty message found here, possibly an error but keep following the conversation"
+                .to_owned();
+    }
+
+    pub fn function(message: String) -> Self {
+        Self::new(LLMClientRole::Function, message)
+    }
+
+    pub fn role(&self) -> &LLMClientRole {
+        &self.role
+    }
+
+    pub fn get_function_call(&self) -> Option<&LLMClientMessageFunctionCall> {
+        self.function_call.as_ref()
+    }
+
+    pub fn get_function_return(&self) -> Option<&LLMClientMessageFunctionReturn> {
+        self.function_return.as_ref()
+    }
+}"#;
+        let edits = r#"/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+```rust
+<<<<<<< SEARCH
+    pub fn concat(self, other: Self) -> Self {
+        // We are going to concatenate the 2 llm client messages togehter, at this moment
+        // we are just gonig to join the message with a \n
+        Self {
+            role: self.role,
+            message: self.message + "\n" + &other.message,
+            function_call: match self.function_call {
+                Some(function_call) => Some(function_call),
+                None => other.function_call,
+            },
+            function_return: match other.function_return {
+                Some(function_return) => Some(function_return),
+                None => self.function_return,
+            },
+        }
+    }
+
+    pub fn function_call(name: String, arguments: String) -> Self {
+        Self {
+            role: LLMClientRole::Assistant,
+            message: "".to_owned(),
+            function_call: Some(LLMClientMessageFunctionCall { name, arguments }),
+            function_return: None,
+        }
+    }
+
+    pub fn function_return(name: String, content: String) -> Self {
+        Self {
+            role: LLMClientRole::Function,
+            message: "".to_owned(),
+            function_call: None,
+            function_return: Some(LLMClientMessageFunctionReturn { name, content }),
+        }
+    }
+
+    pub fn user(message: String) -> Self {
+        Self::new(LLMClientRole::User, message)
+    }
+
+    pub fn assistant(message: String) -> Self {
+        Self::new(LLMClientRole::Assistant, message)
+    }
+
+    pub fn system(message: String) -> Self {
+        Self::new(LLMClientRole::System, message)
+    }
+=======
+    pub fn concat(self, other: Self) -> impl Future<Output = Self> {
+        async move {
+            // We are going to concatenate the 2 llm client messages togehter, at this moment
+            // we are just gonig to join the message with a \n
+            Self {
+                role: self.role,
+                message: self.message + "\n" + &other.message,
+                function_call: match self.function_call {
+                    Some(function_call) => Some(function_call),
+                    None => other.function_call,
+                },
+                function_return: match other.function_return {
+                    Some(function_return) => Some(function_return),
+                    None => self.function_return,
+                },
+            }
+        }
+    }
+
+    pub fn function_call(name: String, arguments: String) -> impl Future<Output = Self> {
+        async move {
+            Self {
+                role: LLMClientRole::Assistant,
+                message: "".to_owned(),
+                function_call: Some(LLMClientMessageFunctionCall { name, arguments }),
+                function_return: None,
+            }
+        }
+    }
+
+    pub fn function_return(name: String, content: String) -> impl Future<Output = Self> {
+        async move {
+            Self {
+                role: LLMClientRole::Function,
+                message: "".to_owned(),
+                function_call: None,
+                function_return: Some(LLMClientMessageFunctionReturn { name, content }),
+            }
+        }
+    }
+
+    pub fn user(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::User, message)
+    }
+
+    pub fn assistant(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::Assistant, message)
+    }
+
+    pub fn system(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::System, message)
+    }
+>>>>>>> REPLACE
+```
+
+/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
+```rust
+<<<<<<< SEARCH
+    pub fn function(message: String) -> Self {
+        Self::new(LLMClientRole::Function, message)
+    }
+=======
+    pub fn function(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::Function, message)
+    }
+>>>>>>> REPLACE
+```"#;
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(input_data.to_owned(), 0, sender);
+        search_and_replace_accumulator.add_delta(edits.to_owned());
+        let final_lines = search_and_replace_accumulator.code_lines.join("\n");
+        println!("{}", final_lines);
+        assert!(false);
+    }
 }

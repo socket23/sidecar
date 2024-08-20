@@ -1834,6 +1834,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                 message_properties.clone(),
             )
             .await?;
+
+        // use flash for demo...
+        // let llm = LLMType::GeminiProFlash;
+        // let provider = LLMProvider::GoogleAIStudio;
+        // let keys = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+        //     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+        // ));
+
         let response = self
             .tools
             .code_edit(
@@ -2033,6 +2041,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     self.symbol_name(),
                     &sub_symbol_to_edit,
                     &original_code,
+                    &edited_code,
                     self.llm_properties.llm().clone(),
                     self.llm_properties.provider().clone(),
                     self.llm_properties.api_key().clone(),

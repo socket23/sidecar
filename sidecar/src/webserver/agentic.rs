@@ -457,6 +457,14 @@ pub async fn code_editing(
             .symbols_to_anchor(&user_context, message_properties.clone())
             .await
             .unwrap_or_default();
+        println!(
+            "webserver::code_editing_flow::anchor_symbols::({})",
+            symbols_to_anchor
+                .iter()
+                .map(|(symbol, _)| symbol.symbol_name())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
         if !symbols_to_anchor.is_empty() {
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through

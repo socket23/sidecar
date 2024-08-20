@@ -147,31 +147,32 @@ impl SymbolManager {
 
         println!("symbol_change_set: {}", &symbol_change_set);
 
-        let futures = symbol_change_set
-            .changes()
-            .iter()
-            .flat_map(|symbol_changes| {
-                let parent_symbol_name = symbol_changes.symbol_name().clone();
-                let message_properties = message_properties.clone();
+        let _ = stream::iter(
+            symbol_change_set
+                .changes()
+                .iter()
+                .flat_map(|symbol_changes| {
+                    let parent_symbol_name = symbol_changes.symbol_name().clone();
+                    let message_properties = message_properties.clone();
 
-                symbol_changes
-                    .changes()
-                    .iter()
-                    .map(move |(symbol, original_content)| {
-                        let message_properties = message_properties.clone();
-                        let hub_sender = self.symbol_locker.hub_sender.clone();
-                        let parent_symbol_name = parent_symbol_name.clone();
+                    symbol_changes
+                        .changes()
+                        .iter()
+                        .map(move |(symbol, original_content)| {
+                            let message_properties = message_properties.clone();
+                            let hub_sender = self.symbol_locker.hub_sender.clone();
+                            let parent_symbol_name = parent_symbol_name.clone();
 
-                        async move {
-                            println!("=====================");
-                            println!(
-                                "following up on {} (parent: {})",
-                                symbol.symbol_name(),
-                                parent_symbol_name
-                            );
-                            println!("=====================");
+                            async move {
+                                println!("=====================");
+                                println!(
+                                    "following up on {} (parent: {})",
+                                    symbol.symbol_name(),
+                                    parent_symbol_name
+                                );
+                                println!("=====================");
 
-                            self.tool_box
+                                self.tool_box
                                 .check_for_followups(
                                     &parent_symbol_name,
                                     symbol,
@@ -187,20 +188,13 @@ impl SymbolManager {
                                     &ToolProperties::new(),
                                 )
                                 .await
-                        }
-                    })
-            });
-
-        for future in futures {
-            let _result = future.await;
-
-            // dbg!(&result);
-        }
-
-        // let _ = stream::iter(futures)
-        //     .buffer_unordered(10) // Process up to 10 requests in parallel
-        //     .collect::<Vec<_>>()
-        //     .await;
+                            }
+                        })
+                }),
+        )
+        .buffer_unordered(1)
+        .collect::<Vec<_>>()
+        .await;
 
         Ok(())
     }

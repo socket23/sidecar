@@ -77,7 +77,7 @@ async fn main() {
             symbol_changes
                 .changes()
                 .iter()
-                .map(|(symbol_to_edit, _)| symbol_to_edit.symbol_name().to_owned())
+                .map(|(symbol_to_edit, _, _)| symbol_to_edit.symbol_name().to_owned())
                 .collect::<Vec<_>>()
                 .join(",")
         );

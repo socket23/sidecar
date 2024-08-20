@@ -154,10 +154,8 @@ impl SymbolManager {
                     let parent_symbol_name = symbol_changes.symbol_name().clone();
                     let message_properties = message_properties.clone();
 
-                    symbol_changes
-                        .changes()
-                        .iter()
-                        .map(move |(symbol, original_content)| {
+                    symbol_changes.changes().iter().map(
+                        move |(symbol, original_content, edited_content)| {
                             let message_properties = message_properties.clone();
                             let hub_sender = self.symbol_locker.hub_sender.clone();
                             let parent_symbol_name = parent_symbol_name.clone();
@@ -176,6 +174,7 @@ impl SymbolManager {
                                     &parent_symbol_name,
                                     symbol,
                                     original_content,
+                                    edited_content,
                                     LLMType::Gpt4O,
                                     LLMProvider::OpenAI,
                                     LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
@@ -188,7 +187,8 @@ impl SymbolManager {
                                 )
                                 .await
                             }
-                        })
+                        },
+                    )
                 }),
         )
         .buffer_unordered(1)

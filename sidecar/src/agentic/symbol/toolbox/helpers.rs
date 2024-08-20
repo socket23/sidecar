@@ -2,7 +2,8 @@ use crate::agentic::symbol::events::edit::SymbolToEdit;
 
 pub type SymbolName = String;
 pub type OriginalContent = String;
-pub type Changes = Vec<(SymbolToEdit, OriginalContent)>;
+pub type UpdatedContent = String;
+pub type Changes = Vec<(SymbolToEdit, OriginalContent, UpdatedContent)>;
 
 #[derive(Debug, Clone)]
 pub struct SymbolChanges {
@@ -27,8 +28,13 @@ impl SymbolChanges {
         }
     }
 
-    pub fn add_change(&mut self, edit: SymbolToEdit, original_content: OriginalContent) {
-        self.changes.push((edit, original_content));
+    pub fn add_change(
+        &mut self,
+        edit: SymbolToEdit,
+        original_content: OriginalContent,
+        updated_content: UpdatedContent,
+    ) {
+        self.changes.push((edit, original_content, updated_content));
     }
 
     pub fn symbol_name(&self) -> &SymbolName {
@@ -81,7 +87,7 @@ impl fmt::Display for SymbolChangeSet {
         writeln!(f, "SymbolChangeSet {{")?;
         for (index, symbol_changes) in self.changes.iter().enumerate() {
             writeln!(f, "  Symbol {}: {}", index + 1, symbol_changes.symbol_name)?;
-            for (change_index, (edit, original_content)) in
+            for (change_index, (edit, original_content, _)) in
                 symbol_changes.changes.iter().enumerate()
             {
                 writeln!(f, "    Change {}: {:?}", change_index + 1, edit)?;

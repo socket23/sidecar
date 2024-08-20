@@ -610,13 +610,16 @@ impl SearchAndReplaceAccumulator {
                             let updated_range_start_line =
                                 block_range.start_line() - self.start_line;
                             let updated_range_end_line = block_range.end_line() - self.start_line;
+                            // we are interested in the following lines to be kept and updated
+                            // 0 <= update_range_start-1 + [answer] + updated_range_end_line+1 <= end_of_lines_len
                             let mut updated_code_lines =
                                 self.code_lines[..updated_range_start_line].join("\n");
                             updated_code_lines.push('\n');
                             updated_code_lines.push_str(&updated_answer);
                             updated_code_lines.push('\n');
-                            updated_code_lines
-                                .push_str(&self.code_lines[updated_range_end_line..].join("\n"));
+                            updated_code_lines.push_str(
+                                &self.code_lines[(updated_range_end_line + 1)..].join("\n"),
+                            );
                             self.code_lines = updated_code_lines
                                 .lines()
                                 .into_iter()
@@ -909,7 +912,101 @@ mod tests {
             SearchAndReplaceAccumulator::new(input_data.to_owned(), 0, sender);
         search_and_replace_accumulator.add_delta(edits.to_owned());
         let final_lines = search_and_replace_accumulator.code_lines.join("\n");
-        println!("{}", final_lines);
-        assert!(false);
+        assert_eq!(
+            final_lines,
+            r#"impl LLMClientMessage {
+    pub async fn new(role: LLMClientRole, message: String) -> Self {
+        Self {
+            role,
+            message,
+            function_call: None,
+            function_return: None,
+        }
+    }
+
+    pub fn concat_message(&mut self, message: &str) {
+        self.message = self.message.to_owned() + "\n" + message;
+    }
+
+    pub fn concat(self, other: Self) -> impl Future<Output = Self> {
+        async move {
+            // We are going to concatenate the 2 llm client messages togehter, at this moment
+            // we are just gonig to join the message with a \n
+            Self {
+                role: self.role,
+                message: self.message + "\n" + &other.message,
+                function_call: match self.function_call {
+                    Some(function_call) => Some(function_call),
+                    None => other.function_call,
+                },
+                function_return: match other.function_return {
+                    Some(function_return) => Some(function_return),
+                    None => self.function_return,
+                },
+            }
+        }
+    }
+
+    pub fn function_call(name: String, arguments: String) -> impl Future<Output = Self> {
+        async move {
+            Self {
+                role: LLMClientRole::Assistant,
+                message: "".to_owned(),
+                function_call: Some(LLMClientMessageFunctionCall { name, arguments }),
+                function_return: None,
+            }
+        }
+    }
+
+    pub fn function_return(name: String, content: String) -> impl Future<Output = Self> {
+        async move {
+            Self {
+                role: LLMClientRole::Function,
+                message: "".to_owned(),
+                function_call: None,
+                function_return: Some(LLMClientMessageFunctionReturn { name, content }),
+            }
+        }
+    }
+
+    pub fn user(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::User, message)
+    }
+
+    pub fn assistant(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::Assistant, message)
+    }
+
+    pub fn system(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::System, message)
+    }
+
+    pub fn content(&self) -> &str {
+        &self.message
+    }
+
+    pub fn set_empty_content(&mut self) {
+        self.message =
+            "empty message found here, possibly an error but keep following the conversation"
+                .to_owned();
+    }
+
+    pub fn function(message: String) -> impl Future<Output = Self> {
+        Self::new(LLMClientRole::Function, message)
+    }
+
+    pub fn role(&self) -> &LLMClientRole {
+        &self.role
+    }
+
+    pub fn get_function_call(&self) -> Option<&LLMClientMessageFunctionCall> {
+        self.function_call.as_ref()
+    }
+
+    pub fn get_function_return(&self) -> Option<&LLMClientMessageFunctionReturn> {
+        self.function_return.as_ref()
+    }
+}"#
+        );
     }
 }

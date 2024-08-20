@@ -2009,6 +2009,7 @@ We also believe this symbol needs to be probed because of:
         parent_symbol_name: &str,
         symbol_edited: &SymbolToEdit,
         original_code: &str,
+        _edited_code: &str,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
@@ -2136,6 +2137,8 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await;
         } else {
+            // we are always editing the code in full, so we need to figure out
+            // how to handle this part properly
             println!(
                 "tool_box::check_for_followups::found_sub_symbol_edited::no_branch::({})::({}:{:?})",
                 parent_symbol_name,
@@ -6094,7 +6097,7 @@ FILEPATH: {fs_file_path}
                                                     "Edits have happened, you have to understand the reason".to_owned(),
                                                     None,
                                                     true,
-                                                ), original_content.to_owned()))
+                                                ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
                                         None => {
@@ -6131,7 +6134,7 @@ FILEPATH: {fs_file_path}
                                     "Edits have happened, you have to understand the reason".to_owned(),
                                     None,
                                     true,
-                                ), original_content.to_owned())])
+                                ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
                             }

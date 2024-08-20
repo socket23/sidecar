@@ -2033,6 +2033,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     self.symbol_name(),
                     &sub_symbol_to_edit,
                     &original_code,
+                    &edited_code,
                     self.llm_properties.llm().clone(),
                     self.llm_properties.provider().clone(),
                     self.llm_properties.api_key().clone(),

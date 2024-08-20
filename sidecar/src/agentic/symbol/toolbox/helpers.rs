@@ -73,3 +73,21 @@ impl SymbolChangeSet {
         &self.changes
     }
 }
+
+use std::fmt;
+
+impl fmt::Display for SymbolChangeSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "SymbolChangeSet {{")?;
+        for (index, symbol_changes) in self.changes.iter().enumerate() {
+            writeln!(f, "  Symbol {}: {}", index + 1, symbol_changes.symbol_name)?;
+            for (change_index, (edit, original_content)) in
+                symbol_changes.changes.iter().enumerate()
+            {
+                writeln!(f, "    Change {}: {:?}", change_index + 1, edit)?;
+                writeln!(f, "      Original Content: {}", original_content)?;
+            }
+        }
+        write!(f, "}}")
+    }
+}

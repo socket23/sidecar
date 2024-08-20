@@ -1098,15 +1098,12 @@ impl MechaCodeSymbolThinking {
             let new_sub_symbols = self
                 .decide_new_sub_symbols(original_request, llm_properties.clone(), message_properties.clone())
                 .await?;
-            println!(
-                "mecha_code_symbol_thinking::checking_new_sub_symbols_required::len({})",
-                new_sub_symbols
-                    .as_ref()
-                    .map(|symbols| symbols.len())
-                    .unwrap_or(0)
-            );
 
             if let Some(new_sub_symbols) = new_sub_symbols {
+                println!(
+                    "{}::mecha_code_symbol_thinking::checking_new_sub_symbols_required::len({})",
+                    self.symbol_name(), new_sub_symbols.len()
+                );
                 // send over edit request for this
                 let snippet_file_path = self
                     .snippet

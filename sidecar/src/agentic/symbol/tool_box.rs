@@ -1968,6 +1968,7 @@ We also believe this symbol needs to be probed because of:
                 .flatten()
                 .into_iter()
                 .find(|child_node| child_node.name() == symbol_to_edit.symbol_name());
+
             if let Some(child_node) = child_node {
                 Ok(child_node.clone())
             } else {
@@ -1986,6 +1987,7 @@ We also believe this symbol needs to be probed because of:
                         )
                     })
                     .collect::<Vec<_>>();
+
                 outline_nodes_with_distance.sort_by_key(|(distance, _)| *distance);
                 if outline_nodes_with_distance.is_empty() {
                     Err(SymbolError::NoOutlineNodeSatisfyPosition)
@@ -2041,6 +2043,7 @@ We also believe this symbol needs to be probed because of:
                 message_properties.clone(),
             )
             .await?;
+
         println!(
             "tool_box::check_for_followups::found_sub_symbol_edited::parent_symbol_name({})::symbol_edited({})",
             parent_symbol_name,
@@ -2540,18 +2543,20 @@ We also believe this symbol needs to be probed because of:
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
-        println!("============");
-        println!(
-            "toolbox::invoke_foolowup_on_references: {}",
-            symbol_edited.symbol_name()
-        );
-        println!("============");
-
         let reference_locations = references.locations();
         let file_paths = reference_locations
             .iter()
             .map(|reference| reference.fs_file_path().to_owned())
             .collect::<HashSet<String>>();
+
+        println!(
+            "invoke_followup_on_references::file_paths: {}",
+            file_paths.len()
+        );
+        println!(
+            "invoke_followup_on_references::file_paths: {:?}",
+            file_paths
+        );
         // we invoke a request to open the file
         let _ = stream::iter(
             file_paths
@@ -2612,7 +2617,7 @@ We also believe this symbol needs to be probed because of:
 
         let edited_code = original_symbol.content();
         stream::iter(
-            file_paths_to_locations
+            file_paths_to_locations // each file accounts for a reference
                 .into_iter()
                 .filter_map(|(file_path, ranges)| {
                     if let Some(outline_nodes) = file_path_to_outline_nodes.remove(&file_path) {
@@ -2650,8 +2655,8 @@ We also believe this symbol needs to be probed because of:
                     original_code,
                     edited_code,
                     symbol_edited,
-                    range.start_position(),
-                    outline_nodes,
+                    range.start_position(), // a reference's starting position
+                    outline_nodes,          // these are the outline nodes for a reference's file
                     hub_sender,
                     message_properties,
                     tool_properties,
@@ -2659,7 +2664,7 @@ We also believe this symbol needs to be probed because of:
                 .await
             },
         )
-        .buffer_unordered(100)
+        .buffer_unordered(1) // easier debugging
         .collect::<Vec<_>>()
         .await;
         // not entirely convinced that this is the best way to do this, but I think
@@ -2760,7 +2765,7 @@ Please handle these changes as required."#
         original_code: &str,
         edited_code: &str,
         symbol_to_edit: &SymbolToEdit,
-        position_to_search: Position,
+        position_to_search: Position, // a reference's starting position
         // This is pretty expensive to copy again and again
         outline_nodes: Vec<OutlineNode>,
         // this is becoming annoying now cause we will need a drain for this while
@@ -2784,7 +2789,6 @@ Please handle these changes as required."#
         });
         match outline_node_possible {
             Some(outline_node) => {
-                println!("outline node found: {}", &outline_node.name());
                 // we try to find the smallest node over here which contains the position
                 let child_node_possible =
                     outline_node
@@ -2864,22 +2868,47 @@ Please handle these changes as required."#
                         println!("=========");
                         println!("edited code: \n{}", edited_code);
 
+                        let prompt = format!(
+                            "A dependency of this code has changed.\n\
+                             Dependent class/method: {}\n\
+                             Original implementation:\n```\n{}\n```\n\
+                             Updated implementation:\n```\n{}\n```\n\n\
+                             Please update this code to accommodate these changes. Consider:\n\
+                             1. Method signature changes (parameters, return types)\n\
+                             2. Behavioral changes in the dependency\n\
+                             3. Potential side effects or new exceptions\n\
+                             4. Any new methods or properties that should be utilized\n\
+                             5. Deprecated features that should no longer be used\n\
+                             Explain your changes and any assumptions you make.",
+                            outline_node.name(),
+                            original_code,
+                            edited_code
+                        );
+
+                        // the symbol representing the reference
+                        let symbol_identifier = SymbolIdentifier::with_file_path(
+                            outline_node.name(),
+                            outline_node.fs_file_path(),
+                        );
+
+                        let symbol_to_edit = SymbolToEdit::new(
+                            outline_node.name().to_string(),
+                            outline_node.range().to_owned(),
+                            outline_node.fs_file_path().to_string(),
+                            vec![prompt],
+                            false,
+                            false, // is_new could be true...
+                            true,
+                            "".to_string(),
+                            None,
+                            false,
+                        );
+
                         let event = SymbolEventMessage::message_with_properties(
-                            SymbolEventRequest::initial_request(
-                                SymbolIdentifier::with_file_path(
-                                    outline_node.name(),
-                                    outline_node.fs_file_path(),
-                                ),
-                                // todo(skcd) can we do sthing heree...
-                                format!(
-                                    "This class has changed.\nFrom: {}\nTo: {}\n\nGiven that you depend on it, ensure necessary changes are made to accommodate the changes.",
-                                    original_code, edited_code
-                                ), // original user query - should be some custom prompt?
-                                message_properties.request_id_str().to_string(),
-                                vec![], // history...
-                                tool_properties.clone(),
-                                Some(vec![]),
-                                false,
+                            SymbolEventRequest::simple_edit_request(
+                                symbol_identifier,
+                                symbol_to_edit.to_owned(),
+                                tool_properties.to_owned(),
                             ),
                             message_properties.clone(),
                             sender,
@@ -4882,6 +4911,7 @@ FILEPATH: {fs_file_path}
             })
     }
 
+    // this can help us find the symbol for a given range!
     pub async fn symbol_in_range(
         &self,
         fs_file_path: &str,

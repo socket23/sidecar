@@ -170,6 +170,22 @@ impl SymbolEventRequest {
             tool_properties,
         }
     }
+
+    pub fn simple_edit_request(
+        symbol_identifier: SymbolIdentifier,
+        symbol_to_edit: SymbolToEdit,
+        tool_properties: ToolProperties,
+    ) -> Self {
+        Self {
+            symbol: symbol_identifier.to_owned(),
+            event: SymbolEvent::Edit(SymbolToEditRequest::new(
+                vec![symbol_to_edit],
+                symbol_identifier.to_owned(),
+                vec![],
+            )),
+            tool_properties,
+        }
+    }
 }
 
 #[derive(Debug)]

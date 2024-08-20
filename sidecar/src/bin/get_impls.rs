@@ -113,19 +113,7 @@ async fn main() {
                     break; // Receiver closed, exit the loop
                 }
             }
-            result = &mut impls_test => {
-                println!("Result: {:?}", result);
-                // match result {
-                //     Ok(_) => {
-                //         // The task completed successfully
-                //         // Handle the result if needed
-                //     }
-                //     Err(e) => {
-                //         // An error occurred while running the task
-                //         eprintln!("Error in initial_request_task: {}", e);
-                //         // Handle the error appropriately (e.g., log, retry, or exit)
-                //     }
-                // }
+            _result = &mut impls_test => {
             }
         }
     }

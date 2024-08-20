@@ -138,50 +138,63 @@ impl SymbolManager {
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let root_dir = "/Users/zi/codestory/testing/sidecar";
-        let path =
-            "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/search/iterative.rs";
+        let path = "/Users/zi/codestory/testing/sidecar/llm_client/src/clients/types.rs";
 
         let symbol_change_set = self
             .tool_box
             .grab_changed_symbols_in_file(&root_dir, &path)
             .await?;
 
-        println!("symbol_change_set: {:?}", &symbol_change_set);
+        println!("symbol_change_set: {}", &symbol_change_set);
 
         let futures = symbol_change_set
             .changes()
             .iter()
-            .flat_map(|change| change.changes().iter())
-            .map(|(symbol, original_code)| {
+            .flat_map(|symbol_changes| {
+                let parent_symbol_name = symbol_changes.symbol_name().clone();
                 let message_properties = message_properties.clone();
-                let hub_sender = self.symbol_locker.hub_sender.clone();
 
-                println!("=====================");
-                println!("following up on {}", symbol.symbol_name());
-                println!("=====================");
+                symbol_changes
+                    .changes()
+                    .iter()
+                    .map(move |(symbol, original_content)| {
+                        let message_properties = message_properties.clone();
+                        let hub_sender = self.symbol_locker.hub_sender.clone();
+                        let parent_symbol_name = parent_symbol_name.clone();
 
-                async move {
-                    self.tool_box
-                        .check_for_followups(
-                            symbol.symbol_name(),
-                            symbol,
-                            original_code,
-                            LLMType::Gpt4O,
-                            LLMProvider::OpenAI,
-                            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt"
-                                    .to_owned(),
-                            )),
-                            hub_sender,
-                            message_properties,
-                            &ToolProperties::new(),
-                        )
-                        .await
-                }
+                        async move {
+                            println!("=====================");
+                            println!(
+                                "following up on {} (parent: {})",
+                                symbol.symbol_name(),
+                                parent_symbol_name
+                            );
+                            println!("=====================");
+
+                            self.tool_box
+                                .check_for_followups(
+                                    &parent_symbol_name,
+                                    symbol,
+                                    original_content,
+                                    LLMType::Gpt4O,
+                                    LLMProvider::OpenAI,
+                                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                                        "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt"
+                                            .to_owned(),
+                                    )),
+                                    hub_sender,
+                                    message_properties,
+                                    &ToolProperties::new(),
+                                )
+                                .await
+                        }
+                    })
             });
 
         for future in futures {
-            let _ = future.await;
+            let result = future.await;
+
+            // dbg!(&result);
         }
 
         // let _ = stream::iter(futures)

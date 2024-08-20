@@ -170,6 +170,22 @@ impl SymbolEventRequest {
             tool_properties,
         }
     }
+
+    pub fn simple_edit_request(
+        symbol_identifier: SymbolIdentifier,
+        symbol_to_edit: SymbolToEdit,
+        tool_properties: ToolProperties,
+    ) -> Self {
+        Self {
+            symbol: symbol_identifier.to_owned(),
+            event: SymbolEvent::Edit(SymbolToEditRequest::new(
+                vec![symbol_to_edit],
+                symbol_identifier.to_owned(),
+                vec![],
+            )),
+            tool_properties,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -1868,26 +1884,28 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol_to_edit.is_new(),
             );
 
-            let context_for_editing = if sub_symbol_to_edit.is_new() {
-                self.grab_context_for_editing_faster(
-                    &sub_symbol_to_edit,
-                    message_properties.clone(),
-                )
-                .await?
-            } else {
-                if sub_symbol_to_edit.is_full_edit() {
-                    // TODO(skcd): Limit this so we are fast enough over here, do something
-                    // anything about this on the fast path
-                    self.grab_context_for_editing_faster(
-                        &sub_symbol_to_edit,
-                        message_properties.clone(),
-                    )
-                    .await?
-                } else {
-                    self.grab_context_for_editing(&sub_symbol_to_edit, message_properties.clone())
-                        .await?
-                }
-            };
+            // let context_for_editing = if sub_symbol_to_edit.is_new() {
+            //     self.grab_context_for_editing_faster(
+            //         &sub_symbol_to_edit,
+            //         message_properties.clone(),
+            //     )
+            //     .await?
+            // } else {
+            //     if sub_symbol_to_edit.is_full_edit() {
+            //         // TODO(skcd): Limit this so we are fast enough over here, do something
+            //         // anything about this on the fast path
+            //         self.grab_context_for_editing_faster(
+            //             &sub_symbol_to_edit,
+            //             message_properties.clone(),
+            //         )
+            //         .await?
+            //     } else {
+            //         self.grab_context_for_editing(&sub_symbol_to_edit, message_properties.clone())
+            //             .await?
+            //     }
+            // };
+
+            let context_for_editing = vec!["".to_string()];
 
             // if this is a new sub-symbol we have to create we have to diverge the
             // implementations a bit or figure out how to edit with a new line added

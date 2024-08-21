@@ -1914,21 +1914,18 @@ We also believe this symbol needs to be probed because of:
         let file_open_response = self
             .file_open(symbol_to_edit.fs_file_path().to_owned(), message_properties)
             .await?;
-        let _ = self
-            .force_add_document(
+        let language_config = self
+            .editor_parsing
+            .for_file_path(symbol_to_edit.fs_file_path())
+            .ok_or(SymbolError::ExpectedFileToExist)?;
+        let outline_nodes = language_config
+            .generate_outline_fresh(
+                file_open_response.contents_ref().as_bytes(),
                 symbol_to_edit.fs_file_path(),
-                file_open_response.contents_ref(),
-                file_open_response.language(),
             )
-            .await;
-        let outline_nodes = self
-            .get_outline_nodes_grouped(symbol_to_edit.fs_file_path())
-            .await
-            .ok_or(SymbolError::ExpectedFileToExist)?
             .into_iter()
             .filter(|outline_node| outline_node.name() == parent_symbol_name)
             .collect::<Vec<_>>();
-
         if outline_nodes.is_empty() {
             return Err(SymbolError::NoOutlineNodeSatisfyPosition);
         }

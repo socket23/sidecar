@@ -528,21 +528,10 @@ impl SearchAndReplaceAccumulator {
                 + 1
         };
 
-        // println!("process_answer::start_index({})", start_index);
-
         for line_number in start_index..=line_number_to_process_until {
             // update our answer lines right now
             self.previous_answer_line_number = Some(line_number);
-            println!(
-                "process_answer::line_number({})::answer_lines({})",
-                line_number,
-                answer_lines.len()
-            );
             let answer_line_at_index = answer_lines[line_number];
-            println!(
-                "process_answer::line_number({})::block_status({:?})::line_content({})",
-                line_number, &self.search_block_status, &answer_line_at_index
-            );
             // clone here is bad, we should try and get rid of it
             match self.search_block_status.clone() {
                 SearchBlockStatus::NoBlock => {

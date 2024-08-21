@@ -50,6 +50,9 @@ pub struct CodeEdit {
     should_stream: bool,
     symbol_identifier: SymbolIdentifier,
     ui_sender: UnboundedSender<UIEventWithID>,
+    // if we should disable thinking and just generate code edits as required
+    // this improves the time to first edit
+    disable_thinking: bool,
 }
 
 impl CodeEdit {
@@ -74,6 +77,7 @@ impl CodeEdit {
         should_stream: bool,
         symbol_identifier: SymbolIdentifier,
         ui_sender: UnboundedSender<UIEventWithID>,
+        disable_thinking: bool,
     ) -> Self {
         Self {
             code_above,
@@ -96,6 +100,7 @@ impl CodeEdit {
             should_stream,
             symbol_identifier,
             ui_sender,
+            disable_thinking,
         }
     }
 }
@@ -232,6 +237,11 @@ impl CodeEdit {
     /// Contains the xml string which has symbols which will be edited
     pub fn symbols_which_will_be_added(&self) -> Option<String> {
         self.new_symbols.clone()
+    }
+
+    /// If we should disable thinking over here
+    pub fn disable_thinking(&self) -> bool {
+        self.disable_thinking
     }
 }
 

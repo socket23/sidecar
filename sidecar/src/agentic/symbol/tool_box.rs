@@ -4207,6 +4207,7 @@ FILEPATH: {fs_file_path}
             is_addition,
             symbol_identifier.clone(),
             message_properties.ui_sender().clone(),
+            true, // disable thinking by default
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -4337,6 +4338,7 @@ FILEPATH: {fs_file_path}
             true,
             symbol_identifier.clone(),
             message_properties.ui_sender(),
+            true, // disable thinking by default
         ));
         self.tools
             .invoke(request)

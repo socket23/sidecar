@@ -149,6 +149,10 @@ fn agentic_router() -> Router {
             "/code_sculpting_followup",
             post(sidecar::webserver::agentic::code_sculpting),
         )
+        .route(
+            "/code_sculpting_warmup",
+            post(sidecar::webserver::agentic::code_sculpting_warmup),
+        )
         .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))
 }
 

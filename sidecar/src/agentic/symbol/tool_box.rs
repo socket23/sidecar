@@ -3636,6 +3636,7 @@ instruction:
             // TODO(codestory): just make this branch false so we always use
             // the previous flow
             let symbol_to_edit = {
+                println!("tool_box::check_code_correctness::range_refersh_start::symbol_name::({})::symbol_to_edit::({})::original_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_edited.range());
                 let symbol_to_edit_range = self
                     .find_sub_symbol_to_edit_with_name(
                         parent_symbol_name,
@@ -3647,6 +3648,7 @@ instruction:
                     // If its a new symbol we still do not have it in our outline yet, so
                     // we should grab it from the range position provided in the edit request
                     .unwrap_or(symbol_edited.range().clone());
+                println!("tool_box::check_code_correctness::symbol_name::({})::symbol_to_edit::({})::changed_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_to_edit_range);
                 let _fs_file_content = self
                     .file_open(fs_file_path.to_owned(), message_properties.clone())
                     .await?
@@ -4146,16 +4148,6 @@ FILEPATH: {fs_file_path}
 
         let updated_code = response.updated_code();
 
-        // Now we can apply the edits to the editor
-        let _ = self
-            .apply_edits_to_editor(
-                fs_file_path,
-                selection_range,
-                updated_code,
-                false,
-                message_properties.clone(),
-            )
-            .await?;
         println!(
             "tool_box::search_and_replace::finish::symbol_name({})",
             sub_symbol.symbol_name()

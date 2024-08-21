@@ -375,7 +375,7 @@ impl Tool for SearchAndReplaceEditing {
                 edits_response = edits_receiver.recv() => {
                     match edits_response {
                         Some(EditDelta::EditStarted(range)) => {
-                            println!("tool_box::search_and_replace::start_streaming::symbol_name({})", symbol_identifier.symbol_name());
+                            println!("tool_box::search_and_replace::start_streaming::symbol_name({})::range({:?})", symbol_identifier.symbol_name(), &range);
                             let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
                                 root_request_id.to_owned(),
                                 symbol_identifier.clone(),

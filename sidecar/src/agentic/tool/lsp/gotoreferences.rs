@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use async_trait::async_trait;
 
 use crate::{
@@ -54,6 +56,21 @@ impl GoToReferencesResponse {
                     && location.range().contains_check_line_column(&range_to_check))
             })
             .collect::<Vec<_>>();
+        self
+    }
+
+    pub fn prioritise_file(mut self, priority_file: &str) -> Self {
+        self.reference_locations.sort_unstable_by(|a, b| {
+            let a_priority = a.fs_file_path().ends_with(priority_file);
+            let b_priority = b.fs_file_path().ends_with(priority_file);
+
+            match (a_priority, b_priority) {
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+                _ => Ordering::Equal,
+            }
+        });
+
         self
     }
 }

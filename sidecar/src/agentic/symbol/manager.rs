@@ -143,7 +143,6 @@ impl SymbolManager {
             .tool_box
             .grab_changed_symbols_in_file(&root_dir, &fs_file_path)
             .await?;
-
         println!("symbol_change_set: {}", &symbol_change_set);
 
         let _ = stream::iter(
@@ -161,14 +160,6 @@ impl SymbolManager {
                             let parent_symbol_name = parent_symbol_name.clone();
 
                             async move {
-                                println!("=====================");
-                                println!(
-                                    "symbol_manager::impls_test::({})::parent:({})",
-                                    symbol.symbol_name(),
-                                    parent_symbol_name,
-                                );
-                                println!("=====================");
-
                                 self.tool_box
                                 .check_for_followups(
                                     &parent_symbol_name,

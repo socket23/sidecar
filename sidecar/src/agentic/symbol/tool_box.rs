@@ -10,9 +10,7 @@ use llm_client::provider::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::agentic::symbol::helpers::{
-    apply_inlay_hints_to_code, search_and_replace_generator, split_file_content_into_parts,
-};
+use crate::agentic::symbol::helpers::{apply_inlay_hints_to_code, split_file_content_into_parts};
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::code_edit::filter_edit::{
     FilterEditOperationRequest, FilterEditOperationResponse,
@@ -4083,7 +4081,6 @@ instruction:
             .unwrap_or("".to_owned());
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
-        let original_in_range_selection = in_range_selection.to_owned();
         // disable inlay hints, cause it causes the LLM to mess up the code
         // in_range_selection = self
         //     .apply_inlay_hints(
@@ -4150,18 +4147,14 @@ FILEPATH: {fs_file_path}
             start.elapsed()
         );
 
-        let updated_code = search_and_replace_generator(
-            response.response(),
-            &original_in_range_selection,
-            selection_range,
-        );
+        let updated_code = response.updated_code();
 
         // Now we can apply the edits to the editor
         let _ = self
             .apply_edits_to_editor(
                 fs_file_path,
                 selection_range,
-                &updated_code,
+                updated_code,
                 false,
                 message_properties.clone(),
             )
@@ -4170,7 +4163,7 @@ FILEPATH: {fs_file_path}
             "tool_box::search_and_replace::finish::symbol_name({})",
             sub_symbol.symbol_name()
         );
-        Ok(updated_code)
+        Ok(updated_code.to_owned())
     }
 
     /// This uses a more powerful LLM to plan out the changes and generate

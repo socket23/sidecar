@@ -24,12 +24,20 @@ const _SURROUNDING_CONTEXT_LIMIT: usize = 200;
 
 #[derive(Debug)]
 pub struct SearchAndReplaceEditingResponse {
+    updated_code: String,
     response: String,
 }
 
 impl SearchAndReplaceEditingResponse {
-    pub fn new(response: String) -> Self {
-        Self { response }
+    pub fn new(updated_code: String, response: String) -> Self {
+        Self {
+            updated_code,
+            response,
+        }
+    }
+
+    pub fn updated_code(&self) -> &str {
+        &self.updated_code
     }
 
     pub fn response(&self) -> &str {
@@ -427,7 +435,10 @@ impl Tool for SearchAndReplaceEditing {
         }
         match stream_result {
             Some(Ok(response)) => Ok(ToolOutput::search_and_replace_editing(
-                SearchAndReplaceEditingResponse::new(response),
+                SearchAndReplaceEditingResponse::new(
+                    search_and_replace_accumulator.code_lines.join("\n"),
+                    response,
+                ),
             )),
             // wrong error over here but its fine for now
             _ => Err(ToolError::RetriesExhausted),
@@ -522,11 +533,16 @@ impl SearchAndReplaceAccumulator {
         for line_number in start_index..=line_number_to_process_until {
             // update our answer lines right now
             self.previous_answer_line_number = Some(line_number);
+            println!(
+                "process_answer::line_number({})::answer_lines({})",
+                line_number,
+                answer_lines.len()
+            );
             let answer_line_at_index = answer_lines[line_number];
-            // println!(
-            //     "process_answer::line_number({})::block_status({:?})::line_content({})",
-            //     line_number, &self.search_block_status, &answer_line_at_index
-            // );
+            println!(
+                "process_answer::line_number({})::block_status({:?})::line_content({})",
+                line_number, &self.search_block_status, &answer_line_at_index
+            );
             // clone here is bad, we should try and get rid of it
             match self.search_block_status.clone() {
                 SearchBlockStatus::NoBlock => {

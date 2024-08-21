@@ -133,6 +133,11 @@ impl SymbolManager {
         .buffer_unordered(10)
         .collect::<Vec<_>>()
         .await;
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::code_iteration_finished(
+                message_properties.request_id_str().to_owned(),
+            ));
         Ok(())
     }
 

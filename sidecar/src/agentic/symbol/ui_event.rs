@@ -16,6 +16,13 @@ pub struct UIEventWithID {
 }
 
 impl UIEventWithID {
+    pub fn code_iteration_finished(request_id: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::CodeIterationFinished(request_id)),
+        }
+    }
+
     pub fn start_long_context_search(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -591,4 +598,5 @@ pub enum FrameworkEvent {
     LongContextSearchFinished(String),
     InitialSearchSymbols(InitialSearchSymbolEvent),
     OpenFile(OpenFileRequest),
+    CodeIterationFinished(String),
 }

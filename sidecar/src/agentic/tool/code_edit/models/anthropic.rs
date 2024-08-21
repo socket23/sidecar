@@ -169,8 +169,6 @@ We are going to insert the code in the section <code_to_add> of the input, when 
 - Make sure to add the new method in <code_to_add> section without leaving any comments or placeholder values.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
 
-We are also showing you an example:
-
 <user_instruction>
 Add the function to divide 2 numbers
 </user_instruction>
@@ -296,6 +294,87 @@ In this example the mistake you made is that you went ahead and edited code outs
         )
     }
 
+    fn few_shot_examples_for_code_editing(&self) -> Vec<LLMClientMessage> {
+        vec![
+            LLMClientMessage::user(
+                r#"<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>"#
+                    .to_owned(),
+            ),
+            LLMClientMessage::assistant("<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+```python
+    def add(a, b):
+        print(a, b)
+        return a + b
+```
+</code_edited>
+</reply>".to_owned()),
+            LLMClientMessage::user("<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>".to_owned()),
+            LLMClientMessage::assistant("<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+    def add(a, b):
+        print(a, b)
+        return a + b
+
+    @class_method
+    def multiply(a, b):
+        print(a, b)
+        return a + b
+</code_edited>
+</reply>".to_owned()),
+            LLMClientMessage::user("you moved beyond the add method and also changed the multiply method which is wrong. We only want to change the add method.".to_owned()),
+            LLMClientMessage::assistant("Understood I will only edit code in the section which has been mentioned by the user and never go beyond it".to_owned())
+        ]
+    }
+
     fn system_message(
         &self,
         language: &str,
@@ -326,91 +405,7 @@ Follow the user's requirements carefully and to the letter.
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
-{symbol_to_edit_instruction}
-
-We are also showing you an example:
-
-<user_instruction>
-We want to print the parameters of the function
-</user_instruction>
-
-<code_above>
-class Maths
-    @class_method
-    def subtract(a, b):
-        return a - b
-    
-    @class_method
-</code_above>
-<code_below>
-    @class_method
-    def multiply(a, b):
-        return a * b
-</code_below>
-<code_to_edit>
-```python
-    def add(a, b):
-        return a + b
-</code_to_edit>
-
-Your reply is:
-<reply>
-<thinking>
-The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
-</thinking>
-<code_edited>
-```python
-    def add(a, b):
-        print(a, b)
-        return a + b
-```
-</code_edited>
-</reply>
-
-We are showing you another example now, where the output is WRONG:
-<user_instruction>
-We want to print the parameters of the function
-</user_instruction>
-
-<code_above>
-class Maths
-    @class_method
-    def subtract(a, b):
-        return a - b
-    
-    @class_method
-</code_above>
-<code_below>
-    @class_method
-    def multiply(a, b):
-        return a * b
-</code_below>
-<code_to_edit>
-```python
-    def add(a, b):
-        return a + b
-</code_to_edit>
-
-Your reply:
-<reply>
-<thinking>
-The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
-</thinking>
-<code_edited>
-    def add(a, b):
-        print(a, b)
-        return a + b
-
-    @class_method
-    def multiply(a, b):
-        print(a, b)
-        return a + b
-</code_edited>
-</reply>
-
-Notice how you moved beyond the add method and also changed the multiply method which is wrong. We only want to change the add method.
-
-Notice how we rewrote the whole section of the code and only the portion which was in the selection which needs to be changed again with the right indentation."#
+{symbol_to_edit_instruction}"#
         )
     }
 
@@ -698,15 +693,22 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
                 self.system_message(language, fs_file_path, context.symbol_to_edit_name())
             }
         };
+        let few_shot_examples = if context.is_new_sub_symbol().is_some() {
+            vec![]
+        } else {
+            self.few_shot_examples_for_code_editing()
+        };
         let user_message = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
             self.user_message_for_code_addition(context, sub_symbol_name)
         } else {
             self.user_message_for_code_editing(context)
         };
+
         let mut messages = vec![];
 
         // add the system message
         messages.push(LLMClientMessage::system(system_message));
+        messages.extend(few_shot_examples);
         messages.push(LLMClientMessage::user(user_message));
 
         // we use 0.2 temperature so the model can imagine ✨

@@ -6360,6 +6360,7 @@ FILEPATH: {fs_file_path}
         &self,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
         user_query: &str,
+        user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
         let mut symbol_to_edit_request = vec![];
@@ -6411,7 +6412,7 @@ FILEPATH: {fs_file_path}
                                 // since these are quick edits we do not want to spend
                                 // time gathering context
                                 false,
-                                None,
+                                user_provided_context.clone(),
                             ))
                         } else {
                             None
@@ -6434,7 +6435,7 @@ FILEPATH: {fs_file_path}
                                         // since these are quick edits we do not
                                         // want to spend time gathering context
                                         false,
-                                        None,
+                                        user_provided_context.clone(),
                                     ))
                                 } else {
                                     None

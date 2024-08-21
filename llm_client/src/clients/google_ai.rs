@@ -73,20 +73,44 @@ impl GoogleAIStdioClient {
     }
 
     fn get_messages(&self, messages: &[LLMClientMessage]) -> Vec<Content> {
-        messages
+        let messages = messages
             .iter()
             .filter(|m| !m.role().is_system())
-            .filter_map(|m| {
-                if let Some(role) = self.get_role(&m.role()) {
-                    Some(Content {
-                        role,
-                        parts: vec![HashMap::from([("text".to_owned(), m.content().to_owned())])],
-                    })
+            .collect::<Vec<_>>();
+        let mut previous_role = None;
+        let mut accumulated_messages = vec![];
+        let mut final_messages = vec![];
+        for message in messages.into_iter() {
+            if previous_role.is_none() {
+                previous_role = Some(message.role().clone());
+                accumulated_messages.push(message);
+            } else {
+                let previous_role_expected = previous_role.clone().expect("to work");
+                let current_role = message.role();
+                if &previous_role_expected == current_role {
+                    accumulated_messages.push(message);
                 } else {
-                    None
+                    let previous_role_str = self.get_role(&previous_role_expected);
+                    if let Some(previous_role_str) = previous_role_str {
+                        final_messages.push(Content {
+                            role: previous_role_str,
+                            parts: accumulated_messages
+                                .iter()
+                                .map(|message| {
+                                    HashMap::from([(
+                                        "text".to_owned(),
+                                        message.content().to_owned(),
+                                    )])
+                                })
+                                .collect(),
+                        });
+                    }
+                    accumulated_messages = vec![message];
+                    previous_role = Some(current_role.clone());
                 }
-            })
-            .collect()
+            }
+        }
+        final_messages
     }
 
     fn get_api_key(&self, api_key: &LLMProviderAPIKeys) -> Option<String> {

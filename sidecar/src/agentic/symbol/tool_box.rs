@@ -2066,6 +2066,8 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await?;
 
+            let references = references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
+
             let _ = self
                 .invoke_followup_on_references(
                     symbol_edited.symbol_name(),
@@ -2199,7 +2201,10 @@ We also believe this symbol needs to be probed because of:
                             message_properties.clone(),
                         )
                         .await;
+
                     if let Ok(references) = references {
+                        let references =
+                            references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
                         reference_locations.extend(references.locations());
                     }
                 }

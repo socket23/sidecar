@@ -47,13 +47,24 @@ impl AnthropicMessage {
         }
     }
 
-    pub fn enable_cache(mut self) -> Self {
-        if let Some(message) = self.content.get_mut(0) {
-            message.cache_control = Some(AnthropicCacheControl {
-                r#type: AnthropicCacheType::Ephemeral,
-            });
+    pub fn new_with_content_vec(role: String, content: Vec<(String, bool)>) -> Self {
+        Self {
+            role,
+            content: content
+                .into_iter()
+                .map(|(content, cache_point)| AnthropicMessageContent {
+                    r#type: "text".to_owned(),
+                    text: content,
+                    cache_control: if cache_point {
+                        Some(AnthropicCacheControl {
+                            r#type: AnthropicCacheType::Ephemeral,
+                        })
+                    } else {
+                        None
+                    },
+                })
+                .collect::<Vec<_>>(),
         }
-        self
     }
 }
 
@@ -160,7 +171,7 @@ impl AnthropicRequest {
             None => {
                 // TODO(codestory): Fix this proper
                 if model == &LLMType::ClaudeSonnet {
-                    Some(4096)
+                    Some(8192)
                 } else {
                     Some(4096)
                 }
@@ -189,18 +200,47 @@ impl AnthropicRequest {
         let normal_conversation = messages
             .into_iter()
             .filter(|message| message.role().is_user() || message.role().is_assistant())
-            .map(|message| {
-                let mut anthropic_message =
-                    AnthropicMessage::new(message.role().to_string(), message.content().to_owned());
-                if message.is_cache_point() {
-                    anthropic_message = anthropic_message.enable_cache();
-                }
-                anthropic_message
-            })
             .collect::<Vec<_>>();
+
+        let mut messages = vec![];
+        let mut previous_role = None;
+        let mut accumulated_messages = vec![];
+        for conversation in normal_conversation.into_iter() {
+            let role = conversation.role();
+            if previous_role.is_none() {
+                previous_role = Some(role.clone());
+                accumulated_messages.push(conversation);
+            } else {
+                let previous_role_in_check = previous_role.clone().expect("is_none to hold");
+                // if we have the same role as the last time, keep accumulating them
+                if &previous_role_in_check == role {
+                    accumulated_messages.push(conversation);
+                } else {
+                    // push the previous messages in first
+                    messages.push(AnthropicMessage::new_with_content_vec(
+                        previous_role_in_check.to_string(),
+                        accumulated_messages
+                            .iter()
+                            .map(|message| (message.content().to_owned(), message.is_cache_point()))
+                            .collect::<Vec<_>>(),
+                    ));
+                    previous_role = Some(role.clone());
+                    accumulated_messages.push(conversation);
+                }
+            }
+        }
+        if !accumulated_messages.is_empty() && previous_role.is_some() {
+            messages.push(AnthropicMessage::new_with_content_vec(
+                previous_role.expect("is_some to hold").to_string(),
+                accumulated_messages
+                    .into_iter()
+                    .map(|message| (message.content().to_owned(), message.is_cache_point()))
+                    .collect::<Vec<_>>(),
+            ));
+        }
         AnthropicRequest {
             system: system_message,
-            messages: normal_conversation,
+            messages,
             temperature,
             stream: true,
             max_tokens,

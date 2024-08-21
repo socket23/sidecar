@@ -606,9 +606,27 @@ impl SearchAndReplaceAccumulator {
                             // 0 <= update_range_start-1 + [answer] + updated_range_end_line+1 <= end_of_lines_len
                             let mut updated_code_lines =
                                 self.code_lines[..updated_range_start_line].join("\n");
-                            updated_code_lines.push('\n');
+                            if updated_range_start_line != 0 {
+                                updated_code_lines.push('\n');
+                            }
                             updated_code_lines.push_str(&updated_answer);
                             updated_code_lines.push('\n');
+                            updated_code_lines.push_str(
+                                &self.code_lines[(updated_range_end_line + 1)..].join("\n"),
+                            );
+                            self.code_lines = updated_code_lines
+                                .lines()
+                                .into_iter()
+                                .map(|line| line.to_owned())
+                                .collect::<Vec<_>>();
+                        } else {
+                            let updated_range_start_line =
+                                block_range.start_line() - self.start_line;
+                            let updated_range_end_line = block_range.end_line() - self.start_line;
+                            // we are interested in the following lines to be kept and updated
+                            // 0 <= update_range_start-1 + [answer] + updated_range_end_line+1 <= end_of_lines_len
+                            let mut updated_code_lines =
+                                self.code_lines[..updated_range_start_line].join("\n");
                             updated_code_lines.push_str(
                                 &self.code_lines[(updated_range_end_line + 1)..].join("\n"),
                             );
@@ -997,6 +1015,213 @@ mod tests {
 
     pub fn get_function_return(&self) -> Option<&LLMClientMessageFunctionReturn> {
         self.function_return.as_ref()
+    }
+}"#
+        );
+    }
+
+    #[test]
+    fn test_search_and_replace_removing_code() {
+        let original_code = r#"impl SymbolToEdit {
+    pub fn new(
+        symbol_name: String,
+        range: Range,
+        fs_file_path: String,
+        instructions: Vec<String>,
+        outline: bool,
+        is_new: bool,
+        is_full_edit: bool,
+        original_user_query: String,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+    ) -> Self {
+        Self {
+            symbol_name,
+            range,
+            outline,
+            fs_file_path,
+            instructions,
+            is_new,
+            is_full_edit,
+            original_user_query,
+            symbol_edited_list,
+        }
+    }
+
+    pub fn symbol_edited_list(&self) -> Option<Vec<SymbolEditedItem>> {
+        self.symbol_edited_list.clone()
+    }
+
+    pub fn original_user_query(&self) -> &str {
+        &self.original_user_query
+    }
+
+    pub fn is_full_edit(&self) -> bool {
+        self.is_full_edit
+    }
+
+    pub fn set_fs_file_path(&mut self, fs_file_path: String) {
+        self.fs_file_path = fs_file_path;
+    }
+
+    pub fn set_range(&mut self, range: Range) {
+        self.range = range;
+    }
+
+    pub fn is_new(&self) -> bool {
+        self.is_new.clone()
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn is_outline(&self) -> bool {
+        self.outline
+    }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
+
+    pub fn instructions(&self) -> &[String] {
+        self.instructions.as_slice()
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+}"#;
+        let edits = r#"/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/symbol/events/edit.rs
+```rust
+<<<<<<< SEARCH
+impl SymbolToEdit {
+    pub fn new(
+        symbol_name: String,
+        range: Range,
+        fs_file_path: String,
+        instructions: Vec<String>,
+        outline: bool,
+        is_new: bool,
+        is_full_edit: bool,
+        original_user_query: String,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+    ) -> Self {
+        Self {
+            symbol_name,
+            range,
+            outline,
+            fs_file_path,
+            instructions,
+            is_new,
+            is_full_edit,
+            original_user_query,
+            symbol_edited_list,
+        }
+    }
+=======
+impl SymbolToEdit {
+    pub fn new(
+        symbol_name: String,
+        range: Range,
+        fs_file_path: String,
+        instructions: Vec<String>,
+        is_new: bool,
+        is_full_edit: bool,
+        original_user_query: String,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+    ) -> Self {
+        Self {
+            symbol_name,
+            range,
+            fs_file_path,
+            instructions,
+            is_new,
+            is_full_edit,
+            original_user_query,
+            symbol_edited_list,
+        }
+    }
+>>>>>>> REPLACE
+```
+
+/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/symbol/events/edit.rs
+```rust
+<<<<<<< SEARCH
+    pub fn is_outline(&self) -> bool {
+        self.outline
+    }
+
+=======
+>>>>>>> REPLACE
+```"#;
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(original_code.to_owned(), 0, sender);
+        search_and_replace_accumulator.add_delta(edits.to_owned());
+        let final_code = search_and_replace_accumulator.code_lines.join("\n");
+        assert_eq!(
+            final_code,
+            r#"impl SymbolToEdit {
+    pub fn new(
+        symbol_name: String,
+        range: Range,
+        fs_file_path: String,
+        instructions: Vec<String>,
+        is_new: bool,
+        is_full_edit: bool,
+        original_user_query: String,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+    ) -> Self {
+        Self {
+            symbol_name,
+            range,
+            fs_file_path,
+            instructions,
+            is_new,
+            is_full_edit,
+            original_user_query,
+            symbol_edited_list,
+        }
+    }
+
+    pub fn symbol_edited_list(&self) -> Option<Vec<SymbolEditedItem>> {
+        self.symbol_edited_list.clone()
+    }
+
+    pub fn original_user_query(&self) -> &str {
+        &self.original_user_query
+    }
+
+    pub fn is_full_edit(&self) -> bool {
+        self.is_full_edit
+    }
+
+    pub fn set_fs_file_path(&mut self, fs_file_path: String) {
+        self.fs_file_path = fs_file_path;
+    }
+
+    pub fn set_range(&mut self, range: Range) {
+        self.range = range;
+    }
+
+    pub fn is_new(&self) -> bool {
+        self.is_new.clone()
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
+
+    pub fn instructions(&self) -> &[String] {
+        self.instructions.as_slice()
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
     }
 }"#
         );

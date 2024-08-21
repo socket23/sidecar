@@ -2670,7 +2670,7 @@ We also believe this symbol needs to be probed because of:
         // once we have the outline node, we can try to understand which symbol
         // the position is part of and use that for creating the containing scope
         // of the symbol
-        let mut file_path_to_outline_nodes = stream::iter(file_paths.clone())
+        let file_path_to_outline_nodes = stream::iter(file_paths.clone())
             .map(|fs_file_path| async {
                 self.get_outline_nodes_grouped(&fs_file_path)
                     .await
@@ -2682,6 +2682,32 @@ We also believe this symbol needs to be probed because of:
             .into_iter()
             .filter_map(|s| s)
             .collect::<HashMap<String, Vec<OutlineNode>>>();
+
+        let mut sorted_file_path_to_outline_nodes: HashMap<String, Vec<OutlineNode>> =
+            file_path_to_outline_nodes
+                .into_iter()
+                .map(|(fs_file_path, mut outline_nodes)| {
+                    let original_symbol_name = original_symbol.name();
+
+                    outline_nodes.sort_by(|a, b| {
+                        let a_match = a.name() == original_symbol_name;
+                        let b_match = b.name() == original_symbol_name;
+                        b_match.cmp(&a_match)
+                    });
+
+                    println!(
+                        "toolbox::invoke_followup_on_references::sorted_file_path_to_outline_nodes({}):\n{}", fs_file_path,
+                        outline_nodes
+                            .iter()
+                            .map(|n| n.name())
+                            .collect::<Vec<&str>>()
+                            .join("\n")
+                    );
+
+                    (fs_file_path, outline_nodes)
+                })
+                .collect::<HashMap<String, Vec<OutlineNode>>>();
+
         // now we have to group the files along with the positions/ranges of the references
         let mut file_paths_to_locations: HashMap<String, Vec<Range>> = Default::default();
         reference_locations.iter().for_each(|reference| {
@@ -2700,7 +2726,7 @@ We also believe this symbol needs to be probed because of:
         let outline_nodes_for_followups = file_paths_to_locations
             .into_iter()
             .filter_map(|(file_path, ranges)| {
-                if let Some(outline_nodes) = file_path_to_outline_nodes.remove(&file_path) {
+                if let Some(outline_nodes) = sorted_file_path_to_outline_nodes.remove(&file_path) {
                     // figure out what to put over here
                     let outline_nodes_containing_references = outline_nodes
                         .into_iter()

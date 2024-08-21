@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashSet};
 
 use async_trait::async_trait;
 
@@ -59,18 +59,32 @@ impl GoToReferencesResponse {
         self
     }
 
-    pub fn prioritise_file(mut self, priority_file: &str) -> Self {
-        self.reference_locations.sort_unstable_by(|a, b| {
-            let a_priority = a.fs_file_path().ends_with(priority_file);
-            let b_priority = b.fs_file_path().ends_with(priority_file);
+    pub fn prioritize_and_deduplicate(mut self, priority_path: &str) -> Self {
+        // Step 1: Partition the vector
+        let (priority, others): (Vec<_>, Vec<_>) = self
+            .reference_locations
+            .into_iter()
+            .partition(|ref_loc| ref_loc.fs_file_path == priority_path);
 
-            match (a_priority, b_priority) {
-                (true, false) => Ordering::Less,
-                (false, true) => Ordering::Greater,
-                _ => Ordering::Equal,
+        // Step 2: Deduplicate and combine
+        let mut seen = HashSet::new();
+        let mut result = Vec::with_capacity(priority.len() + others.len());
+
+        // Add priority items first
+        for ref_loc in priority {
+            if seen.insert(ref_loc.fs_file_path.clone()) {
+                result.push(ref_loc);
             }
-        });
+        }
 
+        // Add other items
+        for ref_loc in others {
+            if seen.insert(ref_loc.fs_file_path.clone()) {
+                result.push(ref_loc);
+            }
+        }
+
+        self.reference_locations = result;
         self
     }
 }

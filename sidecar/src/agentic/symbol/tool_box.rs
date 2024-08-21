@@ -2114,11 +2114,7 @@ We also believe this symbol needs to be probed because of:
                 )
                 .await?;
 
-            dbg!(&references.clone().locations()[..5]);
-
-            let references = references.prioritise_file(symbol_edited.fs_file_path());
-
-            dbg!(&references.clone().locations()[..5]);
+            let references = references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
 
             println!(
                 "check_for_followups::go_to_references::({})",
@@ -2630,15 +2626,11 @@ We also believe this symbol needs to be probed because of:
 
         println!(
             "invoke_followup_on_references::file_paths::({})",
-            file_paths.len()
-        );
-        println!(
-            "invoke_followup_on_references::file_paths::({})",
             file_paths
                 .iter()
                 .map(|fs_file_path| fs_file_path.as_str())
                 .collect::<Vec<_>>()
-                .join(",")
+                .join("\n")
         );
         // we invoke a request to open the file
         let _ = stream::iter(

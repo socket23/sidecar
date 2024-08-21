@@ -270,7 +270,6 @@ pub fn search_and_replace_generator(
         }
     }
     let code_lines_joined = code_lines.join("\n");
-    println!("code_lines::{}", code_lines_joined);
     code_lines_joined
 }
 

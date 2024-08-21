@@ -2865,6 +2865,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                 "".to_string(),
                 None,
                 false,
+                None,
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -6173,6 +6174,7 @@ FILEPATH: {fs_file_path}
                                                     "Edits have happened, you have to understand the reason".to_owned(),
                                                     None,
                                                     true,
+                                                    None,
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -6210,6 +6212,7 @@ FILEPATH: {fs_file_path}
                                     "Edits have happened, you have to understand the reason".to_owned(),
                                     None,
                                     true,
+                                    None,
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
@@ -6374,6 +6377,7 @@ FILEPATH: {fs_file_path}
                                 // since these are quick edits we do not want to spend
                                 // time gathering context
                                 false,
+                                None,
                             ))
                         } else {
                             None
@@ -6396,6 +6400,7 @@ FILEPATH: {fs_file_path}
                                         // since these are quick edits we do not
                                         // want to spend time gathering context
                                         false,
+                                        None,
                                     ))
                                 } else {
                                     None

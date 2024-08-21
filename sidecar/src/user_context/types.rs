@@ -206,6 +206,39 @@ impl UserContext {
         self.variables.is_empty() && self.terminal_selection.is_none()
     }
 
+    /// Grabs the user provided context as a string which can be passed to LLMs for code editing
+    ///
+    /// This also de-duplicates the context as much as possible making this efficient
+    /// We cannot trust the file-system but for now this is a decent hack to make that
+    pub async fn to_context_string(&self) -> Result<String, UserContextError> {
+        let file_paths = self
+            .file_content_map
+            .iter()
+            .map(|file_content| file_content.file_path.to_owned())
+            .collect::<Vec<String>>();
+
+        // now we have to read the file contents as a string and pass it to the LLM
+        // for output
+        let mut file_contents = vec![];
+        for file_path in file_paths.into_iter() {
+            let contents = tokio::fs::read(&file_path).await;
+            if contents.is_err() {
+                continue;
+            } else {
+                let content = String::from_utf8(contents.expect("is_err to hold"));
+                if let Ok(content) = content {
+                    file_contents.push(format!(
+                        r#"FILEPATH: {file_path}
+```
+{content}
+```"#
+                    ));
+                }
+            }
+        }
+        Ok(file_contents.join("\n"))
+    }
+
     // generats the full xml for the input context so the llm can query from it
     pub async fn to_xml(
         self,

@@ -16,6 +16,8 @@ pub struct SymbolToEdit {
     symbol_edited_list: Option<Vec<SymbolEditedItem>>,
     // If we should gather definitions for editing
     gather_definitions_for_editing: bool,
+    // user provided context as a string for the LLM to use
+    user_provided_context: Option<String>,
 }
 
 impl SymbolToEdit {
@@ -30,6 +32,7 @@ impl SymbolToEdit {
         original_user_query: String,
         symbol_edited_list: Option<Vec<SymbolEditedItem>>,
         gather_definitions_for_editing: bool,
+        user_provided_context: Option<String>,
     ) -> Self {
         Self {
             symbol_name,
@@ -42,6 +45,7 @@ impl SymbolToEdit {
             original_user_query,
             symbol_edited_list,
             gather_definitions_for_editing,
+            user_provided_context,
         }
     }
 
@@ -91,6 +95,10 @@ impl SymbolToEdit {
 
     pub fn fs_file_path(&self) -> &str {
         &self.fs_file_path
+    }
+
+    pub fn user_provided_context(&self) -> Option<String> {
+        self.user_provided_context.clone()
     }
 }
 

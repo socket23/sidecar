@@ -2908,6 +2908,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                 "".to_string(),
                 None,
                 false,
+                None,
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -4265,6 +4266,7 @@ FILEPATH: {fs_file_path}
             symbol_identifier.clone(),
             message_properties.ui_sender().clone(),
             true, // disable thinking by default
+            None,
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -4343,6 +4345,7 @@ FILEPATH: {fs_file_path}
         is_new_sub_symbol: Option<String>,
         symbol_edited_list: Option<Vec<SymbolEditedItem>>,
         symbol_identifier: &SymbolIdentifier,
+        user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
@@ -4399,6 +4402,7 @@ FILEPATH: {fs_file_path}
             symbol_identifier.clone(),
             message_properties.ui_sender(),
             true, // disable thinking by default
+            user_provided_context,
         ));
         self.tools
             .invoke(request)
@@ -6233,6 +6237,7 @@ FILEPATH: {fs_file_path}
                                                     "Edits have happened, you have to understand the reason".to_owned(),
                                                     None,
                                                     true,
+                                                    None,
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -6270,6 +6275,7 @@ FILEPATH: {fs_file_path}
                                     "Edits have happened, you have to understand the reason".to_owned(),
                                     None,
                                     true,
+                                    None,
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
@@ -6307,10 +6313,11 @@ FILEPATH: {fs_file_path}
         // we return a vector which maps the parent symbol identifier to the children symbols
         // which require editing over here
     ) -> Result<Vec<(SymbolIdentifier, Vec<String>)>, SymbolError> {
-        let selection_variable = user_context
-            .variables
-            .iter()
-            .find(|variable| variable.is_selection());
+        let selection_variable = user_context.variables.iter().find(|variable| {
+            variable.is_selection()
+                && variable.start_position.line() != 0
+                && variable.end_position.line() != 0
+        });
         if selection_variable.is_none() {
             return Ok(vec![]);
         }
@@ -6383,6 +6390,7 @@ FILEPATH: {fs_file_path}
         &self,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
         user_query: &str,
+        user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
         let mut symbol_to_edit_request = vec![];
@@ -6434,6 +6442,7 @@ FILEPATH: {fs_file_path}
                                 // since these are quick edits we do not want to spend
                                 // time gathering context
                                 false,
+                                user_provided_context.clone(),
                             ))
                         } else {
                             None
@@ -6456,6 +6465,7 @@ FILEPATH: {fs_file_path}
                                         // since these are quick edits we do not
                                         // want to spend time gathering context
                                         false,
+                                        user_provided_context.clone(),
                                     ))
                                 } else {
                                     None

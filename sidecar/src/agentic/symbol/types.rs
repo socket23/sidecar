@@ -1431,6 +1431,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     .symbols_edited_list()
                     .map(|symbol_edited_list| symbol_edited_list.to_vec()),
                 true,
+                None,
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(
@@ -1633,6 +1634,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 Some(sub_symbol.symbol_name().to_owned()),
                 sub_symbol.symbol_edited_list(),
                 &self.symbol_identifier,
+                sub_symbol.user_provided_context(),
                 message_properties.clone(),
             )
             .await?;
@@ -1858,6 +1860,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 None,
                 sub_symbol.symbol_edited_list(),
                 &self.symbol_identifier,
+                sub_symbol.user_provided_context(),
                 message_properties.clone(),
             )
             .await?;

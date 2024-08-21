@@ -421,6 +421,8 @@ Follow the user's requirements carefully and to the letter.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
 - Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
 - There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
+- The user has provided you additional code to follow same patterns from and understand how the code is supposed to be written, this is provided in <user_provided_context_files>.
+- <user_provided_context_files> might also include an older version of the code which you have to edit, so do not fixtate on that and follow the user instructions.
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
 - You must always answer in {language} code.
@@ -432,7 +434,24 @@ Follow the user's requirements carefully and to the letter.
         )
     }
 
-    fn user_message_for_code_editing(&self, context: &CodeEdit) -> String {
+    fn user_message_for_code_editing(&self, context: &CodeEdit) -> Vec<LLMClientMessage> {
+        let mut messages = vec![];
+        if let Some(user_provided_context) = context.user_provided_context() {
+            let context_message = format!(
+                r#"<user_provided_context_files>
+{user_provided_context}
+</user_provided_context_files>"#
+            );
+            if context_message
+                .lines()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .len()
+                > 50
+            {
+                messages.push(LLMClientMessage::user(context_message.to_owned()).cache_point());
+            }
+        }
         let extra_data = self.extra_data(context.extra_content());
         let above = self.above_selection(
             context
@@ -487,10 +506,15 @@ Follow the user's requirements carefully and to the letter.
 {user_instruction}
 </user_instruction>"#
             );
-        user_message
+        messages.push(LLMClientMessage::user(user_message));
+        messages
     }
 
-    fn user_message_for_code_addition(&self, context: &CodeEdit, new_sub_symbol: String) -> String {
+    fn user_message_for_code_addition(
+        &self,
+        context: &CodeEdit,
+        new_sub_symbol: String,
+    ) -> Vec<LLMClientMessage> {
         let extra_data = self.extra_data(context.extra_content());
         let above = self.above_selection(context.above_context());
         // let below = self.below_selection(context.below_context());
@@ -530,7 +554,7 @@ Follow the user's requirements carefully and to the letter.
 {user_instructions}
 </user_instructions>"#
             );
-        user_message
+        vec![LLMClientMessage::user(user_message)]
     }
 
     fn above_selection(&self, above_selection: Option<&str>) -> Option<String> {
@@ -722,7 +746,7 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
         } else {
             self.few_shot_examples_for_code_editing(should_disable_thinking)
         };
-        let user_message = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
+        let user_messages = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
             self.user_message_for_code_addition(context, sub_symbol_name)
         } else {
             self.user_message_for_code_editing(context)
@@ -733,7 +757,7 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
         // add the system message
         messages.push(LLMClientMessage::system(system_message));
         messages.extend(few_shot_examples);
-        messages.push(LLMClientMessage::user(user_message));
+        messages.extend(user_messages);
 
         // we use 0.2 temperature so the model can imagine ✨
         LLMClientCompletionRequest::new(context.model().clone(), messages, 0.2, None)

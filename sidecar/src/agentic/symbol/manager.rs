@@ -95,12 +95,17 @@ impl SymbolManager {
         &self,
         user_query: String,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
-        _user_context: UserContext,
+        user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let symbols_to_edit_request = self
             .tool_box
-            .symbol_to_edit_request(anchored_symbols, &user_query, message_properties.clone())
+            .symbol_to_edit_request(
+                anchored_symbols,
+                &user_query,
+                user_provided_context,
+                message_properties.clone(),
+            )
             .await?;
 
         // Now we can send over these requests to the symbol locker to manager
@@ -128,6 +133,11 @@ impl SymbolManager {
         .buffer_unordered(10)
         .collect::<Vec<_>>()
         .await;
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::code_iteration_finished(
+                message_properties.request_id_str().to_owned(),
+            ));
         Ok(())
     }
 

@@ -66,14 +66,14 @@ struct AnchoredEditingMetadata {
     // These are the symbols where we are focussed on right now in the selection
     anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
     // the context provided by the user
-    user_context: UserContext,
+    user_context: Option<String>,
 }
 
 impl AnchoredEditingMetadata {
     pub fn new(
         message_properties: SymbolEventMessageProperties,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
-        user_context: UserContext,
+        user_context: Option<String>,
     ) -> Self {
         Self {
             message_properties,
@@ -445,6 +445,8 @@ pub async fn code_editing(
         );
     }
 
+    println!("{:?}", &user_context);
+
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),
@@ -479,10 +481,11 @@ pub async fn code_editing(
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through
             // the initial request parts
+            let user_provided_context = user_context.to_context_string().await.ok();
             let editing_metadata = AnchoredEditingMetadata::new(
                 message_properties.clone(),
                 symbols_to_anchor,
-                user_context.clone(),
+                user_provided_context.clone(),
             );
             let anchored_symbols = app
                 .tool_box
@@ -495,7 +498,7 @@ pub async fn code_editing(
                     .anchor_edits(
                         user_query,
                         anchored_symbols,
-                        user_context,
+                        user_provided_context,
                         message_properties,
                     )
                     .await;

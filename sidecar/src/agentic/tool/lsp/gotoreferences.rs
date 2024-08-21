@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 
 use crate::{
@@ -54,6 +56,35 @@ impl GoToReferencesResponse {
                     && location.range().contains_check_line_column(&range_to_check))
             })
             .collect::<Vec<_>>();
+        self
+    }
+
+    pub fn prioritize_and_deduplicate(mut self, priority_path: &str) -> Self {
+        // Step 1: Partition the vector
+        let (priority, others): (Vec<_>, Vec<_>) = self
+            .reference_locations
+            .into_iter()
+            .partition(|ref_loc| ref_loc.fs_file_path == priority_path);
+
+        // Step 2: Deduplicate and combine
+        let mut seen = HashSet::new();
+        let mut result = Vec::with_capacity(priority.len() + others.len());
+
+        // Add priority items first
+        for ref_loc in priority {
+            if seen.insert(ref_loc.fs_file_path.clone()) {
+                result.push(ref_loc);
+            }
+        }
+
+        // Add other items
+        for ref_loc in others {
+            if seen.insert(ref_loc.fs_file_path.clone()) {
+                result.push(ref_loc);
+            }
+        }
+
+        self.reference_locations = result;
         self
     }
 }

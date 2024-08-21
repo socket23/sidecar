@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
@@ -2019,10 +2020,6 @@ We also believe this symbol needs to be probed because of:
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
-        println!(
-            "tool_box::check_for_followups::start::symbol({})",
-            parent_symbol_name
-        );
         // followups here are made for checking the references or different symbols
         // or if something has changed
         // first do we show the agent the chagned data and then ask it to decide
@@ -2068,6 +2065,9 @@ We also believe this symbol needs to be probed because of:
                     message_properties.clone(),
                 )
                 .await?;
+
+            let references = references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
+
             let _ = self
                 .invoke_followup_on_references(
                     symbol_edited.symbol_name(),
@@ -2115,6 +2115,8 @@ We also believe this symbol needs to be probed because of:
                     message_properties.clone(),
                 )
                 .await?;
+
+            let references = references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
 
             println!(
                 "check_for_followups::go_to_references::({})",
@@ -2199,7 +2201,10 @@ We also believe this symbol needs to be probed because of:
                             message_properties.clone(),
                         )
                         .await;
+
                     if let Ok(references) = references {
+                        let references =
+                            references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
                         reference_locations.extend(references.locations());
                     }
                 }
@@ -2626,15 +2631,11 @@ We also believe this symbol needs to be probed because of:
 
         println!(
             "invoke_followup_on_references::file_paths::({})",
-            file_paths.len()
-        );
-        println!(
-            "invoke_followup_on_references::file_paths::({})",
             file_paths
                 .iter()
                 .map(|fs_file_path| fs_file_path.as_str())
                 .collect::<Vec<_>>()
-                .join(",")
+                .join("\n")
         );
         // we invoke a request to open the file
         let _ = stream::iter(
@@ -2681,7 +2682,6 @@ We also believe this symbol needs to be probed because of:
             .into_iter()
             .filter_map(|s| s)
             .collect::<HashMap<String, Vec<OutlineNode>>>();
-
         // now we have to group the files along with the positions/ranges of the references
         let mut file_paths_to_locations: HashMap<String, Vec<Range>> = Default::default();
         reference_locations.iter().for_each(|reference| {
@@ -2720,6 +2720,15 @@ We also believe this symbol needs to be probed because of:
             .into_iter()
             .map(|outline_node| (outline_node, hub_sender.clone(), message_properties.clone()))
             .collect::<Vec<_>>();
+
+        println!(
+            "tool_box::invoke_followup_on_references::outline_nodes_for_followups\n{}",
+            outline_nodes_for_followups
+                .iter()
+                .map(|(node, _, _)| format!("{} - {:?}", node.name(), node.identifier_range()))
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
 
         stream::iter(outline_nodes_for_followups)
             .map(
@@ -2816,6 +2825,8 @@ Make the necessary changes if required making sure that nothing breaks"#
         let outline_node_identifier_range = outline_node.content().identifier_range();
         // we can go to definition of the node and then ask the symbol for the outline over
         // here so the symbol knows about everything
+
+        let start = Instant::now();
         let definitions = self
             .go_to_definition(
                 outline_node_fs_file_path,
@@ -2823,6 +2834,12 @@ Make the necessary changes if required making sure that nothing breaks"#
                 message_properties.clone(),
             )
             .await?;
+
+        println!(
+            "tool_box::send_request_for_followup::go_to_definition::time: {:?}",
+            start.elapsed()
+        );
+
         if let Some(_definition) = definitions.definitions().get(0) {
             // we need to get a few lines above and below the place where the defintion is present
             // so we can show that to the LLM properly and ask it to make changes
@@ -2876,9 +2893,14 @@ Make the necessary changes if required making sure that nothing breaks"#
                 message_properties.clone(),
                 sender,
             );
+            let start = Instant::now();
             let _ = hub_sender.send(event);
             // Figure out what to do with the receiver over here
             let _ = receiver.await;
+            println!(
+                "tool_box::send_request_for_followup::SymbolEventRequest::time: {:?}",
+                start.elapsed()
+            );
             // this also feels a bit iffy to me, since this will block
             // the other requests from happening unless we do everything in parallel
             Ok(())
@@ -4085,6 +4107,9 @@ FILEPATH: {fs_file_path}
             "tool_box::code_edit_outline::start::symbol_name({})",
             sub_symbol.symbol_name()
         );
+
+        let start = Instant::now();
+
         let response = self
             .tools
             .invoke(request)
@@ -4092,6 +4117,12 @@ FILEPATH: {fs_file_path}
             .map_err(|e| SymbolError::ToolError(e))?
             .get_search_and_replace_output()
             .ok_or(SymbolError::WrongToolOutput)?;
+
+        println!(
+            "code_editing_with_search_and_replace::time: {:?}",
+            start.elapsed()
+        );
+
         let updated_code = search_and_replace_generator(
             response.response(),
             &original_in_range_selection,
@@ -4213,6 +4244,7 @@ FILEPATH: {fs_file_path}
             "tool_box::code_edit_outline::start::symbol_name({})",
             sub_symbol.symbol_name()
         );
+        let start = Instant::now();
         let response = self
             .tools
             .invoke(request)
@@ -4220,6 +4252,8 @@ FILEPATH: {fs_file_path}
             .map_err(|e| SymbolError::ToolError(e))?
             .get_code_edit_output()
             .ok_or(SymbolError::WrongToolOutput)?;
+
+        println!("code_edit_outline::time: {:?}", start.elapsed());
         println!(
             "tool_box::code_edit_outline::finish::symbol_name({})",
             sub_symbol.symbol_name()

@@ -163,8 +163,7 @@ If you want to put code in a new file, use a *SEARCH/REPLACE block* with:
 You are diligent and tireless!
 You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
-ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
-You always put your thinking in <thinking> section before you suggest *SEARCH/REPLACE* blocks"#).to_owned()
+ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
     }
 
     fn extra_data(&self, extra_data: &str) -> String {
@@ -260,11 +259,12 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
                 r#"Only edit the code in <code_to_edit_selection> my instructions are:
 <user_instruction>
 {instructions}
-</user_insturction>
+</user_instruction>
 
 <fs_file_path>
 {fs_file_path}
-</fs_file_path>"#
+</fs_file_path>
+"#
             );
         user_message
     }
@@ -273,15 +273,7 @@ You always put your thinking in <thinking> section before you suggest *SEARCH/RE
         vec![
             LLMClientMessage::user(r#"Change get_factorial() to use math.factorial"#.to_owned()),
             LLMClientMessage::assistant(
-                r#"<thinking>
-To make this change we need to modify `mathweb/flask/app.py` to:
-
-1. Import the math package.
-2. Remove the existing factorial() function.
-3. Update get_factorial() to call math.factorial instead.
-</thinking>
-
-Here are the *SEARCH/REPLACE* blocks:
+                r#"Here are the *SEARCH/REPLACE* blocks:
 
 mathweb/flask/app.py
 ```python

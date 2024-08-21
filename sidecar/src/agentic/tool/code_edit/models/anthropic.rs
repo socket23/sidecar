@@ -405,18 +405,7 @@ The user instruction requires us to print the parameters for the function. I can
         ]
     }
 
-    fn system_message(
-        &self,
-        language: &str,
-        file_path: &str,
-        symbol_to_edit: Option<String>,
-        disable_thinking: bool,
-    ) -> String {
-        let symbol_to_edit_instruction = if let Some(symbol_to_edit) = symbol_to_edit {
-            format!("- You have to edit the code for {symbol_to_edit} which has been shown to you in <code_to_edit> section.\n")
-        } else {
-            "".to_owned()
-        };
+    fn system_message(&self, language: &str, disable_thinking: bool) -> String {
         let should_thinking_present = if !disable_thinking {
             "- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.".to_owned()
         } else {
@@ -432,7 +421,6 @@ Follow the user's requirements carefully and to the letter.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
 - Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
 - There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
-- The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
 - You must always answer in {language} code.
@@ -440,8 +428,7 @@ Follow the user's requirements carefully and to the letter.
 {should_thinking_present}
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
-- The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
-{symbol_to_edit_instruction}"#
+- The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete."#
         )
     }
 
@@ -727,12 +714,7 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
             if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
                 self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
             } else {
-                self.system_message(
-                    language,
-                    fs_file_path,
-                    context.symbol_to_edit_name(),
-                    should_disable_thinking,
-                )
+                self.system_message(language, should_disable_thinking)
             }
         };
         let few_shot_examples = if context.is_new_sub_symbol().is_some() {

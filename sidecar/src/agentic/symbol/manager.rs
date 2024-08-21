@@ -95,6 +95,7 @@ impl SymbolManager {
         &self,
         user_query: String,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        _user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let symbols_to_edit_request = self

@@ -1634,6 +1634,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 Some(sub_symbol.symbol_name().to_owned()),
                 sub_symbol.symbol_edited_list(),
                 &self.symbol_identifier,
+                sub_symbol.user_provided_context(),
                 message_properties.clone(),
             )
             .await?;
@@ -1859,6 +1860,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 None,
                 sub_symbol.symbol_edited_list(),
                 &self.symbol_identifier,
+                sub_symbol.user_provided_context(),
                 message_properties.clone(),
             )
             .await?;

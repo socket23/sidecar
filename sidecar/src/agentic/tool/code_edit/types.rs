@@ -53,6 +53,10 @@ pub struct CodeEdit {
     // if we should disable thinking and just generate code edits as required
     // this improves the time to first edit
     disable_thinking: bool,
+    // This is the context which the user has provided, the hope is that this will
+    // be cached and passed along so we do not have to worry about the inference
+    // speed on this
+    user_provided_context: Option<String>,
 }
 
 impl CodeEdit {
@@ -78,6 +82,7 @@ impl CodeEdit {
         symbol_identifier: SymbolIdentifier,
         ui_sender: UnboundedSender<UIEventWithID>,
         disable_thinking: bool,
+        user_provided_context: Option<String>,
     ) -> Self {
         Self {
             code_above,
@@ -101,6 +106,7 @@ impl CodeEdit {
             symbol_identifier,
             ui_sender,
             disable_thinking,
+            user_provided_context,
         }
     }
 }
@@ -242,6 +248,11 @@ impl CodeEdit {
     /// If we should disable thinking over here
     pub fn disable_thinking(&self) -> bool {
         self.disable_thinking
+    }
+
+    /// returns the user provided context which is supposed to be cached always
+    pub fn user_provided_context(&self) -> Option<String> {
+        self.user_provided_context.clone()
     }
 }
 

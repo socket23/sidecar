@@ -4240,6 +4240,7 @@ FILEPATH: {fs_file_path}
             symbol_identifier.clone(),
             message_properties.ui_sender().clone(),
             true, // disable thinking by default
+            None,
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -4318,6 +4319,7 @@ FILEPATH: {fs_file_path}
         is_new_sub_symbol: Option<String>,
         symbol_edited_list: Option<Vec<SymbolEditedItem>>,
         symbol_identifier: &SymbolIdentifier,
+        user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit============");
@@ -4374,6 +4376,7 @@ FILEPATH: {fs_file_path}
             symbol_identifier.clone(),
             message_properties.ui_sender(),
             true, // disable thinking by default
+            user_provided_context,
         ));
         self.tools
             .invoke(request)

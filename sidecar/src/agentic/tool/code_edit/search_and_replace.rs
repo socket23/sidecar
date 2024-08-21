@@ -208,7 +208,7 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
     }
 
     fn user_message(&self, context: SearchAndReplaceEditingRequest) -> String {
-        let extra_data = self.extra_data(&context.extra_data); // extra_data
+        let extra_data = self.extra_data(&context.extra_data);
         let _above = self.above_selection(
             context
                 .code_above
@@ -329,7 +329,7 @@ impl Tool for SearchAndReplaceEditing {
         let root_request_id = context.root_request_id.to_owned();
         let system_message = LLMClientMessage::system(self.system_message(&context.language));
         let user_message = LLMClientMessage::user(self.user_message(context));
-        let example_messages = self.example_messages(); // example messages
+        let example_messages = self.example_messages();
         let request = LLMClientCompletionRequest::new(
             llm_properties.llm().clone(),
             vec![system_message]

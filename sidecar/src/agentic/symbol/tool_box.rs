@@ -2716,6 +2716,15 @@ We also believe this symbol needs to be probed because of:
             .map(|outline_node| (outline_node, hub_sender.clone(), message_properties.clone()))
             .collect::<Vec<_>>();
 
+        println!(
+            "tool_box::invoke_followup_on_references::outline_nodes_for_followups\n{}",
+            outline_nodes_for_followups
+                .iter()
+                .map(|(node, _, _)| format!("{} - {:?}", node.name(), node.identifier_range()))
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
+
         stream::iter(outline_nodes_for_followups)
             .map(
                 |(outline_node, hub_sender, message_properties)| async move {

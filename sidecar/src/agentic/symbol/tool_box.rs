@@ -6287,10 +6287,11 @@ FILEPATH: {fs_file_path}
         // we return a vector which maps the parent symbol identifier to the children symbols
         // which require editing over here
     ) -> Result<Vec<(SymbolIdentifier, Vec<String>)>, SymbolError> {
-        let selection_variable = user_context
-            .variables
-            .iter()
-            .find(|variable| variable.is_selection());
+        let selection_variable = user_context.variables.iter().find(|variable| {
+            variable.is_selection()
+                && variable.start_position.line() != 0
+                && variable.end_position.line() != 0
+        });
         if selection_variable.is_none() {
             return Ok(vec![]);
         }

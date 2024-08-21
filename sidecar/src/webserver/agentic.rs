@@ -445,6 +445,8 @@ pub async fn code_editing(
         );
     }
 
+    println!("{:?}", &user_context);
+
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),

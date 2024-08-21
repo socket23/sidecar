@@ -1995,6 +1995,16 @@ Satisfy the requirement either by making edits or gathering the required informa
                 };
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
+
+            if original_code == edited_code {
+                println!(
+                    "symbol::edit_implementation::no_changes::({})::({})",
+                    self.symbol_name(),
+                    sub_symbol_to_edit.symbol_name()
+                );
+                continue;
+            }
+
             // send over edited code request
             let _ = message_properties
                 .ui_sender()

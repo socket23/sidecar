@@ -4224,6 +4224,7 @@ FILEPATH: {fs_file_path}
             is_addition,
             symbol_identifier.clone(),
             message_properties.ui_sender().clone(),
+            true, // disable thinking by default
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -4357,6 +4358,7 @@ FILEPATH: {fs_file_path}
             true,
             symbol_identifier.clone(),
             message_properties.ui_sender(),
+            true, // disable thinking by default
         ));
         self.tools
             .invoke(request)
@@ -6442,7 +6444,7 @@ FILEPATH: {fs_file_path}
     /// We should have good visual toggles to show people how much cache we are using
     /// and how long is it taking, we can keep a deep and a simple version of this for
     /// outline editing (would be interesting to see how that plays out)
-    pub fn warmpup_context(&self, _user_context: &UserContext) {
+    pub fn warmup_context(&self, _user_context: &UserContext) {
         // the first warm up we can do over here is to literally feed the code editing
         // with this context, so we can generate the right code for it
         // I want to measure the latency hits and also figure out how to use the user

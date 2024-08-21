@@ -65,16 +65,20 @@ struct AnchoredEditingMetadata {
     message_properties: SymbolEventMessageProperties,
     // These are the symbols where we are focussed on right now in the selection
     anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+    // the context provided by the user
+    user_context: UserContext,
 }
 
 impl AnchoredEditingMetadata {
     pub fn new(
         message_properties: SymbolEventMessageProperties,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        user_context: UserContext,
     ) -> Self {
         Self {
             message_properties,
             anchored_symbols,
+            user_context,
         }
     }
 }
@@ -380,9 +384,15 @@ pub async fn code_sculpting(
         let symbol_manager = app.symbol_manager.clone();
         let join_handle = tokio::spawn(async move {
             let anchored_symbols = anchor_properties.anchored_symbols;
+            let user_context = anchor_properties.user_context;
             let message_properties = anchor_properties.message_properties;
             let _ = symbol_manager
-                .anchor_edits(instruction, anchored_symbols, message_properties)
+                .anchor_edits(
+                    instruction,
+                    anchored_symbols,
+                    user_context,
+                    message_properties,
+                )
                 .await;
         });
         {
@@ -469,8 +479,11 @@ pub async fn code_editing(
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through
             // the initial request parts
-            let editing_metadata =
-                AnchoredEditingMetadata::new(message_properties.clone(), symbols_to_anchor);
+            let editing_metadata = AnchoredEditingMetadata::new(
+                message_properties.clone(),
+                symbols_to_anchor,
+                user_context.clone(),
+            );
             let anchored_symbols = app
                 .tool_box
                 .symbols_to_anchor(&user_context, message_properties.clone())
@@ -479,7 +492,12 @@ pub async fn code_editing(
             let symbol_manager = app.symbol_manager.clone();
             let join_handle = tokio::spawn(async move {
                 let _ = symbol_manager
-                    .anchor_edits(user_query, anchored_symbols, message_properties)
+                    .anchor_edits(
+                        user_query,
+                        anchored_symbols,
+                        user_context,
+                        message_properties,
+                    )
                     .await;
             });
             let _ = app

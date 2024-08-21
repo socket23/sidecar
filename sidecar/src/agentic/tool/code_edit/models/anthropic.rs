@@ -169,8 +169,6 @@ We are going to insert the code in the section <code_to_add> of the input, when 
 - Make sure to add the new method in <code_to_add> section without leaving any comments or placeholder values.
 - The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
 
-We are also showing you an example:
-
 <user_instruction>
 Add the function to divide 2 numbers
 </user_instruction>
@@ -296,16 +294,122 @@ In this example the mistake you made is that you went ahead and edited code outs
         )
     }
 
-    fn system_message(
+    fn few_shot_examples_for_code_editing(
         &self,
-        language: &str,
-        file_path: &str,
-        symbol_to_edit: Option<String>,
-    ) -> String {
-        let symbol_to_edit_instruction = if let Some(symbol_to_edit) = symbol_to_edit {
-            format!("- You have to edit the code for {symbol_to_edit} which has been shown to you in <code_to_edit> section.\n")
+        should_disable_thinking: bool,
+    ) -> Vec<LLMClientMessage> {
+        vec![
+            LLMClientMessage::user(
+                r#"<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>"#
+                    .to_owned(),
+            ),
+            LLMClientMessage::assistant({
+                if should_disable_thinking {
+                    r#"<reply>
+<code_edited>
+```python
+    def add(a, b):
+        print(a, b)
+        return a + b
+```
+</code_edited>
+</reply>"#.to_owned()
+                } else {
+                r#"<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+```python
+    def add(a, b):
+        print(a, b)
+        return a + b
+```
+</code_edited>
+</reply>"#.to_owned()}}),
+            LLMClientMessage::user("<user_instruction>
+We want to print the parameters of the function
+</user_instruction>
+
+<code_above>
+class Maths
+    @class_method
+    def subtract(a, b):
+        return a - b
+    
+    @class_method
+</code_above>
+<code_below>
+    @class_method
+    def multiply(a, b):
+        return a * b
+</code_below>
+<code_to_edit>
+```python
+    def add(a, b):
+        return a + b
+</code_to_edit>".to_owned()),
+            LLMClientMessage::assistant({
+                if should_disable_thinking {
+                    r#"<reply>
+<code_edited>
+    def add(a, b):
+        print(a, b)
+        return a + b
+
+    @class_method
+    def multiply(a, b):
+        print(a, b)
+        return a + b
+</code_edited>
+</reply>"#.to_owned()
+                } else {
+                    r#"<reply>
+<thinking>
+The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
+</thinking>
+<code_edited>
+    def add(a, b):
+        print(a, b)
+        return a + b
+
+    @class_method
+    def multiply(a, b):
+        print(a, b)
+        return a + b
+</code_edited>
+</reply>"#.to_owned()}}),
+            LLMClientMessage::user("you moved beyond the add method and also changed the multiply method which is wrong. We only want to change the add method.".to_owned()),
+            LLMClientMessage::assistant("Understood I will only edit code in the section which has been mentioned by the user and never go beyond it".to_owned())
+        ]
+    }
+
+    fn system_message(&self, language: &str, disable_thinking: bool) -> String {
+        let should_thinking_present = if !disable_thinking {
+            "- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.".to_owned()
         } else {
-            "".to_owned()
+            "- Your reply should consist of a single section called <code_edited> where you edit the code based on user instruction.".to_owned()
         };
         format!(
             r#"You are an expert software engineer who writes the most high quality code without making any mistakes.
@@ -317,100 +421,14 @@ Follow the user's requirements carefully and to the letter.
 - The code you have to rewrite will be given to you in <code_to_edit> section.
 - Use the additional context provided to you in <extra_data> section to understand the functions available on different types of variables, it might have additional context provided by the user, use them as required.
 - There are some additional symbols which we will be creating which you can use right now while editing this section of the code, this is present in <extra_symbols_will_be_created>
-- The code you have to edit is in {file_path}
 - Output the edited code in a single code block.
 - Each code block starts with ```{language}.
 - You must always answer in {language} code.
 - Your reply should be contained in the <reply> tags.
-- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.
+{should_thinking_present}
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
 - Make sure to rewrite the whole code present in <code_to_edit> without leaving any comments or using place-holders.
-- The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete.
-{symbol_to_edit_instruction}
-
-We are also showing you an example:
-
-<user_instruction>
-We want to print the parameters of the function
-</user_instruction>
-
-<code_above>
-class Maths
-    @class_method
-    def subtract(a, b):
-        return a - b
-    
-    @class_method
-</code_above>
-<code_below>
-    @class_method
-    def multiply(a, b):
-        return a * b
-</code_below>
-<code_to_edit>
-```python
-    def add(a, b):
-        return a + b
-</code_to_edit>
-
-Your reply is:
-<reply>
-<thinking>
-The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
-</thinking>
-<code_edited>
-```python
-    def add(a, b):
-        print(a, b)
-        return a + b
-```
-</code_edited>
-</reply>
-
-We are showing you another example now, where the output is WRONG:
-<user_instruction>
-We want to print the parameters of the function
-</user_instruction>
-
-<code_above>
-class Maths
-    @class_method
-    def subtract(a, b):
-        return a - b
-    
-    @class_method
-</code_above>
-<code_below>
-    @class_method
-    def multiply(a, b):
-        return a * b
-</code_below>
-<code_to_edit>
-```python
-    def add(a, b):
-        return a + b
-</code_to_edit>
-
-Your reply:
-<reply>
-<thinking>
-The user instruction requires us to print the parameters for the function. I can use the print function in python to do so.
-</thinking>
-<code_edited>
-    def add(a, b):
-        print(a, b)
-        return a + b
-
-    @class_method
-    def multiply(a, b):
-        print(a, b)
-        return a + b
-</code_edited>
-</reply>
-
-Notice how you moved beyond the add method and also changed the multiply method which is wrong. We only want to change the add method.
-
-Notice how we rewrote the whole section of the code and only the portion which was in the selection which needs to be changed again with the right indentation."#
+- The user will use the code which you generated directly without looking at it or taking care of any additional comments, so make sure that the code is complete."#
         )
     }
 
@@ -678,6 +696,7 @@ We need to select this block to edit because this is where the test for multiply
 impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
     fn format_prompt(&self, context: &CodeEdit) -> LLMClientCompletionRequest {
         let language = context.language();
+        let should_disable_thinking = context.disable_thinking();
         let fs_file_path = context.fs_file_path();
         let system_message = if context.is_outline_edit() {
             // new sub-symbol implies we are adding code, the system prompt
@@ -695,18 +714,25 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
             if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
                 self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
             } else {
-                self.system_message(language, fs_file_path, context.symbol_to_edit_name())
+                self.system_message(language, should_disable_thinking)
             }
+        };
+        let few_shot_examples = if context.is_new_sub_symbol().is_some() {
+            vec![]
+        } else {
+            self.few_shot_examples_for_code_editing(should_disable_thinking)
         };
         let user_message = if let Some(sub_symbol_name) = context.is_new_sub_symbol() {
             self.user_message_for_code_addition(context, sub_symbol_name)
         } else {
             self.user_message_for_code_editing(context)
         };
+
         let mut messages = vec![];
 
         // add the system message
         messages.push(LLMClientMessage::system(system_message));
+        messages.extend(few_shot_examples);
         messages.push(LLMClientMessage::user(user_message));
 
         // we use 0.2 temperature so the model can imagine ✨

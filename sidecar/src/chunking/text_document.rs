@@ -343,6 +343,27 @@ impl Range {
         self.end_byte() + 1 - self.start_byte()
     }
 
+    /// The other range intersects with the self
+    /// This means they there is some kind of overlap between other and self
+    /// ....................
+    /// .......S.....E......
+    /// .................... <- [other start]
+    /// ....S......E........ [yes]
+    /// ...S............E... [yes]
+    /// ..........S.E....... [yes]
+    /// ..S..E.............. [not]
+    pub fn intersects_with_another_range(&self, other: &Range) -> bool {
+        let self_start_line = self.start_line();
+        let self_end_line = self.end_line();
+        let other_start_line = other.start_line();
+        let other_end_line = other.end_line();
+
+        (self_start_line >= other_start_line && self_start_line <= other_end_line)
+            || (self_end_line >= other_start_line && self_end_line <= other_end_line)
+            || (other_start_line >= self_start_line && other_start_line <= self_end_line)
+            || (other_end_line >= self_start_line && other_end_line <= self_end_line)
+    }
+
     pub fn intersects_without_byte(&self, other: &Range) -> bool {
         if self.start_line() <= other.end_line() && self.start_line() >= other.start_line() {
             true

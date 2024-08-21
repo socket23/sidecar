@@ -6308,6 +6308,7 @@ FILEPATH: {fs_file_path}
                 && variable.start_position.line() != 0
                 && variable.end_position.line() != 0
         });
+        println!("tool_box::symbols_to_anchor::({:?})", &selection_variable);
         if selection_variable.is_none() {
             return Ok(vec![]);
         }
@@ -6327,6 +6328,11 @@ FILEPATH: {fs_file_path}
             .await?;
         let outline_nodes = language_config
             .generate_outline_fresh(file_contents.contents_ref().as_bytes(), &fs_file_path);
+        println!(
+            "tool_box::symbols_to_anchor::file_path({})::outline_nodes_len({})",
+            &fs_file_path,
+            outline_nodes.len()
+        );
 
         // now I have the outline nodes, I want to see which of them intersect with the range we are interested in
         let intersecting_outline_nodes = outline_nodes
@@ -6334,7 +6340,7 @@ FILEPATH: {fs_file_path}
             .filter(|outline_node| {
                 outline_node
                     .range()
-                    .intersects_without_byte(&selection_range)
+                    .intersects_with_another_range(&selection_range)
             })
             .collect::<Vec<_>>();
 
@@ -6356,7 +6362,9 @@ FILEPATH: {fs_file_path}
                         .children()
                         .into_iter()
                         .filter(|children| {
-                            children.range().intersects_without_byte(&selection_range)
+                            children
+                                .range()
+                                .intersects_with_another_range(&selection_range)
                         })
                         .map(|child_outline_node| child_outline_node.name().to_owned())
                         .collect::<Vec<_>>();

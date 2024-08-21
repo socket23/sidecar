@@ -405,7 +405,7 @@ The user instruction requires us to print the parameters for the function. I can
         ]
     }
 
-    fn system_message(&self, language: &str, disable_thinking: bool) -> String {
+    fn system_message(&self, disable_thinking: bool) -> String {
         let should_thinking_present = if !disable_thinking {
             "- Your reply consists of 2 parts, the first part where you come up with a detailed plan of the changes you are going to do and then the changes. The detailed plan is contained in <thinking> section and the edited code is present in <code_edited> section.".to_owned()
         } else {
@@ -424,8 +424,8 @@ Follow the user's requirements carefully and to the letter.
 - The user has provided you additional code to follow same patterns from and understand how the code is supposed to be written, this is provided in <user_provided_context_files>.
 - <user_provided_context_files> might also include an older version of the code which you have to edit, so do not fixtate on that and follow the user instructions.
 - Output the edited code in a single code block.
-- Each code block starts with ```{language}.
-- You must always answer in {language} code.
+- Each code block starts with ``` and the coding language for the selected file.
+- You must always answer in code block.
 - Your reply should be contained in the <reply> tags.
 {should_thinking_present}
 - Make sure you follow the pattern specified for replying and make no mistakes while doing that.
@@ -738,7 +738,7 @@ impl CodeEditPromptFormatters for AnthropicCodeEditFromatter {
             if let Some(new_sub_symbol) = context.is_new_sub_symbol() {
                 self.system_message_for_code_insertion(language, fs_file_path, &new_sub_symbol)
             } else {
-                self.system_message(language, should_disable_thinking)
+                self.system_message(should_disable_thinking)
             }
         };
         let few_shot_examples = if context.is_new_sub_symbol().is_some() {

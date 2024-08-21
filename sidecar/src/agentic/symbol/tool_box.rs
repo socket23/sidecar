@@ -6488,18 +6488,56 @@ FILEPATH: {fs_file_path}
     /// added for context, this allows for faster and more accurate edits based
     /// on the model's in-context learning
     ///
-    /// This will take a while to resolve, but when it does the output will be always
-    /// correct
-    ///
-    /// We should have good visual toggles to show people how much cache we are using
-    /// and how long is it taking, we can keep a deep and a simple version of this for
-    /// outline editing (would be interesting to see how that plays out)
-    pub fn warmup_context(&self, _user_context: &UserContext) {
-        // the first warm up we can do over here is to literally feed the code editing
-        // with this context, so we can generate the right code for it
-        // I want to measure the latency hits and also figure out how to use the user
-        // context in the code editing, I think we have some extra context tag we could use
-        // that instead of code editing which is not necessary and probably the context should not
-        // be in xml as well since llms deviate from their natural attention span
+    /// To warmup we send over a dummy edit request here with a very simple user instruction
+    /// we do not care about how the output is working or what it is generating, just
+    /// keep the cache warm
+    pub async fn warmup_context(&self, file_paths: Vec<String>, request_id: String) {
+        let mut file_contents = vec![];
+        for file_path in file_paths.into_iter() {
+            let contents = tokio::fs::read(&file_path).await;
+            if contents.is_err() {
+                continue;
+            } else {
+                let content = String::from_utf8(contents.expect("is_err to hold"));
+                if let Ok(content) = content {
+                    file_contents.push(format!(
+                        r#"FILEPATH: {file_path}
+```
+{content}
+```"#
+                    ));
+                }
+            }
+        }
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let code_edit_request = CodeEdit::new(
+            None,
+            None,
+            "".to_owned(),
+            "".to_owned(),
+            "".to_owned(),
+            "".to_owned(),
+            "".to_owned(),
+            LLMType::ClaudeSonnet,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
+            LLMProvider::Anthropic,
+            false,
+            None,
+            None,
+            request_id.to_owned(),
+            Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+            false,
+            None,
+            true,
+            SymbolIdentifier::with_file_path("", ""),
+            sender,
+            true,
+            Some(file_contents.join("\n")),
+        );
+        let tool_input = ToolInput::CodeEditing(code_edit_request);
+        let cloned_tools = self.tools.clone();
+        let _join_handle = tokio::spawn(async move {
+            let _ = cloned_tools.invoke(tool_input).await;
+        });
     }
 }

@@ -20,7 +20,7 @@ use crate::{
     chunking::text_document::{Position, Range},
 };
 
-const SURROUNDING_CONTEXT_LIMIT: usize = 200;
+const _SURROUNDING_CONTEXT_LIMIT: usize = 200;
 
 #[derive(Debug)]
 pub struct SearchAndReplaceEditingResponse {
@@ -43,8 +43,8 @@ pub struct SearchAndReplaceEditingRequest {
     // TODO(skcd): we use this to detect the range where we want to perform the edits
     edit_range: Range,
     context_in_edit_selection: String,
-    code_above: Option<String>,
-    code_below: Option<String>,
+    _code_above: Option<String>,
+    _code_below: Option<String>,
     extra_data: String,
     llm_properties: LLMProperties,
     language: String,
@@ -77,8 +77,8 @@ impl SearchAndReplaceEditingRequest {
             fs_file_path,
             edit_range,
             context_in_edit_selection,
-            code_above,
-            code_below,
+            _code_above: code_above,
+            _code_below: code_below,
             extra_data,
             llm_properties,
             language,
@@ -175,7 +175,7 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
         )
     }
 
-    fn above_selection(&self, above_selection: Option<&str>) -> Option<String> {
+    fn _above_selection(&self, above_selection: Option<&str>) -> Option<String> {
         if let Some(above_selection) = above_selection {
             Some(format!(
                 r#"<code_above>
@@ -187,7 +187,7 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
         }
     }
 
-    fn below_selection(&self, below_selection: Option<&str>) -> Option<String> {
+    fn _below_selection(&self, below_selection: Option<&str>) -> Option<String> {
         if let Some(below_selection) = below_selection {
             Some(format!(
                 r#"<code_below>
@@ -209,29 +209,6 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
 
     fn user_message(&self, context: SearchAndReplaceEditingRequest) -> String {
         let extra_data = self.extra_data(&context.extra_data);
-        let _above = self.above_selection(
-            context
-                .code_above
-                .map(|code_above| {
-                    // limit it to 100 lines from the start
-                    let mut lines = code_above.lines().collect::<Vec<_>>();
-                    lines.reverse();
-                    lines.truncate(SURROUNDING_CONTEXT_LIMIT);
-                    lines.reverse();
-                    lines.join("\n")
-                })
-                .as_deref(),
-        );
-        let _below = self.below_selection(
-            context
-                .code_below
-                .map(|code_below| {
-                    let mut lines = code_below.lines().collect::<Vec<_>>();
-                    lines.truncate(SURROUNDING_CONTEXT_LIMIT / 3);
-                    lines.join("\n")
-                })
-                .as_deref(),
-        );
         let in_range = self.selection_to_edit(&context.context_in_edit_selection);
         let mut user_message = "".to_owned();
         if let Some(extra_symbols) = context.new_symbols.clone() {

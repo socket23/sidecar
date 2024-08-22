@@ -6498,6 +6498,11 @@ FILEPATH: {fs_file_path}
             }
         }
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let llm_properties = LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        );
         let code_edit_request = CodeEdit::new(
             None,
             None,
@@ -6506,9 +6511,9 @@ FILEPATH: {fs_file_path}
             "".to_owned(),
             "".to_owned(),
             "".to_owned(),
-            LLMType::ClaudeSonnet,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
-            LLMProvider::Anthropic,
+            llm_properties.llm().clone(),
+            llm_properties.api_key().clone(),
+            llm_properties.provider().clone(),
             false,
             None,
             None,
@@ -6518,7 +6523,7 @@ FILEPATH: {fs_file_path}
             None,
             true,
             SymbolIdentifier::with_file_path("", ""),
-            sender,
+            sender.clone(),
             true,
             Some(file_contents.join("\n")),
         );
@@ -6526,6 +6531,27 @@ FILEPATH: {fs_file_path}
         let cloned_tools = self.tools.clone();
         let _join_handle = tokio::spawn(async move {
             let _ = cloned_tools.invoke(tool_input).await;
+        });
+
+        let search_and_replace_request = SearchAndReplaceEditingRequest::new(
+            "".to_owned(),
+            Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+            "".to_owned(),
+            None,
+            None,
+            "".to_owned(),
+            llm_properties,
+            None,
+            "".to_owned(),
+            request_id.to_owned(),
+            SymbolIdentifier::with_file_path("", ""),
+            request_id.to_owned(),
+            sender,
+        );
+        let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
+        let cloned_tools = self.tools.clone();
+        let _join_handle = tokio::spawn(async move {
+            let _ = cloned_tools.invoke(search_and_replace).await;
         });
     }
 }

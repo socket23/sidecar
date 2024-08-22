@@ -62,7 +62,7 @@ async fn main() {
     // File where you have made changes
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/clients/types.rs";
     let output = tool_box
-        .grab_changed_symbols_in_file(root_directory, fs_file_path)
+        .grab_changed_symbols_in_file_git(root_directory, fs_file_path)
         .await
         .expect("to work");
 

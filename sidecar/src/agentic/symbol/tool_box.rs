@@ -5952,13 +5952,26 @@ FILEPATH: {fs_file_path}
     ///
     /// All file main nodes are returned, those with non-empty vecs have changes contained within.
     /// Original contents storeed in (_, String)
-    pub async fn grab_changed_symbols_in_file(
+    pub async fn grab_changed_symbols_in_file_git(
         &self,
         root_directory: &str,
         fs_file_path: &str,
     ) -> Result<SymbolChangeSet, SymbolError> {
         let file_changes = self.get_file_changes(root_directory, fs_file_path).await?;
+        self.get_symbol_change_set(
+            fs_file_path,
+            file_changes.old_version(),
+            file_changes.new_version(),
+        )
+        .await
+    }
 
+    pub async fn get_symbol_change_set(
+        &self,
+        fs_file_path: &str,
+        older_content: &str,
+        new_content: &str,
+    ) -> Result<SymbolChangeSet, SymbolError> {
         // Now we need to parse the new and old version of the files and get the changed
         // nodes which are present in them or which have been completely added or deleted
         // TODO(codestory): This is still wrong btw, the true meaning of a symbol-identifier
@@ -5975,7 +5988,7 @@ FILEPATH: {fs_file_path}
         let mut older_outline_nodes: HashMap<SymbolIdentifier, Vec<OutlineNode>> =
             Default::default();
         language_config
-            .generate_outline_fresh(file_changes.old_version().as_bytes(), fs_file_path)
+            .generate_outline_fresh(older_content.as_bytes(), fs_file_path)
             .into_iter()
             .for_each(|outline_node| {
                 let symbol_identifier =
@@ -5989,7 +6002,7 @@ FILEPATH: {fs_file_path}
         let mut newer_outline_nodes: HashMap<SymbolIdentifier, Vec<OutlineNode>> =
             Default::default();
         language_config
-            .generate_outline_fresh(file_changes.new_version().as_bytes(), fs_file_path)
+            .generate_outline_fresh(new_content.as_bytes(), fs_file_path)
             .into_iter()
             .for_each(|outline_node| {
                 let symbol_identifier =

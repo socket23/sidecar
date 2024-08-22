@@ -156,7 +156,7 @@ impl SymbolManager {
     ) -> Result<(), SymbolError> {
         let symbol_change_set = self
             .tool_box
-            .grab_changed_symbols_in_file(&root_dir, &fs_file_path)
+            .grab_changed_symbols_in_file_git(&root_dir, &fs_file_path)
             .await?;
         println!("symbol_change_set: {}", &symbol_change_set);
 

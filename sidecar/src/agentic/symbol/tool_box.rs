@@ -2651,6 +2651,19 @@ We also believe this symbol needs to be probed because of:
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    /// Invokes followups on the references based on certain assumptions:
+    /// prioritizes and de-duplicates which can lead to self-loops this is important
+    /// as it can happen anytime
+    ///
+    /// How do we detect this:
+    /// - we need to look at which node level we are on and transition/filter out
+    /// based on that
+    /// - if we are on a function, then its trivial to just keep going over all the references (no
+    /// prioritiztion required)
+    /// - if we are on a class definition, then we for sure need to go to the implementations
+    /// if the references point to that
+    /// - if we are on a class implementation block, then we do not need to go further into the
+    /// implementation block since that will be already covered by our current run for reference checks
     async fn invoke_followup_on_references(
         &self,
         original_symbol_name: &str,

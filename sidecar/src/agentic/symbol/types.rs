@@ -1641,11 +1641,11 @@ Satisfy the requirement either by making edits or gathering the required informa
         Ok(EditedCodeSymbol::new(content, response))
     }
 
-    /// Editing the full symbol in total is a 2 step process
-    /// - We use sonnet 3.5 for planning the changes and generating an outline
-    /// of the changes
-    /// - We then use a weaker model to apply the changes very quickly
-    /// - Code correction happens naturally after that
+    /// Editing the full symbol using search and replace blocks
+    /// 
+    /// This leads to better edits and performance in general at the cost of speed
+    /// 
+    /// For larger blocks of code, this is preferred
     async fn edit_code_full(
         &self,
         // sub-symbol here referes to the full symbol not an individual symbol
@@ -1654,9 +1654,17 @@ Satisfy the requirement either by making edits or gathering the required informa
         context: Vec<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<EditedCodeSymbol, SymbolError> {
+        // let symbol_to_edit = self
+        //     .tools
+        //     .find_symbol_to_edit_closest_to_range(sub_symbol, message_properties.clone())
+        //     .await?;
         let symbol_to_edit = self
             .tools
-            .find_symbol_to_edit_closest_to_range(sub_symbol, message_properties.clone())
+            .find_sub_symbol_to_edit_with_name(
+                self.symbol_name(),
+                sub_symbol,
+                message_properties.clone(),
+            )
             .await?;
         let content = symbol_to_edit.content().to_owned();
         let file_content = self
@@ -1684,6 +1692,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol.instructions().join("\n"),
                 &self.symbol_identifier,
                 sub_symbol.symbol_edited_list(),
+                sub_symbol.user_provided_context(),
                 message_properties.clone(),
             )
             .await?;
@@ -1933,6 +1942,7 @@ Satisfy the requirement either by making edits or gathering the required informa
             let context_for_editing = self
                 .gather_definitions_for_editing(&sub_symbol_to_edit, message_properties.clone())
                 .await?;
+            println!("symbol::edit_implementation::gather_definitions_for_editing::({})::context_len({})", self.symbol_name(), context_for_editing.len());
 
             // if this is a new sub-symbol we have to create we have to diverge the
             // implementations a bit or figure out how to edit with a new line added
@@ -2026,44 +2036,44 @@ Satisfy the requirement either by making edits or gathering the required informa
                 "symbol::edit_implementation::check_code_correctness::({})",
                 self.symbol_name()
             );
-            // debugging loop after this
-            let _ = self
-                .tools
-                .check_code_correctness(
-                    self.symbol_name(),
-                    &sub_symbol_to_edit,
-                    self.symbol_identifier.clone(),
-                    original_code,
-                    edited_code,
-                    &context_for_editing.join("\n"),
-                    self.llm_properties.llm().clone(),
-                    self.llm_properties.provider().clone(),
-                    self.llm_properties.api_key().clone(),
-                    &self.tool_properties,
-                    history.to_vec(),
-                    self.hub_sender.clone(),
-                    message_properties.clone(),
-                )
-                .await;
+            // // debugging loop after this
+            // let _ = self
+            //     .tools
+            //     .check_code_correctness(
+            //         self.symbol_name(),
+            //         &sub_symbol_to_edit,
+            //         self.symbol_identifier.clone(),
+            //         original_code,
+            //         edited_code,
+            //         &context_for_editing.join("\n"),
+            //         self.llm_properties.llm().clone(),
+            //         self.llm_properties.provider().clone(),
+            //         self.llm_properties.api_key().clone(),
+            //         &self.tool_properties,
+            //         history.to_vec(),
+            //         self.hub_sender.clone(),
+            //         message_properties.clone(),
+            //     )
+            //     .await;
 
-            // once we have successfully changed the implementation over here
-            // we have to start looking for followups over here
-            // F in the chat for error handling :')
-            let _ = self
-                .tools
-                .check_for_followups(
-                    self.symbol_name(),
-                    &sub_symbol_to_edit,
-                    &original_code,
-                    &edited_code,
-                    self.llm_properties.llm().clone(),
-                    self.llm_properties.provider().clone(),
-                    self.llm_properties.api_key().clone(),
-                    self.hub_sender.clone(),
-                    message_properties.clone(),
-                    &self.tool_properties,
-                )
-                .await;
+            // // once we have successfully changed the implementation over here
+            // // we have to start looking for followups over here
+            // // F in the chat for error handling :')
+            // let _ = self
+            //     .tools
+            //     .check_for_followups(
+            //         self.symbol_name(),
+            //         &sub_symbol_to_edit,
+            //         &original_code,
+            //         &edited_code,
+            //         self.llm_properties.llm().clone(),
+            //         self.llm_properties.provider().clone(),
+            //         self.llm_properties.api_key().clone(),
+            //         self.hub_sender.clone(),
+            //         message_properties.clone(),
+            //         &self.tool_properties,
+            //     )
+            //     .await;
         }
         println!(
             "symbol::edit_implementation::finish::({})",

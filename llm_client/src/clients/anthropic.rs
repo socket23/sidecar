@@ -169,7 +169,6 @@ impl AnthropicRequest {
         let max_tokens = match completion_request.get_max_tokens() {
             Some(tokens) => Some(tokens),
             None => {
-                // TODO(codestory): Fix this proper
                 if model == &LLMType::ClaudeSonnet {
                     Some(8192)
                 } else {

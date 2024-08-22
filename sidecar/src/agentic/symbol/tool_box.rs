@@ -2028,9 +2028,10 @@ We also believe this symbol needs to be probed because of:
             .map(|language_config| language_config.language_str.to_owned())
             .unwrap_or("".to_owned());
         println!(
-            "tool_box::check_for_followups::find_sub_symbol_edited::({})::({})",
+            "tool_box::check_for_followups::find_sub_symbol_edited::({})::({})::range({:?})",
             parent_symbol_name,
-            symbol_edited.symbol_name()
+            symbol_edited.symbol_name(),
+            symbol_edited.range(),
         );
         let outline_node = self
             .find_sub_symbol_to_edit_with_name(
@@ -2040,10 +2041,14 @@ We also believe this symbol needs to be probed because of:
             )
             .await?;
 
+        // the line number relative to which we are computing our positions
+        let edited_code_start_line = outline_node.range().start_line();
+
         println!(
-            "tool_box::check_for_followups::found_sub_symbol_edited::parent_symbol_name({})::symbol_edited({})",
+            "tool_box::check_for_followups::found_sub_symbol_edited::parent_symbol_name({})::symbol_edited({})::outline_node_type({:?})",
             parent_symbol_name,
             symbol_edited.symbol_name(),
+            outline_node.outline_node_type(),
         );
         // over here we have to check if its a function or a class
         if outline_node.is_function_type() {
@@ -2150,6 +2155,9 @@ We also believe this symbol needs to be probed because of:
                 return Ok(());
             }
             let language_config = language_config.expect("to be present");
+
+            // the ranges here are all messed up since we are computing relative to
+            // Position::new(0, 0, 0) ...ugh
             let older_outline_nodes = language_config
                 .generate_outline_fresh(original_code.as_bytes(), symbol_edited.fs_file_path())
                 .into_iter()
@@ -2185,6 +2193,16 @@ We also believe this symbol needs to be probed because of:
                     })
                     .collect::<Vec<_>>();
 
+                let function_names = changed_function_nodes
+                    .iter()
+                    .map(|function_node| function_node.name())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                println!(
+                    "tool_box::check_for_followups::symbol_name({})::functions_changed::({})",
+                    parent_symbol_name, function_names
+                );
+
                 // go over the children now and go to the references for each of them which have changed, these will
                 // be our reference locations
                 let fs_file_path = symbol_edited.fs_file_path();
@@ -2193,15 +2211,38 @@ We also believe this symbol needs to be probed because of:
                     let references = self
                         .go_to_references(
                             fs_file_path.to_owned(),
-                            outline_node.range().start_position(),
+                            // we have to fix the range here relative to the
+                            // position in the current document
+                            outline_node
+                                .identifier_range()
+                                .start_position()
+                                .move_lines(edited_code_start_line),
                             message_properties.clone(),
                         )
                         .await;
 
                     if let Ok(references) = references {
+                        let locations = references.clone().locations();
+                        println!(
+                            "tool_box::check_for_followups::symbol_name({})::fs_file_path({})::range({:?})::references::({})",
+                            outline_node.name(),
+                            outline_node.fs_file_path(),
+                            outline_node.range(),
+                            locations
+                                .as_slice()
+                                .iter()
+                                .map(|location| location.fs_file_path())
+                                .collect::<Vec<_>>()
+                                .join(",")
+                        );
                         let references =
                             references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
                         reference_locations.extend(references.locations());
+                    } else {
+                        println!(
+                            "tool_box::refenreces_error::({:?})",
+                            references.expect("if let Ok to hold")
+                        );
                     }
                 }
 
@@ -2952,6 +2993,11 @@ Make the necessary changes if required making sure that nothing breaks"#
             position.clone(),
             message_properties.editor_url().to_owned(),
         ));
+
+        println!(
+            "too_box::go_to_references::fs_file_path({:?})::position({:?})",
+            &fs_file_path, &position
+        );
 
         let reference_locations = self
             .tools

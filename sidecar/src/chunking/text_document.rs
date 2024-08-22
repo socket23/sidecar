@@ -139,6 +139,11 @@ impl Position {
         }
     }
 
+    pub fn move_lines(mut self, delta: usize) -> Self {
+        self.line = self.line + delta;
+        self
+    }
+
     /// Moves the position to the end of the line
     pub fn move_to_next_line(mut self) -> Self {
         self.line = self.line + 1;

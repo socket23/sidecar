@@ -1000,6 +1000,7 @@ impl MechaCodeSymbolThinking {
                                     original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                     true,
                                     None,
+                                    false, // should we disable the followups
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1033,6 +1034,7 @@ impl MechaCodeSymbolThinking {
                                 original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                 true,
                                 None,
+                                false, // should we disable followups and correctness check
                             ))
                         } else {
                             None
@@ -1162,6 +1164,7 @@ impl MechaCodeSymbolThinking {
                                     original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                     true,
                                     None,
+                                    false, // should we disable followups and correctness check
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1286,6 +1289,7 @@ Reason to edit:
                                         original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                         true,
                                         None,
+                                        false, // should we disable followups and correctness check
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);

@@ -18,6 +18,8 @@ pub struct SymbolToEdit {
     gather_definitions_for_editing: bool,
     // user provided context as a string for the LLM to use
     user_provided_context: Option<String>,
+    // Whether to disable followups and correctness checks
+    disable_followups_and_correctness: bool,
 }
 
 impl SymbolToEdit {
@@ -33,6 +35,7 @@ impl SymbolToEdit {
         symbol_edited_list: Option<Vec<SymbolEditedItem>>,
         gather_definitions_for_editing: bool,
         user_provided_context: Option<String>,
+        disable_followups_and_correctness: bool,
     ) -> Self {
         Self {
             symbol_name,
@@ -46,7 +49,12 @@ impl SymbolToEdit {
             symbol_edited_list,
             gather_definitions_for_editing,
             user_provided_context,
+            disable_followups_and_correctness,
         }
+    }
+
+    pub fn should_disable_followups_and_correctness(&self) -> bool {
+        self.disable_followups_and_correctness
     }
 
     pub fn should_gather_definitions_for_editing(&self) -> bool {

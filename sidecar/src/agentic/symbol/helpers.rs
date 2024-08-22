@@ -206,7 +206,10 @@ pub fn apply_inlay_hints_to_code(
 #[cfg(test)]
 mod tests {
 
-    use crate::chunking::text_document::{Position, Range};
+    use crate::{
+        agentic::tool::lsp::inlay_hints::InlayHintsResponse,
+        chunking::text_document::{Position, Range},
+    };
 
     use super::apply_inlay_hints_to_code;
 

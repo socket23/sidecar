@@ -1962,6 +1962,7 @@ We also believe this symbol needs to be probed because of:
         } else {
             let child_node = outline_nodes
                 .iter()
+                .filter(|outline_node| outline_node.name() == parent_symbol_name)
                 .map(|outline_node| outline_node.children())
                 .flatten()
                 .into_iter()
@@ -4063,6 +4064,7 @@ instruction:
         instruction: String,
         symbol_identifier: &SymbolIdentifier,
         symbols_edited_list: Option<Vec<SymbolEditedItem>>,
+        user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<String, SymbolError> {
         println!("============tool_box::code_edit_search_and_replace============");
@@ -4118,6 +4120,8 @@ FILEPATH: {fs_file_path}
             symbol_identifier.clone(),
             uuid::Uuid::new_v4().to_string(),
             message_properties.ui_sender().clone(),
+            user_provided_context,
+            false,
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -6424,7 +6428,7 @@ FILEPATH: {fs_file_path}
                                 vec![user_query.to_owned()],
                                 false,
                                 false,
-                                false,
+                                true, // we want to try out the search and replace style editing over here
                                 user_query.to_owned(),
                                 None,
                                 // since these are quick edits we do not want to spend
@@ -6447,7 +6451,7 @@ FILEPATH: {fs_file_path}
                                         vec![user_query.to_owned()],
                                         false,
                                         false,
-                                        false,
+                                        true, // we want to try out the search and replace style editing over here
                                         user_query.to_owned(),
                                         None,
                                         // since these are quick edits we do not
@@ -6547,6 +6551,8 @@ FILEPATH: {fs_file_path}
             SymbolIdentifier::with_file_path("", ""),
             request_id.to_owned(),
             sender,
+            Some(file_contents.join("\n")),
+            true,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();

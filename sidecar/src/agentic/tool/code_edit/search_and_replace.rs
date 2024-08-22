@@ -61,6 +61,9 @@ pub struct SearchAndReplaceEditingRequest {
     symbol_identifier: SymbolIdentifier,
     edit_request_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
+    user_context: Option<String>,
+    // use a is_warmup field
+    is_warmup: bool,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -75,9 +78,13 @@ impl SearchAndReplaceEditingRequest {
         new_symbols: Option<String>,
         instructions: String,
         root_request_id: String,
-        symbol_identifier: SymbolIdentifier,
+        symbol_identifier: SymbolIdentifier, // Unique identifier for the symbol being edited
         edit_request_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
+        // Important: user_context provides essential information for the editing process
+        user_context: Option<String>,
+        // Indicates whether this is a warmup request to prepare the LLM
+        is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
     ) -> Self {
         Self {
             fs_file_path,
@@ -93,8 +100,11 @@ impl SearchAndReplaceEditingRequest {
             symbol_identifier,
             edit_request_id,
             ui_sender,
+            user_context,
+            is_warmup,
         }
     }
+
 }
 
 pub struct SearchAndReplaceEditing {
@@ -119,8 +129,9 @@ Write as little code as possible, opting for tiny, incremental changes. Add more
 The most important principle is to keep it simple. Always opt for the simplest, smallest changes.
 You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
-You will be presented with a single file and the code which you can EDIT will be given in a <code_to_edit_section>.
-You will be also provided with some extra data, which contains various definitions of symbols which you can use to use the call the correct functions and re-use existing functionality in the code.
+You will be presented with a single file and the code which you can EDIT will be given in a <code_to_edit_section>
+You will be also provided with some extra data, which contains various definitions of symbols which you can use to use the call the correct functions and re-use existing functionality in the code, this will be provided to you in <user_provided_context>
+You are not to make changes in the <user_provided_context> ONLY EDIT the code in <code_to_edit_section>
 Take requests for changes to the supplied code.
 If the request is ambiguous, ask questions.
 
@@ -212,7 +223,18 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
         )
     }
 
-    fn user_message(&self, context: SearchAndReplaceEditingRequest) -> String {
+    fn user_messages(&self, context: SearchAndReplaceEditingRequest) -> Vec<LLMClientMessage> {
+        let mut messages = vec![];
+        let user_context = context.user_context;
+        if let Some(user_context) = user_context {
+            let user_provided_context = LLMClientMessage::user(format!(
+                r#"<user_provided_context>
+{user_context}
+</user_provided_context>"#
+            ))
+            .cache_point();
+            messages.push(user_provided_context);
+        }
         let extra_data = self.extra_data(&context.extra_data);
         let in_range = self.selection_to_edit(&context.context_in_edit_selection);
         let mut user_message = "".to_owned();
@@ -248,7 +270,8 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
 </fs_file_path>
 "#
             );
-        user_message
+        messages.push(LLMClientMessage::user(user_message));
+        messages
     }
 
     fn example_messages(&self) -> Vec<LLMClientMessage> {
@@ -301,6 +324,7 @@ mathweb/flask/app.py
 impl Tool for SearchAndReplaceEditing {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.should_search_and_replace_editing()?;
+        let is_warmup = context.is_warmup;
         let code_to_edit = context.context_in_edit_selection.to_owned();
         let code_to_edit_range = context.edit_range.clone();
         let symbol_identifier = context.symbol_identifier.clone();
@@ -310,18 +334,21 @@ impl Tool for SearchAndReplaceEditing {
         let llm_properties = context.llm_properties.clone();
         let root_request_id = context.root_request_id.to_owned();
         let system_message = LLMClientMessage::system(self.system_message());
-        let user_message = LLMClientMessage::user(self.user_message(context));
+        let user_messages = self.user_messages(context);
         let example_messages = self.example_messages();
-        let request = LLMClientCompletionRequest::new(
+        let mut request = LLMClientCompletionRequest::new(
             llm_properties.llm().clone(),
             vec![system_message]
                 .into_iter()
                 .chain(example_messages)
-                .chain(vec![user_message])
+                .chain(user_messages)
                 .collect(),
             0.2,
             None,
         );
+        if is_warmup {
+            request = request.set_max_tokens(1);
+        }
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut llm_response = Box::pin(
             self.llm_client.stream_completion(

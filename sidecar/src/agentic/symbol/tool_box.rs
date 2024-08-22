@@ -4072,12 +4072,6 @@ instruction:
             sub_symbol.symbol_name(),
         );
         println!("============");
-        let language = self
-            .editor_parsing
-            .for_file_path(fs_file_path)
-            .map(|language_config| language_config.get_language())
-            .flatten()
-            .unwrap_or("".to_owned());
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
         // disable inlay hints, cause it causes the LLM to mess up the code
@@ -4118,7 +4112,6 @@ FILEPATH: {fs_file_path}
                 LLMProvider::Anthropic,
                 LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
             ),
-            language,
             symbols_to_edit,
             instruction,
             message_properties.root_request_id().to_owned(),

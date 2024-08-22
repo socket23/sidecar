@@ -55,7 +55,6 @@ pub struct SearchAndReplaceEditingRequest {
     _code_below: Option<String>,
     extra_data: String,
     llm_properties: LLMProperties,
-    language: String,
     new_symbols: Option<String>,
     instructions: String,
     root_request_id: String,
@@ -73,7 +72,6 @@ impl SearchAndReplaceEditingRequest {
         code_below: Option<String>,
         extra_data: String,
         llm_properties: LLMProperties,
-        language: String,
         new_symbols: Option<String>,
         instructions: String,
         root_request_id: String,
@@ -89,7 +87,6 @@ impl SearchAndReplaceEditingRequest {
             _code_below: code_below,
             extra_data,
             llm_properties,
-            language,
             new_symbols,
             instructions,
             root_request_id,
@@ -113,7 +110,7 @@ impl SearchAndReplaceEditing {
         }
     }
 
-    fn system_message(&self, language: &str) -> String {
+    fn system_message(&self) -> String {
         format!(r#"Act as an expert software developer.
 Always use best practices when coding.
 Respect and use existing conventions, libraries, etc that are already present in the code base.
@@ -140,7 +137,7 @@ All changes to files must use the *SEARCH/REPLACE block* format.
 
 Every *SEARCH/REPLACE block* must use this format:
 1. The file path alone on a line, verbatim. No bold asterisks, no quotes around it, no escaping of characters, etc.
-2. The opening fence and code language, eg: ```{language}
+2. The opening fence and code language, eg: ```python
 3. The start of search block: <<<<<<< SEARCH
 4. A contiguous chunk of lines to search for in the existing source code
 5. The dividing line: =======
@@ -312,7 +309,7 @@ impl Tool for SearchAndReplaceEditing {
         let edit_request_id = context.edit_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let root_request_id = context.root_request_id.to_owned();
-        let system_message = LLMClientMessage::system(self.system_message(&context.language));
+        let system_message = LLMClientMessage::system(self.system_message());
         let user_message = LLMClientMessage::user(self.user_message(context));
         let example_messages = self.example_messages();
         let request = LLMClientCompletionRequest::new(

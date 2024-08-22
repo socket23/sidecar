@@ -3,8 +3,8 @@
 use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
-use futures::StreamExt;
-use llm_client::provider::GoogleAIStudioKey;
+use futures::{stream, StreamExt};
+use llm_client::provider::{GoogleAIStudioKey, OpenAIProvider};
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -18,6 +18,8 @@ use tokio::task::JoinHandle;
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::identifier::SymbolIdentifier;
+use crate::agentic::symbol::tool_properties::ToolProperties;
+use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::{
     agentic::{
@@ -373,6 +375,162 @@ pub async fn code_sculpting_warmup(
     );
     let _ = app.tool_box.warmup_context(file_paths, request_id).await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSculptingHeal {
+    request_id: String,
+    root_directory: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeSculptingHealResponse {
+    done: bool,
+}
+
+impl ApiResponse for CodeSculptingHealResponse {}
+
+pub async fn code_sculpting_heal(
+    Extension(app): Extension<Application>,
+    Json(CodeSculptingHeal {
+        request_id,
+        root_directory,
+    }): Json<CodeSculptingHeal>,
+) -> Result<impl IntoResponse> {
+    println!(
+        "webserver::code_sculpting_heal::request_id({})",
+        &request_id
+    );
+    let anchor_properties;
+    {
+        let anchor_tracker = app.anchored_request_tracker.clone();
+        anchor_properties = anchor_tracker.get_properties(&request_id).await;
+    }
+    println!(
+        "code_sculpting::heal::request_id({})::properties_present({})",
+        request_id,
+        anchor_properties.is_some()
+    );
+    if anchor_properties.is_none() {
+        Ok(json_result(CodeSculptingHealResponse { done: false }))
+    } else {
+        let anchor_properties = anchor_properties.expect("is_none to hold");
+        let file_paths = anchor_properties
+            .anchored_symbols
+            .iter()
+            .filter_map(|symbol| symbol.0.fs_file_path())
+            .collect::<Vec<_>>();
+
+        let message_properties = anchor_properties.message_properties.clone();
+
+        // Now grab the symbols which have changed
+        let cloned_tools = app.tool_box.clone();
+        let symbol_change_set: HashMap<String, SymbolChangeSet> = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|file_path| (file_path, cloned_tools.clone(), root_directory.clone())),
+        )
+        .map(|(fs_file_path, tools, root_directory)| async move {
+            let symbol_change_sets = tools
+                .grab_changed_symbols_in_file(&root_directory, &fs_file_path)
+                .await;
+            symbol_change_sets
+                .ok()
+                .map(|symbol_change_set| (fs_file_path, symbol_change_set))
+        })
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .collect::<HashMap<_, _>>();
+
+        let changed_symbols = anchor_properties
+            .anchored_symbols
+            .into_iter()
+            .filter_map(|(symbol_identifier, _)| {
+                let fs_file_path = symbol_identifier.fs_file_path();
+                if fs_file_path.is_none() {
+                    return None;
+                }
+                let fs_file_path = fs_file_path.clone().expect("is_none to hold");
+                let changed_symbols_in_file = symbol_change_set.get(&fs_file_path);
+                if let Some(changed_symbols_in_file) = changed_symbols_in_file {
+                    let symbol_changes = changed_symbols_in_file
+                        .changes()
+                        .into_iter()
+                        .filter(|changed_symbol| {
+                            changed_symbol.symbol_name() == symbol_identifier.symbol_name()
+                        })
+                        .map(|changed_symbol| changed_symbol.clone())
+                        .collect::<Vec<_>>();
+                    Some(symbol_changes)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let hub_sender = app.symbol_manager.hub_sender();
+        let cloned_tools = app.tool_box.clone();
+        let _join_handle = tokio::spawn(async move {
+            let _ = stream::iter(changed_symbols.into_iter().flat_map(|symbol_changes| {
+                let parent_symbol_name = symbol_changes.symbol_name().clone();
+                let message_properties = message_properties.clone();
+                let cloned_tools = cloned_tools.clone();
+                let hub_sender = hub_sender.clone();
+
+                symbol_changes
+                    .remove_changes()
+                    .into_iter()
+                    .map(move |changes| {
+                        (
+                            changes,
+                            message_properties.clone(),
+                            cloned_tools.clone(),
+                            hub_sender.clone(),
+                        )
+                    })
+                    .map(
+                        move |(
+                            (symbol, original_content, edited_content),
+                            message_properties,
+                            cloned_tools,
+                            hub_sender,
+                        )| {
+                            let message_properties = message_properties.clone();
+                            let hub_sender = hub_sender.clone();
+                            let parent_symbol_name = parent_symbol_name.clone();
+
+                            async move {
+                                cloned_tools
+                                .check_for_followups(
+                                    &parent_symbol_name,
+                                    &symbol,
+                                    &original_content,
+                                    &edited_content,
+                                    LLMType::Gpt4O,
+                                    LLMProvider::OpenAI,
+                                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
+                                        "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt"
+                                            .to_owned(),
+                                    )),
+                                    hub_sender,
+                                    message_properties,
+                                    &ToolProperties::new(),
+                                )
+                                .await
+                            }
+                        },
+                    )
+            }))
+            .buffer_unordered(1)
+            .collect::<Vec<_>>()
+            .await;
+        });
+        Ok(json_result(CodeSculptingHealResponse { done: true }))
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

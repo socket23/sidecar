@@ -6297,8 +6297,7 @@ FILEPATH: {fs_file_path}
     ) -> Result<Vec<(SymbolIdentifier, Vec<String>)>, SymbolError> {
         let selection_variable = user_context.variables.iter().find(|variable| {
             variable.is_selection()
-                && variable.start_position.line() != 0
-                && variable.end_position.line() != 0
+                && !(variable.start_position.line() == 0 && variable.end_position.line() == 0)
         });
         println!("tool_box::symbols_to_anchor::({:?})", &selection_variable);
         if selection_variable.is_none() {

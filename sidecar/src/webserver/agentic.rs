@@ -10,7 +10,7 @@ use llm_client::{
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -69,6 +69,9 @@ struct AnchoredEditingMetadata {
     anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
     // the context provided by the user
     user_context: Option<String>,
+    // we also want to store the original content of the files which were mentioned
+    // before we started editing
+    previous_file_content: HashMap<String, String>,
 }
 
 impl AnchoredEditingMetadata {
@@ -76,11 +79,13 @@ impl AnchoredEditingMetadata {
         message_properties: SymbolEventMessageProperties,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
         user_context: Option<String>,
+        previous_file_content: HashMap<String, String>,
     ) -> Self {
         Self {
             message_properties,
             anchored_symbols,
             user_context,
+            previous_file_content,
         }
     }
 }
@@ -380,7 +385,6 @@ pub async fn code_sculpting_warmup(
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingHeal {
     request_id: String,
-    root_directory: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -392,10 +396,7 @@ impl ApiResponse for CodeSculptingHealResponse {}
 
 pub async fn code_sculpting_heal(
     Extension(app): Extension<Application>,
-    Json(CodeSculptingHeal {
-        request_id,
-        root_directory,
-    }): Json<CodeSculptingHeal>,
+    Json(CodeSculptingHeal { request_id }): Json<CodeSculptingHeal>,
 ) -> Result<impl IntoResponse> {
     println!(
         "webserver::code_sculpting_heal::request_id({})",
@@ -415,35 +416,62 @@ pub async fn code_sculpting_heal(
         Ok(json_result(CodeSculptingHealResponse { done: false }))
     } else {
         let anchor_properties = anchor_properties.expect("is_none to hold");
+        let older_file_content_map = anchor_properties.previous_file_content;
         let file_paths = anchor_properties
             .anchored_symbols
             .iter()
             .filter_map(|symbol| symbol.0.fs_file_path())
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect::<Vec<_>>();
 
         let message_properties = anchor_properties.message_properties.clone();
 
         // Now grab the symbols which have changed
         let cloned_tools = app.tool_box.clone();
-        let symbol_change_set: HashMap<String, SymbolChangeSet> = stream::iter(
-            file_paths
-                .into_iter()
-                .map(|file_path| (file_path, cloned_tools.clone(), root_directory.clone())),
-        )
-        .map(|(fs_file_path, tools, root_directory)| async move {
-            let symbol_change_sets = tools
-                .grab_changed_symbols_in_file(&root_directory, &fs_file_path)
-                .await;
-            symbol_change_sets
-                .ok()
-                .map(|symbol_change_set| (fs_file_path, symbol_change_set))
-        })
-        .buffer_unordered(10)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .filter_map(|s| s)
-        .collect::<HashMap<_, _>>();
+        let symbol_change_set: HashMap<String, SymbolChangeSet> =
+            stream::iter(file_paths.into_iter().map(|file_path| {
+                let older_file_content = older_file_content_map
+                    .get(&file_path)
+                    .map(|content| content.to_owned());
+                (
+                    file_path,
+                    cloned_tools.clone(),
+                    older_file_content,
+                    message_properties.clone(),
+                )
+            }))
+            .map(
+                |(fs_file_path, tools, older_file_content, message_properties)| async move {
+                    if let Some(older_content) = older_file_content {
+                        let file_content = tools
+                            .file_open(fs_file_path.to_owned(), message_properties)
+                            .await
+                            .ok();
+                        if let Some(new_content) = file_content {
+                            tools
+                                .get_symbol_change_set(
+                                    &fs_file_path,
+                                    &older_content,
+                                    new_content.contents_ref(),
+                                )
+                                .await
+                                .ok()
+                                .map(|symbol_change_set| (fs_file_path, symbol_change_set))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                },
+            )
+            .buffer_unordered(10)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|s| s)
+            .collect::<HashMap<_, _>>();
 
         let changed_symbols = anchor_properties
             .anchored_symbols
@@ -668,10 +696,34 @@ pub async fn code_editing(
             // we want to send the edit request directly over here cutting through
             // the initial request parts
             let user_provided_context = user_context.to_context_string().await.ok();
+            let possibly_changed_files = symbols_to_anchor
+                .iter()
+                .filter_map(|(symbol_identifer, _)| symbol_identifer.fs_file_path())
+                .collect::<Vec<_>>();
+            let cloned_tools = app.tool_box.clone();
+            let file_contents =
+                stream::iter(possibly_changed_files.into_iter().map(|file_path| {
+                    (file_path, cloned_tools.clone(), message_properties.clone())
+                }))
+                .map(|(fs_file_path, tools, message_properties)| async move {
+                    let file_open_response = tools
+                        .file_open(fs_file_path.to_owned(), message_properties)
+                        .await;
+                    file_open_response
+                        .ok()
+                        .map(|response| (fs_file_path, response.contents()))
+                })
+                .buffer_unordered(100)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .filter_map(|s| s)
+                .collect::<HashMap<_, _>>();
             let editing_metadata = AnchoredEditingMetadata::new(
                 message_properties.clone(),
                 symbols_to_anchor,
                 user_provided_context.clone(),
+                file_contents,
             );
             let anchored_symbols = app
                 .tool_box

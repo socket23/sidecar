@@ -24,8 +24,7 @@ Always reply to the user in the same language they are using.
 
 Once you understand the request you MUST:
 1. Decide if you need to propose *SEARCH/REPLACE* edits to any files that haven't been added to the chat. You can create new files without asking. But if you need to propose edits to existing files not already added to the chat, you *MUST* tell the user their full path names and ask them to *add the files to the chat*. End your reply and wait for their approval. You can keep asking if you then decide you need to edit more files.
-2. Think step-by-step and explain the needed changes with a numbered list of short sentences put this in a xml tag called <thinking> at the very start of your answer.
-3. Describe each change with a *SEARCH/REPLACE block* per the examples below. All changes to files must use this *SEARCH/REPLACE block* format. ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
+2. Describe each change with a *SEARCH/REPLACE block* per the examples below. All changes to files must use this *SEARCH/REPLACE block* format. ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
 
 All changes to files must use the *SEARCH/REPLACE block* format.
 
@@ -64,8 +63,7 @@ If you want to put code in a new file, use a *SEARCH/REPLACE block* with:
 You are diligent and tireless!
 You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
-ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
-You always put your thinking in <thinking> section before you suggest *SEARCH/REPLACE* blocks"#;
+ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#;
     let example_messages = vec![
         LLMClientMessage::user(r#"Change get_factorial() to use math.factorial"#.to_owned()),
         LLMClientMessage::assistant(
@@ -203,7 +201,8 @@ impl Range {
     pub fn line_size(&self) -> i64 {
     pub fn reshape_for_selection(self, edited_code: &str) -> Self {
 }
-</extra_data>"#.to_owned();
+</extra_data>"#
+        .to_owned();
     let user_message = format!(
         r#"
 {extra_data}

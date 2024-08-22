@@ -6339,6 +6339,11 @@ FILEPATH: {fs_file_path}
         let anchored_nodes = intersecting_outline_nodes
             .into_iter()
             .map(|outline_node| {
+                println!(
+                    "tool_box::symbols_to_anchor::({})::({:?})",
+                    outline_node.name(),
+                    outline_node.outline_node_type()
+                );
                 if outline_node.is_funciton() || outline_node.is_class_definition() {
                     // then its a single unit of work, so its a bit easier
                     (

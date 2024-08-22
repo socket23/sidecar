@@ -3733,4 +3733,38 @@ enum Something {
         println!("{}", &compressed_node);
         assert!(false);
     }
+
+    #[test]
+    fn test_outline_nodes_class_definitions_for_typescript() {
+        let source_code = r#"interface Something {
+    a: string;
+    b: string;
+}
+    
+export type IAideProbeProgress =
+    | IAideChatMarkdownContent
+    | IAideProbeBreakdownContent
+    | IAideProbeGoToDefinition
+    | IAideProbeTextEdit
+    | IAideProbeOpenFile
+    | IAideProbeRepoMapGeneration
+    | IAideProbeLongContextSearch
+    | IAideProbeInitialSymbols"#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("typescript")
+            .expect("language config to be present");
+        let grammar = ts_language_config.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(grammar()).unwrap();
+        let tree = parser.parse(source_code, None).unwrap();
+        let outline_nodes = ts_language_config.generate_outline(
+            source_code.as_bytes(),
+            &tree,
+            "/tmp/something.ts".to_owned(),
+        );
+        assert_eq!(outline_nodes.len(), 2);
+        assert!(outline_nodes[0].is_class_definition());
+        assert!(outline_nodes[1].is_class_definition());
+    }
 }

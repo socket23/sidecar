@@ -221,13 +221,13 @@ pub fn typescript_language_config() -> TSLanguageConfig {
           (interface_declaration
               name: (type_identifier) @definition.class.name
           )
-      ) @definition.class
+      ) @definition.class.declaration
   
       (export_statement
           (type_alias_declaration
               name: (type_identifier) @definition.class.name
           )
-      ) @definition.class
+      ) @definition.class.declaration
         "#.to_owned()),
         excluded_file_paths: vec![],
         language_str: "typescript".to_owned(),

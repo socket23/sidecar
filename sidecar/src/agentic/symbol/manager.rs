@@ -189,7 +189,7 @@ impl SymbolManager {
                                     )),
                                     hub_sender,
                                     message_properties,
-                                    &ToolProperties::new(),
+                                    &ToolProperties::new().set_apply_edits_directly(),
                                 )
                                 .await
                             }

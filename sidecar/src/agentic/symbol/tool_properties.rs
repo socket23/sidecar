@@ -13,6 +13,7 @@ pub struct ToolProperties {
     // plan for the task instance this contains the overall plan we are going to
     // be following while making the edits
     plan_for_input: Option<String>,
+    apply_edits_directly: bool,
 }
 
 impl ToolProperties {
@@ -25,7 +26,17 @@ impl ToolProperties {
             full_symbol_request: false,
             fast_code_symbol_search: None,
             plan_for_input: None,
+            apply_edits_directly: false,
         }
+    }
+
+    pub fn should_apply_edits_directly(&self) -> bool {
+        self.apply_edits_directly
+    }
+
+    pub fn set_apply_edits_directly(mut self) -> Self {
+        self.apply_edits_directly = true;
+        self
     }
 
     pub fn get_plan_for_input(&self) -> Option<String> {

@@ -85,6 +85,7 @@ async fn main() {
                 None,
                 true,
                 None,
+                false, // should we disable followups and correctness check
             ),
             event_properties,
         )

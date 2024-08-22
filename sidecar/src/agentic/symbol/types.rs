@@ -1432,6 +1432,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     .map(|symbol_edited_list| symbol_edited_list.to_vec()),
                 true,
                 None,
+                false, // should we disable followups and correctness check
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(
@@ -1642,9 +1643,9 @@ Satisfy the requirement either by making edits or gathering the required informa
     }
 
     /// Editing the full symbol using search and replace blocks
-    /// 
+    ///
     /// This leads to better edits and performance in general at the cost of speed
-    /// 
+    ///
     /// For larger blocks of code, this is preferred
     async fn edit_code_full(
         &self,
@@ -2036,44 +2037,50 @@ Satisfy the requirement either by making edits or gathering the required informa
                 "symbol::edit_implementation::check_code_correctness::({})",
                 self.symbol_name()
             );
-            // // debugging loop after this
-            // let _ = self
-            //     .tools
-            //     .check_code_correctness(
-            //         self.symbol_name(),
-            //         &sub_symbol_to_edit,
-            //         self.symbol_identifier.clone(),
-            //         original_code,
-            //         edited_code,
-            //         &context_for_editing.join("\n"),
-            //         self.llm_properties.llm().clone(),
-            //         self.llm_properties.provider().clone(),
-            //         self.llm_properties.api_key().clone(),
-            //         &self.tool_properties,
-            //         history.to_vec(),
-            //         self.hub_sender.clone(),
-            //         message_properties.clone(),
-            //     )
-            //     .await;
+            // if we have to make sure that followups and correctness checks need
+            // to keep happening
+            if !sub_symbol_to_edit.should_disable_followups_and_correctness() {
+                // debugging loop after this
+                let _ = self
+                    .tools
+                    .check_code_correctness(
+                        self.symbol_name(),
+                        &sub_symbol_to_edit,
+                        self.symbol_identifier.clone(),
+                        original_code,
+                        edited_code,
+                        &context_for_editing.join("\n"),
+                        self.llm_properties.llm().clone(),
+                        self.llm_properties.provider().clone(),
+                        self.llm_properties.api_key().clone(),
+                        &self.tool_properties,
+                        history.to_vec(),
+                        self.hub_sender.clone(),
+                        message_properties.clone(),
+                    )
+                    .await;
 
-            // // once we have successfully changed the implementation over here
-            // // we have to start looking for followups over here
-            // // F in the chat for error handling :')
-            // let _ = self
-            //     .tools
-            //     .check_for_followups(
-            //         self.symbol_name(),
-            //         &sub_symbol_to_edit,
-            //         &original_code,
-            //         &edited_code,
-            //         self.llm_properties.llm().clone(),
-            //         self.llm_properties.provider().clone(),
-            //         self.llm_properties.api_key().clone(),
-            //         self.hub_sender.clone(),
-            //         message_properties.clone(),
-            //         &self.tool_properties,
-            //     )
-            //     .await;
+                // once we have successfully changed the implementation over here
+                // we have to start looking for followups over here
+                // F in the chat for error handling :')
+                let _ = self
+                    .tools
+                    .check_for_followups(
+                        self.symbol_name(),
+                        &sub_symbol_to_edit,
+                        &original_code,
+                        &edited_code,
+                        self.llm_properties.llm().clone(),
+                        self.llm_properties.provider().clone(),
+                        self.llm_properties.api_key().clone(),
+                        self.hub_sender.clone(),
+                        message_properties.clone(),
+                        &self.tool_properties,
+                    )
+                    .await;
+            } else {
+                println!("symbol::edit_implementation::symbol_name({})::followups_and_correctness_check_disabled({})", self.symbol_name(), sub_symbol_to_edit.should_disable_followups_and_correctness());
+            }
         }
         println!(
             "symbol::edit_implementation::finish::({})",

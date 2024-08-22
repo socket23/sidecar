@@ -1653,6 +1653,7 @@ Satisfy the requirement either by making edits or gathering the required informa
         // inside the symbol itself
         sub_symbol: &SymbolToEdit,
         context: Vec<String>,
+        tool_properties: ToolProperties,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<EditedCodeSymbol, SymbolError> {
         // let symbol_to_edit = self
@@ -1697,6 +1698,21 @@ Satisfy the requirement either by making edits or gathering the required informa
                 message_properties.clone(),
             )
             .await?;
+
+        if tool_properties.should_apply_edits_directly() {
+            let _ = self
+                .tools
+                .apply_edits_to_editor(
+                    sub_symbol.fs_file_path(),
+                    symbol_to_edit.range(),
+                    &edited_code,
+                    // apply these directly skipping any kind of undo-stacks
+                    // its raw editor apply
+                    true,
+                    message_properties.clone(),
+                )
+                .await;
+        }
 
         Ok(EditedCodeSymbol::new(content, edited_code))
     }
@@ -1911,10 +1927,11 @@ Satisfy the requirement either by making edits or gathering the required informa
         &self,
         edit_request: SymbolToEditRequest,
         message_properties: SymbolEventMessageProperties,
+        tool_properties: ToolProperties,
     ) -> Result<(), SymbolError> {
         // NOTE: we do not add an entry to the history here because the initial
         // request already adds the entry before sending over the edit
-        let history = edit_request.history().to_vec();
+        let _history = edit_request.history().to_vec();
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
@@ -1992,6 +2009,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                         self.edit_code_full(
                             &sub_symbol_to_edit,
                             context_for_editing.to_vec(),
+                            tool_properties.clone(),
                             message_properties.clone(),
                         )
                         .await?
@@ -2041,24 +2059,25 @@ Satisfy the requirement either by making edits or gathering the required informa
             // to keep happening
             if !sub_symbol_to_edit.should_disable_followups_and_correctness() {
                 // debugging loop after this
-                let _ = self
-                    .tools
-                    .check_code_correctness(
-                        self.symbol_name(),
-                        &sub_symbol_to_edit,
-                        self.symbol_identifier.clone(),
-                        original_code,
-                        edited_code,
-                        &context_for_editing.join("\n"),
-                        self.llm_properties.llm().clone(),
-                        self.llm_properties.provider().clone(),
-                        self.llm_properties.api_key().clone(),
-                        &self.tool_properties,
-                        history.to_vec(),
-                        self.hub_sender.clone(),
-                        message_properties.clone(),
-                    )
-                    .await;
+                // disable code correctness check
+                // let _ = self
+                //     .tools
+                //     .check_code_correctness(
+                //         self.symbol_name(),
+                //         &sub_symbol_to_edit,
+                //         self.symbol_identifier.clone(),
+                //         original_code,
+                //         edited_code,
+                //         &context_for_editing.join("\n"),
+                //         self.llm_properties.llm().clone(),
+                //         self.llm_properties.provider().clone(),
+                //         self.llm_properties.api_key().clone(),
+                //         &self.tool_properties,
+                //         history.to_vec(),
+                //         self.hub_sender.clone(),
+                //         message_properties.clone(),
+                //     )
+                //     .await;
 
                 // once we have successfully changed the implementation over here
                 // we have to start looking for followups over here
@@ -2105,6 +2124,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 let symbol_event_request = symbol_event.symbol_event_request().clone();
                 let request_id_data = symbol_event.request_id_data().clone();
                 let message_properties = symbol_event.get_properties().clone();
+                let tool_properties = symbol_event_request.get_tool_properties();
                 let response_sender = symbol_event.remove_response_sender();
                 println!(
                     "Symbol::receiver_stream::event::({})\n{:?}",
@@ -2191,7 +2211,11 @@ Satisfy the requirement either by making edits or gathering the required informa
                             symbol.symbol_name()
                         );
                         let _ = symbol
-                            .edit_implementations(edit_request, message_properties.clone())
+                            .edit_implementations(
+                                edit_request,
+                                message_properties.clone(),
+                                tool_properties.clone(),
+                            )
                             .await;
                         let _ = response_sender
                             .send(SymbolEventResponse::TaskDone("edit finished".to_owned()));

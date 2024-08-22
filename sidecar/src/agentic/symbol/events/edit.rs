@@ -20,6 +20,8 @@ pub struct SymbolToEdit {
     user_provided_context: Option<String>,
     // Whether to disable followups and correctness checks
     disable_followups_and_correctness: bool,
+    // if we should apply the edits directly
+    apply_edits_directly: bool,
 }
 
 impl SymbolToEdit {
@@ -50,7 +52,17 @@ impl SymbolToEdit {
             gather_definitions_for_editing,
             user_provided_context,
             disable_followups_and_correctness,
+            apply_edits_directly: false,
         }
+    }
+
+    pub fn apply_edits_directly(mut self) -> Self {
+        self.apply_edits_directly = true;
+        self
+    }
+
+    pub fn should_apply_edits_directory(&self) -> bool {
+        self.apply_edits_directly
     }
 
     pub fn should_disable_followups_and_correctness(&self) -> bool {

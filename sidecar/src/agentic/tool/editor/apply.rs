@@ -74,6 +74,10 @@ pub struct EditorApplyResponse {
 
 impl EditorApply {
     async fn apply_edits(&self, request: EditorApplyRequest) -> Result<ToolOutput, ToolError> {
+        println!(
+            "framework_event::edit_event::direct_apply::range({:?})::({:?})",
+            &request.fs_file_path, &request.selected_range,
+        );
         let editor_endpoint = request.editor_url.to_owned() + "/apply_edits";
         let response = self
             .client

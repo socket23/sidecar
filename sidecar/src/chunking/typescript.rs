@@ -188,11 +188,11 @@ pub fn typescript_language_config() -> TSLanguageConfig {
   
       (interface_declaration
           name: (type_identifier) @definition.class.name
-      ) @definition.class
+      ) @definition.class.declaration
   
       (type_alias_declaration
           name: (type_identifier) @definition.class.name
-      ) @definition.class
+      ) @definition.class.declaration
   
       (method_definition
           name: (property_identifier) @function.name

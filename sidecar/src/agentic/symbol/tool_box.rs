@@ -2879,7 +2879,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                              Updated implementation:\n```\n{}\n```\n\n\
                              Please update this code to accommodate these changes. Consider:\n\
                              1. Method signature changes (parameters, return types)\n\
-                             2. Behavioral changes in the dependency\n\
+                             2. Behavioural changes in the dependency\n\
                              3. Potential side effects or new exceptions\n\
                              4. Any new methods or properties that should be utilized\n\
                              5. Deprecated features that should no longer be used\n\
@@ -3965,6 +3965,8 @@ instruction:
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    // TODO(codestory): This part of the puzzle is still messed up since we are rewriting the whole
+    // code over here which is not correct
     async fn code_correctness_with_edits(
         &self,
         fs_file_path: &str,

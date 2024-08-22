@@ -1996,7 +1996,8 @@ Satisfy the requirement either by making edits or gathering the required informa
             let original_code = &edited_code.original_code;
             let edited_code = &edited_code.edited_code;
 
-            if original_code == edited_code {
+            // trim and compare instead of original, cause white spaces leak in at start and end
+            if original_code.trim() == edited_code.trim() {
                 println!(
                     "symbol::edit_implementation::no_changes::({})::({})",
                     self.symbol_name(),

@@ -67,15 +67,7 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#;
     let example_messages = vec![
         LLMClientMessage::user(r#"Change get_factorial() to use math.factorial"#.to_owned()),
         LLMClientMessage::assistant(
-            r#"<thinking>
-To make this change we need to modify `mathweb/flask/app.py` to:
-
-1. Import the math package.
-2. Remove the existing factorial() function.
-3. Update get_factorial() to call math.factorial instead.
-</thinking>
-
-Here are the *SEARCH/REPLACE* blocks:
+            r#"Here are the *SEARCH/REPLACE* blocks:
 
 mathweb/flask/app.py
 ```python

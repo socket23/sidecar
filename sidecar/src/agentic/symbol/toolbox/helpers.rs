@@ -44,6 +44,10 @@ impl SymbolChanges {
     pub fn changes(&self) -> &Changes {
         &self.changes
     }
+
+    pub fn remove_changes(self) -> Changes {
+        self.changes
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -41,7 +41,7 @@ use super::{
 // This is the main communication manager between all the symbols
 // this of this as the central hub through which all the events go forward
 pub struct SymbolManager {
-    _sender: UnboundedSender<SymbolEventMessage>,
+    sender: UnboundedSender<SymbolEventMessage>,
     // this is the channel where the various symbols will use to talk to the manager
     // which in turn will proxy it to the right symbol, what happens if there are failures
     // each symbol has its own receiver which is being used
@@ -81,7 +81,7 @@ impl SymbolManager {
         });
         let ts_parsing = Arc::new(TSLanguageParsing::init());
         Self {
-            _sender: sender,
+            sender,
             symbol_locker,
             ts_parsing,
             tools,
@@ -89,6 +89,10 @@ impl SymbolManager {
             llm_properties,
             long_context_cache: LongContextSearchCache::new(),
         }
+    }
+
+    pub fn hub_sender(&self) -> UnboundedSender<SymbolEventMessage> {
+        self.sender.clone()
     }
 
     pub async fn anchor_edits(

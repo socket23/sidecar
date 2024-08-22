@@ -130,9 +130,14 @@ fn repo_router() -> Router {
         .route("/repo_list", get(sidecar::webserver::repos::repo_status))
 }
 
+// Define routes for agentic operations
+// Define the router for agentic operations
+// This router handles various AI-assisted code operations and benchmarking
 fn agentic_router() -> Router {
     use axum::routing::*;
     Router::new()
+        // Probe request routes
+        // These routes handle starting and stopping probe requests
         .route(
             "/probe_request",
             post(sidecar::webserver::agentic::probe_request),
@@ -141,6 +146,8 @@ fn agentic_router() -> Router {
             "/probe_request_stop",
             post(sidecar::webserver::agentic::probe_request_stop),
         )
+        // Code editing and sculpting routes
+        // These routes handle various AI-assisted code modification operations
         .route(
             "/code_editing",
             post(sidecar::webserver::agentic::code_editing),
@@ -153,6 +160,12 @@ fn agentic_router() -> Router {
             "/code_sculpting_warmup",
             post(sidecar::webserver::agentic::code_sculpting_warmup),
         )
+        .route(
+            "/code_sculpting_heal",
+            post(sidecar::webserver::agentic::code_sculpting_heal),
+        )
+        // SWE bench route
+        // This route is for software engineering benchmarking
         .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))
 }
 

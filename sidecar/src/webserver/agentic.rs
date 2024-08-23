@@ -4,7 +4,7 @@ use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::{stream, StreamExt};
-use llm_client::provider::{GoogleAIStudioKey, OpenAIProvider};
+use llm_client::provider::GoogleAIStudioKey;
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -17,6 +17,7 @@ use tokio::task::JoinHandle;
 
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
+use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::identifier::SymbolIdentifier;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
@@ -488,7 +489,8 @@ pub async fn code_sculpting_heal(
                         .changes()
                         .into_iter()
                         .filter(|changed_symbol| {
-                            changed_symbol.symbol_name() == symbol_identifier.symbol_name()
+                            changed_symbol.symbol_identifier().symbol_name()
+                                == symbol_identifier.symbol_name()
                         })
                         .map(|changed_symbol| changed_symbol.clone())
                         .collect::<Vec<_>>();
@@ -500,62 +502,38 @@ pub async fn code_sculpting_heal(
             .flatten()
             .collect::<Vec<_>>();
 
+        let followup_bfs_request = changed_symbols
+            .into_iter()
+            .map(|changes| {
+                let symbol_identifier = changes.symbol_identifier().clone();
+                let symbol_identifier_ref = &symbol_identifier;
+                changes
+                    .remove_changes()
+                    .into_iter()
+                    .map(|symbol_to_edit| {
+                        SymbolFollowupBFS::new(
+                            symbol_to_edit.0,
+                            symbol_identifier_ref.clone(),
+                            symbol_to_edit.1,
+                            symbol_to_edit.2,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+
         let hub_sender = app.symbol_manager.hub_sender();
         let cloned_tools = app.tool_box.clone();
         let _join_handle = tokio::spawn(async move {
-            let _ = stream::iter(changed_symbols.into_iter().flat_map(|symbol_changes| {
-                let parent_symbol_name = symbol_changes.symbol_name().clone();
-                let message_properties = message_properties.clone();
-                let cloned_tools = cloned_tools.clone();
-                let hub_sender = hub_sender.clone();
-
-                symbol_changes
-                    .remove_changes()
-                    .into_iter()
-                    .map(move |changes| {
-                        (
-                            changes,
-                            message_properties.clone(),
-                            cloned_tools.clone(),
-                            hub_sender.clone(),
-                        )
-                    })
-                    .map(
-                        move |(
-                            (symbol, original_content, edited_content),
-                            message_properties,
-                            cloned_tools,
-                            hub_sender,
-                        )| {
-                            let message_properties = message_properties.clone();
-                            let hub_sender = hub_sender.clone();
-                            let parent_symbol_name = parent_symbol_name.clone();
-
-                            async move {
-                                cloned_tools
-                                .check_for_followups(
-                                    &parent_symbol_name,
-                                    &symbol,
-                                    &original_content,
-                                    &edited_content,
-                                    LLMType::Gpt4O,
-                                    LLMProvider::OpenAI,
-                                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                                        "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt"
-                                            .to_owned(),
-                                    )),
-                                    hub_sender,
-                                    message_properties,
-                                    &ToolProperties::new(),
-                                )
-                                .await
-                            }
-                        },
-                    )
-            }))
-            .buffer_unordered(1)
-            .collect::<Vec<_>>()
-            .await;
+            let _ = cloned_tools
+                .check_for_followups_bfs(
+                    followup_bfs_request,
+                    hub_sender,
+                    message_properties,
+                    &ToolProperties::new(),
+                )
+                .await;
         });
         Ok(json_result(CodeSculptingHealResponse { done: true }))
     }

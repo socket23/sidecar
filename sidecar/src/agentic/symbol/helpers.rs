@@ -8,7 +8,53 @@ use crate::{
     chunking::text_document::Range,
 };
 
-use super::identifier::Snippet;
+use super::{
+    events::edit::SymbolToEdit,
+    identifier::{Snippet, SymbolIdentifier},
+};
+
+/// Keeps track of the symbols on which we want to perform followups
+#[derive(Clone)]
+pub struct SymbolFollowupBFS {
+    symbol_edited: SymbolToEdit,
+    // this is the parent symbol where the edit was happening
+    // we could be editing a sub-symbol inside the parent
+    symbol_identifier: SymbolIdentifier,
+    original_code: String,
+    edited_code: String,
+}
+
+impl SymbolFollowupBFS {
+    pub fn new(
+        symbol_edited: SymbolToEdit,
+        symbol_identifier: SymbolIdentifier,
+        original_code: String,
+        edited_code: String,
+    ) -> Self {
+        Self {
+            symbol_edited,
+            symbol_identifier,
+            original_code,
+            edited_code,
+        }
+    }
+
+    pub fn symbol_identifier(&self) -> &SymbolIdentifier {
+        &self.symbol_identifier
+    }
+
+    pub fn symbol_edited(&self) -> &SymbolToEdit {
+        &self.symbol_edited
+    }
+
+    pub fn original_code(&self) -> &str {
+        &self.original_code
+    }
+
+    pub fn edited_code(&self) -> &str {
+        &self.edited_code
+    }
+}
 
 /// Grab the file contents above, below and in the selection
 pub fn split_file_content_into_parts(

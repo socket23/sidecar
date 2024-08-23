@@ -2086,13 +2086,12 @@ We also believe this symbol needs to be probed because of:
                 parent_symbol_name,
                 &outline_node.name()
             );
-            // TODO(skcd): There are several cases here which we can handle:
-            // - we might have changed the definition of the symbol itself
-            // -  we could have an enum over here and added a new entry at this point, so
-            // we have to follow the symbol itself and go to tht references for it
-            // - so the hard part here is deciding between the following:
-            // - do we follow individual parts of the class type definitions
-            // - or do we follow the symbol itself and check things out
+            // this flow only happens for rust/golang type of languages
+            // so the new flow which we should take is the following:
+            // - go to our implementation blocks and check if there is something which needs
+            // changing over here
+            // - once we have changed the implementation blocks trigger the followups for the functions
+            // which changed as well as the class definition node itself
             let _ = self
                 .invoke_references_check_for_class_definition(
                     symbol_edited,

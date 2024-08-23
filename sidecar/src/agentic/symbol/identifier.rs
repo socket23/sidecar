@@ -944,14 +944,20 @@ impl MechaCodeSymbolThinking {
             self.symbol_name(),
         );
         let mut history = original_request.history().to_vec();
-        history.push(SymbolRequestHistoryItem::new(
-            self.symbol_name().to_owned(),
-            self.fs_file_path().to_owned(),
-            original_request.get_plan().to_owned(),
-        ));
 
 
         if self.is_snippet_present().await {
+            let outline_node_type;
+            {
+                let snippet = self.snippet.lock().await;
+                outline_node_type = snippet.as_ref().expect("is_snippet_present to not fail").outline_node_content.outline_node_type().clone();
+            }
+            history.push(SymbolRequestHistoryItem::new(
+                self.symbol_name().to_owned(),
+                self.fs_file_path().to_owned(),
+                original_request.get_plan().to_owned(),
+                Some(outline_node_type),
+            ));
             // if this is a big search request, we might have been over-eager and want
             // to edit more than required, the best thing to do is self-reflect and check
             // if we even need to edit this
@@ -1084,17 +1090,23 @@ impl MechaCodeSymbolThinking {
 
         // This history of the paths we have taken upto this point
         let mut history = original_request.history().to_vec();
-        // add the current symbol in the history list
-        history.push(SymbolRequestHistoryItem::new(
-            self.symbol_name().to_owned(),
-            self.fs_file_path().to_owned(),
-            original_request.get_original_question().to_owned(),
-        ));
 
         // First we need to verify if we even have to enter the coding loop, often
         // times thinking about this is better and solves generating a lot of code
         // for no reason
         if self.is_snippet_present().await {
+            let outline_node_type;
+            {
+                let snippet = self.snippet.lock().await;
+                outline_node_type = snippet.as_ref().expect("is_snippet_present to work").outline_node_content().outline_node_type().clone();
+            }
+            // add the current symbol in the history list
+            history.push(SymbolRequestHistoryItem::new(
+                self.symbol_name().to_owned(),
+                self.fs_file_path().to_owned(),
+                original_request.get_original_question().to_owned(),
+                Some(outline_node_type),
+            ));
             // TODO(skcd) we also want to check if we need to generate a new symbol inside the current
             // symbol and if yes, then we need to ask for the name of it and reason behind
             // it, and it can only happen in a class:

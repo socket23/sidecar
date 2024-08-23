@@ -73,7 +73,7 @@ async fn main() {
     output.changes().iter().for_each(|symbol_changes| {
         println!(
             "symbol_name::({})::children({})",
-            symbol_changes.symbol_name(),
+            symbol_changes.symbol_identifier().symbol_name(),
             symbol_changes
                 .changes()
                 .iter()

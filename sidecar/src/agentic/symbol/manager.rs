@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
-use llm_client::provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider};
+use llm_client::provider::{GoogleAIStudioKey, LLMProvider};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::agentic::swe_bench::search_cache::LongContextSearchCache;
@@ -14,6 +14,7 @@ use crate::agentic::symbol::events::initial_request::{InitialRequestData, Symbol
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::probe::SymbolToProbeRequest;
 use crate::agentic::symbol::events::types::SymbolEvent;
+use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::ui_event::InitialSearchSymbolInformation;
 use crate::agentic::tool::code_symbol::important::CodeSymbolImportantWideSearch;
@@ -158,48 +159,42 @@ impl SymbolManager {
             .tool_box
             .grab_changed_symbols_in_file_git(&root_dir, &fs_file_path)
             .await?;
-        println!("symbol_change_set: {}", &symbol_change_set);
+        println!("symbol_change_set:{:?}", &symbol_change_set);
 
-        let _ = stream::iter(
-            symbol_change_set
-                .changes()
-                .iter()
-                .flat_map(|symbol_changes| {
-                    let parent_symbol_name = symbol_changes.symbol_name().clone();
-                    let message_properties = message_properties.clone();
+        let symbols_to_followup_request = symbol_change_set
+            .remove_changes()
+            .into_iter()
+            .map(|changes| {
+                let symbol_identifier = changes.symbol_identifier().clone();
+                let symbol_identifier_ref = &symbol_identifier;
+                changes
+                    .remove_changes()
+                    .into_iter()
+                    .map(|symbol_to_edit| {
+                        SymbolFollowupBFS::new(
+                            symbol_to_edit.0,
+                            symbol_identifier_ref.clone(),
+                            symbol_to_edit.1,
+                            symbol_to_edit.2,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect::<Vec<_>>();
 
-                    symbol_changes.changes().iter().map(
-                        move |(symbol, original_content, edited_content)| {
-                            let message_properties = message_properties.clone();
-                            let hub_sender = self.symbol_locker.hub_sender.clone();
-                            let parent_symbol_name = parent_symbol_name.clone();
-
-                            async move {
-                                self.tool_box
-                                .check_for_followups(
-                                    &parent_symbol_name,
-                                    symbol,
-                                    original_content,
-                                    edited_content,
-                                    LLMType::Gpt4O,
-                                    LLMProvider::OpenAI,
-                                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                                        "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt"
-                                            .to_owned(),
-                                    )),
-                                    hub_sender,
-                                    message_properties,
-                                    &ToolProperties::new().set_apply_edits_directly(),
-                                )
-                                .await
-                            }
-                        },
-                    )
-                }),
-        )
-        .buffer_unordered(1)
-        .collect::<Vec<_>>()
-        .await;
+        // This needs to be an iterative loop over here instead of a single call
+        // we have to perform a BFS at this layer so the symbols can organise and
+        // get the job done
+        let _ = self
+            .tool_box
+            .check_for_followups_bfs(
+                symbols_to_followup_request,
+                self.symbol_locker.hub_sender.clone(),
+                message_properties,
+                &ToolProperties::new().set_apply_edits_directly(),
+            )
+            .await;
 
         Ok(())
     }

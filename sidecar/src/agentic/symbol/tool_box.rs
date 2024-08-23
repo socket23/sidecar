@@ -2668,7 +2668,10 @@ We also believe this symbol needs to be probed because of:
         &self,
         original_symbol_name: &str,
         original_code: &str,
+        // this will be a class, function or the class implementation block
         original_symbol: &OutlineNodeContent,
+        // references here might be from everywhere: functions in the class, implementation block
+        // or even the function
         reference_locations: Vec<ReferenceLocation>,
         hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
@@ -2794,6 +2797,31 @@ We also believe this symbol needs to be probed because of:
             .flatten()
             .collect::<Vec<_>>()
             .into_iter()
+            .filter(|outline_node_for_reference| {
+                // here we can follow a simple paradigm and use it
+                if original_symbol.is_function_type() {
+                    true
+                } else if original_symbol.is_class_definition() {
+                    // we can go to an implementation block from here but not back to
+                    // the class itself (only if the classes line up)
+                    if outline_node_for_reference.is_class_definition()
+                        && outline_node_for_reference.name() == original_symbol.name()
+                    {
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    // this is a class implementation block, can we go back to another class implementation block
+                    // yes, but only if its not the same as the outline node itself
+                    // this does not feel right to me tho....
+                    if outline_node_for_reference.content().content() == edited_code {
+                        false
+                    } else {
+                        true
+                    }
+                }
+            })
             .map(|outline_node| (outline_node, hub_sender.clone(), message_properties.clone()))
             .collect::<Vec<_>>();
 

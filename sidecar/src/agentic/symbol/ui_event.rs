@@ -220,6 +220,7 @@ impl UIEventWithID {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
+        updated_code: String,
     ) -> Self {
         Self {
             request_id,
@@ -228,6 +229,7 @@ impl UIEventWithID {
                 edit_request_id,
                 range,
                 fs_file_path,
+                updated_code,
             )),
         }
     }
@@ -364,6 +366,7 @@ pub struct EditedCodeStreamingRequest {
     edit_request_id: String,
     range: Range,
     fs_file_path: String,
+    updated_code: Option<String>,
     event: EditedCodeStreamingEvent,
 }
 
@@ -465,6 +468,7 @@ impl SymbolEventSubStepRequest {
                     range,
                     fs_file_path,
                     event: EditedCodeStreamingEvent::Start,
+                    updated_code: None,
                 },
             )),
         }
@@ -475,6 +479,7 @@ impl SymbolEventSubStepRequest {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
+        updated_code: String,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -483,6 +488,7 @@ impl SymbolEventSubStepRequest {
                     edit_request_id,
                     range,
                     fs_file_path,
+                    updated_code: Some(updated_code),
                     event: EditedCodeStreamingEvent::End,
                 },
             )),
@@ -504,6 +510,7 @@ impl SymbolEventSubStepRequest {
                     range,
                     fs_file_path,
                     event: EditedCodeStreamingEvent::Delta(delta),
+                    updated_code: None,
                 },
             )),
         }

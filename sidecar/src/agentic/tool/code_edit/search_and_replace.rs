@@ -443,6 +443,7 @@ impl Tool for SearchAndReplaceEditing {
                                 edit_request_id.to_owned(),
                                 range,
                                 fs_file_path.to_owned(),
+                                search_and_replace_accumulator.code_lines.join("\n"),
                             ));
                         }
                         None => {

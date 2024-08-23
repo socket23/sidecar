@@ -2127,7 +2127,7 @@ We also believe this symbol needs to be probed because of:
                     .iter()
                     .map(|loc| loc.fs_file_path())
                     .collect::<Vec<_>>()
-                    .join("\n")
+                    .join(",")
             );
 
             let _ = self
@@ -2688,7 +2688,7 @@ We also believe this symbol needs to be probed because of:
                 .iter()
                 .map(|fs_file_path| fs_file_path.as_str())
                 .collect::<Vec<_>>()
-                .join("\n")
+                .join(",")
         );
         // we invoke a request to open the file
         let _ = stream::iter(
@@ -2749,12 +2749,12 @@ We also believe this symbol needs to be probed because of:
                     });
 
                     println!(
-                        "toolbox::invoke_followup_on_references::sorted_file_path_to_outline_nodes({}):\n{}", fs_file_path,
+                        "toolbox::invoke_followup_on_references::sorted_file_path_to_outline_nodes({})::outline_nodes({})", fs_file_path,
                         outline_nodes
                             .iter()
                             .map(|n| n.name())
                             .collect::<Vec<&str>>()
-                            .join("\n")
+                            .join(",")
                     );
 
                     (fs_file_path, outline_nodes)
@@ -2826,12 +2826,12 @@ We also believe this symbol needs to be probed because of:
             .collect::<Vec<_>>();
 
         println!(
-            "tool_box::invoke_followup_on_references::outline_nodes_for_followups\n{}",
+            "tool_box::invoke_followup_on_references::outline_nodes_for_followups::outline_nodes_for_followups({})",
             outline_nodes_for_followups
                 .iter()
                 .map(|(node, _, _)| format!("{} - {:?}", node.name(), node.identifier_range()))
                 .collect::<Vec<String>>()
-                .join("\n")
+                .join(",")
         );
 
         stream::iter(outline_nodes_for_followups)

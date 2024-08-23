@@ -180,6 +180,7 @@ impl Tool for ApplyOutlineEditsToRange {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.apply_outline_edits_to_range()?;
         let ui_sender = context.ui_sender.clone();
+        let code_in_selection = context.code_in_selection.to_owned();
         let symbol_identifier = context.symbol_identifier.clone();
         let edited_range = context.outline_range.clone();
         let edit_request_id = context.edit_request_id.to_owned();
@@ -272,13 +273,26 @@ impl Tool for ApplyOutlineEditsToRange {
                         }
                     }
                     result = &mut stream_future => {
-                        let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
-                            root_request_id.to_owned(),
-                            symbol_identifier.clone(),
-                            edit_request_id.to_owned(),
-                            edited_range.clone(),
-                            fs_file_path.to_owned(),
-                        ));
+                        if let Ok(result) = result.as_deref() {
+                            let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
+                                root_request_id.to_owned(),
+                                symbol_identifier.clone(),
+                                edit_request_id.to_owned(),
+                                edited_range.clone(),
+                                fs_file_path.to_owned(),
+                                result.to_owned(),
+                            ));
+                        } else {
+                            // send over the original selection over here since we had an error
+                            let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
+                                root_request_id.to_owned(),
+                                symbol_identifier.clone(),
+                                edit_request_id.to_owned(),
+                                edited_range.clone(),
+                                fs_file_path.to_owned(),
+                                code_in_selection.to_owned(),
+                            ));
+                        }
                         stream_result = Some(result);
                         break;
                     }

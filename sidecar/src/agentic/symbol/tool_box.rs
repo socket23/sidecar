@@ -2313,7 +2313,15 @@ We also believe this symbol needs to be probed because of:
                         })
                         .collect::<Vec<_>>()
                         .join("\n");
-                    (outline_node, followup_prompt)
+                    let final_prompt = format!(r#"A dependency of this code has changed. You are given the list of changes below:
+{followup_prompt}
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#);
+                    (outline_node, final_prompt)
                 })
                 .collect::<Vec<_>>();
 

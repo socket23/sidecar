@@ -1,6 +1,8 @@
 //! Contains the different datastructures which are necessary for the initial
 //! request
 
+use crate::chunking::types::OutlineNodeType;
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SymbolEditedItem {
     symbol: String,
@@ -41,14 +43,23 @@ pub struct SymbolRequestHistoryItem {
     symbol: String,
     fs_file_path: String,
     request: String,
+    // This is not perfect, because we are leaving behind the new nodes which are
+    // getting created and what their type is
+    outline_node_type: Option<OutlineNodeType>,
 }
 
 impl SymbolRequestHistoryItem {
-    pub fn new(symbol: String, fs_file_path: String, request: String) -> Self {
+    pub fn new(
+        symbol: String,
+        fs_file_path: String,
+        request: String,
+        outline_node_type: Option<OutlineNodeType>,
+    ) -> Self {
         Self {
             symbol,
             fs_file_path,
             request,
+            outline_node_type,
         }
     }
 

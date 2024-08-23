@@ -1439,6 +1439,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.symbol_name().to_owned(),
                 self.fs_file_path().to_owned(),
                 request_data.get_original_question().to_owned(),
+                None,
             ));
             // we need to do context gathering over here as well
             let context = self

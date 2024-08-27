@@ -5529,21 +5529,14 @@ FILEPATH: {fs_file_path}
                             );
 
                             if let Ok(response) = references_response {
-                                println!("let's be sending!");
-
+                                // no need for symbol name - UX will show path and count
                                 let locations = response.locations();
+
                                 reference_locations.extend(locations);
                                 let _ = message_properties.ui_sender().send(
                                     UIEventWithID::found_reference(
                                         message_properties.request_id_str().to_owned(),
                                         path.to_string(),
-                                    ),
-                                );
-
-                                let _ = message_properties.ui_sender().send(
-                                    UIEventWithID::open_file_event(
-                                        message_properties.request_id_str().to_owned(),
-                                        "asdfadsfasdfasd".to_string(),
                                     ),
                                 );
                             }

@@ -4591,7 +4591,7 @@ instruction:
             sub_symbol.symbol_name(),
         );
         println!("============");
-        let (above, below, in_range_selection) =
+        let (_, _, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
         // disable inlay hints, cause it causes the LLM to mess up the code
         // in_range_selection = self

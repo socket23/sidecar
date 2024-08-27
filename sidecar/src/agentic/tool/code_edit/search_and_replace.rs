@@ -49,10 +49,9 @@ impl SearchAndReplaceEditingResponse {
 pub struct SearchAndReplaceEditingRequest {
     fs_file_path: String,
     // TODO(skcd): we use this to detect the range where we want to perform the edits
-    edit_range: Range,
+    _edit_range: Range,
     context_in_edit_selection: String,
-    _code_above: Option<String>,
-    _code_below: Option<String>,
+    complete_file: String,
     extra_data: String,
     llm_properties: LLMProperties,
     new_symbols: Option<String>,
@@ -71,8 +70,7 @@ impl SearchAndReplaceEditingRequest {
         fs_file_path: String,
         edit_range: Range,
         context_in_edit_selection: String,
-        code_above: Option<String>,
-        code_below: Option<String>,
+        complete_file: String,
         extra_data: String,
         llm_properties: LLMProperties,
         new_symbols: Option<String>,
@@ -88,10 +86,9 @@ impl SearchAndReplaceEditingRequest {
     ) -> Self {
         Self {
             fs_file_path,
-            edit_range,
+            _edit_range: edit_range,
             context_in_edit_selection,
-            _code_above: code_above,
-            _code_below: code_below,
+            complete_file,
             extra_data,
             llm_properties,
             new_symbols,
@@ -367,8 +364,8 @@ impl Tool for SearchAndReplaceEditing {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.should_search_and_replace_editing()?;
         let is_warmup = context.is_warmup;
-        let code_to_edit = context.context_in_edit_selection.to_owned();
-        let code_to_edit_range = context.edit_range.clone();
+        let whole_file_context = context.complete_file.to_owned();
+        let start_line = 0;
         let symbol_identifier = context.symbol_identifier.clone();
         let ui_sender = context.ui_sender.clone();
         let fs_file_path = context.fs_file_path.to_owned();
@@ -412,11 +409,8 @@ impl Tool for SearchAndReplaceEditing {
         let stream_result;
 
         let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
-            code_to_edit,
-            code_to_edit_range.start_line(),
-            edits_sender,
-        );
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(whole_file_context, start_line, edits_sender);
 
         // now we can bring it all together and use the answer accumulator over here
         // to start the processing completely

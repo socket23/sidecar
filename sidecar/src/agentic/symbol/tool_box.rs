@@ -2016,7 +2016,7 @@ We also believe this symbol needs to be probed because of:
         hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<Vec<SymbolFollowupBFS>, SymbolError> {
         // first we want to detect if there were changes and if there were what
         // those changes are about
         // we want to track the reference location along with the changed symbol_followup
@@ -2106,6 +2106,73 @@ We also believe this symbol needs to be probed because of:
                     "tool_box::check_for_followups::is_class_implementation_type::({})",
                     outline_node.name()
                 );
+                // we should always trigger an edit on the class symbol definition by itself
+                // just to make sure that if any changes are required to it, they are completed
+                // and managed accordingly
+                let mut definitions = self
+                    .go_to_definition(
+                        outline_node.fs_file_path(),
+                        outline_node.identifier_range().start_position(),
+                        message_properties.clone(),
+                    )
+                    .await?
+                    .definitions();
+
+                if !definitions.is_empty() {
+                    let first_definition = definitions.remove(0);
+                    // if the definition does not belong to the outline nodo where
+                    // we are focussed on right now, then skip the step
+                    if first_definition.file_path() != outline_node.fs_file_path()
+                        || !outline_node
+                            .range()
+                            .contains_check_line_column(outline_node.range())
+                    {
+                        let outline_node = self
+                            .get_outline_node_for_range(
+                                first_definition.range(),
+                                first_definition.file_path(),
+                                message_properties.clone(),
+                            )
+                            .await?;
+
+                        println!("tool_box::check_for_followup_bfs::class_implementation::definition_check::({})::({})", outline_node.name(), outline_node.fs_file_path());
+                        // Now send over an edit request to this outline node
+                        // TODO(skcd): This is heavily unoptimised right now, since we are not changing just the changes
+                        // but the whole symbol together so it slows down the whole pipeline
+                        let _ = self.send_edit_instruction_to_outline_node(
+                        outline_node,
+                        {
+                            let name = symbol_followup.symbol_edited().symbol_name();
+                            let fs_file_path = symbol_followup.symbol_edited().fs_file_path();
+                            format!(r#"A dependency of this code has changed. You are given the list of changes below:
+<dependency>
+<name>
+{name}
+</name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#)},
+                        hub_sender.clone(),
+                        message_properties.clone(),
+                        tool_properties.clone(),
+                    )
+                    .await;
+                    }
+                }
+
                 // we are always editing the symbol in full and are interested in the
                 // fields which are present in the code
                 // we want to go over the child nodes which have changed and then invoke
@@ -2116,7 +2183,7 @@ We also believe this symbol needs to be probed because of:
                     .editor_parsing
                     .for_file_path(symbol_edited.fs_file_path());
                 if language_config.is_none() {
-                    return Ok(());
+                    continue;
                 }
                 let language_config = language_config.expect("to be present");
 
@@ -2389,7 +2456,8 @@ Please update this code to accommodate these changes. Consider:
             .collect::<Vec<_>>()
             .await;
         }
-        Ok(())
+        // Figure out which nodes to send over here for perfoming waves of followups
+        Ok(vec![])
     }
 
     pub async fn check_for_followups(
@@ -3294,71 +3362,44 @@ Make the necessary changes if required making sure that nothing breaks"#
         message_properties: SymbolEventMessageProperties,
         tool_properties: ToolProperties,
     ) -> Result<(), SymbolError> {
-        let outline_node_fs_file_path = outline_node.content().fs_file_path();
-        let outline_node_identifier_range = outline_node.content().identifier_range();
-        // we can go to definition of the node and then ask the symbol for the outline over
-        // here so the symbol knows about everything
+        let (sender, receiver) = tokio::sync::oneshot::channel();
 
-        let start = Instant::now();
-        let definitions = self
-            .go_to_definition(
-                outline_node_fs_file_path,
-                outline_node_identifier_range.start_position(),
-                message_properties.clone(),
-            )
-            .await?;
+        // the symbol representing the reference
+        let symbol_identifier =
+            SymbolIdentifier::with_file_path(outline_node.name(), outline_node.fs_file_path());
 
-        println!(
-            "tool_box::send_edit_instruction_to_outline_node::go_to_definition::time: {:?}",
-            start.elapsed()
+        let symbol_to_edit = SymbolToEdit::new(
+            outline_node.name().to_string(),
+            outline_node.range().to_owned(),
+            outline_node.fs_file_path().to_string(),
+            vec![instruction],
+            false,
+            false, // is_new could be true...
+            true,
+            "".to_string(),
+            None,
+            false,
+            None,
+            false, // disable any kind of followups or correctness check
         );
 
-        if let Some(_definition) = definitions.definitions().get(0) {
-            let (sender, receiver) = tokio::sync::oneshot::channel();
-
-            // the symbol representing the reference
-            let symbol_identifier =
-                SymbolIdentifier::with_file_path(outline_node.name(), outline_node.fs_file_path());
-
-            let symbol_to_edit = SymbolToEdit::new(
-                outline_node.name().to_string(),
-                outline_node.range().to_owned(),
-                outline_node.fs_file_path().to_string(),
-                vec![instruction],
-                false,
-                false, // is_new could be true...
-                true,
-                "".to_string(),
-                None,
-                false,
-                None,
-                false, // disable any kind of followups or correctness check
-            );
-
-            let event = SymbolEventMessage::message_with_properties(
-                SymbolEventRequest::simple_edit_request(
-                    symbol_identifier,
-                    symbol_to_edit.to_owned(),
-                    tool_properties,
-                ),
-                message_properties,
-                sender,
-            );
-            let start = Instant::now();
-            let _ = hub_sender.send(event);
-            let _ = receiver.await;
-            println!(
-                "tool_box::send_edit_instruction_to_outline_node::SymbolEventRequest::time:({:?})",
-                start.elapsed()
-            );
-            Ok(())
-        } else {
-            // if there are no defintions, this is bad since we do require some kind
-            // of definition to be present here
-            return Err(SymbolError::DefinitionNotFound(
-                outline_node.name().to_owned(),
-            ));
-        }
+        let event = SymbolEventMessage::message_with_properties(
+            SymbolEventRequest::simple_edit_request(
+                symbol_identifier,
+                symbol_to_edit.to_owned(),
+                tool_properties,
+            ),
+            message_properties,
+            sender,
+        );
+        let start = Instant::now();
+        let _ = hub_sender.send(event);
+        let _ = receiver.await;
+        println!(
+            "tool_box::send_edit_instruction_to_outline_node::SymbolEventRequest::time:({:?})",
+            start.elapsed()
+        );
+        Ok(())
     }
 
     // we need to search for the smallest node which contains this position or range

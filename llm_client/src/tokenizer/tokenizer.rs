@@ -204,25 +204,20 @@ impl LLMTokenizer {
                     let prompt = self
                         .formatters
                         .get(model)
-                        .map(|formatter| formatter.to_prompt(messages));
-                    match prompt {
-                        Some(prompt) => {
-                            let num_tokens = self.tokenizers.get(model).map(|tokenizer| {
-                                tokenizer
-                                    .encode(prompt, false)
-                                    .map(|encoding| encoding.len())
-                            });
-                            match num_tokens {
-                                Some(Ok(num_tokens)) => Ok(num_tokens),
-                                _ => Err(LLMTokenizerError::TokenizerError(
-                                    "Failed to encode prompt".to_owned(),
-                                )),
-                            }
-                        }
-                        None => Err(LLMTokenizerError::TokenizerError(
-                            "No formatter found for model".to_owned(),
-                        )),
-                    }
+                        .map(|formatter| formatter.to_prompt(messages.to_vec()))
+                        .unwrap_or(ClaudeFormatting::new().to_prompt(messages));
+                    let prompt_length = prompt.len();
+                    let num_tokens = self
+                        .tokenizers
+                        .get(model)
+                        .map(|tokenizer| {
+                            tokenizer
+                                .encode(prompt, false)
+                                .map(|encoding| encoding.len())
+                                .unwrap_or(prompt_length)
+                        })
+                        .unwrap_or(prompt_length);
+                    Ok(num_tokens)
                 }
             }
         }
@@ -249,9 +244,7 @@ impl LLMTokenizer {
                         ))),
                     }
                 }
-                None => {
-                    return Err(LLMTokenizerError::TokenizerNotFound(model.clone()));
-                }
+                None => Ok(prompt.len()),
             }
         } else {
             // If we are using openai model, then we have to use the bpe config

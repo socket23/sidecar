@@ -800,6 +800,8 @@ pub struct AnchorSessionStart {
     request_id: String,
     user_context: UserContext,
     root_directory: String,
+    editor_url: String,
+    active_window_data: Option<ProbeRequestActiveWindow>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -813,13 +815,32 @@ pub async fn anchor_session_start(
     Extension(app): Extension<Application>,
     Json(AnchorSessionStart {
         request_id,
-        user_context,
+        mut user_context,
         root_directory,
+        editor_url,
+        active_window_data,
     }): Json<AnchorSessionStart>,
 ) -> Result<impl IntoResponse> {
     println!(
         "webserver::anchor_session_start::request_id({})",
         &request_id
+    );
+
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    if let Some(active_window_data) = active_window_data {
+        user_context = user_context.update_file_content_map(
+            active_window_data.file_path,
+            active_window_data.file_content,
+            active_window_data.language,
+        );
+    }
+
+    println!("{:?}", &user_context);
+
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
+        sender.clone(),
+        editor_url,
     );
 
     println!(
@@ -831,6 +852,12 @@ pub async fn anchor_session_start(
             .collect::<Vec<_>>()
             .join(", ")
     );
+
+    let symbol_to_anchor = app
+        .tool_box
+        .symbols_to_anchor(&user_context, message_properties.clone())
+        .await
+        .unwrap_or_default();
 
     Ok(json_result(AnchorSessionStartResponse { done: false }))
 

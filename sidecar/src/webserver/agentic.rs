@@ -794,3 +794,49 @@ pub async fn code_editing(
             ),
     ))
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AnchorSessionStart {
+    request_id: String,
+    user_context: UserContext,
+    root_directory: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AnchorSessionStartResponse {
+    done: bool,
+}
+
+impl ApiResponse for AnchorSessionStartResponse {}
+
+pub async fn anchor_session_start(
+    Extension(app): Extension<Application>,
+    Json(AnchorSessionStart {
+        request_id,
+        user_context,
+        root_directory,
+    }): Json<AnchorSessionStart>,
+) -> Result<impl IntoResponse> {
+    println!(
+        "webserver::anchor_session_start::request_id({})",
+        &request_id
+    );
+
+    println!(
+        "webserver::agentic::anchor_session_start::user_context::variables:\n{}",
+        user_context
+            .variables
+            .iter()
+            .map(|var| var.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    Ok(json_result(AnchorSessionStartResponse { done: false }))
+
+    // now we iterate through each variable
+
+    // find outline nodes for each
+
+    // go to references on them.
+}

@@ -5473,6 +5473,89 @@ FILEPATH: {fs_file_path}
         Ok(())
     }
 
+    pub async fn get_reference_locations(
+        &self,
+        symbol_to_anchor: Vec<(SymbolIdentifier, Vec<String>)>,
+        message_properties: SymbolEventMessageProperties,
+        request_id: String,
+    ) -> Vec<ReferenceLocation> {
+        let mut reference_locations: Vec<ReferenceLocation> = vec![];
+
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::found_reference(
+                message_properties.request_id_str().to_owned(),
+                "asefasdfasdfasdf".to_string(),
+            ));
+
+        // todo(zi): compare to bfs
+        for (ident, sub_symbols) in symbol_to_anchor {
+            println!("identifier: {:?}", ident);
+            println!("sub_symbols: {}", sub_symbols.join(", "));
+
+            for symbol in sub_symbols {
+                if let Some(path) = &ident.fs_file_path() {
+                    let outline_nodes = self
+                        .get_outline_nodes(&path, message_properties.to_owned())
+                        .await;
+
+                    if let Some(nodes) = outline_nodes {
+                        let filtered_nodes = nodes
+                            .iter()
+                            .filter(|node| node.name() == symbol)
+                            .collect::<Vec<_>>();
+
+                        println!(
+                            "filtered_nodes: {}",
+                            filtered_nodes
+                                .iter()
+                                .map(|n| format!("name: {}, range: {:?}", n.name(), n.range()))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        );
+
+                        for node in filtered_nodes {
+                            let references_response = self
+                                .go_to_references(
+                                    path.to_string(),
+                                    node.identifier_range().start_position(),
+                                    message_properties.to_owned(),
+                                )
+                                .await;
+
+                            println!(
+                                "message_properties.request_id: {}",
+                                message_properties.request_id_str().to_owned()
+                            );
+
+                            if let Ok(response) = references_response {
+                                println!("let's be sending!");
+
+                                let locations = response.locations();
+                                reference_locations.extend(locations);
+                                let _ = message_properties.ui_sender().send(
+                                    UIEventWithID::found_reference(
+                                        message_properties.request_id_str().to_owned(),
+                                        path.to_string(),
+                                    ),
+                                );
+
+                                let _ = message_properties.ui_sender().send(
+                                    UIEventWithID::open_file_event(
+                                        message_properties.request_id_str().to_owned(),
+                                        "asdfadsfasdfasd".to_string(),
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        reference_locations
+    }
+
     pub async fn file_open(
         &self,
         fs_file_path: String,

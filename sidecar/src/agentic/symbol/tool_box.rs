@@ -2003,6 +2003,111 @@ We also believe this symbol needs to be probed because of:
             .map(|ts_language_config| ts_language_config.language_str.to_owned())
     }
 
+    /// We want to check for followups on the functions which implies that we can
+    /// simply look at the places where these functions are being used and then just
+    /// do go-to-reference on it
+    async fn check_for_followups_on_functions(
+        &self,
+        outline_node: OutlineNodeContent,
+        symbol_edited: &SymbolToEdit,
+        symbol_followup_bfs: &SymbolFollowupBFS,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<(ReferenceLocation, SymbolFollowupBFS)>, SymbolError> {
+        let mut reference_locations = vec![];
+        println!(
+            "tool_box::check_for_followups::is_function_type_edit::({})",
+            outline_node.name()
+        );
+        // for functions its very easy, we have to just get the references which
+        // are using this function somewhere in their code
+        let references = self
+            .go_to_references(
+                symbol_edited.fs_file_path().to_owned(),
+                outline_node.identifier_range().start_position(),
+                message_properties.clone(),
+            )
+            .await;
+        if references.is_ok() {
+            reference_locations.extend(
+                references
+                    .expect("is_ok to hold")
+                    .locations()
+                    .into_iter()
+                    .map(|location| (location, symbol_followup_bfs.clone())),
+            );
+        }
+        Ok(reference_locations)
+    }
+
+    /// We want to check for followups on the class definitions which implies
+    /// that we want to change any implementation of the class which might have
+    /// changed
+    async fn check_for_followups_class_definitions(
+        &self,
+        outline_node: OutlineNodeContent,
+        symbol_edited: &SymbolToEdit,
+        symbol_followup: &SymbolFollowupBFS,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<(ReferenceLocation, SymbolFollowupBFS)>, SymbolError> {
+        let mut reference_locations = vec![];
+        println!(
+            "tool_box::check_for_followups::is_class_definition::({})",
+            outline_node.name()
+        );
+        // if this is a class definitions then we have to be a bit more careful
+        // and look at where this class definition is being used and follow those
+        // reference
+        let references = self
+            .go_to_references(
+                symbol_edited.fs_file_path().to_owned(),
+                outline_node.identifier_range().start_position(),
+                message_properties.clone(),
+            )
+            .await;
+
+        if references.is_ok() {
+            reference_locations.extend(
+                references
+                    .expect("is_ok to hold")
+                    .locations()
+                    .into_iter()
+                    .map(|location| (location, symbol_followup.clone())),
+            );
+        }
+
+        // Now we have to do the following for completeness:
+        // - find all the fucntions which belong to this class
+        // - order them in a topological sort order and then go about making changes
+        // - the challenge here is that we might have dependencies which might be spread
+        // across different implementation blocks so we have to carefully craft this out
+        // - the more they are present in the same block the better it is
+        // having said all of this, the dumb way is the best way
+        // the dumb way is to show the whole symbol implementation blocks and ask
+        // the model to make any changes required (especially if its a single block or all in a single file
+        // which is the majority case in our codebase, if there are multiple files which have this
+        // then we can do it per file)
+        Ok(reference_locations)
+    }
+
+    /// We want to make sure that class implementation chagnes follow the following
+    /// state machine:
+    /// class-implementation -> changes class definitions
+    /// if class-definitions change:
+    /// change everything about the class implementations and also the functions
+    /// which previous changed
+    /// once this is done get the functions which have chagned along with any
+    /// places which might be referencing the class itself
+    async fn check_for_followups_class_implementation(
+        &self,
+        outline_node: OutlineNode,
+        original_code: &str,
+        edited_code: &str,
+        message_properties: SymbolEventMessageProperties,
+        tool_properties: &ToolProperties,
+    ) -> Result<(), SymbolError> {
+        Ok(())
+    }
+
     /// To get the followups working we have to do the following:
     /// we are going to heal the codebase in waves:
     /// - we have a set of symbols which have been edited and want to do followups
@@ -2052,53 +2157,25 @@ We also believe this symbol needs to be probed because of:
             let edited_outline_node_name = outline_node.name().to_owned();
 
             if outline_node.is_function_type() {
-                println!(
-                    "tool_box::check_for_followups::is_function_type_edit::({})",
-                    outline_node.name()
-                );
-                // for functions its very easy, we have to just get the references which
-                // are using this function somewhere in their code
-                let references = self
-                    .go_to_references(
-                        symbol_edited.fs_file_path().to_owned(),
-                        outline_node.identifier_range().start_position(),
+                reference_locations.extend(
+                    self.check_for_followups_on_functions(
+                        outline_node,
+                        symbol_edited,
+                        &symbol_followup,
                         message_properties.clone(),
                     )
-                    .await;
-                if references.is_ok() {
-                    reference_locations.extend(
-                        references
-                            .expect("is_ok to hold")
-                            .locations()
-                            .into_iter()
-                            .map(|location| (location, symbol_followup.clone())),
-                    );
-                }
+                    .await?,
+                );
             } else if outline_node.is_class_definition() {
-                println!(
-                    "tool_box::check_for_followups::is_class_definition::({})",
-                    outline_node.name()
-                );
-                // if this is a class definitions then we have to be a bit more careful
-                // and look at where this class definition is being used and follow those
-                // reference
-                let references = self
-                    .go_to_references(
-                        symbol_edited.fs_file_path().to_owned(),
-                        outline_node.identifier_range().start_position(),
+                reference_locations.extend(
+                    self.check_for_followups_class_definitions(
+                        outline_node,
+                        symbol_edited,
+                        &symbol_followup,
                         message_properties.clone(),
                     )
-                    .await;
-
-                if references.is_ok() {
-                    reference_locations.extend(
-                        references
-                            .expect("is_ok to hold")
-                            .locations()
-                            .into_iter()
-                            .map(|location| (location, symbol_followup.clone())),
-                    );
-                }
+                    .await?,
+                );
             } else {
                 println!(
                     "tool_box::check_for_followups::is_class_implementation_type::({})",

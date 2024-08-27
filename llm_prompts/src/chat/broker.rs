@@ -23,7 +23,7 @@ impl LLMChatModelBroker {
     pub fn get_answer_model(
         &self,
         llm_type: &LLMType,
-    ) -> Result<&AnswerModel, ChatModelBrokerErrors> {
+    ) -> Result<AnswerModel, ChatModelBrokerErrors> {
         self.answer_model_broker
             .get_answer_model(llm_type)
             .ok_or(ChatModelBrokerErrors::ModelNotSupported(llm_type.clone()))

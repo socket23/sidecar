@@ -2097,14 +2097,140 @@ We also believe this symbol needs to be probed because of:
     /// which previous changed
     /// once this is done get the functions which have chagned along with any
     /// places which might be referencing the class itself
-    async fn check_for_followups_class_implementation(
+    async fn _check_for_followups_class_implementation(
         &self,
         outline_node: OutlineNode,
+        symbol_followup: &SymbolFollowupBFS,
         original_code: &str,
         edited_code: &str,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
     ) -> Result<(), SymbolError> {
+        println!(
+            "tool_box::check_for_followups::is_class_implementation_type::({})",
+            outline_node.name()
+        );
+        // we should always trigger an edit on the class symbol definition by itself
+        // just to make sure that if any changes are required to it, they are completed
+        // and managed accordingly
+        // the state-machine when we chagne the definition is as follows:
+        // class-implementation -> check if class-definition needs change
+        // class-definition changed -> check if any of the class-implementation reference blocks point to class definition and trigger a search and replace block
+        let mut definitions = self
+            .go_to_definition(
+                outline_node.fs_file_path(),
+                outline_node.identifier_range().start_position(),
+                message_properties.clone(),
+            )
+            .await?
+            .definitions();
+
+        // changed content for the class definition
+        // is being tracked over here
+        let mut _class_definition_change: Option<(String, String)> = None;
+        let mut class_implementations_interested_references = vec![];
+        if !definitions.is_empty() {
+            let first_definition = definitions.remove(0);
+            // if the definition does not belong to the outline nodo where
+            // we are focussed on right now, then skip the step
+            if first_definition.file_path() != outline_node.fs_file_path()
+                || !outline_node
+                    .range()
+                    .contains_check_line_column(outline_node.range())
+            {
+                let outline_node = self
+                    .get_outline_node_for_range(
+                        first_definition.range(),
+                        first_definition.file_path(),
+                        message_properties.clone(),
+                    )
+                    .await?;
+
+                let original_definition_code = outline_node.content().content().to_owned();
+
+                println!("tool_box::check_for_followup_bfs::class_implementation::definition_check::({})::({})", outline_node.name(), outline_node.fs_file_path());
+                // Now send over an edit request to this outline node
+                // TODO(skcd): This is heavily unoptimised right now, since we are not changing just the changes
+                // but the whole symbol together so it slows down the whole pipeline
+                let _ = self.send_edit_instruction_to_outline_node(
+                outline_node,
+                {
+                    let name = symbol_followup.symbol_edited().symbol_name();
+                    let fs_file_path = symbol_followup.symbol_edited().fs_file_path();
+                    format!(r#"A dependency of this code has changed. You are given the list of changes below:
+<dependency>
+<name>
+{name}
+</name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#)},
+                hub_sender.clone(),
+                message_properties.clone(),
+                tool_properties.clone(),
+            )
+            .await;
+                // now we want to check if the definition has changed over here
+                let changed_outline_node = self
+                    .get_outline_nodes_grouped(first_definition.file_path())
+                    .await
+                    .map(|outline_nodes| {
+                        let mut filtered_outline_nodes = outline_nodes
+                            .into_iter()
+                            .filter(|outline_node| outline_node.is_class_definition())
+                            .filter(|outline_node| outline_node.name() == outline_node.name())
+                            .collect::<Vec<_>>();
+                        if filtered_outline_nodes.is_empty() {
+                            None
+                        } else {
+                            Some(filtered_outline_nodes.remove(0))
+                        }
+                    })
+                    .flatten();
+                if let Some(changed_outline_node) = changed_outline_node {
+                    if changed_outline_node.content().content().trim()
+                        != original_definition_code.trim()
+                    {
+                        _class_definition_change = Some((
+                            original_definition_code,
+                            changed_outline_node.content().content().to_owned(),
+                        ));
+
+                        // we also want to get the references for the class definition node
+                        // which point to self
+                        let class_definition_references = self
+                            .go_to_references(
+                                changed_outline_node.fs_file_path().to_owned(),
+                                changed_outline_node.range().start_position(),
+                                message_properties.clone(),
+                            )
+                            .await;
+                        if let Ok(class_definition_references) = class_definition_references {
+                            class_implementations_interested_references
+                                .extend(class_definition_references.locations());
+                        }
+                    }
+                }
+            }
+        }
+
+        // if class-definition change has happened, we have to go through all the
+        // implementation blocks which contain this class definition along with
+        // any changed functions and their references
         Ok(())
     }
 
@@ -2198,7 +2324,7 @@ We also believe this symbol needs to be probed because of:
 
                 // changed content for the class definition
                 // is being tracked over here
-                let mut class_definition_change: Option<(String, String)> = None;
+                let mut _class_definition_change: Option<(String, String)> = None;
                 let mut class_implementations_interested_references = vec![];
                 if !definitions.is_empty() {
                     let first_definition = definitions.remove(0);
@@ -2277,7 +2403,7 @@ Please update this code to accommodate these changes. Consider:
                             if changed_outline_node.content().content().trim()
                                 != original_definition_code.trim()
                             {
-                                class_definition_change = Some((
+                                _class_definition_change = Some((
                                     original_definition_code,
                                     changed_outline_node.content().content().to_owned(),
                                 ));
@@ -2443,7 +2569,7 @@ Please update this code to accommodate these changes. Consider:
 
                 // Now we want to figure out which outline nodes belongs to the class or uses a function
                 // defined in the class so we can fix ourselves
-                let collected_outline_nodes = outline_nodes_to_file_paths
+                let _collected_outline_nodes = outline_nodes_to_file_paths
                     .into_iter()
                     .map(|(_, outline_nodes)| {
                         let collected_outline_nodes = outline_nodes

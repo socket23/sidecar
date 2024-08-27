@@ -357,7 +357,6 @@ pub async fn swe_bench(
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmup {
-    request_id: String,
     file_paths: Vec<String>,
 }
 
@@ -370,16 +369,14 @@ impl ApiResponse for CodeSculptingWarmupResponse {}
 
 pub async fn code_sculpting_warmup(
     Extension(app): Extension<Application>,
-    Json(CodeSculptingWarmup {
-        request_id,
-        file_paths,
-    }): Json<CodeSculptingWarmup>,
+    Json(CodeSculptingWarmup { file_paths }): Json<CodeSculptingWarmup>,
 ) -> Result<impl IntoResponse> {
-    println!(
-        "webserver::code_sculpting_warmup::request_id({})",
-        &request_id
-    );
-    let _ = app.tool_box.warmup_context(file_paths, request_id).await;
+    println!("webserver::code_sculpting_warmup");
+    let wramup_request_id = "warmup_request_id".to_owned();
+    let _ = app
+        .tool_box
+        .warmup_context(file_paths, wramup_request_id)
+        .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }
 

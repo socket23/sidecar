@@ -730,7 +730,7 @@ impl Agent {
                 )]),
             )? as i64;
             let headroom = answer_model.answer_tokens + system_headroom;
-            trim_utter_history(h, headroom, answer_model, self.llm_tokenizer.clone())?
+            trim_utter_history(h, headroom, &answer_model, self.llm_tokenizer.clone())?
         };
         dbg!("sidecar.generating_answer.history_complete");
         let messages = Some(system_message)

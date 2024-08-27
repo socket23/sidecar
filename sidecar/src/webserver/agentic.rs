@@ -21,6 +21,7 @@ use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::identifier::SymbolIdentifier;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
+use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::{
     agentic::{
@@ -357,7 +358,6 @@ pub async fn swe_bench(
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmup {
-    request_id: String,
     file_paths: Vec<String>,
 }
 
@@ -370,16 +370,14 @@ impl ApiResponse for CodeSculptingWarmupResponse {}
 
 pub async fn code_sculpting_warmup(
     Extension(app): Extension<Application>,
-    Json(CodeSculptingWarmup {
-        request_id,
-        file_paths,
-    }): Json<CodeSculptingWarmup>,
+    Json(CodeSculptingWarmup { file_paths }): Json<CodeSculptingWarmup>,
 ) -> Result<impl IntoResponse> {
-    println!(
-        "webserver::code_sculpting_warmup::request_id({})",
-        &request_id
-    );
-    let _ = app.tool_box.warmup_context(file_paths, request_id).await;
+    println!("webserver::code_sculpting_warmup");
+    let wramup_request_id = "warmup_request_id".to_owned();
+    let _ = app
+        .tool_box
+        .warmup_context(file_paths, wramup_request_id)
+        .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }
 
@@ -530,10 +528,16 @@ pub async fn code_sculpting_heal(
                 .check_for_followups_bfs(
                     followup_bfs_request,
                     hub_sender,
-                    message_properties,
+                    message_properties.clone(),
                     &ToolProperties::new(),
                 )
                 .await;
+
+            // send event after we are done with the followups
+            let ui_sender = message_properties.ui_sender();
+            let _ = ui_sender.send(UIEventWithID::finish_edit_request(
+                message_properties.request_id_str().to_owned(),
+            ));
         });
         Ok(json_result(CodeSculptingHealResponse { done: true }))
     }

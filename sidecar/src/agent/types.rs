@@ -1183,7 +1183,7 @@ impl Agent {
         let answer_model = self.chat_broker.get_answer_model(&slow_llm)?;
 
         let _trimmed_history =
-            trim_history(history.clone(), self.llm_tokenizer.clone(), answer_model)?;
+            trim_history(history.clone(), self.llm_tokenizer.clone(), &answer_model)?;
 
         Ok(None)
 

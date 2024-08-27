@@ -91,7 +91,7 @@ use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
-use crate::chunking::types::{OutlineNode, OutlineNodeContent};
+use crate::chunking::types::{OutlineNode, OutlineNodeContent, OutlineNodeType};
 use crate::repomap::tag::TagIndex;
 use crate::repomap::types::RepoMap;
 use crate::user_context::types::UserContext;
@@ -2016,7 +2016,7 @@ We also believe this symbol needs to be probed because of:
         hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<Vec<SymbolFollowupBFS>, SymbolError> {
         // first we want to detect if there were changes and if there were what
         // those changes are about
         // we want to track the reference location along with the changed symbol_followup
@@ -2030,7 +2030,7 @@ We also believe this symbol needs to be probed because of:
 
             let mut reference_locations = vec![];
 
-            if original_code == edited_code {
+            if original_code.trim() == edited_code.trim() {
                 continue;
             }
             let outline_node = self
@@ -2046,9 +2046,16 @@ We also believe this symbol needs to be probed because of:
 
             let outline_node = outline_node.expect("is_err to not fail above");
 
-            let edited_code_start_line = outline_node.range().start_line();
+            // The type of the edited outline node
+            let edited_outline_node_type = outline_node.outline_node_type().clone();
+            // the edited outline node name
+            let edited_outline_node_name = outline_node.name().to_owned();
 
             if outline_node.is_function_type() {
+                println!(
+                    "tool_box::check_for_followups::is_function_type_edit::({})",
+                    outline_node.name()
+                );
                 // for functions its very easy, we have to just get the references which
                 // are using this function somewhere in their code
                 let references = self
@@ -2068,6 +2075,10 @@ We also believe this symbol needs to be probed because of:
                     );
                 }
             } else if outline_node.is_class_definition() {
+                println!(
+                    "tool_box::check_for_followups::is_class_definition::({})",
+                    outline_node.name()
+                );
                 // if this is a class definitions then we have to be a bit more careful
                 // and look at where this class definition is being used and follow those
                 // reference
@@ -2078,6 +2089,7 @@ We also believe this symbol needs to be probed because of:
                         message_properties.clone(),
                     )
                     .await;
+
                 if references.is_ok() {
                     reference_locations.extend(
                         references
@@ -2088,6 +2100,130 @@ We also believe this symbol needs to be probed because of:
                     );
                 }
             } else {
+                println!(
+                    "tool_box::check_for_followups::is_class_implementation_type::({})",
+                    outline_node.name()
+                );
+                // we should always trigger an edit on the class symbol definition by itself
+                // just to make sure that if any changes are required to it, they are completed
+                // and managed accordingly
+                // the state-machine when we chagne the definition is as follows:
+                // class-implementation -> check if class-definition needs change
+                // class-definition changed -> check if any of the class-implementation reference blocks point to class definition and trigger a search and replace block
+                let mut definitions = self
+                    .go_to_definition(
+                        outline_node.fs_file_path(),
+                        outline_node.identifier_range().start_position(),
+                        message_properties.clone(),
+                    )
+                    .await?
+                    .definitions();
+
+                // changed content for the class definition
+                // is being tracked over here
+                let mut class_definition_change: Option<(String, String)> = None;
+                let mut class_implementations_interested_references = vec![];
+                if !definitions.is_empty() {
+                    let first_definition = definitions.remove(0);
+                    // if the definition does not belong to the outline nodo where
+                    // we are focussed on right now, then skip the step
+                    if first_definition.file_path() != outline_node.fs_file_path()
+                        || !outline_node
+                            .range()
+                            .contains_check_line_column(outline_node.range())
+                    {
+                        let outline_node = self
+                            .get_outline_node_for_range(
+                                first_definition.range(),
+                                first_definition.file_path(),
+                                message_properties.clone(),
+                            )
+                            .await?;
+
+                        let original_definition_code = outline_node.content().content().to_owned();
+
+                        println!("tool_box::check_for_followup_bfs::class_implementation::definition_check::({})::({})", outline_node.name(), outline_node.fs_file_path());
+                        // Now send over an edit request to this outline node
+                        // TODO(skcd): This is heavily unoptimised right now, since we are not changing just the changes
+                        // but the whole symbol together so it slows down the whole pipeline
+                        let _ = self.send_edit_instruction_to_outline_node(
+                        outline_node,
+                        {
+                            let name = symbol_followup.symbol_edited().symbol_name();
+                            let fs_file_path = symbol_followup.symbol_edited().fs_file_path();
+                            format!(r#"A dependency of this code has changed. You are given the list of changes below:
+<dependency>
+<name>
+{name}
+</name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#)},
+                        hub_sender.clone(),
+                        message_properties.clone(),
+                        tool_properties.clone(),
+                    )
+                    .await;
+                        // now we want to check if the definition has changed over here
+                        let changed_outline_node = self
+                            .get_outline_nodes_grouped(first_definition.file_path())
+                            .await
+                            .map(|outline_nodes| {
+                                let mut filtered_outline_nodes = outline_nodes
+                                    .into_iter()
+                                    .filter(|outline_node| outline_node.is_class_definition())
+                                    .filter(|outline_node| {
+                                        outline_node.name() == outline_node.name()
+                                    })
+                                    .collect::<Vec<_>>();
+                                if filtered_outline_nodes.is_empty() {
+                                    None
+                                } else {
+                                    Some(filtered_outline_nodes.remove(0))
+                                }
+                            })
+                            .flatten();
+                        if let Some(changed_outline_node) = changed_outline_node {
+                            if changed_outline_node.content().content().trim()
+                                != original_definition_code.trim()
+                            {
+                                class_definition_change = Some((
+                                    original_definition_code,
+                                    changed_outline_node.content().content().to_owned(),
+                                ));
+
+                                // we also want to get the references for the class definition node
+                                // which point to self
+                                let class_definition_references = self
+                                    .go_to_references(
+                                        changed_outline_node.fs_file_path().to_owned(),
+                                        changed_outline_node.range().start_position(),
+                                        message_properties.clone(),
+                                    )
+                                    .await;
+                                if let Ok(class_definition_references) = class_definition_references
+                                {
+                                    class_implementations_interested_references
+                                        .extend(class_definition_references.locations());
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // we are always editing the symbol in full and are interested in the
                 // fields which are present in the code
                 // we want to go over the child nodes which have changed and then invoke
@@ -2098,7 +2234,7 @@ We also believe this symbol needs to be probed because of:
                     .editor_parsing
                     .for_file_path(symbol_edited.fs_file_path());
                 if language_config.is_none() {
-                    return Ok(());
+                    continue;
                 }
                 let language_config = language_config.expect("to be present");
 
@@ -2154,7 +2290,14 @@ We also believe this symbol needs to be probed because of:
                     // go over the children now and go to the references for each of them which have changed, these will
                     // be our reference locations
                     let fs_file_path = symbol_edited.fs_file_path();
-                    let mut reference_locations = vec![];
+                    let edited_outline_node = self
+                        .find_sub_symbol_to_edit_with_name(
+                            symbol_identifier.symbol_name(),
+                            symbol_edited,
+                            message_properties.clone(),
+                        )
+                        .await?;
+                    let edited_code_start_line = edited_outline_node.range().start_line();
                     for outline_node in changed_function_nodes.into_iter() {
                         let references = self
                             .go_to_references(
@@ -2185,12 +2328,10 @@ We also believe this symbol needs to be probed because of:
                         );
                             let references =
                                 references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
-                            reference_locations.extend(
-                                references
-                                    .locations()
-                                    .into_iter()
-                                    .map(|location| (location, symbol_followup.clone())),
-                            );
+                            // we gather all the references and then we will check which of them really belong outside the class
+                            // and which belong in the class itself
+                            class_implementations_interested_references
+                                .extend(references.locations());
                         } else {
                             println!(
                                 "tool_box::refenreces_error::({:?})",
@@ -2199,6 +2340,69 @@ We also believe this symbol needs to be probed because of:
                         }
                     }
                 }
+
+                // now we have a bunch of references where we want to check which ones
+                // are belonging inside the class and we might want to make one more
+                // edit for that, and which belong outside the class for which we want to trigger
+                // followups
+                // first find the references which belong to the same class block, this is super important to do
+                let file_paths_for_references = class_implementations_interested_references
+                    .iter()
+                    .map(|reference_location| reference_location.fs_file_path().to_owned())
+                    .collect::<HashSet<String>>();
+
+                // now get the outline nodes for each of the file paths which we are interested in
+                let outline_nodes_to_file_paths = stream::iter(file_paths_for_references)
+                    .map(|fs_file_path| async move {
+                        let outline_nodes = self.get_outline_nodes_grouped(&fs_file_path).await;
+                        outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .filter_map(|s| s)
+                    .collect::<HashMap<_, _>>();
+
+                // Now we want to figure out which outline nodes belongs to the class or uses a function
+                // defined in the class so we can fix ourselves
+                let collected_outline_nodes = outline_nodes_to_file_paths
+                    .into_iter()
+                    .map(|(_, outline_nodes)| {
+                        let collected_outline_nodes = outline_nodes
+                            .into_iter()
+                            .filter(|outline_node_in_file| {
+                                outline_node_in_file.name() == outline_node.name()
+                            })
+                            // these are full outline node which means we should check
+                            // if the children here contain any of the references which we are interested in
+                            .filter(|outline_node| {
+                                // check if the outline node contains any of the references
+                                // we are interested in
+                                // does this always return true because we have the class
+                                // definition over here included in the references? (possibly)
+                                class_implementations_interested_references.iter().any(
+                                    |reference| {
+                                        outline_node.children().into_iter().any(|child| {
+                                            child
+                                                .range()
+                                                .contains_check_line_column(reference.range())
+                                        })
+                                    },
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        collected_outline_nodes
+                    })
+                    .flatten()
+                    .collect::<Vec<OutlineNode>>();
+
+                // Now we can send an edit request to each of these outline nodes based on the changes we have accumulated
+                // along with the changed functions up-until now and then send edit requests to these outline nodes
+                // once we are done with them, we can keep going to the references of the changed functions etc
+                // stream::iter(collected_outline_nodes).map(|outline_node| {
+                //     self.send_edit_instruction_to_outline_node(outline_node, instruction, hub_sender, message_properties, tool_properties)
+                // })
             }
 
             // now that we have all the references, we also want to attach
@@ -2237,7 +2441,7 @@ We also believe this symbol needs to be probed because of:
 
             // These are the nodes which are referenced by the current wave of
             // refactors which are going on
-            let referenced_outline_nodes = outline_nodes_by_file_paths
+            let mut referenced_outline_nodes = outline_nodes_by_file_paths
                 .into_iter()
                 .map(|(fs_file_path, outline_nodes)| {
                     // now we go over all the references which we have collected
@@ -2268,6 +2472,28 @@ We also believe this symbol needs to be probed because of:
                     (fs_file_path, outline_nodes_interested)
                 })
                 .collect::<HashMap<String, _>>();
+
+            // if we are a class definition, then we need to first of all fix all the
+            // implementation blocks and then move on to fixing the rest of the world
+            match edited_outline_node_type {
+                OutlineNodeType::ClassDefinition => {
+                    referenced_outline_nodes = referenced_outline_nodes
+                        .into_iter()
+                        .map(|(fs_file_path, outline_nodes_interested)| {
+                            (
+                                fs_file_path,
+                                outline_nodes_interested
+                                    .into_iter()
+                                    .filter(|(outline_node_interested, _)| {
+                                        outline_node_interested.name() == edited_outline_node_name
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect();
+                }
+                _ => {}
+            }
 
             // These are the outline nodes to which we have to send an edit request
             // and we can do this in complete parallelism disabling all correctness checks or followups
@@ -2349,7 +2575,8 @@ Please update this code to accommodate these changes. Consider:
             .collect::<Vec<_>>()
             .await;
         }
-        Ok(())
+        // Figure out which nodes to send over here for perfoming waves of followups
+        Ok(vec![])
     }
 
     pub async fn check_for_followups(
@@ -3254,81 +3481,44 @@ Make the necessary changes if required making sure that nothing breaks"#
         message_properties: SymbolEventMessageProperties,
         tool_properties: ToolProperties,
     ) -> Result<(), SymbolError> {
-        let outline_node_fs_file_path = outline_node.content().fs_file_path();
-        let outline_node_identifier_range = outline_node.content().identifier_range();
-        // we can go to definition of the node and then ask the symbol for the outline over
-        // here so the symbol knows about everything
+        let (sender, receiver) = tokio::sync::oneshot::channel();
 
-        let start = Instant::now();
-        let definitions = self
-            .go_to_definition(
-                outline_node_fs_file_path,
-                outline_node_identifier_range.start_position(),
-                message_properties.clone(),
-            )
-            .await?;
+        // the symbol representing the reference
+        let symbol_identifier =
+            SymbolIdentifier::with_file_path(outline_node.name(), outline_node.fs_file_path());
 
-        println!(
-            "tool_box::send_edit_instruction_to_outline_node::go_to_definition::time: {:?}",
-            start.elapsed()
+        let symbol_to_edit = SymbolToEdit::new(
+            outline_node.name().to_string(),
+            outline_node.range().to_owned(),
+            outline_node.fs_file_path().to_string(),
+            vec![instruction],
+            false,
+            false, // is_new could be true...
+            true,
+            "".to_string(),
+            None,
+            false,
+            None,
+            false, // disable any kind of followups or correctness check
         );
 
-        if let Some(_definition) = definitions.definitions().get(0) {
-            // we need to get a few lines above and below the place where the defintion is present
-            // so we can show that to the LLM properly and ask it to make changes
-            // now we can send it over to the hub sender for handling the change
-            let (sender, receiver) = tokio::sync::oneshot::channel();
-
-            // the symbol representing the reference
-            let symbol_identifier =
-                SymbolIdentifier::with_file_path(outline_node.name(), outline_node.fs_file_path());
-
-            let symbol_to_edit = SymbolToEdit::new(
-                outline_node.name().to_string(),
-                outline_node.range().to_owned(),
-                outline_node.fs_file_path().to_string(),
-                vec![instruction],
-                false,
-                false, // is_new could be true...
-                true,
-                "".to_string(),
-                None,
-                false,
-                None,
-                false, // disable any kind of followups or correctness check
-            );
-
-            let event = SymbolEventMessage::message_with_properties(
-                SymbolEventRequest::simple_edit_request(
-                    symbol_identifier,
-                    symbol_to_edit.to_owned(),
-                    tool_properties,
-                ),
-                message_properties,
-                sender,
-            );
-            let start = Instant::now();
-            let _ = hub_sender.send(event);
-            // Figure out what to do with the receiver over here
-            let _ = receiver.await;
-            println!(
-                "tool_box::send_edit_instruction_to_outline_node::SymbolEventRequest::time:({:?})",
-                start.elapsed()
-            );
-            // this also feels a bit iffy to me, since this will block
-            // the other requests from happening unless we do everything in parallel
-            Ok(())
-            // This is now perfect since we have the symbol outline which we
-            // want to send over as context
-            // along with other metadata to create the followup-request required
-            // for making the edits as required
-        } else {
-            // if there are no defintions, this is bad since we do require some kind
-            // of definition to be present here
-            return Err(SymbolError::DefinitionNotFound(
-                outline_node.name().to_owned(),
-            ));
-        }
+        let event = SymbolEventMessage::message_with_properties(
+            SymbolEventRequest::simple_edit_request(
+                symbol_identifier,
+                symbol_to_edit.to_owned(),
+                tool_properties,
+            ),
+            message_properties,
+            sender,
+        );
+        let start = Instant::now();
+        let _ = hub_sender.send(event);
+        let _ = receiver.await;
+        println!(
+            "tool_box::send_edit_instruction_to_outline_node::SymbolEventRequest::time:({:?})",
+            start.elapsed()
+        );
+        Ok(())
     }
 
     // we need to search for the smallest node which contains this position or range
@@ -4591,7 +4781,7 @@ instruction:
             sub_symbol.symbol_name(),
         );
         println!("============");
-        let (above, below, in_range_selection) =
+        let (_, _, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
         // disable inlay hints, cause it causes the LLM to mess up the code
         // in_range_selection = self
@@ -4623,8 +4813,7 @@ FILEPATH: {fs_file_path}
             fs_file_path.to_owned(),
             selection_range.clone(),
             in_range_selection,
-            above,
-            below,
+            file_content.to_owned(),
             extra_context,
             LLMProperties::new(
                 LLMType::ClaudeSonnet,
@@ -7172,8 +7361,7 @@ FILEPATH: {fs_file_path}
             "".to_owned(),
             Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
             "".to_owned(),
-            None,
-            None,
+            "".to_owned(),
             "".to_owned(),
             llm_properties,
             None,

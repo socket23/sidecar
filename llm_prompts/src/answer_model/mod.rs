@@ -20,7 +20,7 @@ lazy_static! {
     ];
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AnswerModel {
     pub llm_type: LLMType,
     /// The number of tokens reserved for the answer
@@ -288,7 +288,21 @@ impl LLMAnswerModelBroker {
             .and_then(|model| model.inline_completion_tokens)
     }
 
-    pub fn get_answer_model(&self, llm_type: &LLMType) -> Option<&AnswerModel> {
-        self.models.get(llm_type)
+    pub fn get_answer_model(&self, llm_type: &LLMType) -> Option<AnswerModel> {
+        let default_answer_model = AnswerModel {
+            llm_type: llm_type.clone(),
+            answer_tokens: 8192,
+            prompt_tokens_limit: 2500 * 8,
+            history_tokens_limit: 2048 * 8,
+            total_tokens: 128000,
+            inline_completion_tokens: None,
+        };
+        // return the default answer model over here
+        Some(
+            self.models
+                .get(llm_type)
+                .map(|answer_model| answer_model.clone())
+                .unwrap_or(default_answer_model),
+        )
     }
 }

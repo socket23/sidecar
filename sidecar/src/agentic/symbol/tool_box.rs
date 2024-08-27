@@ -2374,6 +2374,8 @@ Please update this code to accommodate these changes. Consider:
                             .filter(|outline_node_in_file| {
                                 outline_node_in_file.name() == outline_node.name()
                             })
+                            // these are full outline node which means we should check
+                            // if the children here contain any of the references which we are interested in
                             .filter(|outline_node| {
                                 // check if the outline node contains any of the references
                                 // we are interested in
@@ -2381,9 +2383,11 @@ Please update this code to accommodate these changes. Consider:
                                 // definition over here included in the references? (possibly)
                                 class_implementations_interested_references.iter().any(
                                     |reference| {
-                                        outline_node
-                                            .range()
-                                            .contains_check_line_column(reference.range())
+                                        outline_node.children().into_iter().any(|child| {
+                                            child
+                                                .range()
+                                                .contains_check_line_column(reference.range())
+                                        })
                                     },
                                 )
                             })
@@ -2394,6 +2398,8 @@ Please update this code to accommodate these changes. Consider:
                     .collect::<Vec<OutlineNode>>();
 
                 // Now we can send an edit request to each of these outline nodes based on the changes we have accumulated
+                // along with the changed functions up-until now and then send edit requests to these outline nodes
+                // once we are done with them, we can keep going to the references of the changed functions etc
                 // stream::iter(collected_outline_nodes).map(|outline_node| {
                 //     self.send_edit_instruction_to_outline_node(outline_node, instruction, hub_sender, message_properties, tool_properties)
                 // })

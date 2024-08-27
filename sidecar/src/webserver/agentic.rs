@@ -21,6 +21,7 @@ use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::identifier::SymbolIdentifier;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
+use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::{
     agentic::{
@@ -527,10 +528,16 @@ pub async fn code_sculpting_heal(
                 .check_for_followups_bfs(
                     followup_bfs_request,
                     hub_sender,
-                    message_properties,
+                    message_properties.clone(),
                     &ToolProperties::new(),
                 )
                 .await;
+
+            // send event after we are done with the followups
+            let ui_sender = message_properties.ui_sender();
+            let _ = ui_sender.send(UIEventWithID::finish_edit_request(
+                message_properties.request_id_str().to_owned(),
+            ));
         });
         Ok(json_result(CodeSculptingHealResponse { done: true }))
     }

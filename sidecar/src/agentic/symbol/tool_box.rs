@@ -91,7 +91,7 @@ use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
-use crate::chunking::types::{OutlineNode, OutlineNodeContent};
+use crate::chunking::types::{OutlineNode, OutlineNodeContent, OutlineNodeType};
 use crate::repomap::tag::TagIndex;
 use crate::repomap::types::RepoMap;
 use crate::user_context::types::UserContext;
@@ -2048,6 +2048,11 @@ We also believe this symbol needs to be probed because of:
 
             let edited_code_start_line = outline_node.range().start_line();
 
+            // The type of the edited outline node
+            let edited_outline_node_type = outline_node.outline_node_type().clone();
+            // the edited outline node name
+            let edited_outline_node_name = outline_node.name().to_owned();
+
             if outline_node.is_function_type() {
                 println!(
                     "tool_box::check_for_followups::is_function_type_edit::({})",
@@ -2086,6 +2091,7 @@ We also believe this symbol needs to be probed because of:
                         message_properties.clone(),
                     )
                     .await;
+
                 if references.is_ok() {
                     reference_locations.extend(
                         references
@@ -2249,7 +2255,7 @@ We also believe this symbol needs to be probed because of:
 
             // These are the nodes which are referenced by the current wave of
             // refactors which are going on
-            let referenced_outline_nodes = outline_nodes_by_file_paths
+            let mut referenced_outline_nodes = outline_nodes_by_file_paths
                 .into_iter()
                 .map(|(fs_file_path, outline_nodes)| {
                     // now we go over all the references which we have collected
@@ -2280,6 +2286,28 @@ We also believe this symbol needs to be probed because of:
                     (fs_file_path, outline_nodes_interested)
                 })
                 .collect::<HashMap<String, _>>();
+
+            // if we are a class definition, then we need to first of all fix all the
+            // implementation blocks and then move on to fixing the rest of the world
+            match edited_outline_node_type {
+                OutlineNodeType::ClassDefinition => {
+                    referenced_outline_nodes = referenced_outline_nodes
+                        .into_iter()
+                        .map(|(fs_file_path, outline_nodes_interested)| {
+                            (
+                                fs_file_path,
+                                outline_nodes_interested
+                                    .into_iter()
+                                    .filter(|(outline_node_interested, _)| {
+                                        outline_node_interested.name() == edited_outline_node_name
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect();
+                }
+                _ => {}
+            }
 
             // These are the outline nodes to which we have to send an edit request
             // and we can do this in complete parallelism disabling all correctness checks or followups
@@ -3286,9 +3314,6 @@ Make the necessary changes if required making sure that nothing breaks"#
         );
 
         if let Some(_definition) = definitions.definitions().get(0) {
-            // we need to get a few lines above and below the place where the defintion is present
-            // so we can show that to the LLM properly and ask it to make changes
-            // now we can send it over to the hub sender for handling the change
             let (sender, receiver) = tokio::sync::oneshot::channel();
 
             // the symbol representing the reference
@@ -3321,19 +3346,12 @@ Make the necessary changes if required making sure that nothing breaks"#
             );
             let start = Instant::now();
             let _ = hub_sender.send(event);
-            // Figure out what to do with the receiver over here
             let _ = receiver.await;
             println!(
                 "tool_box::send_edit_instruction_to_outline_node::SymbolEventRequest::time:({:?})",
                 start.elapsed()
             );
-            // this also feels a bit iffy to me, since this will block
-            // the other requests from happening unless we do everything in parallel
             Ok(())
-            // This is now perfect since we have the symbol outline which we
-            // want to send over as context
-            // along with other metadata to create the followup-request required
-            // for making the edits as required
         } else {
             // if there are no defintions, this is bad since we do require some kind
             // of definition to be present here

@@ -2049,6 +2049,10 @@ We also believe this symbol needs to be probed because of:
             let edited_code_start_line = outline_node.range().start_line();
 
             if outline_node.is_function_type() {
+                println!(
+                    "tool_box::check_for_followups::is_function_type_edit::({})",
+                    outline_node.name()
+                );
                 // for functions its very easy, we have to just get the references which
                 // are using this function somewhere in their code
                 let references = self
@@ -2068,6 +2072,10 @@ We also believe this symbol needs to be probed because of:
                     );
                 }
             } else if outline_node.is_class_definition() {
+                println!(
+                    "tool_box::check_for_followups::is_class_definition::({})",
+                    outline_node.name()
+                );
                 // if this is a class definitions then we have to be a bit more careful
                 // and look at where this class definition is being used and follow those
                 // reference
@@ -2088,6 +2096,10 @@ We also believe this symbol needs to be probed because of:
                     );
                 }
             } else {
+                println!(
+                    "tool_box::check_for_followups::is_class_implementation_type::({})",
+                    outline_node.name()
+                );
                 // we are always editing the symbol in full and are interested in the
                 // fields which are present in the code
                 // we want to go over the child nodes which have changed and then invoke

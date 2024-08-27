@@ -2127,11 +2127,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 let message_properties = symbol_event.get_properties().clone();
                 let tool_properties = symbol_event_request.get_tool_properties();
                 let response_sender = symbol_event.remove_response_sender();
-                println!(
-                    "Symbol::receiver_stream::event::({})\n{:?}",
-                    symbol.symbol_name(),
-                    &symbol_event_request
-                );
+                println!("Symbol::receiver_stream::event::({})", symbol.symbol_name(),);
                 let _ = ui_sender.send(UIEventWithID::from_symbol_event(
                     request_id_data.request_id().to_owned(),
                     symbol_event_request.clone(),

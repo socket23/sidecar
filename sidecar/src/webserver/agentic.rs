@@ -22,7 +22,6 @@ use crate::agentic::symbol::identifier::SymbolIdentifier;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
-use crate::agentic::tool::lsp::gotoreferences::ReferenceLocation;
 use crate::{
     agentic::{
         symbol::{
@@ -671,6 +670,27 @@ pub async fn code_editing(
                 .join(",")
         );
         if !symbols_to_anchor.is_empty() {
+            let cloned_symbols_to_anchor = symbols_to_anchor.clone();
+            let cloned_message_properties = message_properties.clone();
+            let cloned_request_id = request_id.clone();
+            let tool_box = app.tool_box.clone();
+            let _join_handle = tokio::spawn(async move {
+                let reference_locations = tool_box
+                    .get_reference_locations(
+                        cloned_symbols_to_anchor,
+                        cloned_message_properties,
+                        cloned_request_id,
+                    )
+                    .await;
+
+                dbg!(&reference_locations);
+            });
+
+            // todo(zi): dedupe reference locations.
+            // todo(zi): may need more than locations for UI response.
+            // todo(zi): send UI events. (just send them...)
+            // todo(zi): make use of _join_handle?
+
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through
             // the initial request parts
@@ -869,63 +889,37 @@ pub async fn anchor_session_start(
             .join("\n")
     );
 
-    if symbol_to_anchor.is_empty() {
-        println!("No symbols to anchor found.");
-        return Ok(json_result(AnchorSessionStartResponse { done: false }));
+    if !symbol_to_anchor.is_empty() {
+        let _join_handle = tokio::spawn(async move {
+            let reference_locations = app
+                .tool_box
+                .get_reference_locations(symbol_to_anchor, message_properties, request_id)
+                .await;
+
+            dbg!(&reference_locations);
+
+            reference_locations
+        });
     }
 
-    let mut reference_locations: Vec<ReferenceLocation> = vec![];
+    let event_stream = Sse::new(
+        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
+            dbg!(&event);
+            sse::Event::default()
+                .json_data(event)
+                .map_err(anyhow::Error::new)
+        }),
+    );
 
-    for (ident, sub_symbols) in symbol_to_anchor {
-        println!("identifier: {:?}", ident);
-        println!("sub_symbols: {}", sub_symbols.join(", "));
-
-        for symbol in sub_symbols {
-            if let Some(path) = &ident.fs_file_path() {
-                let outline_nodes = app
-                    .tool_box
-                    .get_outline_nodes(&path, message_properties.to_owned())
-                    .await;
-
-                if let Some(nodes) = outline_nodes {
-                    let filtered_nodes = nodes
-                        .iter()
-                        .filter(|node| node.name() == symbol)
-                        .collect::<Vec<_>>();
-
-                    println!(
-                        "filtered_nodes: {}",
-                        filtered_nodes
-                            .iter()
-                            .map(|n| format!("name: {}, range: {:?}", n.name(), n.range()))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    );
-
-                    for node in filtered_nodes {
-                        let references_response = app
-                            .tool_box
-                            .go_to_references(
-                                path.to_string(),
-                                node.identifier_range().start_position(),
-                                message_properties.to_owned(),
-                            )
-                            .await;
-
-                        if let Ok(response) = references_response {
-                            let locations = response.locations();
-                            reference_locations.extend(locations);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    dbg!(reference_locations);
-
-    // todo(zi): dedupe reference locations.
-    // todo(zi): send UI events.
-
-    Ok(json_result(AnchorSessionStartResponse { done: false }))
+    Ok(event_stream.keep_alive(
+        sse::KeepAlive::new()
+            .interval(Duration::from_secs(3))
+            .event(
+                sse::Event::default()
+                    .json_data(json!({
+                        "keep_alive": "alive"
+                    }))
+                    .expect("json to not fail in keep alive"),
+            ),
+    ))
 }

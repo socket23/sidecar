@@ -22,6 +22,7 @@ use crate::agentic::symbol::identifier::SymbolIdentifier;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
+use crate::agentic::tool::lsp::gotoreferences::ReferenceLocation;
 use crate::{
     agentic::{
         symbol::{
@@ -835,8 +836,6 @@ pub async fn anchor_session_start(
         );
     }
 
-    println!("{:?}", &user_context);
-
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),
@@ -859,11 +858,74 @@ pub async fn anchor_session_start(
         .await
         .unwrap_or_default();
 
+    println!(
+        "webserver::agentic::anchor_session_start::symbol_to_anchor:\n{}",
+        symbol_to_anchor
+            .iter()
+            .map(|(id, string_vec)| {
+                format!("id: {:?}, string_vec: {}", id, string_vec.join(", "))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    if symbol_to_anchor.is_empty() {
+        println!("No symbols to anchor found.");
+        return Ok(json_result(AnchorSessionStartResponse { done: false }));
+    }
+
+    let mut reference_locations: Vec<ReferenceLocation> = vec![];
+
+    for (ident, sub_symbols) in symbol_to_anchor {
+        println!("identifier: {:?}", ident);
+        println!("sub_symbols: {}", sub_symbols.join(", "));
+
+        for symbol in sub_symbols {
+            if let Some(path) = &ident.fs_file_path() {
+                let outline_nodes = app
+                    .tool_box
+                    .get_outline_nodes(&path, message_properties.to_owned())
+                    .await;
+
+                if let Some(nodes) = outline_nodes {
+                    let filtered_nodes = nodes
+                        .iter()
+                        .filter(|node| node.name() == symbol)
+                        .collect::<Vec<_>>();
+
+                    println!(
+                        "filtered_nodes: {}",
+                        filtered_nodes
+                            .iter()
+                            .map(|n| format!("name: {}, range: {:?}", n.name(), n.range()))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    );
+
+                    for node in filtered_nodes {
+                        let references_response = app
+                            .tool_box
+                            .go_to_references(
+                                path.to_string(),
+                                node.identifier_range().start_position(),
+                                message_properties.to_owned(),
+                            )
+                            .await;
+
+                        if let Ok(response) = references_response {
+                            let locations = response.locations();
+                            reference_locations.extend(locations);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    dbg!(reference_locations);
+
+    // todo(zi): dedupe reference locations.
+    // todo(zi): send UI events.
+
     Ok(json_result(AnchorSessionStartResponse { done: false }))
-
-    // now we iterate through each variable
-
-    // find outline nodes for each
-
-    // go to references on them.
 }

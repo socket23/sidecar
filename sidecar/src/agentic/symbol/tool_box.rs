@@ -5979,6 +5979,7 @@ FILEPATH: {fs_file_path}
         message_properties: SymbolEventMessageProperties,
         request_id: String,
     ) -> Vec<ReferenceLocation> {
+        // todo(zi): this returns duplicate nodes, which will 2x the UI events sent to client
         let filtered_nodes = self
             .get_outline_nodes(&path, message_properties.clone())
             .await
@@ -5990,6 +5991,7 @@ FILEPATH: {fs_file_path}
             })
             .unwrap_or_default();
 
+        // necessary for use in async move
         let message_properties = Arc::new(message_properties);
 
         let reference_locations = stream::iter(filtered_nodes.into_iter().map(|node| {
@@ -5997,6 +5999,10 @@ FILEPATH: {fs_file_path}
             let message_properties = Arc::clone(&message_properties);
             let request_id = request_id.clone();
 
+            println!(
+                "toolbox::get_symbol_references::go_to_references({})",
+                node.name()
+            );
             async move {
                 match self
                     .go_to_references(
@@ -6008,6 +6014,12 @@ FILEPATH: {fs_file_path}
                 {
                     Ok(refs) => {
                         let locations = refs.locations();
+
+                        println!(
+                            "reference locations found for {}: {}",
+                            node.name(),
+                            &locations.len()
+                        );
 
                         for location in &locations {
                             // this is where we send UI events for a found reference

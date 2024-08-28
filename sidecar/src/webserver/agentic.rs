@@ -687,6 +687,8 @@ pub async fn code_editing(
                 },
             ))
             .map(|(path, symbol_name)| {
+                // for each symbol in user selection
+                println!("getting references for {}-{}", &path, &symbol_name);
                 app.tool_box.get_symbol_references(
                     path,
                     symbol_name,

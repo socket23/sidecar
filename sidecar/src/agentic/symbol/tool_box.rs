@@ -5877,6 +5877,7 @@ FILEPATH: {fs_file_path}
         }
     }
 
+    /// todo(zi): this is a dead method walking...but a perfect test case for refactoring
     pub async fn get_outline_nodes_grouped(&self, fs_file_path: &str) -> Option<Vec<OutlineNode>> {
         self.symbol_broker.get_symbols_outline(fs_file_path).await
     }
@@ -5981,7 +5982,7 @@ FILEPATH: {fs_file_path}
     ) -> Vec<ReferenceLocation> {
         // todo(zi): this returns duplicate nodes, which will 2x the UI events sent to client
         let filtered_nodes = self
-            .get_outline_nodes(&path, message_properties.clone())
+            .get_ouline_nodes_grouped_fresh(&path, message_properties.clone())
             .await
             .map(|nodes| {
                 nodes

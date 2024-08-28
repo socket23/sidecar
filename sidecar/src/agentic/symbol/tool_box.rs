@@ -6003,6 +6003,8 @@ FILEPATH: {fs_file_path}
                 "toolbox::get_symbol_references::go_to_references({})",
                 node.name()
             );
+
+            // this async move caused some headaches in its caller!
             async move {
                 match self
                     .go_to_references(

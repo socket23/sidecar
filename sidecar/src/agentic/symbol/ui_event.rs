@@ -262,6 +262,7 @@ impl UIEventWithID {
             request_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceFound(FoundReference::new(
                 request_id,
+                fs_file_path,
             ))),
         }
     }
@@ -589,11 +590,15 @@ impl InitialSearchSymbolInformation {
 #[derive(Debug, serde::Serialize)]
 pub struct FoundReference {
     request_id: String,
+    fs_file_path: String,
 }
 
 impl FoundReference {
-    pub fn new(request_id: String) -> Self {
-        Self { request_id }
+    pub fn new(request_id: String, fs_file_path: String) -> Self {
+        Self {
+            request_id,
+            fs_file_path,
+        }
     }
 }
 

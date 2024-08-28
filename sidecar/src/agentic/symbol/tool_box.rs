@@ -2348,11 +2348,11 @@ Please update this code to accommodate these changes. Consider:
                     .find(|outline_node| outline_node.name() == class_symbol_name);
 
                 // our outline nodes are matching up over here
-                if let (Some(new_outline_node), Some(old_outline_node)) =
+                if let (Some(new_outline_nodes), Some(old_outline_node)) =
                     (newer_outline_nodes, older_outline_nodes)
                 {
                     // now find the child nodes which are also present on the old outline nodes
-                    let changed_function_nodes = new_outline_node
+                    let changed_function_nodes = new_outline_nodes
                         .children()
                         .into_iter()
                         .filter_map(|new_child_outline_node| {

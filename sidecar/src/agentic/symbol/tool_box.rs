@@ -5980,25 +5980,21 @@ FILEPATH: {fs_file_path}
     ) -> Vec<ReferenceLocation> {
         let mut reference_locations: Vec<ReferenceLocation> = vec![];
 
-        let _ = message_properties
-            .ui_sender()
-            .send(UIEventWithID::found_reference(
-                message_properties.request_id_str().to_owned(),
-                "asefasdfasdfasdf".to_string(),
-            ));
-
-        // todo(zi): compare to bfs
         for (ident, sub_symbols) in symbol_to_anchor {
             println!("identifier: {:?}", ident);
             println!("sub_symbols: {}", sub_symbols.join(", "));
 
+            // for every symbol within the identifier
             for symbol in sub_symbols {
+                // symbol must have fs_file_path - could use filter_map here
                 if let Some(path) = &ident.fs_file_path() {
                     let outline_nodes = self
                         .get_outline_nodes(&path, message_properties.to_owned())
                         .await;
 
+                    // could also use filter_map for Option
                     if let Some(nodes) = outline_nodes {
+                        // filter for file nodes that match our symbol
                         let filtered_nodes = nodes
                             .iter()
                             .filter(|node| node.name() == symbol)
@@ -6013,7 +6009,9 @@ FILEPATH: {fs_file_path}
                                 .join("\n")
                         );
 
+                        // for each of our nodes
                         for node in filtered_nodes {
+                            // get their references - this should be an async task
                             let references_response = self
                                 .go_to_references(
                                     path.to_string(),
@@ -6032,6 +6030,7 @@ FILEPATH: {fs_file_path}
                                 let locations = response.locations();
 
                                 reference_locations.extend(locations);
+
                                 let _ = message_properties.ui_sender().send(
                                     UIEventWithID::found_reference(
                                         message_properties.request_id_str().to_owned(),

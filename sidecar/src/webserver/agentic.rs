@@ -11,6 +11,7 @@ use llm_client::{
 };
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -641,8 +642,6 @@ pub async fn code_editing(
         );
     }
 
-    println!("{:?}", &user_context);
-
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),
@@ -674,10 +673,14 @@ pub async fn code_editing(
                 .join(",")
         );
         if !symbols_to_anchor.is_empty() {
+            let start = Instant::now();
+
             let cloned_symbols_to_anchor = symbols_to_anchor.clone();
             let cloned_message_properties = message_properties.clone();
             let cloned_request_id = request_id.clone();
             let tool_box = app.tool_box.clone();
+
+            // this will fire events while getting reference locations, but is not later used.
             let _join_handle = tokio::spawn(async move {
                 let reference_locations = tool_box
                     .get_reference_locations(
@@ -688,10 +691,11 @@ pub async fn code_editing(
                     .await;
 
                 dbg!(&reference_locations);
+
+                let duration = start.elapsed();
+                println!("Reference locations execution time: {:?}", duration);
             });
 
-            // todo(zi): dedupe reference locations.
-            // todo(zi): may need more than locations for UI response.
             // todo(zi): send UI events. (just send them...)
             // todo(zi): make use of _join_handle?
 

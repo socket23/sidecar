@@ -2133,7 +2133,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     false,
                     None,
-                    true,
+                    false,
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),

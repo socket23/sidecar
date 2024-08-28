@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use futures::{stream, StreamExt};
+use futures::{stream, FutureExt, StreamExt, TryFutureExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{
     AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
@@ -5972,77 +5972,65 @@ FILEPATH: {fs_file_path}
         Ok(())
     }
 
-    pub async fn get_reference_locations(
+    pub async fn get_symbol_references(
         &self,
-        symbol_to_anchor: Vec<(SymbolIdentifier, Vec<String>)>,
+        path: String,
+        symbol: String,
         message_properties: SymbolEventMessageProperties,
         request_id: String,
     ) -> Vec<ReferenceLocation> {
-        let mut reference_locations: Vec<ReferenceLocation> = vec![];
+        let filtered_nodes = self
+            .get_outline_nodes(&path, message_properties.clone())
+            .await
+            .map(|nodes| {
+                nodes
+                    .into_iter()
+                    .filter(|node| node.name() == symbol)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
-        for (ident, sub_symbols) in symbol_to_anchor {
-            println!("identifier: {:?}", ident);
-            println!("sub_symbols: {}", sub_symbols.join(", "));
+        let message_properties = Arc::new(message_properties);
 
-            // for every symbol within the identifier
-            for symbol in sub_symbols {
-                // symbol must have fs_file_path - could use filter_map here
-                if let Some(path) = &ident.fs_file_path() {
-                    let outline_nodes = self
-                        .get_outline_nodes(&path, message_properties.to_owned())
-                        .await;
+        let reference_locations = stream::iter(filtered_nodes.into_iter().map(|node| {
+            let path = path.clone();
+            let message_properties = Arc::clone(&message_properties);
+            let request_id = request_id.clone();
 
-                    // could also use filter_map for Option
-                    if let Some(nodes) = outline_nodes {
-                        // filter for file nodes that match our symbol
-                        let filtered_nodes = nodes
-                            .iter()
-                            .filter(|node| node.name() == symbol)
-                            .collect::<Vec<_>>();
+            async move {
+                match self
+                    .go_to_references(
+                        path.clone(),
+                        node.identifier_range().start_position(),
+                        (*message_properties).clone(),
+                    )
+                    .await
+                {
+                    Ok(refs) => {
+                        let locations = refs.locations();
 
-                        println!(
-                            "filtered_nodes: {}",
-                            filtered_nodes
-                                .iter()
-                                .map(|n| format!("name: {}, range: {:?}", n.name(), n.range()))
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        );
-
-                        // for each of our nodes
-                        for node in filtered_nodes {
-                            // get their references - this should be an async task
-                            let references_response = self
-                                .go_to_references(
-                                    path.to_string(),
-                                    node.identifier_range().start_position(),
-                                    message_properties.to_owned(),
-                                )
-                                .await;
-
-                            println!(
-                                "message_properties.request_id: {}",
-                                message_properties.request_id_str().to_owned()
+                        for location in &locations {
+                            // this is where we send UI events for a found reference
+                            let _ = message_properties.ui_sender().send(
+                                UIEventWithID::found_reference(
+                                    request_id.clone(),
+                                    location.fs_file_path().to_string(),
+                                ),
                             );
-
-                            if let Ok(response) = references_response {
-                                // no need for symbol name - UX will show path and count
-                                let locations = response.locations();
-
-                                reference_locations.extend(locations);
-
-                                let _ = message_properties.ui_sender().send(
-                                    UIEventWithID::found_reference(
-                                        message_properties.request_id_str().to_owned(),
-                                        path.to_string(),
-                                    ),
-                                );
-                            }
                         }
+
+                        locations
                     }
+                    Err(_) => Vec::new(),
                 }
             }
-        }
+        }))
+        .buffer_unordered(100)
+        .collect::<Vec<Vec<_>>>()
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
 
         reference_locations
     }

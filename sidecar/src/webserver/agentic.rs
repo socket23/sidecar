@@ -675,30 +675,34 @@ pub async fn code_editing(
         if !symbols_to_anchor.is_empty() {
             let start = Instant::now();
 
-            let cloned_symbols_to_anchor = symbols_to_anchor.clone();
-            let cloned_message_properties = message_properties.clone();
-            let cloned_request_id = request_id.clone();
-            let tool_box = app.tool_box.clone();
+            // this needs to be its own async task
+            let references = stream::iter(symbols_to_anchor.clone().into_iter().flat_map(
+                |(symbol_identifier, symbol_names)| {
+                    // move is needed for symbol_identifier
+                    symbol_names.into_iter().filter_map(move |symbol_name| {
+                        symbol_identifier
+                            .fs_file_path()
+                            .map(|path| (path, symbol_name))
+                    })
+                },
+            ))
+            .map(|(path, symbol_name)| {
+                app.tool_box.get_symbol_references(
+                    path,
+                    symbol_name,
+                    message_properties.clone(),
+                    request_id.clone(),
+                )
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
-            // this will fire events while getting reference locations, but is not later used.
-            let _join_handle = tokio::spawn(async move {
-                let reference_locations = tool_box
-                    .get_reference_locations(
-                        cloned_symbols_to_anchor,
-                        cloned_message_properties,
-                        cloned_request_id,
-                    )
-                    .await;
-
-                dbg!(&reference_locations);
-
-                let duration = start.elapsed();
-                println!("Reference locations execution time: {:?}", duration);
-            });
-
-            // todo(zi): send UI events. (just send them...)
-            // todo(zi): make use of _join_handle?
-
+            println!("total references: {}", references.len());
+            println!("collect references time elapsed: {:?}", start.elapsed());
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through
             // the initial request parts
@@ -897,18 +901,18 @@ pub async fn anchor_session_start(
             .join("\n")
     );
 
-    if !symbol_to_anchor.is_empty() {
-        let _join_handle = tokio::spawn(async move {
-            let reference_locations = app
-                .tool_box
-                .get_reference_locations(symbol_to_anchor, message_properties, request_id)
-                .await;
+    // if !symbol_to_anchor.is_empty() {
+    //     let _join_handle = tokio::spawn(async move {
+    //         let reference_locations = app
+    //             .tool_box
+    //             .get_reference_locations(symbol_to_anchor, message_properties, request_id)
+    //             .await;
 
-            dbg!(&reference_locations);
+    //         dbg!(&reference_locations);
 
-            reference_locations
-        });
-    }
+    //         reference_locations
+    //     });
+    // }
 
     let event_stream = Sse::new(
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {

@@ -520,6 +520,8 @@ pub async fn code_sculpting_heal(
             })
             .flatten()
             .collect::<Vec<_>>();
+        // make sure that the edit request we are creating is on the whole outline
+        // node and not on the individual function
 
         let hub_sender = app.symbol_manager.hub_sender();
         let cloned_tools = app.tool_box.clone();

@@ -77,7 +77,7 @@ struct AnchoredEditingMetadata {
     // before we started editing
     previous_file_content: HashMap<String, String>,
     // to store anchor selection nodes' references
-    references: Vec<ReferenceLocation>,
+    _references: Vec<ReferenceLocation>,
 }
 
 impl AnchoredEditingMetadata {
@@ -93,7 +93,7 @@ impl AnchoredEditingMetadata {
             anchored_symbols,
             user_context,
             previous_file_content,
-            references,
+            _references: references,
         }
     }
 
@@ -118,7 +118,7 @@ impl AnchoredEditingMetadata {
     }
 
     pub fn _add_references(&mut self, references: Vec<ReferenceLocation>) {
-        self.references.extend(references);
+        self._references.extend(references);
     }
 }
 
@@ -885,7 +885,6 @@ pub async fn code_editing(
 pub struct AnchorSessionStart {
     request_id: String,
     user_context: UserContext,
-    root_directory: String,
     editor_url: String,
     active_window_data: Option<ProbeRequestActiveWindow>,
 }
@@ -902,7 +901,6 @@ pub async fn anchor_session_start(
     Json(AnchorSessionStart {
         request_id,
         mut user_context,
-        root_directory,
         editor_url,
         active_window_data,
     }): Json<AnchorSessionStart>,
@@ -954,22 +952,8 @@ pub async fn anchor_session_start(
             .join("\n")
     );
 
-    // if !symbol_to_anchor.is_empty() {
-    //     let _join_handle = tokio::spawn(async move {
-    //         let reference_locations = app
-    //             .tool_box
-    //             .get_reference_locations(symbol_to_anchor, message_properties, request_id)
-    //             .await;
-
-    //         dbg!(&reference_locations);
-
-    //         reference_locations
-    //     });
-    // }
-
     let event_stream = Sse::new(
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
-            dbg!(&event);
             sse::Event::default()
                 .json_data(event)
                 .map_err(anyhow::Error::new)

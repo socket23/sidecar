@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use futures::{stream, FutureExt, StreamExt, TryFutureExt};
+use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{
     AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
@@ -5980,7 +5980,6 @@ FILEPATH: {fs_file_path}
         message_properties: SymbolEventMessageProperties,
         request_id: String,
     ) -> Vec<ReferenceLocation> {
-        // todo(zi): this returns duplicate nodes, which will 2x the UI events sent to client
         let filtered_nodes = self
             .get_ouline_nodes_grouped_fresh(&path, message_properties.clone())
             .await

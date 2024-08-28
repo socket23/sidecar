@@ -586,7 +586,6 @@ impl InitialSearchSymbolInformation {
     }
 }
 
-// todo(zi): flesh this out
 #[derive(Debug, serde::Serialize)]
 pub struct FoundReference {
     request_id: String,

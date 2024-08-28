@@ -3296,12 +3296,15 @@ Please update this code to accommodate these changes. Consider:
         // those changes are about
         // we want to track the reference location along with the changed symbol_followup
         // so we can pass the correct git-diff to it
-        let mut reference_locations: Vec<SymbolFollowupBFS> = vec![];
+        let mut reference_locations: Vec<SymbolFollowupBFS>;
         loop {
             if symbol_followups.is_empty() {
                 // break when we have no more followups to do
                 break;
             }
+            // empty the reference locations at the start of the invocation as it
+            // will get populated down the line
+            reference_locations = vec![];
             for symbol_followup in symbol_followups.into_iter() {
                 let symbol_edited = symbol_followup.symbol_edited();
                 let symbol_identifier = symbol_followup.symbol_identifier();

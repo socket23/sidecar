@@ -2047,13 +2047,20 @@ We also believe this symbol needs to be probed because of:
         outline_node: OutlineNodeContent,
         symbol_edited: &SymbolToEdit,
         symbol_followup: &SymbolFollowupBFS,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
+        tool_properties: ToolProperties,
     ) -> Result<Vec<(ReferenceLocation, SymbolFollowupBFS)>, SymbolError> {
         let mut reference_locations = vec![];
         println!(
             "tool_box::check_for_followups::is_class_definition::({})",
             outline_node.name()
         );
+
+        let original_code = symbol_followup.original_code();
+        let edited_code = symbol_followup.edited_code();
+        let symbol_name = outline_node.name();
+        let fs_file_path = outline_node.fs_file_path();
         // if this is a class definitions then we have to be a bit more careful
         // and look at where this class definition is being used and follow those
         // reference
@@ -2086,6 +2093,104 @@ We also believe this symbol needs to be probed because of:
         // the model to make any changes required (especially if its a single block or all in a single file
         // which is the majority case in our codebase, if there are multiple files which have this
         // then we can do it per file)
+        let file_paths = reference_locations
+            .iter()
+            .map(|(reference_location, _)| reference_location.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        // outline nodes which contain any children which contains a reference
+        // to the original symbol
+        let outline_nodes = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|file_path| (file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            self.get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .flatten()
+        .filter(|outline_node| {
+            // now check which outline node belongs to the refenrence
+            let outline_node_range = outline_node.range();
+            reference_locations.iter().any(|(reference_location, _)| {
+                outline_node_range.contains_check_line_column(reference_location.range())
+            })
+        })
+        .filter(|outline_node| outline_node.name() == symbol_name)
+        .filter(|outline_node| {
+            outline_node.children().into_iter().any(|child_node| {
+                let child_range = child_node.range();
+                reference_locations.iter().any(|(reference_location, _)| {
+                    child_range.contains_check_line_column(reference_location.range())
+                })
+            })
+        })
+        .collect::<Vec<_>>();
+
+        // now we can execute the edits on each of these files
+        let prompt = format!(
+            r#"A dependency of this code has changed. You are given the list of changes below:
+<dependency>
+<name>
+{symbol_name}
+</name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#
+        );
+
+        println!(
+            "tool_box::check_for_followups_class_definitions::symbol_name({})::outline_nodes({})",
+            symbol_name,
+            outline_nodes.len()
+        );
+        let _ = stream::iter(outline_nodes.to_vec().into_iter().map(|data| {
+            (
+                data,
+                hub_sender.clone(),
+                message_properties.clone(),
+                tool_properties.clone(),
+                prompt.to_owned(),
+            )
+        }))
+        .map(
+            |(outline_node, hub_sender, message_properties, tool_properties, prompt)| async move {
+                self.send_edit_instruction_to_outline_node(
+                    outline_node,
+                    prompt,
+                    hub_sender,
+                    message_properties,
+                    tool_properties,
+                )
+                .await
+            },
+        )
+        .buffer_unordered(1)
+        .collect::<Vec<_>>()
+        .await;
+
+        // TODO(skcd): now we want to capture the methods which have changed since those are the
+        // ones which we want follow after changing the symbol (the methods over here)
+        // the symbol might have moved, so we want to make sure that we do it correctly
         Ok(reference_locations)
     }
 
@@ -2298,7 +2403,9 @@ Please update this code to accommodate these changes. Consider:
                         outline_node,
                         symbol_edited,
                         &symbol_followup,
+                        hub_sender.clone(),
                         message_properties.clone(),
+                        tool_properties.clone(),
                     )
                     .await?,
                 );

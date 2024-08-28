@@ -1641,7 +1641,7 @@ We also believe this symbol needs to be probed because of:
             // - its either a function or a class like symbol
             // - if its a function no need to check for implementations
             // - if its a class then we still need to check for implementations
-            if outline_node.is_funciton() {
+            if outline_node.is_function() {
                 // just return this over here
                 let fs_file_path = format!(
                     "{}-{}:{}",
@@ -6364,6 +6364,7 @@ FILEPATH: {fs_file_path}
         }
     }
 
+    /// todo(zi): this is a dead method walking...but a perfect test case for refactoring
     pub async fn get_outline_nodes_grouped(&self, fs_file_path: &str) -> Option<Vec<OutlineNode>> {
         self.symbol_broker.get_symbols_outline(fs_file_path).await
     }
@@ -6457,6 +6458,82 @@ FILEPATH: {fs_file_path}
             )
             .await;
         Ok(())
+    }
+
+    pub async fn get_symbol_references(
+        &self,
+        path: String,
+        symbol: String,
+        message_properties: SymbolEventMessageProperties,
+        request_id: String,
+    ) -> Vec<ReferenceLocation> {
+        let filtered_nodes = self
+            .get_ouline_nodes_grouped_fresh(&path, message_properties.clone())
+            .await
+            .map(|nodes| {
+                nodes
+                    .into_iter()
+                    .filter(|node| node.name() == symbol)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        // necessary for use in async move
+        let message_properties = Arc::new(message_properties);
+
+        let reference_locations = stream::iter(filtered_nodes.into_iter().map(|node| {
+            let path = path.clone();
+            let message_properties = Arc::clone(&message_properties);
+            let request_id = request_id.clone();
+
+            println!(
+                "toolbox::get_symbol_references::go_to_references({})",
+                node.name()
+            );
+
+            // this async move caused some headaches in its caller!
+            async move {
+                match self
+                    .go_to_references(
+                        path.clone(),
+                        node.identifier_range().start_position(),
+                        (*message_properties).clone(),
+                    )
+                    .await
+                {
+                    Ok(refs) => {
+                        let locations = refs.locations();
+
+                        println!(
+                            "reference locations found for {}: {}",
+                            node.name(),
+                            &locations.len()
+                        );
+
+                        for location in &locations {
+                            // this is where we send UI events for a found reference
+                            let _ = message_properties.ui_sender().send(
+                                UIEventWithID::found_reference(
+                                    request_id.clone(),
+                                    location.fs_file_path().to_string(),
+                                ),
+                            );
+                        }
+
+                        locations
+                    }
+                    Err(_) => Vec::new(),
+                }
+            }
+        }))
+        .buffer_unordered(100)
+        .collect::<Vec<Vec<_>>>()
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
+
+        reference_locations
     }
 
     pub async fn file_open(
@@ -7568,13 +7645,13 @@ FILEPATH: {fs_file_path}
                                 // is_func and is_class_delcaration are special one
                                 // if this is a class then we are in js/py land
                                 if new_outline_nodes[0].is_class_definition()
-                                    || new_outline_nodes[0].is_funciton()
+                                    || new_outline_nodes[0].is_function()
                                 {
                                     older_outline_nodes
                                         .into_iter()
                                         .find(|outline_node| {
                                             outline_node.is_class_definition()
-                                                || outline_node.is_funciton()
+                                                || outline_node.is_function()
                                         })
                                         .map(|older_outline_node| {
                                             vec![(
@@ -7880,7 +7957,7 @@ FILEPATH: {fs_file_path}
                     outline_node.name(),
                     outline_node.outline_node_type()
                 );
-                if outline_node.is_funciton() || outline_node.is_class_definition() {
+                if outline_node.is_function() || outline_node.is_class_definition() {
                     // then its a single unit of work, so its a bit easier
                     (
                         SymbolIdentifier::with_file_path(
@@ -7957,7 +8034,7 @@ FILEPATH: {fs_file_path}
                         // this is a spcial case where the child symbol is of the same name as the symbol name
                         // representing a class definition or function
                         let possible_outline_node = outline_nodes.iter().find(|outline_node| {
-                            outline_node.is_class_definition() || outline_node.is_funciton()
+                            outline_node.is_class_definition() || outline_node.is_function()
                         });
                         if let Some(outline_node) = possible_outline_node {
                             Some(SymbolToEdit::new(

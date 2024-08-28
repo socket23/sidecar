@@ -11,6 +11,7 @@ use llm_client::{
 };
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -23,6 +24,7 @@ use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
+use crate::agentic::tool::lsp::gotoreferences::ReferenceLocation;
 use crate::{
     agentic::{
         symbol::{
@@ -74,6 +76,8 @@ struct AnchoredEditingMetadata {
     // we also want to store the original content of the files which were mentioned
     // before we started editing
     previous_file_content: HashMap<String, String>,
+    // to store anchor selection nodes' references
+    _references: Vec<ReferenceLocation>,
 }
 
 impl AnchoredEditingMetadata {
@@ -82,13 +86,39 @@ impl AnchoredEditingMetadata {
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
         user_context: Option<String>,
         previous_file_content: HashMap<String, String>,
+        references: Vec<ReferenceLocation>,
     ) -> Self {
         Self {
             message_properties,
             anchored_symbols,
             user_context,
             previous_file_content,
+            _references: references,
         }
+    }
+
+    pub fn _add_message_property(&mut self, property: SymbolEventMessageProperties) {
+        self.message_properties = property
+    }
+
+    pub fn _add_anchored_symbols(&mut self, symbols: Vec<(SymbolIdentifier, Vec<String>)>) {
+        self.anchored_symbols.extend(symbols);
+    }
+
+    pub fn _append_user_context(&mut self, context: &str) {
+        self.user_context = match &self.user_context {
+            Some(existing) => Some(existing.to_owned() + context),
+            None => Some(context.to_owned()),
+        };
+    }
+
+    pub fn _set_file_contents(&mut self, file_path: &str, contents: &str) {
+        self.previous_file_content
+            .insert(file_path.to_string(), contents.to_string());
+    }
+
+    pub fn _add_references(&mut self, references: Vec<ReferenceLocation>) {
+        self._references.extend(references);
     }
 }
 
@@ -643,8 +673,6 @@ pub async fn code_editing(
         );
     }
 
-    println!("{:?}", &user_context);
-
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),
@@ -675,7 +703,51 @@ pub async fn code_editing(
                 .collect::<Vec<_>>()
                 .join(",")
         );
+
+        let cloned_symbols_to_anchor = symbols_to_anchor.clone();
+        let cloned_message_properties = message_properties.clone();
+        let cloned_toolbox = app.tool_box.clone();
+        let cloned_request_id = request_id.clone();
         if !symbols_to_anchor.is_empty() {
+            // so this is an async task that should just chill in the background while the edits flow below continues
+            let references_join_handle = tokio::spawn(async move {
+                let start = Instant::now();
+
+                // this needs to be its own async task
+                let references =
+                    stream::iter(cloned_symbols_to_anchor.clone().into_iter().flat_map(
+                        |(symbol_identifier, symbol_names)| {
+                            // move is needed for symbol_identifier
+                            symbol_names.into_iter().filter_map(move |symbol_name| {
+                                symbol_identifier
+                                    .fs_file_path()
+                                    .map(|path| (path, symbol_name))
+                            })
+                        },
+                    ))
+                    .map(|(path, symbol_name)| {
+                        // for each symbol in user selection
+                        println!("getting references for {}-{}", &path, &symbol_name);
+                        cloned_toolbox.get_symbol_references(
+                            path,
+                            symbol_name,
+                            cloned_message_properties.clone(),
+                            cloned_request_id.clone(),
+                        )
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await // this await blocks everything
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                println!("total references: {}", references.len());
+                println!("collect references time elapsed: {:?}", start.elapsed());
+
+                references
+            });
+
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through
             // the initial request parts
@@ -703,28 +775,38 @@ pub async fn code_editing(
                 .into_iter()
                 .filter_map(|s| s)
                 .collect::<HashMap<_, _>>();
-            let editing_metadata = AnchoredEditingMetadata::new(
-                message_properties.clone(),
-                symbols_to_anchor,
-                user_provided_context.clone(),
-                file_contents,
-            );
+
             let anchored_symbols = app
                 .tool_box
                 .symbols_to_anchor(&user_context, message_properties.clone())
                 .await
                 .unwrap_or_default();
+
+            // clone, clone, clone
             let symbol_manager = app.symbol_manager.clone();
+            let cloned_message_properties = message_properties.clone();
+            let cloned_user_context = user_provided_context.clone();
             let join_handle = tokio::spawn(async move {
                 let _ = symbol_manager
                     .anchor_edits(
                         user_query,
                         anchored_symbols,
-                        user_provided_context,
-                        message_properties,
+                        cloned_user_context,
+                        cloned_message_properties,
                     )
                     .await;
             });
+
+            // this must happen after the anchor_edits task is underway so as to not block it
+            let references = references_join_handle.await.expect("references to return");
+
+            let editing_metadata = AnchoredEditingMetadata::new(
+                message_properties,
+                symbols_to_anchor,
+                user_provided_context,
+                file_contents,
+                references, // precomputed references
+            );
             let _ = app
                 .anchored_request_tracker
                 .track_new_request(&request_id, join_handle, editing_metadata)
@@ -788,6 +870,98 @@ pub async fn code_editing(
     );
 
     // return the stream as a SSE event stream over here
+    Ok(event_stream.keep_alive(
+        sse::KeepAlive::new()
+            .interval(Duration::from_secs(3))
+            .event(
+                sse::Event::default()
+                    .json_data(json!({
+                        "keep_alive": "alive"
+                    }))
+                    .expect("json to not fail in keep alive"),
+            ),
+    ))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AnchorSessionStart {
+    request_id: String,
+    user_context: UserContext,
+    editor_url: String,
+    active_window_data: Option<ProbeRequestActiveWindow>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AnchorSessionStartResponse {
+    done: bool,
+}
+
+impl ApiResponse for AnchorSessionStartResponse {}
+
+pub async fn anchor_session_start(
+    Extension(app): Extension<Application>,
+    Json(AnchorSessionStart {
+        request_id,
+        mut user_context,
+        editor_url,
+        active_window_data,
+    }): Json<AnchorSessionStart>,
+) -> Result<impl IntoResponse> {
+    println!(
+        "webserver::anchor_session_start::request_id({})",
+        &request_id
+    );
+
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    if let Some(active_window_data) = active_window_data {
+        user_context = user_context.update_file_content_map(
+            active_window_data.file_path,
+            active_window_data.file_content,
+            active_window_data.language,
+        );
+    }
+
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
+        sender.clone(),
+        editor_url,
+    );
+
+    println!(
+        "webserver::agentic::anchor_session_start::user_context::variables:\n{}",
+        user_context
+            .variables
+            .iter()
+            .map(|var| var.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    let symbol_to_anchor = app
+        .tool_box
+        .symbols_to_anchor(&user_context, message_properties.clone())
+        .await
+        .unwrap_or_default();
+
+    println!(
+        "webserver::agentic::anchor_session_start::symbol_to_anchor:\n{}",
+        symbol_to_anchor
+            .iter()
+            .map(|(id, string_vec)| {
+                format!("id: {:?}, string_vec: {}", id, string_vec.join(", "))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    let event_stream = Sse::new(
+        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
+            sse::Event::default()
+                .json_data(event)
+                .map_err(anyhow::Error::new)
+        }),
+    );
+
     Ok(event_stream.keep_alive(
         sse::KeepAlive::new()
             .interval(Duration::from_secs(3))

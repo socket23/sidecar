@@ -164,6 +164,10 @@ fn agentic_router() -> Router {
             "/code_sculpting_heal",
             post(sidecar::webserver::agentic::code_sculpting_heal),
         )
+        .route(
+            "/anchor_session_start",
+            post(sidecar::webserver::agentic::anchor_session_start),
+        )
         // SWE bench route
         // This route is for software engineering benchmarking
         .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))

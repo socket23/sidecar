@@ -2097,7 +2097,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                         message_properties.clone(),
                         &self.tool_properties,
                     )
-                    .await;
+                    .await
+                    .map_err(|e| eprintln!("{:?}", e));
             } else {
                 println!("symbol::edit_implementation::symbol_name({})::followups_and_correctness_check_disabled({})", self.symbol_name(), sub_symbol_to_edit.should_disable_followups_and_correctness());
             }

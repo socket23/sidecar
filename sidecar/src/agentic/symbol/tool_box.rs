@@ -2556,15 +2556,26 @@ Please update this code to accommodate these changes. Consider:
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            let _ = self
-                .send_edit_instruction_to_outline_node(
-                    editable_outline_node,
-                    prompt_for_editing,
-                    hub_sender.clone(),
-                    message_properties.clone(),
-                    tool_properties.clone(),
-                )
-                .await;
+            if !prompt_for_editing.trim().is_empty() {
+                let _ = self
+                    .send_edit_instruction_to_outline_node(
+                        editable_outline_node,
+                        format!(
+                            r#"A dependency of this code has changed. You are given the list of changes below:
+{prompt_for_editing}
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#
+                        ),
+                        hub_sender.clone(),
+                        message_properties.clone(),
+                        tool_properties.clone(),
+                    )
+                    .await;
+            }
         }
 
         // now that we have edited all the outline nodes we are interested in
@@ -2627,20 +2638,29 @@ Please update this code to accommodate these changes. Consider:
     /// which previous changed
     /// once this is done get the functions which have chagned along with any
     /// places which might be referencing the class itself
-    async fn _check_for_followups_class_implementation(
+    async fn check_for_followups_class_implementation(
         &self,
-        outline_node: OutlineNode,
+        class_implementation_outline_node: OutlineNodeContent,
         symbol_followup: &SymbolFollowupBFS,
         original_code: &str,
         edited_code: &str,
         hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<Vec<SymbolFollowupBFS>, SymbolError> {
         println!(
             "tool_box::check_for_followups::is_class_implementation_type::({})",
-            outline_node.name()
+            class_implementation_outline_node.name()
         );
+        let language_config = self
+            .editor_parsing
+            .for_file_path(class_implementation_outline_node.fs_file_path());
+        if language_config.is_none() {
+            return Ok(vec![]);
+        }
+        let language_config = language_config.expect("is_none to hold");
+        let class_implementation_name = class_implementation_outline_node.name();
+        let outline_node_file_path = class_implementation_outline_node.fs_file_path();
         // we should always trigger an edit on the class symbol definition by itself
         // just to make sure that if any changes are required to it, they are completed
         // and managed accordingly
@@ -2649,8 +2669,10 @@ Please update this code to accommodate these changes. Consider:
         // class-definition changed -> check if any of the class-implementation reference blocks point to class definition and trigger a search and replace block
         let mut definitions = self
             .go_to_definition(
-                outline_node.fs_file_path(),
-                outline_node.identifier_range().start_position(),
+                class_implementation_outline_node.fs_file_path(),
+                class_implementation_outline_node
+                    .identifier_range()
+                    .start_position(),
                 message_properties.clone(),
             )
             .await?
@@ -2658,16 +2680,15 @@ Please update this code to accommodate these changes. Consider:
 
         // changed content for the class definition
         // is being tracked over here
-        let mut _class_definition_change: Option<(String, String)> = None;
         let mut class_implementations_interested_references = vec![];
         if !definitions.is_empty() {
             let first_definition = definitions.remove(0);
             // if the definition does not belong to the outline nodo where
             // we are focussed on right now, then skip the step
-            if first_definition.file_path() != outline_node.fs_file_path()
-                || !outline_node
+            if first_definition.file_path() != class_implementation_outline_node.fs_file_path()
+                || !class_implementation_outline_node
                     .range()
-                    .contains_check_line_column(outline_node.range())
+                    .contains_check_line_column(class_implementation_outline_node.range())
             {
                 let outline_node = self
                     .get_outline_node_for_range(
@@ -2735,11 +2756,6 @@ Please update this code to accommodate these changes. Consider:
                     if changed_outline_node.content().content().trim()
                         != original_definition_code.trim()
                     {
-                        _class_definition_change = Some((
-                            original_definition_code,
-                            changed_outline_node.content().content().to_owned(),
-                        ));
-
                         // we also want to get the references for the class definition node
                         // which point to self
                         let class_definition_references = self
@@ -2750,8 +2766,37 @@ Please update this code to accommodate these changes. Consider:
                             )
                             .await;
                         if let Ok(class_definition_references) = class_definition_references {
-                            class_implementations_interested_references
-                                .extend(class_definition_references.locations());
+                            class_implementations_interested_references.extend(
+                                class_definition_references.locations().into_iter().map(
+                                    |location| {
+                                        (
+                                            location,
+                                            SymbolFollowupBFS::new(
+                                                SymbolToEdit::new(
+                                                    changed_outline_node.name().to_owned(),
+                                                    changed_outline_node.range().clone(),
+                                                    changed_outline_node.fs_file_path().to_owned(),
+                                                    vec![],
+                                                    false,
+                                                    false,
+                                                    true,
+                                                    "".to_owned(),
+                                                    None,
+                                                    false,
+                                                    None,
+                                                    true,
+                                                ),
+                                                SymbolIdentifier::with_file_path(
+                                                    changed_outline_node.name(),
+                                                    changed_outline_node.fs_file_path(),
+                                                ),
+                                                original_definition_code.to_owned(),
+                                                changed_outline_node.content().content().to_owned(),
+                                            ),
+                                        )
+                                    },
+                                ),
+                            )
                         }
                     }
                 }
@@ -2761,7 +2806,470 @@ Please update this code to accommodate these changes. Consider:
         // if class-definition change has happened, we have to go through all the
         // implementation blocks which contain this class definition along with
         // any changed functions and their references
-        Ok(())
+        // the ranges here are all messed up since we are computing relative to
+        // Position::new(0, 0, 0) ...ugh
+        let older_outline_nodes = language_config
+            .generate_outline_fresh(original_code.as_bytes(), outline_node_file_path)
+            .into_iter()
+            .find(|outline_node| outline_node.name() == class_implementation_name);
+        let newer_outline_nodes = language_config
+            .generate_outline_fresh(edited_code.as_bytes(), outline_node_file_path)
+            .into_iter()
+            .find(|outline_node| outline_node.name() == class_implementation_name);
+
+        let class_implementation_block_new_location = self
+            .find_sub_symbol_to_edit_with_name(
+                class_implementation_outline_node.name(),
+                &SymbolToEdit::new(
+                    class_implementation_outline_node.name().to_owned(),
+                    class_implementation_outline_node.range().clone(),
+                    class_implementation_outline_node.fs_file_path().to_owned(),
+                    vec![],
+                    false,
+                    false,
+                    true,
+                    "".to_owned(),
+                    None,
+                    false,
+                    None,
+                    true,
+                ),
+                message_properties.clone(),
+            )
+            .await?;
+
+        let start_line = class_implementation_block_new_location
+            .range()
+            .start_position()
+            .line();
+
+        // our outline nodes are matching up over here
+        if let (Some(new_outline_node), Some(old_outline_node)) =
+            (newer_outline_nodes, older_outline_nodes)
+        {
+            // now find the child nodes which are also present on the old outline nodes
+            let changed_function_nodes = new_outline_node
+                .children()
+                .into_iter()
+                .filter_map(|new_child_outline_node| {
+                    let old_child_outline_node =
+                        old_outline_node.children().iter().find(|old_child_node| {
+                            old_child_node.name() == new_child_outline_node.name()
+                        });
+                    if let Some(old_child_outline_node) = old_child_outline_node {
+                        if old_child_outline_node.content() != new_child_outline_node.content() {
+                            Some((old_child_outline_node.content(), new_child_outline_node))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            // now that we have the changed function nodes we can try and find the references where we want to go for this
+            // and the ones which belong to the same class (that is very important we are still in the first branch over here)
+            for (old_content, changed_function_node) in changed_function_nodes.into_iter() {
+                let references_for_functions = self
+                    .go_to_references(
+                        changed_function_node.fs_file_path().to_owned(),
+                        changed_function_node
+                            .identifier_range()
+                            .start_position()
+                            // we want to get the accurate line because when we are parsing on top of just
+                            // the changed content we will start with 0 index since we do not have the file content
+                            .move_lines(start_line),
+                        message_properties.clone(),
+                    )
+                    .await?
+                    .locations();
+                class_implementations_interested_references.extend(
+                    references_for_functions.into_iter().map(|reference| {
+                        (
+                            reference,
+                            SymbolFollowupBFS::new(
+                                SymbolToEdit::new(
+                                    changed_function_node.name().to_owned(),
+                                    changed_function_node.range().clone(),
+                                    changed_function_node.fs_file_path().to_owned(),
+                                    vec![],
+                                    false,
+                                    false,
+                                    false,
+                                    "".to_owned(),
+                                    None,
+                                    false,
+                                    None,
+                                    true,
+                                ),
+                                SymbolIdentifier::with_file_path(
+                                    class_implementation_name,
+                                    outline_node_file_path,
+                                ),
+                                old_content.to_owned(),
+                                changed_function_node.content().to_owned(),
+                            ),
+                        )
+                    }),
+                );
+            }
+        }
+
+        // now that we have all the references and where we want to go towards, we have to find the outline nodes which these referneces belong to
+        // and make sure that the edit request we are sending is only for the outline nodes which belong to the class
+        let file_paths = class_implementations_interested_references
+            .iter()
+            .map(|(reference_location, _)| reference_location.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        let outline_nodes_which_belong_to_class = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|file_path| (file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            self.get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .flatten()
+        // only worry about outline nodes which are part of the class
+        .filter(|outline_node| outline_node.name() == class_implementation_name)
+        // only look at the class implementation blocks and not on the definition again
+        .filter(|outline_node| outline_node.is_class())
+        .collect::<Vec<_>>();
+
+        // now we want to send an edit request with the changes which have happend and have a reference to this outline node
+        for outline_nodes_to_change in outline_nodes_which_belong_to_class.to_vec().into_iter() {
+            let prompt_for_editing = class_implementations_interested_references
+                .iter()
+                .filter_map(|(reference_location, symbol_followup_bfs)| {
+                    // this will by definition include all the nodes since we might have the changed class definition
+                    if outline_nodes_to_change
+                        .children()
+                        .into_iter()
+                        .any(|children| {
+                            let child_range = children.range();
+                            child_range.contains(reference_location.range())
+                        })
+                    {
+                        Some(symbol_followup_bfs)
+                    } else {
+                        None
+                    }
+                })
+                .map(|symbol_followup_bfs| {
+                    let name = symbol_followup_bfs.symbol_edited().symbol_name();
+                    let fs_file_path = symbol_followup_bfs.symbol_edited().fs_file_path();
+                    let original_code = symbol_followup_bfs.original_code();
+                    let edited_code = symbol_followup_bfs.edited_code();
+                    format!(
+                        r#"<dependency>
+<name>
+{name}
+</name>
+<file_path>
+{fs_file_path}
+</file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            if !prompt_for_editing.trim().is_empty() {
+                let _ = self.send_edit_instruction_to_outline_node(
+                    outline_nodes_to_change,
+                    format!(r#"A dependency of this code has changed. You are given the list of changes below:
+{prompt_for_editing}
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#),
+                    hub_sender.clone(),
+                    message_properties.clone(),
+                    tool_properties.clone(),
+                )
+                .await;
+            }
+        }
+
+        let mut references_to_check_for_followups = vec![];
+        // now we want to grab the function nodes along with the class definition references which has changed and then send an edit
+        // request to the outline node which is outside the class
+        for outline_node_belonging_to_class in outline_nodes_which_belong_to_class.into_iter() {
+            // First get the new outline node for this one
+            let new_outline_node = self
+                .find_sub_symbol_to_edit_with_name(
+                    outline_node_belonging_to_class.name(),
+                    &SymbolToEdit::new(
+                        outline_node_belonging_to_class.name().to_owned(),
+                        outline_node_belonging_to_class.range().clone(),
+                        outline_node_belonging_to_class.fs_file_path().to_owned(),
+                        vec![],
+                        false,
+                        false,
+                        true,
+                        "".to_owned(),
+                        None,
+                        false,
+                        None,
+                        true,
+                    ),
+                    message_properties.clone(),
+                )
+                .await?;
+
+            // Now we want to get the changed symbols over here and compare it to the older version and get the delta between the old and new
+            let older_outline_nodes = language_config
+                .generate_outline_fresh(
+                    outline_node_belonging_to_class
+                        .content()
+                        .content()
+                        .as_bytes(),
+                    outline_node_file_path,
+                )
+                .into_iter()
+                .find(|outline_node| outline_node.name() == class_implementation_name);
+            let newer_outline_nodes = language_config
+                .generate_outline_fresh(
+                    new_outline_node.content().as_bytes(),
+                    outline_node_file_path,
+                )
+                .into_iter()
+                .find(|outline_node| outline_node.name() == class_implementation_name);
+
+            // Once we have these, we have to find the children which are different in both these blocks and only keep track of those references
+            if let (Some(new_outline_node), Some(old_outline_node)) =
+                (newer_outline_nodes, older_outline_nodes)
+            {
+                // now find the child nodes which are also present on the old outline nodes
+                let changed_function_nodes = new_outline_node
+                    .children()
+                    .into_iter()
+                    .filter_map(|new_child_outline_node| {
+                        let old_child_outline_node =
+                            old_outline_node.children().iter().find(|old_child_node| {
+                                old_child_node.name() == new_child_outline_node.name()
+                            });
+                        if let Some(old_child_outline_node) = old_child_outline_node {
+                            if old_child_outline_node.content() != new_child_outline_node.content()
+                            {
+                                Some((old_child_outline_node.content(), new_child_outline_node))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                // now that we have the changed function nodes we can try and find the references where we want to go for this
+                // and the ones which belong to the same class (that is very important we are still in the first branch over here)
+                for (old_content, changed_function_node) in changed_function_nodes.into_iter() {
+                    let references_for_functions = self
+                        .go_to_references(
+                            changed_function_node.fs_file_path().to_owned(),
+                            changed_function_node
+                                .identifier_range()
+                                .start_position()
+                                // we want to get the accurate line because when we are parsing on top of just
+                                // the changed content we will start with 0 index since we do not have the file content
+                                .move_lines(start_line),
+                            message_properties.clone(),
+                        )
+                        .await?
+                        .locations();
+                    references_to_check_for_followups.extend(
+                        references_for_functions.into_iter().map(|reference| {
+                            (
+                                reference,
+                                SymbolFollowupBFS::new(
+                                    SymbolToEdit::new(
+                                        changed_function_node.name().to_owned(),
+                                        changed_function_node.range().clone(),
+                                        changed_function_node.fs_file_path().to_owned(),
+                                        vec![],
+                                        false,
+                                        false,
+                                        false,
+                                        "".to_owned(),
+                                        None,
+                                        false,
+                                        None,
+                                        true,
+                                    ),
+                                    SymbolIdentifier::with_file_path(
+                                        class_implementation_name,
+                                        outline_node_file_path,
+                                    ),
+                                    old_content.to_owned(),
+                                    changed_function_node.content().to_owned(),
+                                ),
+                            )
+                        }),
+                    );
+                }
+            }
+        }
+
+        let file_paths = references_to_check_for_followups
+            .iter()
+            .map(|(reference, _)| reference.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        // outline nodes which require editing
+        let outline_nodes_to_file_paths = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|file_path| (file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await;
+            outline_nodes
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .flatten()
+        // we do not want to follow the class outline nodes
+        .filter(|outline_node| outline_node.name() != class_implementation_name)
+        .filter(|outline_node| {
+            // make sure that the outline node contains one of the references
+            let outline_node_range = outline_node.range();
+            references_to_check_for_followups
+                .iter()
+                .any(|(reference, _)| {
+                    outline_node_range.contains_check_line_column(reference.range())
+                })
+        })
+        .collect::<Vec<_>>();
+
+        // now we want to grab the symbolfollowup request on each of these outline nodes where we sent the request
+        for outline_node_to_edit in outline_nodes_to_file_paths.to_vec().into_iter() {
+            let prompt_for_editing = references_to_check_for_followups
+                .iter()
+                .filter_map(|(reference_location, symbol_followup_bfs)| {
+                    // this will by definition include all the nodes since we might have the changed class definition
+                    if outline_node_to_edit.children().into_iter().any(|children| {
+                        let child_range = children.range();
+                        child_range.contains(reference_location.range())
+                    }) {
+                        Some(symbol_followup_bfs)
+                    } else {
+                        None
+                    }
+                })
+                .map(|symbol_followup_bfs| {
+                    let name = symbol_followup_bfs.symbol_edited().symbol_name();
+                    let fs_file_path = symbol_followup_bfs.symbol_edited().fs_file_path();
+                    let original_code = symbol_followup_bfs.original_code();
+                    let edited_code = symbol_followup_bfs.edited_code();
+                    format!(
+                        r#"<dependency>
+<name>
+{name}
+</name>
+<file_path>
+{fs_file_path}
+</file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            if !prompt_for_editing.trim().is_empty() {
+                let _ = self
+                    .send_edit_instruction_to_outline_node(
+                        outline_node_to_edit,
+                        format!(r#"A dependency of this code has changed. You are given the list of changes below:
+{prompt_for_editing}
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#),
+                        hub_sender.clone(),
+                        message_properties.clone(),
+                        tool_properties.clone(),
+                    )
+                    .await;
+            }
+        }
+
+        let mut final_followup_requests = vec![];
+        for outline_node_to_follow in outline_nodes_to_file_paths.into_iter() {
+            let outline_node_new_content = self
+                .find_sub_symbol_to_edit_with_name(
+                    outline_node_to_follow.name(),
+                    &SymbolToEdit::new(
+                        outline_node_to_follow.name().to_owned(),
+                        outline_node_to_follow.range().clone(),
+                        outline_node_to_follow.fs_file_path().to_owned(),
+                        vec![],
+                        false,
+                        false,
+                        true,
+                        "".to_owned(),
+                        None,
+                        false,
+                        None,
+                        true,
+                    ),
+                    message_properties.clone(),
+                )
+                .await?;
+            final_followup_requests.push(SymbolFollowupBFS::new(
+                SymbolToEdit::new(
+                    outline_node_new_content.name().to_owned(),
+                    outline_node_new_content.range().clone(),
+                    outline_node_new_content.fs_file_path().to_owned(),
+                    vec![],
+                    false,
+                    false,
+                    true,
+                    "".to_owned(),
+                    None,
+                    false,
+                    None,
+                    true,
+                ),
+                SymbolIdentifier::with_file_path(
+                    outline_node_new_content.name(),
+                    outline_node_new_content.fs_file_path(),
+                ),
+                outline_node_to_follow.content().content().to_owned(),
+                outline_node_new_content.content().to_owned(),
+            ));
+        }
+
+        Ok(final_followup_requests)
     }
 
     /// To get the followups working we have to do the following:
@@ -2782,14 +3290,12 @@ Please update this code to accommodate these changes. Consider:
         // those changes are about
         // we want to track the reference location along with the changed symbol_followup
         // so we can pass the correct git-diff to it
-        // let mut reference_locations_with_symbol = vec![];
+        let mut reference_locations: Vec<SymbolFollowupBFS> = vec![];
         for symbol_followup in symbol_followups.into_iter() {
             let symbol_edited = symbol_followup.symbol_edited();
             let symbol_identifier = symbol_followup.symbol_identifier();
             let original_code = symbol_followup.original_code();
             let edited_code = symbol_followup.edited_code();
-
-            let mut reference_locations: Vec<SymbolFollowupBFS> = vec![];
 
             if original_code.trim() == edited_code.trim() {
                 continue;
@@ -2832,483 +3338,21 @@ Please update this code to accommodate these changes. Consider:
                     .await?,
                 );
             } else {
-                println!(
-                    "tool_box::check_for_followups::is_class_implementation_type::({})",
-                    outline_node.name()
-                );
-                // we should always trigger an edit on the class symbol definition by itself
-                // just to make sure that if any changes are required to it, they are completed
-                // and managed accordingly
-                // the state-machine when we chagne the definition is as follows:
-                // class-implementation -> check if class-definition needs change
-                // class-definition changed -> check if any of the class-implementation reference blocks point to class definition and trigger a search and replace block
-                let mut definitions = self
-                    .go_to_definition(
-                        outline_node.fs_file_path(),
-                        outline_node.identifier_range().start_position(),
-                        message_properties.clone(),
-                    )
-                    .await?
-                    .definitions();
-
-                // changed content for the class definition
-                // is being tracked over here
-                let mut _class_definition_change: Option<(String, String)> = None;
-                let mut class_implementations_interested_references = vec![];
-                if !definitions.is_empty() {
-                    let first_definition = definitions.remove(0);
-                    // if the definition does not belong to the outline nodo where
-                    // we are focussed on right now, then skip the step
-                    if first_definition.file_path() != outline_node.fs_file_path()
-                        || !outline_node
-                            .range()
-                            .contains_check_line_column(outline_node.range())
-                    {
-                        let outline_node = self
-                            .get_outline_node_for_range(
-                                first_definition.range(),
-                                first_definition.file_path(),
-                                message_properties.clone(),
-                            )
-                            .await?;
-
-                        let original_definition_code = outline_node.content().content().to_owned();
-
-                        println!("tool_box::check_for_followup_bfs::class_implementation::definition_check::({})::({})", outline_node.name(), outline_node.fs_file_path());
-                        // Now send over an edit request to this outline node
-                        // TODO(skcd): This is heavily unoptimised right now, since we are not changing just the changes
-                        // but the whole symbol together so it slows down the whole pipeline
-                        let _ = self.send_edit_instruction_to_outline_node(
+                reference_locations.extend(
+                    self.check_for_followups_class_implementation(
                         outline_node,
-                        {
-                            let name = symbol_followup.symbol_edited().symbol_name();
-                            let fs_file_path = symbol_followup.symbol_edited().fs_file_path();
-                            format!(r#"A dependency of this code has changed. You are given the list of changes below:
-<dependency>
-<name>
-{name}
-</name>
-<fs_file_path>
-{fs_file_path}
-</fs_file_path>
-<original_implementation>
-{original_code}
-</original_implementation>
-<updated_implementation>
-{edited_code}
-</updated_implementation>
-</dependency>
-Please update this code to accommodate these changes. Consider:
-1. Method signature changes (parameters, return types)
-2. Behavioural changes in the dependency
-3. Potential side effects or new exceptions
-4. Any new methods or properties that should be utilized
-5. Deprecated features that should no longer be used"#)},
+                        &symbol_followup,
+                        original_code,
+                        edited_code,
                         hub_sender.clone(),
                         message_properties.clone(),
-                        tool_properties.clone(),
+                        tool_properties,
                     )
-                    .await;
-                        // now we want to check if the definition has changed over here
-                        let changed_outline_node = self
-                            .get_outline_nodes_grouped(first_definition.file_path())
-                            .await
-                            .map(|outline_nodes| {
-                                let mut filtered_outline_nodes = outline_nodes
-                                    .into_iter()
-                                    .filter(|outline_node| outline_node.is_class_definition())
-                                    .filter(|outline_node| {
-                                        outline_node.name() == outline_node.name()
-                                    })
-                                    .collect::<Vec<_>>();
-                                if filtered_outline_nodes.is_empty() {
-                                    None
-                                } else {
-                                    Some(filtered_outline_nodes.remove(0))
-                                }
-                            })
-                            .flatten();
-                        if let Some(changed_outline_node) = changed_outline_node {
-                            if changed_outline_node.content().content().trim()
-                                != original_definition_code.trim()
-                            {
-                                _class_definition_change = Some((
-                                    original_definition_code,
-                                    changed_outline_node.content().content().to_owned(),
-                                ));
-
-                                // we also want to get the references for the class definition node
-                                // which point to self
-                                let class_definition_references = self
-                                    .go_to_references(
-                                        changed_outline_node.fs_file_path().to_owned(),
-                                        changed_outline_node.range().start_position(),
-                                        message_properties.clone(),
-                                    )
-                                    .await;
-                                if let Ok(class_definition_references) = class_definition_references
-                                {
-                                    class_implementations_interested_references
-                                        .extend(class_definition_references.locations());
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // we are always editing the symbol in full and are interested in the
-                // fields which are present in the code
-                // we want to go over the child nodes which have changed and then invoke
-                // followups on that
-                // we can compare each of the child nodes and figure out what changes were made
-                // to each of the child
-                let language_config = self
-                    .editor_parsing
-                    .for_file_path(symbol_edited.fs_file_path());
-                if language_config.is_none() {
-                    continue;
-                }
-                let language_config = language_config.expect("to be present");
-
-                // the ranges here are all messed up since we are computing relative to
-                // Position::new(0, 0, 0) ...ugh
-                let older_outline_nodes = language_config
-                    .generate_outline_fresh(original_code.as_bytes(), symbol_edited.fs_file_path())
-                    .into_iter()
-                    .find(|outline_node| outline_node.name() == symbol_identifier.symbol_name());
-                let newer_outline_nodes = language_config
-                    .generate_outline_fresh(edited_code.as_bytes(), symbol_edited.fs_file_path())
-                    .into_iter()
-                    .find(|outline_node| outline_node.name() == symbol_identifier.symbol_name());
-
-                // our outline nodes are matching up over here
-                if let (Some(new_outline_node), Some(old_outline_node)) =
-                    (newer_outline_nodes, older_outline_nodes)
-                {
-                    // now find the child nodes which are also present on the old outline nodes
-                    let changed_function_nodes = new_outline_node
-                        .children()
-                        .into_iter()
-                        .filter_map(|new_child_outline_node| {
-                            let old_child_outline_node =
-                                old_outline_node.children().iter().find(|old_child_node| {
-                                    old_child_node.name() == new_child_outline_node.name()
-                                });
-                            if let Some(old_child_outline_node) = old_child_outline_node {
-                                if old_child_outline_node.content()
-                                    != new_child_outline_node.content()
-                                {
-                                    Some(new_child_outline_node)
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>();
-
-                    let function_names = changed_function_nodes
-                        .iter()
-                        .map(|function_node| function_node.name())
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    println!(
-                        "tool_box::check_for_followups::symbol_name({})::functions_changed::({})",
-                        symbol_identifier.symbol_name(),
-                        function_names
-                    );
-
-                    // go over the children now and go to the references for each of them which have changed, these will
-                    // be our reference locations
-                    let fs_file_path = symbol_edited.fs_file_path();
-                    let edited_outline_node = self
-                        .find_sub_symbol_to_edit_with_name(
-                            symbol_identifier.symbol_name(),
-                            symbol_edited,
-                            message_properties.clone(),
-                        )
-                        .await?;
-                    let edited_code_start_line = edited_outline_node.range().start_line();
-                    for outline_node in changed_function_nodes.into_iter() {
-                        let references = self
-                            .go_to_references(
-                                fs_file_path.to_owned(),
-                                // we have to fix the range here relative to the
-                                // position in the current document
-                                outline_node
-                                    .identifier_range()
-                                    .start_position()
-                                    .move_lines(edited_code_start_line),
-                                message_properties.clone(),
-                            )
-                            .await;
-
-                        if let Ok(references) = references {
-                            let locations = references.clone().locations();
-                            println!(
-                            "tool_box::check_for_followups::symbol_name({})::fs_file_path({})::range({:?})::references::({})",
-                            outline_node.name(),
-                            outline_node.fs_file_path(),
-                            outline_node.range(),
-                            locations
-                                .as_slice()
-                                .iter()
-                                .map(|location| location.fs_file_path())
-                                .collect::<Vec<_>>()
-                                .join(",")
-                        );
-                            let references =
-                                references.prioritize_and_deduplicate(symbol_edited.fs_file_path());
-                            // we gather all the references and then we will check which of them really belong outside the class
-                            // and which belong in the class itself
-                            class_implementations_interested_references
-                                .extend(references.locations());
-                        } else {
-                            println!(
-                                "tool_box::refenreces_error::({:?})",
-                                references.expect("if let Ok to hold")
-                            );
-                        }
-                    }
-                }
-
-                // now we have a bunch of references where we want to check which ones
-                // are belonging inside the class and we might want to make one more
-                // edit for that, and which belong outside the class for which we want to trigger
-                // followups
-                // first find the references which belong to the same class block, this is super important to do
-                let file_paths_for_references = class_implementations_interested_references
-                    .iter()
-                    .map(|reference_location| reference_location.fs_file_path().to_owned())
-                    .collect::<HashSet<String>>();
-
-                // now get the outline nodes for each of the file paths which we are interested in
-                let outline_nodes_to_file_paths = stream::iter(file_paths_for_references)
-                    .map(|fs_file_path| async move {
-                        let outline_nodes = self.get_outline_nodes_grouped(&fs_file_path).await;
-                        outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
-                    })
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await
-                    .into_iter()
-                    .filter_map(|s| s)
-                    .collect::<HashMap<_, _>>();
-
-                // Now we want to figure out which outline nodes belongs to the class or uses a function
-                // defined in the class so we can fix ourselves
-                let _collected_outline_nodes = outline_nodes_to_file_paths
-                    .into_iter()
-                    .map(|(_, outline_nodes)| {
-                        let collected_outline_nodes = outline_nodes
-                            .into_iter()
-                            .filter(|outline_node_in_file| {
-                                outline_node_in_file.name() == outline_node.name()
-                            })
-                            // these are full outline node which means we should check
-                            // if the children here contain any of the references which we are interested in
-                            .filter(|outline_node| {
-                                // check if the outline node contains any of the references
-                                // we are interested in
-                                // does this always return true because we have the class
-                                // definition over here included in the references? (possibly)
-                                class_implementations_interested_references.iter().any(
-                                    |reference| {
-                                        outline_node.children().into_iter().any(|child| {
-                                            child
-                                                .range()
-                                                .contains_check_line_column(reference.range())
-                                        })
-                                    },
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        collected_outline_nodes
-                    })
-                    .flatten()
-                    .collect::<Vec<OutlineNode>>();
-
-                // Now we can send an edit request to each of these outline nodes based on the changes we have accumulated
-                // along with the changed functions up-until now and then send edit requests to these outline nodes
-                // once we are done with them, we can keep going to the references of the changed functions etc
-                // stream::iter(collected_outline_nodes).map(|outline_node| {
-                //     self.send_edit_instruction_to_outline_node(outline_node, instruction, hub_sender, message_properties, tool_properties)
-                // })
+                    .await?,
+                );
             }
-
-            // now that we have all the references, we also want to attach
-            // a git-diff of what has changed to each such section of references
-            // so the model is able to understand and act on it
-            // we will at the very end collect all the references and then trigger
-            // another round of refactors on each of the symbol containing any of the
-            // references
-            // lets keep it simple over here and try to go over the followups
-
-            // now we try to figure out which outline node the reference belongs to
-            // and keep track of that
-            //             let file_paths = reference_locations
-            //                 .iter()
-            //                 .map(|reference| reference.0.fs_file_path().to_owned())
-            //                 .collect::<HashSet<_>>();
-
-            //             // outline nodes by file-paths
-            //             let outline_nodes_by_file_paths = stream::iter(
-            //                 file_paths
-            //                     .into_iter()
-            //                     .map(|file_path| (file_path, message_properties.clone())),
-            //             )
-            //             .map(|(fs_file_path, message_properties)| async move {
-            //                 let outline_nodes = self
-            //                     .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
-            //                     .await;
-            //                 outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
-            //             })
-            //             .buffer_unordered(100)
-            //             .collect::<Vec<_>>()
-            //             .await
-            //             .into_iter()
-            //             .filter_map(|s| s)
-            //             .collect::<HashMap<_, _>>();
-
-            //             // These are the nodes which are referenced by the current wave of
-            //             // refactors which are going on
-            //             let mut referenced_outline_nodes = outline_nodes_by_file_paths
-            //                 .into_iter()
-            //                 .map(|(fs_file_path, outline_nodes)| {
-            //                     // now we go over all the references which we have collected
-            //                     // and try to get the outline node which contains it
-            //                     let referenced_locations = reference_locations
-            //                         .iter()
-            //                         .filter(|reference| reference.0.fs_file_path() == &fs_file_path)
-            //                         .collect::<Vec<_>>();
-            //                     let outline_nodes_interested = outline_nodes
-            //                         .into_iter()
-            //                         .filter_map(|outline_node| {
-            //                             let intersecting_references = referenced_locations
-            //                                 .to_vec()
-            //                                 .into_iter()
-            //                                 .filter(|referenced_location| {
-            //                                     outline_node.range().intersects_with_another_range(
-            //                                         referenced_location.0.range(),
-            //                                     )
-            //                                 })
-            //                                 .collect::<Vec<_>>();
-            //                             if intersecting_references.is_empty() {
-            //                                 None
-            //                             } else {
-            //                                 Some((outline_node, intersecting_references))
-            //                             }
-            //                         })
-            //                         .collect::<Vec<_>>();
-            //                     (fs_file_path, outline_nodes_interested)
-            //                 })
-            //                 .collect::<HashMap<String, _>>();
-
-            //             // if we are a class definition, then we need to first of all fix all the
-            //             // implementation blocks and then move on to fixing the rest of the world
-            //             match edited_outline_node_type {
-            //                 OutlineNodeType::ClassDefinition => {
-            //                     referenced_outline_nodes = referenced_outline_nodes
-            //                         .into_iter()
-            //                         .map(|(fs_file_path, outline_nodes_interested)| {
-            //                             (
-            //                                 fs_file_path,
-            //                                 outline_nodes_interested
-            //                                     .into_iter()
-            //                                     .filter(|(outline_node_interested, _)| {
-            //                                         outline_node_interested.name() == edited_outline_node_name
-            //                                     })
-            //                                     .collect::<Vec<_>>(),
-            //                             )
-            //                         })
-            //                         .collect();
-            //                 }
-            //                 _ => {}
-            //             }
-
-            //             // These are the outline nodes to which we have to send an edit request
-            //             // and we can do this in complete parallelism disabling all correctness checks or followups
-            //             // of their own
-            //             let outline_nodes_with_followups = referenced_outline_nodes
-            //                 .into_iter()
-            //                 .map(|(_, outline_nodes)| outline_nodes)
-            //                 .flatten()
-            //                 .collect::<Vec<_>>();
-
-            //             // Now we can create the edit request which we want to send to these outline nodes over here
-            //             // and return back with the outline nodes which we are getting and keep that running in the background
-            //             let outline_node_with_followup_request = outline_nodes_with_followups
-            //                 .into_iter()
-            //                 .map(|(outline_node, reference_information)| {
-            //                     let dependencies_which_changed = reference_information
-            //                         .iter()
-            //                         .map(|(_, symbol_to_followup)| symbol_to_followup)
-            //                         .collect::<Vec<_>>();
-            //                     let followup_prompt = dependencies_which_changed
-            //                         .into_iter()
-            //                         .map(|dependency| {
-            //                             let name = dependency.symbol_edited().symbol_name();
-            //                             let fs_file_path = dependency.symbol_edited().fs_file_path();
-            //                             let original_implementation = dependency.original_code();
-            //                             let edited_code = dependency.edited_code();
-            //                             format!(
-            //                                 r#"<dependency>
-            // <name>
-            // {name}
-            // </name>
-            // <file_path>
-            // {fs_file_path}
-            // </file_path>
-            // <original_implementation>
-            // {original_implementation}
-            // </original_implementation>
-            // <updated_implementation>
-            // {edited_code}
-            // </updated_implementation>
-            // </dependency>"#
-            //                             )
-            //                         })
-            //                         .collect::<Vec<_>>()
-            //                         .join("\n");
-            //                     let final_prompt = format!(r#"A dependency of this code has changed. You are given the list of changes below:
-            // {followup_prompt}
-            // Please update this code to accommodate these changes. Consider:
-            // 1. Method signature changes (parameters, return types)
-            // 2. Behavioural changes in the dependency
-            // 3. Potential side effects or new exceptions
-            // 4. Any new methods or properties that should be utilized
-            // 5. Deprecated features that should no longer be used"#);
-            //                     (outline_node, final_prompt)
-            //                 })
-            //                 .collect::<Vec<_>>();
-
-            //             let _ = stream::iter(outline_node_with_followup_request.into_iter().map(|data| {
-            //                 (
-            //                     data,
-            //                     hub_sender.clone(),
-            //                     message_properties.clone(),
-            //                     tool_properties.clone(),
-            //                 )
-            //             }))
-            //             .map(
-            //                 |((outline_node, prompt), hub_sender, message_properties, tool_properties)| async move {
-            //                     self.send_edit_instruction_to_outline_node(
-            //                         outline_node,
-            //                         prompt,
-            //                         hub_sender,
-            //                         message_properties,
-            //                         tool_properties,
-            //                     )
-            //                     .await
-            //                 },
-            //             )
-            //             .buffer_unordered(10)
-            //             .collect::<Vec<_>>()
-            //             .await;
         }
-        // Figure out which nodes to send over here for perfoming waves of followups
-        Ok(vec![])
+        Ok(reference_locations)
     }
 
     pub async fn check_for_followups(

@@ -2,7 +2,10 @@
 //! location for it
 //! We can also use the tools along with this symbol to traverse the code graph
 
-use std::{collections::{HashMap, HashSet}, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use derivative::Derivative;
 use futures::{lock::Mutex, stream, StreamExt};
@@ -15,19 +18,30 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     agentic::{
         symbol::events::initial_request::SymbolRequestHistoryItem,
-        tool::{code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse}, lsp::open_file::OpenFileResponse},
+        tool::{
+            code_symbol::{new_sub_symbol::NewSymbol, probe::ProbeEnoughOrDeeperResponse},
+            lsp::open_file::OpenFileResponse,
+        },
     },
-    chunking::{text_document::Range, types::{OutlineNodeContent, OutlineNodeType}},
+    chunking::{
+        text_document::Range,
+        types::{OutlineNodeContent, OutlineNodeType},
+    },
 };
 
 use super::{
     errors::SymbolError,
     events::{
-        edit::{SymbolToEdit, SymbolToEditRequest}, initial_request::InitialRequestData, message_event::{SymbolEventMessage, SymbolEventMessageProperties}, probe::{ProbeEnoughOrDeeperResponseParsed, SubSymbolToProbe}, types::SymbolEvent
+        edit::{SymbolToEdit, SymbolToEditRequest},
+        initial_request::InitialRequestData,
+        message_event::{SymbolEventMessage, SymbolEventMessageProperties},
+        probe::{ProbeEnoughOrDeeperResponseParsed, SubSymbolToProbe},
+        types::SymbolEvent,
     },
     tool_box::ToolBox,
     tool_properties::ToolProperties,
-    types::{SymbolEventRequest, SymbolLocation}, ui_event::UIEventWithID,
+    types::{SymbolEventRequest, SymbolLocation},
+    ui_event::UIEventWithID,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -100,15 +114,13 @@ impl Snippet {
     pub fn is_single_block_language(&self) -> bool {
         match self.language.as_deref() {
             Some("python" | "typescript" | "javascript" | "ts" | "js" | "py") => true,
-            _ => {
-                match self.outline_node_content().language() {
-                    "python" | "typescript" | "javascript" | "ts" | "js" | "py" => true,
-                    _ => false,
-                }
-            }
+            _ => match self.outline_node_content().language() {
+                "python" | "typescript" | "javascript" | "ts" | "js" | "py" => true,
+                _ => false,
+            },
         }
     }
-    
+
     pub fn is_potential_match(&self, range: &Range, fs_file_path: &str, is_outline: bool) -> bool {
         if &self.range == range && self.fs_file_path == fs_file_path {
             if is_outline {
@@ -318,7 +330,7 @@ impl MechaCodeSymbolThinking {
         file_path: &str,
         tools: Arc<ToolBox>,
         message_properties: SymbolEventMessageProperties,
-   ) -> Option<Self> {
+    ) -> Option<Self> {
         let snippet_maybe = tools
             .find_snippet_for_symbol(file_path, symbol_name, message_properties)
             .await;
@@ -532,7 +544,8 @@ impl MechaCodeSymbolThinking {
         message_properties: SymbolEventMessageProperties,
     ) -> Result<ProbeEnoughOrDeeperResponseParsed, SymbolError> {
         if self.is_snippet_present().await {
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(message_properties.clone()).await
+            if let Some((ranked_xml_list, reverse_lookup)) =
+                self.to_llm_request(message_properties.clone()).await
             {
                 let response = self
                     .tool_box
@@ -550,45 +563,49 @@ impl MechaCodeSymbolThinking {
                     }
                     Ok(ProbeEnoughOrDeeperResponse::ProbeDeeper(probe_deeper_list)) => {
                         let probe_deeper_list_ref = probe_deeper_list.get_snippets();
-                        let sub_symbols_to_probe = stream::iter(reverse_lookup.into_iter().map(|data| (data, message_properties.clone())))
-                            .filter_map(|(reverse_lookup, message_properties)| async move {
-                                let idx = reverse_lookup.idx();
-                                let range = reverse_lookup.range();
-                                let fs_file_path = reverse_lookup.fs_file_path();
-                                let outline = reverse_lookup.is_outline();
-                                let found_reason_to_edit = probe_deeper_list_ref
-                                    .into_iter()
-                                    .find(|snippet| snippet.id() == idx)
-                                    .map(|snippet| snippet.reason_to_probe().to_owned());
-                                match found_reason_to_edit {
-                                    Some(reason) => {
-                                        // TODO(skcd): We need to get the sub-symbol over
-                                        // here instead of the original symbol name which
-                                        // would not work
-                                        let symbol_in_range = self
-                                            .find_sub_symbol_in_range(
-                                                range,
-                                                fs_file_path,
-                                                message_properties.clone(),
-                                            )
-                                            .await;
-                                        if let Ok(symbol) = symbol_in_range {
-                                            Some(SubSymbolToProbe::new(
-                                                symbol,
-                                                range.clone(),
-                                                fs_file_path.to_owned(),
-                                                reason,
-                                                outline,
-                                            ))
-                                        } else {
-                                            None
-                                        }
+                        let sub_symbols_to_probe = stream::iter(
+                            reverse_lookup
+                                .into_iter()
+                                .map(|data| (data, message_properties.clone())),
+                        )
+                        .filter_map(|(reverse_lookup, message_properties)| async move {
+                            let idx = reverse_lookup.idx();
+                            let range = reverse_lookup.range();
+                            let fs_file_path = reverse_lookup.fs_file_path();
+                            let outline = reverse_lookup.is_outline();
+                            let found_reason_to_edit = probe_deeper_list_ref
+                                .into_iter()
+                                .find(|snippet| snippet.id() == idx)
+                                .map(|snippet| snippet.reason_to_probe().to_owned());
+                            match found_reason_to_edit {
+                                Some(reason) => {
+                                    // TODO(skcd): We need to get the sub-symbol over
+                                    // here instead of the original symbol name which
+                                    // would not work
+                                    let symbol_in_range = self
+                                        .find_sub_symbol_in_range(
+                                            range,
+                                            fs_file_path,
+                                            message_properties.clone(),
+                                        )
+                                        .await;
+                                    if let Ok(symbol) = symbol_in_range {
+                                        Some(SubSymbolToProbe::new(
+                                            symbol,
+                                            range.clone(),
+                                            fs_file_path.to_owned(),
+                                            reason,
+                                            outline,
+                                        ))
+                                    } else {
+                                        None
                                     }
-                                    None => None,
                                 }
-                            })
-                            .collect::<Vec<_>>()
-                            .await;
+                                None => None,
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .await;
                         Ok(ProbeEnoughOrDeeperResponseParsed::ProbeDeeperInSubSymbols(
                             sub_symbols_to_probe,
                         ))
@@ -627,7 +644,8 @@ impl MechaCodeSymbolThinking {
                 "mecha_code_symbol_thinking::probe_sub_symbol::is_snippet_present::({})",
                 self.symbol_name()
             );
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(message_properties.clone()).await
+            if let Some((ranked_xml_list, reverse_lookup)) =
+                self.to_llm_request(message_properties.clone()).await
             {
                 println!("mecha_code_symbol_thinking::probe_sub_symbol::filter_code_snippets_subsymbol_for_probing::({})", self.symbol_name());
                 let filtered_list = self
@@ -644,42 +662,50 @@ impl MechaCodeSymbolThinking {
 
                 let filtered_list_ref = &filtered_list;
 
-                let sub_symbols_to_edit = stream::iter(reverse_lookup.into_iter().map(|data| (data, message_properties.clone())))
-                    .filter_map(|(reverse_lookup, message_properties)| async move {
-                        let idx = reverse_lookup.idx();
-                        let range = reverse_lookup.range();
-                        let fs_file_path = reverse_lookup.fs_file_path();
-                        let outline = reverse_lookup.is_outline();
-                        let found_reason_to_edit = filtered_list_ref
-                            .code_to_probe_list()
-                            .into_iter()
-                            .find(|snippet| snippet.id() == idx)
-                            .map(|snippet| snippet.reason_to_probe().to_owned());
-                        match found_reason_to_edit {
-                            Some(reason) => {
-                                // TODO(skcd): We need to get the sub-symbol over
-                                // here instead of the original symbol name which
-                                // would not work
-                                let symbol_in_range = self
-                                    .find_sub_symbol_in_range(range, fs_file_path, message_properties.clone())
-                                    .await;
-                                if let Ok(symbol) = symbol_in_range {
-                                    Some(SubSymbolToProbe::new(
-                                        symbol,
-                                        range.clone(),
-                                        fs_file_path.to_owned(),
-                                        reason,
-                                        outline,
-                                    ))
-                                } else {
-                                    None
-                                }
+                let sub_symbols_to_edit = stream::iter(
+                    reverse_lookup
+                        .into_iter()
+                        .map(|data| (data, message_properties.clone())),
+                )
+                .filter_map(|(reverse_lookup, message_properties)| async move {
+                    let idx = reverse_lookup.idx();
+                    let range = reverse_lookup.range();
+                    let fs_file_path = reverse_lookup.fs_file_path();
+                    let outline = reverse_lookup.is_outline();
+                    let found_reason_to_edit = filtered_list_ref
+                        .code_to_probe_list()
+                        .into_iter()
+                        .find(|snippet| snippet.id() == idx)
+                        .map(|snippet| snippet.reason_to_probe().to_owned());
+                    match found_reason_to_edit {
+                        Some(reason) => {
+                            // TODO(skcd): We need to get the sub-symbol over
+                            // here instead of the original symbol name which
+                            // would not work
+                            let symbol_in_range = self
+                                .find_sub_symbol_in_range(
+                                    range,
+                                    fs_file_path,
+                                    message_properties.clone(),
+                                )
+                                .await;
+                            if let Ok(symbol) = symbol_in_range {
+                                Some(SubSymbolToProbe::new(
+                                    symbol,
+                                    range.clone(),
+                                    fs_file_path.to_owned(),
+                                    reason,
+                                    outline,
+                                ))
+                            } else {
+                                None
                             }
-                            None => None,
                         }
-                    })
-                    .collect::<Vec<_>>()
-                    .await;
+                        None => None,
+                    }
+                })
+                .collect::<Vec<_>>()
+                .await;
                 Ok(sub_symbols_to_edit)
             } else {
                 Err(SymbolError::ExpectedFileToExist)
@@ -693,8 +719,12 @@ impl MechaCodeSymbolThinking {
         }
     }
 
-
-    pub async fn grab_implementations(&self, tools: Arc<ToolBox>, symbol_identifier: SymbolIdentifier, message_properties: SymbolEventMessageProperties) -> Result<(), SymbolError> {
+    pub async fn grab_implementations(
+        &self,
+        tools: Arc<ToolBox>,
+        symbol_identifier: SymbolIdentifier,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
         let snippet_file_path: Option<String>;
         {
             snippet_file_path = self
@@ -730,29 +760,36 @@ impl MechaCodeSymbolThinking {
                 .collect::<HashSet<String>>();
             let cloned_tools = tools.clone();
             // once we have the unique files we have to request to open these locations
-            let file_content_map = stream::iter(unique_files.clone().into_iter().map(|fs_file_path| (fs_file_path, message_properties.clone())))
-                .map(|file_path| (file_path, cloned_tools.clone()))
-                .map(|((file_path, message_properties), tool_box)| async move {
-                    let file_path = file_path.to_owned();
-                    let file_content = tool_box.file_open(file_path.to_owned(), message_properties).await;
-                    // we will also force add the file to the symbol broker
-                    if let Ok(file_content) = &file_content {
-                        let _ = tool_box
-                            .force_add_document(
-                                &file_path,
-                                file_content.contents_ref(),
-                                &file_content.language(),
-                            )
-                            .await;
-                    }
-                    (file_path, file_content)
-                })
-                // limit how many files we open in parallel
-                .buffer_unordered(4)
-                .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .collect::<HashMap<String, Result<OpenFileResponse, SymbolError>>>();
+            let file_content_map = stream::iter(
+                unique_files
+                    .clone()
+                    .into_iter()
+                    .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+            )
+            .map(|file_path| (file_path, cloned_tools.clone()))
+            .map(|((file_path, message_properties), tool_box)| async move {
+                let file_path = file_path.to_owned();
+                let file_content = tool_box
+                    .file_open(file_path.to_owned(), message_properties)
+                    .await;
+                // we will also force add the file to the symbol broker
+                if let Ok(file_content) = &file_content {
+                    let _ = tool_box
+                        .force_add_document(
+                            &file_path,
+                            file_content.contents_ref(),
+                            &file_content.language(),
+                        )
+                        .await;
+                }
+                (file_path, file_content)
+            })
+            // limit how many files we open in parallel
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<HashMap<String, Result<OpenFileResponse, SymbolError>>>();
             // grab the outline nodes as well
             let outline_nodes = stream::iter(unique_files)
                 .map(|file_path| (file_path, cloned_tools.clone(), message_properties.clone()))
@@ -763,7 +800,9 @@ impl MechaCodeSymbolThinking {
                         // returning the node containing the full outline
                         // which wins over any other node, so this breaks the rest of the
                         // flow, what should we do here??
-                        tool_box.get_outline_nodes(&file_path, message_properties).await,
+                        tool_box
+                            .get_outline_nodes(&file_path, message_properties)
+                            .await,
                     )
                 })
                 .buffer_unordered(1)
@@ -806,13 +845,15 @@ impl MechaCodeSymbolThinking {
                             })
                             .flatten();
                         if let Some(outline_node) = outline_node_for_range {
-                            if let Some(content) = file_content.content_in_range(&outline_node.range()) {
+                            if let Some(content) =
+                                file_content.content_in_range(&outline_node.range())
+                            {
                                 Some(Snippet::new(
                                     symbol_identifier.symbol_name().to_owned(),
                                     outline_node.range().clone(),
                                     file_path,
                                     content,
-                                    outline_node
+                                    outline_node,
                                 ))
                             } else {
                                 None
@@ -849,8 +890,7 @@ impl MechaCodeSymbolThinking {
             );
             // we update the snippets we have stored here into the symbol itself
             {
-                self.set_implementations(filtered_outline_nodes)
-                    .await;
+                self.set_implementations(filtered_outline_nodes).await;
             }
         }
         Ok(())
@@ -859,20 +899,33 @@ impl MechaCodeSymbolThinking {
     pub async fn refresh_state(&self, message_properties: SymbolEventMessageProperties) {
         // do we really have to do this? or can we get away from this just by
         // not worrying about things?
-        let snippet = self.tool_box
-            .find_snippet_for_symbol(self.fs_file_path(), self.symbol_name(), message_properties.clone())
+        let snippet = self
+            .tool_box
+            .find_snippet_for_symbol(
+                self.fs_file_path(),
+                self.symbol_name(),
+                message_properties.clone(),
+            )
             .await;
         // if we do have a snippet here which is present update it, otherwise its a pretty
         // bad sign that we had the snippet before but do not have it now
         if let Ok(snippet) = snippet {
             self.set_snippet(snippet.clone()).await;
-            let _ = message_properties.ui_sender().send(UIEventWithID::symbol_location(
-                message_properties.request_id().request_id().to_owned(),
-                SymbolLocation::new(self.to_symbol_identifier().clone(), snippet),
-            ));
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::symbol_location(
+                    message_properties.request_id().request_id().to_owned(),
+                    SymbolLocation::new(self.to_symbol_identifier().clone(), snippet),
+                ));
         }
         // now grab the implementations again
-        let _ = self.grab_implementations(self.tool_box.clone(), self.to_symbol_identifier(), message_properties.clone()).await;
+        let _ = self
+            .grab_implementations(
+                self.tool_box.clone(),
+                self.to_symbol_identifier(),
+                message_properties.clone(),
+            )
+            .await;
     }
 
     /// Grabs the list of new sub-symbols if any that we have to create
@@ -911,8 +964,7 @@ impl MechaCodeSymbolThinking {
                 all_contents,
                 llm_properties,
                 original_request.get_original_question(),
-                original_request
-                    .get_plan(),
+                original_request.get_plan(),
                 message_properties,
             )
             .await?;
@@ -945,12 +997,16 @@ impl MechaCodeSymbolThinking {
         );
         let mut history = original_request.history().to_vec();
 
-
         if self.is_snippet_present().await {
             let outline_node_type;
             {
                 let snippet = self.snippet.lock().await;
-                outline_node_type = snippet.as_ref().expect("is_snippet_present to not fail").outline_node_content.outline_node_type().clone();
+                outline_node_type = snippet
+                    .as_ref()
+                    .expect("is_snippet_present to not fail")
+                    .outline_node_content
+                    .outline_node_type()
+                    .clone();
             }
             history.push(SymbolRequestHistoryItem::new(
                 self.symbol_name().to_owned(),
@@ -967,7 +1023,16 @@ impl MechaCodeSymbolThinking {
                 );
                 if let Some(prompt_string) = self.to_llm_request_full_prompt().await {
                     // if we do not have a need to edit, then bail early
-                    if !self.tool_box.edits_required_full_symbol(&prompt_string, &original_request.get_plan(), message_properties.clone()).await.unwrap_or(true) {
+                    if !self
+                        .tool_box
+                        .edits_required_full_symbol(
+                            &prompt_string,
+                            &original_request.get_plan(),
+                            message_properties.clone(),
+                        )
+                        .await
+                        .unwrap_or(true)
+                    {
                         return Ok(None);
                     }
                 }
@@ -975,18 +1040,26 @@ impl MechaCodeSymbolThinking {
 
             // let _local_code_graph = self.tool_box.local_code_graph(self.fs_file_path(), request_id).await?;
             // now we want to only keep the snippets which we are interested in
-            if let Some((_ranked_xml_list, mut reverse_lookup)) = self.to_llm_requet_full_listwise().await {
+            if let Some((_ranked_xml_list, mut reverse_lookup)) =
+                self.to_llm_requet_full_listwise().await
+            {
                 // if we just have a single element over here, then we do not need
                 // to do any lookups, especially if the code is in languages other than
                 // rust, since for them we always have a single snippet
                 if reverse_lookup.len() == 1 {
                     let snippet = self.get_snippet().await.expect("to be present");
                     if snippet.is_single_block_language() {
-                        let step_instruction = original_request.symbols_edited_list().map(|symbol_request_list| 
-                            symbol_request_list.into_iter().find(|symbol_request| {
-                                symbol_request.name() == self.symbol_name() && symbol_request.fs_file_path() == self.fs_file_path()
+                        let step_instruction = original_request
+                            .symbols_edited_list()
+                            .map(|symbol_request_list| {
+                                symbol_request_list
+                                    .into_iter()
+                                    .find(|symbol_request| {
+                                        symbol_request.name() == self.symbol_name()
+                                            && symbol_request.fs_file_path() == self.fs_file_path()
+                                    })
+                                    .map(|symbol_request| symbol_request.thinking().to_owned())
                             })
-                            .map(|symbol_request| symbol_request.thinking().to_owned()))
                             .flatten()
                             .into_iter()
                             .collect::<Vec<_>>();
@@ -1003,7 +1076,9 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     true,
                                     original_request.get_original_question().to_owned(),
-                                    original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                                    original_request
+                                        .symbols_edited_list()
+                                        .map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                     true,
                                     None,
                                     false, // should we disable the followups
@@ -1021,12 +1096,7 @@ impl MechaCodeSymbolThinking {
                         let range = reverse_lookup.range();
                         let fs_file_path = reverse_lookup.fs_file_path();
                         let outline = reverse_lookup.is_outline();
-                        let symbol_in_range = 
-                            self.find_symbol_in_range(
-                                range,
-                                fs_file_path,
-                            )
-                            .await;
+                        let symbol_in_range = self.find_symbol_in_range(range, fs_file_path).await;
                         if let Some(symbol) = symbol_in_range {
                             Some(SymbolToEdit::new(
                                 symbol,
@@ -1037,7 +1107,9 @@ impl MechaCodeSymbolThinking {
                                 false,
                                 true,
                                 original_request_ref.get_original_question().to_owned(),
-                                original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
+                                original_request_ref
+                                    .symbols_edited_list()
+                                    .map(|symbol_edited_list| symbol_edited_list.to_vec()),
                                 true,
                                 None,
                                 false, // should we disable followups and correctness check
@@ -1058,7 +1130,10 @@ impl MechaCodeSymbolThinking {
                     tool_properties.clone(),
                 )))
             } else {
-                println!("mecha_code_symbol_thinking::missing_to_llm_request_full::({})", self.symbol_name());
+                println!(
+                    "mecha_code_symbol_thinking::missing_to_llm_request_full::({})",
+                    self.symbol_name()
+                );
                 Err(SymbolError::SnippetNotFound)
             }
         } else {
@@ -1098,7 +1173,12 @@ impl MechaCodeSymbolThinking {
             let outline_node_type;
             {
                 let snippet = self.snippet.lock().await;
-                outline_node_type = snippet.as_ref().expect("is_snippet_present to work").outline_node_content().outline_node_type().clone();
+                outline_node_type = snippet
+                    .as_ref()
+                    .expect("is_snippet_present to work")
+                    .outline_node_content()
+                    .outline_node_type()
+                    .clone();
             }
             // add the current symbol in the history list
             history.push(SymbolRequestHistoryItem::new(
@@ -1112,13 +1192,18 @@ impl MechaCodeSymbolThinking {
             // it, and it can only happen in a class:
             println!("mecha_code_symbol_thinking::checking_new_sub_symbols_required");
             let new_sub_symbols = self
-                .decide_new_sub_symbols(original_request, llm_properties.clone(), message_properties.clone())
+                .decide_new_sub_symbols(
+                    original_request,
+                    llm_properties.clone(),
+                    message_properties.clone(),
+                )
                 .await?;
 
             if let Some(new_sub_symbols) = new_sub_symbols {
                 println!(
                     "{}::mecha_code_symbol_thinking::checking_new_sub_symbols_required::len({})",
-                    self.symbol_name(), new_sub_symbols.len()
+                    self.symbol_name(),
+                    new_sub_symbols.len()
                 );
                 // send over edit request for this
                 let snippet_file_path = self
@@ -1202,7 +1287,8 @@ impl MechaCodeSymbolThinking {
             // latest implementation of the symbol
             let _ = self.refresh_state(message_properties.clone()).await;
 
-            if let Some((ranked_xml_list, reverse_lookup)) = self.to_llm_request(message_properties.clone()).await
+            if let Some((ranked_xml_list, reverse_lookup)) =
+                self.to_llm_request(message_properties.clone()).await
             {
                 let is_too_long = if reverse_lookup.len() > 100 {
                     true
@@ -1281,8 +1367,7 @@ Reason to edit:
                                 println!("mecha_code_symbol_thinking::initial_request::reason_to_edit::({:?})::({:?})", &range, &fs_file_path);
                                 // TODO(skcd): Shoudn't this use the search by name
                                 // instead of the using the range for searching
-                                let symbol_in_range = 
-                                    self.find_sub_symbol_in_range(
+                                let symbol_in_range = self.find_sub_symbol_in_range(
                                         range,
                                         fs_file_path,
                                         message_properties,
@@ -1404,11 +1489,15 @@ Reason to edit:
 
     /// Generates the full symbol which we can put in a prompt for full symbol
     /// analysis and decision making
-    /// 
+    ///
     /// We do not generate a list of anything just the full symbol over here
     pub async fn to_llm_request_full_prompt(&self) -> Option<String> {
         let snippet_maybe = {
-            self.snippet.lock().await.as_ref().map(|snippet| snippet.clone())
+            self.snippet
+                .lock()
+                .await
+                .as_ref()
+                .map(|snippet| snippet.clone())
         };
         if let Some(snippet) = snippet_maybe {
             println!(
@@ -1428,18 +1517,27 @@ Reason to edit:
                 Some(function_body)
             } else {
                 let implementations = self.get_implementations().await;
-                println!("mecha_code_symbol_thinking::implementations_for_symbol::({})::symbol({})", &implementations.len(), self.symbol_name());
+                println!(
+                    "mecha_code_symbol_thinking::implementations_for_symbol::({})::symbol({})",
+                    &implementations.len(),
+                    self.symbol_name()
+                );
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
                 // Now we need to format this properly and send it back over to the LLM
-                let snippet_xml = snippets_ref.iter().enumerate().map(|(_idx, snippet)| {
-                    let file_path = snippet.file_path();
-                    let start_line = snippet.range().start_line();
-                    let end_line = snippet.range().end_line();
-                    let location = format!("{}:{}-{}", file_path, start_line, end_line);
-                    let language = snippet.language();
-                    let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
-                    format!(
-                        r#"
+                let snippet_xml = snippets_ref
+                    .iter()
+                    .enumerate()
+                    .map(|(_idx, snippet)| {
+                        let file_path = snippet.file_path();
+                        let start_line = snippet.range().start_line();
+                        let end_line = snippet.range().end_line();
+                        let location = format!("{}:{}-{}", file_path, start_line, end_line);
+                        let language = snippet.language();
+                        let content = self
+                            .tool_box
+                            .get_compressed_symbol_view(snippet.content(), snippet.file_path());
+                        format!(
+                            r#"
 <file_path>
 {location}
 </file_path>
@@ -1448,8 +1546,10 @@ Reason to edit:
 {content}
 ```
 </content>"#
-                    )
-                }).collect::<Vec<_>>().join("\n");
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 Some(snippet_xml)
             }
         } else {
@@ -1460,9 +1560,15 @@ Reason to edit:
     /// We generate the sections of the symbols here in full, which implies
     /// that we are not going to create sections of the symbol per function
     /// or in other logical units but as complete
-    pub async fn to_llm_requet_full_listwise(&self) -> Option<(String, Vec<SnippetReRankInformation>)> {
+    pub async fn to_llm_requet_full_listwise(
+        &self,
+    ) -> Option<(String, Vec<SnippetReRankInformation>)> {
         let snippet_maybe = {
-            self.snippet.lock().await.as_ref().map(|snippet| snippet.clone())
+            self.snippet
+                .lock()
+                .await
+                .as_ref()
+                .map(|snippet| snippet.clone())
         };
         if let Some(snippet) = snippet_maybe {
             println!(
@@ -1496,19 +1602,26 @@ Reason to edit:
                 ))
             } else {
                 let implementations = self.get_implementations().await;
-                println!("mecha_code_symbol_thinking::implementations_for_symbol::({:?})::symbol({})", &implementations, self.symbol_name());
+                println!(
+                    "mecha_code_symbol_thinking::implementations_for_symbol::({:?})::symbol({})",
+                    &implementations,
+                    self.symbol_name()
+                );
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
                 // Now we need to format this properly and send it back over to the LLM
-                let snippet_xml = snippets_ref.iter().enumerate().map(|(idx, snippet)| {
-                    let file_path = snippet.file_path();
-                    let start_line = snippet.range().start_line();
-                    let end_line = snippet.range().end_line();
-                    let location = format!("{}:{}-{}", file_path, start_line, end_line);
-                    let language = snippet.language();
-                    let content = snippet.content();
-                    // let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
-                    format!(
-                        r#"<rerank_entry>
+                let snippet_xml = snippets_ref
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, snippet)| {
+                        let file_path = snippet.file_path();
+                        let start_line = snippet.range().start_line();
+                        let end_line = snippet.range().end_line();
+                        let location = format!("{}:{}-{}", file_path, start_line, end_line);
+                        let language = snippet.language();
+                        let content = snippet.content();
+                        // let content = self.tool_box.get_compressed_symbol_view(snippet.content(), snippet.file_path());
+                        format!(
+                            r#"<rerank_entry>
 <id>
 {idx}
 </id>
@@ -1521,19 +1634,22 @@ Reason to edit:
 ```
 </content>
 </rerank_entry>"#
-                    )
-                }).collect::<Vec<_>>().join("\n");
-                let snippet_information = snippets_ref.into_iter().enumerate().map(|(idx, snippet)| {
-                    SnippetReRankInformation::new(
-                        idx,
-                        snippet.range().clone(),
-                        snippet.fs_file_path.to_owned(),
-                    )
-                }).collect::<Vec<_>>();
-                Some((
-                    snippet_xml,
-                    snippet_information,
-                ))
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let snippet_information = snippets_ref
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, snippet)| {
+                        SnippetReRankInformation::new(
+                            idx,
+                            snippet.range().clone(),
+                            snippet.fs_file_path.to_owned(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                Some((snippet_xml, snippet_information))
             }
         } else {
             None
@@ -1616,7 +1732,10 @@ Reason to edit:
                     // TODO(skcd): we are not getting the correct outline node over here :|
                     let outline_node = self
                         .tool_box
-                        .get_outline_node_from_snippet(implementation_snippet, message_properties.clone())
+                        .get_outline_node_from_snippet(
+                            implementation_snippet,
+                            message_properties.clone(),
+                        )
                         .await;
                     if let Ok(outline_node) = outline_node {
                         outline_nodes.push(outline_node);
@@ -1737,7 +1856,10 @@ Reason to edit:
                                 .to_owned();
                                 // guard against impl blocks in rust, since including
                                 // just the impl statement can confuse the LLM
-                                if !class_snippet.is_class_declaration() && class_snippet.language().to_lowercase() == "rust" && class_snippet.has_trait_implementation().is_none() {
+                                if !class_snippet.is_class_declaration()
+                                    && class_snippet.language().to_lowercase() == "rust"
+                                    && class_snippet.has_trait_implementation().is_none()
+                                {
                                     None
                                 } else {
                                     symbol_rerank_information.push(

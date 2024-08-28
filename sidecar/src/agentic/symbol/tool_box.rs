@@ -3331,6 +3331,7 @@ Please update this code to accommodate these changes. Consider:
                 let outline_node = outline_node.expect("is_err to not fail above");
 
                 if outline_node.is_function_type() {
+                    println!("tool_box::check_for_followups_bfs::is_function_type::symbol_name({})::fs_file_path({})", outline_node.name(), outline_node.fs_file_path());
                     reference_locations.extend(
                         self.check_for_followups_on_functions(
                             outline_node,
@@ -3344,8 +3345,9 @@ Please update this code to accommodate these changes. Consider:
                     );
                 } else if outline_node.is_class_definition() {
                     println!(
-                        "tool_box::check_for_followups_bfs::class_definition::symbol_name({})",
-                        outline_node.name()
+                        "tool_box::check_for_followups_bfs::class_definition::symbol_name({})::fs_file_path({})",
+                        outline_node.name(),
+                        outline_node.fs_file_path(),
                     );
                     reference_locations.extend(
                         self.check_for_followups_class_definitions(
@@ -3359,6 +3361,11 @@ Please update this code to accommodate these changes. Consider:
                         .await?,
                     );
                 } else {
+                    println!(
+                        "tool_box::check_for_followups_bfs:class_implementation::symbol_name({})::fs_file_path({})",
+                        outline_node.name(),
+                        outline_node.fs_file_path(),
+                    );
                     reference_locations.extend(
                         self.check_for_followups_class_implementation(
                             outline_node,

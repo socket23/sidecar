@@ -77,7 +77,7 @@ struct AnchoredEditingMetadata {
     // before we started editing
     previous_file_content: HashMap<String, String>,
     // to store anchor selection nodes' references
-    _references: Vec<ReferenceLocation>,
+    references: Vec<ReferenceLocation>,
 }
 
 impl AnchoredEditingMetadata {
@@ -93,8 +93,12 @@ impl AnchoredEditingMetadata {
             anchored_symbols,
             user_context,
             previous_file_content,
-            _references: references,
+            references,
         }
+    }
+
+    pub fn references(&self) -> &[ReferenceLocation] {
+        &self.references
     }
 
     pub fn _add_message_property(&mut self, property: SymbolEventMessageProperties) {
@@ -118,7 +122,7 @@ impl AnchoredEditingMetadata {
     }
 
     pub fn _add_references(&mut self, references: Vec<ReferenceLocation>) {
-        self._references.extend(references);
+        self.references.extend(references);
     }
 }
 
@@ -445,16 +449,43 @@ pub async fn code_sculpting_heal(
         Ok(json_result(CodeSculptingHealResponse { done: false }))
     } else {
         let anchor_properties = anchor_properties.expect("is_none to hold");
-        let older_file_content_map = anchor_properties.previous_file_content;
-        let file_paths = anchor_properties
-            .anchored_symbols
+
+        println!(
+            "agentic::webserver::code_sculpting_heal::anchor_properties.references.len({})",
+            anchor_properties.references().len()
+        );
+        println!(
+            "agentic::webserver::code_sculpting_heal::anchor_properties.references:\n{}",
+            anchor_properties
+                .references()
+                .iter()
+                .map(|reference| format!(
+                    "path: {}, range: {}",
+                    reference.fs_file_path(),
+                    reference.range().start_line()
+                ))
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
+
+        // these include the anchored symbols themselves
+        let references = anchor_properties.references();
+
+        let file_paths = references
             .iter()
-            .filter_map(|symbol| symbol.0.fs_file_path())
-            .collect::<HashSet<_>>()
-            .into_iter()
+            .map(|r| r.fs_file_path().to_string())
             .collect::<Vec<_>>();
 
+        let older_file_content_map = anchor_properties.previous_file_content;
         let message_properties = anchor_properties.message_properties.clone();
+
+        // let file_paths = anchor_properties
+        //     .anchored_symbols
+        //     .iter()
+        //     .filter_map(|symbol| symbol.0.fs_file_path())
+        //     .collect::<HashSet<_>>()
+        //     .into_iter()
+        //     .collect::<Vec<_>>();
 
         // Now grab the symbols which have changed
         let cloned_tools = app.tool_box.clone();
@@ -530,6 +561,7 @@ pub async fn code_sculpting_heal(
             .flatten()
             .collect::<Vec<_>>();
 
+        // changed symbols also has symbol_identifier
         let followup_bfs_request = changed_symbols
             .into_iter()
             .map(|changes| {
@@ -811,6 +843,8 @@ pub async fn code_editing(
                 .anchored_request_tracker
                 .track_new_request(&request_id, join_handle, editing_metadata)
                 .await;
+
+            // todo(zi): is this check necessary?
             let properties_present = app
                 .anchored_request_tracker
                 .get_properties(&request_id)
@@ -819,6 +853,12 @@ pub async fn code_editing(
                 "webserver::anchored_edits::request_id({})::properties_present({})",
                 &request_id,
                 properties_present.is_some()
+            );
+            println!(
+                "webserver::anchored_edits::request_id({})::properties_present({}).references.len({})",
+                &request_id,
+                properties_present.is_some(),
+                properties_present.map_or(0, |p| p.references().len())
             );
         }
     } else {

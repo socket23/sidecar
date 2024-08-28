@@ -2003,6 +2003,342 @@ We also believe this symbol needs to be probed because of:
             .map(|ts_language_config| ts_language_config.language_str.to_owned())
     }
 
+    /// We want to check for followups on the functions which implies that we can
+    /// simply look at the places where these functions are being used and then just
+    /// do go-to-reference on it
+    async fn check_for_followups_on_functions(
+        &self,
+        outline_node: OutlineNodeContent,
+        symbol_edited: &SymbolToEdit,
+        symbol_followup_bfs: &SymbolFollowupBFS,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<(ReferenceLocation, SymbolFollowupBFS)>, SymbolError> {
+        let mut reference_locations = vec![];
+        println!(
+            "tool_box::check_for_followups::is_function_type_edit::({})",
+            outline_node.name()
+        );
+        // for functions its very easy, we have to just get the references which
+        // are using this function somewhere in their code
+        let references = self
+            .go_to_references(
+                symbol_edited.fs_file_path().to_owned(),
+                outline_node.identifier_range().start_position(),
+                message_properties.clone(),
+            )
+            .await;
+        if references.is_ok() {
+            reference_locations.extend(
+                references
+                    .expect("is_ok to hold")
+                    .locations()
+                    .into_iter()
+                    .map(|location| (location, symbol_followup_bfs.clone())),
+            );
+        }
+        Ok(reference_locations)
+    }
+
+    /// We want to check for followups on the class definitions which implies
+    /// that we want to change any implementation of the class which might have
+    /// changed
+    async fn check_for_followups_class_definitions(
+        &self,
+        outline_node: OutlineNodeContent,
+        symbol_edited: &SymbolToEdit,
+        symbol_followup: &SymbolFollowupBFS,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
+        message_properties: SymbolEventMessageProperties,
+        tool_properties: ToolProperties,
+    ) -> Result<Vec<(ReferenceLocation, SymbolFollowupBFS)>, SymbolError> {
+        let mut reference_locations = vec![];
+        println!(
+            "tool_box::check_for_followups::is_class_definition::({})",
+            outline_node.name()
+        );
+
+        let original_code = symbol_followup.original_code();
+        let edited_code = symbol_followup.edited_code();
+        let symbol_name = outline_node.name();
+        let fs_file_path = outline_node.fs_file_path();
+        // if this is a class definitions then we have to be a bit more careful
+        // and look at where this class definition is being used and follow those
+        // reference
+        let references = self
+            .go_to_references(
+                symbol_edited.fs_file_path().to_owned(),
+                outline_node.identifier_range().start_position(),
+                message_properties.clone(),
+            )
+            .await;
+
+        if references.is_ok() {
+            reference_locations.extend(
+                references
+                    .expect("is_ok to hold")
+                    .locations()
+                    .into_iter()
+                    .map(|location| (location, symbol_followup.clone())),
+            );
+        }
+
+        // Now we have to do the following for completeness:
+        // - find all the fucntions which belong to this class
+        // - order them in a topological sort order and then go about making changes
+        // - the challenge here is that we might have dependencies which might be spread
+        // across different implementation blocks so we have to carefully craft this out
+        // - the more they are present in the same block the better it is
+        // having said all of this, the dumb way is the best way
+        // the dumb way is to show the whole symbol implementation blocks and ask
+        // the model to make any changes required (especially if its a single block or all in a single file
+        // which is the majority case in our codebase, if there are multiple files which have this
+        // then we can do it per file)
+        let file_paths = reference_locations
+            .iter()
+            .map(|(reference_location, _)| reference_location.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        // outline nodes which contain any children which contains a reference
+        // to the original symbol
+        let outline_nodes = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|file_path| (file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            self.get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .flatten()
+        .filter(|outline_node| {
+            // now check which outline node belongs to the refenrence
+            let outline_node_range = outline_node.range();
+            reference_locations.iter().any(|(reference_location, _)| {
+                outline_node_range.contains_check_line_column(reference_location.range())
+            })
+        })
+        .filter(|outline_node| outline_node.name() == symbol_name)
+        .filter(|outline_node| {
+            outline_node.children().into_iter().any(|child_node| {
+                let child_range = child_node.range();
+                reference_locations.iter().any(|(reference_location, _)| {
+                    child_range.contains_check_line_column(reference_location.range())
+                })
+            })
+        })
+        .collect::<Vec<_>>();
+
+        // now we can execute the edits on each of these files
+        let prompt = format!(
+            r#"A dependency of this code has changed. You are given the list of changes below:
+<dependency>
+<name>
+{symbol_name}
+</name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#
+        );
+
+        println!(
+            "tool_box::check_for_followups_class_definitions::symbol_name({})::outline_nodes({})",
+            symbol_name,
+            outline_nodes.len()
+        );
+        let _ = stream::iter(outline_nodes.to_vec().into_iter().map(|data| {
+            (
+                data,
+                hub_sender.clone(),
+                message_properties.clone(),
+                tool_properties.clone(),
+                prompt.to_owned(),
+            )
+        }))
+        .map(
+            |(outline_node, hub_sender, message_properties, tool_properties, prompt)| async move {
+                self.send_edit_instruction_to_outline_node(
+                    outline_node,
+                    prompt,
+                    hub_sender,
+                    message_properties,
+                    tool_properties,
+                )
+                .await
+            },
+        )
+        .buffer_unordered(1)
+        .collect::<Vec<_>>()
+        .await;
+
+        // TODO(skcd): now we want to capture the methods which have changed since those are the
+        // ones which we want follow after changing the symbol (the methods over here)
+        // the symbol might have moved, so we want to make sure that we do it correctly
+        Ok(reference_locations)
+    }
+
+    /// We want to make sure that class implementation chagnes follow the following
+    /// state machine:
+    /// class-implementation -> changes class definitions
+    /// if class-definitions change:
+    /// change everything about the class implementations and also the functions
+    /// which previous changed
+    /// once this is done get the functions which have chagned along with any
+    /// places which might be referencing the class itself
+    async fn _check_for_followups_class_implementation(
+        &self,
+        outline_node: OutlineNode,
+        symbol_followup: &SymbolFollowupBFS,
+        original_code: &str,
+        edited_code: &str,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
+        message_properties: SymbolEventMessageProperties,
+        tool_properties: &ToolProperties,
+    ) -> Result<(), SymbolError> {
+        println!(
+            "tool_box::check_for_followups::is_class_implementation_type::({})",
+            outline_node.name()
+        );
+        // we should always trigger an edit on the class symbol definition by itself
+        // just to make sure that if any changes are required to it, they are completed
+        // and managed accordingly
+        // the state-machine when we chagne the definition is as follows:
+        // class-implementation -> check if class-definition needs change
+        // class-definition changed -> check if any of the class-implementation reference blocks point to class definition and trigger a search and replace block
+        let mut definitions = self
+            .go_to_definition(
+                outline_node.fs_file_path(),
+                outline_node.identifier_range().start_position(),
+                message_properties.clone(),
+            )
+            .await?
+            .definitions();
+
+        // changed content for the class definition
+        // is being tracked over here
+        let mut _class_definition_change: Option<(String, String)> = None;
+        let mut class_implementations_interested_references = vec![];
+        if !definitions.is_empty() {
+            let first_definition = definitions.remove(0);
+            // if the definition does not belong to the outline nodo where
+            // we are focussed on right now, then skip the step
+            if first_definition.file_path() != outline_node.fs_file_path()
+                || !outline_node
+                    .range()
+                    .contains_check_line_column(outline_node.range())
+            {
+                let outline_node = self
+                    .get_outline_node_for_range(
+                        first_definition.range(),
+                        first_definition.file_path(),
+                        message_properties.clone(),
+                    )
+                    .await?;
+
+                let original_definition_code = outline_node.content().content().to_owned();
+
+                println!("tool_box::check_for_followup_bfs::class_implementation::definition_check::({})::({})", outline_node.name(), outline_node.fs_file_path());
+                // Now send over an edit request to this outline node
+                // TODO(skcd): This is heavily unoptimised right now, since we are not changing just the changes
+                // but the whole symbol together so it slows down the whole pipeline
+                let _ = self.send_edit_instruction_to_outline_node(
+                outline_node,
+                {
+                    let name = symbol_followup.symbol_edited().symbol_name();
+                    let fs_file_path = symbol_followup.symbol_edited().fs_file_path();
+                    format!(r#"A dependency of this code has changed. You are given the list of changes below:
+<dependency>
+<name>
+{name}
+</name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<original_implementation>
+{original_code}
+</original_implementation>
+<updated_implementation>
+{edited_code}
+</updated_implementation>
+</dependency>
+Please update this code to accommodate these changes. Consider:
+1. Method signature changes (parameters, return types)
+2. Behavioural changes in the dependency
+3. Potential side effects or new exceptions
+4. Any new methods or properties that should be utilized
+5. Deprecated features that should no longer be used"#)},
+                hub_sender.clone(),
+                message_properties.clone(),
+                tool_properties.clone(),
+            )
+            .await;
+                // now we want to check if the definition has changed over here
+                let changed_outline_node = self
+                    .get_outline_nodes_grouped(first_definition.file_path())
+                    .await
+                    .map(|outline_nodes| {
+                        let mut filtered_outline_nodes = outline_nodes
+                            .into_iter()
+                            .filter(|outline_node| outline_node.is_class_definition())
+                            .filter(|outline_node| outline_node.name() == outline_node.name())
+                            .collect::<Vec<_>>();
+                        if filtered_outline_nodes.is_empty() {
+                            None
+                        } else {
+                            Some(filtered_outline_nodes.remove(0))
+                        }
+                    })
+                    .flatten();
+                if let Some(changed_outline_node) = changed_outline_node {
+                    if changed_outline_node.content().content().trim()
+                        != original_definition_code.trim()
+                    {
+                        _class_definition_change = Some((
+                            original_definition_code,
+                            changed_outline_node.content().content().to_owned(),
+                        ));
+
+                        // we also want to get the references for the class definition node
+                        // which point to self
+                        let class_definition_references = self
+                            .go_to_references(
+                                changed_outline_node.fs_file_path().to_owned(),
+                                changed_outline_node.range().start_position(),
+                                message_properties.clone(),
+                            )
+                            .await;
+                        if let Ok(class_definition_references) = class_definition_references {
+                            class_implementations_interested_references
+                                .extend(class_definition_references.locations());
+                        }
+                    }
+                }
+            }
+        }
+
+        // if class-definition change has happened, we have to go through all the
+        // implementation blocks which contain this class definition along with
+        // any changed functions and their references
+        Ok(())
+    }
+
     /// To get the followups working we have to do the following:
     /// we are going to heal the codebase in waves:
     /// - we have a set of symbols which have been edited and want to do followups
@@ -2052,53 +2388,27 @@ We also believe this symbol needs to be probed because of:
             let edited_outline_node_name = outline_node.name().to_owned();
 
             if outline_node.is_function_type() {
-                println!(
-                    "tool_box::check_for_followups::is_function_type_edit::({})",
-                    outline_node.name()
-                );
-                // for functions its very easy, we have to just get the references which
-                // are using this function somewhere in their code
-                let references = self
-                    .go_to_references(
-                        symbol_edited.fs_file_path().to_owned(),
-                        outline_node.identifier_range().start_position(),
+                reference_locations.extend(
+                    self.check_for_followups_on_functions(
+                        outline_node,
+                        symbol_edited,
+                        &symbol_followup,
                         message_properties.clone(),
                     )
-                    .await;
-                if references.is_ok() {
-                    reference_locations.extend(
-                        references
-                            .expect("is_ok to hold")
-                            .locations()
-                            .into_iter()
-                            .map(|location| (location, symbol_followup.clone())),
-                    );
-                }
+                    .await?,
+                );
             } else if outline_node.is_class_definition() {
-                println!(
-                    "tool_box::check_for_followups::is_class_definition::({})",
-                    outline_node.name()
-                );
-                // if this is a class definitions then we have to be a bit more careful
-                // and look at where this class definition is being used and follow those
-                // reference
-                let references = self
-                    .go_to_references(
-                        symbol_edited.fs_file_path().to_owned(),
-                        outline_node.identifier_range().start_position(),
+                reference_locations.extend(
+                    self.check_for_followups_class_definitions(
+                        outline_node,
+                        symbol_edited,
+                        &symbol_followup,
+                        hub_sender.clone(),
                         message_properties.clone(),
+                        tool_properties.clone(),
                     )
-                    .await;
-
-                if references.is_ok() {
-                    reference_locations.extend(
-                        references
-                            .expect("is_ok to hold")
-                            .locations()
-                            .into_iter()
-                            .map(|location| (location, symbol_followup.clone())),
-                    );
-                }
+                    .await?,
+                );
             } else {
                 println!(
                     "tool_box::check_for_followups::is_class_implementation_type::({})",
@@ -2121,7 +2431,7 @@ We also believe this symbol needs to be probed because of:
 
                 // changed content for the class definition
                 // is being tracked over here
-                let mut class_definition_change: Option<(String, String)> = None;
+                let mut _class_definition_change: Option<(String, String)> = None;
                 let mut class_implementations_interested_references = vec![];
                 if !definitions.is_empty() {
                     let first_definition = definitions.remove(0);
@@ -2200,7 +2510,7 @@ Please update this code to accommodate these changes. Consider:
                             if changed_outline_node.content().content().trim()
                                 != original_definition_code.trim()
                             {
-                                class_definition_change = Some((
+                                _class_definition_change = Some((
                                     original_definition_code,
                                     changed_outline_node.content().content().to_owned(),
                                 ));
@@ -2366,7 +2676,7 @@ Please update this code to accommodate these changes. Consider:
 
                 // Now we want to figure out which outline nodes belongs to the class or uses a function
                 // defined in the class so we can fix ourselves
-                let collected_outline_nodes = outline_nodes_to_file_paths
+                let _collected_outline_nodes = outline_nodes_to_file_paths
                     .into_iter()
                     .map(|(_, outline_nodes)| {
                         let collected_outline_nodes = outline_nodes

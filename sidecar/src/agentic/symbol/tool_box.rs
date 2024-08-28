@@ -1641,7 +1641,7 @@ We also believe this symbol needs to be probed because of:
             // - its either a function or a class like symbol
             // - if its a function no need to check for implementations
             // - if its a class then we still need to check for implementations
-            if outline_node.is_funciton() {
+            if outline_node.is_function() {
                 // just return this over here
                 let fs_file_path = format!(
                     "{}-{}:{}",
@@ -7157,13 +7157,13 @@ FILEPATH: {fs_file_path}
                                 // is_func and is_class_delcaration are special one
                                 // if this is a class then we are in js/py land
                                 if new_outline_nodes[0].is_class_definition()
-                                    || new_outline_nodes[0].is_funciton()
+                                    || new_outline_nodes[0].is_function()
                                 {
                                     older_outline_nodes
                                         .into_iter()
                                         .find(|outline_node| {
                                             outline_node.is_class_definition()
-                                                || outline_node.is_funciton()
+                                                || outline_node.is_function()
                                         })
                                         .map(|older_outline_node| {
                                             vec![(
@@ -7469,7 +7469,7 @@ FILEPATH: {fs_file_path}
                     outline_node.name(),
                     outline_node.outline_node_type()
                 );
-                if outline_node.is_funciton() || outline_node.is_class_definition() {
+                if outline_node.is_function() || outline_node.is_class_definition() {
                     // then its a single unit of work, so its a bit easier
                     (
                         SymbolIdentifier::with_file_path(
@@ -7546,7 +7546,7 @@ FILEPATH: {fs_file_path}
                         // this is a spcial case where the child symbol is of the same name as the symbol name
                         // representing a class definition or function
                         let possible_outline_node = outline_nodes.iter().find(|outline_node| {
-                            outline_node.is_class_definition() || outline_node.is_funciton()
+                            outline_node.is_class_definition() || outline_node.is_function()
                         });
                         if let Some(outline_node) = possible_outline_node {
                             Some(SymbolToEdit::new(

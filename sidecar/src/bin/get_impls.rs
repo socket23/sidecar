@@ -102,9 +102,9 @@ async fn main() {
         sender.clone(),
         editor_url.to_owned(),
     );
-    let root_directory = "/Users/skcd/test_repo/sidecar".to_owned();
+    let root_directory = "/Users/zi/codestory/testing/sidecar".to_owned();
     let fs_file_path =
-        "/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/events/edit.rs".to_owned();
+        "/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/symbol/events/edit.rs".to_owned();
     let mut impls_test =
         Box::pin(symbol_manager.impls_test(&root_directory, &fs_file_path, event_properties));
 

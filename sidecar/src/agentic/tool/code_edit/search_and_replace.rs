@@ -566,7 +566,7 @@ impl SearchAndReplaceAccumulator {
         // right now
         let head = "<<<<<<< SEARCH";
         let divider = "=======";
-        let updated = ">>>>>>> REPLACE";
+        let updated = vec![">>>>>>> REPLACE", "======="];
 
         // no complete line right now, keep going
         let line_number_to_process = get_last_newline_line_number(&self.answer_up_until_now);
@@ -637,7 +637,10 @@ impl SearchAndReplaceAccumulator {
                     }
                 }
                 SearchBlockStatus::BlockFound((_, block_range)) => {
-                    if answer_line_at_index == updated {
+                    if updated
+                        .iter()
+                        .any(|updated_trace| *updated_trace == answer_line_at_index)
+                    {
                         // neat we found when to close, so we can do that now
                         // return an event which stops the edit stream
                         self.search_block_status = SearchBlockStatus::NoBlock;
@@ -1268,6 +1271,33 @@ impl SymbolToEdit {
         &self.fs_file_path
     }
 }"#
+        );
+    }
+
+    #[test]
+    fn test_with_broken_replace_block() {
+        let code = r#"something
+interesting
+something_else
+blahblah"#;
+        let edits = r#"```
+<<<<<<< SEARCH
+something_else
+blahblah
+=======
+blahblah2
+=======
+```"#;
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(code.to_owned(), 0, sender);
+        search_and_replace_accumulator.add_delta(edits.to_owned());
+        let final_code = search_and_replace_accumulator.code_lines.join("\n");
+        assert_eq!(
+            final_code,
+            r#"something
+interesting
+blahblah2"#
         );
     }
 }

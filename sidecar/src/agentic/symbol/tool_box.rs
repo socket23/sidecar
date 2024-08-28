@@ -2390,7 +2390,10 @@ Please update this code to accommodate these changes. Consider:
                         let references_for_functions = self
                             .go_to_references(
                                 changed_function_node.fs_file_path().to_owned(),
-                                changed_function_node.identifier_range().start_position(),
+                                changed_function_node
+                                    .identifier_range()
+                                    .start_position()
+                                    .move_lines(new_outline_node.range().start_line()),
                                 message_properties.clone(),
                             )
                             .await?
@@ -2469,6 +2472,8 @@ Please update this code to accommodate these changes. Consider:
                     .map(|reference| (reference, class_symbol_followup.clone())),
             );
         }
+
+        println!("tool_box::check_for_followups_class_definitions::symbol_name({})::references_locations({})", class_symbol_name, references_to_symbol_followup.iter().map(|(reference_location, _)| reference_location.fs_file_path().to_owned()).collect::<Vec<_>>().join(","));
 
         // Now that we have the references for functions, we need to filter out which do not belong
         // to the current class which is getting edited
@@ -3281,78 +3286,94 @@ Please update this code to accommodate these changes. Consider:
     /// TODO(skcd): heavily unoptimised code
     pub async fn check_for_followups_bfs(
         &self,
-        symbol_followups: Vec<SymbolFollowupBFS>,
+        mut symbol_followups: Vec<SymbolFollowupBFS>,
         hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
         tool_properties: &ToolProperties,
-    ) -> Result<Vec<SymbolFollowupBFS>, SymbolError> {
+    ) -> Result<(), SymbolError> {
+        println!("tool_box::check_for_followups_bfs::start");
         // first we want to detect if there were changes and if there were what
         // those changes are about
         // we want to track the reference location along with the changed symbol_followup
         // so we can pass the correct git-diff to it
         let mut reference_locations: Vec<SymbolFollowupBFS> = vec![];
-        for symbol_followup in symbol_followups.into_iter() {
-            let symbol_edited = symbol_followup.symbol_edited();
-            let symbol_identifier = symbol_followup.symbol_identifier();
-            let original_code = symbol_followup.original_code();
-            let edited_code = symbol_followup.edited_code();
-
-            if original_code.trim() == edited_code.trim() {
-                continue;
+        loop {
+            if symbol_followups.is_empty() {
+                // break when we have no more followups to do
+                break;
             }
-            let outline_node = self
-                .find_sub_symbol_to_edit_with_name(
-                    symbol_identifier.symbol_name(),
-                    symbol_edited,
-                    message_properties.clone(),
-                )
-                .await;
-            if outline_node.is_err() {
-                continue;
-            }
-
-            let outline_node = outline_node.expect("is_err to not fail above");
-
-            if outline_node.is_function_type() {
-                reference_locations.extend(
-                    self.check_for_followups_on_functions(
-                        outline_node,
+            for symbol_followup in symbol_followups.into_iter() {
+                let symbol_edited = symbol_followup.symbol_edited();
+                let symbol_identifier = symbol_followup.symbol_identifier();
+                let original_code = symbol_followup.original_code();
+                let edited_code = symbol_followup.edited_code();
+                println!(
+                    "tool_box::check_for_followup_bfs::symbol_name({})",
+                    symbol_identifier.symbol_name()
+                );
+                if original_code.trim() == edited_code.trim() {
+                    continue;
+                }
+                let outline_node = self
+                    .find_sub_symbol_to_edit_with_name(
+                        symbol_identifier.symbol_name(),
                         symbol_edited,
-                        &symbol_followup,
-                        hub_sender.clone(),
                         message_properties.clone(),
-                        tool_properties.clone(),
                     )
-                    .await?,
-                );
-            } else if outline_node.is_class_definition() {
-                reference_locations.extend(
-                    self.check_for_followups_class_definitions(
-                        outline_node,
-                        symbol_edited,
-                        &symbol_followup,
-                        hub_sender.clone(),
-                        message_properties.clone(),
-                        tool_properties.clone(),
-                    )
-                    .await?,
-                );
-            } else {
-                reference_locations.extend(
-                    self.check_for_followups_class_implementation(
-                        outline_node,
-                        &symbol_followup,
-                        original_code,
-                        edited_code,
-                        hub_sender.clone(),
-                        message_properties.clone(),
-                        tool_properties,
-                    )
-                    .await?,
-                );
+                    .await;
+                if outline_node.is_err() {
+                    continue;
+                }
+
+                let outline_node = outline_node.expect("is_err to not fail above");
+
+                if outline_node.is_function_type() {
+                    reference_locations.extend(
+                        self.check_for_followups_on_functions(
+                            outline_node,
+                            symbol_edited,
+                            &symbol_followup,
+                            hub_sender.clone(),
+                            message_properties.clone(),
+                            tool_properties.clone(),
+                        )
+                        .await?,
+                    );
+                } else if outline_node.is_class_definition() {
+                    println!(
+                        "tool_box::check_for_followups_bfs::class_definition::symbol_name({})",
+                        outline_node.name()
+                    );
+                    reference_locations.extend(
+                        self.check_for_followups_class_definitions(
+                            outline_node,
+                            symbol_edited,
+                            &symbol_followup,
+                            hub_sender.clone(),
+                            message_properties.clone(),
+                            tool_properties.clone(),
+                        )
+                        .await?,
+                    );
+                } else {
+                    reference_locations.extend(
+                        self.check_for_followups_class_implementation(
+                            outline_node,
+                            &symbol_followup,
+                            original_code,
+                            edited_code,
+                            hub_sender.clone(),
+                            message_properties.clone(),
+                            tool_properties,
+                        )
+                        .await?,
+                    );
+                }
             }
+            symbol_followups = reference_locations.to_vec();
         }
-        Ok(reference_locations)
+        println!("tool_box::check_for_followups_bfs::complete");
+        Ok(())
     }
 
     pub async fn check_for_followups(

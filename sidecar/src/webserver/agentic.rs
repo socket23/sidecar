@@ -24,6 +24,7 @@ use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
+use crate::agentic::tool::lsp::gotoreferences::ReferenceLocation;
 use crate::{
     agentic::{
         symbol::{
@@ -75,6 +76,8 @@ struct AnchoredEditingMetadata {
     // we also want to store the original content of the files which were mentioned
     // before we started editing
     previous_file_content: HashMap<String, String>,
+    // to store anchor selection nodes' references
+    references: Vec<ReferenceLocation>,
 }
 
 impl AnchoredEditingMetadata {
@@ -83,13 +86,39 @@ impl AnchoredEditingMetadata {
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
         user_context: Option<String>,
         previous_file_content: HashMap<String, String>,
+        references: Vec<ReferenceLocation>,
     ) -> Self {
         Self {
             message_properties,
             anchored_symbols,
             user_context,
             previous_file_content,
+            references,
         }
+    }
+
+    pub fn _add_message_property(&mut self, property: SymbolEventMessageProperties) {
+        self.message_properties = property
+    }
+
+    pub fn _add_anchored_symbols(&mut self, symbols: Vec<(SymbolIdentifier, Vec<String>)>) {
+        self.anchored_symbols.extend(symbols);
+    }
+
+    pub fn _append_user_context(&mut self, context: &str) {
+        self.user_context = match &self.user_context {
+            Some(existing) => Some(existing.to_owned() + context),
+            None => Some(context.to_owned()),
+        };
+    }
+
+    pub fn _set_file_contents(&mut self, file_path: &str, contents: &str) {
+        self.previous_file_content
+            .insert(file_path.to_string(), contents.to_string());
+    }
+
+    pub fn _add_references(&mut self, references: Vec<ReferenceLocation>) {
+        self.references.extend(references);
     }
 }
 
@@ -679,7 +708,7 @@ pub async fn code_editing(
         let cloned_request_id = request_id.clone();
         if !symbols_to_anchor.is_empty() {
             // so this is an async task that should just chill in the background while the edits flow below continues
-            let _join_handle = tokio::spawn(async move {
+            let references_join_handle = tokio::spawn(async move {
                 let start = Instant::now();
 
                 // this needs to be its own async task
@@ -713,6 +742,8 @@ pub async fn code_editing(
 
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
+
+                references
             });
 
             // if we do not have any symbols to anchor on, then we are screwed over here
@@ -742,28 +773,38 @@ pub async fn code_editing(
                 .into_iter()
                 .filter_map(|s| s)
                 .collect::<HashMap<_, _>>();
-            let editing_metadata = AnchoredEditingMetadata::new(
-                message_properties.clone(),
-                symbols_to_anchor,
-                user_provided_context.clone(),
-                file_contents,
-            );
+
             let anchored_symbols = app
                 .tool_box
                 .symbols_to_anchor(&user_context, message_properties.clone())
                 .await
                 .unwrap_or_default();
+
+            // clone, clone, clone
             let symbol_manager = app.symbol_manager.clone();
+            let cloned_message_properties = message_properties.clone();
+            let cloned_user_context = user_provided_context.clone();
             let join_handle = tokio::spawn(async move {
                 let _ = symbol_manager
                     .anchor_edits(
                         user_query,
                         anchored_symbols,
-                        user_provided_context,
-                        message_properties,
+                        cloned_user_context,
+                        cloned_message_properties,
                     )
                     .await;
             });
+
+            // this must happen after the anchor_edits task is underway so as to not block it
+            let references = references_join_handle.await.expect("references to return");
+
+            let editing_metadata = AnchoredEditingMetadata::new(
+                message_properties,
+                symbols_to_anchor,
+                user_provided_context,
+                file_contents,
+                references, // precomputed references
+            );
             let _ = app
                 .anchored_request_tracker
                 .track_new_request(&request_id, join_handle, editing_metadata)

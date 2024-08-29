@@ -2133,7 +2133,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     false,
                     None,
-                    true,
+                    false,
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),
@@ -3296,12 +3296,15 @@ Please update this code to accommodate these changes. Consider:
         // those changes are about
         // we want to track the reference location along with the changed symbol_followup
         // so we can pass the correct git-diff to it
-        let mut reference_locations: Vec<SymbolFollowupBFS> = vec![];
+        let mut reference_locations: Vec<SymbolFollowupBFS>;
         loop {
             if symbol_followups.is_empty() {
                 // break when we have no more followups to do
                 break;
             }
+            // empty the reference locations at the start of the invocation as it
+            // will get populated down the line
+            reference_locations = vec![];
             for symbol_followup in symbol_followups.into_iter() {
                 let symbol_edited = symbol_followup.symbol_edited();
                 let symbol_identifier = symbol_followup.symbol_identifier();
@@ -3328,6 +3331,7 @@ Please update this code to accommodate these changes. Consider:
                 let outline_node = outline_node.expect("is_err to not fail above");
 
                 if outline_node.is_function_type() {
+                    println!("tool_box::check_for_followups_bfs::is_function_type::symbol_name({})::fs_file_path({})", outline_node.name(), outline_node.fs_file_path());
                     reference_locations.extend(
                         self.check_for_followups_on_functions(
                             outline_node,
@@ -3341,8 +3345,9 @@ Please update this code to accommodate these changes. Consider:
                     );
                 } else if outline_node.is_class_definition() {
                     println!(
-                        "tool_box::check_for_followups_bfs::class_definition::symbol_name({})",
-                        outline_node.name()
+                        "tool_box::check_for_followups_bfs::class_definition::symbol_name({})::fs_file_path({})",
+                        outline_node.name(),
+                        outline_node.fs_file_path(),
                     );
                     reference_locations.extend(
                         self.check_for_followups_class_definitions(
@@ -3356,6 +3361,11 @@ Please update this code to accommodate these changes. Consider:
                         .await?,
                     );
                 } else {
+                    println!(
+                        "tool_box::check_for_followups_bfs:class_implementation::symbol_name({})::fs_file_path({})",
+                        outline_node.name(),
+                        outline_node.fs_file_path(),
+                    );
                     reference_locations.extend(
                         self.check_for_followups_class_implementation(
                             outline_node,

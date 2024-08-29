@@ -123,18 +123,15 @@ Omit those that do not need to change.
     // consider variants: tiny, regular, in-depth
     pub fn system_message(&self) -> String {
         format!(
-            r#"You are an expert software engineer. 
-
-You will be provided with:
-1. a user query
-2. a selection of code
-3. the references of the symbols in the selection
-
-The selection of code may change based on the user query.
-
-Your job is to consider the references that will also need to change based on the user query changes, and respond with a concise sentence describing what needs to change and why.
-
-Try your best to keep it one sentence only.
+            r#"You are an expert software engineer who is pair programming with another developer.
+- The developer who you are helping with has selected some code which is present in <code_selected> and they intent to change it, the request for change will be provided to you in <user_query>.
+- You will take a look at all the references in the codebase for the <code_selected> which is going to change and anticipate which of these references need to change and why.
+- Try to give back your reply in a single sentence if possible and keep it very high value as you are trying to nudge the user towards making the change in the best possible way.
+- Things to look out for:
+- - The user might be changing the function definition
+- - The user might be adding a new parameter or removing a parameter for the class
+- - Changing code from sync to async
+- - and many more such cases which changes the structure and the meaning of the code, as these can be breaking changes.
 
 Reply in the following format:
 <reply>
@@ -150,14 +147,17 @@ Reply in the following format:
 
         // get symbol in range for each reference.
         format!(
-            r#"# user_query: {}
-
-# code selection: 
+            r#"<user_query>
 {}
-    
-# references: 
-{}        
-        "#,
+</user_query>
+
+<code_selected>
+{}
+</code_selected>
+
+<references>
+{}
+</references>"#,
             user_query,
             anchored_symbols
                 .iter()

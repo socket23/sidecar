@@ -110,6 +110,25 @@ impl GoogleAIStdioClient {
                 }
             }
         }
+        // Add the last group of messages
+        if !accumulated_messages.is_empty() {
+            if let Some(last_role) = previous_role {
+                if let Some(last_role_str) = self.get_role(&last_role) {
+                    final_messages.push(Content {
+                        role: last_role_str,
+                        parts: accumulated_messages
+                            .iter()
+                            .map(|message| {
+                                HashMap::from([(
+                                    "text".to_owned(),
+                                    message.content().to_owned(),
+                                )])
+                            })
+                            .collect(),
+                    });
+                }
+            }
+        }
         final_messages
     }
 
@@ -277,6 +296,8 @@ impl LLMClient for GoogleAIStdioClient {
         }
         let api_key = api_key.expect("to be present");
 
+        println!("google_ai_studio.request:{:?}", serde_json::to_string(&request).expect("to work"));
+
         // now we need to send a request to the gemini pro api here
         let response = self
             .client
@@ -285,7 +306,8 @@ impl LLMClient for GoogleAIStdioClient {
             .json(&request)
             .send()
             .await?;
-        if !response.status().is_success() {
+        println!("googl_ai_studio.response_info");
+        if !dbg!(response.status()).is_success() {
             return Err(LLMClientError::FailedToGetResponse);
         }
 

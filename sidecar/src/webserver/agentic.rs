@@ -808,7 +808,7 @@ pub async fn code_editing(
         let cloned_request_id = request_id.clone();
         let cloned_tracker = app.anchored_request_tracker.clone();
         let cloned_user_query = user_query.clone();
-        let cloned_anchored_symbols = anchored_symbols.clone();
+        let _cloned_anchored_symbols = anchored_symbols.clone();
         let _cloned_user_provided_context = user_provided_context.clone();
 
         if !symbols_to_anchor.is_empty() {
@@ -932,8 +932,6 @@ pub async fn code_editing(
                     .collect::<Vec<_>>()
                     .await;
 
-                dbg!(&anchored_symbols_with_contents);
-
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
                     reference_symbols.clone(),
@@ -953,6 +951,7 @@ pub async fn code_editing(
                 match response {
                     Ok(ToolOutput::ReferencesFilter(response)) => {
                         let answer = response.answer();
+                        println!("answer: {}", &answer);
                         let _ = ui_sender.send(UIEventWithID::filter_reference_description(
                             cloned_request_id.clone(),
                             answer,

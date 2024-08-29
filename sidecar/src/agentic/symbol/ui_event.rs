@@ -4,11 +4,7 @@
 
 use std::collections::HashMap;
 
-use gix::reference;
-
-use crate::{
-    agentic::tool::lsp::gotoreferences::ReferenceLocation, chunking::text_document::Range,
-};
+use crate::chunking::text_document::Range;
 
 use super::{
     identifier::SymbolIdentifier,

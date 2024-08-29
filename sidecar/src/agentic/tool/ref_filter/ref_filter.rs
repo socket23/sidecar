@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::{
     agentic::{
-        symbol::identifier::{LLMProperties, SymbolIdentifier},
+        symbol::identifier::LLMProperties,
         tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     },
     chunking::types::OutlineNode,

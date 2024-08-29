@@ -75,8 +75,6 @@ struct AnchoredEditingMetadata {
     message_properties: SymbolEventMessageProperties,
     // These are the symbols where we are focussed on right now in the selection
     anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
-    // the context provided by the user
-    user_context: Option<String>,
     // we also want to store the original content of the files which were mentioned
     // before we started editing
     previous_file_content: HashMap<String, String>,
@@ -88,14 +86,12 @@ impl AnchoredEditingMetadata {
     pub fn new(
         message_properties: SymbolEventMessageProperties,
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
-        user_context: Option<String>,
         previous_file_content: HashMap<String, String>,
         references: Vec<ReferenceLocation>,
     ) -> Self {
         Self {
             message_properties,
             anchored_symbols,
-            user_context,
             previous_file_content,
             references,
         }
@@ -657,13 +653,18 @@ pub async fn code_sculpting(
         let symbol_manager = app.symbol_manager.clone();
         let join_handle = tokio::spawn(async move {
             let anchored_symbols = anchor_properties.anchored_symbols;
-            let user_context = anchor_properties.user_context;
             let message_properties = anchor_properties.message_properties;
             let _ = symbol_manager
                 .anchor_edits(
                     instruction,
                     anchored_symbols,
-                    user_context,
+                    // do not send user context on iteration since the symbols are already
+                    // selected
+                    // we are iterating on a new version of the request over here
+                    // https://app.parea.ai/logs/detailed/f07dee13-d207-49d5-9620-a942ca94d1d3
+                    // yet we were getting the first user context which has been cached leading
+                    // to no new code generated
+                    None,
                     message_properties,
                 )
                 .await;

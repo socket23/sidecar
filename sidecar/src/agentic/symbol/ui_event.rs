@@ -257,6 +257,18 @@ impl UIEventWithID {
         }
     }
 
+    pub fn send_thinking_for_edit(
+        request_id: String,
+        symbol_identifier: SymbolIdentifier,
+        thinking: String,
+        edit_request_id: String,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::thinking_for_edit(symbol_identifier, thinking, edit_request_id))
+        }
+    }
+
     pub fn found_reference(request_id: String, fs_file_path: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -400,6 +412,13 @@ pub enum SymbolEventEditRequest {
     EditCode(EditedCodeForEditRequest),
     CodeCorrectionTool(CodeCorrectionToolSelection),
     EditCodeStreaming(EditedCodeStreamingRequest),
+    ThinkingForEdit(ThinkingForEditRequest),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ThinkingForEditRequest {
+    edit_request_id: String,
+    thinking: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -511,6 +530,20 @@ impl SymbolEventSubStepRequest {
                     event: EditedCodeStreamingEvent::End,
                 },
             )),
+        }
+    }
+
+    pub fn thinking_for_edit(
+        symbol_identifier: SymbolIdentifier,
+        thinking: String,
+        edit_request_id: String,
+    ) -> Self {
+        Self {
+            symbol_identifier,
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::ThinkingForEdit(ThinkingForEditRequest {
+                edit_request_id,
+                thinking,
+            }))
         }
     }
 

@@ -65,16 +65,18 @@ impl ReferenceFilterRequest {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReferenceFilterResponse {
-    references: Vec<ReferenceLocation>,
+    answer: String,
 }
 
 impl ReferenceFilterResponse {
-    pub fn new(references: Vec<ReferenceLocation>) -> Self {
-        Self { references }
+    pub fn new(answer: &str) -> Self {
+        Self {
+            answer: answer.to_string(),
+        }
     }
 
-    pub fn references(&self) -> &[ReferenceLocation] {
-        &self.references
+    pub fn answer(&self) -> &str {
+        &self.answer
     }
 }
 
@@ -136,8 +138,6 @@ Your job is to consider the references that will also need to change based on th
 
 Reply in the following format:
 <reply>
-<response>
-</response>
 </reply>"#
         )
     }
@@ -183,8 +183,20 @@ Reply in the following format:
                     format!("{} in {}\n{}", name, fs_file_path, content)
                 })
                 .collect::<Vec<_>>()
-                .join("\n"),
+                .join("\n\n=========\n"),
         )
+    }
+
+    pub fn parse_response(response: &str) -> String {
+        let answer = response
+            .lines()
+            .skip_while(|l| !l.contains("<reply>"))
+            .skip(1)
+            .take_while(|l| !l.contains("</reply>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        answer
     }
 }
 
@@ -224,8 +236,13 @@ impl Tool for ReferenceFilterBroker {
             .await
             .map_err(|e| ToolError::LLMClientError(e))?;
 
-        dbg!(&response);
+        // this may need to become more sophisticated later, but we roll for now
+        let answer = ReferenceFilterBroker::parse_response(&response);
 
-        todo!();
+        println!("answer: {}", &answer);
+
+        Ok(ToolOutput::ReferencesFilter(ReferenceFilterResponse::new(
+            &answer,
+        )))
     }
 }

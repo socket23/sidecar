@@ -6475,7 +6475,7 @@ FILEPATH: {fs_file_path}
         path: String,
         symbol: String,
         message_properties: SymbolEventMessageProperties,
-        request_id: String,
+        _request_id: String,
     ) -> Vec<ReferenceLocation> {
         let filtered_nodes = self
             .get_ouline_nodes_grouped_fresh(&path, message_properties.clone())
@@ -6494,7 +6494,6 @@ FILEPATH: {fs_file_path}
         let reference_locations = stream::iter(filtered_nodes.into_iter().map(|node| {
             let path = path.clone();
             let message_properties = Arc::clone(&message_properties);
-            let request_id = request_id.clone();
 
             println!(
                 "toolbox::get_symbol_references::go_to_references({})",
@@ -6511,27 +6510,7 @@ FILEPATH: {fs_file_path}
                     )
                     .await
                 {
-                    Ok(refs) => {
-                        let locations = refs.locations();
-
-                        println!(
-                            "reference locations found for {}: {}",
-                            node.name(),
-                            &locations.len()
-                        );
-
-                        for location in &locations {
-                            // this is where we send UI events for a found reference
-                            let _ = message_properties.ui_sender().send(
-                                UIEventWithID::found_reference(
-                                    request_id.clone(),
-                                    location.fs_file_path().to_string(),
-                                ),
-                            );
-                        }
-
-                        locations
-                    }
+                    Ok(refs) => refs.locations(),
                     Err(_) => Vec::new(),
                 }
             }

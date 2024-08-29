@@ -833,12 +833,14 @@ pub async fn code_editing(
                         println!("getting references for {}-{}", &path, &symbol_name);
 
                         // should I async move this?
-                        cloned_toolbox.get_symbol_references(
+                        let references = cloned_toolbox.get_symbol_references(
                             path,
                             symbol_name,
                             cloned_message_properties.clone(),
                             cloned_request_id.clone(),
-                        )
+                        );
+
+                        references
                     })
                     .buffer_unordered(100)
                     .collect::<Vec<_>>()
@@ -849,6 +851,21 @@ pub async fn code_editing(
 
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
+
+                let grouped: HashMap<String, usize> =
+                    references
+                        .clone()
+                        .into_iter()
+                        .fold(HashMap::new(), |mut acc, location| {
+                            acc.entry(location.fs_file_path().to_string())
+                                .and_modify(|count| *count += 1)
+                                .or_insert(1);
+                            acc
+                        });
+
+                let _ = cloned_message_properties.clone().ui_sender().send(
+                    UIEventWithID::found_reference(cloned_request_id.clone(), grouped),
+                );
 
                 let reference_symbols_timer = Instant::now();
                 // now get the symbols for each reference!
@@ -868,9 +885,13 @@ pub async fn code_editing(
                 let llm_broker = app.llm_broker;
 
                 let llm_properties = LLMProperties::new(
-                    LLMType::ClaudeSonnet,
-                    LLMProvider::Anthropic,
-                    LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                    LLMType::GeminiProFlash,
+                    LLMProvider::GoogleAIStudio,
+                    llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(
+                        GoogleAIStudioKey::new(
+                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                        ),
+                    ),
                 );
 
                 let reference_filter_broker =
@@ -892,19 +913,28 @@ pub async fn code_editing(
 
                 let ui_sender = cloned_message_properties.clone().ui_sender();
 
-                if let Ok(ToolOutput::ReferencesFilter(response)) = response {
-                    let answer = response.answer();
-
-                    let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-                        cloned_request_id.clone(),
-                        answer,
-                    ));
-                } else {
-                    // so the IDE has at least something to show.
-                    let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-                        cloned_request_id.clone(),
-                        "Something went wrong, nothing to see here...",
-                    ));
+                match response {
+                    Ok(ToolOutput::ReferencesFilter(response)) => {
+                        let answer = response.answer();
+                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                            cloned_request_id.clone(),
+                            answer,
+                        ));
+                    }
+                    Ok(_) => {
+                        // Handle unexpected ToolOutput variant
+                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                            cloned_request_id.clone(),
+                            "Something went wrong...",
+                        ));
+                    }
+                    Err(e) => {
+                        eprintln!("Error processing response: {:?}", e);
+                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                            cloned_request_id.clone(),
+                            "Something went wrong...",
+                        ));
+                    }
                 }
 
                 let _ = cloned_tracker

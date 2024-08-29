@@ -17,7 +17,7 @@ use crate::{
 pub struct ReferenceFilterRequest {
     user_instruction: String,
     reference_outlines: Vec<OutlineNode>,
-    anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+    anchored_symbols: Vec<(String, String, String)>,
     llm_properties: LLMProperties,
     root_id: String,
 }
@@ -26,7 +26,7 @@ impl ReferenceFilterRequest {
     pub fn new(
         user_instruction: String,
         reference_outlines: Vec<OutlineNode>,
-        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        anchored_symbols: Vec<(String, String, String)>, // consider naming these
         llm_properties: LLMProperties,
         root_id: String,
     ) -> Self {
@@ -51,7 +51,7 @@ impl ReferenceFilterRequest {
         &self.llm_properties
     }
 
-    pub fn anchored_symbols(&self) -> &[(SymbolIdentifier, Vec<String>)] {
+    pub fn anchored_symbols(&self) -> &[(String, String, String)] {
         &self.anchored_symbols
     }
 
@@ -161,15 +161,8 @@ Reply in the following format:
             user_query,
             anchored_symbols
                 .iter()
-                .map(|symbol| {
-                    let identifier = symbol.0.clone();
-                    let fs_file_path = identifier.fs_file_path();
-                    let symbol_name = identifier.symbol_name();
-
-                    match fs_file_path {
-                        Some(path) => format!("{} - {}", path, symbol_name),
-                        None => symbol_name.to_string(),
-                    }
+                .map(|(symbol_name, fs_file_path, contents)| {
+                    format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
                 })
                 .collect::<Vec<_>>()
                 .join("\n"),

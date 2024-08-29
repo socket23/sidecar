@@ -120,6 +120,7 @@ Omit those that do not need to change.
         )
     }
 
+    // consider variants: tiny, regular, in-depth
     pub fn system_message(&self) -> String {
         format!(
             r#"You are an expert software engineer. 
@@ -131,7 +132,9 @@ You will be provided with:
 
 The selection of code may change based on the user query.
 
-Your job is to consider the references that will also need to change based on the user query changes, and respond with a concise summary describing what needs to change and why.
+Your job is to consider the references that will also need to change based on the user query changes, and respond with a concise sentence describing what needs to change and why.
+
+Try your best to keep it one sentence only.
 
 Reply in the following format:
 <reply>
@@ -180,7 +183,7 @@ Reply in the following format:
                     format!("{} in {}\n{}", name, fs_file_path, content)
                 })
                 .collect::<Vec<_>>()
-                .join("\n\n=========\n"),
+                .join("\n\n=========\n\n"),
         )
     }
 

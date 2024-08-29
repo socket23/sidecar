@@ -424,6 +424,13 @@ impl Tool for SearchAndReplaceEditing {
                             if let Some(delta) = delta {
                                 // we have some delta over here which we can process
                                 search_and_replace_accumulator.add_delta(delta.to_owned());
+                                // send over the thinking as soon as we get a delta over here
+                                let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
+                                    root_request_id.to_owned(),
+                                    symbol_identifier.clone(),
+                                    search_and_replace_accumulator.answer_up_until_now.to_owned(),
+                                    edit_request_id.to_owned(),
+                                ));
                             }
                         }
                         None => {

@@ -26,6 +26,7 @@ use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::lsp::gotoreferences::ReferenceLocation;
+use crate::agentic::tool::output::ToolOutput;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
 use crate::{
@@ -891,7 +892,22 @@ pub async fn code_editing(
                     .invoke(ToolInput::ReferencesFilter(request))
                     .await;
 
-                todo!();
+                let ui_sender = cloned_message_properties.clone().ui_sender();
+
+                if let Ok(ToolOutput::ReferencesFilter(response)) = response {
+                    let answer = response.answer();
+
+                    let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                        cloned_request_id.clone(),
+                        answer,
+                    ));
+                } else {
+                    // so the IDE has at least something to show.
+                    let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                        cloned_request_id.clone(),
+                        "Something went wrong, nothing to see here...",
+                    ));
+                }
 
                 let _ = cloned_tracker
                     .add_reference(&cloned_request_id, &references)

@@ -7967,7 +7967,10 @@ FILEPATH: {fs_file_path}
                     outline_node.name(),
                     outline_node.outline_node_type()
                 );
-                if outline_node.is_function() || outline_node.is_class_definition() {
+                if outline_node.is_function()
+                    || outline_node.is_class_definition()
+                    || (language_config.is_single_implementation_block_language())
+                {
                     // then its a single unit of work, so its a bit easier
                     (
                         SymbolIdentifier::with_file_path(
@@ -8044,7 +8047,10 @@ FILEPATH: {fs_file_path}
                         // this is a spcial case where the child symbol is of the same name as the symbol name
                         // representing a class definition or function
                         let possible_outline_node = outline_nodes.iter().find(|outline_node| {
-                            outline_node.is_class_definition() || outline_node.is_function()
+                            outline_node.is_class_definition()
+                                || outline_node.is_function()
+                                // if we are in python or js land, then its a single implementation block language
+                                || language_config.is_single_implementation_block_language()
                         });
                         if let Some(outline_node) = possible_outline_node {
                             Some(SymbolToEdit::new(

@@ -140,6 +140,11 @@ impl TSLanguageConfig {
         self.language_ids.contains(&"javascript") || self.language_ids.contains(&"typescript")
     }
 
+    /// If the language is of type where there is a single implementation block making the changes
+    pub fn is_single_implementation_block_language(&self) -> bool {
+        self.is_python() || self.is_js_like()
+    }
+
     pub fn get_language(&self) -> Option<String> {
         self.language_ids.first().map(|s| s.to_string())
     }

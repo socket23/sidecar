@@ -6,14 +6,17 @@ use llm_client::{
 use std::sync::Arc;
 
 use crate::agentic::{
-    symbol::identifier::{LLMProperties, SymbolIdentifier},
-    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    symbol::identifier::LLMProperties,
+    tool::{
+        errors::ToolError, input::ToolInput, lsp::gotoreferences::ReferenceLocation,
+        output::ToolOutput, r#type::Tool,
+    },
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReferenceFilterRequest {
     user_instruction: String,
-    references: Vec<SymbolIdentifier>, // todo(zi) this needs to be considered.
+    references: Vec<ReferenceLocation>,
     llm_properties: LLMProperties,
     root_id: String,
 }
@@ -21,7 +24,7 @@ pub struct ReferenceFilterRequest {
 impl ReferenceFilterRequest {
     pub fn new(
         user_instruction: String,
-        references: Vec<SymbolIdentifier>,
+        references: Vec<ReferenceLocation>,
         llm_properties: LLMProperties,
         root_id: String,
     ) -> Self {
@@ -33,7 +36,7 @@ impl ReferenceFilterRequest {
         }
     }
 
-    pub fn references(&self) -> &[SymbolIdentifier] {
+    pub fn references(&self) -> &[ReferenceLocation] {
         &self.references
     }
 
@@ -52,15 +55,15 @@ impl ReferenceFilterRequest {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReferenceFilterResponse {
-    references: Vec<SymbolIdentifier>,
+    references: Vec<ReferenceLocation>,
 }
 
 impl ReferenceFilterResponse {
-    pub fn new(references: Vec<SymbolIdentifier>) -> Self {
+    pub fn new(references: Vec<ReferenceLocation>) -> Self {
         Self { references }
     }
 
-    pub fn references(&self) -> &[SymbolIdentifier] {
+    pub fn references(&self) -> &[ReferenceLocation] {
         &self.references
     }
 }

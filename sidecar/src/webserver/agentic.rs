@@ -800,12 +800,14 @@ pub async fn code_editing(
             .track_new_request(&request_id, None, Some(editing_metadata))
             .await;
 
+        // shit this should be cleaned up
         let cloned_symbols_to_anchor = symbols_to_anchor.clone();
         let cloned_message_properties = message_properties.clone();
         let cloned_toolbox = app.tool_box.clone();
         let cloned_request_id = request_id.clone();
         let cloned_tracker = app.anchored_request_tracker.clone();
         let cloned_user_query = user_query.clone();
+        let cloned_anchored_symbols = anchored_symbols.clone();
         let _cloned_user_provided_context = user_provided_context.clone();
 
         if !symbols_to_anchor.is_empty() {
@@ -828,6 +830,8 @@ pub async fn code_editing(
                     .map(|(path, symbol_name)| {
                         // for each symbol in user selection
                         println!("getting references for {}-{}", &path, &symbol_name);
+
+                        // should I async move this?
                         cloned_toolbox.get_symbol_references(
                             path,
                             symbol_name,
@@ -845,6 +849,25 @@ pub async fn code_editing(
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
 
+                // now get the symbols for each reference!
+                // btw my mind is fried from async/move etc...RETURN TO UNDERSTAND THIS
+                let reference_symbols =
+                    stream::iter(references.clone().into_iter().map(|reference| {
+                        let fs_file_path = reference.fs_file_path().to_owned();
+                        let range = reference.range().to_owned();
+                        let toolbox = Arc::clone(&cloned_toolbox);
+
+                        // ...
+                        async move { toolbox.symbol_in_range(&fs_file_path, &range).await }
+                    }))
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .filter_map(|symbol| symbol)
+                    .flatten()
+                    .collect::<Vec<_>>();
+
                 let llm_broker = app.llm_broker;
 
                 let llm_properties = LLMProperties::new(
@@ -858,7 +881,8 @@ pub async fn code_editing(
 
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
-                    references.clone(),
+                    reference_symbols.clone(),
+                    cloned_anchored_symbols.clone(),
                     llm_properties.clone(),
                     cloned_request_id.clone(),
                 );

@@ -13,12 +13,18 @@ use crate::{
     chunking::types::OutlineNode,
 };
 
+/// Represents a request for filtering references in the codebase.
 #[derive(Debug, Clone)]
 pub struct ReferenceFilterRequest {
+    /// The instruction or query provided by the user.
     user_instruction: String,
+    /// A collection of outline nodes representing the references to be filtered.
     reference_outlines: Vec<OutlineNode>,
+    /// A list of anchored symbols with their associated strings.
     anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+    /// Properties for the Language Model to be used.
     llm_properties: LLMProperties,
+    /// The unique identifier for the root request.
     root_id: String,
 }
 

@@ -808,7 +808,7 @@ pub async fn code_editing(
         let cloned_request_id = request_id.clone();
         let cloned_tracker = app.anchored_request_tracker.clone();
         let cloned_user_query = user_query.clone();
-        let cloned_anchored_symbols = anchored_symbols.clone();
+        let _cloned_anchored_symbols = anchored_symbols.clone();
         let _cloned_user_provided_context = user_provided_context.clone();
 
         if !symbols_to_anchor.is_empty() {
@@ -897,10 +897,45 @@ pub async fn code_editing(
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
+                // yes this looks like spaghetti but it works
+                let anchored_symbols_with_contents = stream::iter(cloned_symbols_to_anchor.clone())
+                    .map(|(identifier, _)| {
+                        let symbol_name = identifier.symbol_name().to_string();
+                        let fs_file_path = identifier.fs_file_path();
+                        let tool_box = cloned_toolbox.clone();
+                        let message_properties = cloned_message_properties.clone();
+
+                        (symbol_name, fs_file_path, tool_box, message_properties)
+                    })
+                    .map(
+                        |(symbol_name, fs_file_path, tool_box, message_properties)| async move {
+                            if let Some(fs_file_path) = fs_file_path {
+                                let response = tool_box
+                                    .outline_nodes_for_symbol(
+                                        &fs_file_path,
+                                        &symbol_name,
+                                        message_properties,
+                                    )
+                                    .await;
+
+                                if let Ok(outline_nodes) = response {
+                                    (symbol_name, fs_file_path, outline_nodes)
+                                } else {
+                                    (symbol_name, fs_file_path, String::new())
+                                }
+                            } else {
+                                (symbol_name, String::new(), String::new())
+                            }
+                        },
+                    )
+                    .buffer_unordered(100) // Adjust the number of concurrent tasks as needed
+                    .collect::<Vec<_>>()
+                    .await;
+
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
                     reference_symbols.clone(),
-                    cloned_anchored_symbols.clone(),
+                    anchored_symbols_with_contents.clone(),
                     llm_properties.clone(),
                     cloned_request_id.clone(),
                 );
@@ -916,6 +951,7 @@ pub async fn code_editing(
                 match response {
                     Ok(ToolOutput::ReferencesFilter(response)) => {
                         let answer = response.answer();
+                        println!("answer: {}", &answer);
                         let _ = ui_sender.send(UIEventWithID::filter_reference_description(
                             cloned_request_id.clone(),
                             answer,

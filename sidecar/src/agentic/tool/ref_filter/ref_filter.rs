@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::{
     agentic::{
-        symbol::identifier::{LLMProperties, SymbolIdentifier},
+        symbol::identifier::LLMProperties,
         tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     },
     chunking::types::OutlineNode,
@@ -20,9 +20,7 @@ pub struct ReferenceFilterRequest {
     user_instruction: String,
     /// A collection of outline nodes representing the references to be filtered.
     reference_outlines: Vec<OutlineNode>,
-    /// A list of anchored symbols with their associated strings.
-    anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
-    /// Properties for the Language Model to be used.
+    anchored_symbols: Vec<(String, String, String)>,
     llm_properties: LLMProperties,
     /// The unique identifier for the root request.
     root_id: String,
@@ -32,7 +30,7 @@ impl ReferenceFilterRequest {
     pub fn new(
         user_instruction: String,
         reference_outlines: Vec<OutlineNode>,
-        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        anchored_symbols: Vec<(String, String, String)>, // consider naming these
         llm_properties: LLMProperties,
         root_id: String,
     ) -> Self {
@@ -57,7 +55,7 @@ impl ReferenceFilterRequest {
         &self.llm_properties
     }
 
-    pub fn anchored_symbols(&self) -> &[(SymbolIdentifier, Vec<String>)] {
+    pub fn anchored_symbols(&self) -> &[(String, String, String)] {
         &self.anchored_symbols
     }
 
@@ -120,9 +118,7 @@ Omit those that do not need to change.
 <ref>
 </ref>
 </response>
-</reply>
-            
-            "#
+</reply>"#
         )
     }
 
@@ -139,19 +135,19 @@ Omit those that do not need to change.
 - - Changing code from sync to async
 - - and many more such cases which changes the structure and the meaning of the code, as these can be breaking changes.
 
-Reply in the following format:
+Your response must be in the following format:
+
 <reply>
+your single sentence
 </reply>"#
         )
     }
 
-    // todo(zi): prettify this
     pub fn user_message(&self, request: &ReferenceFilterRequest) -> String {
         let references = request.reference_outlines();
         let user_query = request.user_instruction();
         let anchored_symbols = request.anchored_symbols();
 
-        // get symbol in range for each reference.
         format!(
             r#"<user_query>
 {}
@@ -167,15 +163,8 @@ Reply in the following format:
             user_query,
             anchored_symbols
                 .iter()
-                .map(|symbol| {
-                    let identifier = symbol.0.clone();
-                    let fs_file_path = identifier.fs_file_path();
-                    let symbol_name = identifier.symbol_name();
-
-                    match fs_file_path {
-                        Some(path) => format!("{} - {}", path, symbol_name),
-                        None => symbol_name.to_string(),
-                    }
+                .map(|(symbol_name, fs_file_path, contents)| {
+                    format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
                 })
                 .collect::<Vec<_>>()
                 .join("\n"),
@@ -194,6 +183,7 @@ Reply in the following format:
     }
 
     pub fn parse_response(response: &str) -> String {
+        println!("parse_response::response: {}", response);
         let answer = response
             .lines()
             .skip_while(|l| !l.contains("<reply>"))

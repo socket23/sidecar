@@ -119,10 +119,7 @@ impl GoogleAIStdioClient {
                         parts: accumulated_messages
                             .iter()
                             .map(|message| {
-                                HashMap::from([(
-                                    "text".to_owned(),
-                                    message.content().to_owned(),
-                                )])
+                                HashMap::from([("text".to_owned(), message.content().to_owned())])
                             })
                             .collect(),
                     });
@@ -296,8 +293,6 @@ impl LLMClient for GoogleAIStdioClient {
         }
         let api_key = api_key.expect("to be present");
 
-        println!("google_ai_studio.request:{:?}", serde_json::to_string(&request).expect("to work"));
-
         // now we need to send a request to the gemini pro api here
         let response = self
             .client
@@ -306,8 +301,7 @@ impl LLMClient for GoogleAIStdioClient {
             .json(&request)
             .send()
             .await?;
-        println!("googl_ai_studio.response_info");
-        if !dbg!(response.status()).is_success() {
+        if !response.status().is_success() {
             return Err(LLMClientError::FailedToGetResponse);
         }
 

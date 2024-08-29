@@ -853,22 +853,12 @@ pub async fn code_editing(
                 let reference_symbols_timer = Instant::now();
                 // now get the symbols for each reference!
                 // btw my mind is fried from async/move etc...RETURN TO UNDERSTAND THIS
-                let reference_symbols =
-                    stream::iter(references.clone().into_iter().map(|reference| {
-                        let fs_file_path = reference.fs_file_path().to_owned();
-                        let range = reference.range().to_owned();
-                        let toolbox = Arc::clone(&cloned_toolbox);
-
-                        // ...
-                        async move { toolbox.symbol_in_range(&fs_file_path, &range).await }
-                    }))
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await
-                    .into_iter()
-                    .filter_map(|symbol| symbol)
-                    .flatten()
-                    .collect::<Vec<_>>();
+                let reference_symbols = cloned_toolbox
+                    .outline_nodes_for_references(
+                        references.as_slice(),
+                        cloned_message_properties.clone(),
+                    )
+                    .await;
 
                 println!(
                     "reference::symbols::iter::elapsed({:?})",

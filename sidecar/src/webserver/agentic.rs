@@ -10,7 +10,7 @@ use llm_client::{
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
@@ -850,6 +850,7 @@ pub async fn code_editing(
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
 
+                let reference_symbols_timer = Instant::now();
                 // now get the symbols for each reference!
                 // btw my mind is fried from async/move etc...RETURN TO UNDERSTAND THIS
                 let reference_symbols =
@@ -868,6 +869,11 @@ pub async fn code_editing(
                     .filter_map(|symbol| symbol)
                     .flatten()
                     .collect::<Vec<_>>();
+
+                println!(
+                    "reference::symbols::iter::elapsed({:?})",
+                    reference_symbols_timer.elapsed()
+                );
 
                 let llm_broker = app.llm_broker;
 
@@ -888,9 +894,11 @@ pub async fn code_editing(
                     cloned_request_id.clone(),
                 );
 
+                let llm_time = Instant::now();
                 let response = reference_filter_broker
                     .invoke(ToolInput::ReferencesFilter(request))
                     .await;
+                println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
 
                 let ui_sender = cloned_message_properties.clone().ui_sender();
 
@@ -915,11 +923,13 @@ pub async fn code_editing(
 
                 references
             });
+            // end of async task
 
             // clone, clone, clone
             let symbol_manager = app.symbol_manager.clone();
             let cloned_message_properties = message_properties.clone();
             let cloned_user_context = user_provided_context.clone();
+
             let join_handle = tokio::spawn(async move {
                 let _ = symbol_manager
                     .anchor_edits(
@@ -931,7 +941,7 @@ pub async fn code_editing(
                     .await;
             });
 
-            // adds anchor_edits join_handle to existing request_id
+            // assumption here that previous async task will have already be tracking the request
             let _ = app
                 .anchored_request_tracker
                 .add_join_handle(&request_id, join_handle)

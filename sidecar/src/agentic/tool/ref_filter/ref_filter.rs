@@ -8,10 +8,7 @@ use std::sync::Arc;
 use crate::{
     agentic::{
         symbol::identifier::{LLMProperties, SymbolIdentifier},
-        tool::{
-            errors::ToolError, input::ToolInput, lsp::gotoreferences::ReferenceLocation,
-            output::ToolOutput, r#type::Tool,
-        },
+        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     },
     chunking::types::OutlineNode,
 };
@@ -82,14 +79,14 @@ impl ReferenceFilterResponse {
 
 pub struct ReferenceFilterBroker {
     llm_client: Arc<LLMBroker>,
-    fail_over_llm: LLMProperties,
+    _fail_over_llm: LLMProperties,
 }
 
 impl ReferenceFilterBroker {
     pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
         Self {
             llm_client,
-            fail_over_llm,
+            _fail_over_llm: fail_over_llm,
         }
     }
 

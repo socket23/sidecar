@@ -5,18 +5,22 @@ use llm_client::{
 };
 use std::sync::Arc;
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{
-        errors::ToolError, input::ToolInput, lsp::gotoreferences::ReferenceLocation,
-        output::ToolOutput, r#type::Tool,
+use crate::{
+    agentic::{
+        symbol::identifier::{LLMProperties, SymbolIdentifier},
+        tool::{
+            errors::ToolError, input::ToolInput, lsp::gotoreferences::ReferenceLocation,
+            output::ToolOutput, r#type::Tool,
+        },
     },
+    chunking::types::OutlineNode,
 };
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct ReferenceFilterRequest {
     user_instruction: String,
-    references: Vec<ReferenceLocation>,
+    reference_outlines: Vec<OutlineNode>,
+    anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
     llm_properties: LLMProperties,
     root_id: String,
 }
@@ -24,20 +28,22 @@ pub struct ReferenceFilterRequest {
 impl ReferenceFilterRequest {
     pub fn new(
         user_instruction: String,
-        references: Vec<ReferenceLocation>,
+        reference_outlines: Vec<OutlineNode>,
+        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
         llm_properties: LLMProperties,
         root_id: String,
     ) -> Self {
         Self {
             user_instruction,
-            references,
+            reference_outlines,
             llm_properties,
+            anchored_symbols,
             root_id,
         }
     }
 
-    pub fn references(&self) -> &[ReferenceLocation] {
-        &self.references
+    pub fn reference_outlines(&self) -> &[OutlineNode] {
+        &self.reference_outlines
     }
 
     pub fn user_instruction(&self) -> &str {
@@ -46,6 +52,10 @@ impl ReferenceFilterRequest {
 
     pub fn llm_properties(&self) -> &LLMProperties {
         &self.llm_properties
+    }
+
+    pub fn anchored_symbols(&self) -> &[(SymbolIdentifier, Vec<String>)] {
+        &self.anchored_symbols
     }
 
     pub fn root_id(&self) -> &str {
@@ -81,14 +91,100 @@ impl ReferenceFilterBroker {
         }
     }
 
-    pub fn system_message(&self) -> String {
-        format!(r#"test"#)
+    pub fn later_system_message(&self) -> String {
+        format!(
+            r#"You are an expert software engineer. 
+
+You will be provided with:
+1. a user query
+2. a selection of code
+3. the references of the symbols in the selection
+
+The selection of code may change based on the user query.
+
+Your job is to select the references that will also need to change based on the user query changes.
+
+Omit those that do not need to change.
+
+<reply>
+<response>
+<ref>
+</ref>
+<ref>
+</ref>
+<ref>
+</ref>
+</response>
+</reply>
+            
+            "#
+        )
     }
 
+    pub fn system_message(&self) -> String {
+        format!(
+            r#"You are an expert software engineer. 
+
+You will be provided with:
+1. a user query
+2. a selection of code
+3. the references of the symbols in the selection
+
+The selection of code may change based on the user query.
+
+Your job is to consider the references that will also need to change based on the user query changes, and respond with a concise summary describing what needs to change and why.
+
+Reply in the following format:
+<reply>
+<response>
+</response>
+</reply>"#
+        )
+    }
+
+    // todo(zi): prettify this
     pub fn user_message(&self, request: &ReferenceFilterRequest) -> String {
-        let references = request.references();
+        let references = request.reference_outlines();
         let user_query = request.user_instruction();
-        format!(r#"test"#)
+        let anchored_symbols = request.anchored_symbols();
+
+        // get symbol in range for each reference.
+        format!(
+            r#"# user_query: {}
+
+# code selection: 
+{}
+    
+# references: 
+{}        
+        "#,
+            user_query,
+            anchored_symbols
+                .iter()
+                .map(|symbol| {
+                    let identifier = symbol.0.clone();
+                    let fs_file_path = identifier.fs_file_path();
+                    let symbol_name = identifier.symbol_name();
+
+                    match fs_file_path {
+                        Some(path) => format!("{} - {}", path, symbol_name),
+                        None => symbol_name.to_string(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+            references
+                .iter()
+                .map(|reference| {
+                    let name = reference.name();
+                    let fs_file_path = reference.fs_file_path();
+                    let content = reference.content().content();
+
+                    format!("{} in {}\n{}", name, fs_file_path, content)
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
     }
 }
 

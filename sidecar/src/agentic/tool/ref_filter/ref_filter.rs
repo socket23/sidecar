@@ -114,9 +114,7 @@ Omit those that do not need to change.
 <ref>
 </ref>
 </response>
-</reply>
-            
-            "#
+</reply>"#
         )
     }
 
@@ -133,19 +131,19 @@ Omit those that do not need to change.
 - - Changing code from sync to async
 - - and many more such cases which changes the structure and the meaning of the code, as these can be breaking changes.
 
-Reply in the following format:
+Your response must be in the following format:
+
 <reply>
+your single sentence
 </reply>"#
         )
     }
 
-    // todo(zi): prettify this
     pub fn user_message(&self, request: &ReferenceFilterRequest) -> String {
         let references = request.reference_outlines();
         let user_query = request.user_instruction();
         let anchored_symbols = request.anchored_symbols();
 
-        // get symbol in range for each reference.
         format!(
             r#"<user_query>
 {}
@@ -181,6 +179,7 @@ Reply in the following format:
     }
 
     pub fn parse_response(response: &str) -> String {
+        println!("parse_response::response: {}", response);
         let answer = response
             .lines()
             .skip_while(|l| !l.contains("<reply>"))

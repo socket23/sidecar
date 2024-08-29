@@ -266,6 +266,15 @@ impl UIEventWithID {
             ))),
         }
     }
+
+    pub fn filter_reference_description(request_id: String, answer: &str) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceFilterDescription(
+                answer.to_string(),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -632,4 +641,5 @@ pub enum FrameworkEvent {
     OpenFile(OpenFileRequest),
     CodeIterationFinished(String),
     ReferenceFound(FoundReference),
+    ReferenceFilterDescription(String),
 }

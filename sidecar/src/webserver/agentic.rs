@@ -791,7 +791,6 @@ pub async fn code_editing(
         let editing_metadata = AnchoredEditingMetadata::new(
             message_properties.clone(),
             symbols_to_anchor.clone(),
-            user_provided_context.clone(),
             file_contents,
             vec![],
         );

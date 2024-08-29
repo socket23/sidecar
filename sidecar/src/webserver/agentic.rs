@@ -100,30 +100,6 @@ impl AnchoredEditingMetadata {
     pub fn references(&self) -> &[ReferenceLocation] {
         &self.references
     }
-
-    pub fn _add_message_property(&mut self, property: SymbolEventMessageProperties) {
-        self.message_properties = property
-    }
-
-    pub fn _add_anchored_symbols(&mut self, symbols: Vec<(SymbolIdentifier, Vec<String>)>) {
-        self.anchored_symbols.extend(symbols);
-    }
-
-    pub fn _append_user_context(&mut self, context: &str) {
-        self.user_context = match &self.user_context {
-            Some(existing) => Some(existing.to_owned() + context),
-            None => Some(context.to_owned()),
-        };
-    }
-
-    pub fn _set_file_contents(&mut self, file_path: &str, contents: &str) {
-        self.previous_file_content
-            .insert(file_path.to_string(), contents.to_string());
-    }
-
-    pub fn _add_references(&mut self, references: Vec<ReferenceLocation>) {
-        self.references.extend(references);
-    }
 }
 
 pub struct AnchoredEditingTracker {
@@ -144,19 +120,52 @@ impl AnchoredEditingTracker {
         running_requests.get(request_id).map(|data| data.clone())
     }
 
-    async fn track_new_request(
+    /// this replaces the existing references field
+    async fn add_reference(&self, request_id: &str, references: &[ReferenceLocation]) {
+        let mut running_request_properties = self.running_requests_properties.lock().await;
+
+        if let Some(metadata) = running_request_properties.get_mut(request_id) {
+            metadata.references = references.to_vec();
+        } else {
+            println!("No metadata found for request_id: {}", request_id);
+        }
+    }
+
+    // consider better error handling
+    pub async fn add_join_handle(
         &self,
         request_id: &str,
         join_handle: JoinHandle<()>,
-        editing_metadata: AnchoredEditingMetadata,
+    ) -> Result<(), String> {
+        let mut running_requests = self.running_requests.lock().await;
+        if running_requests.contains_key(request_id) {
+            running_requests.insert(request_id.to_owned(), join_handle);
+            Ok(())
+        } else {
+            Err(format!(
+                "No existing request found for request_id: {}",
+                request_id
+            ))
+        }
+    }
+
+    async fn track_new_request(
+        &self,
+        request_id: &str,
+        join_handle: Option<JoinHandle<()>>, // Optional to allow asynchronous composition of requests
+        editing_metadata: Option<AnchoredEditingMetadata>, // Optional to allow asynchronous composition of requests
     ) {
         {
             let mut running_requests = self.running_requests.lock().await;
-            running_requests.insert(request_id.to_owned(), join_handle);
+            if let Some(join_handle) = join_handle {
+                running_requests.insert(request_id.to_owned(), join_handle);
+            }
         }
         {
             let mut running_request_properties = self.running_requests_properties.lock().await;
-            running_request_properties.insert(request_id.to_owned(), editing_metadata);
+            if let Some(metadata) = editing_metadata {
+                running_request_properties.insert(request_id.to_owned(), metadata);
+            }
         }
     }
 
@@ -735,14 +744,69 @@ pub async fn code_editing(
                 .collect::<Vec<_>>()
                 .join(",")
         );
+        let metadata_pregen = Instant::now();
+
+        // if we do not have any symbols to anchor on, then we are screwed over here
+        // we want to send the edit request directly over here cutting through
+        // the initial request parts
+        let user_provided_context = user_context.to_context_string().await.ok();
+        let possibly_changed_files = symbols_to_anchor
+            .iter()
+            .filter_map(|(symbol_identifer, _)| symbol_identifer.fs_file_path())
+            .collect::<Vec<_>>();
+        let cloned_tools = app.tool_box.clone();
+        let file_contents = stream::iter(
+            possibly_changed_files
+                .into_iter()
+                .map(|file_path| (file_path, cloned_tools.clone(), message_properties.clone())),
+        )
+        .map(|(fs_file_path, tools, message_properties)| async move {
+            let file_open_response = tools
+                .file_open(fs_file_path.to_owned(), message_properties)
+                .await;
+            file_open_response
+                .ok()
+                .map(|response| (fs_file_path, response.contents()))
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .collect::<HashMap<_, _>>();
+
+        let anchored_symbols = app
+            .tool_box
+            .symbols_to_anchor(&user_context, message_properties.clone())
+            .await
+            .unwrap_or_default();
+
+        println!("metadata_pregen::elapsed({:?})", metadata_pregen.elapsed());
+
+        let editing_metadata = AnchoredEditingMetadata::new(
+            message_properties.clone(),
+            symbols_to_anchor.clone(),
+            user_provided_context.clone(),
+            file_contents,
+            vec![],
+        );
+
+        // instantiates basic request tracker, with no join_handle, but basic metadata
+        let _ = app
+            .anchored_request_tracker
+            .track_new_request(&request_id, None, Some(editing_metadata))
+            .await;
 
         let cloned_symbols_to_anchor = symbols_to_anchor.clone();
         let cloned_message_properties = message_properties.clone();
         let cloned_toolbox = app.tool_box.clone();
         let cloned_request_id = request_id.clone();
+        let cloned_tracker = app.anchored_request_tracker.clone();
+        let _cloned_user_provided_context = user_provided_context.clone();
+
         if !symbols_to_anchor.is_empty() {
             // so this is an async task that should just chill in the background while the edits flow below continues
-            let references_join_handle = tokio::spawn(async move {
+            let _references_join_handle = tokio::spawn(async move {
                 let start = Instant::now();
 
                 // this needs to be its own async task
@@ -777,42 +841,14 @@ pub async fn code_editing(
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
 
+                // LLM Filter here.
+
+                let _ = cloned_tracker
+                    .add_reference(&cloned_request_id, &references)
+                    .await;
+
                 references
             });
-
-            // if we do not have any symbols to anchor on, then we are screwed over here
-            // we want to send the edit request directly over here cutting through
-            // the initial request parts
-            let user_provided_context = user_context.to_context_string().await.ok();
-            let possibly_changed_files = symbols_to_anchor
-                .iter()
-                .filter_map(|(symbol_identifer, _)| symbol_identifer.fs_file_path())
-                .collect::<Vec<_>>();
-            let cloned_tools = app.tool_box.clone();
-            let file_contents =
-                stream::iter(possibly_changed_files.into_iter().map(|file_path| {
-                    (file_path, cloned_tools.clone(), message_properties.clone())
-                }))
-                .map(|(fs_file_path, tools, message_properties)| async move {
-                    let file_open_response = tools
-                        .file_open(fs_file_path.to_owned(), message_properties)
-                        .await;
-                    file_open_response
-                        .ok()
-                        .map(|response| (fs_file_path, response.contents()))
-                })
-                .buffer_unordered(100)
-                .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .filter_map(|s| s)
-                .collect::<HashMap<_, _>>();
-
-            let anchored_symbols = app
-                .tool_box
-                .symbols_to_anchor(&user_context, message_properties.clone())
-                .await
-                .unwrap_or_default();
 
             // clone, clone, clone
             let symbol_manager = app.symbol_manager.clone();
@@ -829,19 +865,10 @@ pub async fn code_editing(
                     .await;
             });
 
-            // this must happen after the anchor_edits task is underway so as to not block it
-            let references = references_join_handle.await.expect("references to return");
-
-            let editing_metadata = AnchoredEditingMetadata::new(
-                message_properties,
-                symbols_to_anchor,
-                user_provided_context,
-                file_contents,
-                references, // precomputed references
-            );
+            // adds anchor_edits join_handle to existing request_id
             let _ = app
                 .anchored_request_tracker
-                .track_new_request(&request_id, join_handle, editing_metadata)
+                .add_join_handle(&request_id, join_handle)
                 .await;
 
             // todo(zi): is this check necessary?

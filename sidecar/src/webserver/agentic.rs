@@ -24,7 +24,10 @@ use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
+use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::lsp::gotoreferences::ReferenceLocation;
+use crate::agentic::tool::r#type::Tool;
+use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
 use crate::{
     agentic::{
         symbol::{
@@ -802,6 +805,7 @@ pub async fn code_editing(
         let cloned_toolbox = app.tool_box.clone();
         let cloned_request_id = request_id.clone();
         let cloned_tracker = app.anchored_request_tracker.clone();
+        let cloned_user_query = user_query.clone();
         let _cloned_user_provided_context = user_provided_context.clone();
 
         if !symbols_to_anchor.is_empty() {
@@ -841,7 +845,29 @@ pub async fn code_editing(
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
 
-                // LLM Filter here.
+                let llm_broker = app.llm_broker;
+
+                let llm_properties = LLMProperties::new(
+                    LLMType::ClaudeSonnet,
+                    LLMProvider::Anthropic,
+                    LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                );
+
+                let reference_filter_broker =
+                    ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
+
+                let request = ReferenceFilterRequest::new(
+                    cloned_user_query,
+                    references.clone(),
+                    llm_properties.clone(),
+                    cloned_request_id.clone(),
+                );
+
+                let response = reference_filter_broker
+                    .invoke(ToolInput::ReferencesFilter(request))
+                    .await;
+
+                todo!();
 
                 let _ = cloned_tracker
                     .add_reference(&cloned_request_id, &references)

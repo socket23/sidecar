@@ -9,12 +9,15 @@ use std::{sync::Arc, time::Instant};
 use crate::{
     agentic::{
         symbol::{
-            anchored::AnchoredSymbol,
+            anchored::{self, AnchoredSymbol},
             events::message_event::{SymbolEventMessage, SymbolEventMessageProperties},
             identifier::LLMProperties,
             ui_event::{RelevantReference, UIEventWithID},
         },
-        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+        tool::{
+            errors::ToolError, input::ToolInput, lsp::gotoreferences::ReferenceLocation,
+            output::ToolOutput, r#type::Tool,
+        },
     },
     chunking::types::OutlineNode,
 };
@@ -78,22 +81,16 @@ impl ReferenceFilterRequest {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename = "response")]
 pub struct ReferenceFilterResponse {
-    answer: String,
+    #[serde(rename = "reason")]
+    pub reason: String,
+    #[serde(rename = "change_required")]
+    pub change_required: String,
 }
 
-impl ReferenceFilterResponse {
-    pub fn new(answer: &str) -> Self {
-        Self {
-            answer: answer.to_string(),
-        }
-    }
-
-    pub fn answer(&self) -> &str {
-        &self.answer
-    }
-}
+impl ReferenceFilterResponse {}
 
 pub struct ReferenceFilterBroker {
     llm_client: Arc<LLMBroker>,
@@ -157,16 +154,73 @@ Omit those that do not need to change.
 Your response must be in the following format:
 
 <reply>
+<response>
 <reason>
 your single sentence
 </reason>
 <change_required>
 </change_required>
+</response>
 </reply>"#
         )
     }
 
-    pub fn user_message(&self, request: &ReferenceFilterRequest) -> Vec<String> {
+    pub fn user_message(
+        &self,
+        symbol_name: &str,
+        fs_file_path: &str,
+        contents: &str,
+        user_query: &str,
+    ) -> String {
+        format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
+    }
+
+    pub fn user_message_for_reference(
+        &self,
+        request: &ReferenceFilterRequest,
+        reference: &OutlineNode,
+    ) -> String {
+        let user_query = request.user_instruction();
+        let anchored_symbols_prompt = self.format_anchored_symbols(request.anchored_symbols());
+        let reference_content = self.format_reference_content(reference);
+
+        format!(
+            r#"<user_query>
+    {user_query}
+    </user_query>
+    
+    <code_selected>
+    {anchored_symbols_prompt}
+    </code_selected>
+    
+    <reference>
+    {reference_content}
+    </reference>"#
+        )
+    }
+
+    fn format_anchored_symbols(&self, anchored_symbols: &[AnchoredSymbol]) -> String {
+        anchored_symbols
+            .iter()
+            .filter_map(|symbol| {
+                symbol
+                    .fs_file_path()
+                    .map(|path| format!("{} in {}:\n{}", symbol.name(), path, symbol.content()))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn format_reference_content(&self, reference: &OutlineNode) -> String {
+        format!(
+            "{} in {}\n{}",
+            reference.name(),
+            reference.fs_file_path(),
+            reference.content().content()
+        )
+    }
+
+    pub fn user_message_ve(&self, request: &ReferenceFilterRequest) -> Vec<String> {
         let references = request.reference_outlines();
         let user_query = request.user_instruction();
         let anchored_symbols = request.anchored_symbols();
@@ -233,7 +287,15 @@ impl Tool for ReferenceFilterBroker {
         let root_request_id = context.root_id.to_owned();
 
         let system_message = LLMClientMessage::system(self.system_message());
-        let user_messages = self.user_message(&context);
+        let user_messages = self.user_message_ve(&context);
+
+        // iterate by references
+
+        let references = context.reference_outlines();
+
+        // let _ = stream::iter(references.into_iter().map(|reference| {
+        //     let user_message = self.user_message();
+        // }))
 
         let _ = stream::iter(user_messages.into_iter().map(|user_message| {
             (
@@ -254,7 +316,7 @@ impl Tool for ReferenceFilterBroker {
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
                 let start = Instant::now();
 
-                let _response = llm_client
+                let response = llm_client
                     .stream_completion(
                         llm_properties.api_key().clone(),
                         request,
@@ -274,6 +336,10 @@ impl Tool for ReferenceFilterBroker {
                 );
 
                 // serde parse - path, name, reason
+                // let parsed_response = match response {
+                //     Some(response) => "".to_owned(),
+                //     None => "Something went wrong".to_owned(),
+                // };
 
                 // shit, gna need ui_sender here...gross but whatever for now
                 let ui_sender = context.message_properties().ui_sender();

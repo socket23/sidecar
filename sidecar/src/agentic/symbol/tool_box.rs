@@ -76,7 +76,7 @@ use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
 use crate::agentic::tool::lsp::gotoreferences::{
-    GoToReferencesRequest, GoToReferencesResponse, ReferenceLocation,
+    AnchoredReference, GoToReferencesRequest, GoToReferencesResponse, ReferenceLocation,
 };
 use crate::agentic::tool::lsp::grep_symbol::{
     LSPGrepSymbolInCodebaseRequest, LSPGrepSymbolInCodebaseResponse,
@@ -8194,6 +8194,53 @@ FILEPATH: {fs_file_path}
         references: &[ReferenceLocation],
         message_properties: SymbolEventMessageProperties,
     ) -> Vec<OutlineNode> {
+        let file_paths = references
+            .iter()
+            .map(|reference| reference.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        let outline_nodes_by_files = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await;
+            outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .map(|(_, outline_nodes)| outline_nodes)
+        .flatten()
+        .collect::<Vec<_>>();
+
+        outline_nodes_by_files
+            .into_iter()
+            .filter(|outline_node| {
+                // check if a reference belongs inside this outline node
+                let outline_node_range = outline_node.range();
+                references.iter().any(|reference| {
+                    outline_node_range.contains_check_line_column(reference.range())
+                        && reference.fs_file_path() == outline_node.fs_file_path()
+                })
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub async fn outline_nodes_for_anchored_references(
+        &self,
+        anchored_references: &[AnchoredReference],
+        message_properties: SymbolEventMessageProperties,
+    ) -> Vec<OutlineNode> {
+        let references = anchored_references
+            .iter()
+            .map(|ar| ar.reference_location())
+            .collect::<Vec<_>>();
         let file_paths = references
             .iter()
             .map(|reference| reference.fs_file_path().to_owned())

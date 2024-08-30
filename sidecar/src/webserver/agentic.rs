@@ -25,7 +25,7 @@ use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::agentic::tool::input::ToolInput;
-use crate::agentic::tool::lsp::gotoreferences::ReferenceLocation;
+use crate::agentic::tool::lsp::gotoreferences::{AnchoredReference, ReferenceLocation};
 use crate::agentic::tool::output::ToolOutput;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
@@ -79,7 +79,7 @@ struct AnchoredEditingMetadata {
     // before we started editing
     previous_file_content: HashMap<String, String>,
     // to store anchor selection nodes' references
-    references: Vec<ReferenceLocation>,
+    references: Vec<AnchoredReference>,
 }
 
 impl AnchoredEditingMetadata {
@@ -87,7 +87,7 @@ impl AnchoredEditingMetadata {
         message_properties: SymbolEventMessageProperties,
         anchored_symbols: Vec<AnchoredSymbol>,
         previous_file_content: HashMap<String, String>,
-        references: Vec<ReferenceLocation>,
+        references: Vec<AnchoredReference>,
     ) -> Self {
         Self {
             message_properties,
@@ -97,7 +97,7 @@ impl AnchoredEditingMetadata {
         }
     }
 
-    pub fn references(&self) -> &[ReferenceLocation] {
+    pub fn references(&self) -> &[AnchoredReference] {
         &self.references
     }
 }
@@ -121,7 +121,7 @@ impl AnchoredEditingTracker {
     }
 
     /// this replaces the existing references field
-    async fn add_reference(&self, request_id: &str, references: &[ReferenceLocation]) {
+    async fn add_reference(&self, request_id: &str, references: &[AnchoredReference]) {
         let mut running_request_properties = self.running_requests_properties.lock().await;
 
         if let Some(metadata) = running_request_properties.get_mut(request_id) {
@@ -470,8 +470,8 @@ pub async fn code_sculpting_heal(
                 .iter()
                 .map(|reference| format!(
                     "path: {}, range: {}",
-                    reference.fs_file_path(),
-                    reference.range().start_line()
+                    reference.reference_location().fs_file_path(),
+                    reference.reference_location().range().start_line()
                 ))
                 .collect::<Vec<String>>()
                 .join("\n")
@@ -482,7 +482,7 @@ pub async fn code_sculpting_heal(
 
         let file_paths = references
             .iter()
-            .map(|r| r.fs_file_path().to_string())
+            .map(|r| r.reference_location().fs_file_path().to_string())
             .collect::<Vec<_>>();
 
         let older_file_content_map = anchor_properties.previous_file_content;
@@ -816,49 +816,70 @@ pub async fn code_editing(
                 let start = Instant::now();
 
                 // this does not need to run in sequence!
-                let references = stream::iter(stream_symbols.clone().into_iter().flat_map(
-                    |anchored_symbol| {
+                let references = stream::iter(stream_symbols.into_iter())
+                    .flat_map(|anchored_symbol| {
                         let symbol_names = anchored_symbol.sub_symbol_names().to_vec();
                         let symbol_identifier = anchored_symbol.identifier().to_owned();
-                        // move is needed for symbol_identifier
-                        symbol_names.into_iter().filter_map(move |symbol_name| {
-                            symbol_identifier
-                                .fs_file_path()
-                                .map(|path| (path, symbol_name))
-                        })
-                    },
-                ))
-                .map(|(path, symbol_name)| {
-                    // for each symbol in user selection
-                    println!("getting references for {}-{}", &path, &symbol_name);
-                    cloned_toolbox.get_symbol_references(
-                        path,
-                        symbol_name.to_owned(),
-                        cloned_message_properties.clone(),
-                        cloned_request_id.clone(),
+                        let toolbox = cloned_toolbox.clone();
+                        let message_properties = cloned_message_properties.clone();
+                        let request_id = cloned_request_id.clone();
+                        stream::iter(symbol_names.into_iter().filter_map(move |symbol_name| {
+                            symbol_identifier.fs_file_path().map(|path| {
+                                (
+                                    anchored_symbol.clone(),
+                                    path,
+                                    symbol_name,
+                                    toolbox.clone(),
+                                    message_properties.clone(),
+                                    request_id.clone(),
+                                )
+                            })
+                        }))
+                    })
+                    .map(
+                        |(
+                            original_symbol,
+                            path,
+                            symbol_name,
+                            toolbox,
+                            message_properties,
+                            request_id,
+                        )| async move {
+                            println!("getting references for {}-{}", &path, &symbol_name);
+                            let refs = toolbox
+                                .get_symbol_references(
+                                    path,
+                                    symbol_name.to_owned(),
+                                    message_properties.clone(),
+                                    request_id.clone(),
+                                )
+                                .await;
+                            refs.into_iter()
+                                .map(|r| AnchoredReference::new(original_symbol.clone(), r))
+                                .collect::<Vec<_>>()
+                        },
                     )
-                })
-                .buffer_unordered(100)
-                .collect::<Vec<_>>()
-                .await // this await blocks everything
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
 
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
 
                 // send UI event with grouped references
-                let grouped: HashMap<String, usize> =
-                    references
-                        .clone()
-                        .into_iter()
-                        .fold(HashMap::new(), |mut acc, location| {
-                            acc.entry(location.fs_file_path().to_string())
-                                .and_modify(|count| *count += 1)
-                                .or_insert(1);
-                            acc
-                        });
+                let grouped: HashMap<String, usize> = references.clone().into_iter().fold(
+                    HashMap::new(),
+                    |mut acc, anchored_reference| {
+                        let reference = anchored_reference.reference_location();
+                        acc.entry(reference.fs_file_path().to_string())
+                            .and_modify(|count| *count += 1)
+                            .or_insert(1);
+                        acc
+                    },
+                );
 
                 let _ = cloned_message_properties.clone().ui_sender().send(
                     UIEventWithID::found_reference(cloned_request_id.clone(), grouped),
@@ -867,7 +888,8 @@ pub async fn code_editing(
                 let reference_symbols_timer = Instant::now();
 
                 let reference_outline_nodes = cloned_toolbox
-                    .outline_nodes_for_references(
+                    .clone()
+                    .outline_nodes_for_anchored_references(
                         references.as_slice(),
                         cloned_message_properties.clone(),
                     )

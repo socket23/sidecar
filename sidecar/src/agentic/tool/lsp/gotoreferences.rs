@@ -3,9 +3,35 @@ use std::collections::HashSet;
 use async_trait::async_trait;
 
 use crate::{
-    agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    agentic::{
+        symbol::anchored::AnchoredSymbol,
+        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    },
     chunking::text_document::{Position, Range},
 };
+
+#[derive(Debug, Clone)]
+pub struct AnchoredReference {
+    anchored_symbol: AnchoredSymbol,
+    reference_location: ReferenceLocation,
+}
+
+impl AnchoredReference {
+    pub fn new(anchored_symbol: AnchoredSymbol, reference_location: ReferenceLocation) -> Self {
+        Self {
+            anchored_symbol,
+            reference_location,
+        }
+    }
+
+    pub fn anchored_symbol(&self) -> &AnchoredSymbol {
+        &self.anchored_symbol
+    }
+
+    pub fn reference_location(&self) -> &ReferenceLocation {
+        &self.reference_location
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GoToReferencesRequest {

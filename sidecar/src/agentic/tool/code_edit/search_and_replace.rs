@@ -321,17 +321,36 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#
 
 mathweb/flask/app.py
 ```python
+<<<<<<< SEARCH
+from flask import Flask
+=======
 import math
 from flask import Flask
+>>>>>>> REPLACE
 ```
 
 mathweb/flask/app.py
 ```python
+<<<<<<< SEARCH
+def factorial(n):
+    "compute factorial"
+
+    if n == 0:
+        return 1
+    else:
+        return n * factorial(n-1)
+
+=======
+>>>>>>> REPLACE
 ```
 
 mathweb/flask/app.py
 ```python
+<<<<<<< SEARCH
+    return str(factorial(n))
+=======
     return str(math.factorial(n))
+>>>>>>> REPLACE
 ```"#
                     .to_owned(),
             )
@@ -409,7 +428,7 @@ impl Tool for SearchAndReplaceEditing {
                                 let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
                                     root_request_id.to_owned(),
                                     symbol_identifier.clone(),
-                                    search_and_replace_accumulator.answer_to_show.to_owned(),
+                                    search_and_replace_accumulator.answer_up_until_now.to_owned(),
                                     edit_request_id.to_owned(),
                                 ));
                             }
@@ -904,6 +923,54 @@ mod tests {
 }"#;
         let edits = r#"/Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
 ```rust
+<<<<<<< SEARCH
+    pub fn concat(self, other: Self) -> Self {
+        // We are going to concatenate the 2 llm client messages togehter, at this moment
+        // we are just gonig to join the message with a \n
+        Self {
+            role: self.role,
+            message: self.message + "\n" + &other.message,
+            function_call: match self.function_call {
+                Some(function_call) => Some(function_call),
+                None => other.function_call,
+            },
+            function_return: match other.function_return {
+                Some(function_return) => Some(function_return),
+                None => self.function_return,
+            },
+        }
+    }
+
+    pub fn function_call(name: String, arguments: String) -> Self {
+        Self {
+            role: LLMClientRole::Assistant,
+            message: "".to_owned(),
+            function_call: Some(LLMClientMessageFunctionCall { name, arguments }),
+            function_return: None,
+        }
+    }
+
+    pub fn function_return(name: String, content: String) -> Self {
+        Self {
+            role: LLMClientRole::Function,
+            message: "".to_owned(),
+            function_call: None,
+            function_return: Some(LLMClientMessageFunctionReturn { name, content }),
+        }
+    }
+
+    pub fn user(message: String) -> Self {
+        Self::new(LLMClientRole::User, message)
+    }
+
+    pub fn assistant(message: String) -> Self {
+        Self::new(LLMClientRole::Assistant, message)
+    }
+
+    pub fn system(message: String) -> Self {
+        Self::new(LLMClientRole::System, message)
+    }
+=======
     pub fn concat(self, other: Self) -> impl Future<Output = Self> {
         async move {
             // We are going to concatenate the 2 llm client messages togehter, at this moment
@@ -956,13 +1023,20 @@ mod tests {
     pub fn system(message: String) -> impl Future<Output = Self> {
         Self::new(LLMClientRole::System, message)
     }
+>>>>>>> REPLACE
 ```
 
 /Users/skcd/test_repo/sidecar/llm_client/src/clients/types.rs
 ```rust
+<<<<<<< SEARCH
+    pub fn function(message: String) -> Self {
+        Self::new(LLMClientRole::Function, message)
+    }
+=======
     pub fn function(message: String) -> impl Future<Output = Self> {
         Self::new(LLMClientRole::Function, message)
     }
+>>>>>>> REPLACE
 ```"#;
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -1141,6 +1215,32 @@ mod tests {
 }"#;
         let edits = r#"/Users/zi/codestory/testing/sidecar/sidecar/src/agentic/symbol/events/edit.rs
 ```rust
+<<<<<<< SEARCH
+impl SymbolToEdit {
+    pub fn new(
+        symbol_name: String,
+        range: Range,
+        fs_file_path: String,
+        instructions: Vec<String>,
+        outline: bool,
+        is_new: bool,
+        is_full_edit: bool,
+        original_user_query: String,
+        symbol_edited_list: Option<Vec<SymbolEditedItem>>,
+    ) -> Self {
+        Self {
+            symbol_name,
+            range,
+            outline,
+            fs_file_path,
+            instructions,
+            is_new,
+            is_full_edit,
+            original_user_query,
+            symbol_edited_list,
+        }
+    }
+=======
 impl SymbolToEdit {
     pub fn new(
         symbol_name: String,
@@ -1163,10 +1263,18 @@ impl SymbolToEdit {
             symbol_edited_list,
         }
     }
+>>>>>>> REPLACE
 ```
 
 /Users/zi/codestory/testing/sidecar/sidecar/src/agentic/symbol/events/edit.rs
 ```rust
+<<<<<<< SEARCH
+    pub fn is_outline(&self) -> bool {
+        self.outline
+    }
+
+=======
+>>>>>>> REPLACE
 ```"#;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut search_and_replace_accumulator =

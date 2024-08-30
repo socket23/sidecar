@@ -282,10 +282,17 @@ impl UIEventWithID {
         }
     }
 
-    pub fn relevant_reference(request_id: String, reference: RelevantReference) -> Self {
+    pub fn relevant_reference(
+        request_id: String,
+        fs_file_path: &str,
+        symbol_name: &str,
+        thinking: &str,
+    ) -> Self {
         Self {
             request_id: request_id.to_owned(),
-            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceRelevant(reference)),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceRelevant(
+                RelevantReference::new(&fs_file_path, &symbol_name, &thinking),
+            )),
         }
     }
 }

@@ -25,8 +25,7 @@ use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::agentic::tool::input::ToolInput;
-use crate::agentic::tool::lsp::gotoreferences::{AnchoredReference, ReferenceLocation};
-use crate::agentic::tool::output::ToolOutput;
+use crate::agentic::tool::lsp::gotoreferences::AnchoredReference;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
 use crate::{

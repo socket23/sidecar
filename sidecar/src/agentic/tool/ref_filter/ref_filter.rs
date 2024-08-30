@@ -4,22 +4,18 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
+use quick_xml::de::from_str;
 use std::{sync::Arc, time::Instant};
 
 use crate::{
     agentic::{
         symbol::{
-            anchored::{self, AnchoredSymbol},
-            events::message_event::{SymbolEventMessage, SymbolEventMessageProperties},
-            identifier::LLMProperties,
-            ui_event::{RelevantReference, UIEventWithID},
+            anchored::AnchoredSymbol, events::message_event::SymbolEventMessageProperties,
+            identifier::LLMProperties, ui_event::UIEventWithID,
         },
         tool::{
-            errors::ToolError,
-            input::ToolInput,
-            lsp::gotoreferences::{AnchoredReference, ReferenceLocation},
-            output::ToolOutput,
-            r#type::Tool,
+            errors::ToolError, input::ToolInput, lsp::gotoreferences::AnchoredReference,
+            output::ToolOutput, r#type::Tool,
         },
     },
     chunking::types::OutlineNode,
@@ -97,7 +93,7 @@ pub struct ReferenceFilterResponse {
     #[serde(rename = "reason")]
     pub reason: String,
     #[serde(rename = "change_required")]
-    pub change_required: String,
+    pub change_required: bool,
 }
 
 impl ReferenceFilterResponse {}
@@ -113,34 +109,6 @@ impl ReferenceFilterBroker {
             llm_client,
             _fail_over_llm: fail_over_llm,
         }
-    }
-
-    pub fn later_system_message(&self) -> String {
-        format!(
-            r#"You are an expert software engineer. 
-
-You will be provided with:
-1. a user query
-2. a selection of code
-3. the references of the symbols in the selection
-
-The selection of code may change based on the user query.
-
-Your job is to select the references that will also need to change based on the user query changes.
-
-Omit those that do not need to change.
-
-<reply>
-<response>
-<ref>
-</ref>
-<ref>
-</ref>
-<ref>
-</ref>
-</response>
-</reply>"#
-        )
     }
 
     // consider variants: tiny, regular, in-depth
@@ -177,80 +145,12 @@ your single sentence
 
     pub fn user_message(
         &self,
-        symbol_name: &str,
-        fs_file_path: &str,
-        contents: &str,
+        anchored_symbol_prompt: &str,
         user_query: &str,
-    ) -> String {
-        format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
-    }
-
-    pub fn user_message_for_reference(
-        &self,
-        request: &ReferenceFilterRequest,
         reference: &OutlineNode,
     ) -> String {
-        let user_query = request.user_instruction();
-        let anchored_symbols_prompt = self.format_anchored_symbols(request.anchored_symbols());
-        let reference_content = self.format_reference_content(reference);
-
         format!(
             r#"<user_query>
-    {user_query}
-    </user_query>
-    
-    <code_selected>
-    {anchored_symbols_prompt}
-    </code_selected>
-    
-    <reference>
-    {reference_content}
-    </reference>"#
-        )
-    }
-
-    fn format_anchored_symbols(&self, anchored_symbols: &[AnchoredSymbol]) -> String {
-        anchored_symbols
-            .iter()
-            .filter_map(|symbol| {
-                symbol
-                    .fs_file_path()
-                    .map(|path| format!("{} in {}:\n{}", symbol.name(), path, symbol.content()))
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    fn format_reference_content(&self, reference: &OutlineNode) -> String {
-        format!(
-            "{} in {}\n{}",
-            reference.name(),
-            reference.fs_file_path(),
-            reference.content().content()
-        )
-    }
-
-    pub fn user_message_ve(&self, request: &ReferenceFilterRequest) -> Vec<String> {
-        let references = request.reference_outlines();
-        let user_query = request.user_instruction();
-        let anchored_symbols = request.anchored_symbols();
-
-        let anchored_symbol_prompt = anchored_symbols
-            .iter()
-            .filter_map(|anchored_symbol| {
-                anchored_symbol.fs_file_path().map(|fs_file_path| {
-                    let symbol_name = anchored_symbol.name();
-                    let contents = anchored_symbol.content();
-                    format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
-                })
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        references
-            .into_iter()
-            .map(|reference| {
-                format!(
-                    r#"<user_query>
 {}
 </user_query>
 
@@ -261,18 +161,16 @@ your single sentence
 <reference>
 {}
 </reference>"#,
-                    user_query,
-                    anchored_symbol_prompt,
-                    {
-                        let name = reference.name();
-                        let fs_file_path = reference.fs_file_path();
-                        let content = reference.content().content();
+            user_query,
+            anchored_symbol_prompt,
+            {
+                let name = reference.name();
+                let fs_file_path = reference.fs_file_path();
+                let content = reference.content().content();
 
-                        format!("{} in {}\n{}", name, fs_file_path, content)
-                    }
-                )
-            })
-            .collect()
+                format!("{} in {}\n{}", name, fs_file_path, content)
+            }
+        )
     }
 
     pub fn parse_response(response: &str) -> String {
@@ -297,26 +195,33 @@ impl Tool for ReferenceFilterBroker {
         let root_request_id = context.root_id.to_owned();
 
         let system_message = LLMClientMessage::system(self.system_message());
-        let user_messages = self.user_message_ve(&context);
 
         // iterate by references
 
-        let references = context.reference_outlines();
+        let references = context.reference_outlines().to_vec();
         let anchored_references = context.anchored_references();
 
-        let _ = stream::iter(anchored_references.into_iter().map(|reference| {
-            let name = reference.anchored_symbol().name();
-            let fs_file_path = reference
-                .anchored_symbol()
-                .fs_file_path()
-                .unwrap_or_default(); // fk this Option
-            let contents = reference.anchored_symbol().content();
-            let user_query = context.user_instruction();
+        let anchored_symbol_prompt = anchored_references
+            .iter()
+            .filter_map(|anchored_symbol| {
+                anchored_symbol
+                    .anchored_symbol()
+                    .fs_file_path()
+                    .map(|fs_file_path| {
+                        let symbol_name = anchored_symbol.anchored_symbol().name();
+                        let contents = anchored_symbol.anchored_symbol().content();
+                        format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
+                    })
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
 
-            let user_message = self.user_message(name, &fs_file_path, contents, user_query);
-        }));
+        let user_query = context.user_instruction();
 
-        let _ = stream::iter(user_messages.into_iter().map(|user_message| {
+        let _ = stream::iter(references.into_iter().map(|reference| {
+            let user_message = self.user_message(&anchored_symbol_prompt, user_query, &reference);
+            let fs_file_path_for_reference = reference.fs_file_path().to_owned();
+            let name = reference.name().to_owned();
             (
                 LLMClientCompletionRequest::new(
                     llm_properties.llm().clone(),
@@ -328,10 +233,20 @@ impl Tool for ReferenceFilterBroker {
                 llm_properties.clone(),
                 root_request_id.to_owned(),
                 context.clone(),
+                fs_file_path_for_reference,
+                name,
             )
         }))
         .map(
-            |(request, llm_client, llm_properties, root_request_id, context)| async move {
+            |(
+                request,
+                llm_client,
+                llm_properties,
+                root_request_id,
+                context,
+                fs_file_path_reference,
+                name_reference,
+            )| async move {
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
                 let start = Instant::now();
 
@@ -354,21 +269,24 @@ impl Tool for ReferenceFilterBroker {
                     start.elapsed()
                 );
 
-                // serde parse - path, name, reason
-                // let parsed_response = match response {
-                //     Some(response) => "".to_owned(),
-                //     None => "Something went wrong".to_owned(),
-                // };
+                let parsed_response = match response {
+                    Ok(response) => {
+                        from_str::<ReferenceFilterResponse>(&Self::parse_response(&response)).ok()
+                    }
+                    Err(_) => None,
+                };
 
-                // shit, gna need ui_sender here...gross but whatever for now
-                let ui_sender = context.message_properties().ui_sender();
-
-                todo!();
-                // let relevant_reference = RelevantReference::new();
-                // let _ = ui_sender.send(UIEventWithID::relevant_reference(
-                //     root_request_id.to_owned(),
-                //     relevant_reference,
-                // ));
+                if let Some(parsed_response) = parsed_response {
+                    if parsed_response.change_required {
+                        let ui_sender = context.message_properties().ui_sender();
+                        let _ = ui_sender.send(UIEventWithID::relevant_reference(
+                            root_request_id.to_owned(),
+                            &fs_file_path_reference,
+                            &name_reference,
+                            &parsed_response.reason,
+                        ));
+                    }
+                }
             },
         )
         .buffer_unordered(200)

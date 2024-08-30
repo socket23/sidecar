@@ -664,7 +664,7 @@ impl SearchAndReplaceAccumulator {
                                     .map(|answer_line| answer_line.to_owned())
                                     .collect::<Vec<_>>();
                                 let answer_lines_len = answer_lines.len();
-                                /// TODO(skcd): Fix this
+                                // TODO(skcd): Fix this
                                 answer_lines.truncate(answer_lines_len - (accumualated_length + 2));
                                 answer_lines.push("Generating code....".to_owned());
                                 self.answer_to_show = answer_lines.join("\n");

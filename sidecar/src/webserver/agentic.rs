@@ -751,9 +751,6 @@ pub async fn code_editing(
         );
         let metadata_pregen = Instant::now();
 
-        // if we do not have any symbols to anchor on, then we are screwed over here
-        // we want to send the edit request directly over here cutting through
-        // the initial request parts
         let user_provided_context = user_context.to_context_string().await.ok();
         let possibly_changed_files = symbols_to_anchor
             .iter()
@@ -813,168 +810,168 @@ pub async fn code_editing(
 
         if !symbols_to_anchor.is_empty() {
             // so this is an async task that should just chill in the background while the edits flow below continues
-            // let references_join_handle = tokio::spawn(async move {
-            //     let start = Instant::now();
+            let _references_join_handle = tokio::spawn(async move {
+                let start = Instant::now();
 
-            //     // this needs to be its own async task
-            //     let references =
-            //         stream::iter(cloned_symbols_to_anchor.clone().into_iter().flat_map(
-            //             |(symbol_identifier, symbol_names)| {
-            //                 // move is needed for symbol_identifier
-            //                 symbol_names.into_iter().filter_map(move |symbol_name| {
-            //                     symbol_identifier
-            //                         .fs_file_path()
-            //                         .map(|path| (path, symbol_name))
-            //                 })
-            //             },
-            //         ))
-            //         .map(|(path, symbol_name)| {
-            //             // for each symbol in user selection
-            //             println!("getting references for {}-{}", &path, &symbol_name);
-            //             cloned_toolbox.get_symbol_references(
-            //                 path,
-            //                 symbol_name,
-            //                 cloned_message_properties.clone(),
-            //                 cloned_request_id.clone(),
-            //             )
-            //         })
-            //         .buffer_unordered(100)
-            //         .collect::<Vec<_>>()
-            //         .await // this await blocks everything
-            //         .into_iter()
-            //         .flatten()
-            //         .collect::<Vec<_>>();
+                // this needs to be its own async task
+                let references =
+                    stream::iter(cloned_symbols_to_anchor.clone().into_iter().flat_map(
+                        |(symbol_identifier, symbol_names)| {
+                            // move is needed for symbol_identifier
+                            symbol_names.into_iter().filter_map(move |symbol_name| {
+                                symbol_identifier
+                                    .fs_file_path()
+                                    .map(|path| (path, symbol_name))
+                            })
+                        },
+                    ))
+                    .map(|(path, symbol_name)| {
+                        // for each symbol in user selection
+                        println!("getting references for {}-{}", &path, &symbol_name);
+                        cloned_toolbox.get_symbol_references(
+                            path,
+                            symbol_name,
+                            cloned_message_properties.clone(),
+                            cloned_request_id.clone(),
+                        )
+                    })
+                    .buffer_unordered(100)
+                    .collect::<Vec<_>>()
+                    .await // this await blocks everything
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
 
-            //     println!("total references: {}", references.len());
-            //     println!("collect references time elapsed: {:?}", start.elapsed());
+                println!("total references: {}", references.len());
+                println!("collect references time elapsed: {:?}", start.elapsed());
 
-            //     let grouped: HashMap<String, usize> =
-            //         references
-            //             .clone()
-            //             .into_iter()
-            //             .fold(HashMap::new(), |mut acc, location| {
-            //                 acc.entry(location.fs_file_path().to_string())
-            //                     .and_modify(|count| *count += 1)
-            //                     .or_insert(1);
-            //                 acc
-            //             });
+                let grouped: HashMap<String, usize> =
+                    references
+                        .clone()
+                        .into_iter()
+                        .fold(HashMap::new(), |mut acc, location| {
+                            acc.entry(location.fs_file_path().to_string())
+                                .and_modify(|count| *count += 1)
+                                .or_insert(1);
+                            acc
+                        });
 
-            //     let _ = cloned_message_properties.clone().ui_sender().send(
-            //         UIEventWithID::found_reference(cloned_request_id.clone(), grouped),
-            //     );
+                let _ = cloned_message_properties.clone().ui_sender().send(
+                    UIEventWithID::found_reference(cloned_request_id.clone(), grouped),
+                );
 
-            //     let reference_symbols_timer = Instant::now();
-            //     // now get the symbols for each reference!
-            //     // btw my mind is fried from async/move etc...RETURN TO UNDERSTAND THIS
-            //     let reference_symbols = cloned_toolbox
-            //         .outline_nodes_for_references(
-            //             references.as_slice(),
-            //             cloned_message_properties.clone(),
-            //         )
-            //         .await;
+                let reference_symbols_timer = Instant::now();
+                // now get the symbols for each reference!
+                // btw my mind is fried from async/move etc...RETURN TO UNDERSTAND THIS
+                let reference_symbols = cloned_toolbox
+                    .outline_nodes_for_references(
+                        references.as_slice(),
+                        cloned_message_properties.clone(),
+                    )
+                    .await;
 
-            //     println!(
-            //         "reference::symbols::iter::elapsed({:?})",
-            //         reference_symbols_timer.elapsed()
-            //     );
+                println!(
+                    "reference::symbols::iter::elapsed({:?})",
+                    reference_symbols_timer.elapsed()
+                );
 
-            //     let llm_broker = app.llm_broker;
+                let llm_broker = app.llm_broker;
 
-            //     let llm_properties = LLMProperties::new(
-            //         LLMType::GeminiProFlash,
-            //         LLMProvider::GoogleAIStudio,
-            //         llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(
-            //             GoogleAIStudioKey::new(
-            //                 "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-            //             ),
-            //         ),
-            //     );
+                let llm_properties = LLMProperties::new(
+                    LLMType::GeminiProFlash,
+                    LLMProvider::GoogleAIStudio,
+                    llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(
+                        GoogleAIStudioKey::new(
+                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                        ),
+                    ),
+                );
 
-            //     let reference_filter_broker =
-            //         ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
+                let reference_filter_broker =
+                    ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
-            //     // yes this looks like spaghetti but it works
-            //     let anchored_symbols_with_contents = stream::iter(cloned_symbols_to_anchor.clone())
-            //         .map(|(identifier, _)| {
-            //             let symbol_name = identifier.symbol_name().to_string();
-            //             let fs_file_path = identifier.fs_file_path();
-            //             let tool_box = cloned_toolbox.clone();
-            //             let message_properties = cloned_message_properties.clone();
+                // yes this looks like spaghetti but it works
+                let anchored_symbols_with_contents = stream::iter(cloned_symbols_to_anchor.clone())
+                    .map(|(identifier, _)| {
+                        let symbol_name = identifier.symbol_name().to_string();
+                        let fs_file_path = identifier.fs_file_path();
+                        let tool_box = cloned_toolbox.clone();
+                        let message_properties = cloned_message_properties.clone();
 
-            //             (symbol_name, fs_file_path, tool_box, message_properties)
-            //         })
-            //         .map(
-            //             |(symbol_name, fs_file_path, tool_box, message_properties)| async move {
-            //                 if let Some(fs_file_path) = fs_file_path {
-            //                     let response = tool_box
-            //                         .outline_nodes_for_symbol(
-            //                             &fs_file_path,
-            //                             &symbol_name,
-            //                             message_properties,
-            //                         )
-            //                         .await;
+                        (symbol_name, fs_file_path, tool_box, message_properties)
+                    })
+                    .map(
+                        |(symbol_name, fs_file_path, tool_box, message_properties)| async move {
+                            if let Some(fs_file_path) = fs_file_path {
+                                let response = tool_box
+                                    .outline_nodes_for_symbol(
+                                        &fs_file_path,
+                                        &symbol_name,
+                                        message_properties,
+                                    )
+                                    .await;
 
-            //                     if let Ok(outline_nodes) = response {
-            //                         (symbol_name, fs_file_path, outline_nodes)
-            //                     } else {
-            //                         (symbol_name, fs_file_path, String::new())
-            //                     }
-            //                 } else {
-            //                     (symbol_name, String::new(), String::new())
-            //                 }
-            //             },
-            //         )
-            //         .buffer_unordered(100) // Adjust the number of concurrent tasks as needed
-            //         .collect::<Vec<_>>()
-            //         .await;
+                                if let Ok(outline_nodes) = response {
+                                    (symbol_name, fs_file_path, outline_nodes)
+                                } else {
+                                    (symbol_name, fs_file_path, String::new())
+                                }
+                            } else {
+                                (symbol_name, String::new(), String::new())
+                            }
+                        },
+                    )
+                    .buffer_unordered(100) // Adjust the number of concurrent tasks as needed
+                    .collect::<Vec<_>>()
+                    .await;
 
-            //     let request = ReferenceFilterRequest::new(
-            //         cloned_user_query,
-            //         reference_symbols.clone(),
-            //         anchored_symbols_with_contents.clone(),
-            //         llm_properties.clone(),
-            //         cloned_request_id.clone(),
-            //     );
+                let request = ReferenceFilterRequest::new(
+                    cloned_user_query,
+                    reference_symbols.clone(),
+                    anchored_symbols_with_contents.clone(),
+                    llm_properties.clone(),
+                    cloned_request_id.clone(),
+                );
 
-            //     let llm_time = Instant::now();
-            //     let response = reference_filter_broker
-            //         .invoke(ToolInput::ReferencesFilter(request))
-            //         .await;
-            //     println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
+                let llm_time = Instant::now();
+                let response = reference_filter_broker
+                    .invoke(ToolInput::ReferencesFilter(request))
+                    .await;
+                println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
 
-            //     let ui_sender = cloned_message_properties.clone().ui_sender();
+                let ui_sender = cloned_message_properties.clone().ui_sender();
 
-            //     match response {
-            //         Ok(ToolOutput::ReferencesFilter(response)) => {
-            //             let answer = response.answer();
-            //             println!("answer: {}", &answer);
-            //             let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-            //                 cloned_request_id.clone(),
-            //                 answer,
-            //             ));
-            //         }
-            //         Ok(_) => {
-            //             // Handle unexpected ToolOutput variant
-            //             let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-            //                 cloned_request_id.clone(),
-            //                 "Something went wrong...",
-            //             ));
-            //         }
-            //         Err(e) => {
-            //             eprintln!("Error processing response: {:?}", e);
-            //             let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-            //                 cloned_request_id.clone(),
-            //                 "Something went wrong...",
-            //             ));
-            //         }
-            //     }
+                match response {
+                    Ok(ToolOutput::ReferencesFilter(response)) => {
+                        let answer = response.answer();
+                        println!("answer: {}", &answer);
+                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                            cloned_request_id.clone(),
+                            answer,
+                        ));
+                    }
+                    Ok(_) => {
+                        // Handle unexpected ToolOutput variant
+                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                            cloned_request_id.clone(),
+                            "Something went wrong...",
+                        ));
+                    }
+                    Err(e) => {
+                        eprintln!("Error processing response: {:?}", e);
+                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
+                            cloned_request_id.clone(),
+                            "Something went wrong...",
+                        ));
+                    }
+                }
 
-            //     let _ = cloned_tracker
-            //         .add_reference(&cloned_request_id, &references)
-            //         .await;
+                let _ = cloned_tracker
+                    .add_reference(&cloned_request_id, &references)
+                    .await;
 
-            //     references
-            // });
+                references
+            });
             // end of async task
 
             let symbol_manager = app.symbol_manager.clone();

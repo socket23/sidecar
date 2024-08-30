@@ -282,11 +282,16 @@ impl UIEventWithID {
         }
     }
 
-    pub fn filter_reference_description(request_id: String, answer: &str) -> Self {
+    pub fn relevant_reference(
+        request_id: String,
+        fs_file_path: &str,
+        symbol_name: &str,
+        thinking: &str,
+    ) -> Self {
         Self {
             request_id: request_id.to_owned(),
-            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceFilterDescription(
-                answer.to_string(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceRelevant(
+                RelevantReference::new(&fs_file_path, &symbol_name, &thinking),
             )),
         }
     }
@@ -633,7 +638,24 @@ impl InitialSearchSymbolInformation {
     }
 }
 
-pub type FoundReference = HashMap<String, usize>;
+pub type FoundReference = HashMap<String, usize>; // <file_path, count>
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct RelevantReference {
+    fs_file_path: String,
+    symbol_name: String,
+    reason: String,
+}
+
+impl RelevantReference {
+    pub fn new(fs_file_path: &str, symbol_name: &str, reason: &str) -> Self {
+        Self {
+            fs_file_path: fs_file_path.to_string(),
+            symbol_name: symbol_name.to_string(),
+            reason: reason.to_string(),
+        }
+    }
+}
 
 #[derive(Debug, serde::Serialize)]
 pub struct InitialSearchSymbolEvent {
@@ -666,5 +688,5 @@ pub enum FrameworkEvent {
     OpenFile(OpenFileRequest),
     CodeIterationFinished(String),
     ReferenceFound(FoundReference),
-    ReferenceFilterDescription(String),
+    ReferenceRelevant(RelevantReference), // this naming sucks ass
 }

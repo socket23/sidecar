@@ -4,12 +4,19 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
-use std::sync::Arc;
+use quick_xml::de::from_str;
+use std::{sync::Arc, time::Instant};
 
 use crate::{
     agentic::{
-        symbol::identifier::LLMProperties,
-        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+        symbol::{
+            anchored::AnchoredSymbol, events::message_event::SymbolEventMessageProperties,
+            identifier::LLMProperties, ui_event::UIEventWithID,
+        },
+        tool::{
+            errors::ToolError, input::ToolInput, lsp::gotoreferences::AnchoredReference,
+            output::ToolOutput, r#type::Tool,
+        },
     },
     chunking::types::OutlineNode,
 };
@@ -21,19 +28,24 @@ pub struct ReferenceFilterRequest {
     user_instruction: String,
     /// A collection of outline nodes representing the references to be filtered.
     reference_outlines: Vec<OutlineNode>,
-    anchored_symbols: Vec<(String, String, String)>,
+    anchored_symbols: Vec<AnchoredSymbol>,
     llm_properties: LLMProperties,
     /// The unique identifier for the root request.
     root_id: String,
+    // we need ui_sender to fire events to ide
+    message_properties: SymbolEventMessageProperties,
+    anchored_references: Vec<AnchoredReference>,
 }
 
 impl ReferenceFilterRequest {
     pub fn new(
         user_instruction: String,
         reference_outlines: Vec<OutlineNode>,
-        anchored_symbols: Vec<(String, String, String)>, // consider naming these
+        anchored_symbols: Vec<AnchoredSymbol>,
         llm_properties: LLMProperties,
         root_id: String,
+        message_properties: SymbolEventMessageProperties,
+        anchored_references: Vec<AnchoredReference>,
     ) -> Self {
         Self {
             user_instruction,
@@ -41,6 +53,8 @@ impl ReferenceFilterRequest {
             llm_properties,
             anchored_symbols,
             root_id,
+            message_properties,
+            anchored_references,
         }
     }
 
@@ -56,31 +70,33 @@ impl ReferenceFilterRequest {
         &self.llm_properties
     }
 
-    pub fn anchored_symbols(&self) -> &[(String, String, String)] {
+    pub fn anchored_symbols(&self) -> &[AnchoredSymbol] {
         &self.anchored_symbols
     }
 
     pub fn root_id(&self) -> &str {
         &self.root_id
     }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
+    }
+
+    pub fn anchored_references(&self) -> &[AnchoredReference] {
+        &self.anchored_references
+    }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename = "response")]
 pub struct ReferenceFilterResponse {
-    answer: String,
+    #[serde(rename = "reason")]
+    pub reason: String,
+    #[serde(rename = "change_required")]
+    pub change_required: bool,
 }
 
-impl ReferenceFilterResponse {
-    pub fn new(answer: &str) -> Self {
-        Self {
-            answer: answer.to_string(),
-        }
-    }
-
-    pub fn answer(&self) -> &str {
-        &self.answer
-    }
-}
+impl ReferenceFilterResponse {}
 
 pub struct ReferenceFilterBroker {
     llm_client: Arc<LLMBroker>,
@@ -93,34 +109,6 @@ impl ReferenceFilterBroker {
             llm_client,
             _fail_over_llm: fail_over_llm,
         }
-    }
-
-    pub fn later_system_message(&self) -> String {
-        format!(
-            r#"You are an expert software engineer. 
-
-You will be provided with:
-1. a user query
-2. a selection of code
-3. the references of the symbols in the selection
-
-The selection of code may change based on the user query.
-
-Your job is to select the references that will also need to change based on the user query changes.
-
-Omit those that do not need to change.
-
-<reply>
-<response>
-<ref>
-</ref>
-<ref>
-</ref>
-<ref>
-</ref>
-</response>
-</reply>"#
-        )
     }
 
     // consider variants: tiny, regular, in-depth
@@ -144,32 +132,25 @@ Omit those that do not need to change.
 Your response must be in the following format:
 
 <reply>
+<response>
 <reason>
 your single sentence
 </reason>
 <change_required>
 </change_required>
+</response>
 </reply>"#
         )
     }
 
-    pub fn user_message(&self, request: &ReferenceFilterRequest) -> Vec<String> {
-        let references = request.reference_outlines();
-        let user_query = request.user_instruction();
-        let anchored_symbols = request.anchored_symbols();
-
-        let anchored_symbol_prompt = anchored_symbols
-            .iter()
-            .map(|(symbol_name, fs_file_path, contents)| {
-                format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        references
-            .into_iter()
-            .map(|reference| {
-                format!(
-                    r#"<user_query>
+    pub fn user_message(
+        &self,
+        anchored_symbol_prompt: &str,
+        user_query: &str,
+        reference: &OutlineNode,
+    ) -> String {
+        format!(
+            r#"<user_query>
 {}
 </user_query>
 
@@ -180,18 +161,16 @@ your single sentence
 <reference>
 {}
 </reference>"#,
-                    user_query,
-                    anchored_symbol_prompt,
-                    {
-                        let name = reference.name();
-                        let fs_file_path = reference.fs_file_path();
-                        let content = reference.content().content();
+            user_query,
+            anchored_symbol_prompt,
+            {
+                let name = reference.name();
+                let fs_file_path = reference.fs_file_path();
+                let content = reference.content().content();
 
-                        format!("{} in {}\n{}", name, fs_file_path, content)
-                    }
-                )
-            })
-            .collect()
+                format!("{} in {}\n{}", name, fs_file_path, content)
+            }
+        )
     }
 
     pub fn parse_response(response: &str) -> String {
@@ -216,9 +195,33 @@ impl Tool for ReferenceFilterBroker {
         let root_request_id = context.root_id.to_owned();
 
         let system_message = LLMClientMessage::system(self.system_message());
-        let user_messages = self.user_message(&context);
 
-        let _ = stream::iter(user_messages.into_iter().map(|user_message| {
+        // iterate by references
+
+        let references = context.reference_outlines().to_vec();
+        let anchored_references = context.anchored_references();
+
+        let anchored_symbol_prompt = anchored_references
+            .iter()
+            .filter_map(|anchored_symbol| {
+                anchored_symbol
+                    .anchored_symbol()
+                    .fs_file_path()
+                    .map(|fs_file_path| {
+                        let symbol_name = anchored_symbol.anchored_symbol().name();
+                        let contents = anchored_symbol.anchored_symbol().content();
+                        format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
+                    })
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let user_query = context.user_instruction();
+
+        let _ = stream::iter(references.into_iter().map(|reference| {
+            let user_message = self.user_message(&anchored_symbol_prompt, user_query, &reference);
+            let fs_file_path_for_reference = reference.fs_file_path().to_owned();
+            let name = reference.name().to_owned();
             (
                 LLMClientCompletionRequest::new(
                     llm_properties.llm().clone(),
@@ -229,11 +232,24 @@ impl Tool for ReferenceFilterBroker {
                 self.llm_client.clone(),
                 llm_properties.clone(),
                 root_request_id.to_owned(),
+                context.clone(),
+                fs_file_path_for_reference,
+                name,
             )
         }))
         .map(
-            |(request, llm_client, llm_properties, root_request_id)| async move {
+            |(
+                request,
+                llm_client,
+                llm_properties,
+                root_request_id,
+                context,
+                fs_file_path_reference,
+                name_reference,
+            )| async move {
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+                let start = Instant::now();
+
                 let response = llm_client
                     .stream_completion(
                         llm_properties.api_key().clone(),
@@ -248,7 +264,29 @@ impl Tool for ReferenceFilterBroker {
                         sender,
                     )
                     .await;
-                println!("reference_check::response::({:?})", response);
+                println!(
+                    "reference_check::stream_completion::elapsed: {:?}",
+                    start.elapsed()
+                );
+
+                let parsed_response = match response {
+                    Ok(response) => {
+                        from_str::<ReferenceFilterResponse>(&Self::parse_response(&response)).ok()
+                    }
+                    Err(_) => None,
+                };
+
+                if let Some(parsed_response) = parsed_response {
+                    if parsed_response.change_required {
+                        let ui_sender = context.message_properties().ui_sender();
+                        let _ = ui_sender.send(UIEventWithID::relevant_reference(
+                            root_request_id.to_owned(),
+                            &fs_file_path_reference,
+                            &name_reference,
+                            &parsed_response.reason,
+                        ));
+                    }
+                }
             },
         )
         .buffer_unordered(200)
@@ -256,14 +294,5 @@ impl Tool for ReferenceFilterBroker {
         .await;
 
         Err(ToolError::MissingTool)
-
-        // // this may need to become more sophisticated later, but we roll for now
-        // let answer = ReferenceFilterBroker::parse_response(&response);
-
-        // println!("answer: {}", &answer);
-
-        // Ok(ToolOutput::ReferencesFilter(ReferenceFilterResponse::new(
-        //     &answer,
-        // )))
     }
 }

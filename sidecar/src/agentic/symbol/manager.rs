@@ -28,8 +28,9 @@ use crate::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
+use super::anchored::AnchoredSymbol;
 use super::events::message_event::{SymbolEventMessage, SymbolEventMessageProperties};
-use super::identifier::{LLMProperties, SymbolIdentifier};
+use super::identifier::LLMProperties;
 use super::tool_box::ToolBox;
 use super::ui_event::UIEventWithID;
 use super::{
@@ -118,7 +119,7 @@ impl SymbolManager {
     pub async fn anchor_edits(
         &self,
         user_query: String,
-        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        anchored_symbols: Vec<AnchoredSymbol>,
         user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {

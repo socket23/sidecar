@@ -2,6 +2,7 @@
 //! Some of the attributes here might be related to the symbol itself
 //! or the general question which is being asked to the symbol
 
+pub mod anchored;
 pub mod errors;
 pub mod events;
 pub mod galaxy_brain;

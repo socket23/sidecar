@@ -428,7 +428,7 @@ impl Tool for SearchAndReplaceEditing {
                                 let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
                                     root_request_id.to_owned(),
                                     symbol_identifier.clone(),
-                                    search_and_replace_accumulator.answer_up_until_now.to_owned(),
+                                    search_and_replace_accumulator.answer_to_show.to_owned(),
                                     edit_request_id.to_owned(),
                                 ));
                             }
@@ -613,15 +613,17 @@ impl SearchAndReplaceAccumulator {
                         answer_lines[answer_lines_len - 2] = answer_lines_last;
                         self.answer_to_show = answer_lines.join("\n");
                     } else {
-                        // add the line to our answer
-                        let mut answer_lines = self
-                            .answer_to_show
-                            .lines()
-                            .into_iter()
-                            .map(|line| line.to_string())
-                            .collect::<Vec<_>>();
-                        answer_lines.push(answer_line_at_index.to_owned());
-                        self.answer_to_show = answer_lines.join("\n");
+                        if answer_line_at_index != "```" {
+                            // add the line to our answer
+                            let mut answer_lines = self
+                                .answer_to_show
+                                .lines()
+                                .into_iter()
+                                .map(|line| line.to_string())
+                                .collect::<Vec<_>>();
+                            answer_lines.push(answer_line_at_index.to_owned());
+                            self.answer_to_show = answer_lines.join("\n");
+                        }
                     }
                 }
                 SearchBlockStatus::BlockStart => {
@@ -634,6 +636,7 @@ impl SearchAndReplaceAccumulator {
                         .map(|line| line.to_string())
                         .collect::<Vec<_>>();
                     answer_lines.push(answer_line_at_index.to_owned());
+                    answer_lines.push("```".to_owned());
                     self.answer_to_show = answer_lines.join("\n");
                 }
                 SearchBlockStatus::BlockAccumulate(accumulated) => {
@@ -664,8 +667,12 @@ impl SearchAndReplaceAccumulator {
                                     .map(|answer_line| answer_line.to_owned())
                                     .collect::<Vec<_>>();
                                 let answer_lines_len = answer_lines.len();
-                                // TODO(skcd): Fix this
-                                answer_lines.truncate(answer_lines_len - (accumualated_length + 2));
+                                // we want to remove the first line in our answer which is
+                                // locating relevant snippets
+                                // then the ```{language}
+                                // accumulated lines for the search block
+                                // and the last ``` which we leave for rendering purposes
+                                answer_lines.truncate(answer_lines_len - (accumualated_length + 3));
                                 answer_lines.push("Generating code....".to_owned());
                                 self.answer_to_show = answer_lines.join("\n");
                             }
@@ -673,7 +680,7 @@ impl SearchAndReplaceAccumulator {
                                 self.search_block_status = SearchBlockStatus::NoBlock;
                                 // If we have a range over here, we probably want to show it on the answer lines
                                 // to do this: we need to do the following:
-                                // - go back couple of steps here (or the line length of the accumulated block + 2 (for ```language and Locating relevant snippet...))
+                                // - go back couple of steps here (or the line length of the accumulated block + 3 (for ```language and Locating relevant snippet... and the last backticks which are present))
                                 // - and the replace those lines with a "No snippet found in the codebase"
                                 let accumualated_length =
                                     accumulated.lines().into_iter().collect::<Vec<_>>().len();
@@ -685,7 +692,7 @@ impl SearchAndReplaceAccumulator {
                                     .map(|answer_line| answer_line.to_owned())
                                     .collect::<Vec<_>>();
                                 let answer_lines_len = answer_lines.len();
-                                answer_lines.truncate(answer_lines_len - (accumualated_length + 2));
+                                answer_lines.truncate(answer_lines_len - (accumualated_length + 3));
                                 answer_lines
                                     .push("Failed to find relevant code snippet...".to_owned());
                                 self.answer_to_show = answer_lines.join("\n");
@@ -702,7 +709,11 @@ impl SearchAndReplaceAccumulator {
                             .into_iter()
                             .map(|line| line.to_string())
                             .collect::<Vec<_>>();
+                        // remove the ``` which we added
+                        answer_lines.pop();
                         answer_lines.push(answer_line_at_index.to_owned());
+                        // add the ``` again
+                        answer_lines.push("```".to_owned());
                         self.answer_to_show = answer_lines.join("\n");
                     }
                 }
@@ -711,6 +722,7 @@ impl SearchAndReplaceAccumulator {
                         .iter()
                         .any(|updated_trace| *updated_trace == answer_line_at_index)
                     {
+                        println!("search_and_replace_accumulator::block_found");
                         self.search_block_status = SearchBlockStatus::NoBlock;
                         self.update_code_lines(&block_range);
                         let _ = self.sender.send(EditDelta::EditEnd(block_range.clone()));

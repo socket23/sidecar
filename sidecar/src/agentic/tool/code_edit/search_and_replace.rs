@@ -425,12 +425,12 @@ impl Tool for SearchAndReplaceEditing {
                                 // we have some delta over here which we can process
                                 search_and_replace_accumulator.add_delta(delta.to_owned());
                                 // send over the thinking as soon as we get a delta over here
-                                let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
-                                    root_request_id.to_owned(),
-                                    symbol_identifier.clone(),
-                                    search_and_replace_accumulator.answer_up_until_now.to_owned(),
-                                    edit_request_id.to_owned(),
-                                ));
+                                // let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
+                                //     root_request_id.to_owned(),
+                                //     symbol_identifier.clone(),
+                                //     search_and_replace_accumulator.answer_up_until_now.to_owned(),
+                                //     edit_request_id.to_owned(),
+                                // ));
                             }
                         }
                         None => {
@@ -464,6 +464,7 @@ impl Tool for SearchAndReplaceEditing {
                             ));
                         }
                         Some(EditDelta::EditDelta((range, delta))) => {
+                            println!("tool_box::search_and_replace::edit_streaming_delta::symbol_name({})", symbol_identifier.symbol_name());
                             let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
                                 root_request_id.to_owned(),
                                 symbol_identifier.clone(),

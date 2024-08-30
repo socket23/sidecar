@@ -9,7 +9,7 @@ use crate::agentic::symbol::{
 use super::input::SymbolEventRequestId;
 
 /// The properties which get sent along with each symbol event
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SymbolEventMessageProperties {
     request_id: SymbolEventRequestId,
     ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,

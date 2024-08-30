@@ -898,49 +898,23 @@ pub async fn code_editing(
                     &reference_outline_nodes.len()
                 );
 
-                // anchored_symbols_with_contents...takes time, but can be async?
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
                     reference_outline_nodes.clone(),
                     symbols_to_anchor.clone(),
                     llm_properties.clone(),
                     cloned_request_id.clone(),
+                    cloned_message_properties.clone(),
                 );
 
                 let llm_time = Instant::now();
                 println!("ReferenceFilter::invoke::start");
-                let response = reference_filter_broker
+                let _ = reference_filter_broker
                     .invoke(ToolInput::ReferencesFilter(request))
                     .await;
                 println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
 
-                let ui_sender = cloned_message_properties.clone().ui_sender();
-
-                match response {
-                    Ok(ToolOutput::ReferencesFilter(response)) => {
-                        let answer = response.answer();
-                        println!("answer: {}", &answer);
-                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-                            cloned_request_id.clone(),
-                            answer,
-                        ));
-                    }
-                    Ok(_) => {
-                        // Handle unexpected ToolOutput variant
-                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-                            cloned_request_id.clone(),
-                            "Something went wrong...",
-                        ));
-                    }
-                    Err(e) => {
-                        eprintln!("Error processing response: {:?}", e);
-                        let _ = ui_sender.send(UIEventWithID::filter_reference_description(
-                            cloned_request_id.clone(),
-                            "Something went wrong...",
-                        ));
-                    }
-                }
-
+                // for followup consumption
                 let _ = cloned_tracker
                     .add_reference(&cloned_request_id, &references)
                     .await;

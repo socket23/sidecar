@@ -8,7 +8,12 @@ use std::{sync::Arc, time::Instant};
 
 use crate::{
     agentic::{
-        symbol::{anchored::AnchoredSymbol, identifier::LLMProperties},
+        symbol::{
+            anchored::AnchoredSymbol,
+            events::message_event::{SymbolEventMessage, SymbolEventMessageProperties},
+            identifier::LLMProperties,
+            ui_event::{RelevantReference, UIEventWithID},
+        },
         tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     },
     chunking::types::OutlineNode,
@@ -25,6 +30,8 @@ pub struct ReferenceFilterRequest {
     llm_properties: LLMProperties,
     /// The unique identifier for the root request.
     root_id: String,
+    // we need ui_sender to fire events to ide
+    message_properties: SymbolEventMessageProperties,
 }
 
 impl ReferenceFilterRequest {
@@ -34,6 +41,7 @@ impl ReferenceFilterRequest {
         anchored_symbols: Vec<AnchoredSymbol>,
         llm_properties: LLMProperties,
         root_id: String,
+        message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
             user_instruction,
@@ -41,6 +49,7 @@ impl ReferenceFilterRequest {
             llm_properties,
             anchored_symbols,
             root_id,
+            message_properties,
         }
     }
 
@@ -62,6 +71,10 @@ impl ReferenceFilterRequest {
 
     pub fn root_id(&self) -> &str {
         &self.root_id
+    }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
     }
 }
 
@@ -233,14 +246,14 @@ impl Tool for ReferenceFilterBroker {
                 self.llm_client.clone(),
                 llm_properties.clone(),
                 root_request_id.to_owned(),
+                context.clone(),
             )
         }))
         .map(
-            |(request, llm_client, llm_properties, root_request_id)| async move {
+            |(request, llm_client, llm_properties, root_request_id, context)| async move {
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
                 let start = Instant::now();
 
-                // todo(zi): send the UI events
                 let _response = llm_client
                     .stream_completion(
                         llm_properties.api_key().clone(),
@@ -259,13 +272,23 @@ impl Tool for ReferenceFilterBroker {
                     "reference_check::stream_completion::elapsed: {:?}",
                     start.elapsed()
                 );
+
+                // serde parse - path, name, reason
+
+                // shit, gna need ui_sender here...gross but whatever for now
+                let ui_sender = context.message_properties().ui_sender();
+
+                todo!();
+                // let relevant_reference = RelevantReference::new();
+                // let _ = ui_sender.send(UIEventWithID::relevant_reference(
+                //     root_request_id.to_owned(),
+                //     relevant_reference,
+                // ));
             },
         )
         .buffer_unordered(200)
         .collect::<Vec<_>>()
         .await;
-
-        // todo(zi): send the UI events
 
         Err(ToolError::MissingTool)
     }

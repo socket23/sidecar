@@ -16,10 +16,10 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+use crate::agentic::symbol::anchored::AnchoredSymbol;
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
-use crate::agentic::symbol::identifier::SymbolIdentifier;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::UIEventWithID;
@@ -74,7 +74,7 @@ impl ProbeRequestTracker {
 struct AnchoredEditingMetadata {
     message_properties: SymbolEventMessageProperties,
     // These are the symbols where we are focussed on right now in the selection
-    anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+    anchored_symbols: Vec<AnchoredSymbol>,
     // we also want to store the original content of the files which were mentioned
     // before we started editing
     previous_file_content: HashMap<String, String>,
@@ -85,7 +85,7 @@ struct AnchoredEditingMetadata {
 impl AnchoredEditingMetadata {
     pub fn new(
         message_properties: SymbolEventMessageProperties,
-        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        anchored_symbols: Vec<AnchoredSymbol>,
         previous_file_content: HashMap<String, String>,
         references: Vec<ReferenceLocation>,
     ) -> Self {
@@ -545,7 +545,8 @@ pub async fn code_sculpting_heal(
         let changed_symbols = anchor_properties
             .anchored_symbols
             .into_iter()
-            .filter_map(|(symbol_identifier, _)| {
+            .filter_map(|anchored_symbol| {
+                let symbol_identifier = anchored_symbol.identifier().to_owned();
                 let fs_file_path = symbol_identifier.fs_file_path();
                 if fs_file_path.is_none() {
                     return None;
@@ -745,7 +746,7 @@ pub async fn code_editing(
             "webserver::code_editing_flow::anchor_symbols::({})",
             symbols_to_anchor
                 .iter()
-                .map(|(symbol, _)| symbol.symbol_name())
+                .map(|anchored_symbol| anchored_symbol.name())
                 .collect::<Vec<_>>()
                 .join(",")
         );
@@ -754,7 +755,7 @@ pub async fn code_editing(
         let user_provided_context = user_context.to_context_string().await.ok();
         let possibly_changed_files = symbols_to_anchor
             .iter()
-            .filter_map(|(symbol_identifer, _)| symbol_identifer.fs_file_path())
+            .filter_map(|anchored_symbol| anchored_symbol.fs_file_path())
             .collect::<Vec<_>>();
         let cloned_tools = app.tool_box.clone();
         let file_contents = stream::iter(
@@ -777,12 +778,6 @@ pub async fn code_editing(
         .filter_map(|s| s)
         .collect::<HashMap<_, _>>();
 
-        let anchored_symbols = app
-            .tool_box
-            .symbols_to_anchor(&user_context, message_properties.clone())
-            .await
-            .unwrap_or_default();
-
         println!("metadata_pregen::elapsed({:?})", metadata_pregen.elapsed());
 
         let editing_metadata = AnchoredEditingMetadata::new(
@@ -792,11 +787,14 @@ pub async fn code_editing(
             vec![],
         );
 
+        println!("tracking new request");
         // instantiates basic request tracker, with no join_handle, but basic metadata
         let _ = app
             .anchored_request_tracker
             .track_new_request(&request_id, None, Some(editing_metadata))
             .await;
+
+        println!("tracked new request");
 
         // shit this should be cleaned up
         let cloned_symbols_to_anchor = symbols_to_anchor.clone();
@@ -805,18 +803,18 @@ pub async fn code_editing(
         let cloned_request_id = request_id.clone();
         let cloned_tracker = app.anchored_request_tracker.clone();
         let cloned_user_query = user_query.clone();
-        let _cloned_anchored_symbols = anchored_symbols.clone();
-        let _cloned_user_provided_context = user_provided_context.clone();
 
         if !symbols_to_anchor.is_empty() {
             // so this is an async task that should just chill in the background while the edits flow below continues
             let _references_join_handle = tokio::spawn(async move {
                 let start = Instant::now();
 
-                // this needs to be its own async task
+                // this does not need to run in sequence!
                 let references =
                     stream::iter(cloned_symbols_to_anchor.clone().into_iter().flat_map(
-                        |(symbol_identifier, symbol_names)| {
+                        |anchored_symbol| {
+                            let symbol_names = anchored_symbol.sub_symbol_names().to_vec();
+                            let symbol_identifier = anchored_symbol.identifier().to_owned();
                             // move is needed for symbol_identifier
                             symbol_names.into_iter().filter_map(move |symbol_name| {
                                 symbol_identifier
@@ -830,7 +828,7 @@ pub async fn code_editing(
                         println!("getting references for {}-{}", &path, &symbol_name);
                         cloned_toolbox.get_symbol_references(
                             path,
-                            symbol_name,
+                            symbol_name.to_owned(),
                             cloned_message_properties.clone(),
                             cloned_request_id.clone(),
                         )
@@ -845,6 +843,7 @@ pub async fn code_editing(
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
 
+                // send UI event with grouped references
                 let grouped: HashMap<String, usize> =
                     references
                         .clone()
@@ -861,9 +860,8 @@ pub async fn code_editing(
                 );
 
                 let reference_symbols_timer = Instant::now();
-                // now get the symbols for each reference!
-                // btw my mind is fried from async/move etc...RETURN TO UNDERSTAND THIS
-                let reference_symbols = cloned_toolbox
+
+                let reference_outline_nodes = cloned_toolbox
                     .outline_nodes_for_references(
                         references.as_slice(),
                         cloned_message_properties.clone(),
@@ -890,11 +888,12 @@ pub async fn code_editing(
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
+                // todo(zi):
                 // yes this looks like spaghetti but it works
                 let anchored_symbols_with_contents = stream::iter(cloned_symbols_to_anchor.clone())
-                    .map(|(identifier, _)| {
-                        let symbol_name = identifier.symbol_name().to_string();
-                        let fs_file_path = identifier.fs_file_path();
+                    .map(|anchored_symbol| {
+                        let symbol_name = anchored_symbol.name().to_string();
+                        let fs_file_path = anchored_symbol.fs_file_path();
                         let tool_box = cloned_toolbox.clone();
                         let message_properties = cloned_message_properties.clone();
 
@@ -905,6 +904,8 @@ pub async fn code_editing(
                             if let Some(fs_file_path) = fs_file_path {
                                 let start = Instant::now();
                                 println!("references::outline_node_for_symbol::start");
+
+                                // can take >5s for big symbols
                                 let response = tool_box
                                     .outline_nodes_for_symbol(
                                         &fs_file_path,
@@ -931,9 +932,15 @@ pub async fn code_editing(
                     .collect::<Vec<_>>()
                     .await;
 
+                println!(
+                    "code_editing:reference_symbols.len({:?})",
+                    &reference_outline_nodes.len()
+                );
+
+                // anchored_symbols_with_contents...takes time, but can be async?
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
-                    reference_symbols.clone(),
+                    reference_outline_nodes.clone(),
                     anchored_symbols_with_contents.clone(),
                     llm_properties.clone(),
                     cloned_request_id.clone(),
@@ -977,6 +984,10 @@ pub async fn code_editing(
                     .add_reference(&cloned_request_id, &references)
                     .await;
 
+                println!(
+                    "collect references async task total elapsed: {:?}",
+                    start.elapsed()
+                );
                 references
             });
             // end of async task
@@ -986,21 +997,26 @@ pub async fn code_editing(
             let cloned_user_context = user_provided_context.clone();
 
             let join_handle = tokio::spawn(async move {
+                let anchor_edit_timer = Instant::now();
                 let _ = symbol_manager
                     .anchor_edits(
                         user_query,
-                        anchored_symbols,
+                        symbols_to_anchor.clone(),
                         cloned_user_context,
                         cloned_message_properties,
                     )
                     .await;
+
+                println!(
+                    "anchor_edit_timer::elapsed({:?}",
+                    anchor_edit_timer.elapsed()
+                );
             });
 
             let _ = app
                 .anchored_request_tracker
                 .add_join_handle(&request_id, join_handle)
                 .await;
-
             // todo(zi): is this check necessary?
             let properties_present = app
                 .anchored_request_tracker
@@ -1134,22 +1150,11 @@ pub async fn anchor_session_start(
             .join(", ")
     );
 
-    let symbol_to_anchor = app
+    let _symbol_to_anchor = app
         .tool_box
         .symbols_to_anchor(&user_context, message_properties.clone())
         .await
         .unwrap_or_default();
-
-    println!(
-        "webserver::agentic::anchor_session_start::symbol_to_anchor:\n{}",
-        symbol_to_anchor
-            .iter()
-            .map(|(id, string_vec)| {
-                format!("id: {:?}, string_vec: {}", id, string_vec.join(", "))
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
 
     let event_stream = Sse::new(
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {

@@ -4,7 +4,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use crate::{
     agentic::{
@@ -234,6 +234,7 @@ impl Tool for ReferenceFilterBroker {
         .map(
             |(request, llm_client, llm_properties, root_request_id)| async move {
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+                let start = Instant::now();
                 let response = llm_client
                     .stream_completion(
                         llm_properties.api_key().clone(),
@@ -248,7 +249,11 @@ impl Tool for ReferenceFilterBroker {
                         sender,
                     )
                     .await;
-                println!("reference_check::response::({:?})", response);
+                println!(
+                    "reference_check::stream_completion::elapsed: {:?}",
+                    start.elapsed()
+                );
+                // println!("reference_check::response::({:?})", response);
             },
         )
         .buffer_unordered(200)

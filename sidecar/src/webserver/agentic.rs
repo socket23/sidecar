@@ -903,6 +903,8 @@ pub async fn code_editing(
                     .map(
                         |(symbol_name, fs_file_path, tool_box, message_properties)| async move {
                             if let Some(fs_file_path) = fs_file_path {
+                                let start = Instant::now();
+                                println!("references::outline_node_for_symbol::start");
                                 let response = tool_box
                                     .outline_nodes_for_symbol(
                                         &fs_file_path,
@@ -910,6 +912,10 @@ pub async fn code_editing(
                                         message_properties,
                                     )
                                     .await;
+                                println!(
+                                    "references::outline_node_for_symbol::end::({:?})",
+                                    start.elapsed()
+                                );
 
                                 if let Ok(outline_nodes) = response {
                                     (symbol_name, fs_file_path, outline_nodes)
@@ -934,6 +940,7 @@ pub async fn code_editing(
                 );
 
                 let llm_time = Instant::now();
+                println!("ReferenceFilter::invoke::start");
                 let response = reference_filter_broker
                     .invoke(ToolInput::ReferencesFilter(request))
                     .await;

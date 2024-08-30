@@ -1625,15 +1625,10 @@ We also believe this symbol needs to be probed because of:
         symbol_name: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<String, SymbolError> {
-        // send an open file request here first
-        let _ = self
-            .file_open(fs_file_path.to_owned(), message_properties.clone())
-            .await?;
         let outline_node_possible = self
-            .symbol_broker
-            .get_symbols_outline(fs_file_path)
+            .get_ouline_nodes_grouped_fresh(fs_file_path, message_properties.clone())
             .await
-            .ok_or(SymbolError::ExpectedFileToExist)?
+            .ok_or(SymbolError::WrongToolOutput)?
             .into_iter()
             .find(|outline_node| outline_node.name() == symbol_name);
         if let Some(outline_node) = outline_node_possible {

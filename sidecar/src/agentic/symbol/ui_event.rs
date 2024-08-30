@@ -2,6 +2,8 @@
 //! debugging and having better visibility to what ever is happening
 //! in the symbols
 
+use std::collections::HashMap;
+
 use crate::chunking::text_document::Range;
 
 use super::{
@@ -265,17 +267,27 @@ impl UIEventWithID {
     ) -> Self {
         Self {
             request_id,
-            event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::thinking_for_edit(symbol_identifier, thinking, edit_request_id))
+            event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::thinking_for_edit(
+                symbol_identifier,
+                thinking,
+                edit_request_id,
+            )),
         }
     }
 
-    pub fn found_reference(request_id: String, fs_file_path: String) -> Self {
+    pub fn found_reference(request_id: String, references: FoundReference) -> Self {
         Self {
             request_id: request_id.to_owned(),
-            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceFound(FoundReference::new(
-                request_id,
-                fs_file_path,
-            ))),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceFound(references)),
+        }
+    }
+
+    pub fn filter_reference_description(request_id: String, answer: &str) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceFilterDescription(
+                answer.to_string(),
+            )),
         }
     }
 }
@@ -531,10 +543,12 @@ impl SymbolEventSubStepRequest {
     ) -> Self {
         Self {
             symbol_identifier,
-            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::ThinkingForEdit(ThinkingForEditRequest {
-                edit_request_id,
-                thinking,
-            }))
+            event: SymbolEventSubStep::Edit(SymbolEventEditRequest::ThinkingForEdit(
+                ThinkingForEditRequest {
+                    edit_request_id,
+                    thinking,
+                },
+            )),
         }
     }
 
@@ -619,20 +633,7 @@ impl InitialSearchSymbolInformation {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
-pub struct FoundReference {
-    request_id: String,
-    fs_file_path: String,
-}
-
-impl FoundReference {
-    pub fn new(request_id: String, fs_file_path: String) -> Self {
-        Self {
-            request_id,
-            fs_file_path,
-        }
-    }
-}
+pub type FoundReference = HashMap<String, usize>;
 
 #[derive(Debug, serde::Serialize)]
 pub struct InitialSearchSymbolEvent {
@@ -665,4 +666,5 @@ pub enum FrameworkEvent {
     OpenFile(OpenFileRequest),
     CodeIterationFinished(String),
     ReferenceFound(FoundReference),
+    ReferenceFilterDescription(String),
 }

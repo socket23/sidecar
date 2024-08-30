@@ -425,12 +425,12 @@ impl Tool for SearchAndReplaceEditing {
                                 // we have some delta over here which we can process
                                 search_and_replace_accumulator.add_delta(delta.to_owned());
                                 // send over the thinking as soon as we get a delta over here
-                                // let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
-                                //     root_request_id.to_owned(),
-                                //     symbol_identifier.clone(),
-                                //     search_and_replace_accumulator.answer_up_until_now.to_owned(),
-                                //     edit_request_id.to_owned(),
-                                // ));
+                                let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
+                                    root_request_id.to_owned(),
+                                    symbol_identifier.clone(),
+                                    search_and_replace_accumulator.answer_up_until_now.to_owned(),
+                                    edit_request_id.to_owned(),
+                                ));
                             }
                         }
                         None => {
@@ -534,6 +534,7 @@ struct SearchAndReplaceAccumulator {
     code_lines: Vec<String>,
     start_line: usize,
     answer_up_until_now: String,
+    answer_to_show: String,
     previous_answer_line_number: Option<usize>,
     search_block_status: SearchBlockStatus,
     updated_block: Option<String>,
@@ -554,6 +555,7 @@ impl SearchAndReplaceAccumulator {
                 .collect::<Vec<_>>(),
             start_line,
             answer_up_until_now: "".to_owned(),
+            answer_to_show: "".to_owned(),
             previous_answer_line_number: None,
             search_block_status: SearchBlockStatus::NoBlock,
             updated_block: None,
@@ -568,56 +570,74 @@ impl SearchAndReplaceAccumulator {
     }
 
     fn process_answer(&mut self) {
-        // so there are 2 cases over here which we want to handle
-        // - we haven't even started processing the lines yet which sucks kinda
-        // - we have started processing the lines but we do not have any lines with us
-        // right now
         let head = "<<<<<<< SEARCH";
         let divider = "=======";
         let updated = vec![">>>>>>> REPLACE", "======="];
 
-        // no complete line right now, keep going
         let line_number_to_process = get_last_newline_line_number(&self.answer_up_until_now);
         if line_number_to_process.is_none() {
             return;
         }
-        // we get this value as the last line number always, so better to subtract here and if its none we are returning early
         let line_number_to_process_until = line_number_to_process.expect("to work") - 1;
-        let answer_lines = self
-            .answer_up_until_now
-            .lines()
-            .into_iter()
-            .collect::<Vec<_>>();
+        let answer_lines = self.answer_up_until_now.to_owned();
+        let answer_lines = answer_lines.lines().into_iter().collect::<Vec<_>>();
 
-        // line number we can proceed until:
-        let start_index = if self.previous_answer_line_number.is_none() {
-            0
-        } else {
-            self.previous_answer_line_number
-                .expect("if_none above to work")
-                + 1
-        };
+        let start_index = self.previous_answer_line_number.map_or(0, |n| n + 1);
 
         for line_number in start_index..=line_number_to_process_until {
-            // update our answer lines right now
             self.previous_answer_line_number = Some(line_number);
             let answer_line_at_index = answer_lines[line_number];
-            // clone here is bad, we should try and get rid of it
+
             match self.search_block_status.clone() {
                 SearchBlockStatus::NoBlock => {
                     if answer_line_at_index == head {
                         self.search_block_status = SearchBlockStatus::BlockStart;
+                        let mut answer_lines = self
+                            .answer_to_show
+                            .lines()
+                            .into_iter()
+                            .map(|line| line.to_string())
+                            .collect::<Vec<_>>();
+                        answer_lines.push("Locating relevant snippet...".to_owned());
+                        // at this point we will have the following:
+                        // ```language
+                        // Locating relevant snippet...
+                        // we want to swap it to the following:
+                        // Locating relevant snippet...
+                        // ```language
+                        let answer_lines_len = answer_lines.len();
+                        let answer_lines_last = answer_lines[answer_lines_len - 1].to_owned();
+                        let answer_lines_second_last =
+                            answer_lines[answer_lines_len - 2].to_owned();
+                        answer_lines[answer_lines_len - 1] = answer_lines_second_last;
+                        answer_lines[answer_lines_len - 2] = answer_lines_last;
+                        self.answer_to_show = answer_lines.join("\n");
+                    } else {
+                        // add the line to our answer
+                        let mut answer_lines = self
+                            .answer_to_show
+                            .lines()
+                            .into_iter()
+                            .map(|line| line.to_string())
+                            .collect::<Vec<_>>();
+                        answer_lines.push(answer_line_at_index.to_owned());
+                        self.answer_to_show = answer_lines.join("\n");
                     }
-                    continue;
                 }
                 SearchBlockStatus::BlockStart => {
                     self.search_block_status =
                         SearchBlockStatus::BlockAccumulate(answer_line_at_index.to_owned());
+                    let mut answer_lines = self
+                        .answer_to_show
+                        .lines()
+                        .into_iter()
+                        .map(|line| line.to_string())
+                        .collect::<Vec<_>>();
+                    answer_lines.push(answer_line_at_index.to_owned());
+                    self.answer_to_show = answer_lines.join("\n");
                 }
                 SearchBlockStatus::BlockAccumulate(accumulated) => {
                     if answer_line_at_index == divider {
-                        // we also have to find the range in the code where this block is present
-                        // since that will be our edit range
                         let range = get_range_for_search_block(
                             &self.code_lines.join("\n"),
                             self.start_line,
@@ -630,11 +650,45 @@ impl SearchAndReplaceAccumulator {
                                     range.clone(),
                                 ));
                                 let _ = self.sender.send(EditDelta::EditStarted(range));
+                                // If we have a range over here, we probably want to show it on the answer lines
+                                // to do this: we need to do the following:
+                                // - go back couple of steps here (or the line length of the accumulated block + 2 (for ```language and Locating relevant snippet...))
+                                // - and the replace those lines with a generating code thingy over here instead
+                                let accumualated_length =
+                                    accumulated.lines().into_iter().collect::<Vec<_>>().len();
+                                let mut answer_lines = self
+                                    .answer_to_show
+                                    .to_owned()
+                                    .lines()
+                                    .into_iter()
+                                    .map(|answer_line| answer_line.to_owned())
+                                    .collect::<Vec<_>>();
+                                let answer_lines_len = answer_lines.len();
+                                // TODO(skcd): Fix this
+                                answer_lines.truncate(answer_lines_len - (accumualated_length + 2));
+                                answer_lines.push("Generating code....".to_owned());
+                                self.answer_to_show = answer_lines.join("\n");
                             }
                             None => {
-                                // if we do not find any replacement block, then we give up
-                                // and keep going forward for now
                                 self.search_block_status = SearchBlockStatus::NoBlock;
+                                // If we have a range over here, we probably want to show it on the answer lines
+                                // to do this: we need to do the following:
+                                // - go back couple of steps here (or the line length of the accumulated block + 2 (for ```language and Locating relevant snippet...))
+                                // - and the replace those lines with a "No snippet found in the codebase"
+                                let accumualated_length =
+                                    accumulated.lines().into_iter().collect::<Vec<_>>().len();
+                                let mut answer_lines = self
+                                    .answer_to_show
+                                    .to_owned()
+                                    .lines()
+                                    .into_iter()
+                                    .map(|answer_line| answer_line.to_owned())
+                                    .collect::<Vec<_>>();
+                                let answer_lines_len = answer_lines.len();
+                                answer_lines.truncate(answer_lines_len - (accumualated_length + 2));
+                                answer_lines
+                                    .push("Failed to find relevant code snippet...".to_owned());
+                                self.answer_to_show = answer_lines.join("\n");
                             }
                         };
                     } else {
@@ -642,6 +696,14 @@ impl SearchAndReplaceAccumulator {
                             "{}\n{}",
                             accumulated, answer_line_at_index
                         ));
+                        let mut answer_lines = self
+                            .answer_to_show
+                            .lines()
+                            .into_iter()
+                            .map(|line| line.to_string())
+                            .collect::<Vec<_>>();
+                        answer_lines.push(answer_line_at_index.to_owned());
+                        self.answer_to_show = answer_lines.join("\n");
                     }
                 }
                 SearchBlockStatus::BlockFound((_, block_range)) => {
@@ -649,71 +711,76 @@ impl SearchAndReplaceAccumulator {
                         .iter()
                         .any(|updated_trace| *updated_trace == answer_line_at_index)
                     {
-                        // neat we found when to close, so we can do that now
-                        // return an event which stops the edit stream
                         self.search_block_status = SearchBlockStatus::NoBlock;
-                        // we need to update the answer lines with the new replace block
-                        if let Some(updated_answer) = self.updated_block.clone() {
-                            let updated_range_start_line =
-                                block_range.start_line() - self.start_line;
-                            let updated_range_end_line = block_range.end_line() - self.start_line;
-                            // we are interested in the following lines to be kept and updated
-                            // 0 <= update_range_start-1 + [answer] + updated_range_end_line+1 <= end_of_lines_len
-                            let mut updated_code_lines =
-                                self.code_lines[..updated_range_start_line].join("\n");
-                            if updated_range_start_line != 0 {
-                                updated_code_lines.push('\n');
-                            }
-                            updated_code_lines.push_str(&updated_answer);
-                            updated_code_lines.push('\n');
-                            updated_code_lines.push_str(
-                                &self.code_lines[(updated_range_end_line + 1)..].join("\n"),
-                            );
-                            self.code_lines = updated_code_lines
-                                .lines()
-                                .into_iter()
-                                .map(|line| line.to_owned())
-                                .collect::<Vec<_>>();
-                        } else {
-                            let updated_range_start_line =
-                                block_range.start_line() - self.start_line;
-                            let updated_range_end_line = block_range.end_line() - self.start_line;
-                            // we are interested in the following lines to be kept and updated
-                            // 0 <= update_range_start-1 + [answer] + updated_range_end_line+1 <= end_of_lines_len
-                            let mut updated_code_lines =
-                                self.code_lines[..updated_range_start_line].join("\n");
-                            updated_code_lines.push_str(
-                                &self.code_lines[(updated_range_end_line + 1)..].join("\n"),
-                            );
-                            self.code_lines = updated_code_lines
-                                .lines()
-                                .into_iter()
-                                .map(|line| line.to_owned())
-                                .collect::<Vec<_>>();
-                        }
-                        self.updated_block = None;
+                        self.update_code_lines(&block_range);
                         let _ = self.sender.send(EditDelta::EditEnd(block_range.clone()));
+                        // remove the last line from the answer and instead put in edit completed
+                        let mut answer_lines = self
+                            .answer_to_show
+                            .lines()
+                            .into_iter()
+                            .map(|line| line.to_owned())
+                            .collect::<Vec<_>>();
+                        answer_lines.pop();
+                        answer_lines.push(format!(
+                            "Edit completed: [L{}:{}]",
+                            block_range.start_line(),
+                            block_range.end_line()
+                        ));
+                        self.answer_to_show = answer_lines.join("\n");
                     } else {
-                        if self.updated_block.is_none() {
-                            self.updated_block = Some(answer_line_at_index.to_owned());
-                            let _ = self.sender.send(EditDelta::EditDelta((
-                                block_range.clone(),
-                                answer_line_at_index.to_owned(),
-                            )));
-                        } else {
-                            self.updated_block = Some(
-                                self.updated_block.clone().expect("is_none to hold")
-                                    + "\n"
-                                    + answer_line_at_index,
-                            );
-                            let _ = self.sender.send(EditDelta::EditDelta((
-                                block_range.clone(),
-                                ("\n".to_owned() + answer_line_at_index).to_owned(),
-                            )));
-                        }
+                        self.update_block(answer_line_at_index, &block_range);
                     }
                 }
             }
+        }
+    }
+
+    fn update_code_lines(&mut self, block_range: &Range) {
+        if let Some(updated_answer) = self.updated_block.clone() {
+            let updated_range_start_line = block_range.start_line() - self.start_line;
+            let updated_range_end_line = block_range.end_line() - self.start_line;
+            let mut updated_code_lines = self.code_lines[..updated_range_start_line].join("\n");
+            if updated_range_start_line != 0 {
+                updated_code_lines.push('\n');
+            }
+            updated_code_lines.push_str(&updated_answer);
+            updated_code_lines.push('\n');
+            updated_code_lines
+                .push_str(&self.code_lines[(updated_range_end_line + 1)..].join("\n"));
+            self.code_lines = updated_code_lines
+                .lines()
+                .map(|line| line.to_owned())
+                .collect();
+        } else {
+            let updated_range_start_line = block_range.start_line() - self.start_line;
+            let updated_range_end_line = block_range.end_line() - self.start_line;
+            let mut updated_code_lines = self.code_lines[..updated_range_start_line].join("\n");
+            updated_code_lines
+                .push_str(&self.code_lines[(updated_range_end_line + 1)..].join("\n"));
+            self.code_lines = updated_code_lines
+                .lines()
+                .map(|line| line.to_owned())
+                .collect();
+        }
+        self.updated_block = None;
+    }
+
+    fn update_block(&mut self, answer_line_at_index: &str, block_range: &Range) {
+        if self.updated_block.is_none() {
+            self.updated_block = Some(answer_line_at_index.to_owned());
+            let _ = self.sender.send(EditDelta::EditDelta((
+                block_range.clone(),
+                answer_line_at_index.to_owned(),
+            )));
+        } else {
+            self.updated_block = Some(
+                self.updated_block.clone().expect("is_none to hold") + "\n" + answer_line_at_index,
+            );
+            let _ = self.sender.send(EditDelta::EditDelta((
+                block_range.clone(),
+                ("\n".to_owned() + answer_line_at_index).to_owned(),
+            )));
         }
     }
 }

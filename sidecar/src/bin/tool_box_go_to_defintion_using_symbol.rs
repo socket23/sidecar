@@ -33,6 +33,7 @@ fn default_index_dir() -> PathBuf {
     }
 }
 
+
 #[tokio::main]
 async fn main() {
     let editor_url = "http://localhost:59293".to_owned();

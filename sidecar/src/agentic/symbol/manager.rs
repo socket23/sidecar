@@ -41,16 +41,35 @@ use super::{
 
 // This is the main communication manager between all the symbols
 // this of this as the central hub through which all the events go forward
+/// The SymbolManager is the central hub for managing and coordinating symbol-related operations.
+/// It handles communication between symbols, manages their lifecycle, and orchestrates various tools and services.
 pub struct SymbolManager {
+    /// Channel sender for communication between symbols and the manager.
+    /// This allows for asynchronous message passing within the system.
     sender: UnboundedSender<SymbolEventMessage>,
-    // this is the channel where the various symbols will use to talk to the manager
-    // which in turn will proxy it to the right symbol, what happens if there are failures
-    // each symbol has its own receiver which is being used
+
+    /// Manages locking and unlocking of symbols to prevent concurrent access.
+    /// This ensures thread-safety when multiple operations are performed on symbols simultaneously.
     symbol_locker: SymbolLocker,
+
+    /// Broker for managing and invoking various tools.
+    /// This provides a centralized way to access and use different tools required for symbol operations.
     tools: Arc<ToolBroker>,
+
+    /// Parser for TypeScript language constructs.
+    /// This is used to analyze and understand TypeScript code structures.
     ts_parsing: Arc<TSLanguageParsing>,
+
+    /// Collection of tools and utilities for symbol operations.
+    /// This provides a set of helper functions and utilities specific to symbol manipulation and analysis.
     tool_box: Arc<ToolBox>,
+
+    /// Properties for the Language Model being used.
+    /// This contains configuration and settings for the LLM used in various operations.
     llm_properties: LLMProperties,
+
+    /// Cache for storing long-context search results.
+    /// This improves performance by storing and reusing results of expensive long-context searches.
     long_context_cache: LongContextSearchCache,
 }
 

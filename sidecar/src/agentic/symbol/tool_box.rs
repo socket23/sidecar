@@ -6475,7 +6475,7 @@ FILEPATH: {fs_file_path}
         path: String,
         symbol: String,
         message_properties: SymbolEventMessageProperties,
-        request_id: String,
+        _request_id: String,
     ) -> Vec<ReferenceLocation> {
         let filtered_nodes = self
             .get_ouline_nodes_grouped_fresh(&path, message_properties.clone())
@@ -6494,7 +6494,6 @@ FILEPATH: {fs_file_path}
         let reference_locations = stream::iter(filtered_nodes.into_iter().map(|node| {
             let path = path.clone();
             let message_properties = Arc::clone(&message_properties);
-            let request_id = request_id.clone();
 
             println!(
                 "toolbox::get_symbol_references::go_to_references({})",
@@ -6511,27 +6510,7 @@ FILEPATH: {fs_file_path}
                     )
                     .await
                 {
-                    Ok(refs) => {
-                        let locations = refs.locations();
-
-                        println!(
-                            "reference locations found for {}: {}",
-                            node.name(),
-                            &locations.len()
-                        );
-
-                        for location in &locations {
-                            // this is where we send UI events for a found reference
-                            let _ = message_properties.ui_sender().send(
-                                UIEventWithID::found_reference(
-                                    request_id.clone(),
-                                    location.fs_file_path().to_string(),
-                                ),
-                            );
-                        }
-
-                        locations
-                    }
+                    Ok(refs) => refs.locations(),
                     Err(_) => Vec::new(),
                 }
             }
@@ -8192,5 +8171,50 @@ FILEPATH: {fs_file_path}
         let _join_handle = tokio::spawn(async move {
             let _ = cloned_tools.invoke(search_and_replace).await;
         });
+    }
+
+    /// We are going to get the outline nodes without repeting the locations which
+    /// have been already included
+    pub async fn outline_nodes_for_references(
+        &self,
+        references: &[ReferenceLocation],
+        message_properties: SymbolEventMessageProperties,
+    ) -> Vec<OutlineNode> {
+        let file_paths = references
+            .iter()
+            .map(|reference| reference.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        let outline_nodes_by_files = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await;
+            outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .map(|(_, outline_nodes)| outline_nodes)
+        .flatten()
+        .collect::<Vec<_>>();
+
+        outline_nodes_by_files
+            .into_iter()
+            .filter(|outline_node| {
+                // check if a reference belongs inside this outline node
+                let outline_node_range = outline_node.range();
+                references.iter().any(|reference| {
+                    outline_node_range.contains_check_line_column(reference.range())
+                        && reference.fs_file_path() == outline_node.fs_file_path()
+                })
+            })
+            .collect::<Vec<_>>()
     }
 }

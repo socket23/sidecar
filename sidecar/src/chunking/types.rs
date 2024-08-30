@@ -310,7 +310,7 @@ impl OutlineNodeContent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, std::hash::Hash, Eq)]
+#[derive(Debug, Clone, PartialEq, std::hash::Hash, Eq, serde::Serialize)]
 pub struct OutlineNode {
     content: OutlineNodeContent,
     children: Vec<OutlineNodeContent>,

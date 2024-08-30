@@ -704,43 +704,43 @@ pub async fn code_editing(
         let cloned_request_id = request_id.clone();
         if !symbols_to_anchor.is_empty() {
             // so this is an async task that should just chill in the background while the edits flow below continues
-            let references_join_handle = tokio::spawn(async move {
-                let start = Instant::now();
+            // let references_join_handle = tokio::spawn(async move {
+            //     let start = Instant::now();
 
-                // this needs to be its own async task
-                let references =
-                    stream::iter(cloned_symbols_to_anchor.clone().into_iter().flat_map(
-                        |(symbol_identifier, symbol_names)| {
-                            // move is needed for symbol_identifier
-                            symbol_names.into_iter().filter_map(move |symbol_name| {
-                                symbol_identifier
-                                    .fs_file_path()
-                                    .map(|path| (path, symbol_name))
-                            })
-                        },
-                    ))
-                    .map(|(path, symbol_name)| {
-                        // for each symbol in user selection
-                        println!("getting references for {}-{}", &path, &symbol_name);
-                        cloned_toolbox.get_symbol_references(
-                            path,
-                            symbol_name,
-                            cloned_message_properties.clone(),
-                            cloned_request_id.clone(),
-                        )
-                    })
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await // this await blocks everything
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
+            //     // this needs to be its own async task
+            //     let references =
+            //         stream::iter(cloned_symbols_to_anchor.clone().into_iter().flat_map(
+            //             |(symbol_identifier, symbol_names)| {
+            //                 // move is needed for symbol_identifier
+            //                 symbol_names.into_iter().filter_map(move |symbol_name| {
+            //                     symbol_identifier
+            //                         .fs_file_path()
+            //                         .map(|path| (path, symbol_name))
+            //                 })
+            //             },
+            //         ))
+            //         .map(|(path, symbol_name)| {
+            //             // for each symbol in user selection
+            //             println!("getting references for {}-{}", &path, &symbol_name);
+            //             cloned_toolbox.get_symbol_references(
+            //                 path,
+            //                 symbol_name,
+            //                 cloned_message_properties.clone(),
+            //                 cloned_request_id.clone(),
+            //             )
+            //         })
+            //         .buffer_unordered(100)
+            //         .collect::<Vec<_>>()
+            //         .await // this await blocks everything
+            //         .into_iter()
+            //         .flatten()
+            //         .collect::<Vec<_>>();
 
-                println!("total references: {}", references.len());
-                println!("collect references time elapsed: {:?}", start.elapsed());
+            //     println!("total references: {}", references.len());
+            //     println!("collect references time elapsed: {:?}", start.elapsed());
 
-                references
-            });
+            //     references
+            // });
 
             // if we do not have any symbols to anchor on, then we are screwed over here
             // we want to send the edit request directly over here cutting through
@@ -792,13 +792,13 @@ pub async fn code_editing(
             });
 
             // this must happen after the anchor_edits task is underway so as to not block it
-            let references = references_join_handle.await.expect("references to return");
+            // let references = references_join_handle.await.expect("references to return");
 
             let editing_metadata = AnchoredEditingMetadata::new(
                 message_properties,
                 symbols_to_anchor,
                 file_contents,
-                references, // precomputed references
+                vec![], // precomputed references
             );
             let _ = app
                 .anchored_request_tracker

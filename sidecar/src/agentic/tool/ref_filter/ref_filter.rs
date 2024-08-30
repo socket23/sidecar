@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::{stream, StreamExt};
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
@@ -127,29 +128,48 @@ Omit those that do not need to change.
         format!(
             r#"You are an expert software engineer who is pair programming with another developer.
 - The developer who you are helping with has selected some code which is present in <code_selected> and they intent to change it, the request for change will be provided to you in <user_query>.
-- You will take a look at all the references in the codebase for the <code_selected> which is going to change and anticipate which of these references need to change and why.
-- Try to give back your reply in a single sentence if possible and keep it very high value as you are trying to nudge the user towards making the change in the best possible way.
-- Things to look out for:
+- We found a reference for the code present in <code_selected> which is given to you in <reference> section. This means that any change made to <code_selected> might also require changes to the <reference> section.
+- Given the changes which will be made to <code_selected> because of the <user_query> you need to decide if we need to change the code in <reference> section.
+- Try to give back your reply in a single sentence if possible and keep it very high value.
+- <user_query> which CAN lead to additional changes:
 - - The user might be changing the function definition
 - - The user might be adding a new parameter or removing a parameter for the class
 - - Changing code from sync to async
 - - and many more such cases which changes the structure and the meaning of the code, as these can be breaking changes.
+- You have to decide and be certain if we are going to make a change as true or false, this should be put in a section called <change_required>
+- Making a change requires a lot of effort, so be very certain if we should change the code in our selection in <code_selected> based on the <user_query>
+- In your reply do not mention the <reference> as reference code, but instead talk about the code symbol.
+- Your reason which you will put in the <reason> section of your reply, MUST contain the "WHY" for the change. We MUST explain to the user why the code in <reference> might require a change.
 
 Your response must be in the following format:
 
 <reply>
+<reason>
 your single sentence
+</reason>
+<change_required>
+</change_required>
 </reply>"#
         )
     }
 
-    pub fn user_message(&self, request: &ReferenceFilterRequest) -> String {
+    pub fn user_message(&self, request: &ReferenceFilterRequest) -> Vec<String> {
         let references = request.reference_outlines();
         let user_query = request.user_instruction();
         let anchored_symbols = request.anchored_symbols();
 
-        format!(
-            r#"<user_query>
+        let anchored_symbol_prompt = anchored_symbols
+            .iter()
+            .map(|(symbol_name, fs_file_path, contents)| {
+                format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        references
+            .into_iter()
+            .map(|reference| {
+                format!(
+                    r#"<user_query>
 {}
 </user_query>
 
@@ -157,29 +177,21 @@ your single sentence
 {}
 </code_selected>
 
-<references>
+<reference>
 {}
-</references>"#,
-            user_query,
-            anchored_symbols
-                .iter()
-                .map(|(symbol_name, fs_file_path, contents)| {
-                    format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-            references
-                .iter()
-                .map(|reference| {
-                    let name = reference.name();
-                    let fs_file_path = reference.fs_file_path();
-                    let content = reference.content().content();
+</reference>"#,
+                    user_query,
+                    anchored_symbol_prompt,
+                    {
+                        let name = reference.name();
+                        let fs_file_path = reference.fs_file_path();
+                        let content = reference.content().content();
 
-                    format!("{} in {}\n{}", name, fs_file_path, content)
-                })
-                .collect::<Vec<_>>()
-                .join("\n\n=========\n\n"),
-        )
+                        format!("{} in {}\n{}", name, fs_file_path, content)
+                    }
+                )
+            })
+            .collect()
     }
 
     pub fn parse_response(response: &str) -> String {
@@ -204,41 +216,54 @@ impl Tool for ReferenceFilterBroker {
         let root_request_id = context.root_id.to_owned();
 
         let system_message = LLMClientMessage::system(self.system_message());
-        let user_message = LLMClientMessage::user(self.user_message(&context));
+        let user_messages = self.user_message(&context);
 
-        let request = LLMClientCompletionRequest::new(
-            llm_properties.llm().clone(),
-            vec![system_message, user_message],
-            0.2,
-            None,
-        );
-
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let response = self
-            .llm_client
-            .stream_completion(
-                llm_properties.api_key().clone(),
-                request,
-                llm_properties.provider().clone(),
-                vec![
-                    ("event_type".to_owned(), "filter_references".to_owned()),
-                    ("root_id".to_owned(), root_request_id.to_owned()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
+        let _ = stream::iter(user_messages.into_iter().map(|user_message| {
+            (
+                LLMClientCompletionRequest::new(
+                    llm_properties.llm().clone(),
+                    vec![system_message.clone(), LLMClientMessage::user(user_message)],
+                    0.2,
+                    None,
+                ),
+                self.llm_client.clone(),
+                llm_properties.clone(),
+                root_request_id.to_owned(),
             )
-            .await
-            .map_err(|e| ToolError::LLMClientError(e))?;
+        }))
+        .map(
+            |(request, llm_client, llm_properties, root_request_id)| async move {
+                let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+                let response = llm_client
+                    .stream_completion(
+                        llm_properties.api_key().clone(),
+                        request,
+                        llm_properties.provider().clone(),
+                        vec![
+                            ("event_type".to_owned(), "filter_references".to_owned()),
+                            ("root_id".to_owned(), root_request_id.to_owned()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        sender,
+                    )
+                    .await;
+                println!("reference_check::response::({:?})", response);
+            },
+        )
+        .buffer_unordered(200)
+        .collect::<Vec<_>>()
+        .await;
 
-        // this may need to become more sophisticated later, but we roll for now
-        let answer = ReferenceFilterBroker::parse_response(&response);
+        Err(ToolError::MissingTool)
 
-        println!("answer: {}", &answer);
+        // // this may need to become more sophisticated later, but we roll for now
+        // let answer = ReferenceFilterBroker::parse_response(&response);
 
-        Ok(ToolOutput::ReferencesFilter(ReferenceFilterResponse::new(
-            &answer,
-        )))
+        // println!("answer: {}", &answer);
+
+        // Ok(ToolOutput::ReferencesFilter(ReferenceFilterResponse::new(
+        //     &answer,
+        // )))
     }
 }

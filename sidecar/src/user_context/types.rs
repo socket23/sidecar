@@ -219,8 +219,17 @@ impl UserContext {
 
         // now we have to read the file contents as a string and pass it to the LLM
         // for output
+        println!(
+            "user_context::to_context_string::file_paths({})",
+            file_paths.to_vec().join(",")
+        );
         let mut file_contents = vec![];
+        let mut already_seen_files: HashSet<String> = Default::default();
         for file_path in file_paths.into_iter() {
+            if already_seen_files.contains(&file_path) {
+                continue;
+            }
+            already_seen_files.insert(file_path.to_owned());
             let contents = tokio::fs::read(&file_path).await;
             if contents.is_err() {
                 continue;

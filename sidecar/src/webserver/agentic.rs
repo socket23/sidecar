@@ -80,6 +80,7 @@ struct AnchoredEditingMetadata {
     previous_file_content: HashMap<String, String>,
     // to store anchor selection nodes' references
     references: Vec<ReferenceLocation>,
+    user_context_string: Option<String>,
 }
 
 impl AnchoredEditingMetadata {
@@ -88,12 +89,14 @@ impl AnchoredEditingMetadata {
         anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
         previous_file_content: HashMap<String, String>,
         references: Vec<ReferenceLocation>,
+        user_context_string: Option<String>,
     ) -> Self {
         Self {
             message_properties,
             anchored_symbols,
             previous_file_content,
             references,
+            user_context_string,
         }
     }
 
@@ -416,6 +419,10 @@ pub async fn code_sculpting_warmup(
     Json(CodeSculptingWarmup { file_paths }): Json<CodeSculptingWarmup>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_sculpting_warmup");
+    println!(
+        "webserver::code_sculpting_warmup::file_paths({})",
+        file_paths.to_vec().join(",")
+    );
     let wramup_request_id = "warmup_request_id".to_owned();
     let _ = app
         .tool_box
@@ -654,17 +661,12 @@ pub async fn code_sculpting(
         let join_handle = tokio::spawn(async move {
             let anchored_symbols = anchor_properties.anchored_symbols;
             let message_properties = anchor_properties.message_properties;
+            let user_provided_context = anchor_properties.user_context_string;
             let _ = symbol_manager
                 .anchor_edits(
                     instruction,
                     anchored_symbols,
-                    // do not send user context on iteration since the symbols are already
-                    // selected
-                    // we are iterating on a new version of the request over here
-                    // https://app.parea.ai/logs/detailed/f07dee13-d207-49d5-9620-a942ca94d1d3
-                    // yet we were getting the first user context which has been cached leading
-                    // to no new code generated
-                    None,
+                    user_provided_context,
                     message_properties,
                 )
                 .await;
@@ -790,6 +792,7 @@ pub async fn code_editing(
             symbols_to_anchor.clone(),
             file_contents,
             vec![],
+            user_provided_context.clone(),
         );
 
         // instantiates basic request tracker, with no join_handle, but basic metadata

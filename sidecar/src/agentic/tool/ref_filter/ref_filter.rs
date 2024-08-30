@@ -15,8 +15,11 @@ use crate::{
             ui_event::{RelevantReference, UIEventWithID},
         },
         tool::{
-            errors::ToolError, input::ToolInput, lsp::gotoreferences::ReferenceLocation,
-            output::ToolOutput, r#type::Tool,
+            errors::ToolError,
+            input::ToolInput,
+            lsp::gotoreferences::{AnchoredReference, ReferenceLocation},
+            output::ToolOutput,
+            r#type::Tool,
         },
     },
     chunking::types::OutlineNode,
@@ -35,6 +38,7 @@ pub struct ReferenceFilterRequest {
     root_id: String,
     // we need ui_sender to fire events to ide
     message_properties: SymbolEventMessageProperties,
+    anchored_references: Vec<AnchoredReference>,
 }
 
 impl ReferenceFilterRequest {
@@ -45,6 +49,7 @@ impl ReferenceFilterRequest {
         llm_properties: LLMProperties,
         root_id: String,
         message_properties: SymbolEventMessageProperties,
+        anchored_references: Vec<AnchoredReference>,
     ) -> Self {
         Self {
             user_instruction,
@@ -53,6 +58,7 @@ impl ReferenceFilterRequest {
             anchored_symbols,
             root_id,
             message_properties,
+            anchored_references,
         }
     }
 
@@ -78,6 +84,10 @@ impl ReferenceFilterRequest {
 
     pub fn message_properties(&self) -> &SymbolEventMessageProperties {
         &self.message_properties
+    }
+
+    pub fn anchored_references(&self) -> &[AnchoredReference] {
+        &self.anchored_references
     }
 }
 
@@ -292,10 +302,19 @@ impl Tool for ReferenceFilterBroker {
         // iterate by references
 
         let references = context.reference_outlines();
+        let anchored_references = context.anchored_references();
 
-        // let _ = stream::iter(references.into_iter().map(|reference| {
-        //     let user_message = self.user_message();
-        // }))
+        let _ = stream::iter(anchored_references.into_iter().map(|reference| {
+            let name = reference.anchored_symbol().name();
+            let fs_file_path = reference
+                .anchored_symbol()
+                .fs_file_path()
+                .unwrap_or_default(); // fk this Option
+            let contents = reference.anchored_symbol().content();
+            let user_query = context.user_instruction();
+
+            let user_message = self.user_message(name, &fs_file_path, contents, user_query);
+        }));
 
         let _ = stream::iter(user_messages.into_iter().map(|user_message| {
             (

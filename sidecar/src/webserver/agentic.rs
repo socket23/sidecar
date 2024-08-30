@@ -927,6 +927,7 @@ pub async fn code_editing(
                     llm_properties.clone(),
                     cloned_request_id.clone(),
                     cloned_message_properties.clone(),
+                    references.clone(),
                 );
 
                 let llm_time = Instant::now();

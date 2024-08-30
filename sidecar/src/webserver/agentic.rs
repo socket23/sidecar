@@ -758,6 +758,8 @@ pub async fn code_editing(
             .filter_map(|anchored_symbol| anchored_symbol.fs_file_path())
             .collect::<Vec<_>>();
         let cloned_tools = app.tool_box.clone();
+
+        // consider whether this is necessary
         let file_contents = stream::iter(
             possibly_changed_files
                 .into_iter()
@@ -778,7 +780,10 @@ pub async fn code_editing(
         .filter_map(|s| s)
         .collect::<HashMap<_, _>>();
 
-        println!("metadata_pregen::elapsed({:?})", metadata_pregen.elapsed());
+        println!(
+            "(should be very fast) metadata_pregen::elapsed({:?})",
+            metadata_pregen.elapsed()
+        );
 
         let editing_metadata = AnchoredEditingMetadata::new(
             message_properties.clone(),
@@ -805,40 +810,40 @@ pub async fn code_editing(
         let cloned_user_query = user_query.clone();
 
         if !symbols_to_anchor.is_empty() {
+            let stream_symbols = cloned_symbols_to_anchor.clone();
             // so this is an async task that should just chill in the background while the edits flow below continues
             let _references_join_handle = tokio::spawn(async move {
                 let start = Instant::now();
 
                 // this does not need to run in sequence!
-                let references =
-                    stream::iter(cloned_symbols_to_anchor.clone().into_iter().flat_map(
-                        |anchored_symbol| {
-                            let symbol_names = anchored_symbol.sub_symbol_names().to_vec();
-                            let symbol_identifier = anchored_symbol.identifier().to_owned();
-                            // move is needed for symbol_identifier
-                            symbol_names.into_iter().filter_map(move |symbol_name| {
-                                symbol_identifier
-                                    .fs_file_path()
-                                    .map(|path| (path, symbol_name))
-                            })
-                        },
-                    ))
-                    .map(|(path, symbol_name)| {
-                        // for each symbol in user selection
-                        println!("getting references for {}-{}", &path, &symbol_name);
-                        cloned_toolbox.get_symbol_references(
-                            path,
-                            symbol_name.to_owned(),
-                            cloned_message_properties.clone(),
-                            cloned_request_id.clone(),
-                        )
-                    })
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await // this await blocks everything
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
+                let references = stream::iter(stream_symbols.clone().into_iter().flat_map(
+                    |anchored_symbol| {
+                        let symbol_names = anchored_symbol.sub_symbol_names().to_vec();
+                        let symbol_identifier = anchored_symbol.identifier().to_owned();
+                        // move is needed for symbol_identifier
+                        symbol_names.into_iter().filter_map(move |symbol_name| {
+                            symbol_identifier
+                                .fs_file_path()
+                                .map(|path| (path, symbol_name))
+                        })
+                    },
+                ))
+                .map(|(path, symbol_name)| {
+                    // for each symbol in user selection
+                    println!("getting references for {}-{}", &path, &symbol_name);
+                    cloned_toolbox.get_symbol_references(
+                        path,
+                        symbol_name.to_owned(),
+                        cloned_message_properties.clone(),
+                        cloned_request_id.clone(),
+                    )
+                })
+                .buffer_unordered(100)
+                .collect::<Vec<_>>()
+                .await // this await blocks everything
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
 
                 println!("total references: {}", references.len());
                 println!("collect references time elapsed: {:?}", start.elapsed());
@@ -888,50 +893,6 @@ pub async fn code_editing(
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
-                // todo(zi):
-                // yes this looks like spaghetti but it works
-                let anchored_symbols_with_contents = stream::iter(cloned_symbols_to_anchor.clone())
-                    .map(|anchored_symbol| {
-                        let symbol_name = anchored_symbol.name().to_string();
-                        let fs_file_path = anchored_symbol.fs_file_path();
-                        let tool_box = cloned_toolbox.clone();
-                        let message_properties = cloned_message_properties.clone();
-
-                        (symbol_name, fs_file_path, tool_box, message_properties)
-                    })
-                    .map(
-                        |(symbol_name, fs_file_path, tool_box, message_properties)| async move {
-                            if let Some(fs_file_path) = fs_file_path {
-                                let start = Instant::now();
-                                println!("references::outline_node_for_symbol::start");
-
-                                // can take >5s for big symbols
-                                let response = tool_box
-                                    .outline_nodes_for_symbol(
-                                        &fs_file_path,
-                                        &symbol_name,
-                                        message_properties,
-                                    )
-                                    .await;
-                                println!(
-                                    "references::outline_node_for_symbol::end::({:?})",
-                                    start.elapsed()
-                                );
-
-                                if let Ok(outline_nodes) = response {
-                                    (symbol_name, fs_file_path, outline_nodes)
-                                } else {
-                                    (symbol_name, fs_file_path, String::new())
-                                }
-                            } else {
-                                (symbol_name, String::new(), String::new())
-                            }
-                        },
-                    )
-                    .buffer_unordered(100) // Adjust the number of concurrent tasks as needed
-                    .collect::<Vec<_>>()
-                    .await;
-
                 println!(
                     "code_editing:reference_symbols.len({:?})",
                     &reference_outline_nodes.len()
@@ -941,7 +902,7 @@ pub async fn code_editing(
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
                     reference_outline_nodes.clone(),
-                    anchored_symbols_with_contents.clone(),
+                    symbols_to_anchor.clone(),
                     llm_properties.clone(),
                     cloned_request_id.clone(),
                 );
@@ -1001,7 +962,7 @@ pub async fn code_editing(
                 let _ = symbol_manager
                     .anchor_edits(
                         user_query,
-                        symbols_to_anchor.clone(),
+                        cloned_symbols_to_anchor.clone(),
                         cloned_user_context,
                         cloned_message_properties,
                     )

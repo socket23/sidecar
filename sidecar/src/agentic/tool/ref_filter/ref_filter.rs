@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Instant};
 
 use crate::{
     agentic::{
-        symbol::identifier::LLMProperties,
+        symbol::{anchored::AnchoredSymbol, identifier::LLMProperties},
         tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     },
     chunking::types::OutlineNode,
@@ -21,7 +21,7 @@ pub struct ReferenceFilterRequest {
     user_instruction: String,
     /// A collection of outline nodes representing the references to be filtered.
     reference_outlines: Vec<OutlineNode>,
-    anchored_symbols: Vec<(String, String, String)>,
+    anchored_symbols: Vec<AnchoredSymbol>,
     llm_properties: LLMProperties,
     /// The unique identifier for the root request.
     root_id: String,
@@ -31,7 +31,7 @@ impl ReferenceFilterRequest {
     pub fn new(
         user_instruction: String,
         reference_outlines: Vec<OutlineNode>,
-        anchored_symbols: Vec<(String, String, String)>, // consider naming these
+        anchored_symbols: Vec<AnchoredSymbol>,
         llm_properties: LLMProperties,
         root_id: String,
     ) -> Self {
@@ -56,7 +56,7 @@ impl ReferenceFilterRequest {
         &self.llm_properties
     }
 
-    pub fn anchored_symbols(&self) -> &[(String, String, String)] {
+    pub fn anchored_symbols(&self) -> &[AnchoredSymbol] {
         &self.anchored_symbols
     }
 
@@ -160,8 +160,12 @@ your single sentence
 
         let anchored_symbol_prompt = anchored_symbols
             .iter()
-            .map(|(symbol_name, fs_file_path, contents)| {
-                format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
+            .filter_map(|anchored_symbol| {
+                anchored_symbol.fs_file_path().map(|fs_file_path| {
+                    let symbol_name = anchored_symbol.name();
+                    let contents = anchored_symbol.content();
+                    format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
+                })
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -235,7 +239,9 @@ impl Tool for ReferenceFilterBroker {
             |(request, llm_client, llm_properties, root_request_id)| async move {
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
                 let start = Instant::now();
-                let response = llm_client
+
+                // todo(zi): send the UI events
+                let _response = llm_client
                     .stream_completion(
                         llm_properties.api_key().clone(),
                         request,
@@ -253,22 +259,14 @@ impl Tool for ReferenceFilterBroker {
                     "reference_check::stream_completion::elapsed: {:?}",
                     start.elapsed()
                 );
-                // println!("reference_check::response::({:?})", response);
             },
         )
         .buffer_unordered(200)
         .collect::<Vec<_>>()
         .await;
 
+        // todo(zi): send the UI events
+
         Err(ToolError::MissingTool)
-
-        // // this may need to become more sophisticated later, but we roll for now
-        // let answer = ReferenceFilterBroker::parse_response(&response);
-
-        // println!("answer: {}", &answer);
-
-        // Ok(ToolOutput::ReferencesFilter(ReferenceFilterResponse::new(
-        //     &answer,
-        // )))
     }
 }

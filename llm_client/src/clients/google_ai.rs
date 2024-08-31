@@ -37,7 +37,7 @@ impl GoogleAIStdioClient {
     fn model(&self, model: &LLMType) -> Option<String> {
         match model {
             LLMType::GeminiPro => Some("gemini-1.5-pro".to_owned()),
-            LLMType::GeminiProFlash => Some("gemini-1.5-flash-exp-0827".to_owned()),
+            LLMType::GeminiProFlash => Some("gemini-1.5-flash".to_owned()),
             _ => None,
         }
     }
@@ -107,6 +107,22 @@ impl GoogleAIStdioClient {
                     }
                     accumulated_messages = vec![message];
                     previous_role = Some(current_role.clone());
+                }
+            }
+        }
+        // Add the last group of messages
+        if !accumulated_messages.is_empty() {
+            if let Some(last_role) = previous_role {
+                if let Some(last_role_str) = self.get_role(&last_role) {
+                    final_messages.push(Content {
+                        role: last_role_str,
+                        parts: accumulated_messages
+                            .iter()
+                            .map(|message| {
+                                HashMap::from([("text".to_owned(), message.content().to_owned())])
+                            })
+                            .collect(),
+                    });
                 }
             }
         }

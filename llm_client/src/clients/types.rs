@@ -9,35 +9,63 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::provider::{LLMProvider, LLMProviderAPIKeys};
 
+/// Represents different types of Language Learning Models (LLMs)
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LLMType {
+    /// Mixtral model
     Mixtral,
+    /// Mistral Instruct model
     MistralInstruct,
+    /// GPT-4 model
     Gpt4,
+    /// GPT-3.5 with 16k context window
     GPT3_5_16k,
+    /// GPT-4 with 32k context window
     Gpt4_32k,
+    /// GPT-4 Optimized model
     Gpt4O,
+    /// GPT-4 Optimized Mini model
     Gpt4OMini,
+    /// GPT-4 Turbo model
     Gpt4Turbo,
+    /// DeepSeek Coder 1.3B Instruct model
     DeepSeekCoder1_3BInstruct,
+    /// DeepSeek Coder 33B Instruct model
     DeepSeekCoder33BInstruct,
+    /// DeepSeek Coder 6B Instruct model
     DeepSeekCoder6BInstruct,
+    /// DeepSeek Coder V2 model
     DeepSeekCoderV2,
+    /// CodeLLama 70B Instruct model
     CodeLLama70BInstruct,
+    /// CodeLlama 13B Instruct model
     CodeLlama13BInstruct,
+    /// CodeLlama 7B Instruct model
     CodeLlama7BInstruct,
+    /// Llama 3 8B Instruct model
     Llama3_8bInstruct,
+    /// Llama 3.1 8B Instruct model
     Llama3_1_8bInstruct,
+    /// Llama 3.1 70B Instruct model
     Llama3_1_70bInstruct,
+    /// Claude Opus model
     ClaudeOpus,
+    /// Claude Sonnet model
     ClaudeSonnet,
+    /// Claude Haiku model
     ClaudeHaiku,
+    /// PPLX Sonnet Small model
     PPLXSonnetSmall,
+    /// Cohere Rerank V3 model
     CohereRerankV3,
+    /// Gemini Pro model
     GeminiPro,
+    /// Gemini Pro Flash model
     GeminiProFlash,
+    /// Custom model type with a specified name
     Custom(String),
 }
+
 
 impl Serialize for LLMType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

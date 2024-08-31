@@ -48,6 +48,7 @@ use super::{
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
     r#type::ToolType,
+    ref_filter::ref_filter::ReferenceFilterRequest,
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
     swe_bench::test_tool::SWEBenchTestRequest,
@@ -126,6 +127,8 @@ pub enum ToolInput {
     // git diff request
     GitDiff(GitDiffClientRequest),
     OutlineNodesUsingEditor(OutlineNodesUsingEditorRequest),
+    // filters references based on user query
+    ReferencesFilter(ReferenceFilterRequest),
 }
 
 impl ToolInput {
@@ -187,6 +190,7 @@ impl ToolInput {
             ToolInput::SearchAndReplaceEditing(_) => ToolType::SearchAndReplaceEditing,
             ToolInput::GitDiff(_) => ToolType::GitDiff,
             ToolInput::OutlineNodesUsingEditor(_) => ToolType::OutlineNodesUsingEditor,
+            ToolInput::ReferencesFilter(_) => ToolType::ReferencesFilter,
         }
     }
 
@@ -247,6 +251,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::FilterEditOperation))
+        }
+    }
+
+    pub fn filter_references_request(self) -> Result<ReferenceFilterRequest, ToolError> {
+        if let ToolInput::ReferencesFilter(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ReferencesFilter))
         }
     }
 

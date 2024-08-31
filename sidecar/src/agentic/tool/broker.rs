@@ -47,6 +47,7 @@ use super::{
     },
     output::ToolOutput,
     r#type::{Tool, ToolType},
+    ref_filter::ref_filter::ReferenceFilterBroker,
     rerank::base::ReRankBroker,
     search::big_search::BigSearchBroker,
     swe_bench::test_tool::SWEBenchTestTool,
@@ -369,6 +370,13 @@ impl ToolBroker {
         tools.insert(
             ToolType::OutlineNodesUsingEditor,
             Box::new(OutlineNodesUsingEditorClient::new()),
+        );
+        tools.insert(
+            ToolType::ReferencesFilter,
+            Box::new(ReferenceFilterBroker::new(
+                llm_client.clone(),
+                fail_over_llm.clone(),
+            )),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

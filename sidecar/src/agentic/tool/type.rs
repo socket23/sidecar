@@ -97,6 +97,8 @@ pub enum ToolType {
     CodeEditingWarmupTool,
     // grab outline nodes using the editor
     OutlineNodesUsingEditor,
+    // filters references
+    ReferencesFilter,
 }
 
 impl std::fmt::Display for ToolType {
@@ -166,6 +168,7 @@ impl std::fmt::Display for ToolType {
             ),
             ToolType::CodeEditingWarmupTool => write!(f, "Code editing warmup tool"),
             ToolType::OutlineNodesUsingEditor => write!(f, "Outline nodes using the editor"),
+            ToolType::ReferencesFilter => write!(f, "Filters references"),
         }
     }
 }

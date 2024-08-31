@@ -42,6 +42,7 @@ use super::{
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
+    ref_filter::ref_filter::ReferenceFilterResponse,
     rerank::base::ReRankEntriesForBroker,
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
@@ -158,6 +159,8 @@ pub enum ToolOutput {
     GitDiff(GitDiffClientResponse),
     // outline nodes from the editor
     OutlineNodesUsingEditor(OutlineNodesUsingEditorResponse),
+    // filter reference
+    ReferencesFilter(ReferenceFilterResponse),
 }
 
 impl ToolOutput {

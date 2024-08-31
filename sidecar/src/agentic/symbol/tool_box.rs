@@ -79,7 +79,7 @@ use crate::agentic::tool::lsp::gotoimplementations::{
     GoToImplementationRequest, GoToImplementationResponse,
 };
 use crate::agentic::tool::lsp::gotoreferences::{
-    GoToReferencesRequest, GoToReferencesResponse, ReferenceLocation,
+    AnchoredReference, GoToReferencesRequest, GoToReferencesResponse, ReferenceLocation,
 };
 use crate::agentic::tool::lsp::grep_symbol::{
     LSPGrepSymbolInCodebaseRequest, LSPGrepSymbolInCodebaseResponse,
@@ -103,6 +103,7 @@ use crate::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
+use super::anchored::AnchoredSymbol;
 use super::errors::SymbolError;
 use super::events::edit::{SymbolToEdit, SymbolToEditRequest};
 use super::events::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
@@ -1628,15 +1629,10 @@ We also believe this symbol needs to be probed because of:
         symbol_name: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<String, SymbolError> {
-        // send an open file request here first
-        let _ = self
-            .file_open(fs_file_path.to_owned(), message_properties.clone())
-            .await?;
         let outline_node_possible = self
-            .symbol_broker
-            .get_symbols_outline(fs_file_path)
+            .get_ouline_nodes_grouped_fresh(fs_file_path, message_properties.clone())
             .await
-            .ok_or(SymbolError::ExpectedFileToExist)?
+            .ok_or(SymbolError::WrongToolOutput)?
             .into_iter()
             .find(|outline_node| outline_node.name() == symbol_name);
         if let Some(outline_node) = outline_node_possible {
@@ -1669,9 +1665,10 @@ We also believe this symbol needs to be probed because of:
 </outline_list>"
                 ))
             } else {
+                let start = Instant::now();
                 // we need to check for implementations as well and then return it
                 let identifier_position = outline_node.identifier_range();
-                // now we go to the implementations using this identifier node
+                // now we go to the implementations using this identifier node (this can take some time)
                 let identifier_node_positions = self
                     .go_to_implementations_exact(
                         fs_file_path,
@@ -1680,6 +1677,11 @@ We also believe this symbol needs to be probed because of:
                     )
                     .await?
                     .remove_implementations_vec();
+
+                println!(
+                    "go_to_implementations_exact::elapsed({:?})",
+                    start.elapsed()
+                );
                 // Now that we have the identifier positions we want to grab the
                 // remaining implementations as well
                 let file_paths = identifier_node_positions
@@ -1687,6 +1689,7 @@ We also believe this symbol needs to be probed because of:
                     .map(|implementation| implementation.fs_file_path().to_owned())
                     .collect::<HashSet<String>>();
                 // send a request to open all these files
+
                 let _ = stream::iter(
                     file_paths
                         .clone()
@@ -1699,11 +1702,16 @@ We also believe this symbol needs to be probed because of:
                 .buffer_unordered(100)
                 .collect::<Vec<_>>()
                 .await;
+
+                // this shit takes forever!
+                let start = Instant::now();
                 // Now all files are opened so we have also parsed them in the symbol broker
                 // so we can grab the appropriate outlines properly over here
                 let file_path_to_outline_nodes = stream::iter(file_paths)
                     .map(|fs_file_path| async move {
+                        let start = Instant::now();
                         let symbols = self.symbol_broker.get_symbols_outline(&fs_file_path).await;
+                        println!("get_symbol_outline::elapsed({:?}", start.elapsed());
                         (fs_file_path, symbols)
                     })
                     .buffer_unordered(100)
@@ -1726,6 +1734,8 @@ We also believe this symbol needs to be probed because of:
                         }
                     })
                     .collect::<HashMap<String, OutlineNode>>();
+
+                println!("file_path_to_outline_nodes::elapsed({:?})", start.elapsed());
 
                 // we need to get the outline for the symbol over here
                 let mut outlines = vec![];
@@ -6502,7 +6512,7 @@ FILEPATH: {fs_file_path}
         path: String,
         symbol: String,
         message_properties: SymbolEventMessageProperties,
-        request_id: String,
+        _request_id: String,
     ) -> Vec<ReferenceLocation> {
         let filtered_nodes = self
             .get_ouline_nodes_grouped_fresh(&path, message_properties.clone())
@@ -6521,7 +6531,6 @@ FILEPATH: {fs_file_path}
         let reference_locations = stream::iter(filtered_nodes.into_iter().map(|node| {
             let path = path.clone();
             let message_properties = Arc::clone(&message_properties);
-            let request_id = request_id.clone();
 
             println!(
                 "toolbox::get_symbol_references::go_to_references({})",
@@ -6538,27 +6547,7 @@ FILEPATH: {fs_file_path}
                     )
                     .await
                 {
-                    Ok(refs) => {
-                        let locations = refs.locations();
-
-                        println!(
-                            "reference locations found for {}: {}",
-                            node.name(),
-                            &locations.len()
-                        );
-
-                        for location in &locations {
-                            // this is where we send UI events for a found reference
-                            let _ = message_properties.ui_sender().send(
-                                UIEventWithID::found_reference(
-                                    request_id.clone(),
-                                    location.fs_file_path().to_string(),
-                                ),
-                            );
-                        }
-
-                        locations
-                    }
+                    Ok(refs) => refs.locations(),
                     Err(_) => Vec::new(),
                 }
             }
@@ -7945,7 +7934,7 @@ FILEPATH: {fs_file_path}
         message_properties: SymbolEventMessageProperties,
         // we return a vector which maps the parent symbol identifier to the children symbols
         // which require editing over here
-    ) -> Result<Vec<(SymbolIdentifier, Vec<String>)>, SymbolError> {
+    ) -> Result<Vec<AnchoredSymbol>, SymbolError> {
         let selection_variable = user_context.variables.iter().find(|variable| {
             variable.is_selection()
                 && !(variable.start_position.line() == 0 && variable.end_position.line() == 0)
@@ -7986,7 +7975,7 @@ FILEPATH: {fs_file_path}
             })
             .collect::<Vec<_>>();
 
-        let anchored_nodes = intersecting_outline_nodes
+        let anchored_nodes: Vec<AnchoredSymbol> = intersecting_outline_nodes
             .into_iter()
             .map(|outline_node| {
                 println!(
@@ -7999,12 +7988,13 @@ FILEPATH: {fs_file_path}
                     || (language_config.is_single_implementation_block_language())
                 {
                     // then its a single unit of work, so its a bit easier
-                    (
+                    AnchoredSymbol::new(
                         SymbolIdentifier::with_file_path(
                             outline_node.name(),
                             outline_node.fs_file_path(),
                         ),
-                        vec![outline_node.name().to_owned()],
+                        outline_node.content().content(),
+                        &[outline_node.name().to_owned()],
                     )
                 } else {
                     // we need to look at the children node and figure out where we are going to be making the edits
@@ -8018,12 +8008,13 @@ FILEPATH: {fs_file_path}
                         })
                         .map(|child_outline_node| child_outline_node.name().to_owned())
                         .collect::<Vec<_>>();
-                    (
+                    AnchoredSymbol::new(
                         SymbolIdentifier::with_file_path(
                             outline_node.name(),
                             outline_node.fs_file_path(),
                         ),
-                        children_nodes,
+                        outline_node.content().content(),
+                        &children_nodes,
                     )
                 }
             })
@@ -8036,13 +8027,15 @@ FILEPATH: {fs_file_path}
     /// Uses the anchored symbols to grab the symbols which require editing
     pub async fn symbol_to_edit_request(
         &self,
-        anchored_symbols: Vec<(SymbolIdentifier, Vec<String>)>,
+        anchored_symbols: Vec<AnchoredSymbol>,
         user_query: &str,
         user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
         let mut symbol_to_edit_request = vec![];
-        for (symbol_identifier, child_symbols) in anchored_symbols.into_iter() {
+        for anchored_symbol in anchored_symbols.into_iter() {
+            let symbol_identifier = anchored_symbol.identifier().to_owned();
+            let child_symbols = anchored_symbol.sub_symbol_names().to_vec();
             // if no file path is present we should keep moving forward
             let fs_file_path = symbol_identifier.fs_file_path();
             if fs_file_path.is_none() {
@@ -8219,5 +8212,97 @@ FILEPATH: {fs_file_path}
         let _join_handle = tokio::spawn(async move {
             let _ = cloned_tools.invoke(search_and_replace).await;
         });
+    }
+
+    /// We are going to get the outline nodes without repeting the locations which
+    /// have been already included
+    pub async fn outline_nodes_for_references(
+        &self,
+        references: &[ReferenceLocation],
+        message_properties: SymbolEventMessageProperties,
+    ) -> Vec<OutlineNode> {
+        let file_paths = references
+            .iter()
+            .map(|reference| reference.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        let outline_nodes_by_files = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await;
+            outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .map(|(_, outline_nodes)| outline_nodes)
+        .flatten()
+        .collect::<Vec<_>>();
+
+        outline_nodes_by_files
+            .into_iter()
+            .filter(|outline_node| {
+                // check if a reference belongs inside this outline node
+                let outline_node_range = outline_node.range();
+                references.iter().any(|reference| {
+                    outline_node_range.contains_check_line_column(reference.range())
+                        && reference.fs_file_path() == outline_node.fs_file_path()
+                })
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub async fn outline_nodes_for_anchored_references(
+        &self,
+        anchored_references: &[AnchoredReference],
+        message_properties: SymbolEventMessageProperties,
+    ) -> Vec<OutlineNode> {
+        let references = anchored_references
+            .iter()
+            .map(|ar| ar.reference_location())
+            .collect::<Vec<_>>();
+        let file_paths = references
+            .iter()
+            .map(|reference| reference.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        let outline_nodes_by_files = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await;
+            outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .map(|(_, outline_nodes)| outline_nodes)
+        .flatten()
+        .collect::<Vec<_>>();
+
+        outline_nodes_by_files
+            .into_iter()
+            .filter(|outline_node| {
+                // check if a reference belongs inside this outline node
+                let outline_node_range = outline_node.range();
+                references.iter().any(|reference| {
+                    outline_node_range.contains_check_line_column(reference.range())
+                        && reference.fs_file_path() == outline_node.fs_file_path()
+                })
+            })
+            .collect::<Vec<_>>()
     }
 }

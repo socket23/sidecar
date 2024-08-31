@@ -70,6 +70,11 @@
     "vllm",
     "webserver",
     "yolo"
-],
-  "rust-analyzer.linkedProjects": ["./Cargo.toml", "./sidecar/Cargo.toml"]
+  ],
+  "rust-analyzer.linkedProjects": ["./Cargo.toml", "./sidecar/Cargo.toml"],
+  "files.associations": {
+    "vector": "cpp",
+    "string": "cpp",
+    "__availability": "cpp"
+  }
 }

@@ -36,6 +36,7 @@ use super::{
     input::ToolInput,
     lsp::{
         diagnostics::LSPDiagnostics,
+        get_outline_nodes::OutlineNodesUsingEditorClient,
         gotodefintion::LSPGoToDefinition,
         gotoimplementations::LSPGoToImplementation,
         gotoreferences::LSPGoToReferences,
@@ -365,6 +366,10 @@ impl ToolBroker {
             )),
         );
         tools.insert(ToolType::GitDiff, Box::new(GitDiffClient::new()));
+        tools.insert(
+            ToolType::OutlineNodesUsingEditor,
+            Box::new(OutlineNodesUsingEditorClient::new()),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

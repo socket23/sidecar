@@ -95,6 +95,8 @@ pub enum ToolType {
     GitDiff,
     // code editing warmup tool
     CodeEditingWarmupTool,
+    // grab outline nodes using the editor
+    OutlineNodesUsingEditor,
 }
 
 impl std::fmt::Display for ToolType {
@@ -163,6 +165,7 @@ impl std::fmt::Display for ToolType {
                 "Gets the git diff output for a certain file, also returns the original version"
             ),
             ToolType::CodeEditingWarmupTool => write!(f, "Code editing warmup tool"),
+            ToolType::OutlineNodesUsingEditor => write!(f, "Outline nodes using the editor"),
         }
     }
 }

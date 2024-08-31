@@ -69,6 +69,9 @@ use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::lsp::diagnostics::{
     Diagnostic, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
+use crate::agentic::tool::lsp::get_outline_nodes::{
+    OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
+};
 use crate::agentic::tool::lsp::gotodefintion::{
     DefinitionPathAndRange, GoToDefinitionRequest, GoToDefinitionResponse,
 };
@@ -6399,6 +6402,30 @@ FILEPATH: {fs_file_path}
             .expect("is_none to hold")
             .generate_outline_fresh(file_open_result.contents_ref().as_bytes(), fs_file_path);
         Some(outline_nodes)
+    }
+
+    /// Returns the outline nodes using the editor instead of relying on tree-sitter
+    ///
+    /// Use this with caution for now since some concepts don't map 1:1 to how
+    /// the world looks like with tree-sitter and sidecar
+    /// example: golang class names on functions are not registered when using this
+    pub async fn get_outline_nodes_using_editor(
+        &self,
+        fs_file_path: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<OutlineNodesUsingEditorResponse, SymbolError> {
+        let request = ToolInput::OutlineNodesUsingEditor(OutlineNodesUsingEditorRequest::new(
+            fs_file_path.to_owned(),
+            message_properties.editor_url(),
+        ));
+        let response = self
+            .tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_outline_nodes_from_editor()
+            .ok_or(SymbolError::WrongToolOutput);
+        response
     }
 
     pub async fn get_outline_nodes(

@@ -117,6 +117,7 @@ impl SymbolKind {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OutlineNodesUsingEditorResponse {
+    file_content: String,
     // we have to create the outline nodes over here
     outline_nodes: Vec<DocumentSymbol>,
 }
@@ -197,7 +198,8 @@ mod tests {
       ],
       "children": []
     }
-  ]
+  ],
+  "file_content": "testing"
 }"#;
         let parsed_response = serde_json::from_str::<OutlineNodesUsingEditorResponse>(response);
         println!("{:?}", &parsed_response);

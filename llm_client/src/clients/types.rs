@@ -66,7 +66,6 @@ pub enum LLMType {
     Custom(String),
 }
 
-
 impl Serialize for LLMType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -678,5 +677,15 @@ mod tests {
         let llm_type = LLMType::Custom("skcd_testing".to_owned());
         let str_llm_type = serde_json::to_string(&llm_type).expect("to work");
         assert_eq!(str_llm_type, "");
+    }
+}
+
+mod something {
+    mod somethingelse {
+        mod internalsomething {
+            fn something() {
+                // content here
+            }
+        }
     }
 }

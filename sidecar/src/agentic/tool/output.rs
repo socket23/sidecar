@@ -33,6 +33,7 @@ use super::{
     grep::file::FindInFileResponse,
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
+        get_outline_nodes::OutlineNodesUsingEditorResponse,
         gotodefintion::GoToDefinitionResponse,
         gotoimplementations::GoToImplementationResponse,
         gotoreferences::GoToReferencesResponse,
@@ -156,11 +157,17 @@ pub enum ToolOutput {
     SearchAndReplaceEditing(SearchAndReplaceEditingResponse),
     // git diff response
     GitDiff(GitDiffClientResponse),
+    // outline nodes from the editor
+    OutlineNodesUsingEditor(OutlineNodesUsingEditorResponse),
     // filter reference
     ReferencesFilter(ReferenceFilterResponse),
 }
 
 impl ToolOutput {
+    pub fn outline_nodes_using_editor(response: OutlineNodesUsingEditorResponse) -> Self {
+        ToolOutput::OutlineNodesUsingEditor(response)
+    }
+
     pub fn git_diff_response(response: GitDiffClientResponse) -> Self {
         ToolOutput::GitDiff(response)
     }
@@ -595,6 +602,13 @@ impl ToolOutput {
     pub fn get_git_diff_output(self) -> Option<GitDiffClientResponse> {
         match self {
             ToolOutput::GitDiff(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_outline_nodes_from_editor(self) -> Option<OutlineNodesUsingEditorResponse> {
+        match self {
+            ToolOutput::OutlineNodesUsingEditor(response) => Some(response),
             _ => None,
         }
     }

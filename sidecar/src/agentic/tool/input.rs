@@ -38,6 +38,7 @@ use super::{
     kw_search::tool::KeywordSearchQuery,
     lsp::{
         diagnostics::LSPDiagnosticsInput,
+        get_outline_nodes::OutlineNodesUsingEditorRequest,
         gotodefintion::GoToDefinitionRequest,
         gotoimplementations::GoToImplementationRequest,
         gotoreferences::GoToReferencesRequest,
@@ -125,6 +126,7 @@ pub enum ToolInput {
     SearchAndReplaceEditing(SearchAndReplaceEditingRequest),
     // git diff request
     GitDiff(GitDiffClientRequest),
+    OutlineNodesUsingEditor(OutlineNodesUsingEditorRequest),
     // filters references based on user query
     ReferencesFilter(ReferenceFilterRequest),
 }
@@ -187,7 +189,18 @@ impl ToolInput {
             ToolInput::ShouldEditCode(_) => ToolType::ShouldEditCode,
             ToolInput::SearchAndReplaceEditing(_) => ToolType::SearchAndReplaceEditing,
             ToolInput::GitDiff(_) => ToolType::GitDiff,
+            ToolInput::OutlineNodesUsingEditor(_) => ToolType::OutlineNodesUsingEditor,
             ToolInput::ReferencesFilter(_) => ToolType::ReferencesFilter,
+        }
+    }
+
+    pub fn should_outline_nodes_using_editor(
+        self,
+    ) -> Result<OutlineNodesUsingEditorRequest, ToolError> {
+        if let ToolInput::OutlineNodesUsingEditor(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::OutlineNodesUsingEditor))
         }
     }
 

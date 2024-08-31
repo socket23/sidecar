@@ -10,7 +10,7 @@ use llm_client::{
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;

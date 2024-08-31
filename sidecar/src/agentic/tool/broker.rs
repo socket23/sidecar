@@ -36,6 +36,7 @@ use super::{
     input::ToolInput,
     lsp::{
         diagnostics::LSPDiagnostics,
+        get_outline_nodes::OutlineNodesUsingEditorClient,
         gotodefintion::LSPGoToDefinition,
         gotoimplementations::LSPGoToImplementation,
         gotoreferences::LSPGoToReferences,
@@ -366,6 +367,10 @@ impl ToolBroker {
             )),
         );
         tools.insert(ToolType::GitDiff, Box::new(GitDiffClient::new()));
+        tools.insert(
+            ToolType::OutlineNodesUsingEditor,
+            Box::new(OutlineNodesUsingEditorClient::new()),
+        );
         tools.insert(
             ToolType::ReferencesFilter,
             Box::new(ReferenceFilterBroker::new(

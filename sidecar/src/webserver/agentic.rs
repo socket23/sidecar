@@ -69,16 +69,23 @@ impl ProbeRequestTracker {
 }
 
 /// Contains all the data which we will need to trigger the edits
+/// Represents metadata for anchored editing operations.
 #[derive(Clone)]
 struct AnchoredEditingMetadata {
+    /// Properties of the message event associated with this editing session.
     message_properties: SymbolEventMessageProperties,
-    // These are the symbols where we are focussed on right now in the selection
+    /// The symbols that are currently focused on in the selection.
+    /// These are the primary targets for the editing operation.
     anchored_symbols: Vec<AnchoredSymbol>,
-    // we also want to store the original content of the files which were mentioned
-    // before we started editing
+    /// Stores the original content of the files mentioned before editing started.
+    /// This allows for comparison and potential rollback if needed.
+    /// Key: File path, Value: Original file content
     previous_file_content: HashMap<String, String>,
-    // to store anchor selection nodes' references
+    /// Stores references to the anchor selection nodes.
+    /// These references can be used for navigation or additional context during editing.
     references: Vec<AnchoredReference>,
+    /// Optional string representing the user's context for this editing session.
+    /// This can provide additional information or constraints for the editing process.
     user_context_string: Option<String>,
 }
 

@@ -7995,27 +7995,43 @@ FILEPATH: {fs_file_path}
                         ),
                         outline_node.content().content(),
                         &[outline_node.name().to_owned()],
+                        outline_node.range().clone(),
                     )
                 } else {
-                    // we need to look at the children node and figure out where we are going to be making the edits
-                    let children_nodes = outline_node
-                        .children()
-                        .into_iter()
-                        .filter(|children| {
-                            children
-                                .range()
-                                .intersects_with_another_range(&selection_range)
-                        })
-                        .map(|child_outline_node| child_outline_node.name().to_owned())
-                        .collect::<Vec<_>>();
-                    AnchoredSymbol::new(
-                        SymbolIdentifier::with_file_path(
-                            outline_node.name(),
-                            outline_node.fs_file_path(),
-                        ),
-                        outline_node.content().content(),
-                        &children_nodes,
-                    )
+                    // first check if we are completly covering the outline node in question
+                    // if we are, then we should anchor on just that
+                    if outline_node.range().equals_line_range(&selection_range) {
+                        AnchoredSymbol::new(
+                            SymbolIdentifier::with_file_path(
+                                outline_node.name(),
+                                outline_node.fs_file_path(),
+                            ),
+                            outline_node.content().content(),
+                            &[outline_node.name().to_owned()],
+                            outline_node.range().clone(),
+                        )
+                    } else {
+                        // we need to look at the children node and figure out where we are going to be making the edits
+                        let children_nodes = outline_node
+                            .children()
+                            .into_iter()
+                            .filter(|children| {
+                                children
+                                    .range()
+                                    .intersects_with_another_range(&selection_range)
+                            })
+                            .map(|child_outline_node| child_outline_node.name().to_owned())
+                            .collect::<Vec<_>>();
+                        AnchoredSymbol::new(
+                            SymbolIdentifier::with_file_path(
+                                outline_node.name(),
+                                outline_node.fs_file_path(),
+                            ),
+                            outline_node.content().content(),
+                            &children_nodes,
+                            outline_node.range().clone(),
+                        )
+                    }
                 }
             })
             .collect::<Vec<_>>();
@@ -8036,6 +8052,7 @@ FILEPATH: {fs_file_path}
         for anchored_symbol in anchored_symbols.into_iter() {
             let symbol_identifier = anchored_symbol.identifier().to_owned();
             let child_symbols = anchored_symbol.sub_symbol_names().to_vec();
+            let symbol_range = anchored_symbol.possible_range();
             // if no file path is present we should keep moving forward
             let fs_file_path = symbol_identifier.fs_file_path();
             if fs_file_path.is_none() {
@@ -8056,10 +8073,47 @@ FILEPATH: {fs_file_path}
                 .filter(|outline_node| outline_node.name() == symbol_identifier.symbol_name())
                 .collect::<Vec<_>>();
 
+            // if the child symbol is literally just the symbol identifier
+            if child_symbols.len() == 1
+                && child_symbols.get(0) == Some(&symbol_identifier.symbol_name().to_owned())
+            {
+                println!(
+                    "tool_box::symbol_to_edit_request::full_symbol_edit::symbol_name({})",
+                    symbol_identifier.symbol_name()
+                );
+                // This implies its the symbol itself so we can easily send the edit request quickly
+                // over here, since we anyways do full symbol edits
+                symbol_to_edit_request.push(SymbolToEditRequest::new(
+                    vec![SymbolToEdit::new(
+                        symbol_identifier.symbol_name().to_owned(),
+                        symbol_range.clone(),
+                        fs_file_path.to_owned(),
+                        vec![user_query.to_owned()].to_owned(),
+                        false,
+                        false,
+                        true,
+                        user_query.to_owned(),
+                        None,
+                        false,
+                        user_provided_context.to_owned(),
+                        true,
+                    )],
+                    symbol_identifier.clone(),
+                    vec![],
+                ));
+                continue;
+            }
+
             // Now we loop over the children and try to find the matching entries
             // for each one of them along with the range
             // the child might share the same name as the outline-node in which case
             // its a function or a class definition
+            // TODO(skcd):
+            // whats broken over here?
+            // we have a possible range location on the anchor symbol
+            // we can use that to figure out where the anchor symbol is present
+            // the assumption is that no edits would be going on at the time so we can maybe
+            // directly compare the ranges (altho thats wrong cause we can have race conditions)
             let symbols_to_edit = child_symbols
                 .into_iter()
                 .filter_map(|child_symbol| {

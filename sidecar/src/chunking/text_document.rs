@@ -348,6 +348,16 @@ impl Range {
         self.end_byte() + 1 - self.start_byte()
     }
 
+    /// Checks if the line ranges match up
+    /// this checks equality based on just the line numbers
+    pub fn equals_line_range(&self, other: &Range) -> bool {
+        let self_start_line = self.start_line();
+        let self_end_line = self.end_line();
+        let other_start_line = other.start_line();
+        let other_end_line = other.end_line();
+        self_start_line == other_start_line && self_end_line == other_end_line
+    }
+
     /// The other range intersects with the self
     /// This means they there is some kind of overlap between other and self
     /// ....................

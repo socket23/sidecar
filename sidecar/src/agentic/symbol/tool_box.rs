@@ -1924,21 +1924,28 @@ We also believe this symbol needs to be probed because of:
         symbol_to_edit: &SymbolToEdit,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<OutlineNodeContent, SymbolError> {
-        let file_open_response = self
-            .file_open(symbol_to_edit.fs_file_path().to_owned(), message_properties)
-            .await?;
-        let language_config = self
-            .editor_parsing
-            .for_file_path(symbol_to_edit.fs_file_path())
-            .ok_or(SymbolError::ExpectedFileToExist)?;
-        let outline_nodes = language_config
-            .generate_outline_fresh(
-                file_open_response.contents_ref().as_bytes(),
+        // let file_open_response = self
+        //     .file_open(symbol_to_edit.fs_file_path().to_owned(), message_properties)
+        //     .await?;
+        // let language_config = self
+        //     .editor_parsing
+        //     .for_file_path(symbol_to_edit.fs_file_path())
+        //     .ok_or(SymbolError::ExpectedFileToExist)?;
+        // let outline_nodes = language_config
+        //     .generate_outline_fresh(
+        //         file_open_response.contents_ref().as_bytes(),
+        //         symbol_to_edit.fs_file_path(),
+        //     )
+        //     .into_iter()
+        //     .filter(|outline_node| outline_node.name() == parent_symbol_name)
+        //     .collect::<Vec<_>>();
+        let outline_nodes = self
+            .get_outline_nodes_from_editor(
                 symbol_to_edit.fs_file_path(),
+                message_properties.clone(),
             )
-            .into_iter()
-            .filter(|outline_node| outline_node.name() == parent_symbol_name)
-            .collect::<Vec<_>>();
+            .await
+            .unwrap_or_default();
         if outline_nodes.is_empty() {
             return Err(SymbolError::NoOutlineNodeSatisfyPosition);
         }
@@ -6397,21 +6404,44 @@ FILEPATH: {fs_file_path}
         fs_file_path: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Option<Vec<OutlineNode>> {
-        let file_open_result = self
-            .file_open(fs_file_path.to_owned(), message_properties.clone())
-            .await;
-        if let Err(_) = file_open_result {
-            return None;
-        }
-        let file_open_result = file_open_result.expect("if let Err to hold");
-        let language_config = self.editor_parsing.for_file_path(fs_file_path);
-        if language_config.is_none() {
-            return None;
-        }
-        let outline_nodes = language_config
-            .expect("is_none to hold")
-            .generate_outline_fresh(file_open_result.contents_ref().as_bytes(), fs_file_path);
-        Some(outline_nodes)
+        self.get_outline_nodes_from_editor(fs_file_path, message_properties)
+            .await
+        // let file_open_result = self
+        //     .file_open(fs_file_path.to_owned(), message_properties.clone())
+        //     .await;
+        // if let Err(_) = file_open_result {
+        //     return None;
+        // }
+        // let file_open_result = file_open_result.expect("if let Err to hold");
+        // let language_config = self.editor_parsing.for_file_path(fs_file_path);
+        // if language_config.is_none() {
+        //     return None;
+        // }
+        // let outline_nodes = language_config
+        //     .expect("is_none to hold")
+        //     .generate_outline_fresh(file_open_result.contents_ref().as_bytes(), fs_file_path);
+        // Some(outline_nodes)
+    }
+
+    /// Sends a request to the editor to get the outline nodes
+    pub async fn get_outline_nodes_from_editor(
+        &self,
+        fs_file_path: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Option<Vec<OutlineNode>> {
+        let input = ToolInput::OutlineNodesUsingEditor(OutlineNodesUsingEditorRequest::new(
+            fs_file_path.to_owned(),
+            message_properties.editor_url(),
+        ));
+        self.tools
+            .invoke(input)
+            .await
+            .ok()
+            .map(|response| response.get_outline_nodes_from_editor())
+            .flatten()
+            .map(|outline_nodes_response| {
+                outline_nodes_response.to_outline_nodes(fs_file_path.to_owned())
+            })
     }
 
     /// Returns the outline nodes using the editor instead of relying on tree-sitter
@@ -7954,11 +7984,10 @@ FILEPATH: {fs_file_path}
             return Ok(vec![]);
         }
         let language_config = language_config.expect("is_none to hold");
-        let file_contents = self
-            .file_open(fs_file_path.to_owned(), message_properties.clone())
-            .await?;
-        let outline_nodes = language_config
-            .generate_outline_fresh(file_contents.contents_ref().as_bytes(), &fs_file_path);
+        let outline_nodes = self
+            .get_outline_nodes_from_editor(&fs_file_path, message_properties.clone())
+            .await
+            .unwrap_or_default();
         println!(
             "tool_box::symbols_to_anchor::file_path({})::outline_nodes_len({})",
             &fs_file_path,

@@ -184,9 +184,10 @@ impl SymbolKind {
 pub fn document_symbols_to_outline_nodes(
     language: String,
     fs_file_path: String,
-    file_lines: &[String],
+    file_content: &str,
     document_symbols: Vec<DocumentSymbol>,
 ) -> Vec<OutlineNode> {
+    let file_lines = file_content.lines().into_iter().collect::<Vec<_>>();
     document_symbols
         .into_iter()
         .filter_map(|document_symbol| {
@@ -215,7 +216,7 @@ pub fn document_symbols_to_outline_nodes(
                     let children = document_symbols_to_outline_nodes(
                         language.to_owned(),
                         fs_file_path.to_owned(),
-                        file_lines,
+                        file_content,
                         document_symbol.children,
                     );
                     Some(vec![OutlineNode::new(
@@ -260,7 +261,7 @@ pub fn document_symbols_to_outline_nodes(
                     let children = document_symbols_to_outline_nodes(
                         language.to_owned(),
                         fs_file_path.to_owned(),
-                        file_lines,
+                        file_content,
                         document_symbol.children,
                     );
                     Some(vec![OutlineNode::new(
@@ -275,7 +276,7 @@ pub fn document_symbols_to_outline_nodes(
                 SymbolKind::Module => Some(document_symbols_to_outline_nodes(
                     language.to_owned(),
                     fs_file_path.to_owned(),
-                    file_lines,
+                    file_content,
                     document_symbol.children,
                 )),
                 _ => {
@@ -293,6 +294,18 @@ pub struct OutlineNodesUsingEditorResponse {
     file_content: String,
     // we have to create the outline nodes over here
     outline_nodes: Vec<DocumentSymbol>,
+    language: String,
+}
+
+impl OutlineNodesUsingEditorResponse {
+    pub fn to_outline_nodes(self, fs_file_path: String) -> Vec<OutlineNode> {
+        document_symbols_to_outline_nodes(
+            self.language,
+            fs_file_path,
+            &self.file_content,
+            self.outline_nodes,
+        )
+    }
 }
 
 impl OutlineNodesUsingEditorRequest {

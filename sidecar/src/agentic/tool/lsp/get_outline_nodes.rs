@@ -181,7 +181,7 @@ impl SymbolKind {
 /// from the documentSymbol
 /// to go about this the right way we have to go through all the documentSymbols and figure
 /// out which one we are talking about and why and translate them properly
-fn document_symbols_to_outline_nodes(
+pub fn document_symbols_to_outline_nodes(
     language: String,
     fs_file_path: String,
     file_lines: &[String],
@@ -197,7 +197,10 @@ fn document_symbols_to_outline_nodes(
             match symbol_type {
                 // cursed code, comparing 25 types down to OutlineNodeType 12 types
                 // is a bit of a challenge, its still okay tho so all good
-                SymbolKind::Class => {
+                SymbolKind::Class
+                | SymbolKind::Enum
+                | SymbolKind::Struct
+                | SymbolKind::TypeParameter => {
                     let class_node = OutlineNodeContent::class_definition_symbol(
                         document_symbol.name().to_owned(),
                         document_symbol.range(),
@@ -215,16 +218,16 @@ fn document_symbols_to_outline_nodes(
                         file_lines,
                         document_symbol.children,
                     );
-                    Some(OutlineNode::new(
+                    Some(vec![OutlineNode::new(
                         class_node,
                         children
                             .into_iter()
                             .map(|child| child.consume_content())
                             .collect::<Vec<_>>(),
                         language.to_owned(),
-                    ))
+                    )])
                 }
-                SymbolKind::Function => {
+                SymbolKind::Function | SymbolKind::Method => {
                     let function_node = OutlineNodeContent::function_symbol(
                         document_symbol.name().to_owned(),
                         document_symbol.range(),
@@ -236,18 +239,52 @@ fn document_symbols_to_outline_nodes(
                         document_symbol.identifier_range(),
                         language.to_owned(),
                     );
-                    Some(OutlineNode::new(function_node, vec![], language.to_owned()))
+                    Some(vec![OutlineNode::new(
+                        function_node,
+                        vec![],
+                        language.to_owned(),
+                    )])
                 }
-                SymbolKind::Enum => None,
-                SymbolKind::Method => None,
-                SymbolKind::Struct => None,
-                SymbolKind::TypeParameter => None,
+                SymbolKind::Object => {
+                    let class_node = OutlineNodeContent::class_implementation_symbol(
+                        document_symbol.name().to_owned(),
+                        document_symbol.range(),
+                        file_lines[document_symbol.range().start_line()
+                            ..=document_symbol.range().end_line()]
+                            .to_vec()
+                            .join("\n"),
+                        fs_file_path.to_owned(),
+                        document_symbol.identifier_range(),
+                        language.to_owned(),
+                    );
+                    let children = document_symbols_to_outline_nodes(
+                        language.to_owned(),
+                        fs_file_path.to_owned(),
+                        file_lines,
+                        document_symbol.children,
+                    );
+                    Some(vec![OutlineNode::new(
+                        class_node,
+                        children
+                            .into_iter()
+                            .map(|child| child.consume_content())
+                            .collect::<Vec<_>>(),
+                        language.to_owned(),
+                    )])
+                }
+                SymbolKind::Module => Some(document_symbols_to_outline_nodes(
+                    language.to_owned(),
+                    fs_file_path.to_owned(),
+                    file_lines,
+                    document_symbol.children,
+                )),
                 _ => {
                     // what do we do over here?
                     None
                 }
             }
         })
+        .flatten()
         .collect::<Vec<_>>()
 }
 
@@ -347,35 +384,220 @@ mod tests {
     fn test_outline_node_generation() {
         // peak clowntown 🤡
         let outline_nodes_from_editor = r#"{
+  "file_content": "fn something() {\n}\n\nstruct Something {\n\n}\n\nimpl Something {\n\n}\n\nimpl Blah for Something {\n\n}\n\nenum Something {\n\n}\n\nmod something {\n    mod somethingElse {\n        fn something_inner() {\n            \n        }\n    }\n}",
   "outline_nodes": [
     {
-      "name": "main",
+      "name": "something",
       "detail": "fn()",
       "kind": 11,
       "range": [
         {
-          "line": 4,
+          "line": 0,
           "character": 0
         },
         {
-          "line": 27,
+          "line": 1,
           "character": 1
         }
       ],
       "selectionRange": [
         {
-          "line": 5,
-          "character": 9
+          "line": 0,
+          "character": 3
         },
         {
-          "line": 5,
-          "character": 13
+          "line": 0,
+          "character": 12
         }
       ],
       "children": []
+    },
+    {
+      "name": "Something",
+      "detail": "",
+      "kind": 22,
+      "range": [
+        {
+          "line": 3,
+          "character": 0
+        },
+        {
+          "line": 5,
+          "character": 1
+        }
+      ],
+      "selectionRange": [
+        {
+          "line": 3,
+          "character": 7
+        },
+        {
+          "line": 3,
+          "character": 16
+        }
+      ],
+      "children": []
+    },
+    {
+      "name": "impl Something",
+      "detail": "",
+      "kind": 18,
+      "range": [
+        {
+          "line": 7,
+          "character": 0
+        },
+        {
+          "line": 9,
+          "character": 1
+        }
+      ],
+      "selectionRange": [
+        {
+          "line": 7,
+          "character": 5
+        },
+        {
+          "line": 7,
+          "character": 14
+        }
+      ],
+      "children": []
+    },
+    {
+      "name": "impl Blah for Something",
+      "detail": "",
+      "kind": 18,
+      "range": [
+        {
+          "line": 11,
+          "character": 0
+        },
+        {
+          "line": 13,
+          "character": 1
+        }
+      ],
+      "selectionRange": [
+        {
+          "line": 11,
+          "character": 14
+        },
+        {
+          "line": 11,
+          "character": 23
+        }
+      ],
+      "children": []
+    },
+    {
+      "name": "Something",
+      "detail": "",
+      "kind": 9,
+      "range": [
+        {
+          "line": 15,
+          "character": 0
+        },
+        {
+          "line": 17,
+          "character": 1
+        }
+      ],
+      "selectionRange": [
+        {
+          "line": 15,
+          "character": 5
+        },
+        {
+          "line": 15,
+          "character": 14
+        }
+      ],
+      "children": []
+    },
+    {
+      "name": "something",
+      "detail": "",
+      "kind": 1,
+      "range": [
+        {
+          "line": 19,
+          "character": 0
+        },
+        {
+          "line": 25,
+          "character": 1
+        }
+      ],
+      "selectionRange": [
+        {
+          "line": 19,
+          "character": 4
+        },
+        {
+          "line": 19,
+          "character": 13
+        }
+      ],
+      "children": [
+        {
+          "name": "somethingElse",
+          "detail": "",
+          "kind": 1,
+          "range": [
+            {
+              "line": 20,
+              "character": 4
+            },
+            {
+              "line": 24,
+              "character": 5
+            }
+          ],
+          "selectionRange": [
+            {
+              "line": 20,
+              "character": 8
+            },
+            {
+              "line": 20,
+              "character": 21
+            }
+          ],
+          "children": [
+            {
+              "name": "something_inner",
+              "detail": "fn()",
+              "kind": 11,
+              "range": [
+                {
+                  "line": 21,
+                  "character": 8
+                },
+                {
+                  "line": 23,
+                  "character": 9
+                }
+              ],
+              "selectionRange": [
+                {
+                  "line": 21,
+                  "character": 11
+                },
+                {
+                  "line": 21,
+                  "character": 26
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+      ]
     }
   ],
-  "file_content": "testing"
+  "language": "rust"
 }"#;
         let file_content = (0..=700)
             .into_iter()
@@ -397,5 +619,6 @@ mod tests {
             document_symbols.outline_nodes,
         );
         assert!(!outline_nodes.is_empty());
+        assert_eq!(outline_nodes.len(), 6);
     }
 }

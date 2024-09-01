@@ -679,13 +679,3 @@ mod tests {
         assert_eq!(str_llm_type, "");
     }
 }
-
-mod something {
-    mod somethingelse {
-        mod internalsomething {
-            fn something() {
-                // content here
-            }
-        }
-    }
-}

@@ -184,6 +184,27 @@ impl OutlineNodeContent {
         }
     }
 
+    pub fn class_implementation_symbol(
+        name: String,
+        range: Range,
+        content: String,
+        fs_file_path: String,
+        identifier_range: Range,
+        language: String,
+    ) -> Self {
+        Self {
+            range: range.clone(),
+            name,
+            r#type: OutlineNodeType::Class,
+            content,
+            fs_file_path,
+            identifier_range,
+            body_range: range,
+            language,
+            trait_implementation: None,
+        }
+    }
+
     pub fn class_definition_symbol(
         name: String,
         range: Range,

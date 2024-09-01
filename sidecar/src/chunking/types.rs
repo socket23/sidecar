@@ -184,6 +184,48 @@ impl OutlineNodeContent {
         }
     }
 
+    pub fn class_definition_symbol(
+        name: String,
+        range: Range,
+        content: String,
+        fs_file_path: String,
+        identifier_range: Range,
+        language: String,
+    ) -> Self {
+        Self {
+            range: range.clone(),
+            name,
+            r#type: OutlineNodeType::ClassDefinition,
+            content,
+            fs_file_path,
+            identifier_range,
+            body_range: range,
+            language,
+            trait_implementation: None,
+        }
+    }
+
+    pub fn function_symbol(
+        name: String,
+        range: Range,
+        content: String,
+        fs_file_path: String,
+        identifier_range: Range,
+        language: String,
+    ) -> Self {
+        Self {
+            range: range.clone(),
+            name,
+            r#type: OutlineNodeType::Function,
+            content,
+            fs_file_path,
+            identifier_range,
+            body_range: range,
+            language,
+            trait_implementation: None,
+        }
+    }
+
     /// Overrides the range for the outline node content
     pub fn set_range(mut self, range: Range) -> Self {
         self.range = range;
@@ -348,6 +390,10 @@ impl OutlineNode {
             children: vec![],
             language,
         }
+    }
+
+    pub fn consume_content(self) -> OutlineNodeContent {
+        self.content
     }
 
     pub fn content(&self) -> &OutlineNodeContent {

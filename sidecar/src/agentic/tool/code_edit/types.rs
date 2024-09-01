@@ -118,6 +118,9 @@ pub struct CodeEditingTool {
     fail_over_llm: LLMProperties,
 }
 
+/// `CodeEditingTool` is responsible for handling code editing operations.
+/// It manages the interaction with language models for code editing tasks,
+/// including handling retries, formatting prompts, and processing responses.
 impl CodeEditingTool {
     pub fn new(
         llm_client: Arc<LLMBroker>,

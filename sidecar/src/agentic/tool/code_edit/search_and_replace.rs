@@ -1,8 +1,9 @@
 //! Contains the struct for search and replace style editing
 
 use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
+use futures::lock::Mutex;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
 use llm_client::{
     broker::LLMBroker,
@@ -15,7 +16,10 @@ use crate::{
             identifier::{LLMProperties, SymbolIdentifier},
             ui_event::UIEventWithID,
         },
-        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+        tool::{
+            errors::ToolError, input::ToolInput, lsp::open_file::OpenFileRequest,
+            output::ToolOutput, r#type::Tool,
+        },
     },
     chunking::text_document::{Position, Range},
 };
@@ -61,6 +65,7 @@ pub struct SearchAndReplaceEditingRequest {
     edit_request_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
     user_context: Option<String>,
+    editor_url: String,
     // use a is_warmup field
     is_warmup: bool,
 }
@@ -82,6 +87,7 @@ impl SearchAndReplaceEditingRequest {
         // Important: user_context provides essential information for the editing process
         user_context: Option<String>,
         // Indicates whether this is a warmup request to prepare the LLM
+        editor_url: String,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
     ) -> Self {
         Self {
@@ -98,6 +104,7 @@ impl SearchAndReplaceEditingRequest {
             edit_request_id,
             ui_sender,
             user_context,
+            editor_url,
             is_warmup,
         }
     }
@@ -106,6 +113,7 @@ impl SearchAndReplaceEditingRequest {
 pub struct SearchAndReplaceEditing {
     llm_client: Arc<LLMBroker>,
     lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+    file_locker: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
     _fail_over_llm: LLMProperties,
 }
 
@@ -118,6 +126,7 @@ impl SearchAndReplaceEditing {
         Self {
             llm_client,
             lsp_open_file,
+            file_locker: Arc::new(Mutex::new(Default::default())),
             _fail_over_llm: fail_over_llm,
         }
     }
@@ -379,6 +388,22 @@ impl Tool for SearchAndReplaceEditing {
         let symbol_identifier = context.symbol_identifier.clone();
         let ui_sender = context.ui_sender.clone();
         let fs_file_path = context.fs_file_path.to_owned();
+        let editor_url = context.editor_url.to_owned();
+        let file_lock;
+        {
+            let cloned_file_locker = self.file_locker.clone();
+            let mut file_locker = cloned_file_locker.lock().await;
+            file_lock = if file_locker.contains_key(&fs_file_path) {
+                file_locker
+                    .get(&fs_file_path)
+                    .expect("contains_key to work")
+                    .clone()
+            } else {
+                let file_lock = Arc::new(Semaphore::new(1));
+                file_locker.insert(fs_file_path.to_owned(), file_lock.clone());
+                file_lock
+            };
+        }
         let edit_request_id = context.edit_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let root_request_id = context.root_request_id.to_owned();
@@ -423,6 +448,9 @@ impl Tool for SearchAndReplaceEditing {
             whole_file_context,
             start_line,
             self.lsp_open_file.clone(),
+            file_lock,
+            fs_file_path.to_owned(),
+            editor_url.to_owned(),
             edits_sender,
         );
 
@@ -553,7 +581,15 @@ struct SearchAndReplaceAccumulator {
     search_block_status: SearchBlockStatus,
     updated_block: Option<String>,
     sender: UnboundedSender<EditDelta>,
-    _lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+    // tool to use to open the file
+    lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+    // lock on the file can be obtained using this
+    // this gives us direct write access to the file
+    // this lock right is now is to lock the file while writing, since all the writes
+    // go through here but not for reads which be done by anyone
+    file_lock: Arc<Semaphore>,
+    fs_file_path: String,
+    editor_url: String,
 }
 
 impl SearchAndReplaceAccumulator {
@@ -561,6 +597,9 @@ impl SearchAndReplaceAccumulator {
         code_to_edit: String,
         start_line: usize,
         lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+        file_lock: Arc<Semaphore>,
+        fs_file_path: String,
+        editor_url: String,
         sender: UnboundedSender<EditDelta>,
     ) -> Self {
         Self {
@@ -576,7 +615,10 @@ impl SearchAndReplaceAccumulator {
             search_block_status: SearchBlockStatus::NoBlock,
             updated_block: None,
             sender,
-            _lsp_open_file: lsp_open_file,
+            file_lock,
+            lsp_open_file,
+            fs_file_path,
+            editor_url,
         }
     }
 
@@ -600,6 +642,9 @@ impl SearchAndReplaceAccumulator {
         let answer_lines = answer_lines.lines().into_iter().collect::<Vec<_>>();
 
         let start_index = self.previous_answer_line_number.map_or(0, |n| n + 1);
+
+        // the lock guard over here
+        let mut lock_guard = None;
 
         for line_number in start_index..=line_number_to_process_until {
             self.previous_answer_line_number = Some(line_number);
@@ -660,6 +705,27 @@ impl SearchAndReplaceAccumulator {
                     if answer_line_at_index == divider {
                         // TODO(codestory): here we want to first get the lock for the file and re-read
                         // the contents for the file over here
+                        let file_locker = self.file_lock.clone();
+                        let lock_guard_local = file_locker.acquire_owned().await;
+                        lock_guard = Some(lock_guard_local);
+                        let file_content = self
+                            .lsp_open_file
+                            .invoke(ToolInput::OpenFile(OpenFileRequest::new(
+                                self.fs_file_path.to_owned(),
+                                self.editor_url.to_owned(),
+                            )))
+                            .await
+                            .map(|output| output.get_file_open_response())
+                            .ok()
+                            .flatten();
+                        if let Some(file_content) = file_content {
+                            self.code_lines = file_content
+                                .contents()
+                                .lines()
+                                .into_iter()
+                                .map(|line| line.to_string())
+                                .collect();
+                        }
                         // and hold the lock for a while until we have the replace block
                         let range = get_range_for_search_block(
                             &self.code_lines.join("\n"),
@@ -698,6 +764,12 @@ impl SearchAndReplaceAccumulator {
                             }
                             None => {
                                 // TODO(codestory): release the lock immediately
+                                let lock_guard_owned_value = lock_guard;
+                                lock_guard = None;
+                                if let Some(Ok(lock_guard)) = lock_guard_owned_value {
+                                    drop(lock_guard);
+                                }
+
                                 self.search_block_status = SearchBlockStatus::NoBlock;
                                 // If we have a range over here, we probably want to show it on the answer lines
                                 // to do this: we need to do the following:
@@ -750,6 +822,11 @@ impl SearchAndReplaceAccumulator {
                         // TODO(codestory): release the lock over here which we were holding on to
                         // since we are done editing the file for our section of the code
                         // this way we are sure to never lock up immediately
+                        let lock_guard_owned_value = lock_guard;
+                        lock_guard = None;
+                        if let Some(Ok(lock_guard)) = lock_guard_owned_value {
+                            drop(lock_guard);
+                        }
 
                         // remove the last line from the answer and instead put in edit completed
                         let mut answer_lines = self
@@ -874,6 +951,7 @@ mod tests {
 
     use super::SearchAndReplaceAccumulator;
     use async_trait::async_trait;
+    use tokio::sync::Semaphore;
 
     struct CacheFileOutput {
         content: String,
@@ -1107,6 +1185,9 @@ mod tests {
             Arc::new(Box::new(CacheFileOutput {
                 content: input_data.to_owned(),
             })),
+            Arc::new(Semaphore::new(1)),
+            "".to_owned(),
+            "".to_owned(),
             sender,
         );
         search_and_replace_accumulator
@@ -1352,6 +1433,9 @@ impl SymbolToEdit {
             Arc::new(Box::new(CacheFileOutput {
                 content: original_code.to_owned(),
             })),
+            Arc::new(Semaphore::new(1)),
+            "".to_owned(),
+            "".to_owned(),
             sender,
         );
         search_and_replace_accumulator
@@ -1447,6 +1531,9 @@ blahblah2
             Arc::new(Box::new(CacheFileOutput {
                 content: code.to_owned(),
             })),
+            Arc::new(Semaphore::new(1)),
+            "".to_owned(),
+            "".to_owned(),
             sender,
         );
         search_and_replace_accumulator

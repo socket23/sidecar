@@ -5730,6 +5730,7 @@ FILEPATH: {fs_file_path}
             uuid::Uuid::new_v4().to_string(),
             message_properties.ui_sender().clone(),
             user_provided_context,
+            message_properties.editor_url(),
             false,
         ));
         println!(
@@ -8279,7 +8280,12 @@ FILEPATH: {fs_file_path}
     /// To warmup we send over a dummy edit request here with a very simple user instruction
     /// we do not care about how the output is working or what it is generating, just
     /// keep the cache warm
-    pub async fn warmup_context(&self, file_paths: Vec<String>, request_id: String) {
+    pub async fn warmup_context(
+        &self,
+        file_paths: Vec<String>,
+        request_id: String,
+        editor_url: String,
+    ) {
         let mut file_contents = vec![];
         for file_path in file_paths.into_iter() {
             let contents = tokio::fs::read(&file_path).await;
@@ -8347,6 +8353,7 @@ FILEPATH: {fs_file_path}
             request_id.to_owned(),
             sender,
             Some(file_contents.join("\n")),
+            editor_url,
             true,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);

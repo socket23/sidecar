@@ -65,7 +65,10 @@ impl DocumentSymbol {
         )
     }
 
-    fn name(&self) -> &str {
+    // This is similar to the display name of the symbol, not the real symbol
+    // name which is used by the OutlineNode
+    // we should add something in OutlineNode to capture this information
+    pub fn decription_name(&self) -> &str {
         &self.name
     }
 
@@ -177,6 +180,17 @@ impl SymbolKind {
     }
 }
 
+/// We expect the LSP to not mess up anything for us
+/// And the outline node we are interested in is fetched from the IDE
+fn name_from_selection_range(file_lines: &[&str], range: [DocumentSymbolPosition; 2]) -> String {
+    let start_line = range[0].line;
+    let file_line_content = file_lines[start_line];
+    let character_range = file_line_content.chars().into_iter().collect::<Vec<_>>();
+    character_range[range[0].character..=range[1].character]
+        .into_iter()
+        .collect()
+}
+
 /// now we want to convert this back to the OutlineNode types we are interested in
 /// from the documentSymbol
 /// to go about this the right way we have to go through all the documentSymbols and figure
@@ -203,7 +217,10 @@ pub fn document_symbols_to_outline_nodes(
                 | SymbolKind::Struct
                 | SymbolKind::TypeParameter => {
                     let class_node = OutlineNodeContent::class_definition_symbol(
-                        document_symbol.name().to_owned(),
+                        name_from_selection_range(
+                            file_lines.as_slice(),
+                            document_symbol.selection_range.clone(),
+                        ),
                         document_symbol.range(),
                         file_lines[document_symbol.range().start_line()
                             ..=document_symbol.range().end_line()]
@@ -230,7 +247,10 @@ pub fn document_symbols_to_outline_nodes(
                 }
                 SymbolKind::Function | SymbolKind::Method => {
                     let function_node = OutlineNodeContent::function_symbol(
-                        document_symbol.name().to_owned(),
+                        name_from_selection_range(
+                            file_lines.as_slice(),
+                            document_symbol.selection_range.clone(),
+                        ),
                         document_symbol.range(),
                         file_lines[document_symbol.range().start_line()
                             ..=document_symbol.range().end_line()]
@@ -248,7 +268,10 @@ pub fn document_symbols_to_outline_nodes(
                 }
                 SymbolKind::Object => {
                     let class_node = OutlineNodeContent::class_implementation_symbol(
-                        document_symbol.name().to_owned(),
+                        name_from_selection_range(
+                            file_lines.as_slice(),
+                            document_symbol.selection_range.clone(),
+                        ),
                         document_symbol.range(),
                         file_lines[document_symbol.range().start_line()
                             ..=document_symbol.range().end_line()]

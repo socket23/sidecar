@@ -30,6 +30,20 @@ pub struct OpenFileResponse {
 }
 
 impl OpenFileResponse {
+    pub fn new(
+        fs_file_path: String,
+        file_contents: String,
+        exists: bool,
+        language: String,
+    ) -> Self {
+        Self {
+            fs_file_path,
+            file_contents,
+            exists,
+            language,
+        }
+    }
+
     pub fn contents(self) -> String {
         self.file_contents
     }

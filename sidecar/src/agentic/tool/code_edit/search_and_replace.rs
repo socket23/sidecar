@@ -105,13 +105,19 @@ impl SearchAndReplaceEditingRequest {
 
 pub struct SearchAndReplaceEditing {
     llm_client: Arc<LLMBroker>,
+    lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
     _fail_over_llm: LLMProperties,
 }
 
 impl SearchAndReplaceEditing {
-    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+    pub fn new(
+        llm_client: Arc<LLMBroker>,
+        fail_over_llm: LLMProperties,
+        lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+    ) -> Self {
         Self {
             llm_client,
+            lsp_open_file,
             _fail_over_llm: fail_over_llm,
         }
     }
@@ -413,11 +419,15 @@ impl Tool for SearchAndReplaceEditing {
         let stream_result;
 
         let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator =
-            SearchAndReplaceAccumulator::new(whole_file_context, start_line, edits_sender);
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            whole_file_context,
+            start_line,
+            self.lsp_open_file.clone(),
+            edits_sender,
+        );
 
-        // now we can bring it all together and use the answer accumulator over here
-        // to start the processing completely
+        // we want to figure out how poll the llm stream while locking up until the file is free
+        // from the lock over here for the file path we are interested in
 
         loop {
             tokio::select! {
@@ -543,12 +553,14 @@ struct SearchAndReplaceAccumulator {
     search_block_status: SearchBlockStatus,
     updated_block: Option<String>,
     sender: UnboundedSender<EditDelta>,
+    _lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
 }
 
 impl SearchAndReplaceAccumulator {
     pub fn new(
         code_to_edit: String,
         start_line: usize,
+        lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
         sender: UnboundedSender<EditDelta>,
     ) -> Self {
         Self {
@@ -564,6 +576,7 @@ impl SearchAndReplaceAccumulator {
             search_block_status: SearchBlockStatus::NoBlock,
             updated_block: None,
             sender,
+            _lsp_open_file: lsp_open_file,
         }
     }
 
@@ -645,6 +658,9 @@ impl SearchAndReplaceAccumulator {
                 }
                 SearchBlockStatus::BlockAccumulate(accumulated) => {
                     if answer_line_at_index == divider {
+                        // TODO(codestory): here we want to first get the lock for the file and re-read
+                        // the contents for the file over here
+                        // and hold the lock for a while until we have the replace block
                         let range = get_range_for_search_block(
                             &self.code_lines.join("\n"),
                             self.start_line,
@@ -681,6 +697,7 @@ impl SearchAndReplaceAccumulator {
                                 self.answer_to_show = answer_lines.join("\n");
                             }
                             None => {
+                                // TODO(codestory): release the lock immediately
                                 self.search_block_status = SearchBlockStatus::NoBlock;
                                 // If we have a range over here, we probably want to show it on the answer lines
                                 // to do this: we need to do the following:
@@ -730,6 +747,10 @@ impl SearchAndReplaceAccumulator {
                         self.search_block_status = SearchBlockStatus::NoBlock;
                         self.update_code_lines(&block_range);
                         let _ = self.sender.send(EditDelta::EditEnd(block_range.clone()));
+                        // TODO(codestory): release the lock over here which we were holding on to
+                        // since we are done editing the file for our section of the code
+                        // this way we are sure to never lock up immediately
+
                         // remove the last line from the answer and instead put in edit completed
                         let mut answer_lines = self
                             .answer_to_show
@@ -844,7 +865,31 @@ fn get_range_for_search_block(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use crate::agentic::tool::{
+        errors::ToolError, input::ToolInput, lsp::open_file::OpenFileResponse, output::ToolOutput,
+        r#type::Tool,
+    };
+
     use super::SearchAndReplaceAccumulator;
+    use async_trait::async_trait;
+
+    struct CacheFileOutput {
+        content: String,
+    }
+
+    #[async_trait]
+    impl Tool for CacheFileOutput {
+        async fn invoke(&self, _input: ToolInput) -> Result<ToolOutput, ToolError> {
+            Ok(ToolOutput::file_open(OpenFileResponse::new(
+                "something".to_owned(),
+                self.content.to_owned(),
+                true,
+                "something".to_owned(),
+            )))
+        }
+    }
 
     /// TODO(skcd): Broken test here to debug multiple search and replace blocks being
     /// part of the same edit
@@ -1056,8 +1101,14 @@ mod tests {
 ```"#;
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator =
-            SearchAndReplaceAccumulator::new(input_data.to_owned(), 0, sender);
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            input_data.to_owned(),
+            0,
+            Arc::new(Box::new(CacheFileOutput {
+                content: input_data.to_owned(),
+            })),
+            sender,
+        );
         search_and_replace_accumulator
             .add_delta(edits.to_owned())
             .await;
@@ -1295,8 +1346,14 @@ impl SymbolToEdit {
 >>>>>>> REPLACE
 ```"#;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator =
-            SearchAndReplaceAccumulator::new(original_code.to_owned(), 0, sender);
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            original_code.to_owned(),
+            0,
+            Arc::new(Box::new(CacheFileOutput {
+                content: original_code.to_owned(),
+            })),
+            sender,
+        );
         search_and_replace_accumulator
             .add_delta(edits.to_owned())
             .await;
@@ -1384,8 +1441,14 @@ blahblah2
 =======
 ```"#;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator =
-            SearchAndReplaceAccumulator::new(code.to_owned(), 0, sender);
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            code.to_owned(),
+            0,
+            Arc::new(Box::new(CacheFileOutput {
+                content: code.to_owned(),
+            })),
+            sender,
+        );
         search_and_replace_accumulator
             .add_delta(edits.to_owned())
             .await;

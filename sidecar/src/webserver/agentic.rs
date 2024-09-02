@@ -75,7 +75,7 @@ impl ProbeRequestTracker {
 
 /// Contains all the data which we will need to trigger the edits
 /// Represents metadata for anchored editing operations.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct AnchoredEditingMetadata {
     /// Properties of the message event associated with this editing session.
     message_properties: SymbolEventMessageProperties,
@@ -826,7 +826,7 @@ pub async fn code_editing(
         if !symbols_to_anchor.is_empty() {
             let stream_symbols = cloned_symbols_to_anchor.clone();
             // so this is an async task that should just chill in the background while the edits flow below continues
-            let _references_join_handle = tokio::spawn(async move {
+            let references_join_handle = tokio::spawn(async move {
                 let start = Instant::now();
 
                 // this does not need to run in sequence!
@@ -868,9 +868,15 @@ pub async fn code_editing(
                                     request_id.clone(),
                                 )
                                 .await;
-                            refs.into_iter()
-                                .map(|r| AnchoredReference::new(original_symbol.clone(), r))
-                                .collect::<Vec<_>>()
+
+                            let anchored_refs = toolbox
+                                .anchored_references_for_locations(
+                                    refs.as_slice(),
+                                    original_symbol,
+                                    message_properties,
+                                )
+                                .await;
+                            anchored_refs
                         },
                     )
                     .buffer_unordered(100)
@@ -899,21 +905,6 @@ pub async fn code_editing(
                     UIEventWithID::found_reference(cloned_request_id.clone(), grouped),
                 );
 
-                let reference_symbols_timer = Instant::now();
-
-                let reference_outline_nodes = cloned_toolbox
-                    .clone()
-                    .outline_nodes_for_anchored_references(
-                        references.as_slice(),
-                        cloned_message_properties.clone(),
-                    )
-                    .await;
-
-                println!(
-                    "reference::symbols::iter::elapsed({:?})",
-                    reference_symbols_timer.elapsed()
-                );
-
                 let llm_broker = app.llm_broker;
 
                 let llm_properties = LLMProperties::new(
@@ -931,13 +922,12 @@ pub async fn code_editing(
 
                 println!(
                     "code_editing:reference_symbols.len({:?})",
-                    &reference_outline_nodes.len()
+                    &references.len()
                 );
 
+                // incorrect number of anchored references passed to this.
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
-                    reference_outline_nodes.clone(),
-                    symbols_to_anchor.clone(),
                     llm_properties.clone(),
                     cloned_request_id.clone(),
                     cloned_message_properties.clone(),
@@ -950,6 +940,8 @@ pub async fn code_editing(
                     .invoke(ToolInput::ReferencesFilter(request))
                     .await;
                 println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
+
+                println!("references.len({:?})", &references.len());
 
                 // for followup consumption
                 let _ = cloned_tracker
@@ -994,6 +986,10 @@ pub async fn code_editing(
                 .anchored_request_tracker
                 .get_properties(&request_id)
                 .await;
+
+            // no references at this point! - invoke takes too long
+            dbg!(&properties_present);
+
             println!(
                 "webserver::anchored_edits::request_id({})::properties_present({})",
                 &request_id,

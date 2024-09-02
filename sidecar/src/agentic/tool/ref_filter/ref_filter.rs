@@ -26,9 +26,6 @@ use crate::{
 pub struct ReferenceFilterRequest {
     /// The instruction or query provided by the user.
     user_instruction: String,
-    /// A collection of outline nodes representing the references to be filtered.
-    reference_outlines: Vec<OutlineNode>,
-    anchored_symbols: Vec<AnchoredSymbol>,
     llm_properties: LLMProperties,
     /// The unique identifier for the root request.
     root_id: String,
@@ -40,8 +37,6 @@ pub struct ReferenceFilterRequest {
 impl ReferenceFilterRequest {
     pub fn new(
         user_instruction: String,
-        reference_outlines: Vec<OutlineNode>,
-        anchored_symbols: Vec<AnchoredSymbol>,
         llm_properties: LLMProperties,
         root_id: String,
         message_properties: SymbolEventMessageProperties,
@@ -49,17 +44,11 @@ impl ReferenceFilterRequest {
     ) -> Self {
         Self {
             user_instruction,
-            reference_outlines,
             llm_properties,
-            anchored_symbols,
             root_id,
             message_properties,
             anchored_references,
         }
-    }
-
-    pub fn reference_outlines(&self) -> &[OutlineNode] {
-        &self.reference_outlines
     }
 
     pub fn user_instruction(&self) -> &str {
@@ -68,10 +57,6 @@ impl ReferenceFilterRequest {
 
     pub fn llm_properties(&self) -> &LLMProperties {
         &self.llm_properties
-    }
-
-    pub fn anchored_symbols(&self) -> &[AnchoredSymbol] {
-        &self.anchored_symbols
     }
 
     pub fn root_id(&self) -> &str {
@@ -199,7 +184,12 @@ impl Tool for ReferenceFilterBroker {
         let user_query = context.user_instruction();
 
         // watch this carefully...
-        let anchored_references = context.anchored_references().to_vec();
+        let anchored_references = context
+            .anchored_references()
+            .to_vec()
+            .into_iter()
+            .take(10) // todo(zi): so we don't go crazy with 1000s of requests
+            .collect::<Vec<_>>();
 
         println!(
             "anchored_references::count: {:?}",

@@ -117,15 +117,14 @@ impl ReferenceFilterBroker {
 
 Your response must be in the following format:
 
-<reply>
 <response>
 <reason>
 your single sentence
 </reason>
 <change_required>
+false
 </change_required>
-</response>
-</reply>"#
+</response>"#
         )
     }
 
@@ -255,12 +254,11 @@ impl Tool for ReferenceFilterBroker {
                     );
 
                     let parsed_response = match response {
-                        Ok(response) => {
-                            from_str::<ReferenceFilterResponse>(&Self::parse_response(&response))
-                                .ok()
-                        }
+                        Ok(response) => from_str::<ReferenceFilterResponse>(&response).ok(),
                         Err(_) => None,
                     };
+
+                    println!("parsed_response:\n\n{:?}", parsed_response);
 
                     if let Some(parsed_response) = parsed_response {
                         if parsed_response.change_required {

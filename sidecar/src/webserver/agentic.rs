@@ -480,40 +480,16 @@ pub async fn code_sculpting_heal(
             "agentic::webserver::code_sculpting_heal::anchor_properties.references.len({})",
             anchor_properties.references().len()
         );
-        println!(
-            "agentic::webserver::code_sculpting_heal::anchor_properties.references:\n{}",
-            anchor_properties
-                .references()
-                .iter()
-                .map(|reference| format!(
-                    "path: {}, range: {}",
-                    reference.reference_location().fs_file_path(),
-                    reference.reference_location().range().start_line()
-                ))
-                .collect::<Vec<String>>()
-                .join("\n")
-        );
 
-        // we only need file_paths over here...
-
-        // these include the anchored symbols themselves
         let references = anchor_properties.references();
 
         let file_paths = references
             .iter()
-            .map(|r| r.reference_location().fs_file_path().to_string())
+            .map(|r| r.fs_file_path().to_string())
             .collect::<Vec<_>>();
 
         let older_file_content_map = anchor_properties.previous_file_content;
         let message_properties = anchor_properties.message_properties.clone();
-
-        // let file_paths = anchor_properties
-        //     .anchored_symbols
-        //     .iter()
-        //     .filter_map(|symbol| symbol.0.fs_file_path())
-        //     .collect::<HashSet<_>>()
-        //     .into_iter()
-        //     .collect::<Vec<_>>();
 
         // Now grab the symbols which have changed
         let cloned_tools = app.tool_box.clone();

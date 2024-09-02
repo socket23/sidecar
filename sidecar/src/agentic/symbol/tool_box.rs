@@ -3384,6 +3384,10 @@ Please update this code to accommodate these changes. Consider:
                     symbol_identifier.symbol_name()
                 );
                 if original_code.trim() == edited_code.trim() {
+                    println!(
+                        "tool_box::check_for_followup_bfs::same_code_original_edited::({})",
+                        symbol_identifier.symbol_name()
+                    );
                     continue;
                 }
                 let outline_node = self

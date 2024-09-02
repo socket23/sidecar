@@ -78,6 +78,7 @@ pub struct SymbolInputEvent {
     fast_code_symbol_search_llm: Option<LLMProperties>,
     big_search: bool,
     ui_sender: UnboundedSender<UIEventWithID>,
+    is_complete: bool,
 }
 
 impl SymbolInputEvent {

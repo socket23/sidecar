@@ -2346,7 +2346,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         false,
                         None,
-                        false,
+                        true,
                     ),
                     message_properties.clone(),
                 )

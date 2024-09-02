@@ -2083,6 +2083,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                 // once we have successfully changed the implementation over here
                 // we have to start looking for followups over here
                 // F in the chat for error handling :')
+                println!(
+                    "symbol::edit_implementation::symbol_name({})::followups_triggered",
+                    self.symbol_name()
+                );
                 let _ = self
                     .tools
                     .check_for_followups(

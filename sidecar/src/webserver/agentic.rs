@@ -113,6 +113,10 @@ impl AnchoredEditingMetadata {
     pub fn references(&self) -> &[RelevantReference] {
         &self.references
     }
+
+    pub fn anchored_symbols(&self) -> &[AnchoredSymbol] {
+        &self.anchored_symbols
+    }
 }
 
 pub struct AnchoredEditingTracker {
@@ -481,11 +485,11 @@ pub async fn code_sculpting_heal(
             anchor_properties.references().len()
         );
 
-        let references = anchor_properties.references();
+        let anchored_symbols = anchor_properties.anchored_symbols();
 
-        let file_paths = references
+        let file_paths = anchored_symbols
             .iter()
-            .map(|r| r.fs_file_path().to_string())
+            .filter_map(|r| r.fs_file_path())
             .collect::<Vec<_>>();
 
         let older_file_content_map = anchor_properties.previous_file_content;

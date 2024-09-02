@@ -174,7 +174,7 @@ your single sentence
     }
 
     pub fn parse_response(response: &str) -> String {
-        println!("parse_response::response: {}", response);
+        // println!("parse_response::response: {}", response);
         let answer = response
             .lines()
             .skip_while(|l| !l.contains("<reply>"))
@@ -196,32 +196,33 @@ impl Tool for ReferenceFilterBroker {
 
         let system_message = LLMClientMessage::system(self.system_message());
 
-        // iterate by references
-
-        let references = context.reference_outlines().to_vec();
-        let anchored_references = context.anchored_references();
-
-        let anchored_symbol_prompt = anchored_references
-            .iter()
-            .filter_map(|anchored_symbol| {
-                anchored_symbol
-                    .anchored_symbol()
-                    .fs_file_path()
-                    .map(|fs_file_path| {
-                        let symbol_name = anchored_symbol.anchored_symbol().name();
-                        let contents = anchored_symbol.anchored_symbol().content();
-                        format!("{} in {}:\n{}", symbol_name, fs_file_path, contents)
-                    })
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
         let user_query = context.user_instruction();
 
-        let _ = stream::iter(references.into_iter().map(|reference| {
-            let user_message = self.user_message(&anchored_symbol_prompt, user_query, &reference);
-            let fs_file_path_for_reference = reference.fs_file_path().to_owned();
-            let name = reference.name().to_owned();
+        // watch this carefully...
+        let anchored_references = context.anchored_references().to_vec();
+
+        println!(
+            "anchored_references::count: {:?}",
+            &anchored_references.len()
+        );
+
+        // we iterate over each anchored_reference, which is presumed to have been reduced / deduped correctly
+        // i.e. multiple references within the same symbol should merge into a single shared AnchoredReference
+        let _ = stream::iter(anchored_references.into_iter().map(|anchored_reference| {
+            // the user message contains:
+            // 1. anchored symbol contents
+            // 2. its reference's outline_node
+            let user_message = self.user_message(
+                &anchored_reference.anchored_symbol().content(), // content of the anchored symbol
+                user_query,
+                &anchored_reference.ref_outline_node(), // outline node of the reference
+            );
+
+            let fs_file_path_for_reference = anchored_reference
+                .reference_location()
+                .fs_file_path()
+                .to_owned();
+            let ref_symbol_name = anchored_reference.ref_outline_node().name().to_owned();
             (
                 LLMClientCompletionRequest::new(
                     llm_properties.llm().clone(),
@@ -234,7 +235,7 @@ impl Tool for ReferenceFilterBroker {
                 root_request_id.to_owned(),
                 context.clone(),
                 fs_file_path_for_reference,
-                name,
+                ref_symbol_name,
             )
         }))
         .map(
@@ -245,7 +246,7 @@ impl Tool for ReferenceFilterBroker {
                 root_request_id,
                 context,
                 fs_file_path_reference,
-                name_reference,
+                ref_symbol_name_reference,
             )| async move {
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
                 let start = Instant::now();
@@ -282,7 +283,7 @@ impl Tool for ReferenceFilterBroker {
                         let _ = ui_sender.send(UIEventWithID::relevant_reference(
                             root_request_id.to_owned(),
                             &fs_file_path_reference,
-                            &name_reference,
+                            &ref_symbol_name_reference,
                             &parsed_response.reason,
                         ));
                     }

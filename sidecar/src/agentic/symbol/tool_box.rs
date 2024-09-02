@@ -4398,7 +4398,7 @@ Make the necessary changes if required making sure that nothing breaks"#
             None,
             false,
             None,
-            false, // disable any kind of followups or correctness check
+            true, // disable any kind of followups or correctness check
         );
 
         let event = SymbolEventMessage::message_with_properties(
@@ -4503,7 +4503,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                 None,
                 false,
                 None,
-                false, // should we disable followups and correctness check
+                true,
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -7943,7 +7943,7 @@ FILEPATH: {fs_file_path}
                                                     None,
                                                     true,
                                                     None,
-                                                    false, // should we disable followups and correctness check
+                                                    true, // should we disable followups and correctness check
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -7982,7 +7982,7 @@ FILEPATH: {fs_file_path}
                                     None,
                                     true,
                                     None,
-                                    false, // should we disable followups and correctness check
+                                    true, // should we disable followups and correctness check
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None

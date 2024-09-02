@@ -413,11 +413,13 @@ pub async fn swe_bench(
     ))
 }
 
+/// Represents a request to warm up the code sculpting system.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmup {
     file_paths: Vec<String>,
 }
 
+/// Response structure for the code sculpting warmup operation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmupResponse {
     done: bool,

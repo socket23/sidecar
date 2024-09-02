@@ -5,7 +5,7 @@ use llm_client::{
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 use quick_xml::de::from_str;
-use std::{sync::Arc, time::Instant};
+use std::{iter::once, sync::Arc, time::Instant};
 
 use crate::{
     agentic::{
@@ -117,14 +117,17 @@ impl ReferenceFilterBroker {
 
 Your response must be in the following format:
 
+<reply>
 <response>
 <reason>
-your single sentence
+your reasoning
 </reason>
 <change_required>
-false
+bool
 </change_required>
-</response>"#
+</response>
+</reply>
+"#
         )
     }
 
@@ -170,6 +173,175 @@ false
 
         answer
     }
+
+    pub fn few_shot_examples() -> Vec<LLMClientMessage> {
+        let user_1 = LLMClientMessage::user(r#"<user_query>
+add little_search
+</user_query>
+
+<code_selected>
+/// Represents a request for filtering references in the codebase.
+#[derive(Debug, Clone)]
+pub struct ReferenceFilterRequest {
+    /// The instruction or query provided by the user.
+    user_instruction: String,
+    llm_properties: LLMProperties,
+    /// The unique identifier for the root request.
+    root_id: String,
+    // we need ui_sender to fire events to ide
+    message_properties: SymbolEventMessageProperties,
+    anchored_references: Vec<AnchoredReference>,
+}
+</code_selected>
+
+<reference>
+ReferenceFilterRequest in /Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/ref_filter/ref_filter.rs
+impl ReferenceFilterRequest {
+    pub fn user_instruction(&self) -> &str {
+        &self.user_instruction
+    }
+
+    pub fn llm_properties(&self) -> &LLMProperties {
+        &self.llm_properties
+    }
+
+    pub fn root_id(&self) -> &str {
+        &self.root_id
+    }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
+    }
+
+    pub fn anchored_references(&self) -> &[AnchoredReference] {
+        &self.anchored_references
+    }
+}
+</reference>"#.to_string());
+        let system_1 = LLMClientMessage::system(r#"<reply>
+<response>
+<reason>
+We do not need to change the code in the `ReferenceFilterRequest` struct, because the addition of `little_search` to the struct does not necessitate a getter method.
+</reason>
+<change_required>
+false
+</change_required>
+</response>
+</reply>"#.to_string());
+        let user_2 = LLMClientMessage::user(
+            r#"<user_query>
+add little_search
+</user_query>
+
+<code_selected>
+/// Represents a request for filtering references in the codebase.
+#[derive(Debug, Clone)]
+pub struct ReferenceFilterRequest {
+    /// The instruction or query provided by the user.
+    user_instruction: String,
+    llm_properties: LLMProperties,
+    /// The unique identifier for the root request.
+    root_id: String,
+    // we need ui_sender to fire events to ide
+    message_properties: SymbolEventMessageProperties,
+    anchored_references: Vec<AnchoredReference>,
+}
+</code_selected>
+
+<reference>
+ToolInput in /Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/input.rs
+#[derive(Debug, Clone)]
+pub enum ToolInput {
+    CodeEditing(CodeEdit),
+    LSPDiagnostics(LSPDiagnosticsInput),
+    FindCodeSnippets(FindCodeSelectionInput),
+    ReRank(ReRankEntriesForBroker),
+    CodeSymbolUtilitySearch(CodeSymbolUtilityRequest),
+    RequestImportantSymbols(CodeSymbolImportantRequest),
+    RequestImportantSymbolsCodeWide(CodeSymbolImportantWideSearch),
+    GoToDefinition(GoToDefinitionRequest),
+    GoToReference(GoToReferencesRequest),
+    OpenFile(OpenFileRequest),
+    GrepSingleFile(FindInFileRequest),
+    SymbolImplementations(GoToImplementationRequest),
+    FilterCodeSnippetsForEditing(CodeToEditFilterRequest),
+    FilterCodeSnippetsForEditingSingleSymbols(CodeToEditSymbolRequest),
+    EditorApplyChange(EditorApplyRequest),
+    QuickFixRequest(GetQuickFixRequest),
+    QuickFixInvocationRequest(LSPQuickFixInvocationRequest),
+    CodeCorrectnessAction(CodeCorrectnessRequest),
+    CodeEditingError(CodeEditingErrorRequest),
+    ClassSymbolFollowup(ClassSymbolFollowupRequest),
+    // probe request
+    ProbeCreateQuestionForSymbol(ProbeQuestionForSymbolRequest),
+    ProbeEnoughOrDeeper(ProbeEnoughOrDeeperRequest),
+    ProbeFilterSnippetsSingleSymbol(CodeToProbeSubSymbolRequest),
+    ProbeSubSymbol(CodeToEditFilterRequest),
+    ProbePossibleRequest(CodeSymbolToAskQuestionsRequest),
+    ProbeQuestionAskRequest(CodeSymbolToAskQuestionsRequest),
+    ProbeFollowAlongSymbol(CodeSymbolFollowAlongForProbing),
+    ProbeSummarizeAnswerRequest(CodeSymbolProbingSummarize),
+    ProbeTryHardAnswerRequest(ProbeTryHardAnswerSymbolRequest),
+    // repo map query
+    RepoMapSearch(RepoMapSearchQuery),
+    // important files query
+    ImportantFilesFinder(ImportantFilesFinderQuery),
+    // SWE Bench tooling
+    SWEBenchTest(SWEBenchTestRequest),
+    // Test output correction
+    TestOutputCorrection(TestOutputCorrectionRequest),
+    // Code symbol follow initial request
+    CodeSymbolFollowInitialRequest(CodeSymbolFollowInitialRequest),
+    // Plan before code editing
+    PlanningBeforeCodeEdit(PlanningBeforeCodeEditRequest),
+    // New symbols required for code editing
+    NewSubSymbolForCodeEditing(NewSubSymbolRequiredRequest),
+    // Find the symbol in the codebase which we want to select, this only
+    // takes a string as input
+    GrepSymbolInCodebase(LSPGrepSymbolInCodebaseRequest),
+    // Find file location for the new symbol
+    FindFileForNewSymbol(FindFileForSymbolRequest),
+    // Find symbol to edit in user context
+    FindSymbolsToEditInContext(FindSymbolsToEditInContextRequest),
+    // ReRanking outline nodes for code editing context
+    ReRankingCodeSnippetsForEditing(ReRankingSnippetsForCodeEditingRequest),
+    // Apply the generated code outline to the range we are interested in
+    ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest),
+    // Big search
+    BigSearch(BigSearchRequest),
+    // checks if the edit operation needs to be performed or is an extra
+    FilterEditOperation(FilterEditOperationRequest),
+    // Keyword search
+    KeywordSearch(KeywordSearchQuery),
+    // inlay hints from the lsp/editor
+    InlayHints(InlayHintsRequest),
+    CodeSymbolNewLocation(CodeSymbolNewLocationRequest),
+    // should edit the code symbol
+    ShouldEditCode(ShouldEditCodeSymbolRequest),
+    // search and replace blocks
+    SearchAndReplaceEditing(SearchAndReplaceEditingRequest),
+    // git diff request
+    GitDiff(GitDiffClientRequest),
+    OutlineNodesUsingEditor(OutlineNodesUsingEditorRequest),
+    // filters references based on user query
+    ReferencesFilter(ReferenceFilterRequest),
+}
+</reference>"#
+                .to_string(),
+        );
+        let system_2 = LLMClientMessage::system(r#"<reply>
+<response>
+<reason>
+The ToolInput enum remains unchanged when adding little_search to ReferenceFilterRequest because it references the struct as a whole, not its internal fields.
+</reason>
+<change_required>
+false
+</change_required>
+</response>
+</reply>"#.to_string());
+
+        vec![user_1, system_1, user_2, system_2]
+    }
 }
 
 #[async_trait]
@@ -201,6 +373,11 @@ impl Tool for ReferenceFilterBroker {
                     &anchored_reference.ref_outline_node(), // outline node of the reference
                 );
 
+                let llm_messages = once(system_message.clone())
+                    .chain(Self::few_shot_examples())
+                    .chain(once(LLMClientMessage::user(user_message)))
+                    .collect::<Vec<_>>();
+
                 let fs_file_path_for_reference = anchored_reference
                     .reference_location()
                     .fs_file_path()
@@ -209,7 +386,7 @@ impl Tool for ReferenceFilterBroker {
                 (
                     LLMClientCompletionRequest::new(
                         llm_properties.llm().clone(),
-                        vec![system_message.clone(), LLMClientMessage::user(user_message)],
+                        llm_messages,
                         0.2,
                         None,
                     ),
@@ -253,12 +430,17 @@ impl Tool for ReferenceFilterBroker {
                         start.elapsed()
                     );
 
+                    println!("{:?}", &response);
+
                     let parsed_response = match response {
-                        Ok(response) => from_str::<ReferenceFilterResponse>(&response).ok(),
+                        Ok(response) => {
+                            from_str::<ReferenceFilterResponse>(&Self::parse_response(&response))
+                                .ok()
+                        }
                         Err(_) => None,
                     };
 
-                    println!("parsed_response:\n\n{:?}", parsed_response);
+                    println!("parsed_response:\n{:?}", parsed_response);
 
                     if let Some(parsed_response) = parsed_response {
                         if parsed_response.change_required {

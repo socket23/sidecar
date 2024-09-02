@@ -282,7 +282,8 @@ impl Tool for ReferenceFilterBroker {
                     }
                 },
             )
-            .buffer_unordered(200)
+            // control the parallelism here
+            .buffer_unordered(40)
             .filter_map(|result| async move { result })
             .collect::<Vec<_>>()
             .await;

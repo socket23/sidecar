@@ -916,10 +916,7 @@ pub async fn code_editing(
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
                 // todo(zi): need to consider load here.
-                let references = references
-                    .into_iter()
-                    .take(10) // todo(zi): so we don't go crazy with 1000s of requests
-                    .collect::<Vec<_>>();
+                let references = references.into_iter().collect::<Vec<_>>();
 
                 println!(
                     "code_editing:reference_symbols.len({:?})",

@@ -184,12 +184,7 @@ impl Tool for ReferenceFilterBroker {
         let user_query = context.user_instruction();
 
         // watch this carefully...
-        let anchored_references = context
-            .anchored_references()
-            .to_vec()
-            .into_iter()
-            .take(10) // todo(zi): so we don't go crazy with 1000s of requests
-            .collect::<Vec<_>>();
+        let anchored_references = context.anchored_references().to_vec();
 
         println!(
             "anchored_references::count: {:?}",

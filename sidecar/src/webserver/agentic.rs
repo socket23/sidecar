@@ -920,6 +920,11 @@ pub async fn code_editing(
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
+                let references = references
+                    .into_iter()
+                    .take(10) // todo(zi): so we don't go crazy with 1000s of requests
+                    .collect::<Vec<_>>();
+
                 println!(
                     "code_editing:reference_symbols.len({:?})",
                     &references.len()
@@ -943,7 +948,7 @@ pub async fn code_editing(
 
                 println!("references.len({:?})", &references.len());
 
-                // for followup consumption
+                // todo(zi): this addition needs to occur based on LLM response.
                 let _ = cloned_tracker
                     .add_reference(&cloned_request_id, &references)
                     .await;
@@ -981,20 +986,18 @@ pub async fn code_editing(
                 .anchored_request_tracker
                 .add_join_handle(&request_id, join_handle)
                 .await;
-            // todo(zi): is this check necessary?
             let properties_present = app
                 .anchored_request_tracker
                 .get_properties(&request_id)
                 .await;
-
-            // no references at this point! - invoke takes too long
-            dbg!(&properties_present);
 
             println!(
                 "webserver::anchored_edits::request_id({})::properties_present({})",
                 &request_id,
                 properties_present.is_some()
             );
+
+            // there will never be references at this point, given this runs well before the join_handles can resolve
             println!(
                 "webserver::anchored_edits::request_id({})::properties_present({}).references.len({})",
                 &request_id,

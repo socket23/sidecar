@@ -2107,7 +2107,8 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Deprecated features that should no longer be used"#),
+4. Deprecated features that should no longer be used
+5. If no changes are required, do not make any changes to the code! I do not want to review code if no changes are required."#),
                     hub_sender.clone(),
                     message_properties.clone(),
                     tool_properties.clone(),
@@ -2288,7 +2289,8 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Deprecated features that should no longer be used"#
+4. Deprecated features that should no longer be used
+5. If no changes are required, do not make any changes to the code! I do not want to review code if no changes are required."#
         );
 
         println!(
@@ -2609,7 +2611,8 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Deprecated features that should no longer be used"#
+4. Deprecated features that should no longer be used
+5. If no changes are required, do not make any changes to the code! I do not want to review code if no changes are required."#
                         ),
                         hub_sender.clone(),
                         message_properties.clone(),
@@ -2779,7 +2782,8 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Deprecated features that should no longer be used"#)},
+4. Deprecated features that should no longer be used
+5. If no changes are required, do not make any changes to the code! I do not want to review code if no changes are required."#)},
                 hub_sender.clone(),
                 message_properties.clone(),
                 tool_properties.clone(),
@@ -3057,7 +3061,8 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Deprecated features that should no longer be used"#),
+4. Deprecated features that should no longer be used
+5. If no changes are required, do not make any changes to the code! I do not want to review code if no changes are required."#),
                     hub_sender.clone(),
                     message_properties.clone(),
                     tool_properties.clone(),
@@ -3282,7 +3287,8 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Deprecated features that should no longer be used"#),
+4. Deprecated features that should no longer be used
+5. If no changes are required, do not make any changes to the code! I do not want to review code if no changes are required."#),
                         hub_sender.clone(),
                         message_properties.clone(),
                         tool_properties.clone(),
@@ -4470,6 +4476,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                              2. Behavioural changes in the dependency\n\
                              3. Potential side effects or new exceptions\n\
                              4. Deprecated features that should no longer be used\n\
+                             5. If no changes are required, do not make any changes to the code! I do not want to review code if no changes are required.\n\
                              Explain your changes and any assumptions you make.",
                 outline_node.name(),
                 original_code,

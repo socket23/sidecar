@@ -427,7 +427,7 @@ impl Tool for SearchAndReplaceEditing {
                             let delta = msg.delta();
                             if let Some(delta) = delta {
                                 // we have some delta over here which we can process
-                                search_and_replace_accumulator.add_delta(delta.to_owned());
+                                search_and_replace_accumulator.add_delta(delta.to_owned()).await;
                                 // send over the thinking as soon as we get a delta over here
                                 let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
                                     root_request_id.to_owned(),
@@ -567,13 +567,13 @@ impl SearchAndReplaceAccumulator {
         }
     }
 
-    fn add_delta(&mut self, delta: String) {
+    async fn add_delta(&mut self, delta: String) {
         self.answer_up_until_now.push_str(&delta);
-        self.process_answer();
+        self.process_answer().await;
         // check if we have a new search block starting here
     }
 
-    fn process_answer(&mut self) {
+    async fn process_answer(&mut self) {
         let head = "<<<<<<< SEARCH";
         let divider = "=======";
         let updated = vec![">>>>>>> REPLACE", "======="];
@@ -848,8 +848,8 @@ mod tests {
 
     /// TODO(skcd): Broken test here to debug multiple search and replace blocks being
     /// part of the same edit
-    #[test]
-    fn test_multiple_search_and_edit_blocks() {
+    #[tokio::test]
+    async fn test_multiple_search_and_edit_blocks() {
         let input_data = r#"impl LLMClientMessage {
     pub async fn new(role: LLMClientRole, message: String) -> Self {
         Self {
@@ -1058,7 +1058,9 @@ mod tests {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut search_and_replace_accumulator =
             SearchAndReplaceAccumulator::new(input_data.to_owned(), 0, sender);
-        search_and_replace_accumulator.add_delta(edits.to_owned());
+        search_and_replace_accumulator
+            .add_delta(edits.to_owned())
+            .await;
         let final_lines = search_and_replace_accumulator.code_lines.join("\n");
         assert_eq!(
             final_lines,
@@ -1158,8 +1160,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_search_and_replace_removing_code() {
+    #[tokio::test]
+    async fn test_search_and_replace_removing_code() {
         let original_code = r#"impl SymbolToEdit {
     pub fn new(
         symbol_name: String,
@@ -1295,7 +1297,9 @@ impl SymbolToEdit {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut search_and_replace_accumulator =
             SearchAndReplaceAccumulator::new(original_code.to_owned(), 0, sender);
-        search_and_replace_accumulator.add_delta(edits.to_owned());
+        search_and_replace_accumulator
+            .add_delta(edits.to_owned())
+            .await;
         let final_code = search_and_replace_accumulator.code_lines.join("\n");
         assert_eq!(
             final_code,
@@ -1365,8 +1369,8 @@ impl SymbolToEdit {
         );
     }
 
-    #[test]
-    fn test_with_broken_replace_block() {
+    #[tokio::test]
+    async fn test_with_broken_replace_block() {
         let code = r#"something
 interesting
 something_else
@@ -1382,7 +1386,9 @@ blahblah2
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut search_and_replace_accumulator =
             SearchAndReplaceAccumulator::new(code.to_owned(), 0, sender);
-        search_and_replace_accumulator.add_delta(edits.to_owned());
+        search_and_replace_accumulator
+            .add_delta(edits.to_owned())
+            .await;
         let final_code = search_and_replace_accumulator.code_lines.join("\n");
         assert_eq!(
             final_code,

@@ -817,6 +817,7 @@ pub async fn code_editing(
                         let toolbox = cloned_toolbox.clone();
                         let message_properties = cloned_message_properties.clone();
                         let request_id = cloned_request_id.clone();
+                        let range = anchored_symbol.possible_range().clone();
                         stream::iter(symbol_names.into_iter().filter_map(move |symbol_name| {
                             symbol_identifier.fs_file_path().map(|path| {
                                 (
@@ -826,6 +827,7 @@ pub async fn code_editing(
                                     toolbox.clone(),
                                     message_properties.clone(),
                                     request_id.clone(),
+                                    range.clone(),
                                 )
                             })
                         }))
@@ -838,25 +840,34 @@ pub async fn code_editing(
                             toolbox,
                             message_properties,
                             request_id,
+                            range,
                         )| async move {
                             println!("getting references for {}-{}", &path, &symbol_name);
                             let refs = toolbox
                                 .get_symbol_references(
                                     path,
                                     symbol_name.to_owned(),
+                                    range,
                                     message_properties.clone(),
                                     request_id.clone(),
                                 )
                                 .await;
 
-                            let anchored_refs = toolbox
-                                .anchored_references_for_locations(
-                                    refs.as_slice(),
-                                    original_symbol,
-                                    message_properties,
-                                )
-                                .await;
-                            anchored_refs
+                            match refs {
+                                Ok(references) => {
+                                    toolbox
+                                        .anchored_references_for_locations(
+                                            references.as_slice(),
+                                            original_symbol,
+                                            message_properties,
+                                        )
+                                        .await
+                                }
+                                Err(e) => {
+                                    println!("{:?}", e);
+                                    vec![]
+                                }
+                            }
                         },
                     )
                     .buffer_unordered(100)
@@ -873,10 +884,14 @@ pub async fn code_editing(
                 let grouped: HashMap<String, usize> = references.clone().into_iter().fold(
                     HashMap::new(),
                     |mut acc, anchored_reference| {
-                        let reference = anchored_reference.reference_location();
-                        acc.entry(reference.fs_file_path().to_string())
-                            .and_modify(|count| *count += 1)
-                            .or_insert(1);
+                        let reference_len = anchored_reference.reference_locations().len();
+                        acc.entry(
+                            anchored_reference
+                                .fs_file_path_for_outline_node()
+                                .to_string(),
+                        )
+                        .and_modify(|count| *count += reference_len)
+                        .or_insert(1);
                         acc
                     },
                 );

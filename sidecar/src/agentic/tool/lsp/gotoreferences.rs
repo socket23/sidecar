@@ -16,14 +16,15 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct AnchoredReference {
     anchored_symbol: AnchoredSymbol,
-    reference_location: ReferenceLocation,
+    // an outline node can contain multiple references
+    reference_location: Vec<ReferenceLocation>,
     ref_outline_node: OutlineNode,
 }
 
 impl AnchoredReference {
     pub fn new(
         anchored_symbol: AnchoredSymbol,
-        reference_location: ReferenceLocation,
+        reference_location: Vec<ReferenceLocation>,
         ref_outline_node: OutlineNode,
     ) -> Self {
         Self {
@@ -37,12 +38,16 @@ impl AnchoredReference {
         &self.anchored_symbol
     }
 
-    pub fn reference_location(&self) -> &ReferenceLocation {
-        &self.reference_location
+    pub fn reference_locations(&self) -> &[ReferenceLocation] {
+        self.reference_location.as_slice()
     }
 
     pub fn ref_outline_node(&self) -> &OutlineNode {
         &self.ref_outline_node
+    }
+
+    pub fn fs_file_path_for_outline_node(&self) -> &str {
+        self.ref_outline_node.fs_file_path()
     }
 }
 

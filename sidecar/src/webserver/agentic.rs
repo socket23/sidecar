@@ -42,12 +42,13 @@ use crate::{
 use super::types::ApiResponse;
 use super::{model_selection::LLMClientConfig, types::Result};
 
-/// Tracks and manages ongoing probe requests.
+/// Tracks and manages probe requests in a concurrent environment.
 #[derive(Debug, Clone)]
 pub struct ProbeRequestTracker {
-    /// A thread-safe map of running requests.
-    /// - Key: Request ID (String)
-    /// - Value: JoinHandle for the running task
+    /// A thread-safe map of running requests, keyed by request ID.
+    ///
+    /// - Key: String representing the unique request ID.
+    /// - Value: JoinHandle for the asynchronous task handling the request.
     pub running_requests: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
 }
 

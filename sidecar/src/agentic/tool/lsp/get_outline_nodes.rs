@@ -186,7 +186,7 @@ fn name_from_selection_range(file_lines: &[&str], range: [DocumentSymbolPosition
     let start_line = range[0].line;
     let file_line_content = file_lines[start_line];
     let character_range = file_line_content.chars().into_iter().collect::<Vec<_>>();
-    character_range[range[0].character..=range[1].character]
+    character_range[range[0].character..range[1].character]
         .into_iter()
         .collect()
 }

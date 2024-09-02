@@ -136,6 +136,10 @@ impl TSLanguageConfig {
         self.language_ids.contains(&"python")
     }
 
+    pub fn is_rust(&self) -> bool {
+        self.language_ids.contains(&"rust")
+    }
+
     pub fn is_js_like(&self) -> bool {
         self.language_ids.contains(&"javascript") || self.language_ids.contains(&"typescript")
     }

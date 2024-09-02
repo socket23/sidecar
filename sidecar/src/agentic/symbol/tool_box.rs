@@ -3374,7 +3374,7 @@ Please update this code to accommodate these changes. Consider:
             // empty the reference locations at the start of the invocation as it
             // will get populated down the line
             reference_locations = vec![];
-            for symbol_followup in symbol_followups.into_iter() {
+            for symbol_followup in symbol_followups.iter() {
                 let symbol_edited = symbol_followup.symbol_edited();
                 let symbol_identifier = symbol_followup.symbol_identifier();
                 let original_code = symbol_followup.original_code();
@@ -3449,7 +3449,26 @@ Please update this code to accommodate these changes. Consider:
                     );
                 }
             }
-            symbol_followups = reference_locations.to_vec();
+            // create a dedup here for the references which we are sending
+            // making sure that we are not repeating the followup request with the same data
+            let mut already_seen_followup: HashSet<String> = Default::default();
+            symbol_followups = vec![];
+            for reference_location in reference_locations.into_iter() {
+                let symbol_identifier = reference_location.symbol_identifier();
+                let symbol_to_edit = reference_location.symbol_edited().symbol_name();
+                let hash_key = format!(
+                    "{}::{:?}::{}",
+                    symbol_identifier.symbol_name(),
+                    symbol_identifier.fs_file_path(),
+                    symbol_to_edit
+                );
+                if already_seen_followup.contains(&hash_key) {
+                    continue;
+                }
+                already_seen_followup.insert(hash_key);
+                // helps us dedup the reference locations
+                symbol_followups.push(reference_location);
+            }
         }
         println!("tool_box::check_for_followups_bfs::complete");
         Ok(())

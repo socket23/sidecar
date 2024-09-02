@@ -2107,8 +2107,7 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Any new methods or properties that should be utilized
-5. Deprecated features that should no longer be used"#),
+4. Deprecated features that should no longer be used"#),
                     hub_sender.clone(),
                     message_properties.clone(),
                     tool_properties.clone(),
@@ -2289,8 +2288,7 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Any new methods or properties that should be utilized
-5. Deprecated features that should no longer be used"#
+4. Deprecated features that should no longer be used"#
         );
 
         println!(
@@ -2611,8 +2609,7 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Any new methods or properties that should be utilized
-5. Deprecated features that should no longer be used"#
+4. Deprecated features that should no longer be used"#
                         ),
                         hub_sender.clone(),
                         message_properties.clone(),
@@ -2782,8 +2779,7 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Any new methods or properties that should be utilized
-5. Deprecated features that should no longer be used"#)},
+4. Deprecated features that should no longer be used"#)},
                 hub_sender.clone(),
                 message_properties.clone(),
                 tool_properties.clone(),
@@ -3061,8 +3057,7 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Any new methods or properties that should be utilized
-5. Deprecated features that should no longer be used"#),
+4. Deprecated features that should no longer be used"#),
                     hub_sender.clone(),
                     message_properties.clone(),
                     tool_properties.clone(),
@@ -3287,8 +3282,7 @@ Please update this code to accommodate these changes. Consider:
 1. Method signature changes (parameters, return types)
 2. Behavioural changes in the dependency
 3. Potential side effects or new exceptions
-4. Any new methods or properties that should be utilized
-5. Deprecated features that should no longer be used"#),
+4. Deprecated features that should no longer be used"#),
                         hub_sender.clone(),
                         message_properties.clone(),
                         tool_properties.clone(),
@@ -4475,8 +4469,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                              1. Method signature changes (parameters, return types)\n\
                              2. Behavioural changes in the dependency\n\
                              3. Potential side effects or new exceptions\n\
-                             4. Any new methods or properties that should be utilized\n\
-                             5. Deprecated features that should no longer be used\n\
+                             4. Deprecated features that should no longer be used\n\
                              Explain your changes and any assumptions you make.",
                 outline_node.name(),
                 original_code,

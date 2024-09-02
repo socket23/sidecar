@@ -3366,6 +3366,7 @@ Please update this code to accommodate these changes. Consider:
         // we want to track the reference location along with the changed symbol_followup
         // so we can pass the correct git-diff to it
         let mut reference_locations: Vec<SymbolFollowupBFS>;
+        let instant = std::time::Instant::now();
         loop {
             if symbol_followups.is_empty() {
                 // break when we have no more followups to do
@@ -3474,7 +3475,10 @@ Please update this code to accommodate these changes. Consider:
                 symbol_followups.push(reference_location);
             }
         }
-        println!("tool_box::check_for_followups_bfs::complete");
+        println!(
+            "tool_box::check_for_followups_bfs::complete::time_taken({:?}ms)",
+            instant.elapsed().as_millis()
+        );
         Ok(())
     }
 

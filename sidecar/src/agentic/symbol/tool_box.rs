@@ -2135,7 +2135,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         false,
                         None,
-                        false,
+                        true,
                     ),
                     message_properties.clone(),
                 )
@@ -2153,7 +2153,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     false,
                     None,
-                    false,
+                    true,
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),

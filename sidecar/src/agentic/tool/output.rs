@@ -1,5 +1,7 @@
 //! Contains the output of a tool which can be used by any of the callers
 
+use crate::agentic::symbol::ui_event::RelevantReference;
+
 use super::{
     code_edit::{
         filter_edit::FilterEditOperationResponse,
@@ -42,7 +44,6 @@ use super::{
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
-    ref_filter::ref_filter::ReferenceFilterResponse,
     rerank::base::ReRankEntriesForBroker,
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
@@ -160,7 +161,7 @@ pub enum ToolOutput {
     // outline nodes from the editor
     OutlineNodesUsingEditor(OutlineNodesUsingEditorResponse),
     // filter reference
-    ReferencesFilter(ReferenceFilterResponse),
+    ReferencesFilter(Vec<RelevantReference>),
 }
 
 impl ToolOutput {
@@ -609,6 +610,13 @@ impl ToolOutput {
     pub fn get_outline_nodes_from_editor(self) -> Option<OutlineNodesUsingEditorResponse> {
         match self {
             ToolOutput::OutlineNodesUsingEditor(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_relevant_references(self) -> Option<Vec<RelevantReference>> {
+        match self {
+            ToolOutput::ReferencesFilter(response) => Some(response),
             _ => None,
         }
     }

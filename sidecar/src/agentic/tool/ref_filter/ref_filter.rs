@@ -10,8 +10,9 @@ use std::{sync::Arc, time::Instant};
 use crate::{
     agentic::{
         symbol::{
-            anchored::AnchoredSymbol, events::message_event::SymbolEventMessageProperties,
-            identifier::LLMProperties, ui_event::UIEventWithID,
+            events::message_event::SymbolEventMessageProperties,
+            identifier::LLMProperties,
+            ui_event::{RelevantReference, UIEventWithID},
         },
         tool::{
             errors::ToolError, input::ToolInput, lsp::gotoreferences::AnchoredReference,
@@ -183,7 +184,6 @@ impl Tool for ReferenceFilterBroker {
 
         let user_query = context.user_instruction();
 
-        // watch this carefully...
         let anchored_references = context.anchored_references().to_vec();
 
         println!(
@@ -191,94 +191,105 @@ impl Tool for ReferenceFilterBroker {
             &anchored_references.len()
         );
 
-        // we iterate over each anchored_reference, which is presumed to have been reduced / deduped correctly
-        // i.e. multiple references within the same symbol should merge into a single shared AnchoredReference
-        let _ = stream::iter(anchored_references.into_iter().map(|anchored_reference| {
-            // the user message contains:
-            // 1. anchored symbol contents
-            // 2. its reference's outline_node
-            let user_message = self.user_message(
-                &anchored_reference.anchored_symbol().content(), // content of the anchored symbol
-                user_query,
-                &anchored_reference.ref_outline_node(), // outline node of the reference
-            );
-
-            let fs_file_path_for_reference = anchored_reference
-                .reference_location()
-                .fs_file_path()
-                .to_owned();
-            let ref_symbol_name = anchored_reference.ref_outline_node().name().to_owned();
-            (
-                LLMClientCompletionRequest::new(
-                    llm_properties.llm().clone(),
-                    vec![system_message.clone(), LLMClientMessage::user(user_message)],
-                    0.2,
-                    None,
-                ),
-                self.llm_client.clone(),
-                llm_properties.clone(),
-                root_request_id.to_owned(),
-                context.clone(),
-                fs_file_path_for_reference,
-                ref_symbol_name,
-            )
-        }))
-        .map(
-            |(
-                request,
-                llm_client,
-                llm_properties,
-                root_request_id,
-                context,
-                fs_file_path_reference,
-                ref_symbol_name_reference,
-            )| async move {
-                let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-                let start = Instant::now();
-
-                let response = llm_client
-                    .stream_completion(
-                        llm_properties.api_key().clone(),
-                        request,
-                        llm_properties.provider().clone(),
-                        vec![
-                            ("event_type".to_owned(), "filter_references".to_owned()),
-                            ("root_id".to_owned(), root_request_id.to_owned()),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        sender,
-                    )
-                    .await;
-                println!(
-                    "reference_check::stream_completion::elapsed: {:?}",
-                    start.elapsed()
+        let relevant_references =
+            stream::iter(anchored_references.into_iter().map(|anchored_reference| {
+                // the user message contains:
+                // 1. anchored symbol contents
+                // 2. its reference's outline_node
+                let user_message = self.user_message(
+                    &anchored_reference.anchored_symbol().content(), // content of the anchored symbol
+                    user_query,
+                    &anchored_reference.ref_outline_node(), // outline node of the reference
                 );
 
-                let parsed_response = match response {
-                    Ok(response) => {
-                        from_str::<ReferenceFilterResponse>(&Self::parse_response(&response)).ok()
-                    }
-                    Err(_) => None,
-                };
+                let fs_file_path_for_reference = anchored_reference
+                    .reference_location()
+                    .fs_file_path()
+                    .to_owned();
+                let ref_symbol_name = anchored_reference.ref_outline_node().name().to_owned();
+                (
+                    LLMClientCompletionRequest::new(
+                        llm_properties.llm().clone(),
+                        vec![system_message.clone(), LLMClientMessage::user(user_message)],
+                        0.2,
+                        None,
+                    ),
+                    self.llm_client.clone(),
+                    llm_properties.clone(),
+                    root_request_id.to_owned(),
+                    context.clone(),
+                    fs_file_path_for_reference,
+                    ref_symbol_name,
+                )
+            }))
+            .map(
+                |(
+                    request,
+                    llm_client,
+                    llm_properties,
+                    root_request_id,
+                    context,
+                    fs_file_path_reference,
+                    ref_symbol_name_reference,
+                )| async move {
+                    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+                    let start = Instant::now();
 
-                if let Some(parsed_response) = parsed_response {
-                    if parsed_response.change_required {
-                        let ui_sender = context.message_properties().ui_sender();
-                        let _ = ui_sender.send(UIEventWithID::relevant_reference(
-                            root_request_id.to_owned(),
-                            &fs_file_path_reference,
-                            &ref_symbol_name_reference,
-                            &parsed_response.reason,
-                        ));
-                    }
-                }
-            },
-        )
-        .buffer_unordered(200)
-        .collect::<Vec<_>>()
-        .await;
+                    let response = llm_client
+                        .stream_completion(
+                            llm_properties.api_key().clone(),
+                            request,
+                            llm_properties.provider().clone(),
+                            vec![
+                                ("event_type".to_owned(), "filter_references".to_owned()),
+                                ("root_id".to_owned(), root_request_id.to_owned()),
+                            ]
+                            .into_iter()
+                            .collect(),
+                            sender,
+                        )
+                        .await;
+                    println!(
+                        "reference_check::stream_completion::elapsed: {:?}",
+                        start.elapsed()
+                    );
 
-        Err(ToolError::MissingTool)
+                    let parsed_response = match response {
+                        Ok(response) => {
+                            from_str::<ReferenceFilterResponse>(&Self::parse_response(&response))
+                                .ok()
+                        }
+                        Err(_) => None,
+                    };
+
+                    if let Some(parsed_response) = parsed_response {
+                        if parsed_response.change_required {
+                            let ui_sender = context.message_properties().ui_sender();
+                            let _ = ui_sender.send(UIEventWithID::relevant_reference(
+                                root_request_id.to_owned(),
+                                &fs_file_path_reference,
+                                &ref_symbol_name_reference,
+                                &parsed_response.reason,
+                            ));
+
+                            Some(RelevantReference::new(
+                                &fs_file_path_reference,
+                                &ref_symbol_name_reference,
+                                &parsed_response.reason,
+                            ))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                },
+            )
+            .buffer_unordered(200)
+            .filter_map(|result| async move { result })
+            .collect::<Vec<_>>()
+            .await;
+
+        Ok(ToolOutput::ReferencesFilter(relevant_references))
     }
 }

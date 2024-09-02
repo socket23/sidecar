@@ -8304,11 +8304,13 @@ FILEPATH: {fs_file_path}
         references: &[ReferenceLocation],
         message_properties: SymbolEventMessageProperties,
     ) -> Vec<OutlineNode> {
+        // all file_paths contained in references
         let file_paths = references
             .iter()
             .map(|reference| reference.fs_file_path().to_owned())
             .collect::<HashSet<String>>();
 
+        // all outline_nodes within file_paths
         let outline_nodes_by_files = stream::iter(
             file_paths
                 .into_iter()
@@ -8335,11 +8337,66 @@ FILEPATH: {fs_file_path}
                 // check if a reference belongs inside this outline node
                 let outline_node_range = outline_node.range();
                 references.iter().any(|reference| {
+                    // checks whether the outline node's range contains a reference's range, and has matching paths
                     outline_node_range.contains_check_line_column(reference.range())
                         && reference.fs_file_path() == outline_node.fs_file_path()
                 })
             })
             .collect::<Vec<_>>()
+    }
+
+    pub async fn anchored_references_for_locations(
+        &self,
+        ref_locations: &[ReferenceLocation],
+        original_symbol: AnchoredSymbol,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Vec<AnchoredReference> {
+        let file_paths = ref_locations
+            .iter()
+            .map(|location| location.fs_file_path().to_owned())
+            .collect::<HashSet<String>>();
+
+        // all outline_nodes within file_paths
+        let outline_nodes_by_files = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
+                .await;
+            outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .map(|(_, outline_nodes)| outline_nodes)
+        .flatten()
+        .collect::<Vec<_>>();
+
+        let anchored_references = ref_locations
+            .into_iter()
+            .filter_map(|ref_location| {
+                let matching_outline_node = outline_nodes_by_files.iter().find(|outline_node| {
+                    let outline_node_range = outline_node.range();
+                    outline_node_range.contains_check_line_column(ref_location.range())
+                        && ref_location.fs_file_path() == outline_node.fs_file_path()
+                });
+
+                matching_outline_node.map(|outline_node: &OutlineNode| {
+                    AnchoredReference::new(
+                        original_symbol.to_owned(),
+                        ref_location.to_owned(),
+                        outline_node.to_owned(),
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+
+        anchored_references
     }
 
     pub async fn outline_nodes_for_anchored_references(

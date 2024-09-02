@@ -7,20 +7,29 @@ use crate::{
         symbol::anchored::AnchoredSymbol,
         tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
     },
-    chunking::text_document::{Position, Range},
+    chunking::{
+        text_document::{Position, Range},
+        types::OutlineNode,
+    },
 };
 
 #[derive(Debug, Clone)]
 pub struct AnchoredReference {
     anchored_symbol: AnchoredSymbol,
     reference_location: ReferenceLocation,
+    ref_outline_node: OutlineNode,
 }
 
 impl AnchoredReference {
-    pub fn new(anchored_symbol: AnchoredSymbol, reference_location: ReferenceLocation) -> Self {
+    pub fn new(
+        anchored_symbol: AnchoredSymbol,
+        reference_location: ReferenceLocation,
+        ref_outline_node: OutlineNode,
+    ) -> Self {
         Self {
             anchored_symbol,
             reference_location,
+            ref_outline_node,
         }
     }
 
@@ -30,6 +39,10 @@ impl AnchoredReference {
 
     pub fn reference_location(&self) -> &ReferenceLocation {
         &self.reference_location
+    }
+
+    pub fn ref_outline_node(&self) -> &OutlineNode {
+        &self.ref_outline_node
     }
 }
 

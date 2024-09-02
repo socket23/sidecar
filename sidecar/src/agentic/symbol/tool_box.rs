@@ -2535,6 +2535,9 @@ Please update this code to accommodate these changes. Consider:
                             .any(|(reference_location, _)| {
                                 outline_node_range
                                     .contains_check_line_column(reference_location.range())
+                                    // check if the reference is on the same file as the outline node
+                                    && reference_location.fs_file_path()
+                                        == outline_node.fs_file_path()
                             })
                     })
             })

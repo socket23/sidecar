@@ -2418,6 +2418,9 @@ Please update this code to accommodate these changes. Consider:
                             )
                             .await?
                             .locations();
+                        // the interesting part here is that we are showing the changed
+                        // function content but not idea on which class symbol it is
+                        // part of
                         references_to_symbol_followup.extend(
                             references_for_functions.into_iter().map(|reference| {
                                 (
@@ -2562,6 +2565,19 @@ Please update this code to accommodate these changes. Consider:
                 })
                 .map(|symbol_followup_bfs| {
                     let name = symbol_followup_bfs.symbol_edited().symbol_name();
+                    let parent_symbol_name = symbol_followup_bfs
+                        .symbol_identifier()
+                        .symbol_name()
+                        .to_owned();
+                    let name = if parent_symbol_name != name {
+                        if language_config.is_rust() {
+                            format!("{}::{}", parent_symbol_name, name)
+                        } else {
+                            format!("{}.{}", parent_symbol_name, name)
+                        }
+                    } else {
+                        name.to_owned()
+                    };
                     let fs_file_path = symbol_followup_bfs.symbol_edited().fs_file_path();
                     let original_code = symbol_followup_bfs.original_code();
                     let edited_code = symbol_followup_bfs.edited_code();
@@ -2737,6 +2753,16 @@ Please update this code to accommodate these changes. Consider:
                 {
                     let name = symbol_followup.symbol_edited().symbol_name();
                     let fs_file_path = symbol_followup.symbol_edited().fs_file_path();
+                    let parent_symbol_name = symbol_followup.symbol_identifier().symbol_name();
+                    let name = if parent_symbol_name != name {
+                        if language_config.is_rust() {
+                            format!("{}::{}", parent_symbol_name, name)
+                        } else {
+                            format!("{}.{}", parent_symbol_name, name)
+                        }
+                    } else {
+                        name.to_owned()
+                    };
                     format!(r#"A dependency of this code has changed. You are given the list of changes below:
 <dependency>
 <name>
@@ -2996,6 +3022,16 @@ Please update this code to accommodate these changes. Consider:
                     let fs_file_path = symbol_followup_bfs.symbol_edited().fs_file_path();
                     let original_code = symbol_followup_bfs.original_code();
                     let edited_code = symbol_followup_bfs.edited_code();
+                    let parent_symbol_name = symbol_followup_bfs.symbol_identifier().symbol_name();
+                    let name = if parent_symbol_name != name {
+                        if language_config.is_rust() {
+                            format!("{}::{}", parent_symbol_name, name)
+                        } else {
+                            format!("{}.{}", parent_symbol_name, name)
+                        }
+                    } else {
+                        name.to_owned()
+                    };
                     format!(
                         r#"<dependency>
 <name>
@@ -3211,6 +3247,16 @@ Please update this code to accommodate these changes. Consider:
                     let fs_file_path = symbol_followup_bfs.symbol_edited().fs_file_path();
                     let original_code = symbol_followup_bfs.original_code();
                     let edited_code = symbol_followup_bfs.edited_code();
+                    let parent_symbol_name = symbol_followup_bfs.symbol_identifier().symbol_name();
+                    let name = if parent_symbol_name != name {
+                        if language_config.is_rust() {
+                            format!("{}::{}", parent_symbol_name, name)
+                        } else {
+                            format!("{}.{}", parent_symbol_name, name)
+                        }
+                    } else {
+                        name.to_owned()
+                    };
                     format!(
                         r#"<dependency>
 <name>

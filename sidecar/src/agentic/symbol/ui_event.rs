@@ -640,7 +640,7 @@ impl InitialSearchSymbolInformation {
 
 pub type FoundReference = HashMap<String, usize>; // <file_path, count>
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct RelevantReference {
     fs_file_path: String,
     symbol_name: String,
@@ -654,6 +654,18 @@ impl RelevantReference {
             symbol_name: symbol_name.to_string(),
             reason: reason.to_string(),
         }
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
     }
 }
 

@@ -22,10 +22,9 @@ use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
-use crate::agentic::symbol::ui_event::UIEventWithID;
+use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::agentic::tool::input::ToolInput;
-use crate::agentic::tool::lsp::gotoreferences::AnchoredReference;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
 use crate::{
@@ -75,7 +74,7 @@ impl ProbeRequestTracker {
 
 /// Contains all the data which we will need to trigger the edits
 /// Represents metadata for anchored editing operations.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct AnchoredEditingMetadata {
     /// Properties of the message event associated with this editing session.
     message_properties: SymbolEventMessageProperties,
@@ -88,7 +87,7 @@ struct AnchoredEditingMetadata {
     previous_file_content: HashMap<String, String>,
     /// Stores references to the anchor selection nodes.
     /// These references can be used for navigation or additional context during editing.
-    references: Vec<AnchoredReference>,
+    references: Vec<RelevantReference>,
     /// Optional string representing the user's context for this editing session.
     /// This can provide additional information or constraints for the editing process.
     user_context_string: Option<String>,
@@ -99,7 +98,7 @@ impl AnchoredEditingMetadata {
         message_properties: SymbolEventMessageProperties,
         anchored_symbols: Vec<AnchoredSymbol>,
         previous_file_content: HashMap<String, String>,
-        references: Vec<AnchoredReference>,
+        references: Vec<RelevantReference>,
         user_context_string: Option<String>,
     ) -> Self {
         Self {
@@ -111,7 +110,7 @@ impl AnchoredEditingMetadata {
         }
     }
 
-    pub fn references(&self) -> &[AnchoredReference] {
+    pub fn references(&self) -> &[RelevantReference] {
         &self.references
     }
 }
@@ -135,11 +134,11 @@ impl AnchoredEditingTracker {
     }
 
     /// this replaces the existing references field
-    async fn add_reference(&self, request_id: &str, references: &[AnchoredReference]) {
+    async fn add_reference(&self, request_id: &str, relevant_refs: &[RelevantReference]) {
         let mut running_request_properties = self.running_requests_properties.lock().await;
 
         if let Some(metadata) = running_request_properties.get_mut(request_id) {
-            metadata.references = references.to_vec();
+            metadata.references = relevant_refs.to_vec();
         } else {
             println!("No metadata found for request_id: {}", request_id);
         }
@@ -481,38 +480,16 @@ pub async fn code_sculpting_heal(
             "agentic::webserver::code_sculpting_heal::anchor_properties.references.len({})",
             anchor_properties.references().len()
         );
-        println!(
-            "agentic::webserver::code_sculpting_heal::anchor_properties.references:\n{}",
-            anchor_properties
-                .references()
-                .iter()
-                .map(|reference| format!(
-                    "path: {}, range: {}",
-                    reference.reference_location().fs_file_path(),
-                    reference.reference_location().range().start_line()
-                ))
-                .collect::<Vec<String>>()
-                .join("\n")
-        );
 
-        // these include the anchored symbols themselves
         let references = anchor_properties.references();
 
         let file_paths = references
             .iter()
-            .map(|r| r.reference_location().fs_file_path().to_string())
+            .map(|r| r.fs_file_path().to_string())
             .collect::<Vec<_>>();
 
         let older_file_content_map = anchor_properties.previous_file_content;
         let message_properties = anchor_properties.message_properties.clone();
-
-        // let file_paths = anchor_properties
-        //     .anchored_symbols
-        //     .iter()
-        //     .filter_map(|symbol| symbol.0.fs_file_path())
-        //     .collect::<HashSet<_>>()
-        //     .into_iter()
-        //     .collect::<Vec<_>>();
 
         // Now grab the symbols which have changed
         let cloned_tools = app.tool_box.clone();
@@ -825,7 +802,6 @@ pub async fn code_editing(
 
         if !symbols_to_anchor.is_empty() {
             let stream_symbols = cloned_symbols_to_anchor.clone();
-            // so this is an async task that should just chill in the background while the edits flow below continues
             let _references_join_handle = tokio::spawn(async move {
                 let start = Instant::now();
 
@@ -868,9 +844,15 @@ pub async fn code_editing(
                                     request_id.clone(),
                                 )
                                 .await;
-                            refs.into_iter()
-                                .map(|r| AnchoredReference::new(original_symbol.clone(), r))
-                                .collect::<Vec<_>>()
+
+                            let anchored_refs = toolbox
+                                .anchored_references_for_locations(
+                                    refs.as_slice(),
+                                    original_symbol,
+                                    message_properties,
+                                )
+                                .await;
+                            anchored_refs
                         },
                     )
                     .buffer_unordered(100)
@@ -899,21 +881,6 @@ pub async fn code_editing(
                     UIEventWithID::found_reference(cloned_request_id.clone(), grouped),
                 );
 
-                let reference_symbols_timer = Instant::now();
-
-                let reference_outline_nodes = cloned_toolbox
-                    .clone()
-                    .outline_nodes_for_anchored_references(
-                        references.as_slice(),
-                        cloned_message_properties.clone(),
-                    )
-                    .await;
-
-                println!(
-                    "reference::symbols::iter::elapsed({:?})",
-                    reference_symbols_timer.elapsed()
-                );
-
                 let llm_broker = app.llm_broker;
 
                 let llm_properties = LLMProperties::new(
@@ -929,15 +896,20 @@ pub async fn code_editing(
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
+                // todo(zi): need to consider load here.
+                let references = references
+                    .into_iter()
+                    .take(10) // todo(zi): so we don't go crazy with 1000s of requests
+                    .collect::<Vec<_>>();
+
                 println!(
                     "code_editing:reference_symbols.len({:?})",
-                    &reference_outline_nodes.len()
+                    &references.len()
                 );
 
+                // incorrect number of anchored references passed to this.
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
-                    reference_outline_nodes.clone(),
-                    symbols_to_anchor.clone(),
                     llm_properties.clone(),
                     cloned_request_id.clone(),
                     cloned_message_properties.clone(),
@@ -946,21 +918,31 @@ pub async fn code_editing(
 
                 let llm_time = Instant::now();
                 println!("ReferenceFilter::invoke::start");
-                let _ = reference_filter_broker
+
+                let relevant_references = match reference_filter_broker
                     .invoke(ToolInput::ReferencesFilter(request))
-                    .await;
-                println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
+                    .await
+                {
+                    Ok(ok_references) => {
+                        ok_references.get_relevant_references().unwrap_or_default()
+                    }
+                    Err(err) => {
+                        eprintln!("Failed to filter references: {:?}", err);
+                        Vec::new()
+                    }
+                };
 
-                // for followup consumption
                 let _ = cloned_tracker
-                    .add_reference(&cloned_request_id, &references)
+                    .add_reference(&cloned_request_id, &relevant_references)
                     .await;
 
+                println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
+                println!("relevant_references.len({:?})", relevant_references.len());
                 println!(
                     "collect references async task total elapsed: {:?}",
                     start.elapsed()
                 );
-                references
+                relevant_references
             });
             // end of async task
 
@@ -989,16 +971,18 @@ pub async fn code_editing(
                 .anchored_request_tracker
                 .add_join_handle(&request_id, join_handle)
                 .await;
-            // todo(zi): is this check necessary?
             let properties_present = app
                 .anchored_request_tracker
                 .get_properties(&request_id)
                 .await;
+
             println!(
                 "webserver::anchored_edits::request_id({})::properties_present({})",
                 &request_id,
                 properties_present.is_some()
             );
+
+            // there will never be references at this point, given this runs well before the join_handles can resolve
             println!(
                 "webserver::anchored_edits::request_id({})::properties_present({}).references.len({})",
                 &request_id,

@@ -460,18 +460,18 @@ this is a reason
 
         // parse response
         let parsed_response = match response {
-            Ok(response_text) => {
-                match serde_json::from_str::<GroupedReasonsResponse>(&response_text) {
-                    Ok(parsed) => Some(parsed),
-                    Err(parse_error) => {
-                        eprintln!("Failed to parse response: {}", parse_error);
-                        eprintln!("Response body: {}", response_text);
-                        None
-                    }
+            Ok(response_text) => match from_str::<GroupedReasonsResponse>(&response_text) {
+                Ok(parsed) => Some(parsed),
+                Err(parse_error) => {
+                    eprintln!("Failed to parse response: {}", parse_error);
+                    eprintln!("Response body: {}", response_text);
+                    None
                 }
-            }
+            },
             Err(_) => None,
         };
+
+        dbg!(&parsed_response);
 
         todo!();
     }

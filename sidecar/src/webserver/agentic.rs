@@ -897,12 +897,6 @@ pub async fn code_editing(
                     ),
                 );
 
-                // let llm_properties = LLMProperties::new(
-                //     LLMType::ClaudeSonnet,
-                //     LLMProvider::Anthropic,
-                //     LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-                // );
-
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
@@ -916,7 +910,6 @@ pub async fn code_editing(
                     &references.len()
                 );
 
-                // incorrect number of anchored references passed to this.
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
                     llm_properties.clone(),

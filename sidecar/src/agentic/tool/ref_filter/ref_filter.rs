@@ -2,9 +2,11 @@ use async_trait::async_trait;
 use futures::{stream, StreamExt};
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+    clients::types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage},
 };
 use quick_xml::de::from_str;
+use serde::Deserialize;
+use serde_xml_rs::to_string;
 use std::{iter::once, sync::Arc, time::Instant};
 
 use crate::{
@@ -73,7 +75,32 @@ impl ReferenceFilterRequest {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
+#[serde(rename = "response")]
+pub struct GroupedReasonsResponse {
+    #[serde(rename = "group")]
+    pub groups: Vec<Group>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Group {
+    pub reason: String,
+    pub locations: Locations,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Locations {
+    #[serde(rename = "location")]
+    pub locations: Vec<Location>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Location {
+    pub fs_file_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename = "response")]
 pub struct ReferenceFilterResponse {
     #[serde(rename = "reason")]
@@ -356,6 +383,98 @@ false
 
         vec![user_1, system_1, user_2, system_2]
     }
+
+    fn user_message_for_grouping_references(references: Vec<RelevantReference>) -> String {
+        references
+            .iter()
+            .map(|r| r.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    fn system_message_for_grouping_references() -> String {
+        format!(
+            r#"Your job is to aggregate common reasons for changes against a collection of symbol locations and their reasons for changing.
+Rephrase changes as necessary.
+
+Response format:
+<response>
+<group>
+<reason>
+this is a reason
+</reason>
+<locations>
+<location>
+<fs_file_path>
+</fs_file_path>
+<symbol_name>
+</symbol_name>
+</location>
+<location>
+<fs_file_path>
+</fs_file_path>
+<symbol_name>
+</symbol_name>
+</location><location>
+<fs_file_path>
+</fs_file_path>
+<symbol_name>
+</symbol_name>
+</location>
+</locations>
+</group>
+</response>
+        "#
+        )
+    }
+
+    pub async fn references_by_reason(
+        references: Vec<RelevantReference>,
+        llm_client: Arc<LLMBroker>,
+        llm_properties: LLMProperties,
+        root_request_id: &str,
+    ) -> Vec<RelevantReference> {
+        let user_message =
+            LLMClientMessage::user(Self::user_message_for_grouping_references(references));
+        let system_message =
+            LLMClientMessage::system(Self::system_message_for_grouping_references());
+        let llm_messages = vec![user_message, system_message];
+        let request =
+            LLMClientCompletionRequest::new(llm_properties.llm().clone(), llm_messages, 0.2, None);
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let response = llm_client
+            .stream_completion(
+                llm_properties.api_key().clone(),
+                request,
+                llm_properties.provider().clone(),
+                vec![
+                    ("event_type".to_owned(), "sort_refs_by_reason".to_owned()),
+                    ("root_id".to_owned(), root_request_id.to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await;
+
+        // parse response
+        let parsed_response = match response {
+            Ok(response_text) => {
+                match serde_json::from_str::<GroupedReasonsResponse>(&response_text) {
+                    Ok(parsed) => Some(parsed),
+                    Err(parse_error) => {
+                        eprintln!("Failed to parse response: {}", parse_error);
+                        eprintln!("Response body: {}", response_text);
+                        None
+                    }
+                }
+            }
+            Err(_) => None,
+        };
+
+        todo!();
+    }
 }
 
 #[async_trait]
@@ -480,6 +599,14 @@ impl Tool for ReferenceFilterBroker {
             .filter_map(|result| async move { result })
             .collect::<Vec<_>>()
             .await;
+
+        let _grouped_reasons_response = Self::references_by_reason(
+            relevant_references.clone(),
+            self.llm_client.clone(),
+            llm_properties.clone(),
+            &root_request_id,
+        )
+        .await;
 
         Ok(ToolOutput::ReferencesFilter(relevant_references))
     }

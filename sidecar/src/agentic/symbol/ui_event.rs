@@ -638,6 +638,9 @@ impl InitialSearchSymbolInformation {
     }
 }
 
+/// Key: reason as decided by LLM. Value: (fs_file_path, symbol_name)
+type GroupedReferences = HashMap<String, Vec<(String, String)>>;
+
 pub type FoundReference = HashMap<String, usize>; // <file_path, count>
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -666,6 +669,13 @@ impl RelevantReference {
 
     pub fn reason(&self) -> &str {
         &self.reason
+    }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            "File: {}, Symbol: {}, Reason: {}",
+            self.fs_file_path, self.symbol_name, self.reason
+        )
     }
 }
 

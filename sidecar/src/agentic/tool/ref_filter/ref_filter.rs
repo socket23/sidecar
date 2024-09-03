@@ -105,11 +105,11 @@ impl ReferenceFilterBroker {
 - They are considering a task, defined in <user_query>, to undertake against the symbol in <code_selected>
 - First, summarise the change intended by <user_query> on <code_selected>, describing if and how the change affects the symbol in a way that may concern references. Write this to <change_description>.
 - Then, consider one of the symbol's dependencies, provided in <reference>.
-- Identify which parts of <reference> depends on the symbol in <code_selected>.
-- Given the change_description, reason whether a change to the symbol in <reference> is absolutely necessary to maintain correctness. Think precisely about the change, its effects, and its relevance to the symbol in <reference>.
-- Use your knowledge of programming languages and concepts to inform whether a changing is a breaking one for the reference.
+- Given the change_description and your knowledge of programming languages and concepts, reason whether a the symbol in <reference> is directly affected, and whether a critical edit must be made to maintain correctness.
+- Carefully consider type relationships and dependencies in programming contexts. When dealing with structs, enums, and other complex types, you must analyze how changes in one type might or might not affect dependent types, keeping in mind principles of encapsulation and abstraction.
+- You must be certain about the need for a change. Often, changes to the <reference> are not necessary despite one of its dependencies changing due to encapsulation and abstraction principles in programming. These principles allow for internal modifications of dependent types without requiring changes to the types that use them, as long as the public interface remains consistent.
 - Put your decision in <change_required> as either true or false
-- Provide a single, high value sentence explaining whether a change is needed and why in <reason>
+- Provide a single sentence explaining why a change may be absolutely necessary. Be very strict about what's necessary. Write this in <reason>
 - Do not mistake the <user_query> for an instruction to <reference> - it's explicitly for <code_selected>
 
 Your response must be in the following format:

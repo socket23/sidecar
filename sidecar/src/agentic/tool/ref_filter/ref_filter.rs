@@ -158,15 +158,14 @@ impl ReferenceFilterBroker {
         format!(
             r#"You are an expert software engineer who is pair programming with another developer.
 - The developer you are helping has selected a symbol shown in <code_selected>
-- They are considering a task, defined in <user_query>, to undertake against the symbol in <code_selected>
+- Consider the change to <code_selected> based on the <user_query>
 - First, summarise the change intended by <user_query> on <code_selected>, describing if and how the change affects the symbol in a way that may concern references. Write this to <change_description>.
 - Then, consider one of the symbol's dependencies, provided in <reference>.
-- Identify which parts of <reference> depends on the symbol in <code_selected>.
-- Given the change_description, reason whether a change to the symbol in <reference> is absolutely necessary to maintain correctness. Think precisely about the change, its effects, and its relevance to the symbol in <reference>.
+- Consider whether the LSP would throw an error if the symbol in <reference> did not change after <code_selected> has changed according to <user_query>
+- Given the change_description, reason whether a change to the symbol in <reference> is necessary to maintain correctness.
 - Use your knowledge of programming languages and concepts to inform whether a changing is a breaking one for the reference.
 - Put your decision in <change_required> as either true or false
 - Provide a single, high value sentence explaining whether a change is needed and why in <reason>
-- Do not mistake the <user_query> for an instruction to <reference> - it's explicitly for <code_selected>
 
 <response>
 <change_description>

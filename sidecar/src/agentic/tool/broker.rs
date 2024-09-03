@@ -364,6 +364,7 @@ impl ToolBroker {
             Box::new(SearchAndReplaceEditing::new(
                 llm_client.clone(),
                 fail_over_llm.clone(),
+                Arc::new(Box::new(LSPOpenFile::new())),
             )),
         );
         tools.insert(ToolType::GitDiff, Box::new(GitDiffClient::new()));

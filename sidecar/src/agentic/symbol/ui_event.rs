@@ -222,7 +222,6 @@ impl UIEventWithID {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
-        updated_code: String,
     ) -> Self {
         Self {
             request_id,
@@ -231,7 +230,6 @@ impl UIEventWithID {
                 edit_request_id,
                 range,
                 fs_file_path,
-                updated_code,
             )),
         }
     }
@@ -416,6 +414,43 @@ pub struct EditedCodeStreamingRequest {
     event: EditedCodeStreamingEvent,
 }
 
+impl EditedCodeStreamingRequest {
+    pub fn start_edit(edit_request_id: String, range: Range, fs_file_path: String) -> Self {
+        Self {
+            edit_request_id,
+            range,
+            fs_file_path,
+            updated_code: None,
+            event: EditedCodeStreamingEvent::Start,
+        }
+    }
+
+    pub fn delta(
+        edit_request_id: String,
+        range: Range,
+        fs_file_path: String,
+        delta: String,
+    ) -> Self {
+        Self {
+            edit_request_id,
+            range,
+            fs_file_path,
+            updated_code: None,
+            event: EditedCodeStreamingEvent::Delta(delta),
+        }
+    }
+
+    pub fn end(edit_request_id: String, range: Range, fs_file_path: String) -> Self {
+        Self {
+            edit_request_id,
+            range,
+            fs_file_path,
+            updated_code: None,
+            event: EditedCodeStreamingEvent::End,
+        }
+    }
+}
+
 /// We have range selection and then the edited code, we should also show the
 /// events which the AI is using for the tool correction and whats it is planning
 /// on doing for that
@@ -532,7 +567,6 @@ impl SymbolEventSubStepRequest {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
-        updated_code: String,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -541,7 +575,7 @@ impl SymbolEventSubStepRequest {
                     edit_request_id,
                     range,
                     fs_file_path,
-                    updated_code: Some(updated_code),
+                    updated_code: None,
                     event: EditedCodeStreamingEvent::End,
                 },
             )),

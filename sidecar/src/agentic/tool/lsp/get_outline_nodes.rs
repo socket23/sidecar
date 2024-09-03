@@ -644,14 +644,15 @@ mod tests {
             .lines()
             .into_iter()
             .map(|s| s.to_owned())
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            .join("\n");
         let document_symbols =
             serde_json::from_str::<OutlineNodesUsingEditorResponse>(&outline_nodes_from_editor)
                 .expect("to work");
         let outline_nodes = document_symbols_to_outline_nodes(
             "rust".to_owned(),
             "something/testing.rs".to_owned(),
-            file_lines.as_slice(),
+            &file_lines,
             document_symbols.outline_nodes,
         );
         assert!(!outline_nodes.is_empty());

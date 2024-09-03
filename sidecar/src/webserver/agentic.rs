@@ -42,7 +42,7 @@ use super::types::ApiResponse;
 use super::{model_selection::LLMClientConfig, types::Result};
 
 /// Tracks and manages probe requests in a concurrent environment.
-#[derive(Debug, Clone)]
+/// This struct is responsible for keeping track of ongoing probe requests
 pub struct ProbeRequestTracker {
     /// A thread-safe map of running requests, keyed by request ID.
     ///
@@ -416,11 +416,14 @@ pub async fn swe_bench(
     ))
 }
 
+/// Represents a request to warm up the code sculpting system.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmup {
     file_paths: Vec<String>,
+    editor_url: String,
 }
 
+/// Response structure for the code sculpting warmup operation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmupResponse {
     done: bool,
@@ -430,17 +433,20 @@ impl ApiResponse for CodeSculptingWarmupResponse {}
 
 pub async fn code_sculpting_warmup(
     Extension(app): Extension<Application>,
-    Json(CodeSculptingWarmup { file_paths }): Json<CodeSculptingWarmup>,
+    Json(CodeSculptingWarmup {
+        file_paths,
+        editor_url,
+    }): Json<CodeSculptingWarmup>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_sculpting_warmup");
     println!(
         "webserver::code_sculpting_warmup::file_paths({})",
         file_paths.to_vec().join(",")
     );
-    let wramup_request_id = "warmup_request_id".to_owned();
+    let warmup_request_id = "warmup_request_id".to_owned();
     let _ = app
         .tool_box
-        .warmup_context(file_paths, wramup_request_id)
+        .warmup_context(file_paths, warmup_request_id, editor_url)
         .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }
@@ -817,6 +823,7 @@ pub async fn code_editing(
                         let toolbox = cloned_toolbox.clone();
                         let message_properties = cloned_message_properties.clone();
                         let request_id = cloned_request_id.clone();
+                        let range = anchored_symbol.possible_range().clone();
                         stream::iter(symbol_names.into_iter().filter_map(move |symbol_name| {
                             symbol_identifier.fs_file_path().map(|path| {
                                 (
@@ -826,6 +833,7 @@ pub async fn code_editing(
                                     toolbox.clone(),
                                     message_properties.clone(),
                                     request_id.clone(),
+                                    range.clone(),
                                 )
                             })
                         }))
@@ -838,25 +846,34 @@ pub async fn code_editing(
                             toolbox,
                             message_properties,
                             request_id,
+                            range,
                         )| async move {
                             println!("getting references for {}-{}", &path, &symbol_name);
                             let refs = toolbox
                                 .get_symbol_references(
                                     path,
                                     symbol_name.to_owned(),
+                                    range,
                                     message_properties.clone(),
                                     request_id.clone(),
                                 )
                                 .await;
 
-                            let anchored_refs = toolbox
-                                .anchored_references_for_locations(
-                                    refs.as_slice(),
-                                    original_symbol,
-                                    message_properties,
-                                )
-                                .await;
-                            anchored_refs
+                            match refs {
+                                Ok(references) => {
+                                    toolbox
+                                        .anchored_references_for_locations(
+                                            references.as_slice(),
+                                            original_symbol,
+                                            message_properties,
+                                        )
+                                        .await
+                                }
+                                Err(e) => {
+                                    println!("{:?}", e);
+                                    vec![]
+                                }
+                            }
                         },
                     )
                     .buffer_unordered(100)
@@ -873,10 +890,14 @@ pub async fn code_editing(
                 let grouped: HashMap<String, usize> = references.clone().into_iter().fold(
                     HashMap::new(),
                     |mut acc, anchored_reference| {
-                        let reference = anchored_reference.reference_location();
-                        acc.entry(reference.fs_file_path().to_string())
-                            .and_modify(|count| *count += 1)
-                            .or_insert(1);
+                        let reference_len = anchored_reference.reference_locations().len();
+                        acc.entry(
+                            anchored_reference
+                                .fs_file_path_for_outline_node()
+                                .to_string(),
+                        )
+                        .and_modify(|count| *count += reference_len)
+                        .or_insert(1);
                         acc
                     },
                 );

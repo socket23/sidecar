@@ -2135,7 +2135,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         false,
                         None,
-                        false,
+                        true,
                     ),
                     message_properties.clone(),
                 )
@@ -2153,7 +2153,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     false,
                     None,
-                    false,
+                    true,
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),
@@ -2346,7 +2346,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         false,
                         None,
-                        false,
+                        true,
                     ),
                     message_properties.clone(),
                 )
@@ -3366,6 +3366,7 @@ Please update this code to accommodate these changes. Consider:
         // we want to track the reference location along with the changed symbol_followup
         // so we can pass the correct git-diff to it
         let mut reference_locations: Vec<SymbolFollowupBFS>;
+        let instant = std::time::Instant::now();
         loop {
             if symbol_followups.is_empty() {
                 // break when we have no more followups to do
@@ -3384,6 +3385,10 @@ Please update this code to accommodate these changes. Consider:
                     symbol_identifier.symbol_name()
                 );
                 if original_code.trim() == edited_code.trim() {
+                    println!(
+                        "tool_box::check_for_followup_bfs::same_code_original_edited::({})",
+                        symbol_identifier.symbol_name()
+                    );
                     continue;
                 }
                 let outline_node = self
@@ -3470,7 +3475,10 @@ Please update this code to accommodate these changes. Consider:
                 symbol_followups.push(reference_location);
             }
         }
-        println!("tool_box::check_for_followups_bfs::complete");
+        println!(
+            "tool_box::check_for_followups_bfs::complete::time_taken({:?}ms)",
+            instant.elapsed().as_millis()
+        );
         Ok(())
     }
 
@@ -4394,7 +4402,7 @@ Make the necessary changes if required making sure that nothing breaks"#
             None,
             false,
             None,
-            false, // disable any kind of followups or correctness check
+            true, // disable any kind of followups or correctness check
         );
 
         let event = SymbolEventMessage::message_with_properties(
@@ -4499,7 +4507,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                 None,
                 false,
                 None,
-                false, // should we disable followups and correctness check
+                true,
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -5722,6 +5730,7 @@ FILEPATH: {fs_file_path}
             uuid::Uuid::new_v4().to_string(),
             message_properties.ui_sender().clone(),
             user_provided_context,
+            message_properties.editor_url(),
             false,
         ));
         println!(
@@ -6607,57 +6616,40 @@ FILEPATH: {fs_file_path}
 
     pub async fn get_symbol_references(
         &self,
-        path: String,
+        fs_file_path: String,
         symbol: String,
+        possible_range: Range,
         message_properties: SymbolEventMessageProperties,
         _request_id: String,
-    ) -> Vec<ReferenceLocation> {
-        let filtered_nodes = self
-            .get_ouline_nodes_grouped_fresh(&path, message_properties.clone())
-            .await
-            .map(|nodes| {
-                nodes
-                    .into_iter()
-                    .filter(|node| node.name() == symbol)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-
-        // necessary for use in async move
-        let message_properties = Arc::new(message_properties);
-
-        let reference_locations = stream::iter(filtered_nodes.into_iter().map(|node| {
-            let path = path.clone();
-            let message_properties = Arc::clone(&message_properties);
-
-            println!(
-                "toolbox::get_symbol_references::go_to_references({})",
-                node.name()
-            );
-
-            // this async move caused some headaches in its caller!
-            async move {
-                match self
-                    .go_to_references(
-                        path.clone(),
-                        node.identifier_range().start_position(),
-                        (*message_properties).clone(),
-                    )
-                    .await
-                {
-                    Ok(refs) => refs.locations(),
-                    Err(_) => Vec::new(),
-                }
-            }
-        }))
-        .buffer_unordered(100)
-        .collect::<Vec<Vec<_>>>()
-        .await
-        .into_iter()
-        .flatten()
-        .collect();
-
-        reference_locations
+    ) -> Result<Vec<ReferenceLocation>, SymbolError> {
+        let symbol_closest = self
+            .find_symbol_to_edit_closest_to_range(
+                &SymbolToEdit::new(
+                    symbol,
+                    possible_range,
+                    fs_file_path.to_owned(),
+                    vec![],
+                    false,
+                    false,
+                    true,
+                    "".to_owned(),
+                    None,
+                    false,
+                    None,
+                    true,
+                ),
+                message_properties.clone(),
+            )
+            .await?;
+        let reference_locations = self
+            .go_to_references(
+                fs_file_path,
+                symbol_closest.identifier_range().start_position(),
+                message_properties.clone(),
+            )
+            .await?
+            .locations();
+        Ok(reference_locations)
     }
 
     pub async fn file_open(
@@ -7956,7 +7948,7 @@ FILEPATH: {fs_file_path}
                                                     None,
                                                     true,
                                                     None,
-                                                    false, // should we disable followups and correctness check
+                                                    true, // should we disable followups and correctness check
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -7995,7 +7987,7 @@ FILEPATH: {fs_file_path}
                                     None,
                                     true,
                                     None,
-                                    false, // should we disable followups and correctness check
+                                    true, // should we disable followups and correctness check
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
@@ -8288,7 +8280,12 @@ FILEPATH: {fs_file_path}
     /// To warmup we send over a dummy edit request here with a very simple user instruction
     /// we do not care about how the output is working or what it is generating, just
     /// keep the cache warm
-    pub async fn warmup_context(&self, file_paths: Vec<String>, request_id: String) {
+    pub async fn warmup_context(
+        &self,
+        file_paths: Vec<String>,
+        request_id: String,
+        editor_url: String,
+    ) {
         let mut file_contents = vec![];
         for file_path in file_paths.into_iter() {
             let contents = tokio::fs::read(&file_path).await;
@@ -8356,6 +8353,7 @@ FILEPATH: {fs_file_path}
             request_id.to_owned(),
             sender,
             Some(file_contents.join("\n")),
+            editor_url,
             true,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
@@ -8445,71 +8443,49 @@ FILEPATH: {fs_file_path}
         .flatten()
         .collect::<Vec<_>>();
 
-        let anchored_references = ref_locations
-            .into_iter()
-            .filter_map(|ref_location| {
-                let matching_outline_node = outline_nodes_by_files.iter().find(|outline_node| {
-                    let outline_node_range = outline_node.range();
-                    outline_node_range.contains_check_line_column(ref_location.range())
-                        && ref_location.fs_file_path() == outline_node.fs_file_path()
-                });
+        // let anchored_references = ref_locations
+        //     .into_iter()
+        //     .filter_map(|ref_location| {
+        //         let matching_outline_node = outline_nodes_by_files.iter().find(|outline_node| {
+        //             let outline_node_range = outline_node.range();
+        //             outline_node_range.contains_check_line_column(ref_location.range())
+        //                 && ref_location.fs_file_path() == outline_node.fs_file_path()
+        //         });
 
-                matching_outline_node.map(|outline_node: &OutlineNode| {
-                    AnchoredReference::new(
-                        original_symbol.to_owned(),
-                        ref_location.to_owned(),
-                        outline_node.to_owned(),
-                    )
-                })
-            })
-            .collect::<Vec<_>>();
-
-        anchored_references
-    }
-
-    pub async fn outline_nodes_for_anchored_references(
-        &self,
-        anchored_references: &[AnchoredReference],
-        message_properties: SymbolEventMessageProperties,
-    ) -> Vec<OutlineNode> {
-        let references = anchored_references
-            .iter()
-            .map(|ar| ar.reference_location())
-            .collect::<Vec<_>>();
-        let file_paths = references
-            .iter()
-            .map(|reference| reference.fs_file_path().to_owned())
-            .collect::<HashSet<String>>();
-
-        let outline_nodes_by_files = stream::iter(
-            file_paths
-                .into_iter()
-                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
-        )
-        .map(|(fs_file_path, message_properties)| async move {
-            let outline_nodes = self
-                .get_ouline_nodes_grouped_fresh(&fs_file_path, message_properties)
-                .await;
-            outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
-        })
-        .buffer_unordered(100)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .filter_map(|s| s)
-        .map(|(_, outline_nodes)| outline_nodes)
-        .flatten()
-        .collect::<Vec<_>>();
-
+        //         matching_outline_node.map(|outline_node: &OutlineNode| {
+        //             AnchoredReference::new(
+        //                 original_symbol.to_owned(),
+        //                 ref_location.to_owned(),
+        //                 outline_node.to_owned(),
+        //             )
+        //         })
+        //     })
+        //     .collect::<Vec<_>>();
         outline_nodes_by_files
             .into_iter()
-            .filter(|outline_node| {
+            .filter_map(|outline_node| {
                 // check if a reference belongs inside this outline node
                 let outline_node_range = outline_node.range();
-                references.iter().any(|reference| {
-                    outline_node_range.contains_check_line_column(reference.range())
-                        && reference.fs_file_path() == outline_node.fs_file_path()
-                })
+                let references_inside = ref_locations
+                    .iter()
+                    .filter(|reference| {
+                        outline_node_range.contains_check_line_column(reference.range())
+                            && reference.fs_file_path() == outline_node.fs_file_path()
+                    })
+                    .collect::<Vec<_>>();
+
+                if references_inside.is_empty() {
+                    None
+                } else {
+                    Some(AnchoredReference::new(
+                        original_symbol.to_owned(),
+                        references_inside
+                            .into_iter()
+                            .map(|data| data.clone())
+                            .collect(),
+                        outline_node,
+                    ))
+                }
             })
             .collect::<Vec<_>>()
     }

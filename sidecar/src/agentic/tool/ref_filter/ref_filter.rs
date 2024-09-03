@@ -543,8 +543,7 @@ impl Tool for ReferenceFilterBroker {
                     .collect::<Vec<_>>();
 
                 let fs_file_path_for_reference = anchored_reference
-                    .reference_location()
-                    .fs_file_path()
+                    .fs_file_path_for_outline_node()
                     .to_owned();
                 let ref_symbol_name = anchored_reference.ref_outline_node().name().to_owned();
                 (
@@ -627,7 +626,8 @@ impl Tool for ReferenceFilterBroker {
                     }
                 },
             )
-            .buffer_unordered(200)
+            // control the parallelism here
+            .buffer_unordered(40)
             .filter_map(|result| async move { result })
             .collect::<Vec<_>>()
             .await;

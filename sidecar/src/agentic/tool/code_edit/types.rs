@@ -388,7 +388,6 @@ impl Tool for CodeEditingTool {
                                         edit_request_id.to_owned(),
                                         selection_range,
                                         fs_file_path.to_owned(),
-                                        answer_accumulator.answer_up_until_now(),
                                     ));
                                 }
                                 None => {
@@ -460,7 +459,7 @@ impl CodeToAddAccumulator {
         }
     }
 
-    pub fn answer_up_until_now(&self) -> String {
+    pub fn _answer_up_until_now(&self) -> String {
         self.answer_up_until_now.to_owned()
     }
 

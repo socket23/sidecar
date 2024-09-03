@@ -1,8 +1,9 @@
 //! Contains the struct for search and replace style editing
 
 use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
+use futures::{lock::Mutex, StreamExt};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
 use llm_client::{
     broker::LLMBroker,
@@ -13,14 +14,25 @@ use crate::{
     agentic::{
         symbol::{
             identifier::{LLMProperties, SymbolIdentifier},
-            ui_event::UIEventWithID,
+            ui_event::{EditedCodeStreamingRequest, UIEventWithID},
         },
-        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+        tool::{
+            errors::ToolError, input::ToolInput, lsp::open_file::OpenFileRequest,
+            output::ToolOutput, r#type::Tool,
+        },
     },
     chunking::text_document::{Position, Range},
 };
 
 const _SURROUNDING_CONTEXT_LIMIT: usize = 200;
+
+struct DropDetector<T>(T);
+
+impl<T> Drop for DropDetector<T> {
+    fn drop(&mut self) {
+        println!("DropDetector is being dropped!");
+    }
+}
 
 #[derive(Debug)]
 pub struct SearchAndReplaceEditingResponse {
@@ -61,6 +73,7 @@ pub struct SearchAndReplaceEditingRequest {
     edit_request_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
     user_context: Option<String>,
+    editor_url: String,
     // use a is_warmup field
     is_warmup: bool,
 }
@@ -82,6 +95,7 @@ impl SearchAndReplaceEditingRequest {
         // Important: user_context provides essential information for the editing process
         user_context: Option<String>,
         // Indicates whether this is a warmup request to prepare the LLM
+        editor_url: String,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
     ) -> Self {
         Self {
@@ -98,20 +112,51 @@ impl SearchAndReplaceEditingRequest {
             edit_request_id,
             ui_sender,
             user_context,
+            editor_url,
             is_warmup,
         }
     }
 }
 
+struct StreamedEditingForEditor {
+    client: reqwest::Client,
+}
+
+impl StreamedEditingForEditor {
+    fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+        }
+    }
+
+    async fn send_edit_event(&self, editor_url: String, edit_event: EditedCodeStreamingRequest) {
+        let editor_endpoint = editor_url + "/apply_edits_streamed";
+        let _ = self
+            .client
+            .post(editor_endpoint)
+            .body(serde_json::to_string(&edit_event).expect("to work"))
+            .send()
+            .await;
+    }
+}
+
 pub struct SearchAndReplaceEditing {
     llm_client: Arc<LLMBroker>,
+    lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+    file_locker: Arc<Mutex<HashMap<String, (String, Arc<Semaphore>)>>>,
     _fail_over_llm: LLMProperties,
 }
 
 impl SearchAndReplaceEditing {
-    pub fn new(llm_client: Arc<LLMBroker>, fail_over_llm: LLMProperties) -> Self {
+    pub fn new(
+        llm_client: Arc<LLMBroker>,
+        fail_over_llm: LLMProperties,
+        lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+    ) -> Self {
         Self {
             llm_client,
+            lsp_open_file,
+            file_locker: Arc::new(Mutex::new(Default::default())),
             _fail_over_llm: fail_over_llm,
         }
     }
@@ -373,6 +418,32 @@ impl Tool for SearchAndReplaceEditing {
         let symbol_identifier = context.symbol_identifier.clone();
         let ui_sender = context.ui_sender.clone();
         let fs_file_path = context.fs_file_path.to_owned();
+        let editor_url = context.editor_url.to_owned();
+        let file_lock;
+        {
+            let cloned_file_locker = self.file_locker.clone();
+            let mut file_locker = cloned_file_locker.lock().await;
+            file_lock = if file_locker.contains_key(&fs_file_path) {
+                let lock_acquired = file_locker
+                    .get(&fs_file_path)
+                    .expect("contains_key to work")
+                    .clone();
+                println!(
+                    "lock_for_fs_file_path({})::lock_idx({})",
+                    &fs_file_path, &lock_acquired.0
+                );
+                lock_acquired.1
+            } else {
+                let file_lock = Arc::new(Semaphore::new(1));
+                let idx = uuid::Uuid::new_v4().to_string();
+                file_locker.insert(fs_file_path.to_owned(), (idx.to_owned(), file_lock.clone()));
+                println!(
+                    "lock_for_fs_file_path::insert::fs_file_path({})::lock_idx({})",
+                    fs_file_path, idx
+                );
+                file_lock
+            };
+        }
         let edit_request_id = context.edit_request_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let root_request_id = context.root_request_id.to_owned();
@@ -392,123 +463,257 @@ impl Tool for SearchAndReplaceEditing {
         if is_warmup {
             request = request.set_max_tokens(1);
         }
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut llm_response = Box::pin(
-            self.llm_client.stream_completion(
-                llm_properties.api_key().clone(),
-                request,
-                llm_properties.provider().clone(),
-                vec![
-                    (
-                        "event_type".to_owned(),
-                        "search_and_replace_editing".to_owned(),
-                    ),
-                    ("root_id".to_owned(), root_request_id.to_owned()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            ),
-        );
-        let stream_result;
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let cloned_llm_client = self.llm_client.clone();
+        let cloned_root_request_id = root_request_id.to_owned();
+        let llm_response = tokio::spawn(async move {
+            cloned_llm_client
+                .stream_completion(
+                    llm_properties.api_key().clone(),
+                    request,
+                    llm_properties.provider().clone(),
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "search_and_replace_editing".to_owned(),
+                        ),
+                        ("root_id".to_owned(), cloned_root_request_id.to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+        });
 
         let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::unbounded_channel();
+        // let (locks_sender, mut locks_receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut search_and_replace_accumulator =
             SearchAndReplaceAccumulator::new(whole_file_context, start_line, edits_sender);
 
-        // now we can bring it all together and use the answer accumulator over here
-        // to start the processing completely
+        // we want to figure out how poll the llm stream while locking up until the file is free
+        // from the lock over here for the file path we are interested in
+        let idx = uuid::Uuid::new_v4().to_string();
+        let cloned_file_lock = file_lock.clone();
+        let cloned_idx = idx.to_owned();
+        let cloned_ui_sender = ui_sender.clone();
+        let cloned_root_request_id = root_request_id.to_owned();
+        let cloned_edit_request_id = edit_request_id.to_owned();
+        let cloned_lsp_open_file = self.lsp_open_file.clone();
+        let cloned_symbol_identifer = symbol_identifier.clone();
+        let cloned_fs_file_path = fs_file_path.to_owned();
+        let cloned_editor_url = editor_url.to_owned();
 
-        loop {
-            tokio::select! {
-                stream_msg = receiver.recv() => {
-                    match stream_msg {
-                        Some(msg) => {
-                            let delta = msg.delta();
-                            if let Some(delta) = delta {
-                                // we have some delta over here which we can process
-                                search_and_replace_accumulator.add_delta(delta.to_owned());
-                                // send over the thinking as soon as we get a delta over here
-                                let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
-                                    root_request_id.to_owned(),
-                                    symbol_identifier.clone(),
-                                    search_and_replace_accumulator.answer_to_show.to_owned(),
+        let mut stream_answer = "".to_owned();
+
+        let join_handle = tokio::spawn(async move {
+            let idx = cloned_idx;
+            let file_lock = cloned_file_lock;
+            let mut edit_lock = None;
+            let _ui_sender = cloned_ui_sender.clone();
+            let _root_request_id = cloned_root_request_id;
+            let edit_request_id = cloned_edit_request_id;
+            let lsp_open_file = cloned_lsp_open_file;
+            let fs_file_path = cloned_fs_file_path;
+            let editor_url = cloned_editor_url;
+            let symbol_identifier = cloned_symbol_identifer;
+            let streamed_edit_client = StreamedEditingForEditor::new();
+            // figure out what to do over here
+            #[allow(irrefutable_let_patterns)]
+            while let edits_response = edits_receiver.recv().await {
+                // now over here we can manage the locks which we are getting and hold on to them for the while we are interested in
+                // TODO(skcd): The lock needs to happen over here since we might
+                // be processing the data in a stream so we want to hold onto it
+                // for longer than required since we are getting the data in chunks
+                // so we end up releasing very quickly
+                match edits_response {
+                    Some(EditDelta::EditLockAcquire(sender)) => {
+                        edit_lock = Some(
+                            file_lock
+                                .clone()
+                                .acquire_owned()
+                                .await
+                                .map(|data| DropDetector(data)),
+                        );
+                        // TODO(codestory): here we want to first get the lock for the file and re-read
+                        // the contents for the file over here
+                        let file_content = lsp_open_file
+                            .invoke(ToolInput::OpenFile(OpenFileRequest::new(
+                                fs_file_path.to_owned(),
+                                editor_url.to_owned(),
+                            )))
+                            .await
+                            .map(|output| output.get_file_open_response())
+                            .ok()
+                            .flatten();
+                        if let Some(file_content) = file_content {
+                            let _ = sender.send(Some(file_content.contents()));
+                        } else {
+                            let _ = sender.send(None);
+                        }
+                    }
+                    Some(EditDelta::EditLockRelease) => {
+                        println!("lock_release::({})", &idx);
+                        let edit_lock_value = edit_lock;
+                        edit_lock = None;
+                        if let Some(Ok(edit_lock)) = edit_lock_value {
+                            drop(DropDetector(edit_lock));
+                        }
+                    }
+                    Some(EditDelta::EditStarted(range)) => {
+                        // let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
+                        //     root_request_id.to_owned(),
+                        //     symbol_identifier.clone(),
+                        //     edit_request_id.to_owned(),
+                        //     range,
+                        //     fs_file_path.to_owned(),
+                        // ));
+                        streamed_edit_client
+                            .send_edit_event(
+                                editor_url.to_owned(),
+                                EditedCodeStreamingRequest::start_edit(
                                     edit_request_id.to_owned(),
-                                ));
-                            }
-                        }
-                        None => {
-                            // we should flush the accumualtor over here
-                            // channel is probably closed over here?
-                        },
+                                    range,
+                                    fs_file_path.to_owned(),
+                                ),
+                            )
+                            .await;
+                        // we need to send this ``` since thats the detection string
+                        // we use for making sure that we are inside a code-block on the
+                        // editor
+                        // let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                        //     root_request_id.to_owned(),
+                        //     symbol_identifier.clone(),
+                        //     "```\n".to_owned(),
+                        //     edit_request_id.to_owned(),
+                        //     range,
+                        //     fs_file_path.to_owned(),
+                        // ));
+                        streamed_edit_client
+                            .send_edit_event(
+                                editor_url.to_owned(),
+                                EditedCodeStreamingRequest::delta(
+                                    edit_request_id.to_owned(),
+                                    range,
+                                    fs_file_path.to_owned(),
+                                    "```\n".to_owned(),
+                                ),
+                            )
+                            .await;
                     }
-                }
-                edits_response = edits_receiver.recv() => {
-                    match edits_response {
-                        Some(EditDelta::EditStarted(range)) => {
-                            println!("framework_event::edit_event::symbol_name({}:{:?})::search_and_replace::range({:?})", symbol_identifier.symbol_name(), symbol_identifier.fs_file_path(), &range);
-                            println!("tool_box::search_and_replace::start_streaming::symbol_name({})::range({:?})", symbol_identifier.symbol_name(), &range);
-                            let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
-                                root_request_id.to_owned(),
-                                symbol_identifier.clone(),
-                                edit_request_id.to_owned(),
-                                range,
-                                fs_file_path.to_owned(),
-                            ));
-                            // we need to send this ``` since thats the detection string
-                            // we use for making sure that we are inside a code-block on the
-                            // editor
-                            let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
-                                root_request_id.to_owned(),
-                                symbol_identifier.clone(),
-                                "```\n".to_owned(),
-                                edit_request_id.to_owned(),
-                                range,
-                                fs_file_path.to_owned(),
-                            ));
-                        }
-                        Some(EditDelta::EditDelta((range, delta))) => {
-                            println!("tool_box::search_and_replace::edit_streaming_delta::symbol_name({})", symbol_identifier.symbol_name());
-                            let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
-                                root_request_id.to_owned(),
-                                symbol_identifier.clone(),
-                                delta,
-                                edit_request_id.to_owned(),
-                                range,
-                                fs_file_path.to_owned(),
-                            ));
-                        }
-                        Some(EditDelta::EditEnd(range)) => {
-                            let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
-                                root_request_id.to_owned(),
-                                symbol_identifier.clone(),
-                                "\n```".to_owned(),
-                                edit_request_id.to_owned(),
-                                range,
-                                fs_file_path.to_owned(),
-                            ));
-                            let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
-                                root_request_id.to_owned(),
-                                symbol_identifier.clone(),
-                                edit_request_id.to_owned(),
-                                range,
-                                fs_file_path.to_owned(),
-                                search_and_replace_accumulator.code_lines.join("\n"),
-                            ));
-                        }
-                        None => {
-
-                        }
+                    Some(EditDelta::EditDelta((range, delta))) => {
+                        // println!("tool_box::search_and_replace::edit_streaming_delta::symbol_name({})", symbol_identifier.symbol_name());
+                        // let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                        //     root_request_id.to_owned(),
+                        //     symbol_identifier.clone(),
+                        //     delta,
+                        //     edit_request_id.to_owned(),
+                        //     range,
+                        //     fs_file_path.to_owned(),
+                        // ));
+                        println!(
+                            "tool_box::streaming_delta::symbol_name({})::delta({})",
+                            symbol_identifier.symbol_name(),
+                            &delta
+                        );
+                        streamed_edit_client
+                            .send_edit_event(
+                                editor_url.to_owned(),
+                                EditedCodeStreamingRequest::delta(
+                                    edit_request_id.to_owned(),
+                                    range,
+                                    fs_file_path.to_owned(),
+                                    delta,
+                                ),
+                            )
+                            .await;
                     }
-                }
-                result = &mut llm_response => {
-                    stream_result = Some(result);
-                    break;
+                    Some(EditDelta::EditEnd(range)) => {
+                        // let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
+                        //     root_request_id.to_owned(),
+                        //     symbol_identifier.clone(),
+                        //     "\n```".to_owned(),
+                        //     edit_request_id.to_owned(),
+                        //     range,
+                        //     fs_file_path.to_owned(),
+                        // ));
+                        streamed_edit_client
+                            .send_edit_event(
+                                editor_url.to_owned(),
+                                EditedCodeStreamingRequest::delta(
+                                    edit_request_id.to_owned(),
+                                    range,
+                                    fs_file_path.to_owned(),
+                                    "\n```".to_owned(),
+                                ),
+                            )
+                            .await;
+                        // let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
+                        //     root_request_id.to_owned(),
+                        //     symbol_identifier.clone(),
+                        //     edit_request_id.to_owned(),
+                        //     range,
+                        //     fs_file_path.to_owned(),
+                        // ));
+                        streamed_edit_client
+                            .send_edit_event(
+                                editor_url.to_owned(),
+                                EditedCodeStreamingRequest::end(
+                                    edit_request_id.to_owned(),
+                                    range,
+                                    fs_file_path.to_owned(),
+                                ),
+                            )
+                            .await;
+                    }
+                    Some(EditDelta::EndPollingStream) => {
+                        println!("asked_to_end_polling_after");
+                        break;
+                    }
+                    None => {
+                        // println!("none_event_in_edit_delta::({})", &idx);
+                    }
                 }
             }
+        });
+
+        // over here we are getting the stream of deltas and also the final
+        // answer which we are getting from the LLM
+        // we want to process it in a fashion where we are consume the stream
+        // and then return the answer while waiting on the future to finish
+
+        // start consuming from the stream
+        let mut delta_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+        while let Some(stream_msg) = delta_stream.next().await {
+            let delta = stream_msg.delta();
+            if let Some(delta) = delta {
+                println!(
+                    "delta_streaming::symbol_identifier({})::delta({})",
+                    symbol_identifier.symbol_name(),
+                    &delta
+                );
+                stream_answer.push_str(&delta);
+                // we have some delta over here which we can process
+                search_and_replace_accumulator
+                    .add_delta(delta.to_owned())
+                    .await;
+                // send over the thinking as soon as we get a delta over here
+                let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
+                    root_request_id.to_owned(),
+                    symbol_identifier.clone(),
+                    search_and_replace_accumulator.answer_to_show.to_owned(),
+                    edit_request_id.to_owned(),
+                ));
+            }
         }
-        match stream_result {
-            Some(Ok(response)) => Ok(ToolOutput::search_and_replace_editing(
+
+        // force the flush to happen over here
+        search_and_replace_accumulator.process_answer().await;
+        search_and_replace_accumulator.end_streaming().await;
+        // we stop polling from the events stream once we are done with the llm response and the loop has finished
+        let _ = join_handle.await;
+        match llm_response.await {
+            Ok(Ok(response)) => Ok(ToolOutput::search_and_replace_editing(
                 SearchAndReplaceEditingResponse::new(
                     search_and_replace_accumulator.code_lines.join("\n"),
                     response,
@@ -524,6 +729,9 @@ enum EditDelta {
     EditStarted(Range),
     EditDelta((Range, String)),
     EditEnd(Range),
+    EditLockAcquire(tokio::sync::oneshot::Sender<Option<String>>),
+    EditLockRelease,
+    EndPollingStream,
 }
 
 #[derive(Debug, Clone)]
@@ -567,13 +775,17 @@ impl SearchAndReplaceAccumulator {
         }
     }
 
-    fn add_delta(&mut self, delta: String) {
+    async fn end_streaming(&mut self) {
+        let _ = self.sender.send(EditDelta::EndPollingStream);
+    }
+
+    async fn add_delta(&mut self, delta: String) {
         self.answer_up_until_now.push_str(&delta);
-        self.process_answer();
+        self.process_answer().await;
         // check if we have a new search block starting here
     }
 
-    fn process_answer(&mut self) {
+    async fn process_answer(&mut self) {
         let head = "<<<<<<< SEARCH";
         let divider = "=======";
         let updated = vec![">>>>>>> REPLACE", "======="];
@@ -645,6 +857,26 @@ impl SearchAndReplaceAccumulator {
                 }
                 SearchBlockStatus::BlockAccumulate(accumulated) => {
                     if answer_line_at_index == divider {
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        let _result = self.sender.send(EditDelta::EditLockAcquire(sender));
+                        let file_contents = receiver.await.ok().flatten();
+                        let time_now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .expect("to work")
+                            .as_millis();
+                        if let Some(file_contents) = file_contents {
+                            let _ = tokio::fs::write(
+                                format!("/tmp/codestory_debugging/{}", time_now),
+                                file_contents.as_bytes(),
+                            )
+                            .await;
+                            self.code_lines = file_contents
+                                .lines()
+                                .into_iter()
+                                .map(|line| line.to_owned())
+                                .collect::<Vec<_>>();
+                        }
+                        // and hold the lock for a while until we have the replace block
                         let range = get_range_for_search_block(
                             &self.code_lines.join("\n"),
                             self.start_line,
@@ -681,6 +913,9 @@ impl SearchAndReplaceAccumulator {
                                 self.answer_to_show = answer_lines.join("\n");
                             }
                             None => {
+                                // TODO(codestory): release the lock immediately
+                                let _ = self.sender.send(EditDelta::EditLockRelease);
+
                                 self.search_block_status = SearchBlockStatus::NoBlock;
                                 // If we have a range over here, we probably want to show it on the answer lines
                                 // to do this: we need to do the following:
@@ -726,10 +961,14 @@ impl SearchAndReplaceAccumulator {
                         .iter()
                         .any(|updated_trace| *updated_trace == answer_line_at_index)
                     {
-                        println!("search_and_replace_accumulator::block_found");
                         self.search_block_status = SearchBlockStatus::NoBlock;
                         self.update_code_lines(&block_range);
                         let _ = self.sender.send(EditDelta::EditEnd(block_range.clone()));
+                        // TODO(codestory): release the lock over here which we were holding on to
+                        // since we are done editing the file for our section of the code
+                        // this way we are sure to never lock up immediately
+                        let _ = self.sender.send(EditDelta::EditLockRelease);
+
                         // remove the last line from the answer and instead put in edit completed
                         let mut answer_lines = self
                             .answer_to_show
@@ -844,12 +1083,37 @@ fn get_range_for_search_block(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use crate::agentic::tool::{
+        errors::ToolError, input::ToolInput, lsp::open_file::OpenFileResponse, output::ToolOutput,
+        r#type::Tool,
+    };
+
     use super::SearchAndReplaceAccumulator;
+    use async_trait::async_trait;
+    use tokio::sync::Semaphore;
+
+    struct CacheFileOutput {
+        content: String,
+    }
+
+    #[async_trait]
+    impl Tool for CacheFileOutput {
+        async fn invoke(&self, _input: ToolInput) -> Result<ToolOutput, ToolError> {
+            Ok(ToolOutput::file_open(OpenFileResponse::new(
+                "something".to_owned(),
+                self.content.to_owned(),
+                true,
+                "something".to_owned(),
+            )))
+        }
+    }
 
     /// TODO(skcd): Broken test here to debug multiple search and replace blocks being
     /// part of the same edit
-    #[test]
-    fn test_multiple_search_and_edit_blocks() {
+    #[tokio::test]
+    async fn test_multiple_search_and_edit_blocks() {
         let input_data = r#"impl LLMClientMessage {
     pub async fn new(role: LLMClientRole, message: String) -> Self {
         Self {
@@ -1056,9 +1320,19 @@ mod tests {
 ```"#;
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator =
-            SearchAndReplaceAccumulator::new(input_data.to_owned(), 0, sender);
-        search_and_replace_accumulator.add_delta(edits.to_owned());
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            input_data.to_owned(),
+            0,
+            Arc::new(Box::new(CacheFileOutput {
+                content: input_data.to_owned(),
+            })),
+            "".to_owned(),
+            "".to_owned(),
+            sender,
+        );
+        search_and_replace_accumulator
+            .add_delta(edits.to_owned())
+            .await;
         let final_lines = search_and_replace_accumulator.code_lines.join("\n");
         assert_eq!(
             final_lines,
@@ -1158,8 +1432,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_search_and_replace_removing_code() {
+    #[tokio::test]
+    async fn test_search_and_replace_removing_code() {
         let original_code = r#"impl SymbolToEdit {
     pub fn new(
         symbol_name: String,
@@ -1293,9 +1567,19 @@ impl SymbolToEdit {
 >>>>>>> REPLACE
 ```"#;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator =
-            SearchAndReplaceAccumulator::new(original_code.to_owned(), 0, sender);
-        search_and_replace_accumulator.add_delta(edits.to_owned());
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            original_code.to_owned(),
+            0,
+            Arc::new(Box::new(CacheFileOutput {
+                content: original_code.to_owned(),
+            })),
+            "".to_owned(),
+            "".to_owned(),
+            sender,
+        );
+        search_and_replace_accumulator
+            .add_delta(edits.to_owned())
+            .await;
         let final_code = search_and_replace_accumulator.code_lines.join("\n");
         assert_eq!(
             final_code,
@@ -1365,8 +1649,8 @@ impl SymbolToEdit {
         );
     }
 
-    #[test]
-    fn test_with_broken_replace_block() {
+    #[tokio::test]
+    async fn test_with_broken_replace_block() {
         let code = r#"something
 interesting
 something_else
@@ -1380,9 +1664,19 @@ blahblah2
 =======
 ```"#;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator =
-            SearchAndReplaceAccumulator::new(code.to_owned(), 0, sender);
-        search_and_replace_accumulator.add_delta(edits.to_owned());
+        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
+            code.to_owned(),
+            0,
+            Arc::new(Box::new(CacheFileOutput {
+                content: code.to_owned(),
+            })),
+            "".to_owned(),
+            "".to_owned(),
+            sender,
+        );
+        search_and_replace_accumulator
+            .add_delta(edits.to_owned())
+            .await;
         let final_code = search_and_replace_accumulator.code_lines.join("\n");
         assert_eq!(
             final_code,

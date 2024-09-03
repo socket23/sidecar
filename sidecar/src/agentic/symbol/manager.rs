@@ -154,8 +154,8 @@ impl SymbolManager {
             let _ = self.symbol_locker.process_request(event).await;
             receiver.await
         })
-        // run 1 edit requests in parallel to prevent race conditions
-        .buffer_unordered(1)
+        // run 100 edit requests in parallel to prevent race conditions
+        .buffer_unordered(100)
         .collect::<Vec<_>>()
         .await;
         let _ = message_properties

@@ -897,10 +897,15 @@ pub async fn code_editing(
                     ),
                 );
 
+                // let llm_properties = LLMProperties::new(
+                //     LLMType::ClaudeSonnet,
+                //     LLMProvider::Anthropic,
+                //     LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                // );
+
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
-                // todo(zi): need to consider load here.
                 let references = references
                     .into_iter()
                     .take(10) // todo(zi): so we don't go crazy with 1000s of requests

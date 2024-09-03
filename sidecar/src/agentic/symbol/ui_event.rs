@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::chunking::text_document::Range;
+use crate::{agentic::tool::ref_filter::ref_filter::Location, chunking::text_document::Range};
 
 use super::{
     identifier::SymbolIdentifier,
@@ -645,8 +645,7 @@ impl InitialSearchSymbolInformation {
     }
 }
 
-/// Key: reason as decided by LLM. Value: (fs_file_path, symbol_name)
-pub type GroupedReferences = HashMap<String, Vec<(String, String)>>;
+pub type GroupedReferences = HashMap<String, Vec<Location>>;
 
 pub type FoundReference = HashMap<String, usize>; // <file_path, count>
 

@@ -2,11 +2,10 @@ use async_trait::async_trait;
 use futures::{stream, StreamExt};
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 use quick_xml::de::from_str;
-use serde::Deserialize;
-use serde_xml_rs::to_string;
+use serde::{Deserialize, Serialize};
 use std::{iter::once, sync::Arc, time::Instant};
 
 use crate::{
@@ -95,7 +94,7 @@ impl GroupedReasonsResponse {
                     .locations
                     .locations
                     .into_iter()
-                    .map(|location| (location.fs_file_path, location.symbol_name))
+                    .map(|location| Location::new(location.fs_file_path, location.symbol_name))
                     .collect();
                 (group.reason, references)
             })
@@ -115,10 +114,19 @@ pub struct Locations {
     pub locations: Vec<Location>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Location {
     pub fs_file_path: String,
     pub symbol_name: String,
+}
+
+impl Location {
+    pub fn new(fs_file_path: String, symbol_name: String) -> Self {
+        Self {
+            fs_file_path,
+            symbol_name,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

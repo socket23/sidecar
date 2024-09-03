@@ -493,21 +493,17 @@ impl Tool for SearchAndReplaceEditing {
 
         // we want to figure out how poll the llm stream while locking up until the file is free
         // from the lock over here for the file path we are interested in
-        let idx = uuid::Uuid::new_v4().to_string();
         let cloned_file_lock = file_lock.clone();
-        let cloned_idx = idx.to_owned();
         let cloned_ui_sender = ui_sender.clone();
         let cloned_root_request_id = root_request_id.to_owned();
         let cloned_edit_request_id = edit_request_id.to_owned();
         let cloned_lsp_open_file = self.lsp_open_file.clone();
-        let cloned_symbol_identifer = symbol_identifier.clone();
         let cloned_fs_file_path = fs_file_path.to_owned();
         let cloned_editor_url = editor_url.to_owned();
 
         let mut stream_answer = "".to_owned();
 
         let join_handle = tokio::spawn(async move {
-            let idx = cloned_idx;
             let file_lock = cloned_file_lock;
             let mut edit_lock = None;
             let _ui_sender = cloned_ui_sender.clone();
@@ -516,7 +512,6 @@ impl Tool for SearchAndReplaceEditing {
             let lsp_open_file = cloned_lsp_open_file;
             let fs_file_path = cloned_fs_file_path;
             let editor_url = cloned_editor_url;
-            let symbol_identifier = cloned_symbol_identifer;
             let streamed_edit_client = StreamedEditingForEditor::new();
             // figure out what to do over here
             #[allow(irrefutable_let_patterns)]
@@ -553,7 +548,6 @@ impl Tool for SearchAndReplaceEditing {
                         }
                     }
                     Some(EditDelta::EditLockRelease) => {
-                        println!("lock_release::({})", &idx);
                         let edit_lock_value = edit_lock;
                         edit_lock = None;
                         if let Some(Ok(edit_lock)) = edit_lock_value {
@@ -561,13 +555,6 @@ impl Tool for SearchAndReplaceEditing {
                         }
                     }
                     Some(EditDelta::EditStarted(range)) => {
-                        // let _ = ui_sender.send(UIEventWithID::start_edit_streaming(
-                        //     root_request_id.to_owned(),
-                        //     symbol_identifier.clone(),
-                        //     edit_request_id.to_owned(),
-                        //     range,
-                        //     fs_file_path.to_owned(),
-                        // ));
                         streamed_edit_client
                             .send_edit_event(
                                 editor_url.to_owned(),
@@ -578,17 +565,6 @@ impl Tool for SearchAndReplaceEditing {
                                 ),
                             )
                             .await;
-                        // we need to send this ``` since thats the detection string
-                        // we use for making sure that we are inside a code-block on the
-                        // editor
-                        // let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
-                        //     root_request_id.to_owned(),
-                        //     symbol_identifier.clone(),
-                        //     "```\n".to_owned(),
-                        //     edit_request_id.to_owned(),
-                        //     range,
-                        //     fs_file_path.to_owned(),
-                        // ));
                         streamed_edit_client
                             .send_edit_event(
                                 editor_url.to_owned(),
@@ -602,20 +578,6 @@ impl Tool for SearchAndReplaceEditing {
                             .await;
                     }
                     Some(EditDelta::EditDelta((range, delta))) => {
-                        // println!("tool_box::search_and_replace::edit_streaming_delta::symbol_name({})", symbol_identifier.symbol_name());
-                        // let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
-                        //     root_request_id.to_owned(),
-                        //     symbol_identifier.clone(),
-                        //     delta,
-                        //     edit_request_id.to_owned(),
-                        //     range,
-                        //     fs_file_path.to_owned(),
-                        // ));
-                        println!(
-                            "tool_box::streaming_delta::symbol_name({})::delta({})",
-                            symbol_identifier.symbol_name(),
-                            &delta
-                        );
                         streamed_edit_client
                             .send_edit_event(
                                 editor_url.to_owned(),
@@ -629,14 +591,6 @@ impl Tool for SearchAndReplaceEditing {
                             .await;
                     }
                     Some(EditDelta::EditEnd(range)) => {
-                        // let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
-                        //     root_request_id.to_owned(),
-                        //     symbol_identifier.clone(),
-                        //     "\n```".to_owned(),
-                        //     edit_request_id.to_owned(),
-                        //     range,
-                        //     fs_file_path.to_owned(),
-                        // ));
                         streamed_edit_client
                             .send_edit_event(
                                 editor_url.to_owned(),
@@ -648,13 +602,6 @@ impl Tool for SearchAndReplaceEditing {
                                 ),
                             )
                             .await;
-                        // let _ = ui_sender.send(UIEventWithID::end_edit_streaming(
-                        //     root_request_id.to_owned(),
-                        //     symbol_identifier.clone(),
-                        //     edit_request_id.to_owned(),
-                        //     range,
-                        //     fs_file_path.to_owned(),
-                        // ));
                         streamed_edit_client
                             .send_edit_event(
                                 editor_url.to_owned(),
@@ -667,7 +614,6 @@ impl Tool for SearchAndReplaceEditing {
                             .await;
                     }
                     Some(EditDelta::EndPollingStream) => {
-                        println!("asked_to_end_polling_after");
                         break;
                     }
                     None => {
@@ -687,11 +633,6 @@ impl Tool for SearchAndReplaceEditing {
         while let Some(stream_msg) = delta_stream.next().await {
             let delta = stream_msg.delta();
             if let Some(delta) = delta {
-                println!(
-                    "delta_streaming::symbol_identifier({})::delta({})",
-                    symbol_identifier.symbol_name(),
-                    &delta
-                );
                 stream_answer.push_str(&delta);
                 // we have some delta over here which we can process
                 search_and_replace_accumulator
@@ -1087,7 +1028,6 @@ mod tests {
 
     use super::SearchAndReplaceAccumulator;
     use async_trait::async_trait;
-    use tokio::sync::Semaphore;
 
     struct CacheFileOutput {
         content: String,
@@ -1315,16 +1255,8 @@ mod tests {
 ```"#;
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
-            input_data.to_owned(),
-            0,
-            Arc::new(Box::new(CacheFileOutput {
-                content: input_data.to_owned(),
-            })),
-            "".to_owned(),
-            "".to_owned(),
-            sender,
-        );
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(input_data.to_owned(), 0, sender);
         search_and_replace_accumulator
             .add_delta(edits.to_owned())
             .await;
@@ -1562,16 +1494,8 @@ impl SymbolToEdit {
 >>>>>>> REPLACE
 ```"#;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
-            original_code.to_owned(),
-            0,
-            Arc::new(Box::new(CacheFileOutput {
-                content: original_code.to_owned(),
-            })),
-            "".to_owned(),
-            "".to_owned(),
-            sender,
-        );
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(original_code.to_owned(), 0, sender);
         search_and_replace_accumulator
             .add_delta(edits.to_owned())
             .await;
@@ -1659,16 +1583,8 @@ blahblah2
 =======
 ```"#;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
-            code.to_owned(),
-            0,
-            Arc::new(Box::new(CacheFileOutput {
-                content: code.to_owned(),
-            })),
-            "".to_owned(),
-            "".to_owned(),
-            sender,
-        );
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(code.to_owned(), 0, sender);
         search_and_replace_accumulator
             .add_delta(edits.to_owned())
             .await;

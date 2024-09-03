@@ -26,6 +26,14 @@ use crate::{
 
 const _SURROUNDING_CONTEXT_LIMIT: usize = 200;
 
+struct DropDetector<T>(T);
+
+impl<T> Drop for DropDetector<T> {
+    fn drop(&mut self) {
+        println!("DropDetector is being dropped!");
+    }
+}
+
 #[derive(Debug)]
 pub struct SearchAndReplaceEditingResponse {
     updated_code: String,
@@ -113,7 +121,7 @@ impl SearchAndReplaceEditingRequest {
 pub struct SearchAndReplaceEditing {
     llm_client: Arc<LLMBroker>,
     lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
-    file_locker: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
+    file_locker: Arc<Mutex<HashMap<String, (String, Arc<Semaphore>)>>>,
     _fail_over_llm: LLMProperties,
 }
 
@@ -394,13 +402,23 @@ impl Tool for SearchAndReplaceEditing {
             let cloned_file_locker = self.file_locker.clone();
             let mut file_locker = cloned_file_locker.lock().await;
             file_lock = if file_locker.contains_key(&fs_file_path) {
-                file_locker
+                let lock_acquired = file_locker
                     .get(&fs_file_path)
                     .expect("contains_key to work")
-                    .clone()
+                    .clone();
+                println!(
+                    "lock_for_fs_file_path({})::lock_idx({})",
+                    &fs_file_path, &lock_acquired.0
+                );
+                lock_acquired.1
             } else {
                 let file_lock = Arc::new(Semaphore::new(1));
-                file_locker.insert(fs_file_path.to_owned(), file_lock.clone());
+                let idx = uuid::Uuid::new_v4().to_string();
+                file_locker.insert(fs_file_path.to_owned(), (idx.to_owned(), file_lock.clone()));
+                println!(
+                    "lock_for_fs_file_path::insert::fs_file_path({})::lock_idx({})",
+                    fs_file_path, idx
+                );
                 file_lock
             };
         }
@@ -448,7 +466,7 @@ impl Tool for SearchAndReplaceEditing {
             whole_file_context,
             start_line,
             self.lsp_open_file.clone(),
-            file_lock,
+            file_lock.clone(),
             fs_file_path.to_owned(),
             editor_url.to_owned(),
             edits_sender,
@@ -456,6 +474,7 @@ impl Tool for SearchAndReplaceEditing {
 
         // we want to figure out how poll the llm stream while locking up until the file is free
         // from the lock over here for the file path we are interested in
+        let mut edit_lock = None;
 
         loop {
             tokio::select! {
@@ -482,7 +501,21 @@ impl Tool for SearchAndReplaceEditing {
                     }
                 }
                 edits_response = edits_receiver.recv() => {
+                    // TODO(skcd): The lock needs to happen over here since we might
+                    // be processing the data in a stream so we want to hold onto it
+                    // for longer than required since we are getting the data in chunks
+                    // so we end up releasing very quickly
                     match edits_response {
+                        Some(EditDelta::EditLockAcquire) => {
+                            edit_lock = Some(file_lock.clone().acquire_owned().await);
+                        }
+                        Some(EditDelta::EditLockRelease) => {
+                            let edit_lock_value = edit_lock;
+                            edit_lock = None;
+                            if let Some(Ok(edit_lock)) = edit_lock_value {
+                                drop(DropDetector(edit_lock));
+                            }
+                        }
                         Some(EditDelta::EditStarted(range)) => {
                             println!("framework_event::edit_event::symbol_name({}:{:?})::search_and_replace::range({:?})", symbol_identifier.symbol_name(), symbol_identifier.fs_file_path(), &range);
                             println!("tool_box::search_and_replace::start_streaming::symbol_name({})::range({:?})", symbol_identifier.symbol_name(), &range);
@@ -506,7 +539,7 @@ impl Tool for SearchAndReplaceEditing {
                             ));
                         }
                         Some(EditDelta::EditDelta((range, delta))) => {
-                            println!("tool_box::search_and_replace::edit_streaming_delta::symbol_name({})", symbol_identifier.symbol_name());
+                            // println!("tool_box::search_and_replace::edit_streaming_delta::symbol_name({})", symbol_identifier.symbol_name());
                             let _ = ui_sender.send(UIEventWithID::delta_edit_streaming(
                                 root_request_id.to_owned(),
                                 symbol_identifier.clone(),
@@ -562,6 +595,8 @@ enum EditDelta {
     EditStarted(Range),
     EditDelta((Range, String)),
     EditEnd(Range),
+    EditLockAcquire,
+    EditLockRelease,
 }
 
 #[derive(Debug, Clone)]
@@ -706,7 +741,12 @@ impl SearchAndReplaceAccumulator {
                         // TODO(codestory): here we want to first get the lock for the file and re-read
                         // the contents for the file over here
                         let file_locker = self.file_lock.clone();
-                        let lock_guard_local = file_locker.acquire_owned().await;
+                        let idx = uuid::Uuid::new_v4().to_string();
+                        println!("lock_calling::{}", &idx);
+                        let lock_guard_local = file_locker
+                            .acquire_owned()
+                            .await
+                            .map(|data| DropDetector(data));
                         lock_guard = Some(lock_guard_local);
                         let file_content = self
                             .lsp_open_file
@@ -726,6 +766,7 @@ impl SearchAndReplaceAccumulator {
                                 .map(|line| line.to_string())
                                 .collect();
                         }
+                        println!("lock_acquired::{}", &idx);
                         // and hold the lock for a while until we have the replace block
                         let range = get_range_for_search_block(
                             &self.code_lines.join("\n"),
@@ -761,6 +802,7 @@ impl SearchAndReplaceAccumulator {
                                 answer_lines.truncate(answer_lines_len - (accumualated_length + 3));
                                 answer_lines.push("Generating code....".to_owned());
                                 self.answer_to_show = answer_lines.join("\n");
+                                println!("found_range_block_finished");
                             }
                             None => {
                                 // TODO(codestory): release the lock immediately
@@ -769,6 +811,7 @@ impl SearchAndReplaceAccumulator {
                                 if let Some(Ok(lock_guard)) = lock_guard_owned_value {
                                     drop(lock_guard);
                                 }
+                                println!("lock_released");
 
                                 self.search_block_status = SearchBlockStatus::NoBlock;
                                 // If we have a range over here, we probably want to show it on the answer lines
@@ -791,6 +834,7 @@ impl SearchAndReplaceAccumulator {
                                 self.answer_to_show = answer_lines.join("\n");
                             }
                         };
+                        println!("done_with_block");
                     } else {
                         self.search_block_status = SearchBlockStatus::BlockAccumulate(format!(
                             "{}\n{}",
@@ -827,6 +871,7 @@ impl SearchAndReplaceAccumulator {
                         if let Some(Ok(lock_guard)) = lock_guard_owned_value {
                             drop(lock_guard);
                         }
+                        println!("lock_released::block_found");
 
                         // remove the last line from the answer and instead put in edit completed
                         let mut answer_lines = self

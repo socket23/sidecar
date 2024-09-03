@@ -42,7 +42,7 @@ use super::types::ApiResponse;
 use super::{model_selection::LLMClientConfig, types::Result};
 
 /// Tracks and manages probe requests in a concurrent environment.
-#[derive(Debug, Clone)]
+/// This struct is responsible for keeping track of ongoing probe requests
 pub struct ProbeRequestTracker {
     /// A thread-safe map of running requests, keyed by request ID.
     ///

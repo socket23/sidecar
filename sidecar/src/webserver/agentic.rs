@@ -42,7 +42,7 @@ use super::types::ApiResponse;
 use super::{model_selection::LLMClientConfig, types::Result};
 
 /// Tracks and manages probe requests in a concurrent environment.
-#[derive(Debug, Clone)]
+/// This struct is responsible for keeping track of ongoing probe requests
 pub struct ProbeRequestTracker {
     /// A thread-safe map of running requests, keyed by request ID.
     ///
@@ -420,6 +420,7 @@ pub async fn swe_bench(
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmup {
     file_paths: Vec<String>,
+    editor_url: String,
 }
 
 /// Response structure for the code sculpting warmup operation.
@@ -432,17 +433,20 @@ impl ApiResponse for CodeSculptingWarmupResponse {}
 
 pub async fn code_sculpting_warmup(
     Extension(app): Extension<Application>,
-    Json(CodeSculptingWarmup { file_paths }): Json<CodeSculptingWarmup>,
+    Json(CodeSculptingWarmup {
+        file_paths,
+        editor_url,
+    }): Json<CodeSculptingWarmup>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_sculpting_warmup");
     println!(
         "webserver::code_sculpting_warmup::file_paths({})",
         file_paths.to_vec().join(",")
     );
-    let wramup_request_id = "warmup_request_id".to_owned();
+    let warmup_request_id = "warmup_request_id".to_owned();
     let _ = app
         .tool_box
-        .warmup_context(file_paths, wramup_request_id)
+        .warmup_context(file_paths, warmup_request_id, editor_url)
         .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }

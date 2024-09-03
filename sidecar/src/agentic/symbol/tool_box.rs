@@ -6778,22 +6778,19 @@ FILEPATH: {fs_file_path}
         symbol_name: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Snippet, SymbolError> {
-        // we always open the document before asking for an outline
-        let file_open_result = self
-            .file_open(fs_file_path.to_owned(), message_properties.clone())
-            .await?;
-        let language = file_open_result.language().to_owned();
-        // we add the document for parsing over here
-        self.symbol_broker
-            .force_add_document(
-                file_open_result.fs_file_path().to_owned(),
-                file_open_result.contents(),
-                language,
-            )
-            .await;
-
         // we grab the outlines over here
-        let outline_nodes = self.symbol_broker.get_symbols_outline(fs_file_path).await;
+        let outline_nodes = self
+            .tools
+            .invoke(ToolInput::OutlineNodesUsingEditor(
+                OutlineNodesUsingEditorRequest::new(
+                    fs_file_path.to_owned(),
+                    message_properties.editor_url(),
+                ),
+            ))
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_outline_nodes_from_editor()
+            .map(|response| response.to_outline_nodes(fs_file_path.to_owned()));
 
         // We will either get an outline node or we will get None
         // for today, we will go with the following assumption

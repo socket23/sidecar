@@ -103,10 +103,11 @@ impl ReferenceFilterBroker {
             r#"You are an expert software engineer who is pair programming with another developer.
 - The developer you are helping has selected a symbol shown in <code_selected>
 - They are considering a task, defined in <user_query>, to undertake against the symbol in <code_selected>
-- First, summarise the change intended by <user_query> on <code_selected>, and write it to <change_description>
-- Then, consider a dependency of the symbol in <code_selected>, provided in <reference>
-- Identify which part of <reference> contains the dependent code
-- Reason whether a change to the symbol in <reference> is absolutely necessary. Think precisely about the moving parts, do not guess, and be biased against making changes.
+- First, summarise the change intended by <user_query> on <code_selected>, describing if and how the change affects the symbol in a way that may concern references. Write this to <change_description>.
+- Then, consider one of the symbol's dependencies, provided in <reference>.
+- Identify which parts of <reference> depends on the symbol in <code_selected>.
+- Given the change_description, reason whether a change to the symbol in <reference> is absolutely necessary to maintain correctness. Think precisely about the change, its effects, and its relevance to the symbol in <reference>.
+- Use your knowledge of programming languages and concepts to inform whether a changing is a breaking one for the reference.
 - Put your decision in <change_required> as either true or false
 - Provide a single, high value sentence explaining whether a change is needed and why in <reason>
 - Do not mistake the <user_query> for an instruction to <reference> - it's explicitly for <code_selected>
@@ -194,6 +195,22 @@ pub struct ReferenceFilterRequest {
 <reference>
 ReferenceFilterRequest in /Users/zi/codestory/testing/sidecar/sidecar/src/agentic/tool/ref_filter/ref_filter.rs
 impl ReferenceFilterRequest {
+    pub fn new(
+        user_instruction: String,
+        llm_properties: LLMProperties,
+        root_id: String,
+        message_properties: SymbolEventMessageProperties,
+        anchored_references: Vec<AnchoredReference>,
+    ) -> Self {
+        Self {
+            user_instruction,
+            llm_properties,
+            root_id,
+            message_properties,
+            anchored_references,
+        }
+    }
+
     pub fn user_instruction(&self) -> &str {
         &self.user_instruction
     }
@@ -215,16 +232,17 @@ impl ReferenceFilterRequest {
     }
 }
 </reference>"#.to_string());
-        let system_1 = LLMClientMessage::system(r#"<reply>
-<response>
+        let system_1 = LLMClientMessage::system(r#"<response>
+<change_description>
+The intended change is to add a new property called "little_search" to the ReferenceFilterRequest struct. This change affects the nature of the symbol by introducing a new field to the struct definition.
+</change_description>
 <reason>
-We do not need to change the code in the `ReferenceFilterRequest` struct, because the addition of `little_search` to the struct does not necessitate a getter method.
+A change is necessary because the constructor and accessor methods need to be updated to include the new field.
 </reason>
 <change_required>
-false
+true
 </change_required>
-</response>
-</reply>"#.to_string());
+</response>"#.to_string());
         let user_2 = LLMClientMessage::user(
             r#"<user_query>
 add little_search
@@ -326,16 +344,17 @@ pub enum ToolInput {
 </reference>"#
                 .to_string(),
         );
-        let system_2 = LLMClientMessage::system(r#"<reply>
-<response>
+        let system_2 = LLMClientMessage::system(r#"<response>
+<change_description>
+The intended change is to add a new property called "little_search" to the ReferenceFilterRequest struct. This change affects the nature of the symbol by introducing a new field to the struct, potentially altering its memory layout and how it's constructed or used.
+</change_description>
 <reason>
-The ToolInput enum remains unchanged when adding little_search to ReferenceFilterRequest because it references the struct as a whole, not its internal fields.
+A change is not needed because the ToolInput enum uses ReferenceFilterRequest as a whole, without accessing its individual fields directly.
 </reason>
 <change_required>
 false
 </change_required>
-</response>
-</reply>"#.to_string());
+</response>"#.to_string());
 
         vec![user_1, system_1, user_2, system_2]
     }

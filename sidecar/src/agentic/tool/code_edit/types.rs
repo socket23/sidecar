@@ -459,7 +459,7 @@ impl CodeToAddAccumulator {
         }
     }
 
-    pub fn answer_up_until_now(&self) -> String {
+    pub fn _answer_up_until_now(&self) -> String {
         self.answer_up_until_now.to_owned()
     }
 

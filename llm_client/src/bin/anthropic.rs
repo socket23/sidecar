@@ -12,7 +12,7 @@ async fn main() {
     let anthropic_api_key = "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".to_owned();
     let anthropic_client = AnthropicClient::new();
     let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(anthropic_api_key));
-    let system_prompt = r#"Act as an expert software developer.
+    let _system_prompt = r#"Act as an expert software developer.
 Always use best practices when coding.
 Respect and use existing conventions, libraries, etc that are already present in the code base.
 You are diligent and tireless!
@@ -69,7 +69,7 @@ You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
 ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
 You always put your thinking in <thinking> section before you suggest *SEARCH/REPLACE* blocks"#;
-    fn example_messages() -> Vec<LLMClientMessage> {
+    fn _example_messages() -> Vec<LLMClientMessage> {
         vec![
             LLMClientMessage::user(r#"Change get_factorial() to use math.factorial"#.to_owned()),
             LLMClientMessage::assistant(
@@ -121,7 +121,7 @@ return str(math.factorial(n))
             .cache_point(),
         ]
     }
-    let user_request = r#"<extra_symbols_will_be_created>
+    let _user_request = r#"<extra_symbols_will_be_created>
 <symbol>
 FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs
 code_editing_stop
@@ -171,7 +171,7 @@ We can reuse the existing ProbeStopRequest struct for the new API as it already 
         .collect::<Vec<_>>()
         .await
         .join("\n");
-    let context_message = vec![
+    let _context_message = vec![
         LLMClientMessage::user(format!(
             r#"You can use the code in these files are inspiration for the coding style and writing out the code in the same way as present in the codebase:
 {file_content_prompt}"#

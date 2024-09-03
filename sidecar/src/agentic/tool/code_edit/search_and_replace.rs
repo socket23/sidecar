@@ -488,14 +488,8 @@ impl Tool for SearchAndReplaceEditing {
 
         let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::unbounded_channel();
         // let (locks_sender, mut locks_receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut search_and_replace_accumulator = SearchAndReplaceAccumulator::new(
-            whole_file_context,
-            start_line,
-            self.lsp_open_file.clone(),
-            fs_file_path.to_owned(),
-            editor_url.to_owned(),
-            edits_sender,
-        );
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(whole_file_context, start_line, edits_sender);
 
         // we want to figure out how poll the llm stream while locking up until the file is free
         // from the lock over here for the file path we are interested in
@@ -516,8 +510,8 @@ impl Tool for SearchAndReplaceEditing {
             let idx = cloned_idx;
             let file_lock = cloned_file_lock;
             let mut edit_lock = None;
-            let ui_sender = cloned_ui_sender.clone();
-            let root_request_id = cloned_root_request_id;
+            let _ui_sender = cloned_ui_sender.clone();
+            let _root_request_id = cloned_root_request_id;
             let edit_request_id = cloned_edit_request_id;
             let lsp_open_file = cloned_lsp_open_file;
             let fs_file_path = cloned_fs_file_path;
@@ -525,6 +519,7 @@ impl Tool for SearchAndReplaceEditing {
             let symbol_identifier = cloned_symbol_identifer;
             let streamed_edit_client = StreamedEditingForEditor::new();
             // figure out what to do over here
+            #[allow(irrefutable_let_patterns)]
             while let edits_response = edits_receiver.recv().await {
                 // now over here we can manage the locks which we are getting and hold on to them for the while we are interested in
                 // TODO(skcd): The lock needs to happen over here since we might
@@ -756,19 +751,12 @@ struct SearchAndReplaceAccumulator {
     search_block_status: SearchBlockStatus,
     updated_block: Option<String>,
     sender: UnboundedSender<EditDelta>,
-    // tool to use to open the file
-    lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
-    fs_file_path: String,
-    editor_url: String,
 }
 
 impl SearchAndReplaceAccumulator {
     pub fn new(
         code_to_edit: String,
         start_line: usize,
-        lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
-        fs_file_path: String,
-        editor_url: String,
         sender: UnboundedSender<EditDelta>,
     ) -> Self {
         Self {
@@ -784,14 +772,11 @@ impl SearchAndReplaceAccumulator {
             search_block_status: SearchBlockStatus::NoBlock,
             updated_block: None,
             sender,
-            lsp_open_file,
-            fs_file_path,
-            editor_url,
         }
     }
 
     async fn end_streaming(&mut self) {
-        self.sender.send(EditDelta::EndPollingStream);
+        let _ = self.sender.send(EditDelta::EndPollingStream);
     }
 
     async fn add_delta(&mut self, delta: String) {
@@ -873,7 +858,7 @@ impl SearchAndReplaceAccumulator {
                 SearchBlockStatus::BlockAccumulate(accumulated) => {
                     if answer_line_at_index == divider {
                         let (sender, receiver) = tokio::sync::oneshot::channel();
-                        let result = self.sender.send(EditDelta::EditLockAcquire(sender));
+                        let _result = self.sender.send(EditDelta::EditLockAcquire(sender));
                         let file_contents = receiver.await.ok().flatten();
                         let time_now = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)

@@ -984,7 +984,7 @@ pub async fn code_editing(
                     .await;
 
                 println!(
-                    "anchor_edit_timer::elapsed({:?}",
+                    "anchor_edit_timer::elapsed({:?})",
                     anchor_edit_timer.elapsed()
                 );
             });

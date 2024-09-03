@@ -865,11 +865,6 @@ impl SearchAndReplaceAccumulator {
                             .expect("to work")
                             .as_millis();
                         if let Some(file_contents) = file_contents {
-                            let _ = tokio::fs::write(
-                                format!("/tmp/codestory_debugging/{}", time_now),
-                                file_contents.as_bytes(),
-                            )
-                            .await;
                             self.code_lines = file_contents
                                 .lines()
                                 .into_iter()

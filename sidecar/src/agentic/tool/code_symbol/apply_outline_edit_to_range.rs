@@ -280,7 +280,6 @@ impl Tool for ApplyOutlineEditsToRange {
                                 edit_request_id.to_owned(),
                                 edited_range.clone(),
                                 fs_file_path.to_owned(),
-                                result.to_owned(),
                             ));
                         } else {
                             // send over the original selection over here since we had an error
@@ -290,7 +289,6 @@ impl Tool for ApplyOutlineEditsToRange {
                                 edit_request_id.to_owned(),
                                 edited_range.clone(),
                                 fs_file_path.to_owned(),
-                                code_in_selection.to_owned(),
                             ));
                         }
                         stream_result = Some(result);

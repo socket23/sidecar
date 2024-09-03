@@ -426,6 +426,9 @@ false
             r#"Your job is to aggregate common reasons for changes against a collection of symbol locations and their reasons for changing.
 Rephrase changes as necessary.
 
+Categorize the reasons for updating references into distinct types (e.g., Struct Update, Enum Variant Update, Method Update, etc.).
+Keep descriptions concise and avoid repetition. Combine similar reasons under the same category when possible
+
 Response format:
 <response>
 <group>
@@ -495,8 +498,6 @@ this is a reason
                 None
             }
         };
-
-        dbg!(&parsed_response);
 
         if let Some(response) = parsed_response {
             response

@@ -860,7 +860,7 @@ impl SearchAndReplaceAccumulator {
                         let (sender, receiver) = tokio::sync::oneshot::channel();
                         let _result = self.sender.send(EditDelta::EditLockAcquire(sender));
                         let file_contents = receiver.await.ok().flatten();
-                        let time_now = std::time::SystemTime::now()
+                        let _time_now = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .expect("to work")
                             .as_millis();

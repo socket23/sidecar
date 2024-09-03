@@ -295,6 +295,13 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn grouped_by_reason_references(request_id: String, references: GroupedReferences) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::GroupedReferences(references)),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -639,7 +646,7 @@ impl InitialSearchSymbolInformation {
 }
 
 /// Key: reason as decided by LLM. Value: (fs_file_path, symbol_name)
-type GroupedReferences = HashMap<String, Vec<(String, String)>>;
+pub type GroupedReferences = HashMap<String, Vec<(String, String)>>;
 
 pub type FoundReference = HashMap<String, usize>; // <file_path, count>
 
@@ -711,4 +718,5 @@ pub enum FrameworkEvent {
     CodeIterationFinished(String),
     ReferenceFound(FoundReference),
     ReferenceRelevant(RelevantReference), // this naming sucks ass
+    GroupedReferences(GroupedReferences),
 }

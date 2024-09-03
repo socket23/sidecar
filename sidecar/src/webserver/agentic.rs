@@ -939,16 +939,6 @@ pub async fn code_editing(
                     .await;
 
                 println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
-                println!("relevant_references.len({:?})", relevant_references.len());
-
-                println!(
-                    "Relevant References: \n{}",
-                    relevant_references
-                        .iter()
-                        .map(|r| format!("Name: {}\nReason: {}\n", r.symbol_name(), r.reason()))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                );
 
                 println!(
                     "collect references async task total elapsed: {:?}",

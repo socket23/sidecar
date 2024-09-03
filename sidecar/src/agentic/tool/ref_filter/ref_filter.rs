@@ -14,7 +14,7 @@ use crate::{
         symbol::{
             events::message_event::SymbolEventMessageProperties,
             identifier::LLMProperties,
-            ui_event::{RelevantReference, UIEventWithID},
+            ui_event::{GroupedReferences, RelevantReference, UIEventWithID},
         },
         tool::{
             errors::ToolError, input::ToolInput, lsp::gotoreferences::AnchoredReference,
@@ -80,6 +80,27 @@ impl ReferenceFilterRequest {
 pub struct GroupedReasonsResponse {
     #[serde(rename = "group")]
     pub groups: Vec<Group>,
+}
+
+impl GroupedReasonsResponse {
+    pub fn new(groups: Vec<Group>) -> Self {
+        Self { groups }
+    }
+
+    pub fn into_grouped_references(self) -> GroupedReferences {
+        self.groups
+            .into_iter()
+            .map(|group| {
+                let references = group
+                    .locations
+                    .locations
+                    .into_iter()
+                    .map(|location| (location.fs_file_path, location.symbol_name))
+                    .collect();
+                (group.reason, references)
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -428,12 +449,13 @@ this is a reason
         )
     }
 
+    /// should consider better error handling here, this was done hastily
     pub async fn references_by_reason(
         references: Vec<RelevantReference>,
         llm_client: Arc<LLMBroker>,
         llm_properties: LLMProperties,
         root_request_id: &str,
-    ) -> Vec<RelevantReference> {
+    ) -> GroupedReasonsResponse {
         let user_message =
             LLMClientMessage::user(Self::user_message_for_grouping_references(references));
         let system_message =
@@ -458,22 +480,22 @@ this is a reason
             )
             .await;
 
-        // parse response
         let parsed_response = match response {
-            Ok(response_text) => match from_str::<GroupedReasonsResponse>(&response_text) {
-                Ok(parsed) => Some(parsed),
-                Err(parse_error) => {
-                    eprintln!("Failed to parse response: {}", parse_error);
-                    eprintln!("Response body: {}", response_text);
-                    None
-                }
-            },
-            Err(_) => None,
+            Ok(response) => from_str::<GroupedReasonsResponse>(&response).ok(),
+            Err(_) => {
+                eprintln!("failed to parse response groupedreasonsrepsonse");
+                None
+            }
         };
 
         dbg!(&parsed_response);
 
-        todo!();
+        if let Some(response) = parsed_response {
+            response
+        } else {
+            // this is shite code
+            GroupedReasonsResponse::new(vec![])
+        }
     }
 }
 
@@ -574,6 +596,7 @@ impl Tool for ReferenceFilterBroker {
 
                     if let Some(parsed_response) = parsed_response {
                         if parsed_response.change_required {
+                            // todo(zi): consider removing these as we may not be depending on them anymore
                             let ui_sender = context.message_properties().ui_sender();
                             let _ = ui_sender.send(UIEventWithID::relevant_reference(
                                 root_request_id.to_owned(),
@@ -600,13 +623,34 @@ impl Tool for ReferenceFilterBroker {
             .collect::<Vec<_>>()
             .await;
 
-        let _grouped_reasons_response = Self::references_by_reason(
+        println!("relevant_references.len({:?})", relevant_references.len());
+
+        println!(
+            "Relevant References: \n{}",
+            relevant_references
+                .iter()
+                .map(|r| format!("Name: {}\nReason: {}\n", r.symbol_name(), r.reason()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+
+        let grouped_reasons_response = Self::references_by_reason(
             relevant_references.clone(),
             self.llm_client.clone(),
             llm_properties.clone(),
             &root_request_id,
         )
         .await;
+
+        let grouped_references = grouped_reasons_response.into_grouped_references();
+
+        let ui_sender = context.message_properties().ui_sender();
+        let _ = ui_sender.send(UIEventWithID::grouped_by_reason_references(
+            root_request_id.to_owned(),
+            grouped_references.clone(),
+        ));
+
+        dbg!(&grouped_references);
 
         Ok(ToolOutput::ReferencesFilter(relevant_references))
     }

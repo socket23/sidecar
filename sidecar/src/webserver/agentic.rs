@@ -1025,7 +1025,7 @@ pub async fn code_editing(
             );
         }
     } else {
-        println!("webserver::code_editing_flow::agnetic_editing");
+        println!("webserver::code_editing_flow::agentic_editing");
         let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
                                                   // Now we send the original request over here and then await on the sender like
                                                   // before

@@ -527,9 +527,6 @@ impl Tool for ReferenceFilterBroker {
 
         let relevant_references =
             stream::iter(anchored_references.into_iter().map(|anchored_reference| {
-                // the user message contains:
-                // 1. anchored symbol contents
-                // 2. its reference's outline_node
                 let user_message = self.user_message(
                     &anchored_reference.anchored_symbol().content(), // content of the anchored symbol
                     user_query,
@@ -537,7 +534,6 @@ impl Tool for ReferenceFilterBroker {
                 );
 
                 let llm_messages = once(system_message.clone())
-                    // .chain(Self::few_shot_examples())
                     .chain(once(LLMClientMessage::user(user_message)))
                     .collect::<Vec<_>>();
 
@@ -592,14 +588,10 @@ impl Tool for ReferenceFilterBroker {
                         start.elapsed()
                     );
 
-                    println!("{:?}", &response);
-
                     let parsed_response = match response {
                         Ok(response) => from_str::<ReferenceFilterResponse>(&&response).ok(),
                         Err(_) => None,
                     };
-
-                    println!("parsed_response:\n{:?}", parsed_response);
 
                     if let Some(parsed_response) = parsed_response {
                         if parsed_response.change_required {
@@ -656,8 +648,6 @@ impl Tool for ReferenceFilterBroker {
             root_request_id.to_owned(),
             grouped_references.clone(),
         ));
-
-        dbg!(&grouped_references);
 
         Ok(ToolOutput::ReferencesFilter(relevant_references))
     }

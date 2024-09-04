@@ -603,7 +603,6 @@ impl Tool for ReferenceFilterBroker {
 
                     if let Some(parsed_response) = parsed_response {
                         if parsed_response.change_required {
-                            // todo(zi): consider removing these as we may not be depending on them anymore
                             let ui_sender = context.message_properties().ui_sender();
                             let _ = ui_sender.send(UIEventWithID::relevant_reference(
                                 root_request_id.to_owned(),

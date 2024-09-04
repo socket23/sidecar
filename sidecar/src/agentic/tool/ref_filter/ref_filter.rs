@@ -158,14 +158,26 @@ impl ReferenceFilterBroker {
         format!(
             r#"You are an expert software engineer who is pair programming with another developer.
 - The developer you are helping has selected a symbol shown in <code_selected>
+
+# Understand the change
 - Consider the change to <code_selected> based on the <user_query>
 - First, summarise the change intended by <user_query> on <code_selected>, describing if and how the change affects the symbol in a way that may concern references. Write this to <change_description>.
-- Then, consider one of the symbol's dependencies, provided in <reference>.
-- Consider whether the LSP would throw an error if the symbol in <reference> did not change after <code_selected> has changed according to <user_query>
-- Given the change_description, reason whether a change to the symbol in <reference> is necessary to maintain correctness.
-- Use your knowledge of programming languages and concepts to inform whether a changing is a breaking one for the reference.
+
+# Understand the relationship and dependency
+- Then, consider one of the symbol's dependent symbols, provided in <reference>.
+- Analyze the relationship between <code_selected> and the symbols in <reference>. Identify where the <code_selected> is used.
+- Consider whether the LSP would throw an error for any symbols in <reference> after <code_selected> has changed according to <user_query>
+
+# Maintain Correctness
+- Given the change_description, reason whether changes are required to any symbols in <reference>.
+- Think carefully about the role of the <code_selected> symbol in <reference>. Is it referenced by name? Are its fields referenced?
+- Use your knowledge of programming languages and concepts to inform whether a changing is a breaking one for the reference. e.g. Adding a field to struct would break its constructor method.
+
+# Decide and explain
 - Put your decision in <change_required> as either true or false
 - Provide a single, high value sentence explaining whether a change is needed and why in <reason>
+
+You must respond in the following format, beginning with <response>:
 
 <response>
 <change_description>
@@ -423,12 +435,19 @@ false
     fn system_message_for_grouping_references() -> String {
         format!(
             r#"Your job is to aggregate common reasons for changes against a collection of symbol locations and their reasons for changing.
-Rephrase changes as necessary.
 
-Categorize the reasons for updating references into distinct types (e.g., Struct Update, Enum Variant Update, Method Update, etc.).
-Keep descriptions concise and avoid repetition. Combine similar reasons under the same category when possible
+Pay attention to the reasons field of each item you are provided. You will notice that code needs changing for different reasons.
 
-Response format:
+It's very important that you group the reasons into logical categories / classifications (e.g., Struct Update, Enum Variant Update, Method Update, etc.).
+
+Category names must be semantically relevant to a software engineer who will depend on the reasons to understand the nature of changes that need to be made across a codebase.
+
+Aim for 3 distinct categories. Group items encapsulated by the reason accordingly.
+
+Category names must have fewer than 5 words.
+
+You must respond in the following format, beginning with <response>:
+
 <response>
 <group>
 <reason>
@@ -501,6 +520,7 @@ this is a reason
         if let Some(response) = parsed_response {
             response
         } else {
+            println!("something went wrong with parsing");
             // this is shite code
             GroupedReasonsResponse::new(vec![])
         }
@@ -594,6 +614,7 @@ impl Tool for ReferenceFilterBroker {
                     };
 
                     if let Some(parsed_response) = parsed_response {
+                        println!("parsing successful, sending UI: {:?}", &parsed_response);
                         if parsed_response.change_required {
                             let ui_sender = context.message_properties().ui_sender();
                             let _ = ui_sender.send(UIEventWithID::relevant_reference(
@@ -641,7 +662,14 @@ impl Tool for ReferenceFilterBroker {
         )
         .await;
 
+        println!(
+            "grouped groups len: {}",
+            &grouped_reasons_response.groups.len()
+        );
+
         let grouped_references = grouped_reasons_response.into_grouped_references();
+
+        dbg!(&grouped_references);
 
         let ui_sender = context.message_properties().ui_sender();
         let _ = ui_sender.send(UIEventWithID::grouped_by_reason_references(

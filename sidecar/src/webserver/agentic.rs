@@ -486,12 +486,13 @@ pub async fn code_sculpting_heal(
     } else {
         let anchor_properties = anchor_properties.expect("is_none to hold");
 
-        println!(
-            "agentic::webserver::code_sculpting_heal::anchor_properties.references.len({})",
-            anchor_properties.references().len()
-        );
-
         let anchored_symbols = anchor_properties.anchored_symbols();
+
+        let relevant_references = anchor_properties.references();
+        println!(
+            "agentic::webserver::code_sculpting_heal::relevant_references.len({})",
+            relevant_references.len()
+        );
 
         let file_paths = anchored_symbols
             .iter()
@@ -575,6 +576,11 @@ pub async fn code_sculpting_heal(
             })
             .flatten()
             .collect::<Vec<_>>();
+
+        println!(
+            "webserver::agentic::changed_symbols: \n{:?}",
+            &changed_symbols
+        );
 
         // changed symbols also has symbol_identifier
         let followup_bfs_request = changed_symbols
@@ -908,14 +914,21 @@ pub async fn code_editing(
 
                 let llm_broker = app.llm_broker;
 
+                // let llm_properties = LLMProperties::new(
+                //     LLMType::GeminiProFlash,
+                //     LLMProvider::GoogleAIStudio,
+                //     llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(
+                //         GoogleAIStudioKey::new(
+                //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                //         ),
+                //     ),
+                // );
+
+                let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
                 let llm_properties = LLMProperties::new(
-                    LLMType::GeminiProFlash,
-                    LLMProvider::GoogleAIStudio,
-                    llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(
-                        GoogleAIStudioKey::new(
-                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                        ),
-                    ),
+                    LLMType::ClaudeSonnet,
+                    LLMProvider::Anthropic,
+                    anthropic_api_keys.clone(),
                 );
 
                 let reference_filter_broker =

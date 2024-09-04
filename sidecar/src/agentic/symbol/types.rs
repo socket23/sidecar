@@ -1430,7 +1430,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 request_data
                     .symbols_edited_list()
                     .map(|symbol_edited_list| symbol_edited_list.to_vec()),
-                true,
+                false,
                 None,
                 false, // should we disable followups and correctness check
             );
@@ -1442,9 +1442,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                 None,
             ));
             // we need to do context gathering over here as well
-            let context = self
-                .grab_context_for_editing_faster(&sub_symbol_to_edit, message_properties.clone())
-                .await?;
+            // let context = self
+            //     .grab_context_for_editing_faster(&sub_symbol_to_edit, message_properties.clone())
+            //     .await?;
+            let context = vec![];
             let _ = self
                 .insert_code_full(
                     &sub_symbol_to_edit,

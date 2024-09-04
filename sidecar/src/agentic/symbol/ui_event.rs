@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::chunking::text_document::Range;
+use crate::{agentic::tool::ref_filter::ref_filter::Location, chunking::text_document::Range};
 
 use super::{
     identifier::SymbolIdentifier,
@@ -288,9 +288,16 @@ impl UIEventWithID {
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
-            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceRelevant(
+            event: UIEvent::FrameworkEvent(FrameworkEvent::RelevantReference(
                 RelevantReference::new(&fs_file_path, &symbol_name, &thinking),
             )),
+        }
+    }
+
+    pub fn grouped_by_reason_references(request_id: String, references: GroupedReferences) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::GroupedReferences(references)),
         }
     }
 }
@@ -672,6 +679,8 @@ impl InitialSearchSymbolInformation {
     }
 }
 
+pub type GroupedReferences = HashMap<String, Vec<Location>>;
+
 pub type FoundReference = HashMap<String, usize>; // <file_path, count>
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -700,6 +709,13 @@ impl RelevantReference {
 
     pub fn reason(&self) -> &str {
         &self.reason
+    }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            "File: {}, Symbol: {}, Reason: {}",
+            self.fs_file_path, self.symbol_name, self.reason
+        )
     }
 }
 
@@ -734,5 +750,6 @@ pub enum FrameworkEvent {
     OpenFile(OpenFileRequest),
     CodeIterationFinished(String),
     ReferenceFound(FoundReference),
-    ReferenceRelevant(RelevantReference), // this naming sucks ass
+    RelevantReference(RelevantReference), // this naming sucks ass
+    GroupedReferences(GroupedReferences),
 }

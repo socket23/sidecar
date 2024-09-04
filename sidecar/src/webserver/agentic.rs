@@ -921,15 +921,16 @@ pub async fn code_editing(
                 let reference_filter_broker =
                     ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
 
-                // todo(zi): need to consider load here.
-                let references = references.into_iter().collect::<Vec<_>>();
+                let references = references
+                    .into_iter()
+                    .take(10) // todo(zi): so we don't go crazy with 1000s of requests
+                    .collect::<Vec<_>>();
 
                 println!(
                     "code_editing:reference_symbols.len({:?})",
                     &references.len()
                 );
 
-                // incorrect number of anchored references passed to this.
                 let request = ReferenceFilterRequest::new(
                     cloned_user_query,
                     llm_properties.clone(),
@@ -959,7 +960,7 @@ pub async fn code_editing(
                     .await;
 
                 println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
-                println!("relevant_references.len({:?})", relevant_references.len());
+
                 println!(
                     "collect references async task total elapsed: {:?}",
                     start.elapsed()

@@ -1079,7 +1079,7 @@ impl MechaCodeSymbolThinking {
                                     original_request
                                         .symbols_edited_list()
                                         .map(|symbol_edited_list| symbol_edited_list.to_vec()),
-                                    true,
+                                    false,
                                     None,
                                     false, // should we disable the followups
                                 )],
@@ -1110,7 +1110,7 @@ impl MechaCodeSymbolThinking {
                                 original_request_ref
                                     .symbols_edited_list()
                                     .map(|symbol_edited_list| symbol_edited_list.to_vec()),
-                                true,
+                                false,
                                 None,
                                 false, // should we disable followups and correctness check
                             ))
@@ -1259,7 +1259,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     original_request.get_original_question().to_owned(),
                                     original_request.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
-                                    true,
+                                    false,
                                     None,
                                     false, // should we disable followups and correctness check
                                 )
@@ -1384,7 +1384,7 @@ Reason to edit:
                                         false,
                                         original_request_ref.get_original_question().to_owned(),
                                         original_request_ref.symbols_edited_list().map(|symbol_edited_list| symbol_edited_list.to_vec()),
-                                        true,
+                                        false,
                                         None,
                                         false, // should we disable followups and correctness check
                                     ))

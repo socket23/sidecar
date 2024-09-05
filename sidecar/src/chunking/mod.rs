@@ -1,4 +1,5 @@
 pub mod editor_parsing;
+mod file_content;
 mod go;
 mod helpers;
 mod javascript;

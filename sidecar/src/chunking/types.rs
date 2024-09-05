@@ -101,6 +101,8 @@ pub enum OutlineNodeType {
     DefinitionAssignment,
     // The identifier for the definition or the constant which we are interested in
     DefinitionIdentifier,
+    // Represents a file in the outline
+    File,
 }
 
 impl OutlineNodeType {
@@ -140,6 +142,7 @@ impl OutlineNodeType {
             "decorator" => Some(Self::Decorator),
             "definition.assignment" => Some(Self::DefinitionAssignment),
             "definition.identifier" => Some(Self::DefinitionIdentifier),
+            "file" => Some(Self::File),
             _ => None,
         }
     }

@@ -7701,6 +7701,8 @@ FILEPATH: {fs_file_path}
         let language_config = language_config.expect("is_none to hold");
         let mut older_outline_nodes: HashMap<SymbolIdentifier, Vec<OutlineNode>> =
             Default::default();
+        // this function needs to be using the editor instead of the tree-sitter
+        // call over here
         language_config
             .generate_outline_fresh(older_content.as_bytes(), fs_file_path)
             .into_iter()

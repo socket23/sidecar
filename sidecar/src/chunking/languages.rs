@@ -408,6 +408,9 @@ impl TSLanguageConfig {
                                 // if this is a definition identifer we are not interested in this for
                                 // now so keep skipping
                             }
+                            OutlineNodeType::File => {
+                                // we want to not do anything if its a file over here
+                            }
                         }
                         end_index = end_index + 1;
                     }
@@ -603,7 +606,7 @@ impl TSLanguageConfig {
                     }
                     start_index = end_index;
                     // the immediate next node after this is a definition identifier which is inside
-                    // the definition assigment
+                    // the definition assignment
                     // we are not tracking the definition assignment right now, we will figure
                     // out what to do about this in a bit
                 }
@@ -615,12 +618,16 @@ impl TSLanguageConfig {
                 OutlineNodeType::ClassTrait => {
                     start_index = start_index + 1;
                 }
+                OutlineNodeType::File => {
+                    // skipping this one, we are not tracking this
+                    start_index = start_index + 1;
+                }
             }
         }
 
         // Now at the very end we check for our map which contains functions which might be
-        // part of the class because they say so and we want to inlcude them as children
-        compressed_outline
+        // part of the class because they say so and we want to include them as children
+        let mut result = compressed_outline
             .into_iter()
             .map(|mut outline_node| {
                 if !outline_node.is_class() {
@@ -634,7 +641,34 @@ impl TSLanguageConfig {
                     outline_node
                 }
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        if result.is_empty() {
+            // If no nodes were found, create a single File node
+            result.push(OutlineNode::new(
+                OutlineNodeContent::new(
+                    fs_file_path.clone(),
+                    Range::new(
+                        Position::new(0, 0, 0),
+                        Position::new(lines.len(), 0, source_code.len()),
+                    ),
+                    OutlineNodeType::File,
+                    String::from_utf8_lossy(source_code).to_string(),
+                    fs_file_path,
+                    Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+                    Range::new(
+                        Position::new(0, 0, 0),
+                        Position::new(lines.len(), 0, source_code.len()),
+                    ),
+                    self.language_str.to_owned(),
+                    None,
+                ),
+                vec![],
+                self.language_str.to_owned(),
+            ));
+        }
+
+        result
     }
 
     /// This function generates the tree by parsing the source code and can be

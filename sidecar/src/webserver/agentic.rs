@@ -785,7 +785,7 @@ pub async fn code_editing(
         .collect::<HashMap<_, _>>();
 
         println!(
-            "(should be very fast) metadata_pregen::elapsed({:?})",
+            "metadata_pregen::elapsed({:?})",
             metadata_pregen.elapsed()
         );
 

@@ -912,16 +912,6 @@ pub async fn code_editing(
 
                 let llm_broker = app.llm_broker;
 
-                // let llm_properties = LLMProperties::new(
-                //     LLMType::GeminiProFlash,
-                //     LLMProvider::GoogleAIStudio,
-                //     llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(
-                //         GoogleAIStudioKey::new(
-                //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-                //         ),
-                //     ),
-                // );
-
                 let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
                 let llm_properties = LLMProperties::new(
                     LLMType::ClaudeSonnet,

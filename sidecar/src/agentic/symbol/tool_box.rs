@@ -7344,7 +7344,7 @@ FILEPATH: {fs_file_path}
         outline_nodes
             .into_iter()
             .filter_map(|node| {
-                if node.is_class() {
+                if node.is_class() || node.is_file() {
                     // it might either be the class itself
                     // or a function inside it so we can check for it
                     // properly here
@@ -8040,6 +8040,7 @@ FILEPATH: {fs_file_path}
         let fs_file_path = selection_variable.fs_file_path.to_owned();
         let language_config = self.editor_parsing.for_file_path(&fs_file_path);
         if language_config.is_none() {
+            println!("tool_box::language_config::is_none");
             return Ok(vec![]);
         }
         let language_config = language_config.expect("is_none to hold");

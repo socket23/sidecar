@@ -284,15 +284,21 @@ impl SnippetReRankInformation {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct MechaCodeSymbolThinking {
+    /// The name of the symbol being processed
     symbol_name: String,
+    /// A list of steps taken during the thinking process, protected by a mutex for concurrent access
     steps: Mutex<Vec<String>>,
+    /// Indicates whether this is a new symbol or an existing one
     is_new: bool,
+    /// The file path where the symbol is located
     file_path: String,
+    /// The code snippet associated with this symbol, wrapped in a mutex for thread-safe access
     snippet: Mutex<Option<Snippet>>,
-    // this contains all the implementations, if there were children before
-    // for example: functions inside the class, they all get flattened over here
+    /// Contains all implementations of the symbol, including child elements (e.g., functions inside a class)
+    /// These are flattened and stored in a mutex-protected vector for concurrent access
     implementations: Mutex<Vec<Snippet>>,
-    // The tool box which contains all the tools necessary
+    /// The tool box containing all necessary tools for symbol processing
+    /// Wrapped in an Arc for shared ownership and ignored in Debug output
     #[derivative(Debug = "ignore")]
     tool_box: Arc<ToolBox>,
 }

@@ -123,6 +123,7 @@ impl SymbolManager {
         user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
+        // The is ultimately received by the symbol agent
         let symbols_to_edit_request = self
             .tool_box
             .symbol_to_edit_request(

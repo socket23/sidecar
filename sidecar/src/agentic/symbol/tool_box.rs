@@ -4784,6 +4784,8 @@ instruction:
             })
             .collect::<Vec<_>>();
 
+        dbg!(&outline_node_child_addition);
+
         // outline nodes which have changed now
         // we do not consider child node changes over here, only the main symbol
         // which changed
@@ -4815,6 +4817,8 @@ instruction:
             })
             .collect::<Vec<_>>();
 
+        dbg!(&outline_nodes_which_changed_vec);
+
         // check the state here because we will start applying changes to the editor and
         // if we changed the node content for an outline node
         let child_added = outline_node_child_addition
@@ -4826,9 +4830,12 @@ instruction:
                     .any(|outline_node| outline_node.name() == parent_symbol_name);
                 parent_symbol_name_any
             });
+        dbg!(&child_added);
+
         let outline_node_changed = outline_nodes_which_changed_vec
             .iter()
             .any(|outline_node_changed| outline_node_changed.0.name() == parent_symbol_name);
+        dbg!(&outline_node_changed);
 
         // we want something related to the parent symbol to change
         Ok(child_added || outline_node_changed)
@@ -4840,7 +4847,7 @@ instruction:
     /// we will focus only on the symbols which are part of the parent symbol
     async fn apply_code_changes_code_addition(
         &self,
-        edited_code: &str,
+        edited_code: &str, // just the code that's edited, not the edited symbol?
         symbol_edited: &SymbolToEdit,
         parent_symbol_name: &str,
         message_properties: SymbolEventMessageProperties,
@@ -4997,6 +5004,9 @@ instruction:
                 parent_symbol_name,
                 fresh_outline_node.name()
             );
+
+            // didn't we already know the contents of the changed nodes? (diff lines + their surroundings)
+            // why is an edit needed here? What's informing the edit?
             let _ = self
                 .apply_edits_to_editor(
                     fs_file_path,
@@ -5232,6 +5242,11 @@ instruction:
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
 
             if should_apply_code_changes_for_addition {
+                // applies the proposed edits
+                println!(
+                    "should_apply_code_changes_for_addition::{}",
+                    &should_apply_code_changes_for_addition
+                );
                 let _ = self
                     .apply_code_changes_code_addition(
                         edited_code,
@@ -5244,7 +5259,7 @@ instruction:
 
             // TODO(codestory): just make this branch false so we always use
             // the previous flow
-            let symbol_to_edit = {
+            let symbol_to_edit_content = {
                 println!("tool_box::check_code_correctness::range_refersh_start::symbol_name::({})::symbol_to_edit::({})::original_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_edited.range());
                 let symbol_to_edit_range = self
                     .find_sub_symbol_to_edit_with_name(
@@ -5286,6 +5301,7 @@ instruction:
                     .await;
                 symbol_to_edit
             }?;
+            // applying edits completed
 
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), message_properties.clone())
@@ -5293,7 +5309,7 @@ instruction:
                 .contents();
 
             // After applying the changes we get the new range for the symbol
-            let edited_range = symbol_to_edit.range().clone();
+            let edited_range = symbol_to_edit_content.range().clone();
             // In case we have swe-bench-tooling enabled over here we should run
             // the tests first, since we get enough value out if to begin with
             // TODO(skcd): Use the test output for debugging over here
@@ -5380,6 +5396,10 @@ instruction:
                 .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.clone())
                 .await?;
 
+            dbg!(&lsp_diagnostics);
+
+            todo!();
+
             // We also give it the option to edit the code as required
             if lsp_diagnostics.get_diagnostics().is_empty() {
                 break;
@@ -5445,7 +5465,7 @@ instruction:
                     .code_correctness_with_edits(
                         fs_file_path,
                         &fs_file_content,
-                        symbol_to_edit.range(),
+                        symbol_to_edit_content.range(),
                         code_edit_extra_context.to_owned(),
                         selected_action.thinking(),
                         &instructions,
@@ -8182,9 +8202,9 @@ FILEPATH: {fs_file_path}
                         true,
                         user_query.to_owned(),
                         None,
-                        false,
+                        false, // grab definitions
                         user_provided_context.to_owned(),
-                        true,
+                        false, // disable followups
                     )],
                     symbol_identifier.clone(),
                     vec![],

@@ -1933,7 +1933,7 @@ Satisfy the requirement either by making edits or gathering the required informa
     ) -> Result<(), SymbolError> {
         // NOTE: we do not add an entry to the history here because the initial
         // request already adds the entry before sending over the edit
-        let _history = edit_request.history().to_vec();
+        let history = edit_request.history().to_vec();
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
@@ -2061,25 +2061,27 @@ Satisfy the requirement either by making edits or gathering the required informa
             // to keep happening
             if !sub_symbol_to_edit.should_disable_followups_and_correctness() {
                 // debugging loop after this
-                // disable code correctness check
-                // let _ = self
-                //     .tools
-                //     .check_code_correctness(
-                //         self.symbol_name(),
-                //         &sub_symbol_to_edit,
-                //         self.symbol_identifier.clone(),
-                //         original_code,
-                //         edited_code,
-                //         &context_for_editing.join("\n"),
-                //         self.llm_properties.llm().clone(),
-                //         self.llm_properties.provider().clone(),
-                //         self.llm_properties.api_key().clone(),
-                //         &self.tool_properties,
-                //         history.to_vec(),
-                //         self.hub_sender.clone(),
-                //         message_properties.clone(),
-                //     )
-                //     .await;
+                // re-enable code correctness check
+                let _ = self
+                    .tools
+                    .check_code_correctness(
+                        self.symbol_name(),
+                        &sub_symbol_to_edit,
+                        self.symbol_identifier.clone(),
+                        original_code,
+                        edited_code,
+                        &context_for_editing.join("\n"),
+                        self.llm_properties.llm().clone(),
+                        self.llm_properties.provider().clone(),
+                        self.llm_properties.api_key().clone(),
+                        &self.tool_properties,
+                        history.to_vec(),
+                        self.hub_sender.clone(),
+                        message_properties.clone(),
+                    )
+                    .await;
+
+                todo!();
 
                 // once we have successfully changed the implementation over here
                 // we have to start looking for followups over here

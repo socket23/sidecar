@@ -214,6 +214,30 @@ impl EditedCodeSymbol {
             edited_code,
         }
     }
+
+    pub fn to_string(&self, sub_symbol_to_edit: &SymbolToEdit, instructions: &str) -> String {
+        let symbol_name = sub_symbol_to_edit.symbol_name();
+        let fs_file_path = sub_symbol_to_edit.fs_file_path();
+        let original_code = &self.original_code;
+        let edited_code = &self.edited_code;
+        format!(r#"<sub_symbol_edited>
+<sub_symbol_name>
+{symbol_name}
+</sub_symbol_name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<instruction>
+{instructions}
+</instruction>
+<original_code>
+{original_code}
+<original_code>
+<edited_code>
+{edited_code}
+</edited_code>
+</sub_symbol_edited>"#)
+    }
 }
 
 /// The symbol is going to spin in the background and keep working on things
@@ -1930,7 +1954,7 @@ Satisfy the requirement either by making edits or gathering the required informa
         edit_request: SymbolToEditRequest,
         message_properties: SymbolEventMessageProperties,
         tool_properties: ToolProperties,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<SymbolEventResponse, SymbolError> {
         // NOTE: we do not add an entry to the history here because the initial
         // request already adds the entry before sending over the edit
         let _history = edit_request.history().to_vec();
@@ -1942,12 +1966,14 @@ Satisfy the requirement either by making edits or gathering the required informa
             self.symbol_name(),
             sub_symbols_to_edit.len()
         );
+        let mut changes_made = vec![];
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
         // - do a COT to figure out how to go about making the changes
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
         for mut sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
+            let instructions = sub_symbol_to_edit.instructions().to_vec().join("\n");
             println!(
                 "symbol::edit_implementation::sub_symbol_to_edit::({})::is_new({:?})",
                 sub_symbol_to_edit.symbol_name(),
@@ -1967,7 +1993,7 @@ Satisfy the requirement either by making edits or gathering the required informa
             // if this is a new sub-symbol we have to create we have to diverge the
             // implementations a bit or figure out how to edit with a new line added
             // to the end of the symbol
-            let edited_code =
+            let edited_code_response =
                 if sub_symbol_to_edit.is_new() {
                     let _ = message_properties.ui_sender().send(
                         UIEventWithID::range_selection_for_edit(
@@ -2024,8 +2050,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                         .await?
                     }
                 };
-            let original_code = &edited_code.original_code;
-            let edited_code = &edited_code.edited_code;
+            let original_code = &edited_code_response.original_code;
+            let edited_code = &edited_code_response.edited_code;
 
             // trim and compare instead of original, cause white spaces leak in at start and end
             if original_code.trim() == edited_code.trim() {
@@ -2107,12 +2133,22 @@ Satisfy the requirement either by making edits or gathering the required informa
             } else {
                 println!("symbol::edit_implementation::symbol_name({})::followups_and_correctness_check_disabled({})", self.symbol_name(), sub_symbol_to_edit.should_disable_followups_and_correctness());
             }
+            changes_made.push(edited_code_response.to_string(&sub_symbol_to_edit, &instructions));
         }
         println!(
             "symbol::edit_implementation::finish::({})",
             self.symbol_name()
         );
-        Ok(())
+        let symbol_name = self.symbol_name();
+        let changes = changes_made.join("\n");
+        let formatted_changes_made = format!(r#"<changes_made_to_symbol>
+<name>
+{symbol_name}
+</name>
+<changes>
+{changes}
+</changes>"#);
+        Ok(SymbolEventResponse::TaskDone(formatted_changes_made))
     }
 
     // this is the function which is polling the requests from the hub
@@ -2213,15 +2249,19 @@ Satisfy the requirement either by making edits or gathering the required informa
                             "symbol::types::symbol_event::edit::edit_implementations({})",
                             symbol.symbol_name()
                         );
-                        let _ = symbol
+                        let response = symbol
                             .edit_implementations(
                                 edit_request,
                                 message_properties.clone(),
                                 tool_properties.clone(),
                             )
                             .await;
+                        if let Ok(response) = response {
+                            let _ = response_sender.send(response);
+                        } else {
                         let _ = response_sender
-                            .send(SymbolEventResponse::TaskDone("edit finished".to_owned()));
+                            .send(SymbolEventResponse::TaskDone("edit failed".to_owned()));
+                        }
                         Ok(())
                     }
                     SymbolEvent::AskQuestion(_ask_question_request) => {

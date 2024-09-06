@@ -22,6 +22,7 @@ use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::languages::TSLanguageParsing;
+use crate::chunking::text_document::{Position, Range};
 use crate::user_context::types::UserContext;
 use crate::{
     agentic::tool::{broker::ToolBroker, output::ToolOutput},
@@ -29,8 +30,9 @@ use crate::{
 };
 
 use super::anchored::AnchoredSymbol;
+use super::events::edit::{SymbolToEdit, SymbolToEditRequest};
 use super::events::message_event::{SymbolEventMessage, SymbolEventMessageProperties};
-use super::identifier::LLMProperties;
+use super::identifier::{LLMProperties, SymbolIdentifier};
 use super::tool_box::ToolBox;
 use super::ui_event::UIEventWithID;
 use super::{
@@ -123,6 +125,7 @@ impl SymbolManager {
         user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
+        // testing out keeping a sractchpad
         let symbols_to_edit_request = self
             .tool_box
             .symbol_to_edit_request(
@@ -134,7 +137,7 @@ impl SymbolManager {
             .await?;
 
         // Now we can send over these requests to the symbol locker to manager
-        let _ = stream::iter(
+        let edits_done = stream::iter(
             symbols_to_edit_request
                 .into_iter()
                 .map(|data| (data, message_properties.clone())),
@@ -163,6 +166,46 @@ impl SymbolManager {
             .send(UIEventWithID::code_iteration_finished(
                 message_properties.request_id_str().to_owned(),
             ));
+//         // sending a request over to edit the scratchpad
+//         let after_edits_changes = edits_done.into_iter().filter_map(|response| response.ok()).map(|symbol_event_response| symbol_event_response.to_string()).collect::<Vec<_>>().join("\n");
+
+//         let scratch_pad = "/Users/skcd/scratch/sidecar/scratchpad.md".to_owned();
+
+//         let symbols_to_edit_request = SymbolToEditRequest::new(vec![SymbolToEdit::new(
+//                     scratch_pad.to_owned(),
+//                     Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
+//                     scratch_pad.to_owned(),
+//                     vec![format!(r#"Record your insights from working on the user query here, use this as a running notepad:
+// <user_query>
+// {user_query}
+// </user_query>
+// <changes_made>
+// {after_edits_changes}
+// </changes_made>"#).to_owned()],
+//                     false,
+//                     false,
+//                     true,
+//                     "Record your insights from working on the user query here, use this as a running notepad".to_owned(),
+//                     None,
+//                     false,
+//                     None,
+//                     true,
+//                 )], SymbolIdentifier::with_file_path(&scratch_pad, &scratch_pad), vec![]);
+//         let (sender, _) = tokio::sync::oneshot::channel();
+//         let symbol_event_request = SymbolEventRequest::new(
+//             symbols_to_edit_request.symbol_identifier().clone(),
+//             SymbolEvent::Edit(symbols_to_edit_request),
+//             ToolProperties::new(),
+//         );
+//         let event = SymbolEventMessage::message_with_properties(
+//             symbol_event_request,
+//             message_properties,
+//             sender,
+//         );
+//         let _ = self
+//             .symbol_locker
+//             .process_request(event)
+//             .await;
         Ok(())
     }
 

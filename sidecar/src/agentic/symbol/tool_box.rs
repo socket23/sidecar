@@ -7197,23 +7197,10 @@ FILEPATH: {fs_file_path}
         symbol_name: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<GoToImplementationResponse, SymbolError> {
-        // LSP requies the EXACT symbol location on where to click go-to-implementation
-        // since thats the case we can just open the file and then look for the
-        // first occurance of the symbol and grab the location
-        let file_content = self
-            .file_open(fs_file_path.to_owned(), message_properties.clone())
-            .await?;
-        let language = file_content.language().to_owned();
-        let _ = self
-            .symbol_broker
-            .force_add_document(fs_file_path.to_owned(), file_content.contents(), language)
-            .await;
+        let outline_nodes = self.get_outline_nodes_from_editor(fs_file_path, message_properties.clone()).await;
         // Now we need to find the outline node which corresponds to the symbol we are
         // interested in and use that as the position to ask for the implementations
-        let position_from_outline_node = self
-            .symbol_broker
-            .get_symbols_outline(fs_file_path)
-            .await
+        let position_from_outline_node = outline_nodes
             .map(|outline_nodes| {
                 outline_nodes
                     .into_iter()

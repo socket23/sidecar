@@ -8060,7 +8060,7 @@ FILEPATH: {fs_file_path}
             .filter(|outline_node| {
                 outline_node
                     .range()
-                    .intersects_with_another_range(&selection_range)
+                    .intersects_with_another_range(&selection_range) || outline_node.is_file()
             })
             .collect::<Vec<_>>();
 
@@ -8074,6 +8074,7 @@ FILEPATH: {fs_file_path}
                 );
                 if outline_node.is_function()
                     || outline_node.is_class_definition()
+                    || outline_node.is_file()
                     || (language_config.is_single_implementation_block_language())
                 {
                     // then its a single unit of work, so its a bit easier
@@ -8137,10 +8138,12 @@ FILEPATH: {fs_file_path}
         user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
+        println!("tool_box::symbol_to_edit_request::anchored_symbols::({:?})", anchored_symbols);
         let mut symbol_to_edit_request = vec![];
         for anchored_symbol in anchored_symbols.into_iter() {
             let symbol_identifier = anchored_symbol.identifier().to_owned();
             let child_symbols = anchored_symbol.sub_symbol_names().to_vec();
+            println!("tool_box::symbol_to_edit_request::anchored_symbos::child_symbols::({})", child_symbols.to_vec().join(","));
             let symbol_range = anchored_symbol.possible_range();
             // if no file path is present we should keep moving forward
             let fs_file_path = symbol_identifier.fs_file_path();
@@ -8148,16 +8151,15 @@ FILEPATH: {fs_file_path}
                 continue;
             }
             let fs_file_path = fs_file_path.expect("is_none to hold");
-            let file_content = self
-                .file_open(fs_file_path.to_owned(), message_properties.clone())
-                .await?;
             let language_config = self.editor_parsing.for_file_path(&fs_file_path);
             if language_config.is_none() {
                 continue;
             }
             let language_config = language_config.expect("is_none to hold");
-            let outline_nodes = language_config
-                .generate_outline_fresh(file_content.contents_ref().as_bytes(), &fs_file_path)
+            let outline_nodes = self
+                .get_outline_nodes_from_editor(&fs_file_path, message_properties.clone())
+                .await
+                .unwrap_or_default()
                 .into_iter()
                 .filter(|outline_node| outline_node.name() == symbol_identifier.symbol_name())
                 .collect::<Vec<_>>();
@@ -8212,6 +8214,7 @@ FILEPATH: {fs_file_path}
                         let possible_outline_node = outline_nodes.iter().find(|outline_node| {
                             outline_node.is_class_definition()
                                 || outline_node.is_function()
+                                || outline_node.is_file()
                                 // if we are in python or js land, then its a single implementation block language
                                 || language_config.is_single_implementation_block_language()
                         });
@@ -8264,6 +8267,7 @@ FILEPATH: {fs_file_path}
                     }
                 })
                 .collect::<Vec<_>>();
+            println!("tool_box::symbol_to_edit_request::symbols_len({})", symbols_to_edit.len());
             symbol_to_edit_request.push(SymbolToEditRequest::new(
                 symbols_to_edit,
                 symbol_identifier,

@@ -459,6 +459,10 @@ impl OutlineNode {
         matches!(self.content.r#type, OutlineNodeType::Class)
     }
 
+    pub fn is_file(&self) -> bool {
+        matches!(self.content.r#type, OutlineNodeType::File)
+    }
+
     pub fn is_function(&self) -> bool {
         matches!(self.content.r#type, OutlineNodeType::Function)
     }

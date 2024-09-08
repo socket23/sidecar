@@ -784,10 +784,7 @@ pub async fn code_editing(
         .filter_map(|s| s)
         .collect::<HashMap<_, _>>();
 
-        println!(
-            "metadata_pregen::elapsed({:?})",
-            metadata_pregen.elapsed()
-        );
+        println!("metadata_pregen::elapsed({:?})", metadata_pregen.elapsed());
 
         let editing_metadata = AnchoredEditingMetadata::new(
             message_properties.clone(),

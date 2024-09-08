@@ -1443,7 +1443,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     .map(|symbol_edited_list| symbol_edited_list.to_vec()),
                 false,
                 None,
-                false, // should we disable followups and correctness check
+                true, // should we disable followups and correctness check
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(

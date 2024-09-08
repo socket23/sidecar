@@ -1924,21 +1924,6 @@ We also believe this symbol needs to be probed because of:
         symbol_to_edit: &SymbolToEdit,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<OutlineNodeContent, SymbolError> {
-        // let file_open_response = self
-        //     .file_open(symbol_to_edit.fs_file_path().to_owned(), message_properties)
-        //     .await?;
-        // let language_config = self
-        //     .editor_parsing
-        //     .for_file_path(symbol_to_edit.fs_file_path())
-        //     .ok_or(SymbolError::ExpectedFileToExist)?;
-        // let outline_nodes = language_config
-        //     .generate_outline_fresh(
-        //         file_open_response.contents_ref().as_bytes(),
-        //         symbol_to_edit.fs_file_path(),
-        //     )
-        //     .into_iter()
-        //     .filter(|outline_node| outline_node.name() == parent_symbol_name)
-        //     .collect::<Vec<_>>();
         let outline_nodes = self
             .get_outline_nodes_from_editor(
                 symbol_to_edit.fs_file_path(),
@@ -7197,7 +7182,9 @@ FILEPATH: {fs_file_path}
         symbol_name: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<GoToImplementationResponse, SymbolError> {
-        let outline_nodes = self.get_outline_nodes_from_editor(fs_file_path, message_properties.clone()).await;
+        let outline_nodes = self
+            .get_outline_nodes_from_editor(fs_file_path, message_properties.clone())
+            .await;
         // Now we need to find the outline node which corresponds to the symbol we are
         // interested in and use that as the position to ask for the implementations
         let position_from_outline_node = outline_nodes
@@ -8047,7 +8034,8 @@ FILEPATH: {fs_file_path}
             .filter(|outline_node| {
                 outline_node
                     .range()
-                    .intersects_with_another_range(&selection_range) || outline_node.is_file()
+                    .intersects_with_another_range(&selection_range)
+                    || outline_node.is_file()
             })
             .collect::<Vec<_>>();
 
@@ -8125,12 +8113,18 @@ FILEPATH: {fs_file_path}
         user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
-        println!("tool_box::symbol_to_edit_request::anchored_symbols::({:?})", anchored_symbols);
+        println!(
+            "tool_box::symbol_to_edit_request::anchored_symbols::({:?})",
+            anchored_symbols
+        );
         let mut symbol_to_edit_request = vec![];
         for anchored_symbol in anchored_symbols.into_iter() {
             let symbol_identifier = anchored_symbol.identifier().to_owned();
             let child_symbols = anchored_symbol.sub_symbol_names().to_vec();
-            println!("tool_box::symbol_to_edit_request::anchored_symbos::child_symbols::({})", child_symbols.to_vec().join(","));
+            println!(
+                "tool_box::symbol_to_edit_request::anchored_symbos::child_symbols::({})",
+                child_symbols.to_vec().join(",")
+            );
             let symbol_range = anchored_symbol.possible_range();
             // if no file path is present we should keep moving forward
             let fs_file_path = symbol_identifier.fs_file_path();
@@ -8254,7 +8248,10 @@ FILEPATH: {fs_file_path}
                     }
                 })
                 .collect::<Vec<_>>();
-            println!("tool_box::symbol_to_edit_request::symbols_len({})", symbols_to_edit.len());
+            println!(
+                "tool_box::symbol_to_edit_request::symbols_len({})",
+                symbols_to_edit.len()
+            );
             symbol_to_edit_request.push(SymbolToEditRequest::new(
                 symbols_to_edit,
                 symbol_identifier,

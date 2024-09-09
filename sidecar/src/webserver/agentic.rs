@@ -420,6 +420,7 @@ pub async fn swe_bench(
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeSculptingWarmup {
     file_paths: Vec<String>,
+    grab_import_nodes: bool,
     editor_url: String,
 }
 
@@ -435,6 +436,7 @@ pub async fn code_sculpting_warmup(
     Extension(app): Extension<Application>,
     Json(CodeSculptingWarmup {
         file_paths,
+        grab_import_nodes,
         editor_url,
     }): Json<CodeSculptingWarmup>,
 ) -> Result<impl IntoResponse> {
@@ -452,7 +454,7 @@ pub async fn code_sculpting_warmup(
     );
     let _ = app
         .tool_box
-        .warmup_context(file_paths, message_properties)
+        .warmup_context(file_paths, grab_import_nodes, message_properties)
         .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }
@@ -703,6 +705,7 @@ pub struct AgenticCodeEditing {
     codebase_search: bool,
     // If we are editing based on an anchor position
     anchor_editing: bool,
+    enable_import_nodes: bool,
 }
 
 pub async fn code_editing(
@@ -719,6 +722,7 @@ pub async fn code_editing(
         // how to handle this better on the editor side, right now our proxy
         // is having a selection item in the user_context
         anchor_editing,
+        enable_import_nodes,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start::request_id({})", &request_id);
@@ -764,7 +768,7 @@ pub async fn code_editing(
 
         let user_provided_context = app
             .tool_box
-            .file_paths_to_user_context(user_context.file_paths(), message_properties.clone())
+            .file_paths_to_user_context(user_context.file_paths(), enable_import_nodes, message_properties.clone())
             .await
             .ok();
         let possibly_changed_files = symbols_to_anchor

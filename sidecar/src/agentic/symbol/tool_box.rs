@@ -8416,6 +8416,7 @@ FILEPATH: {fs_file_path}
     pub async fn file_paths_to_user_context(
         &self,
         file_paths: Vec<String>,
+        grab_import_nodes: bool,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<String, SymbolError> {
         let mut deduplicated_file_paths = vec![];
@@ -8427,6 +8428,26 @@ FILEPATH: {fs_file_path}
             already_seen_files.insert(file_path.to_owned());
             deduplicated_file_paths.push(file_path);
         });
+
+        if !grab_import_nodes {
+            let mut user_context_file_contents = vec![];
+            for fs_file_path in deduplicated_file_paths.into_iter() {
+                let file_content = self
+                    .file_open(fs_file_path.to_owned(), message_properties.clone())
+                    .await;
+                if let Ok(file_content) = file_content {
+                    let file_content_str = file_content.contents_ref();
+                    let language_id = file_content.language();
+                    user_context_file_contents.push(format!(
+                        r#"# FILEPATH: {fs_file_path}
+    ```{language_id}
+    {file_content_str}
+    ```"#
+                    ));
+                }
+            }
+            return Ok(user_context_file_contents.join("\n"));
+        }
 
         // now that we have the file paths, we should get the imports properly over here
         // we might have to deduplicate and tone it down a bit based on how big the imports
@@ -8477,7 +8498,10 @@ FILEPATH: {fs_file_path}
             .into_iter()
             .filter(|outline_node| {
                 let fs_file_path = outline_node.fs_file_path();
-                if fs_file_path.contains("node_modules") || fs_file_path.contains(".rustup") {
+                if fs_file_path.contains("node_modules")
+                    || fs_file_path.contains(".rustup")
+                    || fs_file_path.contains(".cargo")
+                {
                     false
                 } else {
                     true
@@ -8509,10 +8533,11 @@ FILEPATH: {fs_file_path}
     pub async fn warmup_context(
         &self,
         file_paths: Vec<String>,
+        grab_import_nodes: bool,
         message_properties: SymbolEventMessageProperties,
     ) {
         let file_paths_to_user_context = self
-            .file_paths_to_user_context(file_paths, message_properties.clone())
+            .file_paths_to_user_context(file_paths, grab_import_nodes, message_properties.clone())
             .await
             .ok();
         let sender = message_properties.ui_sender();

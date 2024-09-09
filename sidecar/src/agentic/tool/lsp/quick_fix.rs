@@ -77,10 +77,12 @@ impl Tool for LSPQuickFixClient {
             .send()
             .await
             .map_err(|_e| ToolError::ErrorCommunicatingWithEditor)?;
-        let quick_fix_list: GetQuickFixResponse = response
-            .json()
-            .await
-            .map_err(|_e| ToolError::SerdeConversionFailed)?;
+
+        let quick_fix_list: GetQuickFixResponse = response.json().await.map_err(|e| {
+            eprintln!("Error response.json(): {:?}", e);
+            ToolError::SerdeConversionFailed
+        })?;
+
         Ok(ToolOutput::quick_fix_list(quick_fix_list))
     }
 }

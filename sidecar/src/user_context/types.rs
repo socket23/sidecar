@@ -206,6 +206,10 @@ impl UserContext {
         self.variables.is_empty() && self.terminal_selection.is_none()
     }
 
+    pub fn file_paths(&self) -> Vec<String> {
+        self.file_content_map.iter().map(|file_content| file_content.file_path.to_owned()).collect::<Vec<_>>()
+    }
+
     /// Grabs the user provided context as a string which can be passed to LLMs for code editing
     ///
     /// This also de-duplicates the context as much as possible making this efficient

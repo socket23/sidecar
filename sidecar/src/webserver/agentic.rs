@@ -444,9 +444,15 @@ pub async fn code_sculpting_warmup(
         file_paths.to_vec().join(",")
     );
     let warmup_request_id = "warmup_request_id".to_owned();
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(warmup_request_id.to_owned(), warmup_request_id.to_owned()),
+        sender,
+        editor_url,
+    );
     let _ = app
         .tool_box
-        .warmup_context(file_paths, warmup_request_id, editor_url)
+        .warmup_context(file_paths, message_properties)
         .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }
@@ -756,7 +762,11 @@ pub async fn code_editing(
         );
         let metadata_pregen = Instant::now();
 
-        let user_provided_context = user_context.to_context_string().await.ok();
+        let user_provided_context = app
+            .tool_box
+            .file_paths_to_user_context(user_context.file_paths(), message_properties.clone())
+            .await
+            .ok();
         let possibly_changed_files = symbols_to_anchor
             .iter()
             .filter_map(|anchored_symbol| anchored_symbol.fs_file_path())

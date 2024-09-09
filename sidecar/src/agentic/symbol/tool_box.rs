@@ -8261,6 +8261,184 @@ FILEPATH: {fs_file_path}
         Ok(symbol_to_edit_request)
     }
 
+    /// Grabs all the files which are imported by the current file we are interested
+    /// in
+    ///
+    /// Use this for getting a sense of code graph and where we are loacted in the code
+    async fn get_imported_files_outline_nodes(
+        &self,
+        fs_file_path: &str,
+        message_properties: SymbolEventMessageProperties,
+        // returns the Vec<files_on_the_local_graph>, Vec<outline_nodes_symbol_filter>)
+        // this allows us to get the local graph of the files which are related
+        // to the current file and the outline nodes which we can include
+    ) -> Result<Vec<OutlineNode>, SymbolError> {
+        let mut clickable_import_range = vec![];
+        // the name of the outline nodes which we can include when we are looking
+        // at the imports, this prevents extra context or nodes from slipping in
+        // and only includes the local code graph
+        let mut outline_node_name_filter = vec![];
+        self.find_import_nodes(fs_file_path, message_properties.clone())
+            .await?
+            .into_iter()
+            .for_each(|(import_node_name, range)| {
+                clickable_import_range.push(range);
+                outline_node_name_filter.push(import_node_name)
+            });
+        // Now we execute a go-to-definition request on all the imports
+        let definition_files = stream::iter(
+            clickable_import_range
+                .to_vec()
+                .into_iter()
+                .map(|data| (data, message_properties.clone())),
+        )
+        .map(|(range, message_properties)| async move {
+            let go_to_definition = self
+                .go_to_definition(fs_file_path, range.end_position(), message_properties)
+                .await;
+            match go_to_definition {
+                Ok(go_to_definition) => go_to_definition
+                    .definitions()
+                    .into_iter()
+                    .map(|definition| definition.file_path().to_owned())
+                    .collect::<Vec<_>>(),
+                Err(e) => {
+                    println!("get_imported_files::error({:?})", e);
+                    vec![]
+                }
+            }
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await;
+        let implementation_files = stream::iter(
+            clickable_import_range
+                .into_iter()
+                .map(|data| (data, message_properties.clone())),
+        )
+        .map(|(range, message_properties)| async move {
+            let go_to_implementations = self
+                .go_to_implementations_exact(
+                    fs_file_path,
+                    &range.end_position(),
+                    message_properties,
+                )
+                .await;
+            match go_to_implementations {
+                Ok(go_to_implementations) => go_to_implementations
+                    .get_implementation_locations_vec()
+                    .into_iter()
+                    .map(|implementation| implementation.fs_file_path().to_owned())
+                    .collect::<Vec<_>>(),
+                Err(e) => {
+                    println!("get_imported_files::go_to_implementation::error({:?})", e);
+                    vec![]
+                }
+            }
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await;
+
+        let interested_files = definition_files.into_iter().flatten().chain(implementation_files.into_iter().flatten()).collect::<Vec<_>>();
+
+        let outline_nodes = stream::iter(interested_files.into_iter().map(|fs_file_path| (fs_file_path, message_properties.clone()))).map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes_for_file = self.get_outline_nodes_using_editor(&fs_file_path, message_properties).await;
+            match outline_nodes_for_file {
+                Ok(outline_nodes) => {
+                    Some(outline_nodes.to_outline_nodes(fs_file_path))
+                }
+                Err(e) => {
+                    eprintln!("{:?}", e);
+                    None
+                }
+            }
+        }).buffer_unordered(4).collect::<Vec<_>>().await.into_iter().filter_map(|data| data).flatten().collect::<Vec<_>>();
+
+        // now we need to grab the outline nodes which pass the filter we are interested in
+        let filtered_outline_nodes = outline_nodes.into_iter().filter(|outline_node| outline_node_name_filter.contains(&(outline_node.name().to_owned()))).collect::<Vec<_>>();
+        // TODO(skcd): We should exclude files which are internal libraries in specific languages like rust and typescript, golang etc
+        Ok(filtered_outline_nodes)
+    }
+
+
+    /// We try to get the file contents which are present here along with the local
+    /// import graph which is contained by these files
+    /// 
+    /// We have to be smart about how we represent the data so we need to de-duplicate
+    /// the nodes which we are interested in and get them to work properly
+    pub async fn file_paths_to_user_context(&self, file_paths: Vec<String>, message_properties: SymbolEventMessageProperties) -> Result<String, SymbolError> {
+        let mut deduplicated_file_paths = vec![];
+        let mut already_seen_files :HashSet<String> = Default::default();
+        file_paths.into_iter().for_each(|file_path| {
+            if already_seen_files.contains(&file_path) {
+                return;
+            }
+            already_seen_files.insert(file_path.to_owned());
+            deduplicated_file_paths.push(file_path);
+        });
+
+        // now that we have the file paths, we should get the imports properly over here
+        // we might have to deduplicate and tone it down a bit based on how big the imports
+        // are getting
+        let mut outline_nodes = vec![];
+        for fs_file_path in deduplicated_file_paths.iter() {
+            let imported_outline_nodes = self.get_imported_files_outline_nodes(fs_file_path, message_properties.clone()).await?;
+            outline_nodes.extend(imported_outline_nodes);
+        }
+
+        // now that we have all the outline nodes we want to make sure that this is passed around properly
+        // we have to sort them by path and also make sure that they are de-duplicated since that can lead to errors otherwise
+        let mut deduplicated_outline_nodes: HashSet<String> = Default::default();
+        let mut filtered_outline_nodes = vec![];
+        for outline_node in outline_nodes.into_iter() {
+            let unique_identifier = outline_node.unique_identifier();
+            if deduplicated_outline_nodes.contains(&unique_identifier) {
+                continue;
+            }
+            deduplicated_outline_nodes.insert(unique_identifier);
+            filtered_outline_nodes.push(outline_node);
+        }
+
+        // now we filter out the outline nodes which we know are part of the core language features, these just add bloat
+        // to the code
+        filtered_outline_nodes.sort_by_key(|outline_node| outline_node.unique_identifier());
+        let mut user_context_file_contents = vec![];
+        for fs_file_path in deduplicated_file_paths.into_iter() {
+            let file_content = self.file_open(fs_file_path.to_owned(), message_properties.clone()).await;
+            if let Ok(file_content) = file_content {
+                let file_content_str = file_content.contents_ref();
+                let language_id = file_content.language();
+                user_context_file_contents.push(format!(r#"# FILEPATH: {fs_file_path}
+```{language_id}
+{file_content_str}
+```"#));
+            }
+        }
+
+        // now we want to get the outline nodes processed over here
+        let outline_node_strings = filtered_outline_nodes.into_iter().filter(|outline_node| {
+            let fs_file_path = outline_node.fs_file_path();
+            if fs_file_path.contains("node_modules") || fs_file_path.contains(".rustup") {
+                false
+            } else {
+                true
+            }
+        }).filter_map(|outline_node| {
+            outline_node.get_outline_node_compressed()
+        }).collect::<Vec<_>>();
+
+        let user_context_file_contents = user_context_file_contents.join("\n");
+        let code_outlines = outline_node_strings.join("\n");
+
+        Ok(format!("<files_provided>
+{user_context_file_contents}
+</files_imported>
+<code_outline>
+{code_outlines}
+</code_outline>"))
+    }
+
     /// We try to warmup the user context over here with the context the user has
     /// added for context, this allows for faster and more accurate edits based
     /// on the model's in-context learning
@@ -8271,61 +8449,17 @@ FILEPATH: {fs_file_path}
     pub async fn warmup_context(
         &self,
         file_paths: Vec<String>,
-        request_id: String,
-        editor_url: String,
+        message_properties: SymbolEventMessageProperties,
     ) {
-        let mut file_contents = vec![];
-        for file_path in file_paths.into_iter() {
-            let contents = tokio::fs::read(&file_path).await;
-            if contents.is_err() {
-                continue;
-            } else {
-                let content = String::from_utf8(contents.expect("is_err to hold"));
-                if let Ok(content) = content {
-                    file_contents.push(format!(
-                        r#"FILEPATH: {file_path}
-```
-{content}
-```"#
-                    ));
-                }
-            }
-        }
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let file_paths_to_user_context = self.file_paths_to_user_context(file_paths, message_properties.clone()).await.ok();
+        let sender = message_properties.ui_sender();
+        let request_id = message_properties.request_id_str();
+        let editor_url = message_properties.editor_url();
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,
             LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
         );
-        let code_edit_request = CodeEdit::new(
-            None,
-            None,
-            "".to_owned(),
-            "".to_owned(),
-            "".to_owned(),
-            "".to_owned(),
-            "".to_owned(),
-            llm_properties.llm().clone(),
-            llm_properties.api_key().clone(),
-            llm_properties.provider().clone(),
-            false,
-            None,
-            None,
-            request_id.to_owned(),
-            Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
-            false,
-            None,
-            true,
-            SymbolIdentifier::with_file_path("", ""),
-            sender.clone(),
-            true,
-            Some(file_contents.join("\n")),
-        );
-        let tool_input = ToolInput::CodeEditing(code_edit_request);
-        let cloned_tools = self.tools.clone();
-        let _join_handle = tokio::spawn(async move {
-            let _ = cloned_tools.invoke(tool_input).await;
-        });
 
         let search_and_replace_request = SearchAndReplaceEditingRequest::new(
             "".to_owned(),
@@ -8340,7 +8474,7 @@ FILEPATH: {fs_file_path}
             SymbolIdentifier::with_file_path("", ""),
             request_id.to_owned(),
             sender,
-            Some(file_contents.join("\n")),
+            file_paths_to_user_context,
             editor_url,
             true,
         );

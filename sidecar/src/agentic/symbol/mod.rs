@@ -10,6 +10,7 @@ pub mod helpers;
 pub mod identifier;
 pub mod locker;
 pub mod manager;
+pub mod scratch_pad;
 pub mod tool_box;
 pub mod tool_properties;
 pub mod toolbox;

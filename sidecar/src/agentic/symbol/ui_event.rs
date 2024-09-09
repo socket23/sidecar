@@ -347,6 +347,7 @@ impl SymbolEventGoToDefinitionRequest {
 pub struct RangeSelectionForEditRequest {
     range: Range,
     fs_file_path: String,
+    // user_id: LSPQuickFixInvocationRequest,
 }
 
 impl RangeSelectionForEditRequest {

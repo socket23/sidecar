@@ -3,7 +3,7 @@
 
 use super::languages::TSLanguageConfig;
 
-pub fn file_content_language_config() -> TSLanguageConfig {
+pub fn _file_content_language_config() -> TSLanguageConfig {
     TSLanguageConfig {
         language_ids: &["*"],
         file_extensions: &["*"],

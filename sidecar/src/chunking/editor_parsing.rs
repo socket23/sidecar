@@ -5,7 +5,6 @@ use regex::Regex;
 use crate::repo::types::RepoRef;
 
 use super::{
-    file_content::file_content_language_config,
     go::go_language_config,
     javascript::javascript_language_config,
     languages::TSLanguageConfig,

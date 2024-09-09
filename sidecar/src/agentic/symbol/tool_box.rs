@@ -5430,7 +5430,7 @@ instruction:
                 &selected_action_index, &tool_use_thinking
             );
 
-            // what is this for?
+            // IDE doesn't react to this atm.
             let _ = message_properties
                 .ui_sender()
                 .send(UIEventWithID::code_correctness_action(
@@ -5447,6 +5447,23 @@ instruction:
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
             if selected_action_index == quick_fix_actions.len() as i64 {
+                println!(
+                    "tool_box::check_code_correctness::code_correctness_with_edits (edit self)"
+                );
+
+                // we need a symbol to edit request here, with symbol that contains the thinking required to execute code_correctness option
+
+                let symbol_to_edit_with_tool_use_thinking =
+                    symbol_edited.clone_with_instructions(&vec![tool_use_thinking.to_owned()]);
+
+                let symbol_to_edit_request = SymbolToEditRequest::new(
+                    vec![symbol_to_edit_with_tool_use_thinking],
+                    symbol_identifier.clone(),
+                    vec![],
+                );
+
+                // todo(zi): we need symbol locker to process this request, but how?
+
                 // edit code in selection
                 let fixed_code = self
                     .code_correctness_with_edits(
@@ -5520,6 +5537,11 @@ instruction:
                 println!("tool_box::check_code_correctness::no_changes_required");
                 break;
             } else {
+                println!(
+                    "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
+                    &selected_action_index, &tool_use_thinking
+                );
+
                 // invoke the code action over here with the editor
                 let response = self
                     .invoke_quick_action(
@@ -5529,10 +5551,14 @@ instruction:
                     )
                     .await?;
                 if response.is_success() {
+                    println!("tool_box::check_code_correctness::invoke_quick_action::is_success()");
                     // great we have a W
                 } else {
                     // boo something bad happened, we should probably log and do something about this here
                     // for now we assume its all Ws
+                    println!(
+                        "tool_box::check_code_correctness::invoke_quick_action::fail::DO_SOMETHING_ABOUT_THIS"
+                    );
                 }
             }
         }

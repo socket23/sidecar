@@ -1806,6 +1806,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.symbol_name(),
                 sub_symbol_to_edit.should_gather_definitions_for_editing(),
             );
+
+            // todo(zi): how long does this take?
             let context_for_editing = self
                 .gather_definitions_for_editing(&sub_symbol_to_edit, message_properties.clone())
                 .await?;
@@ -1927,8 +1929,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 {
                     eprintln!("Error checking code correctness: {}", e);
                 }
-
-                // todo!(); // todo(zi): remove this
 
                 // once we have successfully changed the implementation over here
                 // we have to start looking for followups over here

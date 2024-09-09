@@ -396,6 +396,12 @@ impl OutlineNode {
         }
     }
 
+    /// Gives back a unique string representation of the outline node which can be used
+    /// to de-duplicate outline nodes
+    pub fn unique_identifier(&self) -> String {
+        format!("{}-{}-{}-{}", self.content.name(), self.content.fs_file_path(), self.identifier_range().start_line(), self.identifier_range().end_line())
+    }
+
     pub fn identifier_range(&self) -> &Range {
         self.content.identifier_range()
     }
@@ -457,6 +463,10 @@ impl OutlineNode {
 
     pub fn is_class(&self) -> bool {
         matches!(self.content.r#type, OutlineNodeType::Class)
+    }
+
+    pub fn is_file(&self) -> bool {
+        matches!(self.content.r#type, OutlineNodeType::File)
     }
 
     pub fn is_function(&self) -> bool {

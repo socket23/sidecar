@@ -5,6 +5,7 @@ use regex::Regex;
 use crate::repo::types::RepoRef;
 
 use super::{
+    file_content::file_content_language_config,
     go::go_language_config,
     javascript::javascript_language_config,
     languages::TSLanguageConfig,
@@ -32,6 +33,7 @@ impl Default for EditorParsing {
                 typescript_language_config(),
                 python_language_config(),
                 go_language_config(),
+                file_content_language_config(),
             ],
         }
     }
@@ -52,11 +54,26 @@ impl EditorParsing {
             .map(|extension| extension.to_owned())
             .flatten();
         match file_extension {
-            Some(extension) => self
-                .configs
-                .iter()
-                .find(|config| config.file_extensions.contains(&extension)),
-            None => None,
+            Some(extension) => {
+                let language_config = self
+                    .configs
+                    .iter()
+                    .find(|config| config.file_extensions.contains(&extension));
+                if language_config.is_none() {
+                    // return the file config
+                    self.configs
+                        .iter()
+                        .find(|config| config.file_extensions.contains(&"*"))
+                } else {
+                    language_config
+                }
+            }
+            None => {
+                // return the file config
+                self.configs
+                    .iter()
+                    .find(|config| config.file_extensions.contains(&"*"))
+            }
         }
     }
 

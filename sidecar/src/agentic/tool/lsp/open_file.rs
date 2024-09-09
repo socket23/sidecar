@@ -101,6 +101,15 @@ impl OpenFileResponse {
             }
         }
     }
+
+    /// Length of the file contents
+    pub fn file_content_len(&self) -> usize {
+        self.file_contents
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .len()
+    }
 }
 
 pub struct LSPOpenFile {

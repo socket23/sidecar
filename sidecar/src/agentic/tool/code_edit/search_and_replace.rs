@@ -335,16 +335,16 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#
                 );
         }
         user_message = user_message + &extra_data + "\n";
-        // TODO(skcd): Disable the code above and below, while we figure out
-        // what snippets we want to show the llm as inspiration
-        // if let Some(above) = above {
-        //     user_message = user_message + &above + "\n";
-        // }
-        // if let Some(below) = below {
-        //     user_message = user_message + &below + "\n";
-        // }
         user_message = user_message + &in_range + "\n";
-        let instructions = context.instructions;
+        let instructions = if in_range.lines().into_iter().collect::<Vec<_>>().len() >= 1000 {
+            let context_instructions = context.instructions;
+            format!(
+                r#"{context_instructions}
+Think carefully since this is a long file where you have to make the changes"#
+            )
+        } else {
+            context.instructions
+        };
         let fs_file_path = context.fs_file_path;
         user_message = user_message
             + &format!(

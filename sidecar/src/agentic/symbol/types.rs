@@ -214,6 +214,32 @@ impl EditedCodeSymbol {
             edited_code,
         }
     }
+
+    pub fn to_string(&self, sub_symbol_to_edit: &SymbolToEdit, instructions: &str) -> String {
+        let symbol_name = sub_symbol_to_edit.symbol_name();
+        let fs_file_path = sub_symbol_to_edit.fs_file_path();
+        let original_code = &self.original_code;
+        let edited_code = &self.edited_code;
+        format!(
+            r#"<sub_symbol_edited>
+<sub_symbol_name>
+{symbol_name}
+</sub_symbol_name>
+<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<instruction>
+{instructions}
+</instruction>
+<original_code>
+{original_code}
+<original_code>
+<edited_code>
+{edited_code}
+</edited_code>
+</sub_symbol_edited>"#
+        )
+    }
 }
 
 /// The symbol is going to spin in the background and keep working on things
@@ -1353,10 +1379,10 @@ Satisfy the requirement either by making edits or gathering the required informa
         Ok(())
     }
 
-    /// Initial request follows the following flow:
-    /// - COT + follow-along questions for any other symbols which might even lead to edits
-    /// - Reranking the snippets for the symbol
-    /// - Edit the current symbol
+    /// Take the initial request and generates the edit request which we should
+    /// act on if required
+    ///
+    /// In the future we will be figuring out how to answer a question etc
     async fn generate_initial_request(
         &self,
         request_data: InitialRequestData,
@@ -1364,14 +1390,9 @@ Satisfy the requirement either by making edits or gathering the required informa
         // TODO(codestory): This is a bit wrong, we will figure this out in due time
     ) -> Result<Option<SymbolEventRequest>, SymbolError> {
         println!(
-            "symbol::generate_follow_along_requests::symbol_name({})",
+            "symbol::generate_initial_request::symbol_name({})",
             self.symbol_name()
         );
-        // disable follow_along_requests so we can get to the code editing faster
-        // let original_request = request_data.get_original_question();
-        // let _ = self
-        //     .follow_along_requests(&request_id, original_request)
-        //     .await;
         if self.mecha_code_symbol.is_snippet_present().await {
             let request = if request_data.full_symbol_request() {
                 self.mecha_code_symbol
@@ -1397,30 +1418,20 @@ Satisfy the requirement either by making edits or gathering the required informa
             };
             Ok(request)
         } else {
-            let code_location_for_addition = self
+            let file_content = self
                 .tools
-                .code_location_for_addition(
-                    self.fs_file_path(),
-                    &self.symbol_identifier,
-                    request_data.get_original_question(),
-                    message_properties.clone(),
-                )
+                .file_open(self.fs_file_path().to_owned(), message_properties.clone())
                 .await?;
-            let code_position = self
-                .tools
-                .add_empty_line_at_line(
-                    self.fs_file_path(),
-                    code_location_for_addition.0.line(),
-                    code_location_for_addition.1,
-                    message_properties.clone(),
-                )
-                .await?;
+            let file_content_range = Range::new(
+                Position::new(0, 0, 0),
+                Position::new(file_content.file_content_len(), 0, 0),
+            );
 
             // if the last line is not empty, then we want to create an empty line
             // and then start inserting the code over there
             let sub_symbol_to_edit = SymbolToEdit::new(
                 self.symbol_name().to_owned(),
-                Range::new(code_position.clone(), code_position),
+                file_content_range,
                 self.fs_file_path().to_owned(),
                 vec![request_data.get_plan()],
                 false,
@@ -1432,7 +1443,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     .map(|symbol_edited_list| symbol_edited_list.to_vec()),
                 false,
                 None,
-                false, // should we disable followups and correctness check
+                true, // should we disable followups and correctness check
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(
@@ -1441,20 +1452,16 @@ Satisfy the requirement either by making edits or gathering the required informa
                 request_data.get_original_question().to_owned(),
                 None,
             ));
-            // we need to do context gathering over here as well
-            // let context = self
-            //     .grab_context_for_editing_faster(&sub_symbol_to_edit, message_properties.clone())
-            //     .await?;
-            let context = vec![];
-            let _ = self
-                .insert_code_full(
-                    &sub_symbol_to_edit,
-                    context,
+            let symbol_event_request = SymbolEventRequest::new(
+                self.symbol_identifier.clone(),
+                SymbolEvent::Edit(SymbolToEditRequest::new(
+                    vec![sub_symbol_to_edit],
+                    self.symbol_identifier.clone(),
                     history,
-                    message_properties.clone(),
-                )
-                .await;
-            Ok(None)
+                )),
+                self.tool_properties.clone(),
+            );
+            Ok(Some(symbol_event_request))
         }
     }
 
@@ -1569,81 +1576,6 @@ Satisfy the requirement either by making edits or gathering the required informa
         Ok(outlines)
     }
 
-    /// Helps find the sub-symbol location or creates a new location for it
-    /// if we do not have any sub-symbol matching this one
-    async fn find_sub_symbol_location(
-        &self,
-        mut sub_symbol: SymbolToEdit,
-        message_properties: SymbolEventMessageProperties,
-    ) -> Result<SymbolToEdit, SymbolError> {
-        self.refresh_state(message_properties).await;
-        // Grabs the implementation of the symbols over here
-        let implementation_blocks = self.mecha_code_symbol.get_implementations().await;
-        // in languages like typescript and python we have a single implementation block
-        // of if its a new sub-symbol then we return it accordingly as the line just after
-        // the last symbol
-        // in case of rust, we have scoped implementation like: trait implementations, struct
-        // and then impl blocks, for now we will find the first impl block which is not a trait
-        // implementation and place the sub-symbol over there
-        // we do need this data about the code symbol from the chunker
-        // - we have to find the blocks of code which are implementations
-        sub_symbol = self
-            .tools
-            .find_implementation_block_for_sub_symbol(sub_symbol, implementation_blocks.as_slice())
-            .await?;
-        Ok(sub_symbol)
-    }
-
-    async fn add_subsymbol(
-        &self,
-        sub_symbol: &SymbolToEdit,
-        context: Vec<String>,
-        message_properties: SymbolEventMessageProperties,
-    ) -> Result<EditedCodeSymbol, SymbolError> {
-        println!(
-            "symbol::add_subsymbol::sub_symbol_name({})",
-            sub_symbol.symbol_name()
-        );
-        // update the sub-symbol location to the most appropriate place
-        // TODO(codestory): Might need some debug logging on this section
-        let range_to_insert = sub_symbol.range().clone();
-        let content = "".to_owned();
-        let (llm_properties, swe_bench_initial_edit) =
-            if let Some(llm_properties) = self.tool_properties.get_swe_bench_code_editing_llm() {
-                (llm_properties, true)
-            } else {
-                (self.llm_properties.clone(), false)
-            };
-        let file_content = self
-            .tools
-            .file_open(
-                sub_symbol.fs_file_path().to_owned(),
-                message_properties.clone(),
-            )
-            .await?;
-        let response = self
-            .tools
-            .code_edit(
-                sub_symbol.fs_file_path(),
-                file_content.contents_ref(),
-                &range_to_insert,
-                context.join("\n"),
-                sub_symbol.instructions().join("\n"),
-                llm_properties.llm().clone(),
-                llm_properties.provider().clone(),
-                llm_properties.api_key().clone(),
-                swe_bench_initial_edit,
-                None,
-                Some(sub_symbol.symbol_name().to_owned()),
-                sub_symbol.symbol_edited_list(),
-                &self.symbol_identifier,
-                sub_symbol.user_provided_context(),
-                message_properties.clone(),
-            )
-            .await?;
-        Ok(EditedCodeSymbol::new(content, response))
-    }
-
     /// Editing the full symbol using search and replace blocks
     ///
     /// This leads to better edits and performance in general at the cost of speed
@@ -1658,19 +1590,6 @@ Satisfy the requirement either by making edits or gathering the required informa
         tool_properties: ToolProperties,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<EditedCodeSymbol, SymbolError> {
-        // let symbol_to_edit = self
-        //     .tools
-        //     .find_symbol_to_edit_closest_to_range(sub_symbol, message_properties.clone())
-        //     .await?;
-        let symbol_to_edit = self
-            .tools
-            .find_sub_symbol_to_edit_with_name(
-                self.symbol_name(),
-                sub_symbol,
-                message_properties.clone(),
-            )
-            .await?;
-        let content = symbol_to_edit.content().to_owned();
         let file_content = self
             .tools
             .file_open(
@@ -1678,6 +1597,35 @@ Satisfy the requirement either by making edits or gathering the required informa
                 message_properties.clone(),
             )
             .await?;
+        let content = if sub_symbol.is_new() {
+            "".to_owned()
+        } else {
+            let symbol_to_edit = self
+                .tools
+                .find_sub_symbol_to_edit_with_name(
+                    self.symbol_name(),
+                    sub_symbol,
+                    message_properties.clone(),
+                )
+                .await?;
+            symbol_to_edit.content().to_owned()
+        };
+        let symbol_to_edit_range = if sub_symbol.is_new() {
+            Range::new(
+                Position::new(0, 0, 0),
+                Position::new(file_content.file_content_len(), 0, 0),
+            )
+        } else {
+            let symbol_to_edit = self
+                .tools
+                .find_sub_symbol_to_edit_with_name(
+                    self.symbol_name(),
+                    sub_symbol,
+                    message_properties.clone(),
+                )
+                .await?;
+            symbol_to_edit.range().clone()
+        };
 
         // check if we should continue editing here
         println!(
@@ -1691,7 +1639,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 sub_symbol,
                 sub_symbol.fs_file_path(),
                 file_content.contents_ref(),
-                symbol_to_edit.range(),
+                &symbol_to_edit_range,
                 context.join("\n"),
                 sub_symbol.instructions().join("\n"),
                 &self.symbol_identifier,
@@ -1706,7 +1654,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 .tools
                 .apply_edits_to_editor(
                     sub_symbol.fs_file_path(),
-                    symbol_to_edit.range(),
+                    &symbol_to_edit_range,
                     &edited_code,
                     // apply these directly skipping any kind of undo-stacks
                     // its raw editor apply
@@ -1717,102 +1665,6 @@ Satisfy the requirement either by making edits or gathering the required informa
         }
 
         Ok(EditedCodeSymbol::new(content, edited_code))
-    }
-
-    /// Inserts new code to the file, this is useful when the symbol is not present
-    /// in the file and needs to be inserted anew
-    async fn insert_code_full(
-        &self,
-        sub_symbol: &SymbolToEdit,
-        context: Vec<String>,
-        history: Vec<SymbolRequestHistoryItem>,
-        message_properties: SymbolEventMessageProperties,
-    ) -> Result<(), SymbolError> {
-        println!(
-            "symbol::insert_code_full::start::symbol({})",
-            self.symbol_name()
-        );
-        let file_content = self
-            .tools
-            .file_open(
-                sub_symbol.fs_file_path().to_owned(),
-                message_properties.clone(),
-            )
-            .await?;
-        // always return the original code which was present here in case of rollbacks
-        let _ = message_properties
-            .ui_sender()
-            .send(UIEventWithID::range_selection_for_edit(
-                message_properties.request_id_str().to_owned(),
-                self.symbol_identifier.clone(),
-                sub_symbol.range().clone(),
-                sub_symbol.fs_file_path().to_owned(),
-            ));
-        println!(
-            "symbol::insert_code_full::code_edit_outline::symbol({})",
-            self.symbol_name()
-        );
-        let edited_code = self
-            .tools
-            .code_edit_outline(
-                sub_symbol,
-                // forcefully send the symbol identifier because we depend on the
-                // fs_file_path being non-null on the editor side
-                &SymbolIdentifier::with_file_path(self.symbol_name(), sub_symbol.fs_file_path()),
-                sub_symbol.fs_file_path(),
-                file_content.contents_ref(),
-                sub_symbol.range(),
-                context.join("\n"),
-                sub_symbol.instructions().join("\n"),
-                self.llm_properties.clone(),
-                Some(sub_symbol.symbol_name().to_owned()),
-                sub_symbol.symbol_edited_list(),
-                true,
-                message_properties.clone(),
-            )
-            .await?;
-        let _ = message_properties
-            .ui_sender()
-            .send(UIEventWithID::edited_code(
-                message_properties.request_id_str().to_owned(),
-                self.symbol_identifier.clone(),
-                // we need to reshape our range here for the edited
-                // code so we just make sure that the end line is properly
-                // moved
-                sub_symbol
-                    .range()
-                    .clone()
-                    .reshape_for_selection(&edited_code),
-                sub_symbol.fs_file_path().to_owned(),
-                edited_code.to_owned(),
-            ));
-
-        // TODO(skcd): We also want to generate followups over here after applying
-        // the edits, that can come later on tho
-        println!(
-            "symbol::insert_code_full::check_code_correctness::symbol({})",
-            self.symbol_name()
-        );
-        let context_str = context.join("\n");
-        let _ = self
-            .tools
-            .check_code_correctness(
-                self.symbol_name(),
-                sub_symbol,
-                self.symbol_identifier.clone(),
-                "",
-                &edited_code,
-                &context_str,
-                self.llm_properties.llm().clone(),
-                self.llm_properties.provider().clone(),
-                self.llm_properties.api_key().clone(),
-                &self.tool_properties,
-                history,
-                self.hub_sender.clone(),
-                message_properties.clone(),
-            )
-            .await?;
-        Ok(())
     }
 
     async fn edit_code(
@@ -1864,13 +1716,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 message_properties.clone(),
             )
             .await?;
-
-        // use flash for demo...
-        // let llm = LLMType::GeminiProFlash;
-        // let provider = LLMProvider::GoogleAIStudio;
-        // let keys = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-        //     "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-        // ));
 
         let response = self
             .tools
@@ -1930,7 +1775,7 @@ Satisfy the requirement either by making edits or gathering the required informa
         edit_request: SymbolToEditRequest,
         message_properties: SymbolEventMessageProperties,
         tool_properties: ToolProperties,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<SymbolEventResponse, SymbolError> {
         // NOTE: we do not add an entry to the history here because the initial
         // request already adds the entry before sending over the edit
         let history = edit_request.history().to_vec();
@@ -1942,12 +1787,14 @@ Satisfy the requirement either by making edits or gathering the required informa
             self.symbol_name(),
             sub_symbols_to_edit.len()
         );
+        let mut changes_made = vec![];
         // edit requires the following:
         // - gathering context for the symbols which the definitions or outlines are required
         // - do a COT to figure out how to go about making the changes
         // - making the edits
         // - following the changed symbol to check on the references and wherever its being used
-        for mut sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
+        for sub_symbol_to_edit in sub_symbols_to_edit.into_iter() {
+            let instructions = sub_symbol_to_edit.instructions().to_vec().join("\n");
             println!(
                 "symbol::edit_implementation::sub_symbol_to_edit::({})::is_new({:?})",
                 sub_symbol_to_edit.symbol_name(),
@@ -1967,7 +1814,7 @@ Satisfy the requirement either by making edits or gathering the required informa
             // if this is a new sub-symbol we have to create we have to diverge the
             // implementations a bit or figure out how to edit with a new line added
             // to the end of the symbol
-            let edited_code =
+            let edited_code_response =
                 if sub_symbol_to_edit.is_new() {
                     let _ = message_properties.ui_sender().send(
                         UIEventWithID::range_selection_for_edit(
@@ -1982,16 +1829,10 @@ Satisfy the requirement either by making edits or gathering the required informa
                         self.symbol_name(),
                         sub_symbol_to_edit.symbol_name()
                     );
-                    // Find the location for the sub-symbol
-                    sub_symbol_to_edit = self
-                        .find_sub_symbol_location(
-                            sub_symbol_to_edit.clone(),
-                            message_properties.clone(),
-                        )
-                        .await?;
-                    self.add_subsymbol(
+                    self.edit_code_full(
                         &sub_symbol_to_edit,
-                        context_for_editing.to_owned(),
+                        context_for_editing.clone(),
+                        tool_properties.clone(),
                         message_properties.clone(),
                     )
                     .await?
@@ -2024,8 +1865,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                         .await?
                     }
                 };
-            let original_code = &edited_code.original_code;
-            let edited_code = &edited_code.edited_code;
+            let original_code = &edited_code_response.original_code;
+            let edited_code = &edited_code_response.edited_code;
 
             // trim and compare instead of original, cause white spaces leak in at start and end
             if original_code.trim() == edited_code.trim() {
@@ -2115,12 +1956,24 @@ Satisfy the requirement either by making edits or gathering the required informa
             } else {
                 println!("symbol::edit_implementation::symbol_name({})::followups_and_correctness_check_disabled({})", self.symbol_name(), sub_symbol_to_edit.should_disable_followups_and_correctness());
             }
+            changes_made.push(edited_code_response.to_string(&sub_symbol_to_edit, &instructions));
         }
         println!(
             "symbol::edit_implementation::finish::({})",
             self.symbol_name()
         );
-        Ok(())
+        let symbol_name = self.symbol_name();
+        let changes = changes_made.join("\n");
+        let formatted_changes_made = format!(
+            r#"<changes_made_to_symbol>
+<name>
+{symbol_name}
+</name>
+<changes>
+{changes}
+</changes>"#
+        );
+        Ok(SymbolEventResponse::TaskDone(formatted_changes_made))
     }
 
     // this is the function which is polling the requests from the hub
@@ -2221,15 +2074,19 @@ Satisfy the requirement either by making edits or gathering the required informa
                             "symbol::types::symbol_event::edit::edit_implementations({})",
                             symbol.symbol_name()
                         );
-                        let _ = symbol
+                        let response = symbol
                             .edit_implementations(
                                 edit_request,
                                 message_properties.clone(),
                                 tool_properties.clone(),
                             )
                             .await;
-                        let _ = response_sender
-                            .send(SymbolEventResponse::TaskDone("edit finished".to_owned()));
+                        if let Ok(response) = response {
+                            let _ = response_sender.send(response);
+                        } else {
+                            let _ = response_sender
+                                .send(SymbolEventResponse::TaskDone("edit failed".to_owned()));
+                        }
                         Ok(())
                     }
                     SymbolEvent::AskQuestion(_ask_question_request) => {

@@ -284,15 +284,21 @@ impl SnippetReRankInformation {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct MechaCodeSymbolThinking {
+    /// The name of the symbol being processed
     symbol_name: String,
+    /// A list of steps taken during the thinking process, protected by a mutex for concurrent access
     steps: Mutex<Vec<String>>,
+    /// Indicates whether this is a new symbol or an existing one
     is_new: bool,
+    /// The file path where the symbol is located
     file_path: String,
+    /// The code snippet associated with this symbol, wrapped in a mutex for thread-safe access
     snippet: Mutex<Option<Snippet>>,
-    // this contains all the implementations, if there were children before
-    // for example: functions inside the class, they all get flattened over here
+    /// Contains all implementations of the symbol, including child elements (e.g., functions inside a class)
+    /// These are flattened and stored in a mutex-protected vector for concurrent access
     implementations: Mutex<Vec<Snippet>>,
-    // The tool box which contains all the tools necessary
+    /// The tool box containing all necessary tools for symbol processing
+    /// Wrapped in an Arc for shared ownership and ignored in Debug output
     #[derivative(Debug = "ignore")]
     tool_box: Arc<ToolBox>,
 }
@@ -897,8 +903,6 @@ impl MechaCodeSymbolThinking {
     }
 
     pub async fn refresh_state(&self, message_properties: SymbolEventMessageProperties) {
-        // do we really have to do this? or can we get away from this just by
-        // not worrying about things?
         let snippet = self
             .tool_box
             .find_snippet_for_symbol(
@@ -907,25 +911,35 @@ impl MechaCodeSymbolThinking {
                 message_properties.clone(),
             )
             .await;
-        // if we do have a snippet here which is present update it, otherwise its a pretty
-        // bad sign that we had the snippet before but do not have it now
+
+        println!("refresh_state::snippet::details::snippet_is_ok({})", snippet.is_ok());
+
         if let Ok(snippet) = snippet {
             self.set_snippet(snippet.clone()).await;
             let _ = message_properties
                 .ui_sender()
                 .send(UIEventWithID::symbol_location(
                     message_properties.request_id().request_id().to_owned(),
-                    SymbolLocation::new(self.to_symbol_identifier().clone(), snippet),
+                    SymbolLocation::new(self.to_symbol_identifier().clone(), snippet.clone()),
                 ));
+
+            println!("refresh_state::snippet::outline_node_type({:?})", snippet.outline_node_content().outline_node_type());
+
+            // Check if the snippet is of OutlineNodeType::File
+            if snippet.outline_node_content().outline_node_type() == &OutlineNodeType::File {
+                // Add the snippet to the implementations
+                self.add_implementation(snippet).await;
+            } else {
+                // Grab the implementations again for non-File types
+                let _ = self
+                    .grab_implementations(
+                        self.tool_box.clone(),
+                        self.to_symbol_identifier(),
+                        message_properties.clone(),
+                    )
+                    .await;
+            }
         }
-        // now grab the implementations again
-        let _ = self
-            .grab_implementations(
-                self.tool_box.clone(),
-                self.to_symbol_identifier(),
-                message_properties.clone(),
-            )
-            .await;
     }
 
     /// Grabs the list of new sub-symbols if any that we have to create

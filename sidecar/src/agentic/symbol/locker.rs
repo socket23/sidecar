@@ -147,14 +147,20 @@ impl SymbolLocker {
         // at this point we have also tried creating the symbol agent, so we can start logging it
         {
             if let Some(symbol) = self.symbols.lock().await.get(&symbol_identifier) {
-                let response = symbol.send(SymbolEventMessage::new(
+                match symbol.send(SymbolEventMessage::new(
                     request.clone(),
                     request_id,
                     ui_sender,
                     sender,
                     message_properties.editor_url(),
-                ));
-                println!("Request sending erorr: {:?}", response.is_err());
+                )) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!("Error sending request: {:?}", err);
+                    }
+                }
+            } else {
+                eprintln!("Symbol not found: {:?}", &symbol_identifier);
             }
         }
     }

@@ -5,7 +5,7 @@
 //! keep track of and whenever a question is asked we forward it to all the implementations
 //! and select the ones which are necessary.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, thread, time::Duration};
 
 use derivative::Derivative;
 use futures::{future::Shared, stream, FutureExt, StreamExt};
@@ -2057,12 +2057,15 @@ Satisfy the requirement either by making edits or gathering the required informa
                 "symbol::edit_implementation::check_code_correctness::({})",
                 self.symbol_name()
             );
+
+            thread::sleep(Duration::from_secs(5));
+
             // if we have to make sure that followups and correctness checks need
             // to keep happening
             if !sub_symbol_to_edit.should_disable_followups_and_correctness() {
                 // debugging loop after this
                 // re-enable code correctness check
-                let _ = self
+                if let Err(e) = self
                     .tools
                     .check_code_correctness(
                         self.symbol_name(),
@@ -2079,9 +2082,12 @@ Satisfy the requirement either by making edits or gathering the required informa
                         self.hub_sender.clone(),
                         message_properties.clone(),
                     )
-                    .await;
+                    .await
+                {
+                    eprintln!("Error checking code correctness: {}", e);
+                }
 
-                todo!();
+                // todo!(); // todo(zi): remove this
 
                 // once we have successfully changed the implementation over here
                 // we have to start looking for followups over here

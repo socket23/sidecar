@@ -5396,9 +5396,7 @@ instruction:
                 .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.clone())
                 .await?;
 
-            dbg!(&lsp_diagnostics);
-
-            todo!();
+            // dbg!(&lsp_diagnostics);
 
             // We also give it the option to edit the code as required
             if lsp_diagnostics.get_diagnostics().is_empty() {
@@ -5419,6 +5417,9 @@ instruction:
                 )
                 .await?
                 .remove_options();
+
+            // dbg!(&quick_fix_actions);
+            println!("There are {} quick_fix_actions", &quick_fix_actions.len());
 
             // now we can send over the request to the LLM to select the best tool
             // for editing the code out
@@ -5445,6 +5446,13 @@ instruction:
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
             let selected_action_index = selected_action.index();
             let tool_use_thinking = selected_action.thinking();
+
+            println!(
+                "toolbox::check_code_correctness::selected_action_index: {}, thinking: {}",
+                &selected_action_index, &tool_use_thinking
+            );
+
+            // what is this for?
             let _ = message_properties
                 .ui_sender()
                 .send(UIEventWithID::code_correctness_action(
@@ -5461,13 +5469,14 @@ instruction:
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
             if selected_action_index == quick_fix_actions.len() as i64 {
+                // edit code in selection
                 let fixed_code = self
                     .code_correctness_with_edits(
                         fs_file_path,
                         &fs_file_content,
                         symbol_to_edit_content.range(),
                         code_edit_extra_context.to_owned(),
-                        selected_action.thinking(),
+                        selected_action.thinking(), // error_instruction
                         &instructions,
                         original_code,
                         llm.clone(),
@@ -5499,6 +5508,8 @@ instruction:
                     )
                     .await?;
             } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
+                // is this still necessary given follow ups?
+
                 // over here we want to ping the other symbols and send them requests, there is a search
                 // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
                 // or maybe we should keep it separate
@@ -5591,6 +5602,8 @@ instruction:
             .get_test_correction_output()
             .ok_or(SymbolError::WrongToolOutput)
     }
+
+    // todo(zi): consider using search and replace here?
 
     // TODO(codestory): This part of the puzzle is still messed up since we are rewriting the whole
     // code over here which is not correct

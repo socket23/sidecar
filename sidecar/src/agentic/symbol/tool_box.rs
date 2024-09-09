@@ -8340,36 +8340,61 @@ FILEPATH: {fs_file_path}
         .collect::<Vec<_>>()
         .await;
 
-        let interested_files = definition_files.into_iter().flatten().chain(implementation_files.into_iter().flatten()).collect::<Vec<_>>();
+        let interested_files = definition_files
+            .into_iter()
+            .flatten()
+            .chain(implementation_files.into_iter().flatten())
+            .collect::<Vec<_>>();
 
-        let outline_nodes = stream::iter(interested_files.into_iter().map(|fs_file_path| (fs_file_path, message_properties.clone()))).map(|(fs_file_path, message_properties)| async move {
-            let outline_nodes_for_file = self.get_outline_nodes_using_editor(&fs_file_path, message_properties).await;
+        let outline_nodes = stream::iter(
+            interested_files
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes_for_file = self
+                .get_outline_nodes_using_editor(&fs_file_path, message_properties)
+                .await;
             match outline_nodes_for_file {
-                Ok(outline_nodes) => {
-                    Some(outline_nodes.to_outline_nodes(fs_file_path))
-                }
+                Ok(outline_nodes) => Some(outline_nodes.to_outline_nodes(fs_file_path)),
                 Err(e) => {
                     eprintln!("{:?}", e);
                     None
                 }
             }
-        }).buffer_unordered(4).collect::<Vec<_>>().await.into_iter().filter_map(|data| data).flatten().collect::<Vec<_>>();
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|data| data)
+        .flatten()
+        .collect::<Vec<_>>();
 
         // now we need to grab the outline nodes which pass the filter we are interested in
-        let filtered_outline_nodes = outline_nodes.into_iter().filter(|outline_node| outline_node_name_filter.contains(&(outline_node.name().to_owned()))).collect::<Vec<_>>();
+        let filtered_outline_nodes = outline_nodes
+            .into_iter()
+            .filter(|outline_node| {
+                outline_node_name_filter.contains(&(outline_node.name().to_owned()))
+            })
+            .collect::<Vec<_>>();
         // TODO(skcd): We should exclude files which are internal libraries in specific languages like rust and typescript, golang etc
         Ok(filtered_outline_nodes)
     }
 
-
     /// We try to get the file contents which are present here along with the local
     /// import graph which is contained by these files
-    /// 
+    ///
     /// We have to be smart about how we represent the data so we need to de-duplicate
     /// the nodes which we are interested in and get them to work properly
-    pub async fn file_paths_to_user_context(&self, file_paths: Vec<String>, message_properties: SymbolEventMessageProperties) -> Result<String, SymbolError> {
+    pub async fn file_paths_to_user_context(
+        &self,
+        file_paths: Vec<String>,
+        grab_import_nodes: bool,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<String, SymbolError> {
         let mut deduplicated_file_paths = vec![];
-        let mut already_seen_files :HashSet<String> = Default::default();
+        let mut already_seen_files: HashSet<String> = Default::default();
         file_paths.into_iter().for_each(|file_path| {
             if already_seen_files.contains(&file_path) {
                 return;
@@ -8378,12 +8403,34 @@ FILEPATH: {fs_file_path}
             deduplicated_file_paths.push(file_path);
         });
 
+        if !grab_import_nodes {
+            let mut user_context_file_contents = vec![];
+            for fs_file_path in deduplicated_file_paths.into_iter() {
+                let file_content = self
+                    .file_open(fs_file_path.to_owned(), message_properties.clone())
+                    .await;
+                if let Ok(file_content) = file_content {
+                    let file_content_str = file_content.contents_ref();
+                    let language_id = file_content.language();
+                    user_context_file_contents.push(format!(
+                        r#"# FILEPATH: {fs_file_path}
+    ```{language_id}
+    {file_content_str}
+    ```"#
+                    ));
+                }
+            }
+            return Ok(user_context_file_contents.join("\n"));
+        }
+
         // now that we have the file paths, we should get the imports properly over here
         // we might have to deduplicate and tone it down a bit based on how big the imports
         // are getting
         let mut outline_nodes = vec![];
         for fs_file_path in deduplicated_file_paths.iter() {
-            let imported_outline_nodes = self.get_imported_files_outline_nodes(fs_file_path, message_properties.clone()).await?;
+            let imported_outline_nodes = self
+                .get_imported_files_outline_nodes(fs_file_path, message_properties.clone())
+                .await?;
             outline_nodes.extend(imported_outline_nodes);
         }
 
@@ -8405,38 +8452,49 @@ FILEPATH: {fs_file_path}
         filtered_outline_nodes.sort_by_key(|outline_node| outline_node.unique_identifier());
         let mut user_context_file_contents = vec![];
         for fs_file_path in deduplicated_file_paths.into_iter() {
-            let file_content = self.file_open(fs_file_path.to_owned(), message_properties.clone()).await;
+            let file_content = self
+                .file_open(fs_file_path.to_owned(), message_properties.clone())
+                .await;
             if let Ok(file_content) = file_content {
                 let file_content_str = file_content.contents_ref();
                 let language_id = file_content.language();
-                user_context_file_contents.push(format!(r#"# FILEPATH: {fs_file_path}
+                user_context_file_contents.push(format!(
+                    r#"# FILEPATH: {fs_file_path}
 ```{language_id}
 {file_content_str}
-```"#));
+```"#
+                ));
             }
         }
 
         // now we want to get the outline nodes processed over here
-        let outline_node_strings = filtered_outline_nodes.into_iter().filter(|outline_node| {
-            let fs_file_path = outline_node.fs_file_path();
-            if fs_file_path.contains("node_modules") || fs_file_path.contains(".rustup") {
-                false
-            } else {
-                true
-            }
-        }).filter_map(|outline_node| {
-            outline_node.get_outline_node_compressed()
-        }).collect::<Vec<_>>();
+        let outline_node_strings = filtered_outline_nodes
+            .into_iter()
+            .filter(|outline_node| {
+                let fs_file_path = outline_node.fs_file_path();
+                if fs_file_path.contains("node_modules")
+                    || fs_file_path.contains(".rustup")
+                    || fs_file_path.contains(".cargo")
+                {
+                    false
+                } else {
+                    true
+                }
+            })
+            .filter_map(|outline_node| outline_node.get_outline_node_compressed())
+            .collect::<Vec<_>>();
 
         let user_context_file_contents = user_context_file_contents.join("\n");
         let code_outlines = outline_node_strings.join("\n");
 
-        Ok(format!("<files_provided>
+        Ok(format!(
+            "<files_provided>
 {user_context_file_contents}
 </files_imported>
 <code_outline>
 {code_outlines}
-</code_outline>"))
+</code_outline>"
+        ))
     }
 
     /// We try to warmup the user context over here with the context the user has
@@ -8449,9 +8507,13 @@ FILEPATH: {fs_file_path}
     pub async fn warmup_context(
         &self,
         file_paths: Vec<String>,
+        grab_import_nodes: bool,
         message_properties: SymbolEventMessageProperties,
     ) {
-        let file_paths_to_user_context = self.file_paths_to_user_context(file_paths, message_properties.clone()).await.ok();
+        let file_paths_to_user_context = self
+            .file_paths_to_user_context(file_paths, grab_import_nodes, message_properties.clone())
+            .await
+            .ok();
         let sender = message_properties.ui_sender();
         let request_id = message_properties.request_id_str();
         let editor_url = message_properties.editor_url();

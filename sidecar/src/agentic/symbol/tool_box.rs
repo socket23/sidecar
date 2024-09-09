@@ -4784,8 +4784,6 @@ instruction:
             })
             .collect::<Vec<_>>();
 
-        dbg!(&outline_node_child_addition);
-
         // outline nodes which have changed now
         // we do not consider child node changes over here, only the main symbol
         // which changed
@@ -4817,8 +4815,6 @@ instruction:
             })
             .collect::<Vec<_>>();
 
-        dbg!(&outline_nodes_which_changed_vec);
-
         // check the state here because we will start applying changes to the editor and
         // if we changed the node content for an outline node
         let child_added = outline_node_child_addition
@@ -4830,12 +4826,10 @@ instruction:
                     .any(|outline_node| outline_node.name() == parent_symbol_name);
                 parent_symbol_name_any
             });
-        dbg!(&child_added);
 
         let outline_node_changed = outline_nodes_which_changed_vec
             .iter()
             .any(|outline_node_changed| outline_node_changed.0.name() == parent_symbol_name);
-        dbg!(&outline_node_changed);
 
         // we want something related to the parent symbol to change
         Ok(child_added || outline_node_changed)
@@ -5243,10 +5237,6 @@ instruction:
 
             if should_apply_code_changes_for_addition {
                 // applies the proposed edits
-                println!(
-                    "should_apply_code_changes_for_addition::{}",
-                    &should_apply_code_changes_for_addition
-                );
                 let _ = self
                     .apply_code_changes_code_addition(
                         edited_code,

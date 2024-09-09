@@ -13,13 +13,16 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 use crate::agentic::symbol::anchored::AnchoredSymbol;
+use crate::agentic::symbol::events::environment_event::EnvironmentEventType;
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
+use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
@@ -91,6 +94,8 @@ struct AnchoredEditingMetadata {
     /// Optional string representing the user's context for this editing session.
     /// This can provide additional information or constraints for the editing process.
     user_context_string: Option<String>,
+    /// environment events
+    _environment_event_sender: UnboundedSender<EnvironmentEventType>,
 }
 
 impl AnchoredEditingMetadata {
@@ -100,6 +105,7 @@ impl AnchoredEditingMetadata {
         previous_file_content: HashMap<String, String>,
         references: Vec<RelevantReference>,
         user_context_string: Option<String>,
+        environment_event_sender: UnboundedSender<EnvironmentEventType>,
     ) -> Self {
         Self {
             message_properties,
@@ -107,6 +113,7 @@ impl AnchoredEditingMetadata {
             previous_file_content,
             references,
             user_context_string,
+            _environment_event_sender: environment_event_sender,
         }
     }
 
@@ -768,7 +775,11 @@ pub async fn code_editing(
 
         let user_provided_context = app
             .tool_box
-            .file_paths_to_user_context(user_context.file_paths(), enable_import_nodes, message_properties.clone())
+            .file_paths_to_user_context(
+                user_context.file_paths(),
+                enable_import_nodes,
+                message_properties.clone(),
+            )
             .await
             .ok();
         let possibly_changed_files = symbols_to_anchor
@@ -800,12 +811,27 @@ pub async fn code_editing(
 
         println!("metadata_pregen::elapsed({:?})", metadata_pregen.elapsed());
 
+        let (environment_sender, environment_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let scratch_pad_agent =
+            ScratchPadAgent::new(message_properties.clone(), app.symbol_manager.hub_sender());
+
+        let _scratch_pad_handle = tokio::spawn(async move {
+            // spawning the scratch pad agent
+            scratch_pad_agent
+                .process_envrionment(Box::pin(
+                    tokio_stream::wrappers::UnboundedReceiverStream::new(environment_receiver),
+                ))
+                .await;
+        });
+
         let editing_metadata = AnchoredEditingMetadata::new(
             message_properties.clone(),
             symbols_to_anchor.clone(),
             file_contents,
             vec![],
             user_provided_context.clone(),
+            environment_sender,
         );
 
         println!("tracking new request");

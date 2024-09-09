@@ -5,7 +5,7 @@
 //! keep track of and whenever a question is asked we forward it to all the implementations
 //! and select the ones which are necessary.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, thread, time::Duration};
 
 use derivative::Derivative;
 use futures::{future::Shared, stream, FutureExt, StreamExt};
@@ -1778,7 +1778,7 @@ Satisfy the requirement either by making edits or gathering the required informa
     ) -> Result<SymbolEventResponse, SymbolError> {
         // NOTE: we do not add an entry to the history here because the initial
         // request already adds the entry before sending over the edit
-        let _history = edit_request.history().to_vec();
+        let history = edit_request.history().to_vec();
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
@@ -1831,7 +1831,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     );
                     self.edit_code_full(
                         &sub_symbol_to_edit,
-                        context_for_editing,
+                        context_for_editing.clone(),
                         tool_properties.clone(),
                         message_properties.clone(),
                     )
@@ -1898,29 +1898,37 @@ Satisfy the requirement either by making edits or gathering the required informa
                 "symbol::edit_implementation::check_code_correctness::({})",
                 self.symbol_name()
             );
+
+            thread::sleep(Duration::from_secs(5));
+
             // if we have to make sure that followups and correctness checks need
             // to keep happening
             if !sub_symbol_to_edit.should_disable_followups_and_correctness() {
                 // debugging loop after this
-                // disable code correctness check
-                // let _ = self
-                //     .tools
-                //     .check_code_correctness(
-                //         self.symbol_name(),
-                //         &sub_symbol_to_edit,
-                //         self.symbol_identifier.clone(),
-                //         original_code,
-                //         edited_code,
-                //         &context_for_editing.join("\n"),
-                //         self.llm_properties.llm().clone(),
-                //         self.llm_properties.provider().clone(),
-                //         self.llm_properties.api_key().clone(),
-                //         &self.tool_properties,
-                //         history.to_vec(),
-                //         self.hub_sender.clone(),
-                //         message_properties.clone(),
-                //     )
-                //     .await;
+                // re-enable code correctness check
+                if let Err(e) = self
+                    .tools
+                    .check_code_correctness(
+                        self.symbol_name(),
+                        &sub_symbol_to_edit,
+                        self.symbol_identifier.clone(),
+                        original_code,
+                        edited_code,
+                        &context_for_editing.join("\n"),
+                        self.llm_properties.llm().clone(),
+                        self.llm_properties.provider().clone(),
+                        self.llm_properties.api_key().clone(),
+                        &self.tool_properties,
+                        history.to_vec(),
+                        self.hub_sender.clone(),
+                        message_properties.clone(),
+                    )
+                    .await
+                {
+                    eprintln!("Error checking code correctness: {}", e);
+                }
+
+                // todo!(); // todo(zi): remove this
 
                 // once we have successfully changed the implementation over here
                 // we have to start looking for followups over here

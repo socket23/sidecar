@@ -654,28 +654,30 @@ impl Tool for ReferenceFilterBroker {
                 .join("\n")
         );
 
-        let grouped_reasons_response = Self::references_by_reason(
-            relevant_references.clone(),
-            self.llm_client.clone(),
-            llm_properties.clone(),
-            &root_request_id,
-        )
-        .await;
+        if !relevant_references.is_empty() {
+            let grouped_reasons_response = Self::references_by_reason(
+                relevant_references.clone(),
+                self.llm_client.clone(),
+                llm_properties.clone(),
+                &root_request_id,
+            )
+            .await;
 
-        println!(
-            "grouped groups len: {}",
-            &grouped_reasons_response.groups.len()
-        );
+            println!(
+                "grouped groups len: {}",
+                &grouped_reasons_response.groups.len()
+            );
 
-        let grouped_references = grouped_reasons_response.into_grouped_references();
+            let grouped_references = grouped_reasons_response.into_grouped_references();
 
-        dbg!(&grouped_references);
+            dbg!(&grouped_references);
 
-        let ui_sender = context.message_properties().ui_sender();
-        let _ = ui_sender.send(UIEventWithID::grouped_by_reason_references(
-            root_request_id.to_owned(),
-            grouped_references.clone(),
-        ));
+            let ui_sender = context.message_properties().ui_sender();
+            let _ = ui_sender.send(UIEventWithID::grouped_by_reason_references(
+                root_request_id.to_owned(),
+                grouped_references.clone(),
+            ));
+        }
 
         Ok(ToolOutput::ReferencesFilter(relevant_references))
     }

@@ -830,7 +830,6 @@ pub async fn code_editing(
             let _references_join_handle = tokio::spawn(async move {
                 let start = Instant::now();
 
-                // this does not need to run in sequence!
                 let references = stream::iter(stream_symbols.into_iter())
                     .flat_map(|anchored_symbol| {
                         let symbol_names = anchored_symbol.sub_symbol_names().to_vec();

@@ -144,7 +144,7 @@ impl SymbolManager {
             let (sender, receiver) = tokio::sync::oneshot::channel();
             let symbol_event_request = SymbolEventRequest::new(
                 symbol_to_edit_request.symbol_identifier().clone(),
-                SymbolEvent::Edit(symbol_to_edit_request),
+                SymbolEvent::Edit(symbol_to_edit_request), // defines event type
                 ToolProperties::new(),
             );
             let event = SymbolEventMessage::message_with_properties(
@@ -159,6 +159,8 @@ impl SymbolManager {
         .buffer_unordered(100)
         .collect::<Vec<_>>()
         .await;
+
+        // iteration finished event triggers IDE save
         let _ = message_properties
             .ui_sender()
             .send(UIEventWithID::code_iteration_finished(

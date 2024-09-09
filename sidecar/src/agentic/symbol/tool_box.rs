@@ -4811,6 +4811,7 @@ instruction:
                     .any(|outline_node| outline_node.name() == parent_symbol_name);
                 parent_symbol_name_any
             });
+
         let outline_node_changed = outline_nodes_which_changed_vec
             .iter()
             .any(|outline_node_changed| outline_node_changed.0.name() == parent_symbol_name);
@@ -4825,7 +4826,7 @@ instruction:
     /// we will focus only on the symbols which are part of the parent symbol
     async fn apply_code_changes_code_addition(
         &self,
-        edited_code: &str,
+        edited_code: &str, // just the code that's edited, not the edited symbol?
         symbol_edited: &SymbolToEdit,
         parent_symbol_name: &str,
         message_properties: SymbolEventMessageProperties,
@@ -4982,6 +4983,9 @@ instruction:
                 parent_symbol_name,
                 fresh_outline_node.name()
             );
+
+            // didn't we already know the contents of the changed nodes? (diff lines + their surroundings)
+            // why is an edit needed here? What's informing the edit?
             let _ = self
                 .apply_edits_to_editor(
                     fs_file_path,
@@ -5217,6 +5221,7 @@ instruction:
             let lsp_request_id = uuid::Uuid::new_v4().to_string();
 
             if should_apply_code_changes_for_addition {
+                // applies the proposed edits
                 let _ = self
                     .apply_code_changes_code_addition(
                         edited_code,
@@ -5229,7 +5234,7 @@ instruction:
 
             // TODO(codestory): just make this branch false so we always use
             // the previous flow
-            let symbol_to_edit = {
+            let symbol_to_edit_content = {
                 println!("tool_box::check_code_correctness::range_refersh_start::symbol_name::({})::symbol_to_edit::({})::original_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_edited.range());
                 let symbol_to_edit_range = self
                     .find_sub_symbol_to_edit_with_name(
@@ -5271,6 +5276,7 @@ instruction:
                     .await;
                 symbol_to_edit
             }?;
+            // applying edits completed
 
             let fs_file_content = self
                 .file_open(fs_file_path.to_owned(), message_properties.clone())
@@ -5278,7 +5284,7 @@ instruction:
                 .contents();
 
             // After applying the changes we get the new range for the symbol
-            let edited_range = symbol_to_edit.range().clone();
+            let edited_range = symbol_to_edit_content.range().clone();
             // In case we have swe-bench-tooling enabled over here we should run
             // the tests first, since we get enough value out if to begin with
             // TODO(skcd): Use the test output for debugging over here
@@ -5365,6 +5371,8 @@ instruction:
                 .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.clone())
                 .await?;
 
+            // dbg!(&lsp_diagnostics);
+
             // We also give it the option to edit the code as required
             if lsp_diagnostics.get_diagnostics().is_empty() {
                 break;
@@ -5384,6 +5392,12 @@ instruction:
                 )
                 .await?
                 .remove_options();
+
+            // dbg!(&quick_fix_actions);
+            println!(
+                "tool_box::check_code_correctness::quick_fix_actions.len({})",
+                &quick_fix_actions.len()
+            );
 
             // now we can send over the request to the LLM to select the best tool
             // for editing the code out
@@ -5410,6 +5424,13 @@ instruction:
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
             let selected_action_index = selected_action.index();
             let tool_use_thinking = selected_action.thinking();
+
+            println!(
+                "toolbox::check_code_correctness::selected_action_index-thinking: {}-{}",
+                &selected_action_index, &tool_use_thinking
+            );
+
+            // what is this for?
             let _ = message_properties
                 .ui_sender()
                 .send(UIEventWithID::code_correctness_action(
@@ -5426,13 +5447,14 @@ instruction:
             // but is provided by us, the way to check this is by looking at the index and seeing
             // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
             if selected_action_index == quick_fix_actions.len() as i64 {
+                // edit code in selection
                 let fixed_code = self
                     .code_correctness_with_edits(
                         fs_file_path,
                         &fs_file_content,
-                        symbol_to_edit.range(),
+                        symbol_to_edit_content.range(),
                         code_edit_extra_context.to_owned(),
-                        selected_action.thinking(),
+                        selected_action.thinking(), // error_instruction
                         &instructions,
                         original_code,
                         llm.clone(),
@@ -5464,6 +5486,8 @@ instruction:
                     )
                     .await?;
             } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
+                // is this still necessary given follow ups?
+
                 // over here we want to ping the other symbols and send them requests, there is a search
                 // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
                 // or maybe we should keep it separate
@@ -5556,6 +5580,8 @@ instruction:
             .get_test_correction_output()
             .ok_or(SymbolError::WrongToolOutput)
     }
+
+    // todo(zi): consider using search and replace here?
 
     // TODO(codestory): This part of the puzzle is still messed up since we are rewriting the whole
     // code over here which is not correct
@@ -8166,9 +8192,9 @@ FILEPATH: {fs_file_path}
                         true,
                         user_query.to_owned(),
                         None,
-                        false,
+                        false, // grab definitions
                         user_provided_context.to_owned(),
-                        true,
+                        false, // disable followups
                     )],
                     symbol_identifier.clone(),
                     vec![],

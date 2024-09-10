@@ -5592,7 +5592,49 @@ instruction:
         Ok(())
     }
 
-    // async fn handle_selected_action(&self)
+    /// Logic for processing selected actions
+    async fn handle_selected_action(
+        &self,
+        action_index: i64,
+        total_actions_len: i64,
+        correctness_tool_thinking: &str,
+        lsp_request_id: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) {
+        match action_index {
+            i if i == total_actions_len => {}
+            i if i == total_actions_len + 1 => {}
+            i if i == total_actions_len + 2 => {
+                println!("tool_box::check_code_correctness::no_changes_required");
+                return;
+            }
+            i if i < total_actions_len => {
+                println!(
+                    "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
+                    &action_index, &correctness_tool_thinking
+                );
+
+                // invoke the code action over here with the editor
+                let response = self
+                    .invoke_quick_action(action_index, &lsp_request_id, message_properties)
+                    .await?;
+                if response.is_success() {
+                    println!("tool_box::check_code_correctness::invoke_quick_action::is_success()");
+                    // great we have a W
+                } else {
+                    // boo something bad happened, we should probably log and do something about this here
+                    // for now we assume its all Ws
+                    println!(
+                        "tool_box::check_code_correctness::invoke_quick_action::fail::DO_SOMETHING_ABOUT_THIS"
+                    );
+                }
+            }
+            _ => {
+                // Handle unexpected index
+                println!("Unexpected action index: {}", action_index);
+            }
+        }
+    }
 
     /// We are going to edit out the code depending on the test output
     async fn fix_tests_by_editing(

@@ -25,6 +25,7 @@ use super::{
         probe_try_hard_answer::ProbeTryHardAnswerSymbolRequest,
         repo_map_search::RepoMapSearchQuery,
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingRequest,
+        scratch_pad::ScratchPadAgentInput,
         should_edit::ShouldEditCodeSymbolRequest,
     },
     editor::apply::EditorApplyRequest,
@@ -129,6 +130,8 @@ pub enum ToolInput {
     OutlineNodesUsingEditor(OutlineNodesUsingEditorRequest),
     // filters references based on user query
     ReferencesFilter(ReferenceFilterRequest),
+    // Scratch pad agent input request
+    ScratchPadInput(ScratchPadAgentInput),
 }
 
 impl ToolInput {
@@ -191,6 +194,15 @@ impl ToolInput {
             ToolInput::GitDiff(_) => ToolType::GitDiff,
             ToolInput::OutlineNodesUsingEditor(_) => ToolType::OutlineNodesUsingEditor,
             ToolInput::ReferencesFilter(_) => ToolType::ReferencesFilter,
+            ToolInput::ScratchPadInput(_) => ToolType::ScratchPadAgent,
+        }
+    }
+
+    pub fn should_scratch_pad_input(self) -> Result<ScratchPadAgentInput, ToolError> {
+        if let ToolInput::ScratchPadInput(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ScratchPadAgent))
         }
     }
 

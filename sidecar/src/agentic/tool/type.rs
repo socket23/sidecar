@@ -99,6 +99,8 @@ pub enum ToolType {
     OutlineNodesUsingEditor,
     // filters references
     ReferencesFilter,
+    // scratch pad agent
+    ScratchPadAgent,
 }
 
 impl std::fmt::Display for ToolType {
@@ -169,6 +171,7 @@ impl std::fmt::Display for ToolType {
             ToolType::CodeEditingWarmupTool => write!(f, "Code editing warmup tool"),
             ToolType::OutlineNodesUsingEditor => write!(f, "Outline nodes using the editor"),
             ToolType::ReferencesFilter => write!(f, "Filters references"),
+            ToolType::ScratchPadAgent => write!(f, "Scratch pad agent"),
         }
     }
 }

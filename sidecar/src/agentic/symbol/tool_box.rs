@@ -5423,11 +5423,11 @@ instruction:
             // there might be a case that we have to re-write the code completely, since
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
             let selected_action_index = selected_action.index();
-            let tool_use_thinking = selected_action.thinking();
+            let correctness_tool_thinking = selected_action.thinking();
 
             println!(
                 "toolbox::check_code_correctness::selected_action_index-thinking: {}-{}",
-                &selected_action_index, &tool_use_thinking
+                &selected_action_index, &correctness_tool_thinking
             );
 
             // IDE doesn't react to this atm.
@@ -5438,7 +5438,7 @@ instruction:
                     symbol_identifier.clone(),
                     edited_range.clone(),
                     fs_file_path.to_owned(),
-                    tool_use_thinking.to_owned(),
+                    correctness_tool_thinking.to_owned(),
                 ));
 
             // TODO(skcd): This needs to change because we will now have 3 actions which can
@@ -5451,57 +5451,30 @@ instruction:
                     "tool_box::check_code_correctness::code_correctness_with_edits (edit self)"
                 );
 
-                // we need a symbol to edit request here, with symbol that contains the thinking required to execute code_correctness option
+                let symbol_to_edit_with_correctness_thinking = symbol_edited
+                    .clone_with_instructions(&vec![correctness_tool_thinking.to_owned()]);
 
-                let symbol_to_edit_with_tool_use_thinking =
-                    symbol_edited.clone_with_instructions(&vec![tool_use_thinking.to_owned()]);
+                // make sender / receiver pair
+                let (sender, receiver) = tokio::sync::oneshot::channel();
 
-                let symbol_to_edit_request = SymbolToEditRequest::new(
-                    vec![symbol_to_edit_with_tool_use_thinking],
-                    symbol_identifier.clone(),
-                    vec![],
+                // wrap in SymbolEventMessage
+                let symbol_event_message = SymbolEventMessage::message_with_properties(
+                    SymbolEventRequest::simple_edit_request(
+                        symbol_identifier.clone(),
+                        symbol_to_edit_with_correctness_thinking.clone(),
+                        tool_properties.clone(),
+                    ),
+                    message_properties.clone(),
+                    sender,
                 );
 
-                // todo(zi): we need symbol locker to process this request, but how?
+                let _ = hub_sender
+                    .send(symbol_event_message)
+                    .map_err(|e| SymbolError::SymbolEventSendError(e))?;
 
-                // edit code in selection
-                let fixed_code = self
-                    .code_correctness_with_edits(
-                        fs_file_path,
-                        &fs_file_content,
-                        symbol_to_edit_content.range(),
-                        code_edit_extra_context.to_owned(),
-                        selected_action.thinking(), // error_instruction
-                        &instructions,
-                        original_code,
-                        llm.clone(),
-                        provider.clone(),
-                        api_keys.clone(),
-                        message_properties.clone(),
-                    )
-                    .await?;
-
-                let _ = message_properties
-                    .ui_sender()
-                    .send(UIEventWithID::edited_code(
-                        message_properties.request_id_str().to_owned(),
-                        symbol_identifier.clone(),
-                        edited_range.clone(),
-                        fs_file_path.to_owned(),
-                        fixed_code.to_owned(),
-                    ));
-
-                // after this we have to apply the edits to the editor again and being
-                // the loop again
-                let _ = self
-                    .apply_edits_to_editor(
-                        fs_file_path,
-                        &edited_range,
-                        &fixed_code,
-                        false,
-                        message_properties.clone(),
-                    )
-                    .await?;
+                println!("tool_box::check_code_correctness::simple_edit_request::waiting");
+                let _ = receiver.await.map_err(|e| SymbolError::RecvError(e))?;
+                println!("tool_box::check_code_correctness::simple_edit_request::complete");
             } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
                 // is this still necessary given follow ups?
 
@@ -5520,7 +5493,7 @@ instruction:
                         fs_file_path,
                         &edited_range,
                         &updated_code,
-                        &tool_use_thinking,
+                        &correctness_tool_thinking,
                         tool_properties,
                         LLMProperties::new(llm.clone(), provider.clone(), api_keys.clone()),
                         history.to_vec(),
@@ -5539,7 +5512,7 @@ instruction:
             } else {
                 println!(
                     "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
-                    &selected_action_index, &tool_use_thinking
+                    &selected_action_index, &correctness_tool_thinking
                 );
 
                 // invoke the code action over here with the editor

@@ -4197,19 +4197,18 @@ You have to do that always and only select a single action at a time."#
             .into_iter()
             .map(|line| line.to_owned())
             .collect::<Vec<_>>();
-        let diagnostics = code_correctness_request.diagnostics();
+        let diagnostic = code_correctness_request.diagnostic();
         let fs_file_path = code_correctness_request.fs_file_path();
-        let formatted_diagnostics = diagnostics
-            .into_iter()
-            .filter_map(|diagnostics| {
-                self.format_lsp_diagnostic_for_prompt(
-                    fs_file_content_lines.as_slice(),
-                    fs_file_path.to_owned(),
-                    diagnostics,
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+
+        let formatted_diagnostic = self
+            .format_lsp_diagnostic_for_prompt(
+                fs_file_content_lines.as_slice(),
+                fs_file_path.to_owned(),
+                diagnostic,
+            )
+            .unwrap_or("\n".to_owned()); // what should we do about None?
+
+        println!("formatted_diagnostic: {}", &formatted_diagnostic);
 
         // now we show the quick actions which are avaiable as tools along with
         // the code edit which is always an option as well
@@ -4311,7 +4310,7 @@ no action required
             r#"<query>
 {file_content}
 <diagnostic_list>
-{formatted_diagnostics}
+{formatted_diagnostic}
 </diagnostic_list>
 <action_list>
 {formatted_actions}

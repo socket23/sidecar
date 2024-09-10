@@ -20,7 +20,7 @@ use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionReques
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
 use crate::agentic::tool::code_symbol::correctness::{
-    CodeCorrectnessAction, CodeCorrectnessRequest,
+    CodeCorrectionArgs, CodeCorrectnessAction, CodeCorrectnessRequest,
 };
 use crate::agentic::tool::code_symbol::error_fix::CodeEditingErrorRequest;
 use crate::agentic::tool::code_symbol::find_file_for_new_symbol::{
@@ -66,6 +66,7 @@ use crate::agentic::tool::filtering::broker::{
 };
 use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClientResponse};
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
+use crate::agentic::tool::lsp;
 use crate::agentic::tool::lsp::diagnostics::{
     Diagnostic, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
@@ -5369,55 +5370,77 @@ instruction:
             // Now we check for LSP diagnostics
             let lsp_diagnostics = self
                 .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.clone())
-                .await?;
-
-            // dbg!(&lsp_diagnostics);
+                .await?
+                .get_diagnostics();
 
             // We also give it the option to edit the code as required
-            if lsp_diagnostics.get_diagnostics().is_empty() {
+            if lsp_diagnostics.is_empty() {
+                println!(
+                    "tool_box::check_code_correctness::get_diagnostics::is_empty(true) - breaking"
+                );
                 break;
             }
 
-            // TODO(skcd): We should format the diagnostics properly over here
-            // with some highlight from the lines above and below so we can show
-            // a more detailed output to the model
+            dbg!(&lsp_diagnostics);
 
-            // Now we get all the quick fixes which are available in the editor
-            let quick_fix_actions = self
-                .get_quick_fix_actions(
-                    fs_file_path,
-                    &edited_range,
+            // parallel process diagnostics
+            let res = stream::iter(lsp_diagnostics.into_iter().map(|diagnostic| {
+                (
+                    diagnostic,
+                    fs_file_path.to_owned(),
                     lsp_request_id.to_owned(),
-                    message_properties.clone(),
+                    message_properties.to_owned(),
                 )
-                .await?
-                .remove_options();
+            }))
+            .map(
+                |(diagnostic, fs_file_path, lsp_request_id, message_properties)| async move {
+                    // get quick actions for diagnostics range
+                    let quick_fix_actions = self
+                        .get_quick_fix_actions(
+                            &fs_file_path.to_owned(),
+                            diagnostic.range(), // only the fix actions at this range - this range must not change due to another edit
+                            lsp_request_id,
+                            message_properties,
+                        )
+                        .await?
+                        .remove_options();
 
-            // dbg!(&quick_fix_actions);
-            println!(
-                "tool_box::check_code_correctness::quick_fix_actions.len({})",
-                &quick_fix_actions.len()
-            );
+                    dbg!(&quick_fix_actions);
+                    // println!(
+                    //     "tool_box::check_code_correctness::quick_fix_actions.len({})",
+                    //     &quick_fix_actions.len()
+                    // );
 
-            // now we can send over the request to the LLM to select the best tool
-            // for editing the code out
-            let selected_action = self
-                .code_correctness_action_selection(
-                    fs_file_path,
-                    &fs_file_content,
-                    &edited_range,
-                    symbol_name,
-                    &instructions,
-                    original_code,
-                    lsp_diagnostics.remove_diagnostics(),
-                    quick_fix_actions.to_vec(),
-                    llm.clone(),
-                    provider.clone(),
-                    api_keys.clone(),
-                    extra_symbol_list_ref,
-                    message_properties.clone(),
-                )
-                .await?;
+                    let code_correctness_args = CodeCorrectionArgs::new(
+                        &fs_file_path,
+                        &fs_file_content,
+                        edited_range,
+                        symbol_name,
+                        &instructions,
+                        original_code,
+                        diagnostic.to_owned(),
+                        quick_fix_actions.to_vec(),
+                        llm.clone(),
+                        provider.clone(),
+                        api_keys.clone(),
+                        extra_symbol_list_ref,
+                        message_properties.clone(),
+                    );
+
+                    // now we can send over the request to the LLM to select the best tool
+                    // for editing the code out
+                    let selected_action = self
+                        .code_correctness_action_selection(code_correctness_args)
+                        .await?;
+
+                    dbg!(&selected_action);
+
+                    Ok(())
+                },
+            )
+            .buffer_unordered(5)
+            .collect::<Vec<_>>()
+            .await;
 
             // Now that we have the selected action, we can chose what to do about it
             // there might be a case that we have to re-write the code completely, since
@@ -5624,45 +5647,33 @@ instruction:
 
     async fn code_correctness_action_selection(
         &self,
-        fs_file_path: &str,
-        fs_file_content: &str,
-        edited_range: &Range,
-        symbol_name: &str,
-        instruction: &str,
-        previous_code: &str,
-        diagnostics: Vec<Diagnostic>,
-        quick_fix_actions: Vec<QuickFixOption>,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_keys: LLMProviderAPIKeys,
-        extra_symbol_plan: Option<&str>,
-        message_properties: SymbolEventMessageProperties,
-        // TODO(skcd): a history parameter and play with the prompt over here so
-        // the LLM does not over index on the history of the symbols which were edited
+        args: CodeCorrectionArgs,
     ) -> Result<CodeCorrectnessAction, SymbolError> {
         let (code_above, code_below, code_in_selection) =
-            split_file_content_into_parts(fs_file_content, edited_range);
+            split_file_content_into_parts(args.fs_file_content(), args.edited_range());
+
         let request = ToolInput::CodeCorrectnessAction(CodeCorrectnessRequest::new(
-            fs_file_content.to_owned(),
-            fs_file_path.to_owned(),
+            args.fs_file_content().to_owned(),
+            args.fs_file_path().to_owned(),
             code_above,
             code_below,
             code_in_selection,
-            symbol_name.to_owned(),
-            instruction.to_owned(),
-            diagnostics,
-            quick_fix_actions,
-            previous_code.to_owned(),
-            llm,
-            provider,
-            api_keys,
-            extra_symbol_plan.map(|plan| plan.to_owned()),
-            message_properties.root_request_id().to_owned(),
+            args.symbol_name().to_owned(),
+            args.instruction().to_owned(),
+            args.diagnostic().to_owned(),
+            args.quick_fix_actions().to_vec(),
+            args.previous_code().to_owned(),
+            args.llm().clone(),
+            args.provider().clone(),
+            args.api_keys().clone(),
+            args.extra_symbol_plan().map(str::to_owned),
+            args.message_properties().root_request_id().to_owned(),
         ));
+
         self.tools
             .invoke(request)
             .await
-            .map_err(|e| SymbolError::ToolError(e))?
+            .map_err(SymbolError::ToolError)?
             .get_code_correctness_action()
             .ok_or(SymbolError::WrongToolOutput)
     }

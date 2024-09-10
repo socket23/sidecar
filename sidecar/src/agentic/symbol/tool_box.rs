@@ -5561,6 +5561,39 @@ instruction:
         Ok(())
     }
 
+    async fn quick_action_simple_edit(
+        &self,
+        symbol_to_edit: SymbolToEdit,
+        symbol_identifier: SymbolIdentifier,
+        tool_properties: ToolProperties,
+        message_properties: SymbolEventMessageProperties,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
+    ) -> Result<(), SymbolError> {
+        println!("tool_box::check_code_correctness::code_correctness_with_edits (edit self)");
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let symbol_event_message = SymbolEventMessage::message_with_properties(
+            SymbolEventRequest::simple_edit_request(
+                symbol_identifier,
+                symbol_to_edit,
+                tool_properties,
+            ),
+            message_properties,
+            sender,
+        );
+
+        let _ = hub_sender
+            .send(symbol_event_message)
+            .map_err(|e| SymbolError::SymbolEventSendError(e))?;
+
+        println!("tool_box::check_code_correctness::simple_edit_request::waiting");
+        let _ = receiver.await.map_err(|e| SymbolError::RecvError(e))?;
+        println!("tool_box::check_code_correctness::simple_edit_request::complete");
+
+        Ok(())
+    }
+
+    // async fn handle_selected_action(&self)
+
     /// We are going to edit out the code depending on the test output
     async fn fix_tests_by_editing(
         &self,

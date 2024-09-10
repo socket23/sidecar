@@ -8134,7 +8134,7 @@ FILEPATH: {fs_file_path}
     /// Uses the anchored symbols to grab the symbols which require editing
     pub async fn symbol_to_edit_request(
         &self,
-        anchored_symbols: Vec<AnchoredSymbol>,
+        anchored_symbols: &[AnchoredSymbol],
         user_query: &str,
         user_provided_context: Option<String>,
         message_properties: SymbolEventMessageProperties,
@@ -8194,7 +8194,7 @@ FILEPATH: {fs_file_path}
                         None,
                         false, // grab definitions
                         user_provided_context.to_owned(),
-                        false, // disable followups
+                        true, // disable followups
                     )],
                     symbol_identifier.clone(),
                     vec![],

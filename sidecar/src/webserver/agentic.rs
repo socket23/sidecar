@@ -95,7 +95,7 @@ struct AnchoredEditingMetadata {
     /// This can provide additional information or constraints for the editing process.
     user_context_string: Option<String>,
     /// environment events
-    _environment_event_sender: UnboundedSender<EnvironmentEventType>,
+    environment_event_sender: UnboundedSender<EnvironmentEventType>,
 }
 
 impl AnchoredEditingMetadata {
@@ -113,7 +113,7 @@ impl AnchoredEditingMetadata {
             previous_file_content,
             references,
             user_context_string,
-            _environment_event_sender: environment_event_sender,
+            environment_event_sender,
         }
     }
 
@@ -677,19 +677,15 @@ pub async fn code_sculpting(
         Ok(json_result(CodeSculptingResponse { done: false }))
     } else {
         let anchor_properties = anchor_properties.expect("is_none to hold");
-        let symbol_manager = app.symbol_manager.clone();
         let join_handle = tokio::spawn(async move {
             let anchored_symbols = anchor_properties.anchored_symbols;
-            let message_properties = anchor_properties.message_properties;
             let user_provided_context = anchor_properties.user_context_string;
-            let _ = symbol_manager
-                .anchor_edits(
-                    instruction,
-                    anchored_symbols,
-                    user_provided_context,
-                    message_properties,
-                )
-                .await;
+            let environment_sender = anchor_properties.environment_event_sender;
+            let _ = environment_sender.send(EnvironmentEventType::human_anchor_request(
+                instruction,
+                anchored_symbols,
+                user_provided_context,
+            ));
         });
         {
             let anchor_tracker = app.anchored_request_tracker.clone();
@@ -813,8 +809,11 @@ pub async fn code_editing(
 
         let (environment_sender, environment_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        let scratch_pad_agent =
-            ScratchPadAgent::new(message_properties.clone(), app.symbol_manager.hub_sender());
+        let scratch_pad_agent = ScratchPadAgent::new(
+            message_properties.clone(),
+            app.tool_box.clone(),
+            app.symbol_manager.hub_sender(),
+        );
 
         let _scratch_pad_handle = tokio::spawn(async move {
             // spawning the scratch pad agent
@@ -831,7 +830,9 @@ pub async fn code_editing(
             file_contents,
             vec![],
             user_provided_context.clone(),
-            environment_sender,
+            // we store the environment sender so we can use it later for
+            // sending the scratchpad some events
+            environment_sender.clone(),
         );
 
         println!("tracking new request");
@@ -1006,25 +1007,17 @@ pub async fn code_editing(
             });
             // end of async task
 
-            let symbol_manager = app.symbol_manager.clone();
-            let cloned_message_properties = message_properties.clone();
             let cloned_user_context = user_provided_context.clone();
+            // no way to monitor the speed of response over here, which sucks but
+            // we can figure that out later
+            let cloned_environment_sender = environment_sender.clone();
 
             let join_handle = tokio::spawn(async move {
-                let anchor_edit_timer = Instant::now();
-                let _ = symbol_manager
-                    .anchor_edits(
-                        user_query,
-                        cloned_symbols_to_anchor.clone(),
-                        cloned_user_context,
-                        cloned_message_properties,
-                    )
-                    .await;
-
-                println!(
-                    "anchor_edit_timer::elapsed({:?})",
-                    anchor_edit_timer.elapsed()
-                );
+                let _ = cloned_environment_sender.send(EnvironmentEventType::human_anchor_request(
+                    user_query,
+                    symbols_to_anchor,
+                    cloned_user_context,
+                ));
             });
 
             let _ = app

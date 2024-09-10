@@ -127,7 +127,7 @@ impl SymbolManager {
         let symbols_to_edit_request = self
             .tool_box
             .symbol_to_edit_request(
-                anchored_symbols,
+                anchored_symbols.as_slice(),
                 &user_query,
                 user_provided_context,
                 message_properties.clone(),

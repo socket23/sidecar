@@ -53,7 +53,7 @@ impl CodeCorrectionArgs {
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
-        extra_symbol_plan: Option<&str>,
+        extra_symbol_plan: Option<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
@@ -68,7 +68,7 @@ impl CodeCorrectionArgs {
             llm,
             provider,
             api_keys,
-            extra_symbol_plan: extra_symbol_plan.map(str::to_owned),
+            extra_symbol_plan,
             message_properties,
         }
     }

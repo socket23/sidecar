@@ -5197,7 +5197,7 @@ instruction:
         let instructions = symbol_edited.instructions().join("\n");
         let fs_file_path = symbol_edited.fs_file_path();
         let extra_symbol_list = tool_properties.get_plan_for_input();
-        let extra_symbol_list_ref = extra_symbol_list.as_deref();
+        let extra_symbol_list_ref = extra_symbol_list.as_deref().map(String::from);
         let symbol_name = symbol_edited.symbol_name();
         let mut updated_code = edited_code.to_owned();
         let mut tries = 0;
@@ -5368,39 +5368,61 @@ instruction:
             }
 
             // Now we check for LSP diagnostics
-            let lsp_diagnostics = self
-                .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.clone())
-                .await?
-                .get_diagnostics();
+            let lsp_diagnostics_output = self
+                .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.to_owned())
+                .await?;
+
+            let diagnostics = lsp_diagnostics_output.get_diagnostics().to_owned();
 
             // We also give it the option to edit the code as required
-            if lsp_diagnostics.is_empty() {
+            if diagnostics.is_empty() {
                 println!(
                     "tool_box::check_code_correctness::get_diagnostics::is_empty(true) - breaking"
                 );
                 break;
             }
 
-            dbg!(&lsp_diagnostics);
+            dbg!(&diagnostics);
 
             // parallel process diagnostics
-            let res = stream::iter(lsp_diagnostics.into_iter().map(|diagnostic| {
+            let res = stream::iter(diagnostics.into_iter().map(|diagnostic| {
                 (
                     diagnostic,
                     fs_file_path.to_owned(),
                     lsp_request_id.to_owned(),
                     message_properties.to_owned(),
+                    fs_file_content.to_owned(),
+                    instructions.to_owned(),
+                    llm.to_owned(),
+                    provider.to_owned(),
+                    api_keys.to_owned(),
+                    extra_symbol_list_ref.to_owned(),
+                    symbol_identifier.to_owned(),
+                    hub_sender.to_owned(),
                 )
             }))
             .map(
-                |(diagnostic, fs_file_path, lsp_request_id, message_properties)| async move {
+                |(
+                    diagnostic,
+                    fs_file_path,
+                    lsp_request_id,
+                    message_properties,
+                    fs_file_content,
+                    instructions,
+                    llm,
+                    provider,
+                    api_keys,
+                    extra_symbol_list_ref,
+                    symbol_identifier,
+                    hub_sender,
+                )| async move {
                     // get quick actions for diagnostics range
                     let quick_fix_actions = self
                         .get_quick_fix_actions(
                             &fs_file_path.to_owned(),
                             diagnostic.range(), // only the fix actions at this range - this range must not change due to another edit
-                            lsp_request_id,
-                            message_properties,
+                            lsp_request_id.to_owned(),
+                            message_properties.to_owned(),
                         )
                         .await?
                         .remove_options();
@@ -5424,7 +5446,7 @@ instruction:
                         provider.clone(),
                         api_keys.clone(),
                         extra_symbol_list_ref,
-                        message_properties.clone(),
+                        message_properties.to_owned(),
                     );
 
                     // now we can send over the request to the LLM to select the best tool
@@ -5435,128 +5457,49 @@ instruction:
 
                     dbg!(&selected_action);
 
+                    let selected_action_index = selected_action.index();
+                    let correctness_tool_thinking = selected_action.thinking();
+
+                    println!(
+                        "toolbox::check_code_correctness::selected_action_index-thinking: {}-{}",
+                        &selected_action_index, &correctness_tool_thinking
+                    );
+
+                    // IDE doesn't react to this atm.
+                    let _ = message_properties.ui_sender().send(
+                        UIEventWithID::code_correctness_action(
+                            message_properties.request_id_str().to_owned(),
+                            symbol_identifier.clone(),
+                            edited_range.clone(),
+                            fs_file_path.to_owned(),
+                            correctness_tool_thinking.to_owned(),
+                        ),
+                    );
+
+                    let _ = self
+                        .handle_selected_action(
+                            selected_action_index,
+                            quick_fix_actions.len() as i64, // todo(zi): may panic?
+                            correctness_tool_thinking,
+                            &lsp_request_id,
+                            message_properties.to_owned(),
+                            tool_properties.to_owned(),
+                            symbol_identifier.to_owned(),
+                            hub_sender.to_owned(),
+                            symbol_edited.to_owned(),
+                        )
+                        .await?;
+
                     Ok(())
                 },
             )
             .buffer_unordered(5)
-            .collect::<Vec<_>>()
+            .collect::<Vec<Result<(), SymbolError>>>()
             .await;
 
             // Now that we have the selected action, we can chose what to do about it
             // there might be a case that we have to re-write the code completely, since
             // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
-            let selected_action_index = selected_action.index();
-            let correctness_tool_thinking = selected_action.thinking();
-
-            println!(
-                "toolbox::check_code_correctness::selected_action_index-thinking: {}-{}",
-                &selected_action_index, &correctness_tool_thinking
-            );
-
-            // IDE doesn't react to this atm.
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::code_correctness_action(
-                    message_properties.request_id_str().to_owned(),
-                    symbol_identifier.clone(),
-                    edited_range.clone(),
-                    fs_file_path.to_owned(),
-                    correctness_tool_thinking.to_owned(),
-                ));
-
-            // TODO(skcd): This needs to change because we will now have 3 actions which can
-            // happen
-            // code edit is a special operation which is not present in the quick-fix
-            // but is provided by us, the way to check this is by looking at the index and seeing
-            // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
-            if selected_action_index == quick_fix_actions.len() as i64 {
-                println!(
-                    "tool_box::check_code_correctness::code_correctness_with_edits (edit self)"
-                );
-
-                let symbol_to_edit_with_correctness_thinking = symbol_edited
-                    .clone_with_instructions(&vec![correctness_tool_thinking.to_owned()]);
-
-                // make sender / receiver pair
-                let (sender, receiver) = tokio::sync::oneshot::channel();
-
-                // wrap in SymbolEventMessage
-                let symbol_event_message = SymbolEventMessage::message_with_properties(
-                    SymbolEventRequest::simple_edit_request(
-                        symbol_identifier.clone(),
-                        symbol_to_edit_with_correctness_thinking.clone(),
-                        tool_properties.clone(),
-                    ),
-                    message_properties.clone(),
-                    sender,
-                );
-
-                let _ = hub_sender
-                    .send(symbol_event_message)
-                    .map_err(|e| SymbolError::SymbolEventSendError(e))?;
-
-                println!("tool_box::check_code_correctness::simple_edit_request::waiting");
-                let _ = receiver.await.map_err(|e| SymbolError::RecvError(e))?;
-                println!("tool_box::check_code_correctness::simple_edit_request::complete");
-            } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
-                // is this still necessary given follow ups?
-
-                // over here we want to ping the other symbols and send them requests, there is a search
-                // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
-                // or maybe we should keep it separate
-                // TODO(skcd): Figure this part out
-                // 1. First we figure out if the code symbol exists in the codebase
-                // 2. If it does exist then we know the action we want to  invoke on it
-                // 3. If the symbol does not exist, then we need to go through the creation loop
-                // where should that happen?
-                println!("tool_box::check_code_correctness::changes_to_codebase");
-                let edit_request_sent = self
-                    .code_correctness_changes_to_codebase(
-                        parent_symbol_name,
-                        fs_file_path,
-                        &edited_range,
-                        &updated_code,
-                        &correctness_tool_thinking,
-                        tool_properties,
-                        LLMProperties::new(llm.clone(), provider.clone(), api_keys.clone()),
-                        history.to_vec(),
-                        hub_sender.clone(),
-                        message_properties.clone(),
-                    )
-                    .await;
-                // if no edits were done to the codebase, then we can break from the
-                // code correction loop and move forward as there is no more action to take
-                if let Ok(false) = edit_request_sent {
-                    break;
-                }
-            } else if selected_action_index == quick_fix_actions.len() as i64 + 2 {
-                println!("tool_box::check_code_correctness::no_changes_required");
-                break;
-            } else {
-                println!(
-                    "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
-                    &selected_action_index, &correctness_tool_thinking
-                );
-
-                // invoke the code action over here with the editor
-                let response = self
-                    .invoke_quick_action(
-                        selected_action_index,
-                        &lsp_request_id,
-                        message_properties.clone(),
-                    )
-                    .await?;
-                if response.is_success() {
-                    println!("tool_box::check_code_correctness::invoke_quick_action::is_success()");
-                    // great we have a W
-                } else {
-                    // boo something bad happened, we should probably log and do something about this here
-                    // for now we assume its all Ws
-                    println!(
-                        "tool_box::check_code_correctness::invoke_quick_action::fail::DO_SOMETHING_ABOUT_THIS"
-                    );
-                }
-            }
         }
         Ok(())
     }
@@ -5600,15 +5543,44 @@ instruction:
         correctness_tool_thinking: &str,
         lsp_request_id: &str,
         message_properties: SymbolEventMessageProperties,
-    ) {
+        tool_properties: ToolProperties,
+        symbol_identifier: SymbolIdentifier,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
+        symbol_edited: SymbolToEdit,
+    ) -> Result<(), SymbolError> {
+        // TODO(skcd): This needs to change because we will now have 3 actions which can
+        // happen
+        // code edit is a special operation which is not present in the quick-fix
+        // but is provided by us, the way to check this is by looking at the index and seeing
+        // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
         match action_index {
-            i if i == total_actions_len => {}
-            i if i == total_actions_len + 1 => {}
+            i if i == total_actions_len => {
+                let symbol_to_edit_with_correctness_thinking = symbol_edited
+                    .clone_with_instructions(&vec![correctness_tool_thinking.to_owned()]);
+
+                let _ = self
+                    .quick_action_simple_edit(
+                        symbol_to_edit_with_correctness_thinking,
+                        symbol_identifier.clone(),
+                        tool_properties.clone(),
+                        message_properties.clone(),
+                        hub_sender.clone(),
+                    )
+                    .await?;
+
+                Ok(())
+            }
+            i if i == total_actions_len + 1 => {
+                // todo(zi): remove option from system prompt then
+                println!("No longer be needed, given followups to come?");
+                Ok(())
+            }
             i if i == total_actions_len + 2 => {
                 println!("tool_box::check_code_correctness::no_changes_required");
-                return;
+                Ok(())
             }
             i if i < total_actions_len => {
+                // invoke quick action
                 println!(
                     "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
                     &action_index, &correctness_tool_thinking
@@ -5628,10 +5600,13 @@ instruction:
                         "tool_box::check_code_correctness::invoke_quick_action::fail::DO_SOMETHING_ABOUT_THIS"
                     );
                 }
+
+                Ok(())
             }
             _ => {
                 // Handle unexpected index
                 println!("Unexpected action index: {}", action_index);
+                Ok(())
             }
         }
     }

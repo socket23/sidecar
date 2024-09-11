@@ -258,12 +258,14 @@ You will be given a scratchpad which you can use to record your work and thought
 The scratchpad might be already populated with your thoughts from before.
 
 The scratchpad is a special place structured as following:
+<scratchpad>
 <files_visible>
 </files_visible>
 <thinking>
 </thinking>
 <tasks>
 </tasks>
+</scratchpad>
 
 You are free to use the scratchpad as your notebook where you can record your work.
 We explain each section of the scratchpad below:
@@ -287,7 +289,16 @@ The different kind of signals which you get are of the following type:
 Your scratchpad is a special place because the developer is also looking at it to inform themselves about the changes made to the codebase, so be concise and insightful in your scratchpad. Remember the developer trusts you a lot!
 
 When you get a signal either from the developer or from the editor you must update the scratchpad, remember the developer is also using to keep an eye on the progress so be the most helpful pair-programmer you can be!
-You have to generate the scratchpad again from scratch and rewrite the whole content which is present inside."#
+You have to generate the scratchpad again from scratch and rewrite the whole content which is present inside.
+Remember to only show your reply in the following format:
+<scratchpad>
+<files_visible>
+</files_visible>
+<thinking>
+</thinking>
+<tasks>
+</tasks>
+</scratchpad>"#
             )
         };
         ScratchPadAgentUserMessage {

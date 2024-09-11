@@ -726,7 +726,6 @@ impl SearchAndReplaceAccumulator {
 
     pub async fn add_delta(&mut self, delta: String) {
         self.answer_up_until_now.push_str(&delta);
-        println!("answer_up_until_now::({})", &self.answer_up_until_now);
         self.process_answer().await;
         // check if we have a new search block starting here
     }

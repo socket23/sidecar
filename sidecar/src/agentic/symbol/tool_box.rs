@@ -5574,12 +5574,8 @@ instruction:
 
                 Ok(())
             }
+            // this is the new +1, since codebase wide edits removed
             i if i == total_actions_len + 1 => {
-                // todo(zi): remove option from system prompt then - we should definitely remove this for now.
-                println!("No longer be needed, given followups to come?");
-                Ok(())
-            }
-            i if i == total_actions_len + 2 => {
                 println!("tool_box::check_code_correctness::no_changes_required");
                 // consider sending UI event here
                 Ok(())

@@ -1931,29 +1931,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     eprintln!("Error checking code correctness: {}", e);
                 }
 
-                // once we have successfully changed the implementation over here
-                // we have to start looking for followups over here
-                // F in the chat for error handling :')
-                println!(
-                    "symbol::edit_implementation::symbol_name({})::followups_triggered",
-                    self.symbol_name()
-                );
-                let _ = self
-                    .tools
-                    .check_for_followups(
-                        self.symbol_name(),
-                        &sub_symbol_to_edit,
-                        &original_code,
-                        &edited_code,
-                        self.llm_properties.llm().clone(),
-                        self.llm_properties.provider().clone(),
-                        self.llm_properties.api_key().clone(),
-                        self.hub_sender.clone(),
-                        message_properties.clone(),
-                        &self.tool_properties,
-                    )
-                    .await
-                    .map_err(|e| eprintln!("{:?}", e));
+                // 🪦 follow ups was here - lest we forget 🪦
             } else {
                 println!("symbol::edit_implementation::symbol_name({})::followups_and_correctness_check_disabled({})", self.symbol_name(), sub_symbol_to_edit.should_disable_followups_and_correctness());
             }

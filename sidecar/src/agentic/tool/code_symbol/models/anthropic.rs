@@ -5736,19 +5736,11 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
             0.0,
             None,
         );
-        let (llm, api_keys, provider) = if retries % 2 == 0 {
-            (
-                request_llm.clone(),
-                request_api_keys.clone(),
-                request_provider.clone(),
-            )
-        } else {
-            (
-                self.fail_over_llm.llm().clone(),
-                self.fail_over_llm.api_key().clone(),
-                self.fail_over_llm.provider().clone(),
-            )
-        };
+        let (llm, api_keys, provider) = (
+            request_llm.clone(),
+            request_api_keys.clone(),
+            request_provider.clone(),
+        );
         let cloned_request = messages.clone().set_llm(llm);
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self

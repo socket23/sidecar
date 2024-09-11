@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     Application::install_logging(&configuration);
 
     // We create our scratch-pad directory
-    Application::setup_scratch_pad(&configuration);
+    Application::setup_scratch_pad(&configuration).await;
 
     // Create a oneshot channel
     let (tx, rx) = oneshot::channel();

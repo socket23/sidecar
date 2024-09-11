@@ -183,6 +183,19 @@ impl Application {
         LOGGER_INSTALLED.set(true).unwrap();
     }
 
+    /// This can blow up, so be careful
+    pub async fn setup_scratch_pad(config: &Configuration) {
+        let scratch_pad_path = config.scratch_pad();
+        if !tokio::fs::try_exists(&scratch_pad_path)
+            .await
+            .expect("checking for scratch_pad directory creation should work")
+        {
+            tokio::fs::create_dir_all(&scratch_pad_path)
+                .await
+                .expect("scratch_pad directory creation failed");
+        }
+    }
+
     pub fn write_index(&self) -> BoundSyncQueue {
         self.sync_queue.bind(self.clone())
     }

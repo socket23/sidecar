@@ -53,14 +53,15 @@ pub struct ScratchPadAgent {
 }
 
 impl ScratchPadAgent {
-    pub fn new(
+    pub async fn new(
+        scratch_pad_path: String,
         message_properties: SymbolEventMessageProperties,
         tool_box: Arc<ToolBox>,
         symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     ) -> Self {
         let (reaction_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let scratch_pad_agent = Self {
-            storage_fs_path: "/Users/skcd/test_repo/sidecar/scratchpad.md".to_owned(),
+            storage_fs_path: scratch_pad_path,
             message_properties,
             tool_box,
             symbol_event_sender,

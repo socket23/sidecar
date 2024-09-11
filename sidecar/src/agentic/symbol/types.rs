@@ -5,7 +5,7 @@
 //! keep track of and whenever a question is asked we forward it to all the implementations
 //! and select the ones which are necessary.
 
-use std::{collections::HashMap, sync::Arc, thread, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use derivative::Derivative;
 use futures::{future::Shared, stream, FutureExt, StreamExt};

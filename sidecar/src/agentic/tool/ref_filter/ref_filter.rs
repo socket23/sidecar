@@ -614,7 +614,7 @@ impl Tool for ReferenceFilterBroker {
                     };
 
                     if let Some(parsed_response) = parsed_response {
-                        println!("parsing successful, sending UI: {:?}", &parsed_response);
+                        println!("{:?}", &parsed_response);
                         if parsed_response.change_required {
                             let ui_sender = context.message_properties().ui_sender();
                             let _ = ui_sender.send(UIEventWithID::relevant_reference(

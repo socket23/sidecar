@@ -123,6 +123,7 @@ impl SymbolEventRequest {
         }
     }
 
+    // no longer used - unless we're clear about a purpose.
     pub fn ask_question(
         symbol: SymbolIdentifier,
         question: String,
@@ -1806,6 +1807,8 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.symbol_name(),
                 sub_symbol_to_edit.should_gather_definitions_for_editing(),
             );
+
+            // todo(zi): how long does this take?
             let context_for_editing = self
                 .gather_definitions_for_editing(&sub_symbol_to_edit, message_properties.clone())
                 .await?;
@@ -1928,31 +1931,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                     eprintln!("Error checking code correctness: {}", e);
                 }
 
-                // todo!(); // todo(zi): remove this
-
-                // once we have successfully changed the implementation over here
-                // we have to start looking for followups over here
-                // F in the chat for error handling :')
-                println!(
-                    "symbol::edit_implementation::symbol_name({})::followups_triggered",
-                    self.symbol_name()
-                );
-                let _ = self
-                    .tools
-                    .check_for_followups(
-                        self.symbol_name(),
-                        &sub_symbol_to_edit,
-                        &original_code,
-                        &edited_code,
-                        self.llm_properties.llm().clone(),
-                        self.llm_properties.provider().clone(),
-                        self.llm_properties.api_key().clone(),
-                        self.hub_sender.clone(),
-                        message_properties.clone(),
-                        &self.tool_properties,
-                    )
-                    .await
-                    .map_err(|e| eprintln!("{:?}", e));
+                // 🪦 follow ups was here - lest we forget 🪦
             } else {
                 println!("symbol::edit_implementation::symbol_name({})::followups_and_correctness_check_disabled({})", self.symbol_name(), sub_symbol_to_edit.should_disable_followups_and_correctness());
             }
@@ -2031,11 +2010,11 @@ Satisfy the requirement either by making edits or gathering the required informa
                                         &initial_request,
                                     );
                                 }
-                                println!(
-                                    "Response from symbol.hub_sender::({}): {:?}",
-                                    symbol.symbol_name(),
-                                    &response,
-                                );
+                                // println!(
+                                //     "Response from symbol.hub_sender::({}): {:?}",
+                                //     symbol.symbol_name(),
+                                //     &response,
+                                // );
                                 // ideally we want to give this resopnse back to the symbol
                                 // so it can keep track of everything that its doing, we will get to that
                                 let _ = response_sender.send(SymbolEventResponse::TaskDone(

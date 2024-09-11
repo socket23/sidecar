@@ -8,18 +8,123 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys},
 };
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{
-        errors::ToolError,
-        input::ToolInput,
-        lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
-        output::ToolOutput,
-        r#type::{Tool, ToolType},
+use crate::{
+    agentic::{
+        symbol::{events::message_event::SymbolEventMessageProperties, identifier::LLMProperties},
+        tool::{
+            errors::ToolError,
+            input::ToolInput,
+            lsp::{diagnostics::Diagnostic, quick_fix::QuickFixOption},
+            output::ToolOutput,
+            r#type::{Tool, ToolType},
+        },
     },
+    chunking::text_document::Range,
 };
 
 use super::{models::anthropic::AnthropicCodeSymbolImportant, types::CodeSymbolError};
+
+pub struct CodeCorrectionArgs {
+    fs_file_path: String,
+    fs_file_content: String,
+    edited_range: Range,
+    symbol_name: String,
+    instruction: String,
+    previous_code: String,
+    diagnostic: Diagnostic,
+    quick_fix_actions: Vec<QuickFixOption>,
+    llm: LLMType,
+    provider: LLMProvider,
+    api_keys: LLMProviderAPIKeys,
+    extra_symbol_plan: Option<String>,
+    message_properties: SymbolEventMessageProperties,
+}
+
+impl CodeCorrectionArgs {
+    pub fn new(
+        fs_file_path: &str,
+        fs_file_content: &str,
+        edited_range: Range,
+        symbol_name: &str,
+        instruction: &str,
+        previous_code: &str,
+        diagnostic: Diagnostic,
+        quick_fix_actions: Vec<QuickFixOption>,
+        llm: LLMType,
+        provider: LLMProvider,
+        api_keys: LLMProviderAPIKeys,
+        extra_symbol_plan: Option<String>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Self {
+        Self {
+            fs_file_path: fs_file_path.to_owned(),
+            fs_file_content: fs_file_content.to_owned(),
+            edited_range,
+            symbol_name: symbol_name.to_owned(),
+            instruction: instruction.to_owned(),
+            previous_code: previous_code.to_owned(),
+            diagnostic,
+            quick_fix_actions,
+            llm,
+            provider,
+            api_keys,
+            extra_symbol_plan,
+            message_properties,
+        }
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn fs_file_content(&self) -> &str {
+        &self.fs_file_content
+    }
+
+    pub fn edited_range(&self) -> &Range {
+        &self.edited_range
+    }
+
+    pub fn symbol_name(&self) -> &str {
+        &self.symbol_name
+    }
+
+    pub fn instruction(&self) -> &str {
+        &self.instruction
+    }
+
+    pub fn previous_code(&self) -> &str {
+        &self.previous_code
+    }
+
+    pub fn diagnostic(&self) -> &Diagnostic {
+        &self.diagnostic
+    }
+
+    pub fn quick_fix_actions(&self) -> &[QuickFixOption] {
+        &self.quick_fix_actions
+    }
+
+    pub fn llm(&self) -> &LLMType {
+        &self.llm
+    }
+
+    pub fn provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    pub fn api_keys(&self) -> &LLMProviderAPIKeys {
+        &self.api_keys
+    }
+
+    pub fn extra_symbol_plan(&self) -> Option<&str> {
+        self.extra_symbol_plan.as_deref()
+    }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
+    }
+}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "reply")]
@@ -48,7 +153,7 @@ pub struct CodeCorrectnessRequest {
     symbol_name: String,
     instruction: String,
     previous_code: String,
-    diagnostics: Vec<Diagnostic>,
+    diagnostic: Diagnostic,
     quick_fix_actions: Vec<QuickFixOption>,
     llm: LLMType,
     provider: LLMProvider,
@@ -68,7 +173,7 @@ impl CodeCorrectnessRequest {
         code_in_selection: String,
         symbol_name: String,
         instruction: String,
-        diagnostics: Vec<Diagnostic>,
+        diagnostic: Diagnostic,
         quick_fix_actions: Vec<QuickFixOption>,
         previous_code: String,
         llm: LLMType,
@@ -87,7 +192,7 @@ impl CodeCorrectnessRequest {
             quick_fix_actions,
             instruction,
             symbol_name,
-            diagnostics,
+            diagnostic,
             llm,
             provider,
             api_keys,
@@ -116,8 +221,8 @@ impl CodeCorrectnessRequest {
         &self.symbol_name
     }
 
-    pub fn diagnostics(&self) -> &[Diagnostic] {
-        self.diagnostics.as_slice()
+    pub fn diagnostic(&self) -> &Diagnostic {
+        &self.diagnostic
     }
 
     pub fn quick_fix_actions(&self) -> &[QuickFixOption] {

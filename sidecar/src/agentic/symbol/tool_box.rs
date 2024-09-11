@@ -20,7 +20,7 @@ use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionReques
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
 use crate::agentic::tool::code_symbol::correctness::{
-    CodeCorrectnessAction, CodeCorrectnessRequest,
+    CodeCorrectionArgs, CodeCorrectnessAction, CodeCorrectnessRequest,
 };
 use crate::agentic::tool::code_symbol::error_fix::CodeEditingErrorRequest;
 use crate::agentic::tool::code_symbol::find_file_for_new_symbol::{
@@ -66,9 +66,7 @@ use crate::agentic::tool::filtering::broker::{
 };
 use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClientResponse};
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
-use crate::agentic::tool::lsp::diagnostics::{
-    Diagnostic, LSPDiagnosticsInput, LSPDiagnosticsOutput,
-};
+use crate::agentic::tool::lsp::diagnostics::{LSPDiagnosticsInput, LSPDiagnosticsOutput};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -88,7 +86,7 @@ use crate::agentic::tool::lsp::inlay_hints::InlayHintsRequest;
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
-    LSPQuickFixInvocationResponse, QuickFixOption,
+    LSPQuickFixInvocationResponse,
 };
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
@@ -3521,6 +3519,9 @@ Please update this code to accommodate these changes. Consider:
                 parent_symbol_name,
                 outline_node.name(),
             );
+
+            // this should no longer be needed - use metadata!
+
             // we do need to get the references over here for the function and
             // send them over as followups to check wherever they are being used
             let references = self
@@ -4050,15 +4051,24 @@ Please update this code to accommodate these changes. Consider:
                             );
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
+
+                        let symbol_identifier = SymbolIdentifier::with_file_path(
+                            outline_node.name(),
+                            outline_node.fs_file_path(),
+                        );
+
+                        let symbol_to_edit_with_updated_instruction = symbol_edited
+                            .clone_with_instructions(&vec![instruction_prompt.clone()]);
+
+                        // go hardcore, straight up edit, no faffing around
+                        let symbol_event_request_for_edit = SymbolEventRequest::simple_edit_request(
+                            symbol_identifier.to_owned(),
+                            symbol_to_edit_with_updated_instruction,
+                            tool_properties.to_owned(),
+                        );
+
                         let event = SymbolEventMessage::new(
-                            SymbolEventRequest::ask_question(
-                                SymbolIdentifier::with_file_path(
-                                    outline_node.name(),
-                                    outline_node.fs_file_path(),
-                                ),
-                                instruction_prompt,
-                                tool_properties.clone(),
-                            ),
+                            symbol_event_request_for_edit,
                             message_properties
                                 .request_id()
                                 .clone()
@@ -4555,7 +4565,7 @@ Make the necessary changes if required making sure that nothing breaks"#
         Ok(reference_locations.filter_out_same_position_location(&fs_file_path, &position))
     }
 
-    async fn swe_bench_test_tool(
+    async fn _swe_bench_test_tool(
         &self,
         swe_bench_test_endpoint: &str,
     ) -> Result<SWEBenchTestRepsonse, SymbolError> {
@@ -5179,12 +5189,12 @@ instruction:
         edited_code: &str,
         // this is the context from the code edit which we want to keep using while
         // fixing
-        code_edit_extra_context: &str,
+        _code_edit_extra_context: &str,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,
         tool_properties: &ToolProperties,
-        history: Vec<SymbolRequestHistoryItem>,
+        _history: Vec<SymbolRequestHistoryItem>,
         hub_sender: UnboundedSender<SymbolEventMessage>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
@@ -5196,351 +5206,420 @@ instruction:
         let instructions = symbol_edited.instructions().join("\n");
         let fs_file_path = symbol_edited.fs_file_path();
         let extra_symbol_list = tool_properties.get_plan_for_input();
-        let extra_symbol_list_ref = extra_symbol_list.as_deref();
+        let extra_symbol_list_ref = extra_symbol_list.as_deref().map(String::from);
         let symbol_name = symbol_edited.symbol_name();
-        let mut updated_code = edited_code.to_owned();
-        let mut tries = 0;
-        let max_tries = 5;
-        loop {
-            // keeping a try counter
-            if tries >= max_tries {
-                break;
-            }
-            tries = tries + 1;
 
-            let should_apply_code_changes_for_addition = symbol_edited.is_new()
-                && self
-                    .should_apply_code_changes_code_addition(
-                        edited_code,
-                        symbol_edited,
-                        parent_symbol_name,
-                        message_properties.clone(),
-                    )
-                    .await?;
+        let updated_code = edited_code.to_owned();
 
-            let lsp_request_id = uuid::Uuid::new_v4().to_string();
+        let should_apply_code_changes_for_addition = symbol_edited.is_new()
+            && self
+                .should_apply_code_changes_code_addition(
+                    edited_code,
+                    symbol_edited,
+                    parent_symbol_name,
+                    message_properties.clone(),
+                )
+                .await?;
 
-            if should_apply_code_changes_for_addition {
-                // applies the proposed edits
-                let _ = self
-                    .apply_code_changes_code_addition(
-                        edited_code,
-                        symbol_edited,
-                        parent_symbol_name,
-                        message_properties.clone(),
-                    )
-                    .await;
-            }
+        println!(
+            "tool_box::should_apply_code_changes_for_addition({})",
+            &should_apply_code_changes_for_addition
+        );
 
-            // TODO(codestory): just make this branch false so we always use
-            // the previous flow
-            let symbol_to_edit_content = {
-                println!("tool_box::check_code_correctness::range_refersh_start::symbol_name::({})::symbol_to_edit::({})::original_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_edited.range());
-                let symbol_to_edit_range = self
-                    .find_sub_symbol_to_edit_with_name(
-                        parent_symbol_name,
-                        symbol_edited,
-                        message_properties.clone(),
-                    )
-                    .await
-                    .map(|outline_node| outline_node.range().clone())
-                    // If its a new symbol we still do not have it in our outline yet, so
-                    // we should grab it from the range position provided in the edit request
-                    .unwrap_or(symbol_edited.range().clone());
-                println!("tool_box::check_code_correctness::symbol_name::({})::symbol_to_edit::({})::changed_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_to_edit_range);
-                let _fs_file_content = self
-                    .file_open(fs_file_path.to_owned(), message_properties.clone())
-                    .await?
-                    .contents();
+        let lsp_request_id = uuid::Uuid::new_v4().to_string();
 
-                // The range of the symbol before doing the edit
-                let edited_range = symbol_to_edit_range;
-                let _editor_response = self
-                    .apply_edits_to_editor(
-                        fs_file_path,
-                        &edited_range,
-                        &updated_code,
-                        false,
-                        message_properties.clone(),
-                    )
-                    .await?;
+        if should_apply_code_changes_for_addition {
+            // applies the proposed edits
+            let _ = self
+                .apply_code_changes_code_addition(
+                    edited_code,
+                    symbol_edited,
+                    parent_symbol_name,
+                    message_properties.clone(),
+                )
+                .await;
+        }
 
-                // after applying the edits to the editor, we will need to get the file
-                // contents and the symbol again
-                let symbol_to_edit = self
-                    .find_sub_symbol_to_edit_with_name(
-                        parent_symbol_name,
-                        symbol_edited,
-                        message_properties.clone(),
-                    )
-                    .await;
-                symbol_to_edit
-            }?;
-            // applying edits completed
-
-            let fs_file_content = self
+        // TODO(codestory): just make this branch false so we always use
+        // the previous flow
+        let symbol_to_edit_content = {
+            println!("tool_box::check_code_correctness::range_refersh_start::symbol_name::({})::symbol_to_edit::({})::original_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_edited.range());
+            let symbol_to_edit_range = self
+                .find_sub_symbol_to_edit_with_name(
+                    parent_symbol_name,
+                    symbol_edited,
+                    message_properties.clone(),
+                )
+                .await
+                .map(|outline_node| outline_node.range().clone())
+                // If its a new symbol we still do not have it in our outline yet, so
+                // we should grab it from the range position provided in the edit request
+                .unwrap_or(symbol_edited.range().clone());
+            println!("tool_box::check_code_correctness::symbol_name::({})::symbol_to_edit::({})::changed_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_to_edit_range);
+            let _fs_file_content = self
                 .file_open(fs_file_path.to_owned(), message_properties.clone())
                 .await?
                 .contents();
 
-            // After applying the changes we get the new range for the symbol
-            let edited_range = symbol_to_edit_content.range().clone();
-            // In case we have swe-bench-tooling enabled over here we should run
-            // the tests first, since we get enough value out if to begin with
-            // TODO(skcd): Use the test output for debugging over here
-            let test_output_maybe = if let Some(swe_bench_test_endpoint) =
-                tool_properties.get_swe_bench_test_endpoint()
-            {
-                let swe_bench_test_output =
-                    self.swe_bench_test_tool(&swe_bench_test_endpoint).await?;
-                // Pass the test output through for checking the correctness of
-                // this code
-                Some(swe_bench_test_output)
-            } else {
-                None
-            };
-
-            // TODO(skcd): Figure out what should we do over here for tracking
-            // the range of the symbol
-            if let Some(test_output) = test_output_maybe {
-                // Check the action to take using the test output here or should
-                // we also combine the lsp diagnostics over here as well???
-                let test_output_logs = test_output.test_output();
-                let tests_passed = test_output.passed();
-                if tests_passed && test_output_logs.is_none() {
-                    // We passed! we can keep going
-                    println!("tool_box::check_code_correctness::test_passed");
-                    return Ok(());
-                } else {
-                    if let Some(test_output_logs) = test_output_logs {
-                        let corrected_code = self
-                            .fix_tests_by_editing(
-                                fs_file_path,
-                                &fs_file_content,
-                                &edited_range,
-                                instructions.to_owned(),
-                                code_edit_extra_context,
-                                original_code,
-                                self.detect_language(fs_file_path).unwrap_or("".to_owned()),
-                                test_output_logs,
-                                llm.clone(),
-                                provider.clone(),
-                                api_keys.clone(),
-                                message_properties.clone(),
-                            )
-                            .await;
-
-                        if corrected_code.is_err() {
-                            println!("tool_box::check_code_correctness::missing_xml_tag");
-                            continue;
-                        }
-                        let corrected_code = corrected_code.expect("is_err above to hold");
-                        // update our edited code
-                        updated_code = corrected_code.to_owned();
-                        // grab the symbol again since the location might have
-                        // changed between invocations of the code
-                        let symbol_to_edit = self
-                            .find_sub_symbol_to_edit_with_name(
-                                parent_symbol_name,
-                                symbol_edited,
-                                message_properties.clone(),
-                            )
-                            .await?;
-
-                        // Now that we have the corrected code, we should again apply
-                        // it to the file
-                        let _ = self
-                            .apply_edits_to_editor(
-                                fs_file_path,
-                                symbol_to_edit.range(),
-                                &corrected_code,
-                                false,
-                                message_properties.clone(),
-                            )
-                            .await;
-
-                        // return over here since we are done with the code correction flow
-                        // since this only happens in case of swe-bench
-                        continue;
-                    }
-                }
-            }
-
-            // Now we check for LSP diagnostics
-            let lsp_diagnostics = self
-                .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.clone())
-                .await?;
-
-            // dbg!(&lsp_diagnostics);
-
-            // We also give it the option to edit the code as required
-            if lsp_diagnostics.get_diagnostics().is_empty() {
-                break;
-            }
-
-            // TODO(skcd): We should format the diagnostics properly over here
-            // with some highlight from the lines above and below so we can show
-            // a more detailed output to the model
-
-            // Now we get all the quick fixes which are available in the editor
-            let quick_fix_actions = self
-                .get_quick_fix_actions(
+            // The range of the symbol before doing the edit
+            let edited_range = symbol_to_edit_range;
+            let _editor_response = self
+                .apply_edits_to_editor(
                     fs_file_path,
                     &edited_range,
-                    lsp_request_id.to_owned(),
+                    &updated_code,
+                    false,
                     message_properties.clone(),
                 )
-                .await?
-                .remove_options();
+                .await?;
 
-            // dbg!(&quick_fix_actions);
+            // after applying the edits to the editor, we will need to get the file
+            // contents and the symbol again
+            let symbol_to_edit = self
+                .find_sub_symbol_to_edit_with_name(
+                    parent_symbol_name,
+                    symbol_edited,
+                    message_properties.clone(),
+                )
+                .await;
+            symbol_to_edit
+        }?;
+        // applying edits completed
+
+        let fs_file_content = self
+            .file_open(fs_file_path.to_owned(), message_properties.clone())
+            .await?
+            .contents();
+
+        // After applying the changes we get the new range for the symbol
+        let edited_range = symbol_to_edit_content.range().clone();
+        // In case we have swe-bench-tooling enabled over here we should run
+        // the tests first, since we get enough value out if to begin with
+        // TODO(skcd): Use the test output for debugging over here
+        // let test_output_maybe = if let Some(swe_bench_test_endpoint) =
+        //     tool_properties.get_swe_bench_test_endpoint()
+        // {
+        //     let swe_bench_test_output = self.swe_bench_test_tool(&swe_bench_test_endpoint).await?;
+        //     // Pass the test output through for checking the correctness of
+        //     // this code
+        //     Some(swe_bench_test_output)
+        // } else {
+        //     None
+        // };
+
+        // // TODO(skcd): Figure out what should we do over here for tracking
+        // // the range of the symbol
+        // if let Some(test_output) = test_output_maybe {
+        //     // Check the action to take using the test output here or should
+        //     // we also combine the lsp diagnostics over here as well???
+        //     let test_output_logs = test_output.test_output();
+        //     let tests_passed = test_output.passed();
+        //     if tests_passed && test_output_logs.is_none() {
+        //         // We passed! we can keep going
+        //         println!("tool_box::check_code_correctness::test_passed");
+        //         return Ok(());
+        //     } else {
+        //         if let Some(test_output_logs) = test_output_logs {
+        //             let corrected_code = self
+        //                 .fix_tests_by_editing(
+        //                     fs_file_path,
+        //                     &fs_file_content,
+        //                     &edited_range,
+        //                     instructions.to_owned(),
+        //                     code_edit_extra_context,
+        //                     original_code,
+        //                     self.detect_language(fs_file_path).unwrap_or("".to_owned()),
+        //                     test_output_logs,
+        //                     llm.clone(),
+        //                     provider.clone(),
+        //                     api_keys.clone(),
+        //                     message_properties.clone(),
+        //                 )
+        //                 .await;
+
+        //             if corrected_code.is_err() {
+        //                 println!("tool_box::check_code_correctness::missing_xml_tag");
+        //                 continue;
+        //             }
+        //             let corrected_code = corrected_code.expect("is_err above to hold");
+        //             // update our edited code
+        //             updated_code = corrected_code.to_owned();
+        //             // grab the symbol again since the location might have
+        //             // changed between invocations of the code
+        //             let symbol_to_edit = self
+        //                 .find_sub_symbol_to_edit_with_name(
+        //                     parent_symbol_name,
+        //                     symbol_edited,
+        //                     message_properties.clone(),
+        //                 )
+        //                 .await?;
+
+        //             // Now that we have the corrected code, we should again apply
+        //             // it to the file
+        //             let _ = self
+        //                 .apply_edits_to_editor(
+        //                     fs_file_path,
+        //                     symbol_to_edit.range(),
+        //                     &corrected_code,
+        //                     false,
+        //                     message_properties.clone(),
+        //                 )
+        //                 .await;
+
+        //             // return over here since we are done with the code correction flow
+        //             // since this only happens in case of swe-bench
+        //             continue;
+        //         }
+        //     }
+        // }
+
+        // Now we check for LSP diagnostics
+        let lsp_diagnostics_output = self
+            .get_lsp_diagnostics(fs_file_path, &edited_range, message_properties.to_owned())
+            .await?;
+
+        let diagnostics = lsp_diagnostics_output.get_diagnostics().to_owned();
+
+        // We also give it the option to edit the code as required
+        if diagnostics.is_empty() {
             println!(
-                "tool_box::check_code_correctness::quick_fix_actions.len({})",
-                &quick_fix_actions.len()
+                "tool_box::check_code_correctness::get_diagnostics::is_empty(true) - no diagnostics found"
             );
+            // early return. Means a) no issues b) issues, but LSP didn't respond in time
+            return Ok(());
+        }
 
-            // now we can send over the request to the LLM to select the best tool
-            // for editing the code out
-            let selected_action = self
-                .code_correctness_action_selection(
-                    fs_file_path,
+        dbg!(&diagnostics);
+
+        // parallel process diagnostics
+        let _res = stream::iter(diagnostics.into_iter().map(|diagnostic| {
+            (
+                diagnostic,
+                fs_file_path.to_owned(),
+                lsp_request_id.to_owned(),
+                message_properties.to_owned(),
+                fs_file_content.to_owned(),
+                instructions.to_owned(),
+                llm.to_owned(),
+                provider.to_owned(),
+                api_keys.to_owned(),
+                extra_symbol_list_ref.to_owned(),
+                symbol_identifier.to_owned(),
+                hub_sender.to_owned(),
+            )
+        }))
+        .map(
+            |(
+                diagnostic,
+                fs_file_path,
+                lsp_request_id,
+                message_properties,
+                fs_file_content,
+                instructions,
+                llm,
+                provider,
+                api_keys,
+                extra_symbol_list_ref,
+                symbol_identifier,
+                hub_sender,
+            )| async move {
+                // get quick actions for diagnostics range
+                let quick_fix_actions = self
+                    .get_quick_fix_actions(
+                        &fs_file_path.to_owned(),
+                        diagnostic.range(), // only the fix actions at this range - this range must not change due to another edit
+                        lsp_request_id.to_owned(),
+                        message_properties.to_owned(),
+                    )
+                    .await?
+                    .remove_options();
+
+                dbg!(&quick_fix_actions);
+                // println!(
+                //     "tool_box::check_code_correctness::quick_fix_actions.len({})",
+                //     &quick_fix_actions.len()
+                // );
+
+                let code_correctness_args = CodeCorrectionArgs::new(
+                    &fs_file_path,
                     &fs_file_content,
-                    &edited_range,
+                    edited_range,
                     symbol_name,
                     &instructions,
                     original_code,
-                    lsp_diagnostics.remove_diagnostics(),
+                    diagnostic.to_owned(),
                     quick_fix_actions.to_vec(),
                     llm.clone(),
                     provider.clone(),
                     api_keys.clone(),
                     extra_symbol_list_ref,
-                    message_properties.clone(),
-                )
-                .await?;
+                    message_properties.to_owned(),
+                );
 
-            // Now that we have the selected action, we can chose what to do about it
-            // there might be a case that we have to re-write the code completely, since
-            // the LLM thinks that the best thing to do, or invoke one of the quick-fix actions
-            let selected_action_index = selected_action.index();
-            let tool_use_thinking = selected_action.thinking();
+                // now we can send over the request to the LLM to select the best tool
+                // for editing the code out
+                let selected_action = self
+                    .code_correctness_action_selection(code_correctness_args)
+                    .await?;
 
-            println!(
-                "toolbox::check_code_correctness::selected_action_index-thinking: {}-{}",
-                &selected_action_index, &tool_use_thinking
-            );
+                let selected_action_index = selected_action.index();
+                let correctness_tool_thinking = selected_action.thinking();
 
-            // what is this for?
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::code_correctness_action(
+                println!(
+                    "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
+                    &selected_action_index, &correctness_tool_thinking
+                );
+
+                let ui_event_with_id = UIEventWithID::code_correctness_action(
                     message_properties.request_id_str().to_owned(),
                     symbol_identifier.clone(),
                     edited_range.clone(),
                     fs_file_path.to_owned(),
-                    tool_use_thinking.to_owned(),
-                ));
+                    correctness_tool_thinking.to_owned(),
+                );
 
-            // TODO(skcd): This needs to change because we will now have 3 actions which can
-            // happen
-            // code edit is a special operation which is not present in the quick-fix
-            // but is provided by us, the way to check this is by looking at the index and seeing
-            // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
-            if selected_action_index == quick_fix_actions.len() as i64 {
-                // edit code in selection
-                let fixed_code = self
-                    .code_correctness_with_edits(
-                        fs_file_path,
-                        &fs_file_content,
-                        symbol_to_edit_content.range(),
-                        code_edit_extra_context.to_owned(),
-                        selected_action.thinking(), // error_instruction
-                        &instructions,
-                        original_code,
-                        llm.clone(),
-                        provider.clone(),
-                        api_keys.clone(),
-                        message_properties.clone(),
-                    )
-                    .await?;
+                // IDE doesn't react to this atm.
+                let _ =
+                    message_properties
+                        .ui_sender()
+                        .send(ui_event_with_id);
 
-                let _ = message_properties
-                    .ui_sender()
-                    .send(UIEventWithID::edited_code(
-                        message_properties.request_id_str().to_owned(),
-                        symbol_identifier.clone(),
-                        edited_range.clone(),
-                        fs_file_path.to_owned(),
-                        fixed_code.to_owned(),
-                    ));
-
-                // after this we have to apply the edits to the editor again and being
-                // the loop again
                 let _ = self
-                    .apply_edits_to_editor(
-                        fs_file_path,
-                        &edited_range,
-                        &fixed_code,
-                        false,
-                        message_properties.clone(),
+                    .handle_selected_action(
+                        selected_action_index,
+                        quick_fix_actions.len() as i64, // todo(zi): may panic?
+                        correctness_tool_thinking,
+                        &lsp_request_id,
+                        message_properties.to_owned(),
+                        tool_properties.to_owned(),
+                        symbol_identifier.to_owned(),
+                        hub_sender.to_owned(),
+                        symbol_edited.to_owned(),
                     )
                     .await?;
-            } else if selected_action_index == quick_fix_actions.len() as i64 + 1 {
-                // is this still necessary given follow ups?
 
-                // over here we want to ping the other symbols and send them requests, there is a search
-                // step with some thinking involved, can we illicit this behavior somehow in the previous invocation
-                // or maybe we should keep it separate
-                // TODO(skcd): Figure this part out
-                // 1. First we figure out if the code symbol exists in the codebase
-                // 2. If it does exist then we know the action we want to  invoke on it
-                // 3. If the symbol does not exist, then we need to go through the creation loop
-                // where should that happen?
-                println!("tool_box::check_code_correctness::changes_to_codebase");
-                let edit_request_sent = self
-                    .code_correctness_changes_to_codebase(
-                        parent_symbol_name,
-                        fs_file_path,
-                        &edited_range,
-                        &updated_code,
-                        &tool_use_thinking,
-                        tool_properties,
-                        LLMProperties::new(llm.clone(), provider.clone(), api_keys.clone()),
-                        history.to_vec(),
-                        hub_sender.clone(),
+                Ok(())
+            },
+        )
+        .buffer_unordered(1) // one at a time for now todo(zi);
+        .collect::<Vec<Result<(), SymbolError>>>()
+        .await;
+        Ok(())
+    }
+
+    async fn quick_action_simple_edit(
+        &self,
+        symbol_to_edit: SymbolToEdit,
+        symbol_identifier: SymbolIdentifier,
+        tool_properties: ToolProperties,
+        message_properties: SymbolEventMessageProperties,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
+    ) -> Result<(), SymbolError> {
+        println!("tool_box::check_code_correctness::code_correctness_with_edits (edit self)");
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let symbol_event_message = SymbolEventMessage::message_with_properties(
+            SymbolEventRequest::simple_edit_request(
+                symbol_identifier,
+                symbol_to_edit,
+                tool_properties,
+            ),
+            message_properties,
+            sender,
+        );
+
+        let _ = hub_sender
+            .send(symbol_event_message)
+            .map_err(|e| SymbolError::SymbolEventSendError(e))?;
+
+        println!("tool_box::check_code_correctness::simple_edit_request::waiting");
+        let _ = receiver.await.map_err(|e| SymbolError::RecvError(e))?;
+        println!("tool_box::check_code_correctness::simple_edit_request::complete");
+
+        Ok(())
+    }
+
+    /// Logic for processing selected actions
+    async fn handle_selected_action(
+        &self,
+        action_index: i64,
+        total_actions_len: i64,
+        correctness_tool_thinking: &str,
+        lsp_request_id: &str,
+        message_properties: SymbolEventMessageProperties,
+        tool_properties: ToolProperties,
+        symbol_identifier: SymbolIdentifier,
+        hub_sender: UnboundedSender<SymbolEventMessage>,
+        symbol_edited: SymbolToEdit,
+    ) -> Result<(), SymbolError> {
+        // TODO(skcd): This needs to change because we will now have 3 actions which can
+        // happen
+        // code edit is a special operation which is not present in the quick-fix
+        // but is provided by us, the way to check this is by looking at the index and seeing
+        // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
+        match action_index {
+            i if i == total_actions_len => {
+                // this may be the culprit of the further, unnecessary edits.
+                // due to this occuring in parallel to quick fix, it misses important assumptions.
+                // todo(zi): is this being hit by the 2nd diagnostic?
+                println!(
+                    "toolbox::handle_selected_action::action_index({})::quic_action_simple_edit",
+                    i
+                );
+                let symbol_to_edit_with_correctness_thinking = symbol_edited
+                    .clone_with_instructions(&vec![correctness_tool_thinking.to_owned()]);
+
+                let _ = self
+                    .quick_action_simple_edit(
+                        symbol_to_edit_with_correctness_thinking,
+                        symbol_identifier.clone(),
+                        tool_properties.clone(),
                         message_properties.clone(),
+                        hub_sender.clone(),
                     )
-                    .await;
-                // if no edits were done to the codebase, then we can break from the
-                // code correction loop and move forward as there is no more action to take
-                if let Ok(false) = edit_request_sent {
-                    break;
-                }
-            } else if selected_action_index == quick_fix_actions.len() as i64 + 2 {
+                    .await?;
+
+                Ok(())
+            }
+            // this is the new +1, since codebase wide edits removed
+            i if i == total_actions_len + 1 => {
                 println!("tool_box::check_code_correctness::no_changes_required");
-                break;
-            } else {
+                // consider sending UI event here
+                Ok(())
+            }
+            i if i < total_actions_len => {
+                let symbol_path = symbol_edited.fs_file_path();
                 // invoke the code action over here with the editor
                 let response = self
                     .invoke_quick_action(
-                        selected_action_index,
+                        action_index,
                         &lsp_request_id,
-                        message_properties.clone(),
+                        symbol_path,
+                        message_properties,
                     )
                     .await?;
                 if response.is_success() {
+                    println!("tool_box::check_code_correctness::invoke_quick_action::is_success()");
                     // great we have a W
                 } else {
                     // boo something bad happened, we should probably log and do something about this here
                     // for now we assume its all Ws
+                    println!(
+                        "tool_box::check_code_correctness::invoke_quick_action::fail::DO_SOMETHING_ABOUT_THIS"
+                    );
                 }
+
+                Ok(())
+            }
+            _ => {
+                // Handle unexpected index
+                println!("Unexpected action index: {}", action_index);
+                Ok(())
             }
         }
-        Ok(())
     }
 
     /// We are going to edit out the code depending on the test output
-    async fn fix_tests_by_editing(
+    async fn _fix_tests_by_editing(
         &self,
         fs_file_path: &str,
         fs_file_content: &str,
@@ -5585,7 +5664,7 @@ instruction:
 
     // TODO(codestory): This part of the puzzle is still messed up since we are rewriting the whole
     // code over here which is not correct
-    async fn code_correctness_with_edits(
+    async fn _code_correctness_with_edits(
         &self,
         fs_file_path: &str,
         fs_file_content: &str,
@@ -5625,45 +5704,33 @@ instruction:
 
     async fn code_correctness_action_selection(
         &self,
-        fs_file_path: &str,
-        fs_file_content: &str,
-        edited_range: &Range,
-        symbol_name: &str,
-        instruction: &str,
-        previous_code: &str,
-        diagnostics: Vec<Diagnostic>,
-        quick_fix_actions: Vec<QuickFixOption>,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_keys: LLMProviderAPIKeys,
-        extra_symbol_plan: Option<&str>,
-        message_properties: SymbolEventMessageProperties,
-        // TODO(skcd): a history parameter and play with the prompt over here so
-        // the LLM does not over index on the history of the symbols which were edited
+        args: CodeCorrectionArgs,
     ) -> Result<CodeCorrectnessAction, SymbolError> {
         let (code_above, code_below, code_in_selection) =
-            split_file_content_into_parts(fs_file_content, edited_range);
+            split_file_content_into_parts(args.fs_file_content(), args.edited_range());
+
         let request = ToolInput::CodeCorrectnessAction(CodeCorrectnessRequest::new(
-            fs_file_content.to_owned(),
-            fs_file_path.to_owned(),
+            args.fs_file_content().to_owned(),
+            args.fs_file_path().to_owned(),
             code_above,
             code_below,
             code_in_selection,
-            symbol_name.to_owned(),
-            instruction.to_owned(),
-            diagnostics,
-            quick_fix_actions,
-            previous_code.to_owned(),
-            llm,
-            provider,
-            api_keys,
-            extra_symbol_plan.map(|plan| plan.to_owned()),
-            message_properties.root_request_id().to_owned(),
+            args.symbol_name().to_owned(),
+            args.instruction().to_owned(),
+            args.diagnostic().to_owned(),
+            args.quick_fix_actions().to_vec(),
+            args.previous_code().to_owned(),
+            args.llm().clone(),
+            args.provider().clone(),
+            args.api_keys().clone(),
+            args.extra_symbol_plan().map(str::to_owned),
+            args.message_properties().root_request_id().to_owned(),
         ));
+
         self.tools
             .invoke(request)
             .await
-            .map_err(|e| SymbolError::ToolError(e))?
+            .map_err(SymbolError::ToolError)?
             .get_code_correctness_action()
             .ok_or(SymbolError::WrongToolOutput)
     }
@@ -6077,12 +6144,14 @@ FILEPATH: {fs_file_path}
         &self,
         quick_fix_index: i64,
         lsp_request_id: &str,
+        fs_file_path: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<LSPQuickFixInvocationResponse, SymbolError> {
         let request = ToolInput::QuickFixInvocationRequest(LSPQuickFixInvocationRequest::new(
             lsp_request_id.to_owned(),
             quick_fix_index,
             message_properties.editor_url(),
+            fs_file_path.to_owned(),
         ));
         self.tools
             .invoke(request)

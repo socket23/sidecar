@@ -1,7 +1,9 @@
 use thiserror::Error;
-use tokio::sync::oneshot::error::RecvError;
+use tokio::sync::{mpsc::error::SendError, oneshot::error::RecvError};
 
 use crate::agentic::tool::errors::ToolError;
+
+use super::events::message_event::SymbolEventMessage;
 
 #[derive(Debug, Error)]
 pub enum SymbolError {
@@ -61,4 +63,7 @@ pub enum SymbolError {
 
     #[error("Edit not required: {0}")]
     EditNotRequired(String),
+
+    #[error("Symbol event send error: {0}")]
+    SymbolEventSendError(SendError<SymbolEventMessage>),
 }

@@ -120,6 +120,12 @@ impl SymbolToEdit {
     pub fn user_provided_context(&self) -> Option<String> {
         self.user_provided_context.clone()
     }
+
+    pub fn clone_with_instructions(&self, new_instructions: &[String]) -> Self {
+        let mut clone = self.clone();
+        clone.instructions = new_instructions.to_vec();
+        clone
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

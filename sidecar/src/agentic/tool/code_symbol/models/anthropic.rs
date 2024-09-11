@@ -4197,19 +4197,16 @@ You have to do that always and only select a single action at a time."#
             .into_iter()
             .map(|line| line.to_owned())
             .collect::<Vec<_>>();
-        let diagnostics = code_correctness_request.diagnostics();
+        let diagnostic = code_correctness_request.diagnostic();
         let fs_file_path = code_correctness_request.fs_file_path();
-        let formatted_diagnostics = diagnostics
-            .into_iter()
-            .filter_map(|diagnostics| {
-                self.format_lsp_diagnostic_for_prompt(
-                    fs_file_content_lines.as_slice(),
-                    fs_file_path.to_owned(),
-                    diagnostics,
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+
+        let formatted_diagnostic = self
+            .format_lsp_diagnostic_for_prompt(
+                fs_file_content_lines.as_slice(),
+                fs_file_path.to_owned(),
+                diagnostic,
+            )
+            .unwrap_or("\n".to_owned()); // what should we do about None?
 
         // now we show the quick actions which are avaiable as tools along with
         // the code edit which is always an option as well
@@ -4239,17 +4236,6 @@ You have to do that always and only select a single action at a time."#
 </index>
 <intent>
 edit code in selection
-</intent>
-</action>"#
-        ));
-        let actions_until_now_for_codebase_wide_edit = quick_actions.len();
-        quick_actions.push(format!(
-            r#"<action>
-<index>
-{actions_until_now_for_codebase_wide_edit}
-</index>
-<intent>
-edit code in other places
 </intent>
 </action>"#
         ));
@@ -4311,7 +4297,7 @@ no action required
             r#"<query>
 {file_content}
 <diagnostic_list>
-{formatted_diagnostics}
+{formatted_diagnostic}
 </diagnostic_list>
 <action_list>
 {formatted_actions}
@@ -5739,80 +5725,59 @@ impl CodeCorrectness for AnthropicCodeSymbolImportant {
             0.0,
             None,
         );
-        let mut retries = 0;
-        loop {
-            if retries >= 4 {
-                return Err(CodeSymbolError::ExhaustedRetries);
-            }
-            let (llm, api_keys, provider) = if retries % 2 == 0 {
-                (
-                    request_llm.clone(),
-                    request_api_keys.clone(),
-                    request_provider.clone(),
-                )
-            } else {
-                (
-                    self.fail_over_llm.llm().clone(),
-                    self.fail_over_llm.api_key().clone(),
-                    self.fail_over_llm.provider().clone(),
-                )
-            };
-            let cloned_request = messages.clone().set_llm(llm);
-            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-            let response = self
-                .llm_client
-                .stream_completion(
-                    api_keys,
-                    cloned_request,
-                    provider,
-                    vec![
-                        (
-                            "event_type".to_owned(),
-                            "code_correctness_tool_use".to_owned(),
-                        ),
-                        ("root_id".to_owned(), root_request_id.to_owned()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    sender,
-                )
-                .await?;
-            // now that we have the response we have to make sure to parse the thinking
-            // process properly or else it will blow up in our faces pretty quickly
-            let mut inside_thinking = false;
-            let fixed_response = response
-                .lines()
+        let (llm, api_keys, provider) = (
+            request_llm.clone(),
+            request_api_keys.clone(),
+            request_provider.clone(),
+        );
+        let cloned_request = messages.clone().set_llm(llm);
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let response = self
+            .llm_client
+            .stream_completion(
+                api_keys,
+                cloned_request,
+                provider,
+                vec![
+                    (
+                        "event_type".to_owned(),
+                        "code_correctness_tool_use".to_owned(),
+                    ),
+                    ("root_id".to_owned(), root_request_id.to_owned()),
+                ]
                 .into_iter()
-                .map(|response| {
-                    if response.starts_with("<thinking>") {
-                        inside_thinking = true;
-                        return response.to_owned();
-                    } else if response.starts_with("</thinking>") {
-                        inside_thinking = false;
-                        return response.to_owned();
-                    }
-                    if inside_thinking {
-                        // espcae the string here
-                        Self::unescape_xml(response.to_owned())
-                    } else {
-                        response.to_owned()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            let parsed_response = from_str::<CodeCorrectnessAction>(&fixed_response).map_err(|e| {
-                CodeSymbolError::SerdeError(SerdeError::new(e, fixed_response.to_owned()))
-            });
-            match parsed_response {
-                Ok(parsed_response) => {
-                    return Ok(parsed_response);
+                .collect(),
+                sender,
+            )
+            .await?;
+        // now that we have the response we have to make sure to parse the thinking
+        // process properly or else it will blow up in our faces pretty quickly
+        let mut inside_thinking = false;
+        let fixed_response = response
+            .lines()
+            .into_iter()
+            .map(|response| {
+                if response.starts_with("<thinking>") {
+                    inside_thinking = true;
+                    return response.to_owned();
+                } else if response.starts_with("</thinking>") {
+                    inside_thinking = false;
+                    return response.to_owned();
                 }
-                Err(_e) => {
-                    retries = retries + 1;
-                    continue;
+                if inside_thinking {
+                    // espcae the string here
+                    Self::unescape_xml(response.to_owned())
+                } else {
+                    response.to_owned()
                 }
-            }
-        }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let parsed_response = from_str::<CodeCorrectnessAction>(&fixed_response).map_err(|e| {
+            CodeSymbolError::SerdeError(SerdeError::new(e, fixed_response.to_owned()))
+        });
+
+        parsed_response
     }
 }
 

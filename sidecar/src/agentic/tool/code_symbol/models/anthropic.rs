@@ -4239,17 +4239,6 @@ edit code in selection
 </intent>
 </action>"#
         ));
-        let actions_until_now_for_codebase_wide_edit = quick_actions.len();
-        quick_actions.push(format!(
-            r#"<action>
-<index>
-{actions_until_now_for_codebase_wide_edit}
-</index>
-<intent>
-edit code in other places
-</intent>
-</action>"#
-        ));
         let action_index_for_no_action = quick_actions.len();
         quick_actions.push(format!(
             r#"<action>

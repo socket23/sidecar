@@ -92,14 +92,16 @@ pub struct LSPQuickFixInvocationRequest {
     request_id: String,
     index: i64,
     editor_url: String,
+    fs_file_path: String,
 }
 
 impl LSPQuickFixInvocationRequest {
-    pub fn new(request_id: String, index: i64, editor_url: String) -> Self {
+    pub fn new(request_id: String, index: i64, editor_url: String, fs_file_path: String) -> Self {
         Self {
             request_id,
             index,
             editor_url,
+            fs_file_path,
         }
     }
 }

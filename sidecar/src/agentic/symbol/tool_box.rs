@@ -5473,17 +5473,19 @@ instruction:
                     &selected_action_index, &correctness_tool_thinking
                 );
 
+                let ui_event_with_id = UIEventWithID::code_correctness_action(
+                    message_properties.request_id_str().to_owned(),
+                    symbol_identifier.clone(),
+                    edited_range.clone(),
+                    fs_file_path.to_owned(),
+                    correctness_tool_thinking.to_owned(),
+                );
+
                 // IDE doesn't react to this atm.
                 let _ =
                     message_properties
                         .ui_sender()
-                        .send(UIEventWithID::code_correctness_action(
-                            message_properties.request_id_str().to_owned(),
-                            symbol_identifier.clone(),
-                            edited_range.clone(),
-                            fs_file_path.to_owned(),
-                            correctness_tool_thinking.to_owned(),
-                        ));
+                        .send(ui_event_with_id);
 
                 let _ = self
                     .handle_selected_action(
@@ -5559,6 +5561,13 @@ instruction:
         // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
         match action_index {
             i if i == total_actions_len => {
+                // this may be the culprit of the further, unnecessary edits.
+                // due to this occuring in parallel to quick fix, it misses important assumptions.
+                // todo(zi): is this being hit by the 2nd diagnostic?
+                println!(
+                    "toolbox::handle_selected_action::action_index({})::quic_action_simple_edit",
+                    i
+                );
                 let symbol_to_edit_with_correctness_thinking = symbol_edited
                     .clone_with_instructions(&vec![correctness_tool_thinking.to_owned()]);
 
@@ -5581,9 +5590,15 @@ instruction:
                 Ok(())
             }
             i if i < total_actions_len => {
+                let symbol_path = symbol_edited.fs_file_path();
                 // invoke the code action over here with the editor
                 let response = self
-                    .invoke_quick_action(action_index, &lsp_request_id, message_properties)
+                    .invoke_quick_action(
+                        action_index,
+                        &lsp_request_id,
+                        symbol_path,
+                        message_properties,
+                    )
                     .await?;
                 if response.is_success() {
                     println!("tool_box::check_code_correctness::invoke_quick_action::is_success()");
@@ -6132,12 +6147,14 @@ FILEPATH: {fs_file_path}
         &self,
         quick_fix_index: i64,
         lsp_request_id: &str,
+        fs_file_path: &str,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<LSPQuickFixInvocationResponse, SymbolError> {
         let request = ToolInput::QuickFixInvocationRequest(LSPQuickFixInvocationRequest::new(
             lsp_request_id.to_owned(),
             quick_fix_index,
             message_properties.editor_url(),
+            fs_file_path.to_owned(),
         ));
         self.tools
             .invoke(request)

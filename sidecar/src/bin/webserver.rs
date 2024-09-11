@@ -27,6 +27,9 @@ async fn main() -> Result<()> {
     debug!("installing logging to local file");
     Application::install_logging(&configuration);
 
+    // We create our scratch-pad directory
+    Application::setup_scratch_pad(&configuration);
+
     // Create a oneshot channel
     let (tx, rx) = oneshot::channel();
 

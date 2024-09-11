@@ -98,6 +98,10 @@ impl Configuration {
     pub fn qdrant_storage(&self) -> PathBuf {
         self.index_dir.join("qdrant_storage")
     }
+
+    pub fn scratch_pad(&self) -> PathBuf {
+        self.index_dir.join("scratch_pad")
+    }
 }
 
 fn default_index_dir() -> PathBuf {

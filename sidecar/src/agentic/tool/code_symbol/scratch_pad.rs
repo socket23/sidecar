@@ -190,8 +190,6 @@ The scratchpad is a special place structured as following:
 <scratchpad>
 <files_visible>
 </files_visible>
-<thinking>
-</thinking>
 <tasks>
 </tasks>
 </scratchpad>
@@ -200,8 +198,6 @@ You are free to use the scratchpad as your notebook where you can record your wo
 We explain each section of the scratchpad below:
 - <files_visible>
 These are the files which are visible to you in the editor, if you want to open new files or ask for more information please use the <next_steps> section and state the WHY always
-- <thinking>
-You can use this to record your running thoughts, any progress which the user has made, this is space for your inner monologue, be concise over here
 - <tasks>
 The tasks can be in 3 different modes:
 - [in_progress] The inprogress tasks are the ones which are going on right now
@@ -271,8 +267,6 @@ The scratchpad is a special place structured as following:
 <scratchpad>
 <files_visible>
 </files_visible>
-<thinking>
-</thinking>
 <tasks>
 </tasks>
 </scratchpad>
@@ -281,8 +275,6 @@ You are free to use the scratchpad as your notebook where you can record your wo
 We explain each section of the scratchpad below:
 - <files_visible>
 These are the files which are visible to you in the editor, if you want to open new files or ask for more information please use the <next_steps> section and state the WHY always
-- <thinking>
-You can use this to record your running thoughts, any progress which the user has made, this is space for your inner monologue, be concise over here
 - <tasks>
 The tasks can be in 3 different modes:
 - [in_progress] The inprogress tasks are the ones which are going on right now
@@ -312,8 +304,6 @@ Remember to only show your reply in the following format:
 <scratchpad>
 <files_visible>
 </files_visible>
-<thinking>
-</thinking>
 <tasks>
 </tasks>
 </scratchpad>"#

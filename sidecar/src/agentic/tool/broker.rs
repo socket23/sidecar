@@ -25,7 +25,7 @@ use super::{
         probe_question_for_symbol::ProbeQuestionForSymbol,
         probe_try_hard_answer::ProbeTryHardAnswer, repo_map_search::RepoMapSearchBroker,
         reranking_symbols_for_editing_context::ReRankingSnippetsForCodeEditingContext,
-        should_edit::ShouldEditCodeSymbol,
+        scratch_pad::ScratchPadAgentBroker, should_edit::ShouldEditCodeSymbol,
     },
     editor::apply::EditorApply,
     errors::ToolError,
@@ -378,6 +378,10 @@ impl ToolBroker {
                 llm_client.clone(),
                 fail_over_llm.clone(),
             )),
+        );
+        tools.insert(
+            ToolType::ScratchPadAgent,
+            Box::new(ScratchPadAgentBroker::new(llm_client)),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

@@ -118,18 +118,22 @@ impl SearchAndReplaceEditingRequest {
     }
 }
 
-struct StreamedEditingForEditor {
+pub struct StreamedEditingForEditor {
     client: reqwest::Client,
 }
 
 impl StreamedEditingForEditor {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
         }
     }
 
-    async fn send_edit_event(&self, editor_url: String, edit_event: EditedCodeStreamingRequest) {
+    pub async fn send_edit_event(
+        &self,
+        editor_url: String,
+        edit_event: EditedCodeStreamingRequest,
+    ) {
         let editor_endpoint = editor_url + "/apply_edits_streamed";
         let _ = self
             .client
@@ -666,7 +670,7 @@ impl Tool for SearchAndReplaceEditing {
     }
 }
 
-enum EditDelta {
+pub enum EditDelta {
     EditStarted(Range),
     EditDelta((Range, String)),
     EditEnd(Range),
@@ -683,11 +687,11 @@ enum SearchBlockStatus {
     BlockFound((String, Range)),
 }
 
-struct SearchAndReplaceAccumulator {
-    code_lines: Vec<String>,
+pub struct SearchAndReplaceAccumulator {
+    pub code_lines: Vec<String>,
     start_line: usize,
     answer_up_until_now: String,
-    answer_to_show: String,
+    pub answer_to_show: String,
     previous_answer_line_number: Option<usize>,
     search_block_status: SearchBlockStatus,
     updated_block: Option<String>,
@@ -716,17 +720,17 @@ impl SearchAndReplaceAccumulator {
         }
     }
 
-    async fn end_streaming(&mut self) {
+    pub async fn end_streaming(&mut self) {
         let _ = self.sender.send(EditDelta::EndPollingStream);
     }
 
-    async fn add_delta(&mut self, delta: String) {
+    pub async fn add_delta(&mut self, delta: String) {
         self.answer_up_until_now.push_str(&delta);
         self.process_answer().await;
         // check if we have a new search block starting here
     }
 
-    async fn process_answer(&mut self) {
+    pub async fn process_answer(&mut self) {
         let head = "<<<<<<< SEARCH";
         let divider = "=======";
         let updated = vec![">>>>>>> REPLACE", "======="];

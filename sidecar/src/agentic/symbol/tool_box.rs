@@ -57,6 +57,9 @@ use crate::agentic::tool::code_symbol::probe_try_hard_answer::ProbeTryHardAnswer
 use crate::agentic::tool::code_symbol::reranking_symbols_for_editing_context::{
     ReRankingCodeSnippetSymbolOutline, ReRankingSnippetsForCodeEditingRequest,
 };
+use crate::agentic::tool::code_symbol::scratch_pad::{
+    ScratchPadAgentHumanMessage, ScratchPadAgentInput, ScratchPadAgentInputType,
+};
 use crate::agentic::tool::code_symbol::should_edit::ShouldEditCodeSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
 use crate::agentic::tool::errors::ToolError;
@@ -132,6 +135,53 @@ impl ToolBox {
             symbol_broker,
             editor_parsing,
         }
+    }
+
+    /// sends the user query to the scratch-pad agent
+    pub async fn scratch_pad_agent_human_request(
+        &self,
+        scratch_pad_path: String,
+        user_query: String,
+        user_context_files: Vec<String>,
+        user_code_selected: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        let scratch_pad_content = self
+            .file_open(scratch_pad_path.to_owned(), message_properties.clone())
+            .await;
+        println!(
+            "tool_box::scratch_pad_agent_human_request::scratch_pad_present::({})",
+            scratch_pad_content.is_ok()
+        );
+        if let Ok(scratch_pad_content) = scratch_pad_content {
+            let _ = self
+                .tools
+                .invoke(ToolInput::ScratchPadInput(ScratchPadAgentInput::new(
+                    user_context_files.to_vec(),
+                    "".to_owned(),
+                    ScratchPadAgentInputType::UserMessage(ScratchPadAgentHumanMessage::new(
+                        user_code_selected,
+                        user_context_files,
+                        user_query,
+                    )),
+                    scratch_pad_content.contents(),
+                    scratch_pad_path.to_owned(),
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.ui_sender(),
+                    message_properties.editor_url(),
+                )))
+                .await;
+        }
+        Ok(())
+    }
+
+    /// send the edits which have been made to the scratch-pad agent
+    pub async fn scratch_pad_edits_made(
+        &self,
+        scratch_pad_path: &str,
+        edits_made: String,
+    ) -> Result<(), SymbolError> {
+        Ok(())
     }
 
     /// Inserts a new line at the locatiaon we want to, this is a smart way to

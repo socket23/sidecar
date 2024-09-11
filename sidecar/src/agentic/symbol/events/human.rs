@@ -2,7 +2,7 @@
 
 use crate::agentic::symbol::anchored::AnchoredSymbol;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HumanAnchorRequest {
     query: String,
     anchored_symbols: Vec<AnchoredSymbol>,

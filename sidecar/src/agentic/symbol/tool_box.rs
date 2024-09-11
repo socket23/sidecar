@@ -5293,6 +5293,9 @@ instruction:
         // TODO(codestory): just make this branch false so we always use
         // the previous flow
         let symbol_to_edit_content = {
+            // why is any of this necessary?
+            // why does code correctness care about applying edits?
+
             println!("tool_box::check_code_correctness::range_refersh_start::symbol_name::({})::symbol_to_edit::({})::original_range::({:?})", symbol_name, symbol_edited.symbol_name(), &symbol_edited.range());
             let symbol_to_edit_range = self
                 .find_sub_symbol_to_edit_with_name(
@@ -8313,7 +8316,7 @@ FILEPATH: {fs_file_path}
                         None,
                         false, // grab definitions
                         user_provided_context.to_owned(),
-                        true, // disable followups
+                        false, // disable followups - keep false to enable followups
                     )],
                     symbol_identifier.clone(),
                     vec![],

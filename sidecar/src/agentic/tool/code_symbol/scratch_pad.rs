@@ -347,7 +347,6 @@ impl Tool for ScratchPadAgentBroker {
         if is_cache_warmup {
             request = request.set_max_tokens(1);
         }
-        dbg!(&request);
         let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let cloned_root_request_id = root_request_id.to_owned();

@@ -1902,7 +1902,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.symbol_name()
             );
 
-            thread::sleep(Duration::from_secs(5));
+            tokio::time::sleep(Duration::from_secs(5)).await;
 
             // if we have to make sure that followups and correctness checks need
             // to keep happening

@@ -66,10 +66,7 @@ use crate::agentic::tool::filtering::broker::{
 };
 use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClientResponse};
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
-use crate::agentic::tool::lsp;
-use crate::agentic::tool::lsp::diagnostics::{
-    Diagnostic, LSPDiagnosticsInput, LSPDiagnosticsOutput,
-};
+use crate::agentic::tool::lsp::diagnostics::{LSPDiagnosticsInput, LSPDiagnosticsOutput};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -89,7 +86,7 @@ use crate::agentic::tool::lsp::inlay_hints::InlayHintsRequest;
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
-    LSPQuickFixInvocationResponse, QuickFixOption,
+    LSPQuickFixInvocationResponse,
 };
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
@@ -4568,7 +4565,7 @@ Make the necessary changes if required making sure that nothing breaks"#
         Ok(reference_locations.filter_out_same_position_location(&fs_file_path, &position))
     }
 
-    async fn swe_bench_test_tool(
+    async fn _swe_bench_test_tool(
         &self,
         swe_bench_test_endpoint: &str,
     ) -> Result<SWEBenchTestRepsonse, SymbolError> {
@@ -5622,7 +5619,7 @@ instruction:
     }
 
     /// We are going to edit out the code depending on the test output
-    async fn fix_tests_by_editing(
+    async fn _fix_tests_by_editing(
         &self,
         fs_file_path: &str,
         fs_file_content: &str,
@@ -5667,7 +5664,7 @@ instruction:
 
     // TODO(codestory): This part of the puzzle is still messed up since we are rewriting the whole
     // code over here which is not correct
-    async fn code_correctness_with_edits(
+    async fn _code_correctness_with_edits(
         &self,
         fs_file_path: &str,
         fs_file_content: &str,

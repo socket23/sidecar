@@ -4208,8 +4208,6 @@ You have to do that always and only select a single action at a time."#
             )
             .unwrap_or("\n".to_owned()); // what should we do about None?
 
-        println!("formatted_diagnostic: {}", &formatted_diagnostic);
-
         // now we show the quick actions which are avaiable as tools along with
         // the code edit which is always an option as well
         let mut quick_actions = code_correctness_request

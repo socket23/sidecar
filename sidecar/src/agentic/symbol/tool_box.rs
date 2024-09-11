@@ -3522,6 +3522,9 @@ Please update this code to accommodate these changes. Consider:
                 parent_symbol_name,
                 outline_node.name(),
             );
+
+            // this should no longer be needed - use metadata!
+
             // we do need to get the references over here for the function and
             // send them over as followups to check wherever they are being used
             let references = self
@@ -4051,15 +4054,24 @@ Please update this code to accommodate these changes. Consider:
                             );
                         // now we can send it over to the hub sender for handling the change
                         let (sender, receiver) = tokio::sync::oneshot::channel();
+
+                        let symbol_identifier = SymbolIdentifier::with_file_path(
+                            outline_node.name(),
+                            outline_node.fs_file_path(),
+                        );
+
+                        let symbol_to_edit_with_updated_instruction = symbol_edited
+                            .clone_with_instructions(&vec![instruction_prompt.clone()]);
+
+                        // go hardcore, straight up edit, no faffing around
+                        let symbol_event_request_for_edit = SymbolEventRequest::simple_edit_request(
+                            symbol_identifier.to_owned(),
+                            symbol_to_edit_with_updated_instruction,
+                            tool_properties.to_owned(),
+                        );
+
                         let event = SymbolEventMessage::new(
-                            SymbolEventRequest::ask_question(
-                                SymbolIdentifier::with_file_path(
-                                    outline_node.name(),
-                                    outline_node.fs_file_path(),
-                                ),
-                                instruction_prompt,
-                                tool_properties.clone(),
-                            ),
+                            symbol_event_request_for_edit,
                             message_properties
                                 .request_id()
                                 .clone()
@@ -5457,7 +5469,7 @@ instruction:
                 let correctness_tool_thinking = selected_action.thinking();
 
                 println!(
-                    "toolbox::check_code_correctness::selected_action_index-thinking: {}-{}",
+                    "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
                     &selected_action_index, &correctness_tool_thinking
                 );
 
@@ -5573,12 +5585,6 @@ instruction:
                 Ok(())
             }
             i if i < total_actions_len => {
-                // invoke quick action
-                println!(
-                    "tool_box::check_code_correctness::invoke_quick_action::index({})\nThinking: {}",
-                    &action_index, &correctness_tool_thinking
-                );
-
                 // invoke the code action over here with the editor
                 let response = self
                     .invoke_quick_action(action_index, &lsp_request_id, message_properties)

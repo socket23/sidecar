@@ -123,6 +123,7 @@ impl SymbolEventRequest {
         }
     }
 
+    // no longer used - unless we're clear about a purpose.
     pub fn ask_question(
         symbol: SymbolIdentifier,
         question: String,

@@ -48,6 +48,49 @@ impl Diagnostic {
     pub fn diagnostic(&self) -> &str {
         &self.diagnostic
     }
+
+    pub fn with_snippet(self, snippet: String) -> DiagnosticWithSnippet {
+        DiagnosticWithSnippet::new(self.diagnostic, self.range, snippet)
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DiagnosticWithSnippet {
+    diagnostic: String,
+    range: Range,
+    snippet: String,
+}
+
+impl DiagnosticWithSnippet {
+    pub fn new(diagnostic: String, range: Range, snippet: String) -> Self {
+        Self {
+            diagnostic,
+            range,
+            snippet,
+        }
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn diagnostic(&self) -> &str {
+        &self.diagnostic
+    }
+
+    pub fn snippet(&self) -> &str {
+        &self.snippet
+    }
+}
+
+impl From<Diagnostic> for DiagnosticWithSnippet {
+    fn from(diagnostic: Diagnostic) -> Self {
+        DiagnosticWithSnippet {
+            diagnostic: diagnostic.diagnostic,
+            range: diagnostic.range,
+            snippet: String::new(), // Default empty snippet (least surprise)
+        }
+    }
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]

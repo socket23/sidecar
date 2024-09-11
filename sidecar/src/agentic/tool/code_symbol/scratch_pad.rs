@@ -141,7 +141,7 @@ pub struct ScratchPadAgentInput {
     scratch_pad_content: String,
     scratch_pad_path: String,
     root_request_id: String,
-    ui_sender: UnboundedSender<UIEventWithID>,
+    _ui_sender: UnboundedSender<UIEventWithID>,
     editor_url: String,
 }
 
@@ -163,7 +163,7 @@ impl ScratchPadAgentInput {
             scratch_pad_content,
             scratch_pad_path,
             root_request_id,
-            ui_sender,
+            _ui_sender: ui_sender,
             editor_url,
         }
     }
@@ -172,9 +172,7 @@ impl ScratchPadAgentInput {
 struct ScratchPadAgentUserMessage {
     user_messages: Vec<LLMClientMessage>,
     is_cache_warmup: bool,
-    scratch_pad_path: String,
     root_request_id: String,
-    scratch_pad_content: String,
 }
 
 impl ScratchPadAgentBroker {
@@ -227,7 +225,6 @@ You have to generate the scratchpad again from scratch and rewrite the whole con
         let extra_context = input.extra_context;
         let event_type = input.input_event;
         let scratch_pad_content = input.scratch_pad_content;
-        let scratch_pad_path = input.scratch_pad_path;
         let root_request_id = input.root_request_id;
         let is_cache_warmup = event_type.is_cache_warmup();
         let context_message = LLMClientMessage::user(format!(
@@ -300,9 +297,7 @@ You have to generate the scratchpad again from scratch and rewrite the whole con
                 LLMClientMessage::user(user_message),
             ],
             is_cache_warmup,
-            scratch_pad_path,
             root_request_id,
-            scratch_pad_content,
         }
     }
 }

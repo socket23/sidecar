@@ -13,6 +13,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -809,11 +810,32 @@ pub async fn code_editing(
 
         let (environment_sender, environment_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+        // the storage unit for the scratch pad path
+        // create this file path before we start editing it
+        let mut scratch_pad_file_path = app.config.scratch_pad().join(request_id.to_owned());
+        scratch_pad_file_path.set_extension("md");
+        let mut scratch_pad_file = tokio::fs::File::create(scratch_pad_file_path.clone())
+            .await
+            .expect("scratch_pad path created");
+        let _ = scratch_pad_file
+            .write_all("# This is your scratchpad".as_bytes())
+            .await;
+        let _ = scratch_pad_file
+            .flush()
+            .await
+            .expect("initiating scratch pad failed");
+
+        let scratch_pad_path = scratch_pad_file_path
+            .into_os_string()
+            .into_string()
+            .expect("os_string to into_string to work");
         let scratch_pad_agent = ScratchPadAgent::new(
+            scratch_pad_path,
             message_properties.clone(),
             app.tool_box.clone(),
             app.symbol_manager.hub_sender(),
-        );
+        )
+        .await;
 
         let _scratch_pad_handle = tokio::spawn(async move {
             // spawning the scratch pad agent

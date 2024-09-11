@@ -818,7 +818,7 @@ pub async fn code_editing(
             .await
             .expect("scratch_pad path created");
         let _ = scratch_pad_file
-            .write_all("# This is your scratchpad".as_bytes())
+            .write_all("<scratchpad>\n</scratchpad>".as_bytes())
             .await;
         let _ = scratch_pad_file
             .flush()

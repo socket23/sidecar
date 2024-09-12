@@ -9,7 +9,7 @@ use llm_client::{
 };
 
 use crate::agentic::{
-    symbol::{events::message_event::SymbolEventMessageProperties, identifier::LLMProperties},
+    symbol::identifier::LLMProperties,
     tool::{
         errors::ToolError,
         input::ToolInput,

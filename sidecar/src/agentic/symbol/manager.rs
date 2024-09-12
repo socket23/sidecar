@@ -28,7 +28,6 @@ use crate::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
-use super::anchored::AnchoredSymbol;
 use super::events::message_event::{SymbolEventMessage, SymbolEventMessageProperties};
 use super::identifier::LLMProperties;
 use super::tool_box::ToolBox;

@@ -29,7 +29,6 @@ use crate::agentic::{
             types::{CodeSymbolError, SerdeError},
         },
         jitter::jitter_sleep,
-        lsp::diagnostics::Diagnostic,
     },
 };
 

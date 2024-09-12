@@ -435,7 +435,8 @@ impl Tool for ScratchPadAgentBroker {
                     edit_request_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
-                ),
+                )
+                .set_apply_directly(),
             )
             .await;
         streamed_edit_client
@@ -446,7 +447,8 @@ impl Tool for ScratchPadAgentBroker {
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "```\n".to_owned(),
-                ),
+                )
+                .set_apply_directly(),
             )
             .await;
         let stream_result;
@@ -464,7 +466,7 @@ impl Tool for ScratchPadAgentBroker {
                                         scratch_pad_range.clone(),
                                         fs_file_path.to_owned(),
                                         delta.to_owned(),
-                                    ),
+                                    ).set_apply_directly(),
                                 ).await;
                             }
                         }
@@ -475,7 +477,6 @@ impl Tool for ScratchPadAgentBroker {
                 }
                 response = &mut response => {
                     if let Ok(_result) = response.as_deref() {
-                        println!("scratch_pad_agent::stream_response::ok({:?})", _result);
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
                             EditedCodeStreamingRequest::delta(
@@ -483,7 +484,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
@@ -491,7 +492,7 @@ impl Tool for ScratchPadAgentBroker {
                                 edit_request_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                     } else {
                         println!("scratch_pad_agent::stream_response::({:?})", response);
@@ -503,7 +504,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
@@ -511,7 +512,7 @@ impl Tool for ScratchPadAgentBroker {
                                 edit_request_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                     }
                     stream_result = Some(response);
@@ -519,6 +520,8 @@ impl Tool for ScratchPadAgentBroker {
                 }
             }
         }
+
+        println!("scratch_pad::llm_response::({:?})", stream_result);
 
         match stream_result {
             Some(Ok(response)) => Ok(ToolOutput::SearchAndReplaceEditing(

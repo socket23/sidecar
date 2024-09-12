@@ -162,6 +162,7 @@ pub struct CodeCorrectnessRequest {
     // helps keep the edits in a course correct way
     extra_symbol_plan: Option<String>,
     root_request_id: String,
+    diagnostics_snippet: String,
 }
 
 impl CodeCorrectnessRequest {
@@ -181,6 +182,7 @@ impl CodeCorrectnessRequest {
         api_keys: LLMProviderAPIKeys,
         extra_symbol_plan: Option<String>,
         root_request_id: String,
+        diagnostics_snippet: String,
     ) -> Self {
         Self {
             fs_file_contents,
@@ -198,6 +200,7 @@ impl CodeCorrectnessRequest {
             api_keys,
             extra_symbol_plan,
             root_request_id,
+            diagnostics_snippet,
         }
     }
 
@@ -259,6 +262,10 @@ impl CodeCorrectnessRequest {
 
     pub fn llm_api_keys(&self) -> &LLMProviderAPIKeys {
         &self.api_keys
+    }
+
+    pub fn diagnostics_snippet(&self) -> &str {
+        &self.diagnostics_snippet
     }
 }
 

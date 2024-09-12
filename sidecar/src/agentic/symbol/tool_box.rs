@@ -20,7 +20,7 @@ use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionReques
 use crate::agentic::tool::code_edit::types::CodeEdit;
 use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
 use crate::agentic::tool::code_symbol::correctness::{
-    CodeCorrectionArgs, CodeCorrectnessAction, CodeCorrectnessRequest,
+    CodeCorrectnessAction, CodeCorrectnessRequest,
 };
 use crate::agentic::tool::code_symbol::error_fix::CodeEditingErrorRequest;
 use crate::agentic::tool::code_symbol::find_file_for_new_symbol::{
@@ -5384,7 +5384,8 @@ instruction:
         let diagnostics_with_snippets = diagnostics
             .into_iter()
             .map(|d| d.with_snippet_from_contents(&fs_file_contents))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| SymbolError::DiagnosticSnippetError(e))?;
 
         // parallel process diagnostics
         let _res = stream::iter(diagnostics_with_snippets.into_iter().map(|diagnostic_with_snippet| {
@@ -5434,23 +5435,23 @@ instruction:
                 //     &quick_fix_actions.len()
                 // );
 
-                let code_correctness_args = CodeCorrectionArgs::new(
-                    &edited_symbol_content,
-                    symbol_name,
-                    &instructions,
+                let request = CodeCorrectnessRequest::new(
+                    edited_symbol_content,
+                    symbol_name.to_owned(),
+                    instructions,
                     diagnostic_with_snippet,
                     quick_fix_actions.to_vec(),
                     llm.clone(),
                     provider.clone(),
                     api_keys.clone(),
                     extra_symbol_list_ref,
-                    message_properties.to_owned(),
+                    message_properties.root_request_id().to_owned(),
                 );
 
                 // now we can send over the request to the LLM to select the best tool
                 // for editing the code out
                 let selected_action = self
-                    .code_correctness_action_selection(code_correctness_args)
+                    .code_correctness_action_selection(request)
                     .await?;
 
                 let selected_action_index = selected_action.index();
@@ -5695,21 +5696,10 @@ instruction:
 
     async fn code_correctness_action_selection(
         &self,
-        args: CodeCorrectionArgs,
+        request: CodeCorrectnessRequest,
     ) -> Result<CodeCorrectnessAction, SymbolError> {
         // todo(zi: limit): check how much ownership is really necessary here
-        let request = ToolInput::CodeCorrectnessAction(CodeCorrectnessRequest::new(
-            args.edited_symbol_content().to_owned(),
-            args.symbol_name().to_owned(),
-            args.instruction().to_owned(),
-            args.diagnostic_with_snippet().to_owned(),
-            args.quick_fix_actions().to_vec(),
-            args.llm().clone(),
-            args.provider().clone(),
-            args.api_keys().clone(),
-            args.extra_symbol_plan().map(str::to_owned),
-            args.message_properties().root_request_id().to_owned(),
-        ));
+        let request = ToolInput::CodeCorrectnessAction(request);
 
         self.tools
             .invoke(request)

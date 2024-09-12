@@ -99,6 +99,8 @@ impl ScratchPadAgent {
         };
         let cloned_scratch_pad_agent = scratch_pad_agent.clone();
         let mut reaction_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+
+        // we also want a timer event here which can fetch lsp signals ad-hoc and as required
         tokio::spawn(async move {
             while let Some(reaction_event) = reaction_stream.next().await {
                 if reaction_event.is_shutdown() {
@@ -120,6 +122,33 @@ impl ScratchPadAgent {
         self,
         mut stream: Pin<Box<dyn Stream<Item = EnvironmentEventType> + Send + Sync>>,
     ) {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        // this is our filtering thread which will run in the background
+        let cloned_self = self.clone();
+        let _ = tokio::spawn(async move {
+            let cloned_sender = sender;
+            // damn borrow-checker got hands
+            let cloned_self = cloned_self;
+            while let Some(event) = stream.next().await {
+                match &event {
+                    // if its a lsp signal and we are still fixing, then skip it
+                    EnvironmentEventType::LSP(_) => {
+                        // if we are fixing or focussing then skip the lsp signal
+                        if cloned_self.is_fixing().await {
+                            continue;
+                        }
+                        if cloned_self.is_focussing().await {
+                            continue;
+                        }
+                    }
+                    _ => {}
+                };
+                let _ = cloned_sender.send(event);
+            }
+        });
+
+        let mut stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
         println!("scratch_pad_agent::start_processing_environment");
         while let Some(event) = stream.next().await {
             match event {
@@ -501,5 +530,13 @@ impl ScratchPadAgent {
             fixing = *(self.fixing.lock().await);
         }
         fixing
+    }
+
+    async fn is_focussing(&self) -> bool {
+        let focussing;
+        {
+            focussing = *(self.focussing.lock().await);
+        }
+        focussing
     }
 }

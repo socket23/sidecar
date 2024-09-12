@@ -41,6 +41,7 @@ impl OpenAIClient {
             LLMType::Gpt4OMini => Some("gpt-4o-mini".to_owned()),
             LLMType::DeepSeekCoder33BInstruct => Some("deepseek-coder-33b".to_owned()),
             LLMType::Llama3_1_8bInstruct => Some("llama-3.1-8b-instant".to_owned()),
+            LLMType::O1Preview => Some("o1-preview".to_owned()),
             _ => None,
         }
     }
@@ -166,9 +167,15 @@ impl LLMClient for OpenAIClient {
         let mut request_builder_args = CreateChatCompletionRequestArgs::default();
         let mut request_builder = request_builder_args
             .model(model.to_owned())
-            .messages(messages)
-            .temperature(request.temperature())
-            .stream(true);
+            .messages(messages);
+        // o1-preview has no streaming
+        if !llm_model.is_o1_preview() {
+            request_builder = request_builder
+                .temperature(request.temperature())
+                .stream(true);
+        } else {
+            request_builder = request_builder.temperature(1.0);
+        }
         if let Some(frequency_penalty) = request.frequency_penalty() {
             request_builder = request_builder.frequency_penalty(frequency_penalty);
         }
@@ -216,27 +223,46 @@ impl LLMClient for OpenAIClient {
                 }
             }
             OpenAIClientType::OpenAIClient(client) => {
-                let mut stream = client.chat().create_stream(request).await?;
-                while let Some(response) = stream.next().await {
-                    match response {
-                        Ok(response) => {
-                            let response = response
-                                .choices
-                                .get(0)
-                                .ok_or(LLMClientError::FailedToGetResponse)?;
-                            let text = response.delta.content.to_owned();
-                            if let Some(text) = text {
-                                buffer.push_str(&text);
-                                let _ = sender.send(LLMClientCompletionResponse::new(
-                                    buffer.to_owned(),
-                                    Some(text),
-                                    model.to_owned(),
-                                ));
+                if llm_model == &LLMType::O1Preview {
+                    let completion = client.chat().create(request).await?;
+                    let response = completion
+                        .choices
+                        .get(0)
+                        .ok_or(LLMClientError::FailedToGetResponse)?;
+                    let content = response
+                        .message
+                        .content
+                        .as_ref()
+                        .ok_or(LLMClientError::FailedToGetResponse)?;
+                    let _ = sender.send(LLMClientCompletionResponse::new(
+                        content.to_owned(),
+                        Some(content.to_owned()),
+                        model.to_owned(),
+                    ));
+                    buffer = content.to_owned();
+                } else {
+                    let mut stream = client.chat().create_stream(request).await?;
+                    while let Some(response) = stream.next().await {
+                        match response {
+                            Ok(response) => {
+                                let response = response
+                                    .choices
+                                    .get(0)
+                                    .ok_or(LLMClientError::FailedToGetResponse)?;
+                                let text = response.delta.content.to_owned();
+                                if let Some(text) = text {
+                                    buffer.push_str(&text);
+                                    let _ = sender.send(LLMClientCompletionResponse::new(
+                                        buffer.to_owned(),
+                                        Some(text),
+                                        model.to_owned(),
+                                    ));
+                                }
                             }
-                        }
-                        Err(err) => {
-                            dbg!(err);
-                            break;
+                            Err(err) => {
+                                dbg!(err);
+                                break;
+                            }
                         }
                     }
                 }

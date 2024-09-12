@@ -9,13 +9,13 @@ use tokio::sync::mpsc::UnboundedSender;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 
 use crate::{
     agentic::{
         symbol::{
-            identifier::SymbolIdentifier,
+            identifier::{LLMProperties, SymbolIdentifier},
             ui_event::{EditedCodeStreamingRequest, UIEventWithID},
         },
         tool::{
@@ -252,15 +252,107 @@ You have to generate the scratchpad again from scratch and rewrite the whole con
         )
     }
 
-    fn user_message(&self, input: ScratchPadAgentInput) -> ScratchPadAgentUserMessage {
+    fn user_message(
+        &self,
+        input: ScratchPadAgentInput,
+        llm_type: LLMType,
+    ) -> ScratchPadAgentUserMessage {
         let files_context = input.files_context.join("\n");
         let extra_context = input.extra_context;
         let event_type = input.input_event;
         let scratch_pad_content = input.scratch_pad_content;
         let root_request_id = input.root_request_id;
         let is_cache_warmup = event_type.is_cache_warmup();
-        let context_message = LLMClientMessage::user(format!(
-            r#"I am providing you the files you asked for along with some extra context
+        // skill issue, fix this
+        let event_type_str = event_type.clone().to_string();
+        if llm_type.is_o1_preview() {
+            let user_message = format!(
+                r#"Act as an expert software engineer.
+You are going to act as a second pair of eyes and brain for the developer working in a code editor.
+You are not on the keyboard, but beside the developer who is going to go about making changes.
+You are the pair-programmer to the developer and your goal is to help them out in the best possible ways.
+Your task is to keep an eye on everything happening in the editor and come up with a TASK LIST to help the user.
+You will be given a scratchpad which you can use to record the list of tasks which you believe the developer and you together should work on.
+The scratchpad might be already populated with the tasks and the various states they were in before.
+
+The scratchpad is a special place structured as following:
+<scratchpad>
+<files_visible>
+</files_visible>
+<tasks>
+</tasks>
+</scratchpad>
+
+You are free to use the scratchpad as your notebook where you can record your work.
+We explain each section of the scratchpad below:
+- <files_visible>
+These are the files which are visible to you in the editor, if you want to open new files or ask for more information please use the <next_steps> section and state the WHY always
+- <tasks>
+The tasks can be in 3 different modes:
+- [in_progress] The inprogress tasks are the ones which are going on right now
+- [blocked] The blocked tasks are the one which we can not do right now because either we do not have enough context or requires more effort than a simple edit in the current file. These can also be tasks which are incomplete
+- [on_going] These are tasks which YOU want to do as they are easy and you want to help the developer, these tasks will be your responsibility so be very confident when you suggest this because you are going to take over the keyboard from the developer and the developer is going to watch you work.
+These tasks contain the complete list which you and the developer will be working on, make sure you mark a task which is being worked on as [in_progress] (when the developer is working on it), if its completed mark it as [complete]. Keep this strucutred as a list (using -) and try to not repeat the same task again.
+If the task has multiple steps, put them in a sub list indentended under the main task, for example:
+- Example task
+ - sub-task-1
+ - sub-task-2
+The developer also sees this and decides what they want to do next, so keep this as verbose as possible, the developer is going to follow your instructions to the letter
+If a particular task requires more effort or is still incomplete, mark it as [blocked] and in a sub-list describe in a single sentence why this is blocked.
+Your tasks are helpful when they talk in terms of data transformation because that makes writing the code for it easier.
+Do not use vague tasks like: "check if its initialized properly" or "update the documentation", these are low value and come in the way of the developer. Both you are developer are super smart so these obvious things are taken care of.
+
+Examples of bad tasks which you should not list:
+- Update the documentation (the developer and you are smart enough to never forget this)
+- Unless told otherwise, do not worry about tests right now and create them as tasks
+
+
+The different kind of signals which you get are of the following type:
+- The user might have asked you for a question about some portion of the code.
+- The user intends to edit some part of the codebase and they are telling you what they plan on doing, you should not suggest the edits since they will be done by the user, your job is to just observe the intention and help the developer understand if they missed anything.
+- The edits which have been made could lead to additional change in the current file or files which are open in the editor.
+- The editor has a language server running which generates diagnostic signals, its really important that you make sure to suggest tasks for these diagnostics.
+- If you wish to go ahead and work on a task after reacting to a signal which you received, write it out and mark it as [on_going], you should be confident that you have all the context required to work on this task.
+- If the task has been completed, spell out the code snippets which indicate why the task has been completed or the information which will help the developer understand that the task has been completed.
+
+Your scratchpad is a special place because the developer is also looking at it to inform themselves about the changes made to the codebase, so be concise and insightful in your scratchpad. Remember the developer trusts you a lot!
+
+When you get a signal either from the developer or from the editor you must update the scratchpad, remember the developer is also using to keep an eye on the progress so be the most helpful pair-programmer you can be!
+You have to generate the scratchpad again from scratch and rewrite the whole content which is present inside.
+Remember you have to reply only in the following format (do not deviate from this format at all!):
+<scratchpad>
+<files_visible>
+</files_visible>
+<tasks>
+</tasks>
+</scratchpad>
+
+
+## Input
+Now I am giving you the input:
+I am providing you the files you asked for along with some extra context
+<files_context>
+{files_context}
+</files_context>
+
+<extra_context>
+{extra_context}
+</extra_context>
+
+This is what I see in the scratchpad
+{scratch_pad_content}
+
+This is what I am working on:
+{event_type_str}"#
+            );
+            ScratchPadAgentUserMessage {
+                user_messages: vec![LLMClientMessage::user(user_message)],
+                is_cache_warmup: false,
+                root_request_id,
+            }
+        } else {
+            let context_message = LLMClientMessage::user(format!(
+                r#"I am providing you the files you asked for along with some extra context
 <files_context>
 {files_context}
 </files_context>
@@ -271,14 +363,14 @@ You have to generate the scratchpad again from scratch and rewrite the whole con
 
 This is what I see in the scratchpad
 {scratch_pad_content}"#
-        ));
-        let acknowledgment_message = LLMClientMessage::assistant("Thank you for providing me the additional context, I will keep this in mind when updating the scratchpad".to_owned()).cache_point();
-        let user_message = if is_cache_warmup {
-            event_type.to_string()
-        } else {
-            let event_type_str = event_type.to_string();
-            format!(
-                r#"{event_type_str}
+            ));
+            let acknowledgment_message = LLMClientMessage::assistant("Thank you for providing me the additional context, I will keep this in mind when updating the scratchpad".to_owned()).cache_point();
+            let user_message = if is_cache_warmup {
+                event_type.to_string()
+            } else {
+                let event_type_str = event_type.to_string();
+                format!(
+                    r#"{event_type_str}
 
 As a reminder this is what you are supposed to do:
 Act as an expert software engineer.
@@ -346,16 +438,17 @@ Remember you have to reply only in the following format (do not deviate from thi
 <tasks>
 </tasks>
 </scratchpad>"#
-            )
-        };
-        ScratchPadAgentUserMessage {
-            user_messages: vec![
-                context_message,
-                acknowledgment_message,
-                LLMClientMessage::user(user_message),
-            ],
-            is_cache_warmup,
-            root_request_id,
+                )
+            };
+            ScratchPadAgentUserMessage {
+                user_messages: vec![
+                    context_message,
+                    acknowledgment_message,
+                    LLMClientMessage::user(user_message),
+                ],
+                is_cache_warmup,
+                root_request_id,
+            }
         }
     }
 }
@@ -388,31 +481,46 @@ impl Tool for ScratchPadAgentBroker {
                 0,
             ),
         );
+        // let llm_properties = LLMProperties::new(
+        //     LLMType::ClaudeSonnet,
+        //     LLMProvider::Anthropic,
+        //     LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        // );
+        let llm_properties = LLMProperties::new(
+            LLMType::O1Preview,
+            LLMProvider::OpenAI,
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+        );
         let system_message = LLMClientMessage::system(self.system_message());
-        let user_messages_context = self.user_message(context);
+        let user_messages_context = self.user_message(context, llm_properties.llm().clone());
         let is_cache_warmup = user_messages_context.is_cache_warmup;
         let user_messages = user_messages_context.user_messages;
+        println!("scratch_pad::user_message:({:?})", &user_messages);
         let root_request_id = user_messages_context.root_request_id;
         let mut request = LLMClientCompletionRequest::new(
-            LLMType::ClaudeSonnet,
-            vec![system_message]
-                .into_iter()
-                .chain(user_messages)
-                .collect::<Vec<_>>(),
+            llm_properties.llm().clone(),
+            // o1-preview does not support system-messages
+            if llm_properties.llm().is_o1_preview() {
+                vec![]
+            } else {
+                vec![system_message]
+            }
+            .into_iter()
+            .chain(user_messages)
+            .collect::<Vec<_>>(),
             0.2,
             None,
         );
         if is_cache_warmup {
             request = request.set_max_tokens(1);
         }
-        let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let cloned_root_request_id = root_request_id.to_owned();
         let mut response = Box::pin(
             self.llm_client.stream_completion(
-                api_key,
+                llm_properties.api_key().clone(),
                 request,
-                LLMProvider::Anthropic,
+                llm_properties.provider().clone(),
                 vec![
                     ("root_id".to_owned(), cloned_root_request_id),
                     ("event_type".to_owned(), "scratch_pad_agent".to_owned()),

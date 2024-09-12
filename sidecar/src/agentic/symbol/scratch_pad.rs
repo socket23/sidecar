@@ -8,12 +8,12 @@ use std::{collections::HashSet, pin::Pin, sync::Arc};
 use futures::{stream, Stream, StreamExt};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 
-use crate::agentic::symbol::{events::types::SymbolEvent, ui_event::UIEventWithID};
+use crate::agentic::symbol::ui_event::UIEventWithID;
 
 use super::{
     errors::SymbolError,
     events::{
-        environment_event::{EditorStateChangeRequest, EnvironmentEventType},
+        environment_event::EnvironmentEventType,
         human::{HumanAnchorRequest, HumanMessage},
         message_event::{SymbolEventMessage, SymbolEventMessageProperties},
     },
@@ -59,9 +59,8 @@ impl ScratchPadAgent {
         tool_box: Arc<ToolBox>,
         symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     ) -> Self {
-        let (reaction_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        let scratch_pad_agent = Self {
-            storage_fs_path: scratch_pad_path,
+        Self {
+            storage_fs_path: "/Users/zi/codestory/sidecar/sidecar/scratchpad.md".to_owned(),
             message_properties,
             tool_box,
             symbol_event_sender,

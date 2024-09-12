@@ -4060,36 +4060,39 @@ def subtract(a, b, c, d):
     fn system_message_for_correctness_check(&self) -> String {
         format!(
             r#"You are an expert software engineer who is tasked with taking actions for fixing errors in the code which is being written in the editor.
-- You will be given a list of actions you can take on the code to fix the various errors which are present.
+- You will be given a list of quick fixes suggested by your code editor. 
+- These are simple, deterministic actions that the editor can make on your behalf to fix simple errors.
 - The code has been edited so that the user instruction present in <user_instruction> section is satisfied.
-- the original code has now been edited to <re_written_code>
-- You are also shown the whole file content in <file> section, this is useful to understand the overall context in which the change was made.
-- You will also have access to the plan which is present in <plan> section which the engineer is following while making edits
-- - You can use the classes, structs, enums, methods or constants and functions which are mentioned in the plan for your own code correction if you forgot or used the wrong name in your own code.
-- - These classes, structs, enums, methods or constants will be eventually written to the codebase but you can use them starting now for code correction. 
+- This code is provided in <code_in_selection>
 - The various errors which are present in the edited code are shown to you as <diagnostic_list>
 - The actions you can take to fix the errors present in <diagnostic_list> is shown in <action_list>
 - You have to only select a single action, even if multiple actions will be required for making the fix.
-- You also get access to 3 special actions:
-- "edit code in selection" which allows you to edit the code currently selected and is present in <re_written_code>
-- "edit code in other places" which allows you to make edits in places other than the currently selected code.
-- "no action required" which allows you to not take any actions as the code you have written in <re_written_code> is correct even if there are Language server signals which mention errors.
+- You must have high confidence in your answer. Do not select changes that you cannot finish. Prefer simple and effective. Do not try to be too clever.
+- You also have an option to solicit help if you are unsure:
+- "ask for help" allows you to solicit the help of a more knowledgeable and intelligent colleague.
+- You do not want to cause extra burden to others by attempting changes that will require a heavy refactor. Instead, ask for help.
 
 An example is shown below to you:
 <query>
 <file>
 <code_in_selection>
-def subtract(a: str, b: str):
-    return a - b
+pub struct Tag {{
+    pub rel_fname: PathBuf,
+    pub fname: PathBuf,
+    pub line: usize,
+    pub name: String,
+    pub kind: TagKind,
+    pub user_id: Symbol,
+}}
 </code_in_selection>
 </file>
 <diagnostic_list>
 <diagnostic>
 <content>
-    return a - b
+pub user_id: Symbol,
 </content>
 <message>
-Cannot subtract a from b when both are strings
+Cannot find type Symbol in this scope
 </message>
 <diagnostic>
 </diagnostic_list>
@@ -4099,30 +4102,34 @@ Cannot subtract a from b when both are strings
 0
 </index>
 <intent>
-code edit
+Import 'webserver::agentic::symbol'
+</intent>
+</action>
+<action>
+<index>
+1
+</index>
+<intent>
+Ask for help
 </intent>
 </action>
 </action_list>
 <user_instruction>
-change the types to int
+add user_id with type Symbol
 </user_instruction>
-<re_written_code>
-def subtract(a: str, b: str):
-    return a - b
-</re_written_code>
 </query>
 
 Your reply should be:
 <code_action>
 <thinking>
-We need to change the types for a and b to int
+We should import the relevant type
 </thinking>
 <index>
 0
 </index>
 </code_action>
 
-You can notice how we selected code edit as our action and also included a thinking field for it to justify how to fix it.
+You can notice how we chose to import the type as our action, and included a thinking field.
 You have to do that always and only select a single action at a time."#
         )
     }
@@ -4177,25 +4184,23 @@ You have to do that always and only select a single action at a time."#
             .collect::<Vec<_>>();
 
         // todo(zi: limit) - report to scratch pad?
-        let action_index_for_no_action = quick_actions.len();
+        let action_index_for_help = quick_actions.len();
         quick_actions.push(format!(
             r#"<action>
 <index>
-{action_index_for_no_action}
+{action_index_for_help}
 </index>
 <intent>
-no action required
+ask for help
 </intent>
 </action>"#
         ));
 
         let formatted_actions = quick_actions.join("\n");
 
-        // changed code, outline, etc.
         let code_in_selection = code_correctness_request.code_in_selection();
 
         let instruction = code_correctness_request.instruction();
-        let extra_symbol_plan = code_correctness_request.extra_symbol_plan();
 
         let file_content = format!(
             r#"<file>
@@ -4204,16 +4209,6 @@ no action required
 </code_in_selection>
 </file>"#
         );
-
-        let plan = extra_symbol_plan
-            .map(|symbol_plan| {
-                format!(
-                    r#"<plan>
-{symbol_plan}
-</plan>"#
-                )
-            })
-            .unwrap_or_default();
 
         format!(
             r#"<query>
@@ -4227,10 +4222,6 @@ no action required
 <user_instruction>
 {instruction}
 </user_instruction>
-{plan}
-<re_written_code>
-{code_in_selection}
-</re_written_code>
 </query>"#
         )
     }

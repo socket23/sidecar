@@ -4954,7 +4954,7 @@ instruction:
             .collect::<Vec<_>>()
             .join("\n");
 
-        println!("===tool_box::check_code_correctness::diagnostics===\n\n{diagnostics_log}\n\n===tool_box::check_code_correctness::diagnostics===");
+        println!("======\ntool_box::check_code_correctness::diagnostics\n======\n{diagnostics_log}");
 
         // we open the file once, using it as reference to find snippets for diagnostics
         let fs_file_contents = self
@@ -5016,7 +5016,7 @@ instruction:
                     .collect::<Vec<_>>()
                     .join("\n");
 
-                println!("===toolbox::check_code_correctness::quick_fix_actions===\n\n{quick_fix_actions_log}\n\n===toolbox::check_code_correctness::quick_fix_actions===");
+                println!("======\ntoolbox::check_code_correctness::quick_fix_actions\n======\n{quick_fix_actions_log}");
 
                 let request = CodeCorrectnessRequest::new(
                     edited_symbol_content,

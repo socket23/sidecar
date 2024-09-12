@@ -9,7 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 
 use crate::{
@@ -262,7 +262,6 @@ You have to generate the scratchpad again from scratch and rewrite the whole con
         let event_type = input.input_event;
         let scratch_pad_content = input.scratch_pad_content;
         let root_request_id = input.root_request_id;
-        let is_cache_warmup = event_type.is_cache_warmup();
         // skill issue, fix this
         let event_type_str = event_type.clone().to_string();
         if llm_type.is_o1_preview() {
@@ -358,19 +357,24 @@ This is what I am working on:
 </files_context>
 
 <extra_context>
-{extra_context}
-</extra_context>
-
-This is what I see in the scratchpad
-{scratch_pad_content}"#
-            ));
-            let acknowledgment_message = LLMClientMessage::assistant("Thank you for providing me the additional context, I will keep this in mind when updating the scratchpad".to_owned()).cache_point();
-            let user_message = if is_cache_warmup {
-                event_type.to_string()
+{extra_context}"#
+            ))
+            .cache_point();
+            if event_type.is_cache_warmup() {
+                return ScratchPadAgentUserMessage {
+                    user_messages: vec![context_message],
+                    is_cache_warmup: true,
+                    root_request_id,
+                };
             } else {
                 let event_type_str = event_type.to_string();
-                format!(
-                    r#"{event_type_str}
+                let user_message = format!(
+                    r#"</extra_context>
+
+This is what I see in the scratchpad
+{scratch_pad_content}
+
+{event_type_str}
 
 As a reminder this is what you are supposed to do:
 Act as an expert software engineer.
@@ -406,12 +410,11 @@ If the task has multiple steps, put them in a sub list indentended under the mai
 The developer also sees this and decides what they want to do next, so keep this VERY HIGH VALUE
 If a particular task requires more effort or is still incomplete, mark it as [blocked] and in a sub-list describe in a single sentence why this is blocked.
 The developer might go above and beyond and do extra work which might complete other parts of the tasks, be sure to keep the list of tasks as very high value with no repetitions.
-Do not use vague tasks like: "check if its initialized properly" or "update the documentation", these are low value and come in the way of the developer. Both you are developer are super smart so these obvious things are taken care of.
+Do not use vague tasks like: "check if its initialized properly" or "redo the documentation", these are low value and come in the way of the developer. Both you are developer are super smart so these obvious things are taken care of.
 
 Examples of bad tasks which you should not list:
 - Update the documentation (the developer and you are smart enough to never forget this)
 - Unless told otherwise, do not worry about tests right now and create them as tasks
-
 
 The different kind of signals which you get are of the following type:
 - The user might have asked you for a question about some portion of the code.
@@ -438,16 +441,13 @@ Remember you have to reply only in the following format (do not deviate from thi
 <tasks>
 </tasks>
 </scratchpad>"#
-                )
-            };
-            ScratchPadAgentUserMessage {
-                user_messages: vec![
-                    context_message,
-                    acknowledgment_message,
-                    LLMClientMessage::user(user_message),
-                ],
-                is_cache_warmup,
-                root_request_id,
+                );
+
+                return ScratchPadAgentUserMessage {
+                    user_messages: vec![context_message, LLMClientMessage::user(user_message)],
+                    is_cache_warmup: false,
+                    root_request_id,
+                };
             }
         }
     }
@@ -481,12 +481,12 @@ impl Tool for ScratchPadAgentBroker {
                 0,
             ),
         );
-        // let llm_properties = LLMProperties::new(
-        //     LLMType::ClaudeSonnet,
-        //     LLMProvider::Anthropic,
-        //     LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-        // );
         let llm_properties = LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        );
+        let _llm_properties = LLMProperties::new(
             LLMType::O1Preview,
             LLMProvider::OpenAI,
             LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),

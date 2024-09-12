@@ -27,6 +27,9 @@ async fn main() -> Result<()> {
     debug!("installing logging to local file");
     Application::install_logging(&configuration);
 
+    // We create our scratch-pad directory
+    Application::setup_scratch_pad(&configuration).await;
+
     // Create a oneshot channel
     let (tx, rx) = oneshot::channel();
 
@@ -167,6 +170,11 @@ fn agentic_router() -> Router {
         .route(
             "/anchor_session_start",
             post(sidecar::webserver::agentic::anchor_session_start),
+        )
+        // route for push events coming from the editor
+        .route(
+            "/diagnostics",
+            post(sidecar::webserver::agentic::push_diagnostics),
         )
         // SWE bench route
         // This route is for software engineering benchmarking

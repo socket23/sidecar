@@ -13,6 +13,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -30,6 +31,7 @@ use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
+use crate::chunking::text_document::Range;
 use crate::{
     agentic::{
         symbol::{
@@ -809,11 +811,32 @@ pub async fn code_editing(
 
         let (environment_sender, environment_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+        // the storage unit for the scratch pad path
+        // create this file path before we start editing it
+        let mut scratch_pad_file_path = app.config.scratch_pad().join(request_id.to_owned());
+        scratch_pad_file_path.set_extension("md");
+        let mut scratch_pad_file = tokio::fs::File::create(scratch_pad_file_path.clone())
+            .await
+            .expect("scratch_pad path created");
+        let _ = scratch_pad_file
+            .write_all("<scratchpad>\n</scratchpad>".as_bytes())
+            .await;
+        let _ = scratch_pad_file
+            .flush()
+            .await
+            .expect("initiating scratch pad failed");
+
+        let scratch_pad_path = scratch_pad_file_path
+            .into_os_string()
+            .into_string()
+            .expect("os_string to into_string to work");
         let scratch_pad_agent = ScratchPadAgent::new(
+            scratch_pad_path,
             message_properties.clone(),
             app.tool_box.clone(),
             app.symbol_manager.hub_sender(),
-        );
+        )
+        .await;
 
         let _scratch_pad_handle = tokio::spawn(async move {
             // spawning the scratch pad agent
@@ -1103,6 +1126,40 @@ pub async fn code_editing(
                     .expect("json to not fail in keep alive"),
             ),
     ))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticDiagnosticData {
+    message: String,
+    range: Range,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticDiagnostics {
+    fs_file_path: String,
+    diagnostics: Vec<AgenticDiagnosticData>,
+    source: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticDiagnosticsResponse {
+    done: bool,
+}
+
+impl ApiResponse for AgenticDiagnosticsResponse {}
+
+pub async fn push_diagnostics(
+    Extension(_app): Extension<Application>,
+    Json(AgenticDiagnostics {
+        fs_file_path: _fs_file_path,
+        diagnostics: _diagnostics,
+        source: _source,
+    }): Json<AgenticDiagnostics>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::push_diagnostics::receieved_diagnostics");
+    // implement this api endpoint properly and send events over to the right
+    // scratch-pad agent
+    Ok(json_result(AgenticDiagnosticsResponse { done: true }))
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

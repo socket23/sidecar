@@ -58,7 +58,8 @@ use crate::agentic::tool::code_symbol::reranking_symbols_for_editing_context::{
     ReRankingCodeSnippetSymbolOutline, ReRankingSnippetsForCodeEditingRequest,
 };
 use crate::agentic::tool::code_symbol::scratch_pad::{
-    ScratchPadAgentHumanMessage, ScratchPadAgentInput, ScratchPadAgentInputType,
+    ScratchPadAgentEdits, ScratchPadAgentHumanMessage, ScratchPadAgentInput,
+    ScratchPadAgentInputType,
 };
 use crate::agentic::tool::code_symbol::should_edit::ShouldEditCodeSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
@@ -179,8 +180,40 @@ impl ToolBox {
     pub async fn scratch_pad_edits_made(
         &self,
         scratch_pad_path: &str,
-        edits_made: String,
+        user_query: &str,
+        edits_made: Vec<String>,
+        user_context_files: Vec<String>,
+        message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
+        println!("tool_box::scratch_pad_edits_made");
+        println!(
+            "tool_box::scratch_pad_edits_made::opening_file::file({})",
+            scratch_pad_path
+        );
+        let scratch_pad_content = self
+            .file_open(scratch_pad_path.to_owned(), message_properties.clone())
+            .await;
+        if let Ok(scratch_pad_content) = scratch_pad_content {
+            println!("tool_box::scratch_pad_edits_made::edits_made_tool_invocation");
+            let _ = self
+                .tools
+                .invoke(ToolInput::ScratchPadInput(ScratchPadAgentInput::new(
+                    user_context_files.to_vec(),
+                    "".to_owned(),
+                    ScratchPadAgentInputType::EditsMade(ScratchPadAgentEdits::new(
+                        edits_made,
+                        user_query.to_owned(),
+                    )),
+                    scratch_pad_content.contents(),
+                    scratch_pad_path.to_owned(),
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.ui_sender().clone(),
+                    message_properties.editor_url(),
+                )))
+                .await;
+        } else {
+            println!("tool_box::scratch_pad_edits_made::file_open_error");
+        }
         Ok(())
     }
 

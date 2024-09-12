@@ -6,26 +6,20 @@
 use std::{collections::HashSet, pin::Pin, sync::Arc};
 
 use futures::{stream, Stream, StreamExt};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 
-use crate::{
-    agentic::symbol::ui_event::UIEventWithID,
-    chunking::text_document::{Position, Range},
-};
+use crate::agentic::symbol::{events::types::SymbolEvent, ui_event::UIEventWithID};
 
 use super::{
     errors::SymbolError,
     events::{
-        edit::{SymbolToEdit, SymbolToEditRequest},
-        environment_event::EnvironmentEventType,
+        environment_event::{EditorStateChangeRequest, EnvironmentEventType},
         human::{HumanAnchorRequest, HumanMessage},
         message_event::{SymbolEventMessage, SymbolEventMessageProperties},
-        types::SymbolEvent,
     },
-    identifier::SymbolIdentifier,
     tool_box::ToolBox,
     tool_properties::ToolProperties,
-    types::{SymbolEventRequest, SymbolEventResponse},
+    types::SymbolEventRequest,
 };
 
 // We should have a way to update our cache of all that has been done
@@ -53,20 +47,40 @@ pub struct ScratchPadAgent {
     message_properties: SymbolEventMessageProperties,
     tool_box: Arc<ToolBox>,
     symbol_event_sender: UnboundedSender<SymbolEventMessage>,
+    // This is the cache which we have to send with every request
+    files_context: Arc<Mutex<Vec<String>>>,
+    reaction_sender: UnboundedSender<EnvironmentEventType>,
 }
 
 impl ScratchPadAgent {
-    pub fn new(
+    pub async fn new(
+        scratch_pad_path: String,
         message_properties: SymbolEventMessageProperties,
         tool_box: Arc<ToolBox>,
         symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     ) -> Self {
-        Self {
-            storage_fs_path: "/Users/skcd/test_repo/sidecar/scratchpad.md".to_owned(),
+        let (reaction_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let scratch_pad_agent = Self {
+            storage_fs_path: scratch_pad_path,
             message_properties,
             tool_box,
             symbol_event_sender,
-        }
+            files_context: Arc::new(Mutex::new(vec![])),
+            reaction_sender,
+        };
+        let cloned_scratch_pad_agent = scratch_pad_agent.clone();
+        let mut reaction_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+        tokio::spawn(async move {
+            while let Some(reaction_event) = reaction_stream.next().await {
+                if reaction_event.is_shutdown() {
+                    break;
+                }
+                let _ = cloned_scratch_pad_agent
+                    .react_to_event(reaction_event)
+                    .await;
+            }
+        });
+        scratch_pad_agent
     }
 }
 
@@ -93,11 +107,29 @@ impl ScratchPadAgent {
                 EnvironmentEventType::Symbol(_symbol_event) => {
                     // we know a symbol is going to be edited, what should we do about it?
                 }
+                EnvironmentEventType::EditorStateChange(_) => {
+                    // not sure what to do about this right now, this event is used so the
+                    // scratchpad can react to it, so for now do not do anything
+                    // we might have to split the events later down the line
+                }
                 EnvironmentEventType::ShutDown => {
                     println!("scratch_pad_agent::shut_down");
+                    let _ = self.reaction_sender.send(EnvironmentEventType::ShutDown);
                     break;
                 }
             }
+        }
+    }
+
+    async fn react_to_event(&self, event: EnvironmentEventType) {
+        match event {
+            EnvironmentEventType::Human(human_event) => {
+                let _ = self.react_to_human_event(human_event).await;
+            }
+            EnvironmentEventType::EditorStateChange(editor_state_change) => {
+                self.react_to_edits(editor_state_change).await;
+            }
+            _ => {}
         }
     }
 
@@ -106,6 +138,16 @@ impl ScratchPadAgent {
             HumanMessage::Anchor(anchor_request) => self.human_message_anchor(anchor_request).await,
             HumanMessage::Followup(_followup_request) => Ok(()),
         }
+    }
+
+    async fn react_to_human_event(&self, human_event: HumanMessage) -> Result<(), SymbolError> {
+        match human_event {
+            HumanMessage::Anchor(anchor_request) => {
+                let _ = self.handle_user_anchor_request(anchor_request).await;
+            }
+            HumanMessage::Followup(_followup_request) => {}
+        }
+        Ok(())
     }
 
     async fn human_message_anchor(
@@ -125,13 +167,12 @@ impl ScratchPadAgent {
             )
             .await?;
 
-        let cloned_self = self.clone();
         let cloned_anchored_request = anchor_request.clone();
-        let _ = tokio::spawn(async move {
-            cloned_self
-                .handle_user_anchor_request(cloned_anchored_request)
-                .await;
-        });
+        let _ = self
+            .reaction_sender
+            .send(EnvironmentEventType::Human(HumanMessage::Anchor(
+                cloned_anchored_request,
+            )));
 
         let edits_done = stream::iter(symbols_to_edit_request.into_iter().map(|data| {
             (
@@ -165,13 +206,12 @@ impl ScratchPadAgent {
         .filter_map(|s| s.ok())
         .collect::<Vec<_>>();
 
-        let cloned_self = self.clone();
         let cloned_user_query = anchor_request.user_query().to_owned();
-        let _ = tokio::spawn(async move {
-            let _ = cloned_self
-                .react_to_edits(edits_done, cloned_user_query)
-                .await;
-        });
+        let _ = self
+            .reaction_sender
+            .send(EnvironmentEventType::EditorStateChange(
+                EditorStateChangeRequest::new(edits_done, cloned_user_query),
+            ));
         println!(
             "scratch_pad_agent::human_message_anchor::end::time_taken({}ms)",
             start_instant.elapsed().as_millis()
@@ -225,6 +265,11 @@ impl ScratchPadAgent {
                 });
             }
         }
+        // update our cache over here
+        {
+            let mut files_context = self.files_context.lock().await;
+            *files_context = user_context_files.to_vec();
+        }
         println!("scratch_pad_agent::tool_box::agent_human_request");
         let _ = self
             .tool_box
@@ -260,8 +305,28 @@ impl ScratchPadAgent {
 
     /// We want to react to the various edits which have happened and the request they were linked to
     /// and come up with next steps and try to understand what we can do to help the developer
-    async fn react_to_edits(&self, edits: Vec<SymbolEventResponse>, user_query: String) {
+    async fn react_to_edits(&self, editor_state_change: EditorStateChangeRequest) {
         println!("scratch_pad::react_to_edits");
         // figure out what to do over here
+        let user_context_files;
+        {
+            let files_context = self.files_context.lock().await;
+            user_context_files = (*files_context).to_vec();
+        }
+        let user_query = editor_state_change.user_query().to_owned();
+        let edits_made = editor_state_change.consume_edits_made();
+        let _ = self
+            .tool_box
+            .scratch_pad_edits_made(
+                &self.storage_fs_path,
+                &user_query,
+                edits_made
+                    .into_iter()
+                    .map(|edit| edit.to_string())
+                    .collect::<Vec<_>>(),
+                user_context_files,
+                self.message_properties.clone(),
+            )
+            .await;
     }
 }

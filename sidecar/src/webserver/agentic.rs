@@ -31,6 +31,7 @@ use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
+use crate::chunking::text_document::Range;
 use crate::{
     agentic::{
         symbol::{
@@ -1125,6 +1126,40 @@ pub async fn code_editing(
                     .expect("json to not fail in keep alive"),
             ),
     ))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticDiagnosticData {
+    message: String,
+    range: Range,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticDiagnostics {
+    fs_file_path: String,
+    diagnostics: Vec<AgenticDiagnosticData>,
+    source: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticDiagnosticsResponse {
+    done: bool,
+}
+
+impl ApiResponse for AgenticDiagnosticsResponse {}
+
+pub async fn push_diagnostics(
+    Extension(_app): Extension<Application>,
+    Json(AgenticDiagnostics {
+        fs_file_path: _fs_file_path,
+        diagnostics: _diagnostics,
+        source: _source,
+    }): Json<AgenticDiagnostics>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::push_diagnostics::receieved_diagnostics");
+    // implement this api endpoint properly and send events over to the right
+    // scratch-pad agent
+    Ok(json_result(AgenticDiagnosticsResponse { done: true }))
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

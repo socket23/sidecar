@@ -171,6 +171,11 @@ fn agentic_router() -> Router {
             "/anchor_session_start",
             post(sidecar::webserver::agentic::anchor_session_start),
         )
+        // route for push events coming from the editor
+        .route(
+            "/diagnostics",
+            post(sidecar::webserver::agentic::push_diagnostics),
+        )
         // SWE bench route
         // This route is for software engineering benchmarking
         .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))

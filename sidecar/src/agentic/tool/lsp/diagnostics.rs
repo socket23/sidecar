@@ -5,8 +5,8 @@
 //!
 //! Note: we do not store the editor url here since we could have reloaded the editor
 //! and the url changes because of that
-
 use async_trait::async_trait;
+use thiserror::Error;
 
 use crate::{
     agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
@@ -36,7 +36,7 @@ impl LSPDiagnosticsInput {
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Diagnostic {
-    diagnostic: String,
+    message: String,
     range: Range,
 }
 
@@ -45,9 +45,88 @@ impl Diagnostic {
         &self.range
     }
 
-    pub fn diagnostic(&self) -> &str {
-        &self.diagnostic
+    pub fn message(&self) -> &str {
+        &self.message
     }
+
+    pub fn with_snippet_from_contents(
+        self,
+        file_contents: &str,
+    ) -> Result<DiagnosticWithSnippet, DiagnosticSnippetError> {
+        DiagnosticWithSnippet::from_diagnostic_and_contents(self, file_contents)
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DiagnosticWithSnippet {
+    message: String,
+    range: Range,
+    snippet: String,
+}
+
+impl DiagnosticWithSnippet {
+    pub fn new(message: String, range: Range, snippet: String) -> Self {
+        Self {
+            message,
+            range,
+            snippet,
+        }
+    }
+
+    pub fn from_diagnostic_and_contents(
+        diagnostic: Diagnostic,
+        file_contents: &str,
+    ) -> Result<Self, DiagnosticSnippetError> {
+        let Diagnostic { range, message } = diagnostic;
+
+        let start_line = range.start_line();
+        let end_line = range.end_line();
+
+        let lines: Vec<&str> = file_contents.lines().collect();
+
+        // Safely slice the vector
+        let relevant_lines = lines
+            .get(start_line..end_line)
+            .ok_or(DiagnosticSnippetError::InvalidRange(range))?;
+
+        let snippet = relevant_lines.join("\n").to_owned();
+
+        Ok(Self {
+            message,
+            range,
+            snippet,
+        })
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn snippet(&self) -> &str {
+        &self.snippet
+    }
+}
+
+impl From<Diagnostic> for DiagnosticWithSnippet {
+    fn from(diagnostic: Diagnostic) -> Self {
+        DiagnosticWithSnippet {
+            message: diagnostic.message,
+            range: diagnostic.range,
+            snippet: String::new(), // Default empty snippet (least surprise)
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum DiagnosticSnippetError {
+    #[error("Invalid range: {0:?}")]
+    InvalidRange(Range),
+    #[error("File content error: {0}")]
+    FileContentError(String),
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]

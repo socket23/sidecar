@@ -4176,19 +4176,6 @@ You have to do that always and only select a single action at a time."#
             })
             .collect::<Vec<_>>();
 
-        // todo(zi: limit) - this should be removed
-        let actions_until_now = quick_actions.len();
-        quick_actions.push(format!(
-            r#"<action>
-<index>
-{actions_until_now}
-</index>
-<intent>
-edit code in selection
-</intent>
-</action>"#
-        ));
-
         // todo(zi: limit) - report to scratch pad?
         let action_index_for_no_action = quick_actions.len();
         quick_actions.push(format!(

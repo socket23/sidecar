@@ -5083,7 +5083,7 @@ instruction:
         Ok(())
     }
 
-    async fn quick_action_simple_edit(
+    async fn _quick_action_simple_edit(
         &self,
         symbol_to_edit: SymbolToEdit,
         symbol_identifier: SymbolIdentifier,
@@ -5119,12 +5119,12 @@ instruction:
         &self,
         action_index: i64,
         total_actions_len: i64,
-        correctness_tool_thinking: &str,
+        _correctness_tool_thinking: &str,
         lsp_request_id: &str,
         message_properties: SymbolEventMessageProperties,
-        tool_properties: ToolProperties,
-        symbol_identifier: SymbolIdentifier,
-        hub_sender: UnboundedSender<SymbolEventMessage>,
+        _tool_properties: ToolProperties,
+        _symbol_identifier: SymbolIdentifier,
+        _hub_sender: UnboundedSender<SymbolEventMessage>,
         symbol_edited: SymbolToEdit,
     ) -> Result<(), SymbolError> {
         // TODO(skcd): This needs to change because we will now have 3 actions which can
@@ -5133,31 +5133,10 @@ instruction:
         // but is provided by us, the way to check this is by looking at the index and seeing
         // if its >= length of the quick_fix_actions (we append to it internally in the LLM call)
         match action_index {
+            // this used to be quick_action_simple_edit,
+            // Since this may have been the culprit of deeper, unnecessary edits, temporarily removing this ability
+            // this arm is now do nothing option
             i if i == total_actions_len => {
-                // this may be the culprit of the further, unnecessary edits.
-                // due to this occuring in parallel to quick fix, it misses important assumptions.
-                // todo(zi): is this being hit by the 2nd diagnostic?
-                println!(
-                    "toolbox::handle_selected_action::action_index({})::quic_action_simple_edit",
-                    i
-                );
-                let symbol_to_edit_with_correctness_thinking = symbol_edited
-                    .clone_with_instructions(&vec![correctness_tool_thinking.to_owned()]);
-
-                let _ = self
-                    .quick_action_simple_edit(
-                        symbol_to_edit_with_correctness_thinking,
-                        symbol_identifier.clone(),
-                        tool_properties.clone(),
-                        message_properties.clone(),
-                        hub_sender.clone(),
-                    )
-                    .await?;
-
-                Ok(())
-            }
-            // this is the new +1, since codebase wide edits removed
-            i if i == total_actions_len + 1 => {
                 println!("tool_box::check_code_correctness::no_changes_required");
                 // consider sending UI event here
                 Ok(())
@@ -5282,11 +5261,10 @@ instruction:
         &self,
         request: CodeCorrectnessRequest,
     ) -> Result<CodeCorrectnessAction, SymbolError> {
-        // todo(zi: limit): check how much ownership is really necessary here
-        let request = ToolInput::CodeCorrectnessAction(request);
+        let tool_input = ToolInput::CodeCorrectnessAction(request);
 
         self.tools
-            .invoke(request)
+            .invoke(tool_input)
             .await
             .map_err(SymbolError::ToolError)?
             .get_code_correctness_action()

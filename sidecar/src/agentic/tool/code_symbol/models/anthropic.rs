@@ -4197,8 +4197,6 @@ no action required
         let instruction = code_correctness_request.instruction();
         let extra_symbol_plan = code_correctness_request.extra_symbol_plan();
 
-        // todo(zi: limit) - is this even necessary? TEST
-        // now we can create the query and have the llm choose it
         let file_content = format!(
             r#"<file>
 <code_in_selection>

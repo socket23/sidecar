@@ -88,8 +88,7 @@ use crate::agentic::tool::lsp::grep_symbol::{
 };
 use crate::agentic::tool::lsp::inlay_hints::InlayHintsRequest;
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
-use crate::agentic::tool::lsp::quick_fix::{
-    GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
+use crate::agentic::tool::lsp::quick_fix::{GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
 use crate::agentic::tool::r#type::Tool;
@@ -4951,11 +4950,11 @@ instruction:
         let diagnostics_log = diagnostics
             .iter()
             .enumerate()
-            .map(|(i, d)| format!("{}: {}", i + 1, d.message()))
+            .map(|(i, d)| format!("{}: {}", i, d.message()))
             .collect::<Vec<_>>()
             .join("\n");
 
-        println!("{diagnostics_log}");
+        println!("===tool_box::check_code_correctness::diagnostics===\n\n{diagnostics_log}\n\n===tool_box::check_code_correctness::diagnostics===");
 
         // we open the file once, using it as reference to find snippets for diagnostics
         let fs_file_contents = self
@@ -5010,14 +5009,14 @@ instruction:
                         message_properties.to_owned(),
                     )
                     .await?
-                    .remove_options();
+                    .remove_options(); // todo(zi: limit) why is this necessary?
+                
+                let quick_fix_actions_log = &quick_fix_actions.iter().enumerate()
+                    .map(|(i, action)| format!("{}: {}", i, action.label()))
+                    .collect::<Vec<_>>()
+                    .join("\n");
 
-                // todo(zi: limit) - better printing here.
-                dbg!(&quick_fix_actions);
-                // println!(
-                //     "tool_box::check_code_correctness::quick_fix_actions.len({})",
-                //     &quick_fix_actions.len()
-                // );
+                println!("===toolbox::check_code_correctness::quick_fix_actions===\n\n{quick_fix_actions_log}\n\n===toolbox::check_code_correctness::quick_fix_actions===");
 
                 let request = CodeCorrectnessRequest::new(
                     edited_symbol_content,

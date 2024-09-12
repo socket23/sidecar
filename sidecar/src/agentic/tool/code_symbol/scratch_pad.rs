@@ -74,13 +74,21 @@ impl ScratchPadAgentEdits {
 }
 
 #[derive(Debug, Clone)]
-pub struct ScratchPadAgentEditorSignal {}
+pub struct ScratchPadDiagnosticSignal {
+    diagnostics: Vec<String>,
+}
+
+impl ScratchPadDiagnosticSignal {
+    pub fn new(diagnostics: Vec<String>) -> Self {
+        Self { diagnostics }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ScratchPadAgentInputType {
     UserMessage(ScratchPadAgentHumanMessage),
     EditsMade(ScratchPadAgentEdits),
-    EditorSignal(ScratchPadAgentEditorSignal),
+    LSPDiagnosticMessage(ScratchPadDiagnosticSignal),
     CacheWarmup,
 }
 
@@ -127,7 +135,13 @@ and my intention was:
 </query>"#
                 )
             }
-            Self::EditorSignal(_editor_signal) => "".to_owned(),
+            Self::LSPDiagnosticMessage(diagnostics) => {
+                let diagnostics = diagnostics.diagnostics.join("\n");
+                format!(
+                    r#"I can see the following diagnostic errors on the editor:
+{diagnostics}"#
+                )
+            }
             Self::CacheWarmup => "".to_owned(),
         }
     }

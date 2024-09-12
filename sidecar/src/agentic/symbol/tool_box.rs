@@ -59,7 +59,7 @@ use crate::agentic::tool::code_symbol::reranking_symbols_for_editing_context::{
 };
 use crate::agentic::tool::code_symbol::scratch_pad::{
     ScratchPadAgentEdits, ScratchPadAgentHumanMessage, ScratchPadAgentInput,
-    ScratchPadAgentInputType,
+    ScratchPadAgentInputType, ScratchPadDiagnosticSignal,
 };
 use crate::agentic::tool::code_symbol::should_edit::ShouldEditCodeSymbolRequest;
 use crate::agentic::tool::editor::apply::{EditorApplyRequest, EditorApplyResponse};
@@ -175,11 +175,45 @@ impl ToolBox {
         Ok(())
     }
 
+    /// sends the diagnostic message to the scratch-pad agent
+    pub async fn scratch_pad_diagnostics(
+        &self,
+        scratch_pad_path: &str,
+        diagnostics: Vec<String>,
+        files_context: Vec<String>,
+        extra_context: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        println!("tool_box::scratch_pad_diagnostics");
+        let scratch_pad_content = self
+            .file_open(scratch_pad_path.to_owned(), message_properties.clone())
+            .await;
+        if let Ok(scratch_pad_content) = scratch_pad_content {
+            let _ = self
+                .tools
+                .invoke(ToolInput::ScratchPadInput(ScratchPadAgentInput::new(
+                    files_context,
+                    extra_context,
+                    ScratchPadAgentInputType::LSPDiagnosticMessage(
+                        ScratchPadDiagnosticSignal::new(diagnostics),
+                    ),
+                    scratch_pad_content.contents(),
+                    scratch_pad_path.to_owned(),
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.ui_sender(),
+                    message_properties.editor_url(),
+                )))
+                .await;
+        }
+        Ok(())
+    }
+
     /// send the edits which have been made to the scratch-pad agent
     pub async fn scratch_pad_edits_made(
         &self,
         scratch_pad_path: &str,
         user_query: &str,
+        extra_context: &str,
         edits_made: Vec<String>,
         user_context_files: Vec<String>,
         message_properties: SymbolEventMessageProperties,
@@ -198,7 +232,7 @@ impl ToolBox {
                 .tools
                 .invoke(ToolInput::ScratchPadInput(ScratchPadAgentInput::new(
                     user_context_files.to_vec(),
-                    "".to_owned(),
+                    extra_context.to_owned(),
                     ScratchPadAgentInputType::EditsMade(ScratchPadAgentEdits::new(
                         edits_made,
                         user_query.to_owned(),

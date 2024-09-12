@@ -68,5 +68,5 @@ pub enum SymbolError {
     SymbolEventSendError(SendError<SymbolEventMessage>),
 
     #[error("Diagnostic snippet error: {0}")]
-    DiagnosticSnippetError(#[from] DiagnosticSnippetError),
+    DiagnosticSnippetError(DiagnosticSnippetError),
 }

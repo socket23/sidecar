@@ -4063,7 +4063,7 @@ def subtract(a, b, c, d):
             r#"You are an expert software engineer who is tasked with taking actions for fixing errors in the code which is being written in the editor.
 - You will be given a list of actions you can take on the code to fix the various errors which are present.
 - The code has been edited so that the user instruction present in <user_instruction> section is satisfied.
-- The previous version of the code is shown to you in <previous_code>, this was the original code has now been edited to <re_written_code>
+- the original code has now been edited to <re_written_code>
 - You are also shown the whole file content in <file> section, this is useful to understand the overall context in which the change was made.
 - You will also have access to the plan which is present in <plan> section which the engineer is following while making edits
 - - You can use the classes, structs, enums, methods or constants and functions which are mentioned in the plan for your own code correction if you forgot or used the wrong name in your own code.
@@ -4079,17 +4079,6 @@ def subtract(a, b, c, d):
 An example is shown below to you:
 <query>
 <file>
-<file_path>
-testing/maths.py
-</file_path>
-<code_above>
-def add(a, b):
-    return a + b
-</code_above>
-<code_below>
-def multiply(a, b):
-    return a * b
-</code_below>
 <code_in_selection>
 def subtract(a: str, b: str):
     return a - b
@@ -4097,9 +4086,6 @@ def subtract(a: str, b: str):
 </file>
 <diagnostic_list>
 <diagnostic>
-<file_path>
-testing/maths.py
-</file_path>
 <content>
     return a - b
 </content>
@@ -4121,10 +4107,6 @@ code edit
 <user_instruction>
 change the types to int
 </user_instruction>
-<previous_code>
-def subtract(a: float, b: float):
-    return a - b
-</previous_code>
 <re_written_code>
 def subtract(a: str, b: str):
     return a - b
@@ -4146,67 +4128,33 @@ You have to do that always and only select a single action at a time."#
         )
     }
 
-    fn format_lsp_diagnostic_for_prompt(
-        &self,
-        fs_file_content_lines: &[String],
-        fs_file_path: String,
-        diagnostic: &Diagnostic,
-    ) -> Option<String> {
-        let diagnostic_range = diagnostic.range();
-        let diagnostic_message = diagnostic.diagnostic();
-        // grab the content which is inside the diagnostic range
-        let diagnostic_start_line = diagnostic_range.start_line();
-        let diagnostic_end_line = diagnostic_range.end_line();
-        if diagnostic_start_line >= fs_file_content_lines.len()
-            || diagnostic_end_line >= fs_file_content_lines.len()
-        {
-            return None;
-        }
-        let content = fs_file_content_lines[diagnostic_start_line..diagnostic_end_line]
-            .into_iter()
-            .map(|line| line.to_owned())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let file_path = format!(
-            "{}-{}:{}",
-            fs_file_path, diagnostic_start_line, diagnostic_end_line
-        );
-        let message = format!(
+    fn format_lsp_diagnostic_for_prompt(&self, snippet: &str, diagnostic_message: &str) -> String {
+        format!(
             r#"<diagnostic>
-<file_path>
-{file_path}
-</file_path>
 <content>
-{content}
+{}
 </content>
 <message>
-{diagnostic_message}
+{}
 </message>
-<diagnostic>"#
-        );
-        Some(message)
+<diagnostic>"#,
+            snippet, diagnostic_message
+        )
+        .to_owned()
     }
 
     fn format_code_correctness_request(
         &self,
         code_correctness_request: CodeCorrectnessRequest,
     ) -> String {
-        let fs_file_content_lines = code_correctness_request
-            .file_content()
-            .lines()
-            .into_iter()
-            .map(|line| line.to_owned())
-            .collect::<Vec<_>>();
-        let diagnostic = code_correctness_request.diagnostic();
-        let fs_file_path = code_correctness_request.fs_file_path();
+        // this should no longer be necessary.
+        // we need a diagnostics snippet?
+        let diagnostic_with_snippet = code_correctness_request.diagnostic_with_snippet();
 
-        let formatted_diagnostic = self
-            .format_lsp_diagnostic_for_prompt(
-                fs_file_content_lines.as_slice(),
-                fs_file_path.to_owned(),
-                diagnostic,
-            )
-            .unwrap_or("\n".to_owned()); // what should we do about None?
+        let formatted_diagnostic = self.format_lsp_diagnostic_for_prompt(
+            diagnostic_with_snippet.snippet(),
+            diagnostic_with_snippet.message(),
+        );
 
         // now we show the quick actions which are avaiable as tools along with
         // the code edit which is always an option as well
@@ -4228,6 +4176,8 @@ You have to do that always and only select a single action at a time."#
                 )
             })
             .collect::<Vec<_>>();
+
+        // todo(zi: limit) - this should be removed
         let actions_until_now = quick_actions.len();
         quick_actions.push(format!(
             r#"<action>
@@ -4239,6 +4189,8 @@ edit code in selection
 </intent>
 </action>"#
         ));
+
+        // todo(zi: limit) - report to scratch pad?
         let action_index_for_no_action = quick_actions.len();
         quick_actions.push(format!(
             r#"<action>
@@ -4253,30 +4205,16 @@ no action required
 
         let formatted_actions = quick_actions.join("\n");
 
-        let code_above = code_correctness_request
-            .code_above()
-            .unwrap_or("".to_owned());
-        let code_below = code_correctness_request
-            .code_below()
-            .unwrap_or("".to_owned());
+        // changed code, outline, etc.
         let code_in_selection = code_correctness_request.code_in_selection();
 
-        let previous_code = code_correctness_request.previous_code();
         let instruction = code_correctness_request.instruction();
         let extra_symbol_plan = code_correctness_request.extra_symbol_plan();
 
+        // todo(zi: limit) - is this even necessary? TEST
         // now we can create the query and have the llm choose it
         let file_content = format!(
             r#"<file>
-<file_path>
-{fs_file_path}
-</file_path>
-<code_above>
-{code_above}
-</code_above>
-<code_below>
-{code_below}
-</code_below>
 <code_in_selection>
 {code_in_selection}
 </code_in_selection>
@@ -4306,9 +4244,6 @@ no action required
 {instruction}
 </user_instruction>
 {plan}
-<previous_code>
-{previous_code}
-</previous_code>
 <re_written_code>
 {code_in_selection}
 </re_written_code>

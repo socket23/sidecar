@@ -49,8 +49,11 @@ impl Diagnostic {
         &self.message
     }
 
-    pub fn with_snippet(self, snippet: String) -> DiagnosticWithSnippet {
-        DiagnosticWithSnippet::new(self.message, self.range, snippet)
+    pub fn with_snippet_from_contents(
+        self,
+        file_contents: &str,
+    ) -> Result<DiagnosticWithSnippet, DiagnosticSnippetError> {
+        DiagnosticWithSnippet::from_diagnostic_and_contents(self, file_contents)
     }
 }
 
@@ -99,7 +102,7 @@ impl DiagnosticWithSnippet {
         &self.range
     }
 
-    pub fn diagnostic(&self) -> &str {
+    pub fn message(&self) -> &str {
         &self.message
     }
 

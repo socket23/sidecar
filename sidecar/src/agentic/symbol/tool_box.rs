@@ -5259,12 +5259,12 @@ instruction:
                                                                // this is dangerous. todo(zi)!!
 
         let edited_symbol_outline_node_content = self
-                .find_sub_symbol_to_edit_with_name(
-                    parent_symbol_name,
-                    symbol_edited,
-                    message_properties.clone(),
-                )
-                .await?;
+            .find_sub_symbol_to_edit_with_name(
+                parent_symbol_name,
+                symbol_edited,
+                message_properties.clone(),
+            )
+            .await?;
 
         // After applying the changes we get the new range for the symbol
         let edited_range = edited_symbol_outline_node_content.range().to_owned();
@@ -5697,20 +5697,13 @@ instruction:
         &self,
         args: CodeCorrectionArgs,
     ) -> Result<CodeCorrectnessAction, SymbolError> {
-        let (code_above, code_below, code_in_selection) =
-            split_file_content_into_parts(args.fs_file_content(), args.edited_range());
-
+        // todo(zi: limit): check how much ownership is really necessary here
         let request = ToolInput::CodeCorrectnessAction(CodeCorrectnessRequest::new(
-            args.fs_file_content().to_owned(),
-            args.fs_file_path().to_owned(),
-            code_above,
-            code_below,
-            code_in_selection,
+            args.edited_symbol_content().to_owned(),
             args.symbol_name().to_owned(),
             args.instruction().to_owned(),
-            args.diagnostic().to_owned(),
+            args.diagnostic_with_snippet().to_owned(),
             args.quick_fix_actions().to_vec(),
-            args.previous_code().to_owned(),
             args.llm().clone(),
             args.provider().clone(),
             args.api_keys().clone(),

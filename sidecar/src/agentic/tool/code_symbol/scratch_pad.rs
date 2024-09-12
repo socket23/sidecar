@@ -239,6 +239,12 @@ The different kind of signals which you get are of the following type:
 - If you wish to go ahead and work on a task after reacting to a signal which you received, write it out and mark it as [on_going], you should be confident that you have all the context required to work on this task.
 - If the task has been completed, spell out the code snippets which indicate why the task has been completed or the information which will help the developer understand that the task has been completed.
 
+When coming up with the tasks, these are the tools inside the editor you have access to:
+- Go-to-definition: This allows you to click on any code symbol and go to the definition of it, like the function call or the class definition
+- Go-to-reference: This allows you to click on any code symbol and go to the references of the symbol
+- Open-file: This allows you to open any file in the editor (you should use this if you are sure that such a path exists in the directory or you have high confidence about it)
+So all your tasks should have sub-task list where each section either uses the above tool in some way, otherwise you can not proceed on the task.
+
 Your scratchpad is a special place because the developer is also looking at it to inform themselves about the changes made to the codebase, so be concise and insightful in your scratchpad. Remember the developer trusts you a lot!
 
 When you get a signal either from the developer or from the editor you must update the scratchpad, remember the developer is also using to keep an eye on the progress so be the most helpful pair-programmer you can be!
@@ -322,6 +328,12 @@ The different kind of signals which you get are of the following type:
 - The editor has a language server running which generates diagnostic signals, its really important that you make sure to suggest tasks for these diagnostics.
 - If you wish to go ahead and work on a task after reacting to a signal which you received, write it out and mark it as [on_going], you should be confident that you have all the context required to work on this task.
 - If the task has been completed, spell out the code snippets which indicate why the task has been completed or the information which will help the developer understand that the task has been completed.
+
+When coming up with the tasks, these are the tools inside the editor you have access to:
+- Go-to-definition: This allows you to click on any code symbol and go to the definition of it, like the function call or the class definition
+- Go-to-reference: This allows you to click on any code symbol and go to the references of the symbol
+- Open-file: This allows you to open any file in the editor (you should use this if you are sure that such a path exists in the directory or you have high confidence about it)
+So all your tasks should have sub-task list where each section either uses the above tool in some way, otherwise you can not proceed on the task.
 
 Your scratchpad is a special place because the developer is also looking at it to inform themselves about the changes made to the codebase, so be concise and insightful in your scratchpad. Remember the developer trusts you a lot!
 
@@ -477,6 +489,7 @@ impl Tool for ScratchPadAgentBroker {
                 }
                 response = &mut response => {
                     if let Ok(_result) = response.as_deref() {
+                        println!("scratch_pad_agent::stream_response::ok({:?})", _result);
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
                             EditedCodeStreamingRequest::delta(

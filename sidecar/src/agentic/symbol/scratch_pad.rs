@@ -119,7 +119,6 @@ impl ScratchPadAgent {
         while let Some(event) = stream.next().await {
             match event {
                 EnvironmentEventType::LSP(lsp_signal) => {
-                    println!("scratch_pad_agent::recieved_lsp_signal");
                     // we just want to react to the lsp signal over here, so we do just that
                     let _ = self
                         .reaction_sender

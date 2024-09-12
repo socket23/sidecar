@@ -4794,125 +4794,6 @@ instruction:
         Ok(true)
     }
 
-    /// Check if we need to make changes more than just the code addition
-    /// This implies that we are going to make changes around the codebase for the code
-    /// addition, instead of just adding code to a particular part of the symbol
-    async fn should_apply_code_changes_code_addition(
-        &self,
-        edited_code: &str,
-        symbol_edited: &SymbolToEdit,
-        parent_symbol_name: &str,
-        message_properties: SymbolEventMessageProperties,
-    ) -> Result<bool, SymbolError> {
-        let fs_file_path = symbol_edited.fs_file_path();
-        // we are going to parse the edited code and get the outline nodes for it
-        let ts_language_parsing = self
-            .editor_parsing
-            .for_file_path(fs_file_path)
-            .ok_or(SymbolError::FileTypeNotSupported(fs_file_path.to_owned()))?;
-        let edited_code_outline_nodes =
-            ts_language_parsing.generate_outline_fresh(edited_code.as_bytes(), fs_file_path);
-
-        // Here is where things get tricky, we have a parent node we want to apply
-        // changes to and various other nodes which might or might not be present
-        // in the scope of the symbol which needs to edited
-        // our assumption right now is that:
-        // no matter the nodes which are generated we do the insertions or the apply the changes
-        // as directed by the edited code and let the symbols self-heal cause they will get invoked
-        // as part of the code-correctness or the plan
-        // code-addition never generates code which is wrong or partial and only complete code
-
-        let file_content = self
-            .file_open(fs_file_path.to_owned(), message_properties)
-            .await?;
-        let file_outline_nodes = ts_language_parsing
-            .generate_outline_fresh(file_content.contents_ref().as_bytes(), fs_file_path);
-
-        // 2 step process now with various cases:
-        // - if the edited code has a new new outline node, we need to insert it always (new outline node and for the children as well)
-        // - if the edited code has any outline nodes which already exist, we want to overwrite it
-
-        // outline nodes which require a child insertion
-        let outline_node_child_addition = edited_code_outline_nodes
-            .iter()
-            .filter_map(|edited_code_outline_node| {
-                let matching_file_outline_node = file_outline_nodes
-                    .iter()
-                    .filter(|file_outline_node| {
-                        file_outline_node.name() == edited_code_outline_node.name()
-                            && file_outline_node.is_class()
-                    })
-                    .collect::<Vec<_>>();
-                if !matching_file_outline_node.is_empty() {
-                    let new_added_nodes = edited_code_outline_node
-                        .children()
-                        .iter()
-                        .filter(|child_node| {
-                            !matching_file_outline_node
-                                .iter()
-                                .map(|file_outline_node| file_outline_node.children())
-                                .flatten()
-                                .any(|file_child_node| file_child_node.name() == child_node.name())
-                        })
-                        .collect::<Vec<_>>();
-                    Some((matching_file_outline_node, new_added_nodes))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // outline nodes which have changed now
-        // we do not consider child node changes over here, only the main symbol
-        // which changed
-        // one of the tricks which we can use here is:
-        // the content of the changed node should not be empty or an empty string
-        // we can comapre it on the length because we could have deletions which happened
-        // to the definition, but since this is addition (and only addition) we can be pretty
-        // sure that our length of the outline node will be > (going for strictly greater) original length of the outline node
-        let outline_nodes_which_changed_vec = edited_code_outline_nodes
-            .iter()
-            .filter_map(|edited_code_outline_node| {
-                let matching_file_outline_node =
-                    file_outline_nodes.iter().find(|file_outline_node| {
-                        // find the class definition
-                        file_outline_node.name() == edited_code_outline_node.name()
-                            && file_outline_node.is_class_definition()
-                    });
-                if let Some(file_outline_node) = matching_file_outline_node {
-                    if edited_code_outline_node.content().content().len()
-                        > file_outline_node.content().content().len()
-                    {
-                        Some((file_outline_node, edited_code_outline_node))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // check the state here because we will start applying changes to the editor and
-        // if we changed the node content for an outline node
-        let child_added = outline_node_child_addition
-            .iter()
-            .any(|outline_node_child_add| {
-                let parent_symbol_name_any = outline_node_child_add
-                    .0
-                    .iter()
-                    .any(|outline_node| outline_node.name() == parent_symbol_name);
-                parent_symbol_name_any
-            });
-
-        let outline_node_changed = outline_nodes_which_changed_vec
-            .iter()
-            .any(|outline_node_changed| outline_node_changed.0.name() == parent_symbol_name);
-
-        // we want something related to the parent symbol to change
-        Ok(child_added || outline_node_changed)
-    }
-
     /// Generate the repo map for the tools
     pub async fn load_repo_map(
         &self,
@@ -4943,12 +4824,6 @@ instruction:
         parent_symbol_name: &str,
         symbol_edited: &SymbolToEdit,
         symbol_identifier: SymbolIdentifier,
-        original_code: &str,
-        // This is the edited code we are applying to the editor
-        edited_code: &str,
-        // this is the context from the code edit which we want to keep using while
-        // fixing
-        _code_edit_extra_context: &str,
         llm: LLMType,
         provider: LLMProvider,
         api_keys: LLMProviderAPIKeys,

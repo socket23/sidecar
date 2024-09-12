@@ -1779,7 +1779,6 @@ Satisfy the requirement either by making edits or gathering the required informa
     ) -> Result<SymbolEventResponse, SymbolError> {
         // NOTE: we do not add an entry to the history here because the initial
         // request already adds the entry before sending over the edit
-        let history = edit_request.history().to_vec();
         // here we might want to edit ourselves or generate new code depending
         // on the scope of the changes being made
         let sub_symbols_to_edit = edit_request.symbols();
@@ -1902,31 +1901,38 @@ Satisfy the requirement either by making edits or gathering the required informa
                 self.symbol_name()
             );
 
-            tokio::time::sleep(Duration::from_secs(5)).await;
-
             // if we have to make sure that followups and correctness checks need
             // to keep happening
             if !sub_symbol_to_edit.should_disable_followups_and_correctness() {
-                // debugging loop after this
-                // re-enable code correctness check
-                if let Err(e) = self
-                    .tools
-                    .check_code_correctness(
-                        self.symbol_name(),
-                        &sub_symbol_to_edit,
-                        self.symbol_identifier.clone(),
-                        self.llm_properties.llm().clone(),
-                        self.llm_properties.provider().clone(),
-                        self.llm_properties.api_key().clone(),
-                        &self.tool_properties,
-                        history.to_vec(),
-                        self.hub_sender.clone(),
-                        message_properties.clone(),
-                    )
-                    .await
-                {
-                    eprintln!("Error checking code correctness: {}", e);
-                }
+                let cloned_tools = self.tools.clone();
+                let parent_symbol_name = self.symbol_name().to_owned();
+                let cloned_sub_symbol_to_edit = sub_symbol_to_edit.clone();
+                let cloned_symbol_identifier = self.symbol_identifier.clone();
+                let cloned_llm_properties = self.llm_properties.clone();
+                let cloned_hub_sender = self.hub_sender.clone();
+                let cloned_tool_properties = self.tool_properties.clone();
+                let cloned_message_properties = message_properties.clone();
+                // TODO(skcd): This is gonna bite us in the ass later on? maybe
+                let _ = tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    if let Err(e) = cloned_tools
+                        .check_code_correctness(
+                            &parent_symbol_name,
+                            &cloned_sub_symbol_to_edit,
+                            cloned_symbol_identifier,
+                            cloned_llm_properties.llm().clone(),
+                            cloned_llm_properties.provider().clone(),
+                            cloned_llm_properties.api_key().clone(),
+                            &cloned_tool_properties,
+                            vec![],
+                            cloned_hub_sender,
+                            cloned_message_properties,
+                        )
+                        .await
+                    {
+                        eprintln!("Error checking code correctness: {}", e);
+                    }
+                });
 
                 // 🪦 follow ups was here - lest we forget 🪦
             } else {

@@ -68,6 +68,7 @@ pub struct ScratchPadAgent {
     // if the scratch-pad agent is right now focussed, then we can't react to other
     // signals and have to pay utmost attention to the current task we are workign on
     focussing: Arc<Mutex<bool>>,
+    fixing: Arc<Mutex<bool>>,
     symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     // This is the cache which we have to send with every request
     files_context: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
@@ -91,6 +92,7 @@ impl ScratchPadAgent {
             tool_box,
             symbol_event_sender,
             focussing: Arc::new(Mutex::new(false)),
+            fixing: Arc::new(Mutex::new(false)),
             files_context: Arc::new(Mutex::new(vec![])),
             extra_context: Arc::new(Mutex::new("".to_owned())),
             reaction_sender,
@@ -123,6 +125,10 @@ impl ScratchPadAgent {
             match event {
                 EnvironmentEventType::LSP(lsp_signal) => {
                     // we just want to react to the lsp signal over here, so we do just that
+                    // if we are fixing, then do not react to the environment yet
+                    if self.is_fixing().await {
+                        continue;
+                    }
                     let _ = self
                         .reaction_sender
                         .send(EnvironmentEventType::LSP(lsp_signal));
@@ -425,6 +431,11 @@ impl ScratchPadAgent {
     }
 
     async fn react_to_diagnostics(&self, diagnostics: Vec<LSPDiagnosticError>) {
+        // we are busy fixing 🧘‍♂️
+        {
+            let mut fixing = self.fixing.lock().await;
+            *fixing = true;
+        }
         let file_paths_focussed;
         {
             file_paths_focussed = self
@@ -476,5 +487,19 @@ impl ScratchPadAgent {
                 self.message_properties.clone(),
             )
             .await;
+
+        // we are done fixing so start skipping
+        {
+            let mut fixing = self.fixing.lock().await;
+            *fixing = false;
+        }
+    }
+
+    async fn is_fixing(&self) -> bool {
+        let fixing;
+        {
+            fixing = *(self.fixing.lock().await);
+        }
+        fixing
     }
 }

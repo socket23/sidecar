@@ -74,13 +74,21 @@ impl ScratchPadAgentEdits {
 }
 
 #[derive(Debug, Clone)]
-pub struct ScratchPadAgentEditorSignal {}
+pub struct ScratchPadDiagnosticSignal {
+    diagnostics: Vec<String>,
+}
+
+impl ScratchPadDiagnosticSignal {
+    pub fn new(diagnostics: Vec<String>) -> Self {
+        Self { diagnostics }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ScratchPadAgentInputType {
     UserMessage(ScratchPadAgentHumanMessage),
     EditsMade(ScratchPadAgentEdits),
-    EditorSignal(ScratchPadAgentEditorSignal),
+    LSPDiagnosticMessage(ScratchPadDiagnosticSignal),
     CacheWarmup,
 }
 
@@ -127,7 +135,13 @@ and my intention was:
 </query>"#
                 )
             }
-            Self::EditorSignal(_editor_signal) => "".to_owned(),
+            Self::LSPDiagnosticMessage(diagnostics) => {
+                let diagnostics = diagnostics.diagnostics.join("\n");
+                format!(
+                    r#"I can see the following diagnostic errors on the editor:
+{diagnostics}"#
+                )
+            }
             Self::CacheWarmup => "".to_owned(),
         }
     }
@@ -224,6 +238,12 @@ The different kind of signals which you get are of the following type:
 - The editor has a language server running which generates diagnostic signals, its really important that you make sure to suggest tasks for these diagnostics.
 - If you wish to go ahead and work on a task after reacting to a signal which you received, write it out and mark it as [on_going], you should be confident that you have all the context required to work on this task.
 - If the task has been completed, spell out the code snippets which indicate why the task has been completed or the information which will help the developer understand that the task has been completed.
+
+When coming up with the tasks, these are the tools inside the editor you have access to:
+- Go-to-definition: This allows you to click on any code symbol and go to the definition of it, like the function call or the class definition
+- Go-to-reference: This allows you to click on any code symbol and go to the references of the symbol
+- Open-file: This allows you to open any file in the editor (you should use this if you are sure that such a path exists in the directory or you have high confidence about it)
+So all your tasks should have sub-task list where each section either uses the above tool in some way, otherwise you can not proceed on the task.
 
 Your scratchpad is a special place because the developer is also looking at it to inform themselves about the changes made to the codebase, so be concise and insightful in your scratchpad. Remember the developer trusts you a lot!
 
@@ -401,6 +421,12 @@ The different kind of signals which you get are of the following type:
 - If you wish to go ahead and work on a task after reacting to a signal which you received, write it out and mark it as [on_going], you should be confident that you have all the context required to work on this task.
 - If the task has been completed, spell out the code snippets which indicate why the task has been completed or the information which will help the developer understand that the task has been completed.
 
+When coming up with the tasks, these are the tools inside the editor you have access to:
+- Go-to-definition: This allows you to click on any code symbol and go to the definition of it, like the function call or the class definition
+- Go-to-reference: This allows you to click on any code symbol and go to the references of the symbol
+- Open-file: This allows you to open any file in the editor (you should use this if you are sure that such a path exists in the directory or you have high confidence about it)
+So all your tasks should have sub-task list where each section either uses the above tool in some way, otherwise you can not proceed on the task.
+
 Your scratchpad is a special place because the developer is also looking at it to inform themselves about the changes made to the codebase, so be concise and insightful in your scratchpad. Remember the developer trusts you a lot!
 
 When you get a signal either from the developer or from the editor you must update the scratchpad, remember the developer is also using to keep an eye on the progress so be the most helpful pair-programmer you can be!
@@ -529,7 +555,8 @@ impl Tool for ScratchPadAgentBroker {
                     edit_request_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
-                ),
+                )
+                .set_apply_directly(),
             )
             .await;
         streamed_edit_client
@@ -540,7 +567,8 @@ impl Tool for ScratchPadAgentBroker {
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "```\n".to_owned(),
-                ),
+                )
+                .set_apply_directly(),
             )
             .await;
         let stream_result;
@@ -558,7 +586,7 @@ impl Tool for ScratchPadAgentBroker {
                                         scratch_pad_range.clone(),
                                         fs_file_path.to_owned(),
                                         delta.to_owned(),
-                                    ),
+                                    ).set_apply_directly(),
                                 ).await;
                             }
                         }
@@ -577,7 +605,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
@@ -585,7 +613,7 @@ impl Tool for ScratchPadAgentBroker {
                                 edit_request_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                     } else {
                         println!("scratch_pad_agent::stream_response::({:?})", response);
@@ -597,7 +625,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
@@ -605,7 +633,7 @@ impl Tool for ScratchPadAgentBroker {
                                 edit_request_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
-                            )
+                            ).set_apply_directly()
                         ).await;
                     }
                     stream_result = Some(response);
@@ -613,6 +641,8 @@ impl Tool for ScratchPadAgentBroker {
                 }
             }
         }
+
+        println!("scratch_pad::llm_response::({:?})", stream_result);
 
         match stream_result {
             Some(Ok(response)) => Ok(ToolOutput::SearchAndReplaceEditing(

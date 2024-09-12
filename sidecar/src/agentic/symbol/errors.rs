@@ -1,7 +1,7 @@
 use thiserror::Error;
 use tokio::sync::{mpsc::error::SendError, oneshot::error::RecvError};
 
-use crate::agentic::tool::errors::ToolError;
+use crate::agentic::tool::{errors::ToolError, lsp::diagnostics::DiagnosticSnippetError};
 
 use super::events::message_event::SymbolEventMessage;
 
@@ -66,4 +66,7 @@ pub enum SymbolError {
 
     #[error("Symbol event send error: {0}")]
     SymbolEventSendError(SendError<SymbolEventMessage>),
+
+    #[error("Diagnostic snippet error: {0}")]
+    DiagnosticSnippetError(DiagnosticSnippetError),
 }

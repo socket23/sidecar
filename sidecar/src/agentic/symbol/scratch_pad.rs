@@ -15,12 +15,28 @@ use super::{
     events::{
         environment_event::{EditorStateChangeRequest, EnvironmentEventType},
         human::{HumanAnchorRequest, HumanMessage},
+        lsp::{LSPDiagnosticError, LSPSignal},
         message_event::{SymbolEventMessage, SymbolEventMessageProperties},
     },
     tool_box::ToolBox,
     tool_properties::ToolProperties,
     types::SymbolEventRequest,
 };
+
+#[derive(Debug, Clone)]
+struct ScratchPadFilesActive {
+    file_content: String,
+    file_path: String,
+}
+
+impl ScratchPadFilesActive {
+    fn new(file_content: String, file_path: String) -> Self {
+        Self {
+            file_content,
+            file_path,
+        }
+    }
+}
 
 // We should have a way to update our cache of all that has been done
 // and what we are upto right now
@@ -49,9 +65,15 @@ pub struct ScratchPadAgent {
     storage_fs_path: String,
     message_properties: SymbolEventMessageProperties,
     tool_box: Arc<ToolBox>,
+    // if the scratch-pad agent is right now focussed, then we can't react to other
+    // signals and have to pay utmost attention to the current task we are workign on
+    focussing: Arc<Mutex<bool>>,
     symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     // This is the cache which we have to send with every request
-    files_context: Arc<Mutex<Vec<String>>>,
+    files_context: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
+    // This is the extra context which we send everytime with each request
+    // this also helps with the prompt cache hits
+    extra_context: Arc<Mutex<String>>,
     reaction_sender: UnboundedSender<EnvironmentEventType>,
 }
 
@@ -68,7 +90,9 @@ impl ScratchPadAgent {
             message_properties,
             tool_box,
             symbol_event_sender,
+            focussing: Arc::new(Mutex::new(false)),
             files_context: Arc::new(Mutex::new(vec![])),
+            extra_context: Arc::new(Mutex::new("".to_owned())),
             reaction_sender,
         };
         let cloned_scratch_pad_agent = scratch_pad_agent.clone();
@@ -97,11 +121,13 @@ impl ScratchPadAgent {
         println!("scratch_pad_agent::start_processing_environment");
         while let Some(event) = stream.next().await {
             match event {
-                EnvironmentEventType::LSP(_lsp_signal) => {
-                    // process the lsp signal over here
+                EnvironmentEventType::LSP(lsp_signal) => {
+                    // we just want to react to the lsp signal over here, so we do just that
+                    let _ = self
+                        .reaction_sender
+                        .send(EnvironmentEventType::LSP(lsp_signal));
                 }
                 EnvironmentEventType::Human(message) => {
-                    println!("scratch_pad_agent::human_message::({:?})", &message);
                     let _ = self.handle_human_message(message).await;
                     // whenever the human sends a request over here, encode it and try
                     // to understand how to handle it, some might require search, some
@@ -131,6 +157,9 @@ impl ScratchPadAgent {
             }
             EnvironmentEventType::EditorStateChange(editor_state_change) => {
                 self.react_to_edits(editor_state_change).await;
+            }
+            EnvironmentEventType::LSP(lsp_signal) => {
+                self.react_to_lsp_signal(lsp_signal).await;
             }
             _ => {}
         }
@@ -171,12 +200,18 @@ impl ScratchPadAgent {
             .await?;
 
         let cloned_anchored_request = anchor_request.clone();
+        // we are going to react to the user message
         let _ = self
             .reaction_sender
             .send(EnvironmentEventType::Human(HumanMessage::Anchor(
                 cloned_anchored_request,
             )));
 
+        // we start making the edits
+        {
+            let mut focussed = self.focussing.lock().await;
+            *focussed = true;
+        }
         let edits_done = stream::iter(symbols_to_edit_request.into_iter().map(|data| {
             (
                 data,
@@ -210,11 +245,17 @@ impl ScratchPadAgent {
         .collect::<Vec<_>>();
 
         let cloned_user_query = anchor_request.user_query().to_owned();
+        // the editor state has changed, so we need to react to that now
         let _ = self
             .reaction_sender
             .send(EnvironmentEventType::EditorStateChange(
                 EditorStateChangeRequest::new(edits_done, cloned_user_query),
             ));
+        // we are not focussed anymore, we can go about receiving events as usual
+        {
+            let mut focussed = self.focussing.lock().await;
+            *focussed = false;
+        }
         println!(
             "scratch_pad_agent::human_message_anchor::end::time_taken({}ms)",
             start_instant.elapsed().as_millis()
@@ -231,6 +272,7 @@ impl ScratchPadAgent {
 
     async fn handle_user_anchor_request(&self, anchor_request: HumanAnchorRequest) {
         println!("scratch_pad::handle_user_anchor_request");
+        // we are busy with the edits going on, so we can discard lsp signals for a while
         // figure out what to do over here
         let file_paths = anchor_request
             .anchored_symbols()
@@ -253,8 +295,9 @@ impl ScratchPadAgent {
                     let file_path = file_contents.fs_file_path();
                     let language = file_contents.language();
                     let content = file_contents.contents_ref();
-                    format!(
-                        r#"<file>
+                    ScratchPadFilesActive::new(
+                        format!(
+                            r#"<file>
 <fs_file_path>
 {file_path}
 </fs_file_path>
@@ -264,6 +307,8 @@ impl ScratchPadAgent {
 ```
 </content>
 </file>"#
+                        ),
+                        file_path.to_owned(),
                     )
                 });
             }
@@ -273,6 +318,10 @@ impl ScratchPadAgent {
             let mut files_context = self.files_context.lock().await;
             *files_context = user_context_files.to_vec();
         }
+        let user_context_files = user_context_files
+            .into_iter()
+            .map(|context_file| context_file.file_content)
+            .collect::<Vec<_>>();
         println!("scratch_pad_agent::tool_box::agent_human_request");
         let _ = self
             .tool_box
@@ -316,18 +365,114 @@ impl ScratchPadAgent {
             let files_context = self.files_context.lock().await;
             user_context_files = (*files_context).to_vec();
         }
+        let _file_paths_in_focus = user_context_files
+            .iter()
+            .map(|context_file| context_file.file_path.to_owned())
+            .collect::<HashSet<String>>();
+        let user_context_files = user_context_files
+            .into_iter()
+            .map(|context_file| context_file.file_content)
+            .collect::<Vec<_>>();
         let user_query = editor_state_change.user_query().to_owned();
         let edits_made = editor_state_change.consume_edits_made();
+        let extra_context;
+        {
+            extra_context = (*self.extra_context.lock().await).to_owned();
+        }
+        {
+            let mut extra_context = self.extra_context.lock().await;
+            *extra_context = (*extra_context).to_owned()
+                + &edits_made
+                    .iter()
+                    .map(|edit| edit.clone().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+        }
         let _ = self
             .tool_box
             .scratch_pad_edits_made(
                 &self.storage_fs_path,
                 &user_query,
+                &extra_context,
                 edits_made
                     .into_iter()
                     .map(|edit| edit.to_string())
                     .collect::<Vec<_>>(),
                 user_context_files,
+                self.message_properties.clone(),
+            )
+            .await;
+
+        // Now we want to grab the diagnostics which come in naturally
+        // or via the files we are observing, there are race conditions here which
+        // we want to tackle for sure
+    }
+
+    /// We get to react to the lsp signal over here
+    async fn react_to_lsp_signal(&self, lsp_signal: LSPSignal) {
+        let focussed;
+        {
+            focussed = *(self.focussing.lock().await);
+        }
+        if focussed {
+            return;
+        }
+        match lsp_signal {
+            LSPSignal::Diagnostics(diagnostics) => {
+                self.react_to_diagnostics(diagnostics).await;
+            }
+        }
+    }
+
+    async fn react_to_diagnostics(&self, diagnostics: Vec<LSPDiagnosticError>) {
+        let file_paths_focussed;
+        {
+            file_paths_focussed = self
+                .files_context
+                .lock()
+                .await
+                .iter()
+                .map(|file_content| file_content.file_path.to_owned())
+                .collect::<HashSet<String>>();
+        }
+        let diagnostic_messages = diagnostics
+            .into_iter()
+            .filter(|diagnostic| file_paths_focussed.contains(diagnostic.fs_file_path()))
+            .map(|diagnostic| {
+                let diagnostic_file_path = diagnostic.fs_file_path();
+                let diagnostic_message = diagnostic.diagnostic_message();
+                format!(
+                    r#"<fs_file_path>
+{diagnostic_file_path}
+</fs_file_path>
+<message>
+{diagnostic_message}
+</message>"#
+                )
+            })
+            .collect::<Vec<_>>();
+        if diagnostic_messages.is_empty() {
+            return;
+        }
+        println!("scratch_pad::reacting_to_diagnostics");
+        let files_context;
+        {
+            files_context = (*self.files_context.lock().await).to_vec();
+        }
+        let extra_context;
+        {
+            extra_context = (*self.extra_context.lock().await).to_owned();
+        }
+        let _ = self
+            .tool_box
+            .scratch_pad_diagnostics(
+                &self.storage_fs_path,
+                diagnostic_messages,
+                files_context
+                    .into_iter()
+                    .map(|files_context| files_context.file_content)
+                    .collect::<Vec<_>>(),
+                extra_context,
                 self.message_properties.clone(),
             )
             .await;

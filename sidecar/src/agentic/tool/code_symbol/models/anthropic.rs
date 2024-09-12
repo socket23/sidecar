@@ -29,7 +29,6 @@ use crate::agentic::{
             types::{CodeSymbolError, SerdeError},
         },
         jitter::jitter_sleep,
-        lsp::diagnostics::Diagnostic,
     },
 };
 
@@ -4061,50 +4060,39 @@ def subtract(a, b, c, d):
     fn system_message_for_correctness_check(&self) -> String {
         format!(
             r#"You are an expert software engineer who is tasked with taking actions for fixing errors in the code which is being written in the editor.
-- You will be given a list of actions you can take on the code to fix the various errors which are present.
+- You will be given a list of quick fixes suggested by your code editor. 
+- These are simple, deterministic actions that the editor can make on your behalf to fix simple errors.
 - The code has been edited so that the user instruction present in <user_instruction> section is satisfied.
-- The previous version of the code is shown to you in <previous_code>, this was the original code has now been edited to <re_written_code>
-- You are also shown the whole file content in <file> section, this is useful to understand the overall context in which the change was made.
-- You will also have access to the plan which is present in <plan> section which the engineer is following while making edits
-- - You can use the classes, structs, enums, methods or constants and functions which are mentioned in the plan for your own code correction if you forgot or used the wrong name in your own code.
-- - These classes, structs, enums, methods or constants will be eventually written to the codebase but you can use them starting now for code correction. 
+- This code is provided in <code_in_selection>
 - The various errors which are present in the edited code are shown to you as <diagnostic_list>
 - The actions you can take to fix the errors present in <diagnostic_list> is shown in <action_list>
 - You have to only select a single action, even if multiple actions will be required for making the fix.
-- You also get access to 3 special actions:
-- "edit code in selection" which allows you to edit the code currently selected and is present in <re_written_code>
-- "edit code in other places" which allows you to make edits in places other than the currently selected code.
-- "no action required" which allows you to not take any actions as the code you have written in <re_written_code> is correct even if there are Language server signals which mention errors.
+- You must have high confidence in your answer. Do not select changes that you cannot finish. Prefer simple and effective. Do not try to be too clever.
+- You also have an option to solicit help if you are unsure:
+- "ask for help" allows you to solicit the help of a more knowledgeable and intelligent colleague.
+- You do not want to cause extra burden to others by attempting changes that will require a heavy refactor. Instead, ask for help.
 
 An example is shown below to you:
 <query>
 <file>
-<file_path>
-testing/maths.py
-</file_path>
-<code_above>
-def add(a, b):
-    return a + b
-</code_above>
-<code_below>
-def multiply(a, b):
-    return a * b
-</code_below>
 <code_in_selection>
-def subtract(a: str, b: str):
-    return a - b
+pub struct Tag {{
+    pub rel_fname: PathBuf,
+    pub fname: PathBuf,
+    pub line: usize,
+    pub name: String,
+    pub kind: TagKind,
+    pub user_id: Symbol,
+}}
 </code_in_selection>
 </file>
 <diagnostic_list>
 <diagnostic>
-<file_path>
-testing/maths.py
-</file_path>
 <content>
-    return a - b
+pub user_id: Symbol,
 </content>
 <message>
-Cannot subtract a from b when both are strings
+Cannot find type Symbol in this scope
 </message>
 <diagnostic>
 </diagnostic_list>
@@ -4114,99 +4102,65 @@ Cannot subtract a from b when both are strings
 0
 </index>
 <intent>
-code edit
+Import 'webserver::agentic::symbol'
+</intent>
+</action>
+<action>
+<index>
+1
+</index>
+<intent>
+Ask for help
 </intent>
 </action>
 </action_list>
 <user_instruction>
-change the types to int
+add user_id with type Symbol
 </user_instruction>
-<previous_code>
-def subtract(a: float, b: float):
-    return a - b
-</previous_code>
-<re_written_code>
-def subtract(a: str, b: str):
-    return a - b
-</re_written_code>
 </query>
 
 Your reply should be:
 <code_action>
 <thinking>
-We need to change the types for a and b to int
+We should import the relevant type
 </thinking>
 <index>
 0
 </index>
 </code_action>
 
-You can notice how we selected code edit as our action and also included a thinking field for it to justify how to fix it.
+You can notice how we chose to import the type as our action, and included a thinking field.
 You have to do that always and only select a single action at a time."#
         )
     }
 
-    fn format_lsp_diagnostic_for_prompt(
-        &self,
-        fs_file_content_lines: &[String],
-        fs_file_path: String,
-        diagnostic: &Diagnostic,
-    ) -> Option<String> {
-        let diagnostic_range = diagnostic.range();
-        let diagnostic_message = diagnostic.diagnostic();
-        // grab the content which is inside the diagnostic range
-        let diagnostic_start_line = diagnostic_range.start_line();
-        let diagnostic_end_line = diagnostic_range.end_line();
-        if diagnostic_start_line >= fs_file_content_lines.len()
-            || diagnostic_end_line >= fs_file_content_lines.len()
-        {
-            return None;
-        }
-        let content = fs_file_content_lines[diagnostic_start_line..diagnostic_end_line]
-            .into_iter()
-            .map(|line| line.to_owned())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let file_path = format!(
-            "{}-{}:{}",
-            fs_file_path, diagnostic_start_line, diagnostic_end_line
-        );
-        let message = format!(
+    fn format_lsp_diagnostic_for_prompt(&self, snippet: &str, diagnostic_message: &str) -> String {
+        format!(
             r#"<diagnostic>
-<file_path>
-{file_path}
-</file_path>
 <content>
-{content}
+{}
 </content>
 <message>
-{diagnostic_message}
+{}
 </message>
-<diagnostic>"#
-        );
-        Some(message)
+<diagnostic>"#,
+            snippet, diagnostic_message
+        )
+        .to_owned()
     }
 
     fn format_code_correctness_request(
         &self,
         code_correctness_request: CodeCorrectnessRequest,
     ) -> String {
-        let fs_file_content_lines = code_correctness_request
-            .file_content()
-            .lines()
-            .into_iter()
-            .map(|line| line.to_owned())
-            .collect::<Vec<_>>();
-        let diagnostic = code_correctness_request.diagnostic();
-        let fs_file_path = code_correctness_request.fs_file_path();
+        // this should no longer be necessary.
+        // we need a diagnostics snippet?
+        let diagnostic_with_snippet = code_correctness_request.diagnostic_with_snippet();
 
-        let formatted_diagnostic = self
-            .format_lsp_diagnostic_for_prompt(
-                fs_file_content_lines.as_slice(),
-                fs_file_path.to_owned(),
-                diagnostic,
-            )
-            .unwrap_or("\n".to_owned()); // what should we do about None?
+        let formatted_diagnostic = self.format_lsp_diagnostic_for_prompt(
+            diagnostic_with_snippet.snippet(),
+            diagnostic_with_snippet.message(),
+        );
 
         // now we show the quick actions which are avaiable as tools along with
         // the code edit which is always an option as well
@@ -4228,70 +4182,33 @@ You have to do that always and only select a single action at a time."#
                 )
             })
             .collect::<Vec<_>>();
-        let actions_until_now = quick_actions.len();
+
+        // todo(zi: limit) - report to scratch pad?
+        let action_index_for_help = quick_actions.len();
         quick_actions.push(format!(
             r#"<action>
 <index>
-{actions_until_now}
+{action_index_for_help}
 </index>
 <intent>
-edit code in selection
-</intent>
-</action>"#
-        ));
-        let action_index_for_no_action = quick_actions.len();
-        quick_actions.push(format!(
-            r#"<action>
-<index>
-{action_index_for_no_action}
-</index>
-<intent>
-no action required
+ask for help
 </intent>
 </action>"#
         ));
 
         let formatted_actions = quick_actions.join("\n");
 
-        let code_above = code_correctness_request
-            .code_above()
-            .unwrap_or("".to_owned());
-        let code_below = code_correctness_request
-            .code_below()
-            .unwrap_or("".to_owned());
         let code_in_selection = code_correctness_request.code_in_selection();
 
-        let previous_code = code_correctness_request.previous_code();
         let instruction = code_correctness_request.instruction();
-        let extra_symbol_plan = code_correctness_request.extra_symbol_plan();
 
-        // now we can create the query and have the llm choose it
         let file_content = format!(
             r#"<file>
-<file_path>
-{fs_file_path}
-</file_path>
-<code_above>
-{code_above}
-</code_above>
-<code_below>
-{code_below}
-</code_below>
 <code_in_selection>
 {code_in_selection}
 </code_in_selection>
 </file>"#
         );
-
-        let plan = extra_symbol_plan
-            .map(|symbol_plan| {
-                format!(
-                    r#"<plan>
-{symbol_plan}
-</plan>"#
-                )
-            })
-            .unwrap_or_default();
 
         format!(
             r#"<query>
@@ -4305,13 +4222,6 @@ no action required
 <user_instruction>
 {instruction}
 </user_instruction>
-{plan}
-<previous_code>
-{previous_code}
-</previous_code>
-<re_written_code>
-{code_in_selection}
-</re_written_code>
 </query>"#
         )
     }

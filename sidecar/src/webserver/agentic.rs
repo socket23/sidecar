@@ -21,6 +21,7 @@ use tokio::task::JoinHandle;
 use crate::agentic::symbol::anchored::AnchoredSymbol;
 use crate::agentic::symbol::events::environment_event::EnvironmentEventType;
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
+use crate::agentic::symbol::events::lsp::{LSPDiagnosticError, LSPSignal};
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
@@ -200,6 +201,24 @@ impl AnchoredEditingTracker {
             let mut running_requests = self.running_requests.lock().await;
             running_requests.insert(request_id.to_owned(), join_handle);
         }
+    }
+
+    pub async fn send_diagnostics_event(&self, diagnostics: Vec<LSPDiagnosticError>) {
+        let environment_senders;
+        {
+            let running_request_properties = self.running_requests_properties.lock().await;
+            environment_senders = running_request_properties
+                .iter()
+                .map(|running_properties| running_properties.1.environment_event_sender.clone())
+                .collect::<Vec<_>>();
+        }
+        environment_senders
+            .into_iter()
+            .for_each(|environment_sender| {
+                let _ = environment_sender.send(EnvironmentEventType::LSP(LSPSignal::diagnostics(
+                    diagnostics.to_vec(),
+                )));
+            })
     }
 }
 
@@ -1149,16 +1168,31 @@ pub struct AgenticDiagnosticsResponse {
 impl ApiResponse for AgenticDiagnosticsResponse {}
 
 pub async fn push_diagnostics(
-    Extension(_app): Extension<Application>,
+    Extension(app): Extension<Application>,
     Json(AgenticDiagnostics {
-        fs_file_path: _fs_file_path,
-        diagnostics: _diagnostics,
+        fs_file_path,
+        diagnostics,
         source: _source,
     }): Json<AgenticDiagnostics>,
 ) -> Result<impl IntoResponse> {
-    println!("webserver::push_diagnostics::receieved_diagnostics");
     // implement this api endpoint properly and send events over to the right
     // scratch-pad agent
+    let lsp_diagnostics = diagnostics
+        .into_iter()
+        .map(|webserver_diagnostic| {
+            LSPDiagnosticError::new(
+                webserver_diagnostic.range,
+                fs_file_path.to_owned(),
+                webserver_diagnostic.message,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    // now look at all the active scratch-pad agents and send them this event
+    let _ = app
+        .anchored_request_tracker
+        .send_diagnostics_event(lsp_diagnostics)
+        .await;
     Ok(json_result(AgenticDiagnosticsResponse { done: true }))
 }
 

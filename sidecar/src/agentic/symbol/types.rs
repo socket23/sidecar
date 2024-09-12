@@ -189,7 +189,7 @@ impl SymbolEventRequest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SymbolEventResponse {
     TaskDone(String),
 }

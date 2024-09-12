@@ -37,6 +37,9 @@ use super::{
 // but screw it, we keep it as it is
 // lets keep it free-flow before we figure out the right way to go about doing this
 // mega-scratchpad ftw
+// Things to do:
+// - [imp] how do we keep the cache hot after making updates or discovering new information, we want to keep the prefix hot and consistenet always
+// - [not_sure] when recieving a LSP signal we might want to edit or gather more information how do we go about doing that?
 
 /// Different kind of events which can happen
 /// We should move beyond symbol events tbh at this point :')

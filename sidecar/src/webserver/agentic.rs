@@ -1159,6 +1159,9 @@ pub async fn push_diagnostics(
     println!("webserver::push_diagnostics::receieved_diagnostics");
     // implement this api endpoint properly and send events over to the right
     // scratch-pad agent
+    // should we control who we forward this signal to or just do it ad-hoc without
+    // worrying about who is getting the signal and then the receiver can decide to
+    // react to it or not
     Ok(json_result(AgenticDiagnosticsResponse { done: true }))
 }
 

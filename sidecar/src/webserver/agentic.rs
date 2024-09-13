@@ -790,7 +790,7 @@ pub async fn code_editing(
         );
         let metadata_pregen = Instant::now();
 
-        let user_provided_context = app
+        let mut user_provided_context = app
             .tool_box
             .file_paths_to_user_context(
                 user_context.file_paths(),
@@ -799,6 +799,29 @@ pub async fn code_editing(
             )
             .await
             .ok();
+
+        // get the git diff of the repository at this state right now
+        // this is also passed as user context which goes into warmup and stays
+        // as context throughout the run of this request_id
+        // this will lead to broken output when we retrigger the anchor again
+        // we have to maintain this cache in a better way
+        // the storage has to be like:
+        // - L2: files_provided
+        // - L1: git_diff (can change on each invocation but not really, we should have
+        // a better delta detection)
+        // - register: active changes which we have made
+        let git_diff = app.tool_box.get_git_diff(&root_directory).await;
+        if let Ok(git_diff) = git_diff {
+            let git_diff = git_diff.new_version();
+            user_provided_context = user_provided_context.map(|user_context| {
+                format!(
+                    r#"{user_context}
+<diff_of_changes>
+{git_diff}
+</diff_of_changes>"#
+                )
+            });
+        }
         let possibly_changed_files = symbols_to_anchor
             .iter()
             .filter_map(|anchored_symbol| anchored_symbol.fs_file_path())

@@ -108,6 +108,7 @@ use super::anchored::AnchoredSymbol;
 use super::errors::SymbolError;
 use super::events::edit::{SymbolToEdit, SymbolToEditRequest};
 use super::events::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
+use super::events::lsp::LSPDiagnosticError;
 use super::events::message_event::{SymbolEventMessage, SymbolEventMessageProperties};
 use super::events::probe::{SubSymbolToProbe, SymbolToProbeRequest};
 use super::helpers::{find_needle_position, generate_hyperlink_from_snippet, SymbolFollowupBFS};
@@ -5909,6 +5910,42 @@ FILEPATH: {fs_file_path}
             .map_err(|e| SymbolError::ToolError(e))?
             .get_lsp_diagnostics()
             .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn get_lsp_diagnostics_for_files(
+        &self,
+        file_paths: Vec<String>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<LSPDiagnosticError>, SymbolError> {
+        let file_signals = stream::iter(
+            file_paths.into_iter().map(
+                |fs_file_path| (fs_file_path, message_properties.clone()))
+            ).map(|(fs_file_path, message_properties)| async move {
+                let diagnostics = self.get_lsp_diagnostics(
+                    &fs_file_path,
+                    &Range::new(Position::new(0, 0, 0), Position::new(10000, 0, 0)),
+                    message_properties,
+                ).await;
+                diagnostics.map(
+                    |diagnostics| diagnostics
+                        .remove_diagnostics()
+                        .into_iter()
+                        .map(|diagnostic| LSPDiagnosticError::new(
+                            diagnostic.range().clone(),
+                            fs_file_path.to_owned(),
+                            diagnostic.message().to_owned(),
+                        )
+                    ).collect::<Vec<_>>()
+                )
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter_map(|data| data.ok())
+            .flatten()
+            .collect::<Vec<_>>();
+        Ok(file_signals)
     }
 
     pub async fn apply_edits_to_editor(

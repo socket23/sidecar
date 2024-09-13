@@ -504,13 +504,17 @@ impl ScratchPadAgent {
             .map(|diagnostic| {
                 let diagnostic_file_path = diagnostic.fs_file_path();
                 let diagnostic_message = diagnostic.diagnostic_message();
+                let diagnostic_snippet = diagnostic.snippet();
                 format!(
                     r#"<fs_file_path>
 {diagnostic_file_path}
 </fs_file_path>
 <message>
 {diagnostic_message}
-</message>"#
+</message>
+<snippet_with_error>
+{diagnostic_snippet}
+</snippet_with_error>"#
                 )
             })
             .collect::<Vec<_>>();

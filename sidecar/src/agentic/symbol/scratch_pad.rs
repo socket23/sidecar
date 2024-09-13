@@ -16,7 +16,7 @@ use crate::{
 use super::{
     errors::SymbolError,
     events::{
-        edit::{SymbolToEdit, SymbolToEditRequest},
+        edit::SymbolToEdit,
         environment_event::{EditorStateChangeRequest, EnvironmentEventType},
         human::{HumanAnchorRequest, HumanMessage},
         lsp::{LSPDiagnosticError, LSPSignal},

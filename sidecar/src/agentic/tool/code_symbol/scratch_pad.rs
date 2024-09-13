@@ -495,7 +495,6 @@ impl Tool for ScratchPadAgentBroker {
         let user_messages_context = self.user_message(context, llm_properties.llm().clone());
         let is_cache_warmup = user_messages_context.is_cache_warmup;
         let user_messages = user_messages_context.user_messages;
-        println!("scratch_pad::user_message:({:?})", &user_messages);
         let root_request_id = user_messages_context.root_request_id;
         let mut request = LLMClientCompletionRequest::new(
             llm_properties.llm().clone(),

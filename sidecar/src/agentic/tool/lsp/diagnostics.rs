@@ -52,8 +52,13 @@ impl Diagnostic {
     pub fn with_snippet_from_contents(
         self,
         file_contents: &str,
+        fs_file_path: &str,
     ) -> Result<DiagnosticWithSnippet, DiagnosticSnippetError> {
-        DiagnosticWithSnippet::from_diagnostic_and_contents(self, file_contents)
+        DiagnosticWithSnippet::from_diagnostic_and_contents(
+            self,
+            file_contents,
+            fs_file_path.to_owned(),
+        )
     }
 }
 
@@ -62,20 +67,23 @@ pub struct DiagnosticWithSnippet {
     message: String,
     range: Range,
     snippet: String,
+    fs_file_path: String,
 }
 
 impl DiagnosticWithSnippet {
-    pub fn new(message: String, range: Range, snippet: String) -> Self {
+    pub fn new(message: String, range: Range, snippet: String, fs_file_path: String) -> Self {
         Self {
             message,
             range,
             snippet,
+            fs_file_path,
         }
     }
 
     pub fn from_diagnostic_and_contents(
         diagnostic: Diagnostic,
         file_contents: &str,
+        fs_file_path: String,
     ) -> Result<Self, DiagnosticSnippetError> {
         let Diagnostic { range, message } = diagnostic;
 
@@ -95,6 +103,7 @@ impl DiagnosticWithSnippet {
             message,
             range,
             snippet,
+            fs_file_path,
         })
     }
 
@@ -109,15 +118,9 @@ impl DiagnosticWithSnippet {
     pub fn snippet(&self) -> &str {
         &self.snippet
     }
-}
 
-impl From<Diagnostic> for DiagnosticWithSnippet {
-    fn from(diagnostic: Diagnostic) -> Self {
-        DiagnosticWithSnippet {
-            message: diagnostic.message,
-            range: diagnostic.range,
-            snippet: String::new(), // Default empty snippet (least surprise)
-        }
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
     }
 }
 

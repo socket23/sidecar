@@ -167,8 +167,11 @@ impl ScratchPadAgent {
             match event {
                 EnvironmentEventType::LSP(lsp_signal) => {
                     // we just want to react to the lsp signal over here, so we do just that
-                    // if we are fixing, then do not react to the environment yet
+                    // if we are fixing or if we are focussing
                     if self.is_fixing().await {
+                        continue;
+                    }
+                    if self.is_focussing().await {
                         continue;
                     }
                     let _ = self

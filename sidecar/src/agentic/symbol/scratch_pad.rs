@@ -61,6 +61,14 @@ impl ScratchPadFilesActive {
 // Things to do:
 // - [imp] how do we keep the cache hot after making updates or discovering new information, we want to keep the prefix hot and consistenet always
 // - [not_sure] when recieving a LSP signal we might want to edit or gather more information how do we go about doing that?
+// - can we get the user behavior to be about changes done in the past and what effects it has
+// - meta programming on the canvas maybe in some ways?
+// - can we just start tracking the relevant edits somehow.. just that
+// - would go a long way most probably
+// - help us prepare for now
+// - even better just show the git diff until now
+// - even dumber just run git-diff and store it as context anyways?
+// - we need access to the root directory for git here
 
 /// Different kind of events which can happen
 /// We should move beyond symbol events tbh at this point :')
@@ -89,6 +97,7 @@ impl ScratchPadAgent {
         message_properties: SymbolEventMessageProperties,
         tool_box: Arc<ToolBox>,
         symbol_event_sender: UnboundedSender<SymbolEventMessage>,
+        user_provided_context: Option<String>,
     ) -> Self {
         let (reaction_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let scratch_pad_agent = Self {
@@ -99,7 +108,7 @@ impl ScratchPadAgent {
             focussing: Arc::new(Mutex::new(false)),
             fixing: Arc::new(Mutex::new(false)),
             files_context: Arc::new(Mutex::new(vec![])),
-            extra_context: Arc::new(Mutex::new("".to_owned())),
+            extra_context: Arc::new(Mutex::new(user_provided_context.unwrap_or_default())),
             reaction_sender,
         };
         let cloned_scratch_pad_agent = scratch_pad_agent.clone();

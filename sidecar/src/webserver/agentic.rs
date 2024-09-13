@@ -854,6 +854,7 @@ pub async fn code_editing(
             message_properties.clone(),
             app.tool_box.clone(),
             app.symbol_manager.hub_sender(),
+            user_provided_context.clone(),
         )
         .await;
 

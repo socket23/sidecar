@@ -136,12 +136,13 @@ impl ScratchPadAgent {
         // create a background thread which pings every 2 seconds and gets the lsp
         // signals
         let _ = tokio::spawn(async move {
-            let cloned_self = cloned_self_second;
+            let _cloned_self = cloned_self_second;
             let mut interval_stream = tokio_stream::wrappers::IntervalStream::new(
                 tokio::time::interval(Duration::from_millis(2000)),
             );
+            // do not send lsp signals at intervals for now
             while let Some(_) = interval_stream.next().await {
-                cloned_self.grab_diagnostics().await;
+                // cloned_self.grab_diagnostics().await;
             }
         });
         let _ = tokio::spawn(async move {
@@ -154,9 +155,11 @@ impl ScratchPadAgent {
                     EnvironmentEventType::LSP(_) => {
                         // if we are fixing or focussing then skip the lsp signal
                         if cloned_self.is_fixing().await {
+                            println!("scratchpad::discarding_lsp::busy_fixing");
                             continue;
                         }
                         if cloned_self.is_focussing().await {
+                            println!("scratchpad::discarding_lsp::busy_focussing");
                             continue;
                         }
                     }
@@ -174,9 +177,11 @@ impl ScratchPadAgent {
                     // we just want to react to the lsp signal over here, so we do just that
                     // if we are fixing or if we are focussing
                     if self.is_fixing().await {
+                        println!("scratchpad::environment_event::discarding_lsp::busy_fixing");
                         continue;
                     }
                     if self.is_focussing().await {
+                        println!("scratchpad::environment_event::discarding_lsp::busy_focussing");
                         continue;
                     }
                     let _ = self
@@ -465,8 +470,8 @@ impl ScratchPadAgent {
         // check for diagnostic_symbols
         let cloned_self = self.clone();
         let _ = tokio::spawn(async move {
-            // sleep for 1 seconds before getting the signals
-            let _ = tokio::time::sleep(Duration::from_secs(1)).await;
+            // sleep for 2 seconds before getting the signals
+            let _ = tokio::time::sleep(Duration::from_secs(2)).await;
             cloned_self.grab_diagnostics().await;
         });
     }
@@ -612,6 +617,7 @@ impl ScratchPadAgent {
             }
         }
         let scratch_pad_contents_ref = scratch_pad_content.contents_ref();
+        let mut edits_made = vec![];
         for active_file in active_file_paths.iter() {
             let symbol_identifier = SymbolIdentifier::with_file_path(&active_file, &active_file);
             let user_instruction = format!(
@@ -652,8 +658,23 @@ Please help me out by making the necessary code edits"#
             // we are going to react to this automagically since the environment
             // will give us feedback about this (copium)
             let output = receiver.await;
-            println!("{:?}", output);
+            edits_made.push(output);
         }
+
+        let edits_made = edits_made
+            .into_iter()
+            .filter_map(|edit| edit.ok())
+            .collect::<Vec<_>>();
+
+        // Now we can send these edits to the scratchpad to have a look
+        let _ = self
+            .reaction_sender
+            .send(EnvironmentEventType::EditorStateChange(
+                EditorStateChangeRequest::new(
+                    edits_made,
+                    "I fixed some diagnostic erorrs".to_owned(),
+                ),
+            ));
     }
 
     async fn grab_diagnostics(&self) {

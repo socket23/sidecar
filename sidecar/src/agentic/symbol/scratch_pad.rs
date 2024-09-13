@@ -8,16 +8,21 @@ use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
 use futures::{stream, Stream, StreamExt};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 
-use crate::agentic::symbol::{events::types::SymbolEvent, ui_event::UIEventWithID};
+use crate::{
+    agentic::symbol::{events::types::SymbolEvent, ui_event::UIEventWithID},
+    chunking::text_document::{Position, Range},
+};
 
 use super::{
     errors::SymbolError,
     events::{
+        edit::{SymbolToEdit, SymbolToEditRequest},
         environment_event::{EditorStateChangeRequest, EnvironmentEventType},
         human::{HumanAnchorRequest, HumanMessage},
         lsp::{LSPDiagnosticError, LSPSignal},
         message_event::{SymbolEventMessage, SymbolEventMessageProperties},
     },
+    identifier::SymbolIdentifier,
     tool_box::ToolBox,
     tool_properties::ToolProperties,
     types::SymbolEventRequest,
@@ -44,7 +49,7 @@ impl ScratchPadFilesActive {
 // able to work on top of that
 // a single LLM call should rewrite the sections which are present and take as input
 // the lsp signal
-// we also need to tell this agent what all things are possible, like: getting data from elsewhere
+// we also need to tell symbol_event_request agent what all things are possible, like: getting data from elsewhere
 // looking at some other file and keeping that in its cache
 // also what kind of information it should keep in:
 // it can be state driven based on the user ask
@@ -544,10 +549,110 @@ impl ScratchPadAgent {
             )
             .await;
 
+        // we try to make code edits to fix the diagnostics
+        let _ = self.code_edit_for_diagnostics().await;
+
         // we are done fixing so start skipping
         {
             let mut fixing = self.fixing.lock().await;
             *fixing = false;
+        }
+    }
+
+    // Now that we have reacted to the update on the scratch-pad we can start
+    // thinking about making code edits for this
+    async fn code_edit_for_diagnostics(&self) {
+        // we want to give the scratch-pad as input to the agent and the files
+        // which are visible as the context where it can make the edits
+        // we can be a bit smarter and make the eidts over the file one after
+        // the other
+        // what about the cache hits over here? thats one of the major issues
+        // on how we want to tack it
+        // fuck the cache hit just raw dog the edits in parallel on the files
+        // which we are tracking using the scratch-pad and the files
+        let scratch_pad_content = self
+            .tool_box
+            .file_open(
+                self.storage_fs_path.to_owned(),
+                self.message_properties.clone(),
+            )
+            .await;
+        if let Err(e) = scratch_pad_content.as_ref() {
+            println!("scratch_pad_agnet::scratch_pad_reading::error");
+            eprintln!("{:?}", e);
+        }
+        let scratch_pad_content = scratch_pad_content.expect("if let Err to hold");
+        let active_file_paths;
+        {
+            active_file_paths = self
+                .files_context
+                .lock()
+                .await
+                .iter()
+                .map(|file_context| file_context.file_path.to_owned())
+                .collect::<Vec<_>>();
+        }
+        // we should optimse for cache hit over here somehow
+        let mut files_context = vec![];
+        for active_file in active_file_paths.to_vec().into_iter() {
+            let file_contents = self
+                .tool_box
+                .file_open(active_file, self.message_properties.clone())
+                .await;
+            if let Ok(file_contents) = file_contents {
+                let fs_file_path = file_contents.fs_file_path();
+                let language_id = file_contents.language();
+                let contents = file_contents.contents_ref();
+                files_context.push(format!(
+                    r#"# FILEPATH: {fs_file_path}
+    ```{language_id}
+    {contents}
+    ```"#
+                ));
+            }
+        }
+        let scratch_pad_contents_ref = scratch_pad_content.contents_ref();
+        for active_file in active_file_paths.iter() {
+            let symbol_identifier = SymbolIdentifier::with_file_path(&active_file, &active_file);
+            let user_instruction = format!(
+                r#"I am sharing with you the scratchpad where I am keeping track of all the things I am working on. I want you to make edits which help move the tasks forward.
+It's important to remember that some edits might require additional steps before we can go about doing them, so feel free to ignore them.
+Only make the edits to be the best of your ability in {active_file}
+
+My scratchpad looks like this:
+{scratch_pad_contents_ref}
+
+Please help me out by making the necessary code edits"#
+            );
+            let symbol_event_request = SymbolEventRequest::simple_edit_request(
+                symbol_identifier,
+                SymbolToEdit::new(
+                    active_file.to_owned(),
+                    Range::new(Position::new(0, 0, 0), Position::new(10000, 0, 0)),
+                    active_file.to_owned(),
+                    vec![user_instruction.to_owned()],
+                    false,
+                    false,
+                    true,
+                    user_instruction,
+                    None,
+                    false,
+                    Some(files_context.to_vec().join("\n")),
+                    true,
+                ),
+                ToolProperties::new(),
+            );
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            let symbol_event_message = SymbolEventMessage::message_with_properties(
+                symbol_event_request,
+                self.message_properties.clone(),
+                sender,
+            );
+            let _ = self.symbol_event_sender.send(symbol_event_message);
+            // we are going to react to this automagically since the environment
+            // will give us feedback about this (copium)
+            let output = receiver.await;
+            println!("{:?}", output);
         }
     }
 

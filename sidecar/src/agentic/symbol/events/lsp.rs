@@ -6,14 +6,16 @@ use crate::chunking::text_document::Range;
 #[derive(Debug, Clone)]
 pub struct LSPDiagnosticError {
     _range: Range,
+    _snippet: String,
     fs_file_path: String,
     diagnostic: String,
 }
 
 impl LSPDiagnosticError {
-    pub fn new(range: Range, fs_file_path: String, diagnostic: String) -> Self {
+    pub fn new(range: Range, snippet: String, fs_file_path: String, diagnostic: String) -> Self {
         Self {
             _range: range,
+            _snippet: snippet,
             fs_file_path,
             diagnostic,
         }

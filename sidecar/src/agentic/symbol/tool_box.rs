@@ -70,7 +70,7 @@ use crate::agentic::tool::filtering::broker::{
 };
 use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClientResponse};
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
-use crate::agentic::tool::lsp::diagnostics::{LSPDiagnosticsInput, LSPDiagnosticsOutput};
+use crate::agentic::tool::lsp::diagnostics::{DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -5001,7 +5001,7 @@ instruction:
         // Should never happen, so should be loud when if it does.
         let diagnostics_with_snippets = diagnostics
             .into_iter()
-            .map(|d| d.with_snippet_from_contents(&fs_file_contents))
+            .map(|d| d.with_snippet_from_contents(&fs_file_contents, fs_file_path))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| SymbolError::DiagnosticSnippetError(e))?;
 
@@ -5924,19 +5924,25 @@ FILEPATH: {fs_file_path}
                 let diagnostics = self.get_lsp_diagnostics(
                     &fs_file_path,
                     &Range::new(Position::new(0, 0, 0), Position::new(10000, 0, 0)),
-                    message_properties,
+                    message_properties.clone(),
                 ).await;
+                let file_contents = self.file_open(fs_file_path.to_owned(), message_properties).await;
+                if let Ok(file_contents) = file_contents {
+                    diagnostics.map(|diagnostics| diagnostics.remove_diagnostics().into_iter().filter_map(|diagnostic| DiagnosticWithSnippet::from_diagnostic_and_contents(diagnostic, file_contents.contents_ref(), fs_file_path.to_owned()).ok()).collect::<Vec<_>>())
+                } else {
                 diagnostics.map(
                     |diagnostics| diagnostics
                         .remove_diagnostics()
                         .into_iter()
-                        .map(|diagnostic| LSPDiagnosticError::new(
-                            diagnostic.range().clone(),
-                            fs_file_path.to_owned(),
+                        .map(|diagnostic| DiagnosticWithSnippet::new(
                             diagnostic.message().to_owned(),
+                            diagnostic.range().clone(),
+                            "".to_owned(),
+                            fs_file_path.to_owned(),
                         )
                     ).collect::<Vec<_>>()
                 )
+            }
             })
             .buffer_unordered(100)
             .collect::<Vec<_>>()
@@ -5944,6 +5950,7 @@ FILEPATH: {fs_file_path}
             .into_iter()
             .filter_map(|data| data.ok())
             .flatten()
+            .map(|diagnostic| LSPDiagnosticError::new(diagnostic.range().clone(), diagnostic.snippet().to_owned(), diagnostic.fs_file_path().to_owned(), diagnostic.message().to_owned()))
             .collect::<Vec<_>>();
         Ok(file_signals)
     }

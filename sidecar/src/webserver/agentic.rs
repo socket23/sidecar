@@ -1151,6 +1151,7 @@ pub async fn code_editing(
 pub struct AgenticDiagnosticData {
     message: String,
     range: Range,
+    range_content: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1182,6 +1183,7 @@ pub async fn push_diagnostics(
         .map(|webserver_diagnostic| {
             LSPDiagnosticError::new(
                 webserver_diagnostic.range,
+                webserver_diagnostic.range_content,
                 fs_file_path.to_owned(),
                 webserver_diagnostic.message,
             )

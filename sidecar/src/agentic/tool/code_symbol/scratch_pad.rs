@@ -597,7 +597,6 @@ impl Tool for ScratchPadAgentBroker {
                 }
                 response = &mut response => {
                     if let Ok(_result) = response.as_deref() {
-                        println!("scratch_pad_agent::stream_response::ok({:?})", _result);
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
                             EditedCodeStreamingRequest::delta(
@@ -616,7 +615,6 @@ impl Tool for ScratchPadAgentBroker {
                             ).set_apply_directly()
                         ).await;
                     } else {
-                        println!("scratch_pad_agent::stream_response::({:?})", response);
                         // send over the original selection over here since we had an error
                         let _ = streamed_edit_client.send_edit_event(
                             editor_url.to_owned(),
@@ -642,7 +640,7 @@ impl Tool for ScratchPadAgentBroker {
             }
         }
 
-        println!("scratch_pad::llm_response::({:?})", stream_result);
+        println!("scratch_pad::llm_response::finished");
 
         match stream_result {
             Some(Ok(response)) => Ok(ToolOutput::SearchAndReplaceEditing(

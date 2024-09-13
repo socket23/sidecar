@@ -7737,7 +7737,7 @@ FILEPATH: {fs_file_path}
         );
 
         // now I have the outline nodes, I want to see which of them intersect with the range we are interested in
-        let intersecting_outline_nodes = outline_nodes
+        let mut intersecting_outline_nodes = outline_nodes
             .into_iter()
             .filter(|outline_node| {
                 outline_node
@@ -7746,6 +7746,13 @@ FILEPATH: {fs_file_path}
                     || outline_node.is_file()
             })
             .collect::<Vec<_>>();
+
+        // if we have multiple outline nodes over here and one of them is a file then we should discard the file
+        // one, since we have a more precise selection anyways
+        let intersecting_outline_nodes_len = intersecting_outline_nodes.len();
+        if intersecting_outline_nodes_len > 1 {
+            intersecting_outline_nodes = intersecting_outline_nodes.into_iter().filter(|outline_node| !outline_node.is_file()).collect::<Vec<_>>();
+        }
 
         let anchored_nodes: Vec<AnchoredSymbol> = intersecting_outline_nodes
             .into_iter()

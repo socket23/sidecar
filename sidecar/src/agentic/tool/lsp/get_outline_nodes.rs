@@ -328,49 +328,50 @@ impl OutlineNodesUsingEditorResponse {
             &self.file_content,
             self.outline_nodes,
         );
-        if results.is_empty() {
-            let file_content = self.file_content;
-            let cloned_file_path = fs_file_path.to_owned();
-            let final_file_content = format!(
-                r#"{cloned_file_path}
+        // send over the file symbol here none the less if required, this can't
+        // break anything which works on top of symbol level but it will work
+        // wonders when we want to do file level edits
+        let file_content = self.file_content;
+        let cloned_file_path = fs_file_path.to_owned();
+        let final_file_content = format!(
+            r#"{cloned_file_path}
 {file_content}"#
-            );
-            let file_content_lines = final_file_content
-                .lines()
-                .into_iter()
-                .collect::<Vec<_>>()
-                .len();
-            let full_file_content = Range::new(
-                Position::new(0, 0, 0),
-                Position::new(file_content_lines, 0, 0),
-            );
-            let file_path_length = fs_file_path.chars().collect::<Vec<_>>().len();
-            let identifier_range = Range::new(
-                Position::new(0, 0, 0),
-                Position::new(0, file_path_length, 0),
-            );
-            let body_range = Range::new(
-                Position::new(1, 0, 0),
-                // this is wrong btw we are taking a shortcut, we should calculate the length
-                // of the last line in the file
-                Position::new(file_content_lines - 1, 0, 0),
-            );
-            results.push(OutlineNode::new(
-                OutlineNodeContent::new(
-                    fs_file_path.to_owned(),
-                    full_file_content,
-                    OutlineNodeType::File,
-                    final_file_content,
-                    fs_file_path,
-                    identifier_range,
-                    body_range,
-                    self.language.to_owned(),
-                    None,
-                ),
-                vec![],
-                self.language,
-            ));
-        }
+        );
+        let file_content_lines = final_file_content
+            .lines()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .len();
+        let full_file_content = Range::new(
+            Position::new(0, 0, 0),
+            Position::new(file_content_lines, 0, 0),
+        );
+        let file_path_length = fs_file_path.chars().collect::<Vec<_>>().len();
+        let identifier_range = Range::new(
+            Position::new(0, 0, 0),
+            Position::new(0, file_path_length, 0),
+        );
+        let body_range = Range::new(
+            Position::new(1, 0, 0),
+            // this is wrong btw we are taking a shortcut, we should calculate the length
+            // of the last line in the file
+            Position::new(file_content_lines - 1, 0, 0),
+        );
+        results.push(OutlineNode::new(
+            OutlineNodeContent::new(
+                fs_file_path.to_owned(),
+                full_file_content,
+                OutlineNodeType::File,
+                final_file_content,
+                fs_file_path,
+                identifier_range,
+                body_range,
+                self.language.to_owned(),
+                None,
+            ),
+            vec![],
+            self.language,
+        ));
         results
     }
 }

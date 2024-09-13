@@ -25,13 +25,16 @@ impl GitDiffClient {
 pub struct GitDiffClientRequest {
     root_directory: String,
     fs_file_path: String,
+    // exapnded implies that its `git diff -u 1000` the full view and not `git diff`
+    expanded: bool,
 }
 
 impl GitDiffClientRequest {
-    pub fn new(root_directory: String, fs_file_path: String) -> Self {
+    pub fn new(root_directory: String, fs_file_path: String, expanded: bool) -> Self {
         Self {
             root_directory,
             fs_file_path,
+            expanded,
         }
     }
 
@@ -41,6 +44,10 @@ impl GitDiffClientRequest {
 
     pub fn fs_file_path(&self) -> &str {
         &self.fs_file_path
+    }
+
+    pub fn expanded(&self) -> bool {
+        self.expanded
     }
 }
 
@@ -64,6 +71,7 @@ impl GitDiffClientResponse {
 async fn run_command(
     root_directory: &str,
     fs_file_path: &str,
+    expanded: bool,
 ) -> Result<GitDiffClientResponse, ToolError> {
     // Create a temporary file
     let tmpfile = NamedTempFile::new_in("/tmp").map_err(|e| ToolError::IOError(e))?;
@@ -71,16 +79,28 @@ async fn run_command(
     println!("tmpfile: {:?}", &tmpfile_path);
 
     // Run the git diff command, directing stdout to the temporary file
-    let status = Command::new("git")
-        .current_dir(root_directory)
-        .arg("diff")
-        .arg("--no-prefix")
-        .arg("-U8000")
-        .stdout(Stdio::from(StdFile::create(&tmpfile_path)?))
-        .status()
-        .await?;
+    // if we are in expanded mode, we want to get all the lines of the files in the diff
+    let status = if expanded {
+        Command::new("git")
+            .current_dir(root_directory)
+            .arg("diff")
+            .arg("--no-prefix")
+            .arg("-U8000")
+            .stdout(Stdio::from(StdFile::create(&tmpfile_path)?))
+            .status()
+            .await?
+    } else {
+        // if we are in normal mode then we just want to get the git diff of the filepath
+        Command::new("git")
+            .current_dir(root_directory)
+            .arg("diff")
+            .stdout(Stdio::from(StdFile::create(&tmpfile_path)?))
+            .status()
+            .await?
+    };
 
     if !status.success() {
+        println!("{:?}", status.code());
         return Err(ToolError::RetriesExhausted);
     }
 
@@ -93,6 +113,17 @@ async fn run_command(
     while let Some(line) = reader.next_line().await? {
         output.push_str(&line);
         output.push('\n');
+    }
+
+    if !expanded {
+        return Ok(GitDiffClientResponse {
+            fs_file_path: "".to_owned(),
+            old_version: "".to_owned(),
+            // we just present the git diff over here in the new version
+            // feeling too lazy to create a new tool so this is implict understood
+            // behavior
+            new_version: output,
+        });
     }
 
     // now we parse the git-diff in a very very hacky way, bear with me
@@ -225,7 +256,12 @@ fn extract_versions(lines: &[&str]) -> (String, String) {
 impl Tool for GitDiffClient {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.should_git_diff()?;
-        let parsed_response = run_command(context.root_directory(), context.fs_file_path()).await?;
+        let parsed_response = run_command(
+            context.root_directory(),
+            context.fs_file_path(),
+            context.expanded(),
+        )
+        .await?;
         let git_diff = ToolOutput::git_diff_response(parsed_response);
         Ok(git_diff)
     }

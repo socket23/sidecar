@@ -7311,6 +7311,34 @@ FILEPATH: {fs_file_path}
         Ok(language_parsing.hoverable_nodes(source_code.as_bytes()))
     }
 
+    /// Grabs the repo wide `git-diff` which can be used
+    /// as input for the agentic trigger
+    /// 
+    /// This is to warmup the cache and set the context for the
+    /// agent
+    pub async fn get_git_diff(
+        &self,
+        root_directory: &str,
+    ) -> Result<GitDiffClientResponse, SymbolError> {
+        let tool_input = ToolInput::GitDiff(GitDiffClientRequest::new(
+            root_directory.to_owned(),
+            // file path is not required, we just need the
+            // root_directory
+            "".to_owned(),
+            // we want the full view of the git diff changes
+            false,
+        ));
+        let output = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_git_diff_output()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        // println!("tool_output::{:?}", output);
+        Ok(output)
+    }
+
     /// Gets the changed contents of the file using git-diff
     pub async fn get_file_changes(
         &self,
@@ -7320,6 +7348,8 @@ FILEPATH: {fs_file_path}
         let tool_input = ToolInput::GitDiff(GitDiffClientRequest::new(
             root_directory.to_owned(),
             fs_file_path.to_owned(),
+            // we want the full view of the git diff changes
+            true,
         ));
         let output = self
             .tools

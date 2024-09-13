@@ -60,26 +60,28 @@ async fn main() {
     // Your root directory
     let root_directory = "/Users/skcd/scratch/sidecar";
     // File where you have made changes
-    let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/clients/types.rs";
+    let _fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/clients/types.rs";
     let output = tool_box
-        .grab_changed_symbols_in_file_git(root_directory, fs_file_path)
+        .get_git_diff(root_directory)
         .await
         .expect("to work");
 
-    // from here we have to go a level deeper into the sub-symbol of the symbol where
-    // the changed values are present and then invoke a followup at that point
-    // println!("{:?}", &output);
-    // a more readable output
-    output.changes().iter().for_each(|symbol_changes| {
-        println!(
-            "symbol_name::({})::children({})",
-            symbol_changes.symbol_identifier().symbol_name(),
-            symbol_changes
-                .changes()
-                .iter()
-                .map(|(symbol_to_edit, _, _)| symbol_to_edit.symbol_name().to_owned())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-    });
+    println!("{:?}", output);
+
+    // // from here we have to go a level deeper into the sub-symbol of the symbol where
+    // // the changed values are present and then invoke a followup at that point
+    // // println!("{:?}", &output);
+    // // a more readable output
+    // output.changes().iter().for_each(|symbol_changes| {
+    //     println!(
+    //         "symbol_name::({})::children({})",
+    //         symbol_changes.symbol_identifier().symbol_name(),
+    //         symbol_changes
+    //             .changes()
+    //             .iter()
+    //             .map(|(symbol_to_edit, _, _)| symbol_to_edit.symbol_name().to_owned())
+    //             .collect::<Vec<_>>()
+    //             .join(",")
+    //     );
+    // });
 }

@@ -452,6 +452,7 @@ impl ScratchPadAgent {
         {
             let mut extra_context = self.extra_context.lock().await;
             *extra_context = (*extra_context).to_owned()
+                + "\n"
                 + &edits_made
                     .iter()
                     .map(|edit| edit.clone().to_string())

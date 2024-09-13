@@ -312,6 +312,7 @@ These are the files which are visible to you in the editor, if you want to open 
 - <original_task>
 Always remember the original task and do not forget about it or rewrite it unless it was empty. When the developer tells you this is what they want to do, remmeber it
 - <tasks>
+YOU CAN ONLY GENERATE 2 TASKS
 The tasks can be in 3 different modes:
 - [in_progress] The inprogress tasks are the ones which are going on right now
 - [blocked] The blocked tasks are the one which we can not do right now because either we do not have enough context or requires more effort than a simple edit in the current file. These can also be tasks which are incomplete
@@ -430,6 +431,7 @@ These are the files which are visible to you in the editor, if you want to open 
 - <original_task>
 Always remember the original task and do not forget about it or rewrite it unless it was empty. When the developer tells you this is what they want to do, remmeber it
 - <tasks>
+YOU CAN ONLY GENERATE 2 TASKS
 The tasks can be in 3 different modes:
 - [in_progress] The inprogress tasks are the ones which are going on right now
 - [blocked] The blocked tasks are the one which we can not do right now because either we do not have enough context or requires more effort than a simple edit in the current file. These can also be tasks which are incomplete

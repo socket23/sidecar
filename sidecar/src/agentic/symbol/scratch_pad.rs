@@ -3,7 +3,7 @@
 //! This way the agent can look at all the events and the requests which are happening
 //! and take a decision based on them on what should happen next
 
-use std::{collections::HashSet, pin::Pin, sync::Arc};
+use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
 
 use futures::{stream, Stream, StreamExt};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
@@ -126,6 +126,19 @@ impl ScratchPadAgent {
 
         // this is our filtering thread which will run in the background
         let cloned_self = self.clone();
+        let cloned_self_second = self.clone();
+
+        // create a background thread which pings every 2 seconds and gets the lsp
+        // signals
+        let _ = tokio::spawn(async move {
+            let cloned_self = cloned_self_second;
+            let mut interval_stream = tokio_stream::wrappers::IntervalStream::new(
+                tokio::time::interval(Duration::from_millis(2000)),
+            );
+            while let Some(_) = interval_stream.next().await {
+                cloned_self.grab_diagnostics().await;
+            }
+        });
         let _ = tokio::spawn(async move {
             let cloned_sender = sender;
             // damn borrow-checker got hands
@@ -441,6 +454,13 @@ impl ScratchPadAgent {
         // Now we want to grab the diagnostics which come in naturally
         // or via the files we are observing, there are race conditions here which
         // we want to tackle for sure
+        // check for diagnostic_symbols
+        let cloned_self = self.clone();
+        let _ = tokio::spawn(async move {
+            // sleep for 1 seconds before getting the signals
+            let _ = tokio::time::sleep(Duration::from_secs(1)).await;
+            cloned_self.grab_diagnostics().await;
+        });
     }
 
     /// We get to react to the lsp signal over here
@@ -522,6 +542,29 @@ impl ScratchPadAgent {
             let mut fixing = self.fixing.lock().await;
             *fixing = false;
         }
+    }
+
+    async fn grab_diagnostics(&self) {
+        let files_focussed;
+        {
+            files_focussed = self
+                .files_context
+                .lock()
+                .await
+                .iter()
+                .map(|file| file.file_path.to_owned())
+                .collect::<Vec<_>>();
+        }
+        let diagnostics = self
+            .tool_box
+            .get_lsp_diagnostics_for_files(files_focussed, self.message_properties.clone())
+            .await
+            .unwrap_or_default();
+        let _ = self
+            .reaction_sender
+            .send(EnvironmentEventType::LSP(LSPSignal::Diagnostics(
+                diagnostics,
+            )));
     }
 
     async fn is_fixing(&self) -> bool {

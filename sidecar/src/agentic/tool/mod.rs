@@ -23,6 +23,7 @@ pub mod file;
 pub mod filtering;
 pub mod git;
 pub mod grep;
+pub mod helpers;
 pub mod human;
 pub mod input;
 pub mod jitter;

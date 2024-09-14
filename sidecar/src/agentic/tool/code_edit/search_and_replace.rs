@@ -17,8 +17,8 @@ use crate::{
             ui_event::{EditedCodeStreamingRequest, UIEventWithID},
         },
         tool::{
-            errors::ToolError, input::ToolInput, lsp::open_file::OpenFileRequest,
-            output::ToolOutput, r#type::Tool,
+            errors::ToolError, helpers::diff_recent_changes::DiffRecentChanges, input::ToolInput,
+            lsp::open_file::OpenFileRequest, output::ToolOutput, r#type::Tool,
         },
     },
     chunking::text_document::{Position, Range},
@@ -74,6 +74,9 @@ pub struct SearchAndReplaceEditingRequest {
     ui_sender: UnboundedSender<UIEventWithID>,
     user_context: Option<String>,
     editor_url: String,
+    // its a vec of string here so we can select the cache points as required
+    // and optimise for that
+    diff_recent_changes: Option<DiffRecentChanges>,
     // use a is_warmup field
     is_warmup: bool,
 }
@@ -96,6 +99,7 @@ impl SearchAndReplaceEditingRequest {
         user_context: Option<String>,
         // Indicates whether this is a warmup request to prepare the LLM
         editor_url: String,
+        diff_recent_changes: Option<DiffRecentChanges>,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
     ) -> Self {
         Self {
@@ -113,6 +117,7 @@ impl SearchAndReplaceEditingRequest {
             ui_sender,
             user_context,
             editor_url,
+            diff_recent_changes,
             is_warmup,
         }
     }
@@ -272,11 +277,13 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
     fn user_messages(&self, context: SearchAndReplaceEditingRequest) -> Vec<LLMClientMessage> {
         let mut messages = vec![];
         let user_context = context.user_context;
+        let extra_data = self.extra_data(&context.extra_data);
         if let Some(user_context) = user_context {
             let user_provided_context = LLMClientMessage::user(format!(
                 r#"<user_provided_context>
 {user_context}
 </user_provided_context>
+{extra_data}
 As a reminder, once you understand the request you MUST:
 1. Decide if you need to propose *SEARCH/REPLACE* edits to any files that haven't been added to the chat. You can create new files without asking. But if you need to propose edits to existing files not already added to the chat, you *MUST* tell the user their full path names and ask them to *add the files to the chat*. End your reply and wait for their approval. You can keep asking if you then decide you need to edit more files.
 2. Describe each change with a *SEARCH/REPLACE block* per the examples below. All changes to files must use this *SEARCH/REPLACE block* format. ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
@@ -327,8 +334,12 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#
             .cache_point();
             messages.push(user_provided_context);
         }
-        let extra_data = self.extra_data(&context.extra_data);
+        if let Some(ref diff_recent_changes) = &context.diff_recent_changes {
+            messages.extend(diff_recent_changes.to_llm_client_message());
+        }
         let in_range = self.selection_to_edit(&context.context_in_edit_selection);
+        // TODO(skcd): We should enforce a cache endpoint over here, what we ideally want is tiers
+        // of memory over here
         let mut user_message = "".to_owned();
         if let Some(extra_symbols) = context.new_symbols.clone() {
             user_message = user_message

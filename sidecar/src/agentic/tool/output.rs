@@ -31,7 +31,7 @@ use super::{
         CodeToEditFilterResponse, CodeToEditSymbolResponse, CodeToProbeFilterResponse,
         CodeToProbeSubSymbolList,
     },
-    git::diff_client::GitDiffClientResponse,
+    git::{diff_client::GitDiffClientResponse, edited_files::EditedFilesResponse},
     grep::file::FindInFileResponse,
     lsp::{
         diagnostics::LSPDiagnosticsOutput,
@@ -162,9 +162,14 @@ pub enum ToolOutput {
     OutlineNodesUsingEditor(OutlineNodesUsingEditorResponse),
     // filter reference
     ReferencesFilter(Vec<RelevantReference>),
+    // edited files with timestamps (git-diff)
+    EditedFiles(EditedFilesResponse),
 }
 
 impl ToolOutput {
+    pub fn edited_files(response: EditedFilesResponse) -> Self {
+        ToolOutput::EditedFiles(response)
+    }
     pub fn outline_nodes_using_editor(response: OutlineNodesUsingEditorResponse) -> Self {
         ToolOutput::OutlineNodesUsingEditor(response)
     }

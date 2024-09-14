@@ -101,6 +101,8 @@ pub enum ToolType {
     ReferencesFilter,
     // scratch pad agent
     ScratchPadAgent,
+    // edited files
+    EditedFiles,
 }
 
 impl std::fmt::Display for ToolType {
@@ -172,6 +174,7 @@ impl std::fmt::Display for ToolType {
             ToolType::OutlineNodesUsingEditor => write!(f, "Outline nodes using the editor"),
             ToolType::ReferencesFilter => write!(f, "Filters references"),
             ToolType::ScratchPadAgent => write!(f, "Scratch pad agent"),
+            ToolType::EditedFiles => write!(f, "Edited files"),
         }
     }
 }

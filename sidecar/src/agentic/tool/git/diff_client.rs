@@ -13,6 +13,8 @@ use tokio::process::Command;
 use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
 use async_trait::async_trait;
 
+// TODO(skcd): We want to talk to the editor to get the git-diff of the recently
+// edited files here so we can use it for agentic and anchored editing
 pub struct GitDiffClient {}
 
 impl GitDiffClient {
@@ -91,6 +93,7 @@ async fn run_command(
             .await?
     } else {
         // if we are in normal mode then we just want to get the git diff of the filepath
+        // we do want to order it by time somewhat, to make it better
         Command::new("git")
             .current_dir(root_directory)
             .arg("diff")

@@ -9,6 +9,12 @@ pub struct EditedFilesRequest {
     editor_url: String,
 }
 
+impl EditedFilesRequest {
+    pub fn new(editor_url: String) -> Self {
+        Self { editor_url }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct EditedGitDiffFile {
     fs_file_path: String,

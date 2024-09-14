@@ -388,6 +388,10 @@ impl ScratchPadAgent {
             let mut files_context = self.files_context.lock().await;
             *files_context = user_context_files.to_vec();
         }
+        let file_paths_interested = user_context_files
+            .iter()
+            .map(|context_file| context_file.file_path.to_owned())
+            .collect::<Vec<_>>();
         let user_context_files = user_context_files
             .into_iter()
             .map(|context_file| context_file.file_content)
@@ -399,6 +403,7 @@ impl ScratchPadAgent {
                 self.storage_fs_path.to_owned(),
                 anchor_request.user_query().to_owned(),
                 user_context_files,
+                file_paths_interested,
                 anchor_request
                     .anchored_symbols()
                     .into_iter()
@@ -435,10 +440,10 @@ impl ScratchPadAgent {
             let files_context = self.files_context.lock().await;
             user_context_files = (*files_context).to_vec();
         }
-        let _file_paths_in_focus = user_context_files
+        let file_paths_in_focus = user_context_files
             .iter()
             .map(|context_file| context_file.file_path.to_owned())
-            .collect::<HashSet<String>>();
+            .collect::<Vec<String>>();
         let user_context_files = user_context_files
             .into_iter()
             .map(|context_file| context_file.file_content)
@@ -465,6 +470,7 @@ impl ScratchPadAgent {
                 &self.storage_fs_path,
                 &user_query,
                 &extra_context,
+                file_paths_in_focus,
                 edits_made
                     .into_iter()
                     .map(|edit| edit.to_string())
@@ -550,11 +556,16 @@ impl ScratchPadAgent {
         {
             extra_context = (*self.extra_context.lock().await).to_owned();
         }
+        let interested_file_paths = files_context
+            .iter()
+            .map(|file_context| file_context.file_path.to_owned())
+            .collect::<Vec<_>>();
         let _ = self
             .tool_box
             .scratch_pad_diagnostics(
                 &self.storage_fs_path,
                 diagnostic_messages,
+                interested_file_paths,
                 files_context
                     .into_iter()
                     .map(|files_context| files_context.file_content)

@@ -69,7 +69,9 @@ use crate::agentic::tool::filtering::broker::{
     CodeToProbeFilterResponse, CodeToProbeSubSymbolList, CodeToProbeSubSymbolRequest,
 };
 use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClientResponse};
+use crate::agentic::tool::git::edited_files::EditedFilesRequest;
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
+use crate::agentic::tool::helpers::diff_recent_changes::DiffRecentChanges;
 use crate::agentic::tool::lsp::diagnostics::{DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
@@ -143,6 +145,7 @@ impl ToolBox {
         &self,
         scratch_pad_path: String,
         user_query: String,
+        file_paths_interested: Vec<String>,
         user_context_files: Vec<String>,
         user_code_selected: String,
         message_properties: SymbolEventMessageProperties,
@@ -154,6 +157,7 @@ impl ToolBox {
             "tool_box::scratch_pad_agent_human_request::scratch_pad_present::({})",
             scratch_pad_content.is_ok()
         );
+        let recent_diff_with_priority = self.recently_edited_files(file_paths_interested.into_iter().collect(), message_properties.clone()).await.ok();
         if let Ok(scratch_pad_content) = scratch_pad_content {
             let _ = self
                 .tools
@@ -168,7 +172,7 @@ impl ToolBox {
                     scratch_pad_content.contents(),
                     scratch_pad_path.to_owned(),
                     message_properties.root_request_id().to_owned(),
-                    None,
+                    recent_diff_with_priority,
                     message_properties.ui_sender(),
                     message_properties.editor_url(),
                 )))
@@ -182,6 +186,7 @@ impl ToolBox {
         &self,
         scratch_pad_path: &str,
         diagnostics: Vec<String>,
+        file_paths_interested: Vec<String>,
         files_context: Vec<String>,
         extra_context: String,
         message_properties: SymbolEventMessageProperties,
@@ -190,6 +195,7 @@ impl ToolBox {
         let scratch_pad_content = self
             .file_open(scratch_pad_path.to_owned(), message_properties.clone())
             .await;
+        let recently_edited_files_with_priority = self.recently_edited_files(file_paths_interested.into_iter().collect(), message_properties.clone()).await.ok();
         if let Ok(scratch_pad_content) = scratch_pad_content {
             let _ = self
                 .tools
@@ -202,7 +208,7 @@ impl ToolBox {
                     scratch_pad_content.contents(),
                     scratch_pad_path.to_owned(),
                     message_properties.root_request_id().to_owned(),
-                    None,
+                    recently_edited_files_with_priority,
                     message_properties.ui_sender(),
                     message_properties.editor_url(),
                 )))
@@ -217,6 +223,7 @@ impl ToolBox {
         scratch_pad_path: &str,
         user_query: &str,
         extra_context: &str,
+        files_interested: Vec<String>,
         edits_made: Vec<String>,
         user_context_files: Vec<String>,
         message_properties: SymbolEventMessageProperties,
@@ -229,6 +236,7 @@ impl ToolBox {
         let scratch_pad_content = self
             .file_open(scratch_pad_path.to_owned(), message_properties.clone())
             .await;
+        let recently_edited_files = self.recently_edited_files(files_interested.into_iter().collect(), message_properties.clone()).await.ok();
         if let Ok(scratch_pad_content) = scratch_pad_content {
             println!("tool_box::scratch_pad_edits_made::edits_made_tool_invocation::scratch_pad_content({})", scratch_pad_content.contents_ref());
             let _ = self
@@ -243,7 +251,7 @@ impl ToolBox {
                     scratch_pad_content.contents(),
                     scratch_pad_path.to_owned(),
                     message_properties.root_request_id().to_owned(),
-                    None,
+                    recently_edited_files,
                     message_properties.ui_sender().clone(),
                     message_properties.editor_url(),
                 )))
@@ -8422,5 +8430,34 @@ FILEPATH: {fs_file_path}
                 }
             })
             .collect::<Vec<_>>()
+    }
+
+    /// Grabs the git-diff sorted by the timestamp over here
+    /// If we are provided a set of files then this set comes at the very end
+    /// and is still ordered by the timestamp
+    /// Those which are not included in the file-set are arranged in the order
+    /// they appear in
+    pub async fn recently_edited_files(
+        &self,
+        important_file_paths: HashSet<String>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<DiffRecentChanges, SymbolError> {
+        let input = ToolInput::EditedFiles(EditedFilesRequest::new(message_properties.editor_url()));
+        let mut recently_edited_files = self.tools.invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .recently_edited_files()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .changed_files();
+
+        // sort it in increasing order based on the updated timestamp
+        recently_edited_files.sort_by_key(|edited_file| edited_file.updated_tiemstamp_ms());
+        let (l1_cache, l2_cache): (Vec<_>, Vec<_>) = recently_edited_files.into_iter().partition(|edited_file| important_file_paths.contains(edited_file.fs_file_path()));
+        let l1_cache = l1_cache.into_iter().map(|diff_file| diff_file.diff().to_owned()).collect::<Vec<_>>().join("\n");
+        let l2_cache = l2_cache.into_iter().map(|diff_file| diff_file.diff().to_owned()).collect::<Vec<_>>().join("\n");
+        // now to create the diff-recent-changes we are going to remove the files
+        // which exist in our important file paths and mark them as l1 cache
+        // while keeping the other set of files as l2 cache
+        Ok(DiffRecentChanges::new(l1_cache, l2_cache))
     }
 }

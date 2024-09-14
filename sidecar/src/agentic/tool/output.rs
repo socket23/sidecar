@@ -625,4 +625,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn recently_edited_files(self) -> Option<EditedFilesResponse> {
+        match self {
+            ToolOutput::EditedFiles(response) => Some(response),
+            _ => None,
+        }
+    }
 }

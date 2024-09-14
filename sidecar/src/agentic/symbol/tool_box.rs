@@ -168,6 +168,7 @@ impl ToolBox {
                     scratch_pad_content.contents(),
                     scratch_pad_path.to_owned(),
                     message_properties.root_request_id().to_owned(),
+                    None,
                     message_properties.ui_sender(),
                     message_properties.editor_url(),
                 )))
@@ -201,6 +202,7 @@ impl ToolBox {
                     scratch_pad_content.contents(),
                     scratch_pad_path.to_owned(),
                     message_properties.root_request_id().to_owned(),
+                    None,
                     message_properties.ui_sender(),
                     message_properties.editor_url(),
                 )))
@@ -241,6 +243,7 @@ impl ToolBox {
                     scratch_pad_content.contents(),
                     scratch_pad_path.to_owned(),
                     message_properties.root_request_id().to_owned(),
+                    None,
                     message_properties.ui_sender().clone(),
                     message_properties.editor_url(),
                 )))
@@ -5379,6 +5382,7 @@ FILEPATH: {fs_file_path}
             message_properties.ui_sender().clone(),
             user_provided_context,
             message_properties.editor_url(),
+            None,
             false,
         ));
         println!(
@@ -8283,6 +8287,7 @@ FILEPATH: {fs_file_path}
             sender,
             file_paths_to_user_context,
             editor_url,
+            None,
             true,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);

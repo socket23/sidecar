@@ -23,6 +23,7 @@ use crate::{
                 SearchAndReplaceEditingResponse, StreamedEditingForEditor,
             },
             errors::ToolError,
+            helpers::diff_recent_changes::DiffRecentChanges,
             input::ToolInput,
             output::ToolOutput,
             r#type::Tool,
@@ -155,6 +156,7 @@ pub struct ScratchPadAgentInput {
     scratch_pad_content: String,
     scratch_pad_path: String,
     root_request_id: String,
+    diff_recent_changes: Option<DiffRecentChanges>,
     _ui_sender: UnboundedSender<UIEventWithID>,
     editor_url: String,
 }
@@ -167,6 +169,7 @@ impl ScratchPadAgentInput {
         scratch_pad_content: String,
         scratch_pad_path: String,
         root_request_id: String,
+        diff_recent_changes: Option<DiffRecentChanges>,
         ui_sender: UnboundedSender<UIEventWithID>,
         editor_url: String,
     ) -> Self {
@@ -177,6 +180,7 @@ impl ScratchPadAgentInput {
             scratch_pad_content,
             scratch_pad_path,
             root_request_id,
+            diff_recent_changes,
             _ui_sender: ui_sender,
             editor_url,
         }
@@ -281,6 +285,7 @@ Remember you have to reply only in the following format (do not deviate from thi
     ) -> ScratchPadAgentUserMessage {
         let files_context = input.files_context.join("\n");
         let extra_context = input.extra_context;
+        let diff_recent_changes = input.diff_recent_changes;
         let event_type = input.input_event;
         let scratch_pad_content = input.scratch_pad_content;
         let root_request_id = input.root_request_id;
@@ -379,6 +384,7 @@ This is what I am working on:
                 root_request_id,
             }
         } else {
+            let mut messages = vec![];
             let context_message = LLMClientMessage::user(format!(
                 r#"I am providing you the files you asked for along with some extra context
 <files_context>
@@ -389,18 +395,28 @@ This is what I am working on:
 {extra_context}"#
             ))
             .cache_point();
+            messages.push(context_message);
             if event_type.is_cache_warmup() {
                 return ScratchPadAgentUserMessage {
-                    user_messages: vec![context_message],
+                    user_messages: messages,
                     is_cache_warmup: true,
                     root_request_id,
                 };
             } else {
-                let event_type_str = event_type.to_string();
-                let user_message = format!(
+                messages.push(LLMClientMessage::user(
                     r#"</extra_context>
 
-This is what I see in the scratchpad
+"#
+                    .to_owned(),
+                ));
+                let event_type_str = event_type.to_string();
+                if let Some(diff_recent_changes) = diff_recent_changes {
+                    let diff_recent_changes_messages = diff_recent_changes.to_llm_client_message();
+                    messages.extend(diff_recent_changes_messages);
+                }
+                // figure out where the user messages are over here
+                let user_message = format!(
+                    r#"This is what I see in the scratchpad
 {scratch_pad_content}
 
 {event_type_str}
@@ -487,8 +503,9 @@ Remember you have to reply only in the following format (do not deviate from thi
 </scratchpad>"#
                 );
 
+                messages.push(LLMClientMessage::user(user_message));
                 return ScratchPadAgentUserMessage {
-                    user_messages: vec![context_message, LLMClientMessage::user(user_message)],
+                    user_messages: messages,
                     is_cache_warmup: false,
                     root_request_id,
                 };

@@ -34,7 +34,7 @@ use super::{
     filtering::broker::{
         CodeToEditFilterRequest, CodeToEditSymbolRequest, CodeToProbeSubSymbolRequest,
     },
-    git::diff_client::GitDiffClientRequest,
+    git::{diff_client::GitDiffClientRequest, edited_files::EditedFilesRequest},
     grep::file::FindInFileRequest,
     kw_search::tool::KeywordSearchQuery,
     lsp::{
@@ -132,6 +132,8 @@ pub enum ToolInput {
     ReferencesFilter(ReferenceFilterRequest),
     // Scratch pad agent input request
     ScratchPadInput(ScratchPadAgentInput),
+    // edited files ordered by timestamp
+    EditedFiles(EditedFilesRequest),
 }
 
 impl ToolInput {
@@ -195,6 +197,15 @@ impl ToolInput {
             ToolInput::OutlineNodesUsingEditor(_) => ToolType::OutlineNodesUsingEditor,
             ToolInput::ReferencesFilter(_) => ToolType::ReferencesFilter,
             ToolInput::ScratchPadInput(_) => ToolType::ScratchPadAgent,
+            ToolInput::EditedFiles(_) => ToolType::EditedFiles,
+        }
+    }
+
+    pub fn should_edited_files(self) -> Result<EditedFilesRequest, ToolError> {
+        if let ToolInput::EditedFiles(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::EditedFiles))
         }
     }
 

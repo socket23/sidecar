@@ -1445,6 +1445,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                 false,
                 None,
                 true, // should we disable followups and correctness check
+                None,
             );
             let mut history = request_data.history().to_vec();
             history.push(SymbolRequestHistoryItem::new(

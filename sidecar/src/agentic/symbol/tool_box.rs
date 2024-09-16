@@ -2247,6 +2247,7 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -2265,6 +2266,7 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),
@@ -2458,6 +2460,7 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -2550,6 +2553,7 @@ Please update this code to accommodate these changes. Consider:
                                             false,
                                             None,
                                             true,
+                                            None,
                                         ),
                                         SymbolIdentifier::with_file_path(
                                             class_symbol_name,
@@ -2585,6 +2589,7 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
                 ),
                 message_properties.clone(),
             )
@@ -2755,6 +2760,7 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -2773,6 +2779,7 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -2950,6 +2957,7 @@ Please update this code to accommodate these changes. Consider:
                                                     false,
                                                     None,
                                                     true,
+                                                    None,
                                                 ),
                                                 SymbolIdentifier::with_file_path(
                                                     changed_outline_node.name(),
@@ -2998,6 +3006,7 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
                 ),
                 message_properties.clone(),
             )
@@ -3067,6 +3076,7 @@ Please update this code to accommodate these changes. Consider:
                                     false,
                                     None,
                                     true,
+                                    None,
                                 ),
                                 SymbolIdentifier::with_file_path(
                                     class_implementation_name,
@@ -3203,6 +3213,7 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -3287,6 +3298,7 @@ Please update this code to accommodate these changes. Consider:
                                         false,
                                         None,
                                         true,
+                                        None,
                                     ),
                                     SymbolIdentifier::with_file_path(
                                         class_implementation_name,
@@ -3426,6 +3438,7 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -3444,6 +3457,7 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -4526,6 +4540,7 @@ Make the necessary changes if required making sure that nothing breaks"#
             false,
             None,
             true, // disable any kind of followups or correctness check
+            None,
         );
 
         let event = SymbolEventMessage::message_with_properties(
@@ -4631,6 +4646,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                 false,
                 None,
                 true,
+                None,
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -6345,6 +6361,7 @@ FILEPATH: {fs_file_path}
                     false,
                     None,
                     true,
+                    None,
                 ),
                 message_properties.clone(),
             )
@@ -7675,6 +7692,7 @@ FILEPATH: {fs_file_path}
                                                     true,
                                                     None,
                                                     true, // should we disable followups and correctness check
+                                                    None,
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -7714,6 +7732,7 @@ FILEPATH: {fs_file_path}
                                     true,
                                     None,
                                     true, // should we disable followups and correctness check
+                                    None,
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
@@ -7871,6 +7890,7 @@ FILEPATH: {fs_file_path}
         anchored_symbols: &[AnchoredSymbol],
         user_query: &str,
         user_provided_context: Option<String>,
+        recent_diff_changes: DiffRecentChanges,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
         println!(
@@ -7929,6 +7949,7 @@ FILEPATH: {fs_file_path}
                         false, // grab definitions
                         user_provided_context.to_owned(),
                         false, // disable followups - keep false to enable followups
+                        Some(recent_diff_changes.clone()),
                     )],
                     symbol_identifier.clone(),
                     vec![],
@@ -7975,6 +7996,7 @@ FILEPATH: {fs_file_path}
                                 false,
                                 user_provided_context.clone(),
                                 true, // should we disable followups and correctness check
+                                None,
                             ))
                         } else {
                             None
@@ -7999,6 +8021,7 @@ FILEPATH: {fs_file_path}
                                         false,
                                         user_provided_context.clone(),
                                         true, // should we disable followups and correctness check
+                                        None,
                                     ))
                                 } else {
                                     None

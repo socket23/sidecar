@@ -1,8 +1,8 @@
 use llm_client::clients::types::{LLMClientError, LLMType};
 use serde_xml_rs::to_string;
 
-use std::path::PathBuf;
 use std::time::Instant;
+use std::{path::PathBuf, time::Duration};
 use thiserror::Error;
 
 use async_trait::async_trait;
@@ -27,6 +27,22 @@ use super::{
     big_search::IterativeSearchSeed, decide::DecideResponse, google_studio::GoogleStudioLLM,
     identify::IdentifyResponse, relevant_files::QueryRelevantFilesResponse, repository::Repository,
 };
+
+pub enum IterativeSearchEvent {
+    SearchStarted,
+    SeedApplied(Duration),
+    SearchQueriesGenerated(Vec<SearchQuery>, Duration),
+    SearchExecuted(Vec<SearchResult>, Duration),
+    IdentificationCompleted(IdentifyResponse, Duration),
+    FileOutlineGenerated(Duration),
+    DecisionMade(DecideResponse, Duration),
+    LoopCompleted(usize, Duration),
+    SearchCompleted(Duration),
+}
+
+pub trait SearchEventHandler {
+    fn handle_event(&self, event: IterativeSearchEvent);
+}
 
 #[derive(Debug, Clone)]
 pub struct IterativeSearchContext {
@@ -305,7 +321,8 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("search loop #{}", count);
             println!("===========");
 
-            let search_queries = self.search().await?;
+            // event: generating search
+            let search_queries = self.generate_search_query().await?;
             println!("Search queries generated in {:?}", loop_start.elapsed());
 
             let search_start = Instant::now();
@@ -420,7 +437,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
     }
 
     // this generates search queries
-    async fn search(&self) -> Result<Vec<SearchQuery>, IterativeSearchError> {
+    async fn generate_search_query(&self) -> Result<Vec<SearchQuery>, IterativeSearchError> {
         self.llm_ops.generate_search_query(self.context()).await
     }
 

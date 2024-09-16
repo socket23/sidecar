@@ -7,6 +7,7 @@ use crate::agentic::symbol::{
 };
 
 use super::{
+    agent::AgentMessage,
     human::{HumanAnchorRequest, HumanMessage},
     input::SymbolEventRequestId,
     lsp::LSPSignal,
@@ -38,6 +39,7 @@ pub enum EnvironmentEventType {
     EditorStateChange(EditorStateChangeRequest),
     LSP(LSPSignal),
     Human(HumanMessage),
+    Agent(AgentMessage),
     ShutDown,
 }
 

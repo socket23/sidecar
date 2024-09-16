@@ -93,6 +93,7 @@ use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
+use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
 use crate::chunking::editor_parsing::EditorParsing;
@@ -8506,5 +8507,52 @@ FILEPATH: {fs_file_path}
         // which exist in our important file paths and mark them as l1 cache
         // while keeping the other set of files as l2 cache
         Ok(DiffRecentChanges::new(l1_cache, l2_cache))
+    }
+
+    pub async fn reference_filtering(
+        &self,
+        user_query: &str,
+        references: Vec<AnchoredReference>,
+        message_properties: SymbolEventMessageProperties,
+    ) {
+        let start = std::time::Instant::now();
+        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+        let llm_properties = LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            anthropic_api_keys.clone(),
+        );
+        let references = references
+            .into_iter()
+            .take(10) // todo(zi): so we don't go crazy with 1000s of requests
+            .collect::<Vec<_>>();
+        println!(
+            "tool_box:reference_filtering::references.len({:?})",
+            &references.len()
+        );
+        let request = ReferenceFilterRequest::new(
+            user_query.to_owned(),
+            llm_properties.clone(),
+            message_properties.request_id_str().to_owned(),
+            message_properties.clone(),
+            references.clone(),
+        );
+        let llm_time = Instant::now();
+        let _relevant_references = match self.tools
+            .invoke(ToolInput::ReferencesFilter(request))
+            .await
+        {
+            Ok(ok_references) => ok_references.get_relevant_references().unwrap_or_default(),
+            Err(err) => {
+                eprintln!("Failed to filter references: {:?}", err);
+                Vec::new()
+            }
+        };
+        println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
+
+        println!(
+            "collect references async task total elapsed: {:?}",
+            start.elapsed()
+        );
     }
 }

@@ -44,7 +44,7 @@ use super::{
     events::{
         agent::{AgentIntentMessage, AgentMessage},
         edit::SymbolToEdit,
-        environment_event::{EditorStateChangeRequest, EnvironmentEventType},
+        environment_event::{EditorStateChangeRequest, EnvironmentEvent, EnvironmentEventType},
         human::{HumanAgenticRequest, HumanAnchorRequest, HumanMessage},
         input::SymbolInputEvent,
         lsp::{LSPDiagnosticError, LSPSignal},
@@ -104,7 +104,6 @@ impl ScratchPadFilesActive {
 #[derive(Clone)]
 pub struct ScratchPadAgent {
     _storage_fs_path: String,
-    message_properties: SymbolEventMessageProperties,
     tool_box: Arc<ToolBox>,
     // if the scratch-pad agent is right now focussed, then we can't react to other
     // signals and have to pay utmost attention to the current task we are workign on
@@ -125,7 +124,6 @@ pub struct ScratchPadAgent {
 impl ScratchPadAgent {
     pub async fn new(
         scratch_pad_path: String,
-        message_properties: SymbolEventMessageProperties,
         tool_box: Arc<ToolBox>,
         symbol_event_sender: UnboundedSender<SymbolEventMessage>,
         user_provided_context: Option<String>,
@@ -133,7 +131,6 @@ impl ScratchPadAgent {
         let (reaction_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let scratch_pad_agent = Self {
             _storage_fs_path: scratch_pad_path,
-            message_properties,
             tool_box,
             symbol_event_sender,
             focussing: Arc::new(Mutex::new(false)),
@@ -167,9 +164,9 @@ impl ScratchPadAgent {
         scratch_pad_file_path: PathBuf,
         tool_box: Arc<ToolBox>,
         symbol_event_sender: UnboundedSender<SymbolEventMessage>,
-        message_properties: SymbolEventMessageProperties,
+        _message_properties: SymbolEventMessageProperties,
         user_provided_context: Option<String>,
-    ) -> (Self, UnboundedSender<EnvironmentEventType>) {
+    ) -> (Self, UnboundedSender<EnvironmentEvent>) {
         let mut scratch_pad_file = tokio::fs::File::create(scratch_pad_file_path.clone())
             .await
             .expect("scratch_pad path created");
@@ -187,7 +184,6 @@ impl ScratchPadAgent {
             .expect("os_string to into_string to work");
         let scratch_pad_agent = ScratchPadAgent::new(
             scratch_pad_path,
-            message_properties.clone(),
             tool_box,
             symbol_event_sender,
             user_provided_context.clone(),
@@ -212,7 +208,7 @@ impl ScratchPadAgent {
     /// which is being edited by the user, the real interface here will look like this
     pub async fn process_envrionment(
         self,
-        mut stream: Pin<Box<dyn Stream<Item = EnvironmentEventType> + Send + Sync>>,
+        mut stream: Pin<Box<dyn Stream<Item = EnvironmentEvent> + Send + Sync>>,
     ) {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -224,21 +220,18 @@ impl ScratchPadAgent {
             // damn borrow-checker got hands
             let cloned_self = cloned_self;
             while let Some(event) = stream.next().await {
-                match &event {
-                    // if its a lsp signal and we are still fixing, then skip it
-                    EnvironmentEventType::LSP(_) => {
-                        // if we are fixing or focussing then skip the lsp signal
-                        if cloned_self.is_fixing().await {
-                            println!("scratchpad::discarding_lsp::busy_fixing");
-                            continue;
-                        }
-                        if cloned_self.is_focussing().await {
-                            println!("scratchpad::discarding_lsp::busy_focussing");
-                            continue;
-                        }
+                let is_lsp_event = event.is_lsp_event();
+                if is_lsp_event {
+                    // if we are fixing or focussing then skip the lsp signal
+                    if cloned_self.is_fixing().await {
+                        println!("scratchpad::discarding_lsp::busy_fixing");
+                        continue;
                     }
-                    _ => {}
-                };
+                    if cloned_self.is_focussing().await {
+                        println!("scratchpad::discarding_lsp::busy_focussing");
+                        continue;
+                    }
+                }
                 let _ = cloned_sender.send(event);
             }
         });
@@ -246,6 +239,8 @@ impl ScratchPadAgent {
         let mut stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
         println!("scratch_pad_agent::start_processing_environment");
         while let Some(event) = stream.next().await {
+            let message_properties = event.message_properties();
+            let event = event.event_type();
             match event {
                 EnvironmentEventType::LSP(lsp_signal) => {
                     // we just want to react to the lsp signal over here, so we do just that
@@ -263,7 +258,7 @@ impl ScratchPadAgent {
                         .send(EnvironmentEventType::LSP(lsp_signal));
                 }
                 EnvironmentEventType::Human(message) => {
-                    let _ = self.handle_human_message(message).await;
+                    let _ = self.handle_human_message(message, message_properties).await;
                     // whenever the human sends a request over here, encode it and try
                     // to understand how to handle it, some might require search, some
                     // might be more automagic
@@ -277,7 +272,9 @@ impl ScratchPadAgent {
                     // we might have to split the events later down the line
                 }
                 EnvironmentEventType::Agent(agent_message) => {
-                    let _ = self.handle_agent_message(agent_message).await;
+                    let _ = self
+                        .handle_agent_message(agent_message, message_properties)
+                        .await;
                 }
                 EnvironmentEventType::ShutDown => {
                     println!("scratch_pad_agent::shut_down");
@@ -288,43 +285,70 @@ impl ScratchPadAgent {
         }
     }
 
-    async fn _react_to_event(&self, event: EnvironmentEventType) {
+    async fn _react_to_event(
+        &self,
+        event: EnvironmentEventType,
+        message_properties: SymbolEventMessageProperties,
+    ) {
         match event {
             EnvironmentEventType::Human(human_event) => {
-                let _ = self._react_to_human_event(human_event).await;
+                let _ = self
+                    ._react_to_human_event(human_event, message_properties)
+                    .await;
             }
             EnvironmentEventType::EditorStateChange(editor_state_change) => {
-                self._react_to_edits(editor_state_change).await;
+                self._react_to_edits(editor_state_change, message_properties)
+                    .await;
             }
             EnvironmentEventType::LSP(lsp_signal) => {
-                self._react_to_lsp_signal(lsp_signal).await;
+                self._react_to_lsp_signal(lsp_signal, message_properties)
+                    .await;
             }
             _ => {}
         }
     }
 
-    async fn handle_agent_message(&self, agent_message: AgentMessage) -> Result<(), SymbolError> {
+    async fn handle_agent_message(
+        &self,
+        agent_message: AgentMessage,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
         match agent_message {
             AgentMessage::ReferenceCheck(reference_check) => {
-                self.agent_reference_check(reference_check).await
+                self.agent_reference_check(reference_check, message_properties)
+                    .await
             }
         }
     }
 
-    async fn handle_human_message(&self, human_message: HumanMessage) -> Result<(), SymbolError> {
+    async fn handle_human_message(
+        &self,
+        human_message: HumanMessage,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
         match human_message {
-            HumanMessage::Anchor(anchor_request) => self.human_message_anchor(anchor_request).await,
+            HumanMessage::Anchor(anchor_request) => {
+                self.human_message_anchor(anchor_request, message_properties)
+                    .await
+            }
             HumanMessage::Agentic(agentic_request) => {
-                self.human_message_agentic(agentic_request).await
+                self.human_message_agentic(agentic_request, message_properties)
+                    .await
             }
             HumanMessage::Followup(_followup_request) => Ok(()),
         }
     }
 
-    async fn _react_to_human_event(&self, human_event: HumanMessage) -> Result<(), SymbolError> {
+    async fn _react_to_human_event(
+        &self,
+        human_event: HumanMessage,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
         match human_event {
             HumanMessage::Anchor(anchor_request) => {
-                let _ = self._handle_user_anchor_request(anchor_request).await;
+                let _ = self
+                    ._handle_user_anchor_request(anchor_request, message_properties)
+                    .await;
             }
             HumanMessage::Agentic(_) => {}
             HumanMessage::Followup(_followup_request) => {}
@@ -335,6 +359,7 @@ impl ScratchPadAgent {
     async fn agent_reference_check(
         &self,
         agent_message: AgentIntentMessage,
+        message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let start = Instant::now();
         let user_query = agent_message.get_user_intent().to_owned();
@@ -345,8 +370,8 @@ impl ScratchPadAgent {
                 let symbol_names = anchored_symbol.sub_symbol_names().to_vec();
                 let symbol_identifier = anchored_symbol.identifier().to_owned();
                 let toolbox = self.tool_box.clone();
-                let message_properties = self.message_properties.clone();
-                let request_id = self.message_properties.request_id_str().to_owned();
+                let message_properties = message_properties.clone();
+                let request_id = message_properties.request_id_str().to_owned();
                 let range = anchored_symbol.possible_range().clone();
                 stream::iter(symbol_names.into_iter().filter_map(move |symbol_name| {
                     symbol_identifier.fs_file_path().map(|path| {
@@ -427,17 +452,16 @@ impl ScratchPadAgent {
                     acc
                 });
 
-        let _ = self
-            .message_properties
+        let _ = message_properties
             .ui_sender()
             .send(UIEventWithID::found_reference(
-                self.message_properties.request_id_str().to_owned(),
+                message_properties.request_id_str().to_owned(),
                 grouped,
             ));
 
         let _ = self
             .tool_box
-            .reference_filtering(&user_query, references, self.message_properties.clone())
+            .reference_filtering(&user_query, references, message_properties.clone())
             .await;
         Ok(())
     }
@@ -445,13 +469,14 @@ impl ScratchPadAgent {
     async fn human_message_agentic(
         &self,
         human_agentic_request: HumanAgenticRequest,
+        message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let user_context = human_agentic_request.user_context().clone();
         let user_query = human_agentic_request.user_query().to_owned();
         let root_directory = human_agentic_request.root_directory().to_owned();
         let codebase_search = human_agentic_request.codebase_search();
-        let edit_request_id = self.message_properties.request_id_str().to_owned();
-        let ui_sender = self.message_properties.ui_sender();
+        let edit_request_id = message_properties.request_id_str().to_owned();
+        let ui_sender = message_properties.ui_sender();
         let start_instant = std::time::Instant::now();
         let input_event = SymbolInputEvent::new(
             user_context,
@@ -495,7 +520,7 @@ impl ScratchPadAgent {
             .set_fast_code_symbol_search(fast_code_symbol_llm);
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event
-            .tool_use_on_initial_invocation(self.tool_box.clone(), self.message_properties.clone())
+            .tool_use_on_initial_invocation(self.tool_box.clone(), message_properties.clone())
             .await;
         let tool_output = if let Some(tool_input) = tool_input {
             {
@@ -560,7 +585,7 @@ impl ScratchPadAgent {
                             &user_query,
                             llm_properties.clone(),
                             is_big_search,
-                            self.message_properties.clone(),
+                            message_properties.clone(),
                         )
                         .await?
                         .fix_symbol_names(ts_parsing);
@@ -592,7 +617,7 @@ impl ScratchPadAgent {
             // does not even see the code and what changes need to be made
             let mut symbols = self
                 .tool_box
-                .important_symbols(&important_symbols, self.message_properties.clone())
+                .important_symbols(&important_symbols, message_properties.clone())
                 .await
                 .map_err(|e| e.into())?;
 
@@ -648,7 +673,7 @@ impl ScratchPadAgent {
                 println!("symbol_manager::grab_symbols_using_search");
                 symbols = self
                     .tool_box
-                    .grab_symbol_using_search(important_symbols, self.message_properties.clone())
+                    .grab_symbol_using_search(important_symbols, message_properties.clone())
                     .await
                     .map_err(|e| e.into())?;
             }
@@ -665,7 +690,7 @@ impl ScratchPadAgent {
                             symbol,
                             user_query.to_owned(),
                             symbols_edited_list.to_vec(),
-                            self.message_properties.clone(),
+                            message_properties.clone(),
                         )
                     }),
                 )
@@ -728,6 +753,7 @@ impl ScratchPadAgent {
     async fn human_message_anchor(
         &self,
         anchor_request: HumanAnchorRequest,
+        message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let start_instant = std::time::Instant::now();
         println!("scratch_pad_agent::human_message_anchor::start");
@@ -742,7 +768,7 @@ impl ScratchPadAgent {
                     .iter()
                     .filter_map(|anchor_symbol| anchor_symbol.fs_file_path())
                     .collect(),
-                self.message_properties.clone(),
+                message_properties.clone(),
             )
             .await?;
         // keep track of the user request in our state
@@ -761,7 +787,7 @@ impl ScratchPadAgent {
                 anchor_request.anchor_request_context(),
                 recent_edits,
                 previous_user_queries,
-                self.message_properties.clone(),
+                message_properties.clone(),
             )
             .await?;
 
@@ -781,7 +807,7 @@ impl ScratchPadAgent {
         let edits_done = stream::iter(symbols_to_edit_request.into_iter().map(|data| {
             (
                 data,
-                self.message_properties.clone(),
+                message_properties.clone(),
                 self.symbol_event_sender.clone(),
             )
         }))
@@ -827,16 +853,19 @@ impl ScratchPadAgent {
             start_instant.elapsed().as_millis()
         );
         // send end of iteration event over here to the frontend
-        let _ = self
-            .message_properties
+        let _ = message_properties
             .ui_sender()
             .send(UIEventWithID::code_iteration_finished(
-                self.message_properties.request_id_str().to_owned(),
+                message_properties.request_id_str().to_owned(),
             ));
         Ok(())
     }
 
-    async fn _handle_user_anchor_request(&self, anchor_request: HumanAnchorRequest) {
+    async fn _handle_user_anchor_request(
+        &self,
+        anchor_request: HumanAnchorRequest,
+        message_properties: SymbolEventMessageProperties,
+    ) {
         println!("scratch_pad::handle_user_anchor_request");
         // we are busy with the edits going on, so we can discard lsp signals for a while
         // figure out what to do over here
@@ -854,7 +883,7 @@ impl ScratchPadAgent {
             already_seen_files.insert(fs_file_path.to_owned());
             let file_contents = self
                 .tool_box
-                .file_open(fs_file_path, self.message_properties.clone())
+                .file_open(fs_file_path, message_properties.clone())
                 .await;
             if let Ok(file_contents) = file_contents {
                 user_context_files.push({
@@ -921,14 +950,18 @@ impl ScratchPadAgent {
                     })
                     .collect::<Vec<_>>()
                     .join("\n"),
-                self.message_properties.clone(),
+                message_properties.clone(),
             )
             .await;
     }
 
     /// We want to react to the various edits which have happened and the request they were linked to
     /// and come up with next steps and try to understand what we can do to help the developer
-    async fn _react_to_edits(&self, editor_state_change: EditorStateChangeRequest) {
+    async fn _react_to_edits(
+        &self,
+        editor_state_change: EditorStateChangeRequest,
+        message_properties: SymbolEventMessageProperties,
+    ) {
         println!("scratch_pad::react_to_edits");
         // figure out what to do over here
         let user_context_files;
@@ -972,7 +1005,7 @@ impl ScratchPadAgent {
                     .map(|edit| edit.to_string())
                     .collect::<Vec<_>>(),
                 user_context_files,
-                self.message_properties.clone(),
+                message_properties.clone(),
             )
             .await;
 
@@ -989,7 +1022,11 @@ impl ScratchPadAgent {
     }
 
     /// We get to react to the lsp signal over here
-    async fn _react_to_lsp_signal(&self, lsp_signal: LSPSignal) {
+    async fn _react_to_lsp_signal(
+        &self,
+        lsp_signal: LSPSignal,
+        message_properties: SymbolEventMessageProperties,
+    ) {
         let focussed;
         {
             focussed = *(self.focussing.lock().await);
@@ -999,12 +1036,17 @@ impl ScratchPadAgent {
         }
         match lsp_signal {
             LSPSignal::Diagnostics(diagnostics) => {
-                self._react_to_diagnostics(diagnostics).await;
+                self._react_to_diagnostics(diagnostics, message_properties)
+                    .await;
             }
         }
     }
 
-    async fn _react_to_diagnostics(&self, diagnostics: Vec<LSPDiagnosticError>) {
+    async fn _react_to_diagnostics(
+        &self,
+        diagnostics: Vec<LSPDiagnosticError>,
+        message_properties: SymbolEventMessageProperties,
+    ) {
         // we are busy fixing 🧘‍♂️
         {
             let mut fixing = self.fixing.lock().await;
@@ -1067,12 +1109,12 @@ impl ScratchPadAgent {
                     .map(|files_context| files_context._file_content)
                     .collect::<Vec<_>>(),
                 extra_context,
-                self.message_properties.clone(),
+                message_properties.clone(),
             )
             .await;
 
         // we try to make code edits to fix the diagnostics
-        let _ = self._code_edit_for_diagnostics().await;
+        let _ = self._code_edit_for_diagnostics(message_properties).await;
 
         // we are done fixing so start skipping
         {
@@ -1083,7 +1125,7 @@ impl ScratchPadAgent {
 
     // Now that we have reacted to the update on the scratch-pad we can start
     // thinking about making code edits for this
-    async fn _code_edit_for_diagnostics(&self) {
+    async fn _code_edit_for_diagnostics(&self, message_properties: SymbolEventMessageProperties) {
         // we want to give the scratch-pad as input to the agent and the files
         // which are visible as the context where it can make the edits
         // we can be a bit smarter and make the eidts over the file one after
@@ -1094,10 +1136,7 @@ impl ScratchPadAgent {
         // which we are tracking using the scratch-pad and the files
         let scratch_pad_content = self
             .tool_box
-            .file_open(
-                self._storage_fs_path.to_owned(),
-                self.message_properties.clone(),
-            )
+            .file_open(self._storage_fs_path.to_owned(), message_properties.clone())
             .await;
         if let Err(e) = scratch_pad_content.as_ref() {
             println!("scratch_pad_agnet::scratch_pad_reading::error");
@@ -1119,7 +1158,7 @@ impl ScratchPadAgent {
         for active_file in active_file_paths.to_vec().into_iter() {
             let file_contents = self
                 .tool_box
-                .file_open(active_file, self.message_properties.clone())
+                .file_open(active_file, message_properties.clone())
                 .await;
             if let Ok(file_contents) = file_contents {
                 let fs_file_path = file_contents.fs_file_path();
@@ -1170,7 +1209,7 @@ Please help me out by making the necessary code edits"#
             let (sender, receiver) = tokio::sync::oneshot::channel();
             let symbol_event_message = SymbolEventMessage::message_with_properties(
                 symbol_event_request,
-                self.message_properties.clone(),
+                message_properties.clone(),
                 sender,
             );
             let _ = self.symbol_event_sender.send(symbol_event_message);
@@ -1196,7 +1235,7 @@ Please help me out by making the necessary code edits"#
             ));
     }
 
-    async fn _grab_diagnostics(&self) {
+    async fn _grab_diagnostics(&self, message_properties: SymbolEventMessageProperties) {
         let files_focussed;
         {
             files_focussed = self
@@ -1209,7 +1248,7 @@ Please help me out by making the necessary code edits"#
         }
         let diagnostics = self
             .tool_box
-            .get_lsp_diagnostics_for_files(files_focussed, self.message_properties.clone())
+            .get_lsp_diagnostics_for_files(files_focussed, message_properties.clone())
             .await
             .unwrap_or_default();
         let _ = self

@@ -15,10 +15,10 @@ use tokio::task::JoinHandle;
 use super::types::Result;
 use crate::agentic::symbol::anchored::AnchoredSymbol;
 use crate::agentic::symbol::events::agent::AgentMessage;
-use crate::agentic::symbol::events::environment_event::EnvironmentEventType;
+use crate::agentic::symbol::events::environment_event::{EnvironmentEvent, EnvironmentEventType};
 use crate::agentic::symbol::events::human::{HumanAgenticRequest, HumanMessage};
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
-use crate::agentic::symbol::events::lsp::{LSPDiagnosticError, LSPSignal};
+use crate::agentic::symbol::events::lsp::LSPDiagnosticError;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
@@ -82,20 +82,20 @@ struct AnchoredEditingMetadata {
     /// This can provide additional information or constraints for the editing process.
     user_context_string: Option<String>,
     /// environment events
-    environment_event_sender: UnboundedSender<EnvironmentEventType>,
+    environment_event_sender: UnboundedSender<EnvironmentEvent>,
     /// the scratchpad agent which tracks the state of the request
     scratch_pad_agent: ScratchPadAgent,
 }
 
 impl AnchoredEditingMetadata {
-    pub fn _new(
+    pub fn new(
         message_properties: SymbolEventMessageProperties,
         anchored_symbols: Vec<AnchoredSymbol>,
         previous_file_content: HashMap<String, String>,
         references: Vec<RelevantReference>,
         user_context_string: Option<String>,
         scratch_pad_agent: ScratchPadAgent,
-        environment_event_sender: UnboundedSender<EnvironmentEventType>,
+        environment_event_sender: UnboundedSender<EnvironmentEvent>,
     ) -> Self {
         Self {
             message_properties,
@@ -169,7 +169,7 @@ impl AnchoredEditingTracker {
         }
     }
 
-    async fn _track_new_request(
+    async fn track_new_request(
         &self,
         request_id: &str,
         join_handle: Option<JoinHandle<()>>, // Optional to allow asynchronous composition of requests
@@ -196,28 +196,28 @@ impl AnchoredEditingTracker {
         }
     }
 
-    pub async fn send_diagnostics_event(&self, diagnostics: Vec<LSPDiagnosticError>) {
-        let environment_senders;
-        {
-            let running_request_properties = self.running_requests_properties.lock().await;
-            environment_senders = running_request_properties
-                .iter()
-                .map(|running_properties| running_properties.1.environment_event_sender.clone())
-                .collect::<Vec<_>>();
-        }
-        environment_senders
-            .into_iter()
-            .for_each(|environment_sender| {
-                let _ = environment_sender.send(EnvironmentEventType::LSP(LSPSignal::diagnostics(
-                    diagnostics.to_vec(),
-                )));
-            })
-    }
+    // pub async fn send_diagnostics_event(&self, diagnostics: Vec<LSPDiagnosticError>) {
+    //     let environment_senders;
+    //     {
+    //         let running_request_properties = self.running_requests_properties.lock().await;
+    //         environment_senders = running_request_properties
+    //             .iter()
+    //             .map(|running_properties| running_properties.1.environment_event_sender.clone())
+    //             .collect::<Vec<_>>();
+    //     }
+    //     environment_senders
+    //         .into_iter()
+    //         .for_each(|environment_sender| {
+    //             let _ = environment_sender.send(EnvironmentEventType::LSP(LSPSignal::diagnostics(
+    //                 diagnostics.to_vec(),
+    //             )));
+    //         })
+    // }
 
     pub async fn scratch_pad_agent(
         &self,
         request_id: &str,
-    ) -> Option<(ScratchPadAgent, UnboundedSender<EnvironmentEventType>)> {
+    ) -> Option<(ScratchPadAgent, UnboundedSender<EnvironmentEvent>)> {
         let scratch_pad_agent;
         {
             scratch_pad_agent = self
@@ -778,10 +778,14 @@ pub async fn code_sculpting(
             let anchored_symbols = anchor_properties.anchored_symbols;
             let user_provided_context = anchor_properties.user_context_string;
             let environment_sender = anchor_properties.environment_event_sender;
-            let _ = environment_sender.send(EnvironmentEventType::human_anchor_request(
-                instruction,
-                anchored_symbols,
-                user_provided_context,
+            let message_properties = anchor_properties.message_properties.clone();
+            let _ = environment_sender.send(EnvironmentEvent::event(
+                EnvironmentEventType::human_anchor_request(
+                    instruction,
+                    anchored_symbols,
+                    user_provided_context,
+                ),
+                message_properties,
             ));
         });
         {
@@ -873,6 +877,19 @@ pub async fn code_editing(
             Some(cached_content.to_owned()),
         )
         .await;
+        let _ = app.anchored_request_tracker.track_new_request(
+            &request_id,
+            None,
+            Some(AnchoredEditingMetadata::new(
+                message_properties.clone(),
+                vec![],
+                Default::default(),
+                vec![],
+                None,
+                scratch_pad_agent.clone(),
+                environment_sender.clone(),
+            )),
+        );
         (scratch_pad_agent, environment_sender)
     };
 
@@ -886,7 +903,7 @@ pub async fn code_editing(
 
         let symbols_to_anchor = app
             .tool_box
-            .symbols_to_anchor(&user_context, message_properties)
+            .symbols_to_anchor(&user_context, message_properties.clone())
             .await
             .unwrap_or_default();
 
@@ -897,17 +914,21 @@ pub async fn code_editing(
             // we can figure that out later
             let cloned_environment_sender = environment_sender.clone();
 
-            let _ = cloned_environment_sender.send(EnvironmentEventType::Agent(
-                AgentMessage::user_intent_for_references(
+            let _ = cloned_environment_sender.send(EnvironmentEvent::event(
+                EnvironmentEventType::Agent(AgentMessage::user_intent_for_references(
                     user_query.to_owned(),
                     symbols_to_anchor.to_vec(),
-                ),
+                )),
+                message_properties.clone(),
             ));
 
-            let _ = cloned_environment_sender.send(EnvironmentEventType::human_anchor_request(
-                user_query,
-                symbols_to_anchor,
-                Some(cached_content.to_owned()),
+            let _ = cloned_environment_sender.send(EnvironmentEvent::event(
+                EnvironmentEventType::human_anchor_request(
+                    user_query,
+                    symbols_to_anchor,
+                    Some(cached_content.to_owned()),
+                ),
+                message_properties.clone(),
             ));
 
             let properties_present = app
@@ -924,9 +945,15 @@ pub async fn code_editing(
     } else {
         println!("webserver::code_editing_flow::agentic_editing");
 
-        let _ = environment_sender.send(EnvironmentEventType::Human(HumanMessage::Agentic(
-            HumanAgenticRequest::new(user_query, root_directory, codebase_search, user_context),
-        )));
+        let _ = environment_sender.send(EnvironmentEvent::event(
+            EnvironmentEventType::Human(HumanMessage::Agentic(HumanAgenticRequest::new(
+                user_query,
+                root_directory,
+                codebase_search,
+                user_context,
+            ))),
+            message_properties,
+        ));
     }
 
     let event_stream = Sse::new(
@@ -973,7 +1000,7 @@ pub struct AgenticDiagnosticsResponse {
 impl ApiResponse for AgenticDiagnosticsResponse {}
 
 pub async fn push_diagnostics(
-    Extension(app): Extension<Application>,
+    Extension(_app): Extension<Application>,
     Json(AgenticDiagnostics {
         fs_file_path,
         diagnostics,
@@ -982,7 +1009,7 @@ pub async fn push_diagnostics(
 ) -> Result<impl IntoResponse> {
     // implement this api endpoint properly and send events over to the right
     // scratch-pad agent
-    let lsp_diagnostics = diagnostics
+    let _ = diagnostics
         .into_iter()
         .map(|webserver_diagnostic| {
             LSPDiagnosticError::new(
@@ -995,10 +1022,10 @@ pub async fn push_diagnostics(
         .collect::<Vec<_>>();
 
     // now look at all the active scratch-pad agents and send them this event
-    let _ = app
-        .anchored_request_tracker
-        .send_diagnostics_event(lsp_diagnostics)
-        .await;
+    // let _ = app
+    //     .anchored_request_tracker
+    //     .send_diagnostics_event(lsp_diagnostics)
+    //     .await;
     Ok(json_result(AgenticDiagnosticsResponse { done: true }))
 }
 

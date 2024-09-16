@@ -33,6 +33,24 @@ impl HumanAnchorRequest {
     pub fn anchor_request_context(&self) -> Option<String> {
         self.anchor_request_context.clone()
     }
+
+    pub fn to_string(&self) -> String {
+        let query = &self.query;
+        let anchored_symbols_to_string = self
+            .anchored_symbols
+            .iter()
+            .map(|anchor_symbol| {
+                let name = anchor_symbol.name();
+                let fs_file_path = anchor_symbol.fs_file_path().unwrap_or_default();
+                format!("{name} at {fs_file_path}")
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "developer request:{query}
+edited: {anchored_symbols_to_string}"
+        )
+    }
 }
 
 #[derive(Debug)]

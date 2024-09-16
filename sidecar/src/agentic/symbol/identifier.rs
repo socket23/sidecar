@@ -1103,6 +1103,7 @@ impl MechaCodeSymbolThinking {
                                     None,
                                     false, // should we disable the followups
                                     None,
+                                    vec![],
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1135,6 +1136,7 @@ impl MechaCodeSymbolThinking {
                                 None,
                                 false, // should we disable followups and correctness check
                                 None,
+                                vec![],
                             ))
                         } else {
                             None
@@ -1285,6 +1287,7 @@ impl MechaCodeSymbolThinking {
                                     None,
                                     false, // should we disable followups and correctness check
                                     None,
+                                    vec![],
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1411,6 +1414,7 @@ Reason to edit:
                                         None,
                                         false, // should we disable followups and correctness check
                                         None,
+                                        vec![],
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);

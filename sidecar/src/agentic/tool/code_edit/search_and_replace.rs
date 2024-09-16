@@ -72,7 +72,7 @@ pub struct SearchAndReplaceEditingRequest {
     symbol_identifier: SymbolIdentifier,
     edit_request_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
-    user_context: Option<String>,
+    cache_contents: Option<String>,
     editor_url: String,
     // its a vec of string here so we can select the cache points as required
     // and optimise for that
@@ -97,8 +97,8 @@ impl SearchAndReplaceEditingRequest {
         symbol_identifier: SymbolIdentifier, // Unique identifier for the symbol being edited
         edit_request_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
-        // Important: user_context provides essential information for the editing process
-        user_context: Option<String>,
+        // Important: cache_contents provides essential information for the editing process
+        cache_contents: Option<String>,
         // Indicates whether this is a warmup request to prepare the LLM
         editor_url: String,
         diff_recent_changes: Option<DiffRecentChanges>,
@@ -118,7 +118,7 @@ impl SearchAndReplaceEditingRequest {
             symbol_identifier,
             edit_request_id,
             ui_sender,
-            user_context,
+            cache_contents,
             editor_url,
             diff_recent_changes,
             previous_user_queries,
@@ -280,14 +280,28 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
         )
     }
 
+    /// The user message structure looks like this:
+    ///
+    /// <cache_content>
+    /// </cache_content>                            : CACHE_POINT
+    /// <git_diff_ordered_by_timestamp_ms>
+    /// <disjoin_set_of_files_not_in_edit>
+    /// </disjoin_set_of_files_not_in_edit>         : CACHE_POINT
+    /// </git_diff_ordered_by_timestamp_ms>
+    /// <previous_user_intents>
+    /// </previous_user_intent>
+    /// <code_in_selection>
+    /// </code_in_selection>
+    /// <code_to_edit>
+    /// </code_to_edit>
     fn user_messages(&self, context: SearchAndReplaceEditingRequest) -> Vec<LLMClientMessage> {
         let mut messages = vec![];
-        let user_context = context.user_context;
+        let cache_contents = context.cache_contents;
         let extra_data = self.extra_data(&context.extra_data);
-        if let Some(user_context) = user_context {
+        if let Some(cache_contents) = cache_contents {
             let user_provided_context = LLMClientMessage::user(format!(
                 r#"<user_provided_context>
-{user_context}
+{cache_contents}
 </user_provided_context>
 {extra_data}
 As a reminder, once you understand the request you MUST:

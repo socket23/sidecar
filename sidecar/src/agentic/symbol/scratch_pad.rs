@@ -3,14 +3,17 @@
 //! This way the agent can look at all the events and the requests which are happening
 //! and take a decision based on them on what should happen next
 
-use std::{collections::HashSet, pin::Pin, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, pin::Pin, sync::Arc};
 
 use futures::{stream, Stream, StreamExt};
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
 };
-use tokio::sync::{mpsc::UnboundedSender, Mutex};
+use tokio::{
+    io::AsyncWriteExt,
+    sync::{mpsc::UnboundedSender, Mutex},
+};
 
 use crate::{
     agentic::{
@@ -149,6 +152,51 @@ impl ScratchPadAgent {
             }
         });
         scratch_pad_agent
+    }
+
+    /// Starts the scratch pad agent and returns the environment sender
+    /// which can be used to talk to these agents
+    pub async fn start_scratch_pad(
+        scratch_pad_file_path: PathBuf,
+        tool_box: Arc<ToolBox>,
+        symbol_event_sender: UnboundedSender<SymbolEventMessage>,
+        message_properties: SymbolEventMessageProperties,
+        user_provided_context: Option<String>,
+    ) -> (Self, UnboundedSender<EnvironmentEventType>) {
+        let mut scratch_pad_file = tokio::fs::File::create(scratch_pad_file_path.clone())
+            .await
+            .expect("scratch_pad path created");
+        let _ = scratch_pad_file
+            .write_all("<scratchpad>\n</scratchpad>".as_bytes())
+            .await;
+        let _ = scratch_pad_file
+            .flush()
+            .await
+            .expect("initiating scratch pad failed");
+
+        let scratch_pad_path = scratch_pad_file_path
+            .into_os_string()
+            .into_string()
+            .expect("os_string to into_string to work");
+        let scratch_pad_agent = ScratchPadAgent::new(
+            scratch_pad_path,
+            message_properties.clone(),
+            tool_box,
+            symbol_event_sender,
+            user_provided_context.clone(),
+        )
+        .await;
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let cloned_scratch_pad_agent = scratch_pad_agent.clone();
+        let _scratch_pad_handle = tokio::spawn(async move {
+            // spawning the scratch pad agent
+            cloned_scratch_pad_agent
+                .process_envrionment(Box::pin(
+                    tokio_stream::wrappers::UnboundedReceiverStream::new(receiver),
+                ))
+                .await;
+        });
+        (scratch_pad_agent, sender)
     }
 }
 

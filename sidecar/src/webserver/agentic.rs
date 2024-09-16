@@ -75,7 +75,7 @@ impl ProbeRequestTracker {
 
 /// Contains all the data which we will need to trigger the edits
 /// Represents metadata for anchored editing operations.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct AnchoredEditingMetadata {
     /// Properties of the message event associated with this editing session.
     message_properties: SymbolEventMessageProperties,
@@ -94,6 +94,8 @@ struct AnchoredEditingMetadata {
     user_context_string: Option<String>,
     /// environment events
     environment_event_sender: UnboundedSender<EnvironmentEventType>,
+    /// the scratchpad agent which tracks the state of the request
+    _scratch_pad_agent: ScratchPadAgent,
 }
 
 impl AnchoredEditingMetadata {
@@ -103,6 +105,7 @@ impl AnchoredEditingMetadata {
         previous_file_content: HashMap<String, String>,
         references: Vec<RelevantReference>,
         user_context_string: Option<String>,
+        scratch_pad_agent: ScratchPadAgent,
         environment_event_sender: UnboundedSender<EnvironmentEventType>,
     ) -> Self {
         Self {
@@ -111,6 +114,7 @@ impl AnchoredEditingMetadata {
             previous_file_content,
             references,
             user_context_string,
+            _scratch_pad_agent: scratch_pad_agent,
             environment_event_sender,
         }
     }
@@ -890,44 +894,18 @@ pub async fn code_editing(
 
         println!("metadata_pregen::elapsed({:?})", metadata_pregen.elapsed());
 
-        let (environment_sender, environment_receiver) = tokio::sync::mpsc::unbounded_channel();
-
         // the storage unit for the scratch pad path
         // create this file path before we start editing it
         let mut scratch_pad_file_path = app.config.scratch_pad().join(request_id.to_owned());
         scratch_pad_file_path.set_extension("md");
-        let mut scratch_pad_file = tokio::fs::File::create(scratch_pad_file_path.clone())
-            .await
-            .expect("scratch_pad path created");
-        let _ = scratch_pad_file
-            .write_all("<scratchpad>\n</scratchpad>".as_bytes())
-            .await;
-        let _ = scratch_pad_file
-            .flush()
-            .await
-            .expect("initiating scratch pad failed");
-
-        let scratch_pad_path = scratch_pad_file_path
-            .into_os_string()
-            .into_string()
-            .expect("os_string to into_string to work");
-        let scratch_pad_agent = ScratchPadAgent::new(
-            scratch_pad_path,
-            message_properties.clone(),
+        let (scratch_pad_agent, environment_sender) = ScratchPadAgent::start_scratch_pad(
+            scratch_pad_file_path,
             app.tool_box.clone(),
             app.symbol_manager.hub_sender(),
+            message_properties.clone(),
             user_provided_context.clone(),
         )
         .await;
-
-        let _scratch_pad_handle = tokio::spawn(async move {
-            // spawning the scratch pad agent
-            scratch_pad_agent
-                .process_envrionment(Box::pin(
-                    tokio_stream::wrappers::UnboundedReceiverStream::new(environment_receiver),
-                ))
-                .await;
-        });
 
         let editing_metadata = AnchoredEditingMetadata::new(
             message_properties.clone(),
@@ -935,6 +913,7 @@ pub async fn code_editing(
             file_contents,
             vec![],
             user_provided_context.clone(),
+            scratch_pad_agent,
             // we store the environment sender so we can use it later for
             // sending the scratchpad some events
             environment_sender.clone(),

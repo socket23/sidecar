@@ -13,7 +13,6 @@ use llm_client::{
         AnthropicAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider,
     },
 };
-use serde_json::json;
 use sidecar::{
     agentic::{
         symbol::{
@@ -42,7 +41,7 @@ fn default_index_dir() -> PathBuf {
     }
 }
 
-async fn get_diff_patch(git_dname: &str) -> String {
+async fn _get_diff_patch(git_dname: &str) -> String {
     let mut child = Command::new("git")
         .arg("-C")
         .arg(git_dname)
@@ -138,15 +137,15 @@ async fn main() {
             )),
         ),
     ));
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let event_properties = SymbolEventMessageProperties::new(
+    let _event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(instance_id.to_owned(), instance_id.to_owned()),
         sender.clone(),
         editor_url.to_owned(),
     );
 
-    let symbol_manager = SymbolManager::new(
+    let _symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
@@ -161,7 +160,7 @@ async fn main() {
     // let repo_map_fs_path =
     //     "/var/folders/bq/1dbw218x1zq3r3c5_gqxgdgr0000gn/T/tmpb0s1ot0p".to_owned();
     let problem_statement = input.problem_statement.to_owned();
-    let initial_request = SymbolInputEvent::new(
+    let _initial_request = SymbolInputEvent::new(
         UserContext::new(vec![], vec![], None, vec![folder_path.to_owned()]),
         LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,
@@ -182,48 +181,48 @@ async fn main() {
         false,
         sender,
     );
-    let mut initial_request_task =
-        Box::pin(symbol_manager.initial_request(initial_request, event_properties.clone()));
+    // let mut initial_request_task =
+    //     Box::pin(symbol_manager.initial_request(initial_request, event_properties.clone()));
 
-    loop {
-        tokio::select! {
-            event = receiver.recv() => {
-                if let Some(_event) = event {
-                    // info!("event: {:?}", event);
-                } else {
-                    break; // Receiver closed, exit the loop
-                }
-            }
-            result = &mut initial_request_task => {
-                match result {
-                    Ok(_) => {
-                        // The task completed successfully
-                        // Handle the result if needed
-                    }
-                    Err(e) => {
-                        // An error occurred while running the task
-                        eprintln!("Error in initial_request_task: {}", e);
-                        // Handle the error appropriately (e.g., log, retry, or exit)
-                    }
-                }
-            }
-        }
-    }
+    // loop {
+    //     tokio::select! {
+    //         event = receiver.recv() => {
+    //             if let Some(_event) = event {
+    //                 // info!("event: {:?}", event);
+    //             } else {
+    //                 break; // Receiver closed, exit the loop
+    //             }
+    //         }
+    //         result = &mut initial_request_task => {
+    //             match result {
+    //                 Ok(_) => {
+    //                     // The task completed successfully
+    //                     // Handle the result if needed
+    //                 }
+    //                 Err(e) => {
+    //                     // An error occurred while running the task
+    //                     eprintln!("Error in initial_request_task: {}", e);
+    //                     // Handle the error appropriately (e.g., log, retry, or exit)
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
-    // Over here we should write out the json file so we can run evaluation on it
-    let prediction_output = "/Users/skcd/scratch/swe_bench/predictions/full---gpt-4o/".to_owned()
-        + &instance_id
-        + ".jsonl";
-    // Now we write out the json object required for the predictions to work
-    let prediction_json = json!({
-        "instance_id": instance_id.to_owned(),
-        "model_name_or_path": "codestory-mixed".to_owned(),
-        "model_patch": get_diff_patch(&folder_path).await,
-    });
+    // // Over here we should write out the json file so we can run evaluation on it
+    // let prediction_output = "/Users/skcd/scratch/swe_bench/predictions/full---gpt-4o/".to_owned()
+    //     + &instance_id
+    //     + ".jsonl";
+    // // Now we write out the json object required for the predictions to work
+    // let prediction_json = json!({
+    //     "instance_id": instance_id.to_owned(),
+    //     "model_name_or_path": "codestory-mixed".to_owned(),
+    //     "model_patch": get_diff_patch(&folder_path).await,
+    // });
 
-    let _ = tokio::fs::write(
-        prediction_output,
-        serde_json::to_string(&prediction_json).expect("serde to not fail"),
-    )
-    .await;
+    // let _ = tokio::fs::write(
+    //     prediction_output,
+    //     serde_json::to_string(&prediction_json).expect("serde to not fail"),
+    // )
+    // .await;
 }

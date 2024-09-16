@@ -140,6 +140,10 @@ impl ToolBox {
         }
     }
 
+    pub fn tools(&self) -> Arc<ToolBroker> {
+        self.tools.clone()
+    }
+
     /// sends the user query to the scratch-pad agent
     pub async fn scratch_pad_agent_human_request(
         &self,

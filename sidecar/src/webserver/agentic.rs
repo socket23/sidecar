@@ -1,10 +1,10 @@
 //! Contains the handler for agnetic requests and how they work
 
+use super::model_selection::LLMClientConfig;
 use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::{stream, StreamExt};
-use llm_client::provider::GoogleAIStudioKey;
 use llm_client::{
     clients::types::LLMType,
     provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
@@ -18,8 +18,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+use super::types::Result;
 use crate::agentic::symbol::anchored::AnchoredSymbol;
 use crate::agentic::symbol::events::environment_event::EnvironmentEventType;
+use crate::agentic::symbol::events::human::{HumanAgenticRequest, HumanMessage};
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::lsp::{LSPDiagnosticError, LSPSignal};
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
@@ -28,24 +30,16 @@ use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
-use crate::agentic::tool::broker::ToolBrokerConfiguration;
 use crate::agentic::tool::input::ToolInput;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
 use crate::chunking::text_document::Range;
 use crate::{
-    agentic::{
-        symbol::{
-            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
-        },
-        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
-    },
-    application::application::Application,
+    agentic::symbol::identifier::LLMProperties, application::application::Application,
     user_context::types::UserContext,
 };
 
 use super::types::ApiResponse;
-use super::{model_selection::LLMClientConfig, types::Result};
 
 /// Tracks and manages probe requests in a concurrent environment.
 /// This struct is responsible for keeping track of ongoing probe requests
@@ -340,108 +334,116 @@ pub struct SWEBenchRequest {
     swe_bench_id: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SweBenchCompletionResponse {
+    done: bool,
+}
+
+impl ApiResponse for SweBenchCompletionResponse {}
+
 pub async fn swe_bench(
     axumQuery(SWEBenchRequest {
-        git_dname,
-        problem_statement,
-        editor_url,
-        test_endpoint,
-        repo_map_file,
+        git_dname: _git_dname,
+        problem_statement: _problem_statement,
+        editor_url: _editor_url,
+        test_endpoint: _test_endpoint,
+        repo_map_file: _repo_map_file,
         gcloud_access_token: _glcoud_access_token,
-        swe_bench_id,
+        swe_bench_id: _swe_bench_id,
     }): axumQuery<SWEBenchRequest>,
-    Extension(app): Extension<Application>,
+    Extension(_app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let tool_broker = Arc::new(ToolBroker::new(
-        app.llm_broker.clone(),
-        Arc::new(CodeEditBroker::new()),
-        app.symbol_tracker.clone(),
-        app.language_parsing.clone(),
-        // for swe-bench tests we do not care about tracking edits
-        ToolBrokerConfiguration::new(None, true),
-        LLMProperties::new(
-            LLMType::GeminiPro,
-            LLMProvider::GoogleAIStudio,
-            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-            )),
-        ),
-    ));
-    let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
-    let model = LLMType::ClaudeSonnet;
-    let provider_type = LLMProvider::Anthropic;
-    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-    let symbol_manager = SymbolManager::new(
-        tool_broker,
-        app.symbol_tracker.clone(),
-        app.editor_parsing.clone(),
-        LLMProperties::new(
-            model.clone(),
-            provider_type.clone(),
-            anthropic_api_keys.clone(),
-        ),
-    );
+    // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    // let tool_broker = Arc::new(ToolBroker::new(
+    //     app.llm_broker.clone(),
+    //     Arc::new(CodeEditBroker::new()),
+    //     app.symbol_tracker.clone(),
+    //     app.language_parsing.clone(),
+    //     // for swe-bench tests we do not care about tracking edits
+    //     ToolBrokerConfiguration::new(None, true),
+    //     LLMProperties::new(
+    //         LLMType::GeminiPro,
+    //         LLMProvider::GoogleAIStudio,
+    //         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+    //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    //         )),
+    //     ),
+    // ));
+    // let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
+    // let model = LLMType::ClaudeSonnet;
+    // let provider_type = LLMProvider::Anthropic;
+    // let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    // let symbol_manager = SymbolManager::new(
+    //     tool_broker,
+    //     app.symbol_tracker.clone(),
+    //     app.editor_parsing.clone(),
+    //     LLMProperties::new(
+    //         model.clone(),
+    //         provider_type.clone(),
+    //         anthropic_api_keys.clone(),
+    //     ),
+    // );
 
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(swe_bench_id.to_owned(), swe_bench_id.to_owned()),
-        sender.clone(),
-        editor_url.to_owned(),
-    );
+    // let message_properties = SymbolEventMessageProperties::new(
+    //     SymbolEventRequestId::new(swe_bench_id.to_owned(), swe_bench_id.to_owned()),
+    //     sender.clone(),
+    //     editor_url.to_owned(),
+    // );
 
     println!("we are getting a hit at this endpoint");
 
     // Now we send the original request over here and then await on the sender like
     // before
-    tokio::spawn(async move {
-        let _ = symbol_manager
-            .initial_request(
-                SymbolInputEvent::new(
-                    user_context,
-                    model,
-                    provider_type,
-                    anthropic_api_keys,
-                    problem_statement,
-                    "web_server_input".to_owned(),
-                    "web_server_input".to_owned(),
-                    Some(test_endpoint),
-                    repo_map_file,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    false,
-                    None,
-                    None,
-                    false,
-                    sender,
-                )
-                .set_swe_bench_id(swe_bench_id),
-                message_properties,
-            )
-            .await;
-    });
-    let event_stream = Sse::new(
-        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
-            sse::Event::default()
-                .json_data(event)
-                .map_err(anyhow::Error::new)
-        }),
-    );
+    // tokio::spawn(async move {
+    //     let _ = symbol_manager
+    //         .initial_request(
+    //             SymbolInputEvent::new(
+    //                 user_context,
+    //                 model,
+    //                 provider_type,
+    //                 anthropic_api_keys,
+    //                 problem_statement,
+    //                 "web_server_input".to_owned(),
+    //                 "web_server_input".to_owned(),
+    //                 Some(test_endpoint),
+    //                 repo_map_file,
+    //                 None,
+    //                 None,
+    //                 None,
+    //                 None,
+    //                 None,
+    //                 false,
+    //                 None,
+    //                 None,
+    //                 false,
+    //                 sender,
+    //             )
+    //             .set_swe_bench_id(swe_bench_id),
+    //             message_properties,
+    //         )
+    //         .await;
+    // });
+    // let event_stream = Sse::new(
+    //     tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
+    //         sse::Event::default()
+    //             .json_data(event)
+    //             .map_err(anyhow::Error::new)
+    //     }),
+    // );
 
-    // return the stream as a SSE event stream over here
-    Ok(event_stream.keep_alive(
-        sse::KeepAlive::new()
-            .interval(Duration::from_secs(3))
-            .event(
-                sse::Event::default()
-                    .json_data(json!({
-                        "keep_alive": "alive"
-                    }))
-                    .expect("json to not fail in keep alive"),
-            ),
-    ))
+    // // return the stream as a SSE event stream over here
+    // Ok(event_stream.keep_alive(
+    //     sse::KeepAlive::new()
+    //         .interval(Duration::from_secs(3))
+    //         .event(
+    //             sse::Event::default()
+    //                 .json_data(json!({
+    //                     "keep_alive": "alive"
+    //                 }))
+    //                 .expect("json to not fail in keep alive"),
+    //         ),
+    // ))
+    Ok(json_result(SweBenchCompletionResponse { done: true }))
 }
 
 /// Represents a request to warm up the code sculpting system.
@@ -747,7 +749,6 @@ pub async fn code_editing(
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start::request_id({})", &request_id);
-    let edit_request_tracker = app.probe_request_tracker.clone();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     if let Some(active_window_data) = active_window_data {
         user_context = user_context.update_file_content_map(
@@ -1108,42 +1109,58 @@ pub async fn code_editing(
         }
     } else {
         println!("webserver::code_editing_flow::agentic_editing");
-        let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
-                                                  // Now we send the original request over here and then await on the sender like
-                                                  // before
 
-        let symbol_manager = app.symbol_manager.clone();
-        let join_handle = tokio::spawn(async move {
-            let _ = symbol_manager
-            .initial_request(
-                SymbolInputEvent::new(
-                    user_context,
-                    LLMType::ClaudeSonnet,
-                    LLMProvider::Anthropic,
-                    LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-                    user_query,
-                    edit_request_id.to_owned(),
-                    edit_request_id,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    true,
-                    Some(root_directory),
-                    None,
-                    codebase_search, // big search
-                    sender,
-                ),
-                message_properties,
+        // recreate the scratch-pad agent here, give us a hot minute before we figure out
+        // how to merge these 2 flows together
+        let (environment_sender, environment_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        // the storage unit for the scratch pad path
+        // create this file path before we start editing it
+        let mut scratch_pad_file_path = app.config.scratch_pad().join(request_id.to_owned());
+        scratch_pad_file_path.set_extension("md");
+        let mut scratch_pad_file = tokio::fs::File::create(scratch_pad_file_path.clone())
+            .await
+            .expect("scratch_pad path created");
+        let _ = scratch_pad_file
+            .write_all("<scratchpad>\n</scratchpad>".as_bytes())
+            .await;
+        let _ = scratch_pad_file
+            .flush()
+            .await
+            .expect("initiating scratch pad failed");
+        let user_provided_context = app
+            .tool_box
+            .file_paths_to_user_context(
+                user_context.file_paths(),
+                enable_import_nodes,
+                message_properties.clone(),
             )
-            .await;
+            .await
+            .ok();
+
+        let scratch_pad_path = scratch_pad_file_path
+            .into_os_string()
+            .into_string()
+            .expect("os_string to into_string to work");
+        let scratch_pad_agent = ScratchPadAgent::new(
+            scratch_pad_path,
+            message_properties.clone(),
+            app.tool_box.clone(),
+            app.symbol_manager.hub_sender(),
+            user_provided_context.clone(),
+        )
+        .await;
+        let _scratch_pad_handle = tokio::spawn(async move {
+            // spawning the scratch pad agent
+            scratch_pad_agent
+                .process_envrionment(Box::pin(
+                    tokio_stream::wrappers::UnboundedReceiverStream::new(environment_receiver),
+                ))
+                .await;
         });
-        let _ = edit_request_tracker
-            .track_new_request(&request_id, join_handle)
-            .await;
+        let _ = environment_sender.send(EnvironmentEventType::Human(HumanMessage::Agentic(
+            HumanAgenticRequest::new(user_query, root_directory, codebase_search, user_context),
+        )));
     }
 
     let event_stream = Sse::new(

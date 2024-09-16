@@ -79,18 +79,18 @@ async fn main() {
     );
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let event_properties = SymbolEventMessageProperties::new(
+    let _event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
     );
-    let symbol_manager = SymbolManager::new(
+    let _symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
         llm_properties,
     );
-    let symbol_input = SymbolInputEvent::new(
+    let _symbol_input = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeHaiku,
         LLMProvider::Anthropic,
@@ -112,10 +112,10 @@ async fn main() {
         sender,
     );
 
-    // execute input on manager
-    let _ = symbol_manager
-        .initial_request(symbol_input, event_properties)
-        .await;
+    // // execute input on manager
+    // let _ = symbol_manager
+    //     .initial_request(symbol_input, event_properties)
+    //     .await;
 
     // after the initial request this is the reply we get back, so lets try to make this work end to end for this case
 

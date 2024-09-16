@@ -264,6 +264,13 @@ impl ScratchPadAgent {
                 self.message_properties.clone(),
             )
             .await?;
+        // keep track of the user request in our state
+        let previous_user_queries;
+        {
+            let mut user_queries = self.previous_user_queries.lock().await;
+            previous_user_queries = user_queries.to_vec();
+            user_queries.push(anchor_request.to_string());
+        }
 
         let symbols_to_edit_request = self
             .tool_box
@@ -272,6 +279,7 @@ impl ScratchPadAgent {
                 anchor_request.user_query(),
                 anchor_request.anchor_request_context(),
                 recent_edits,
+                previous_user_queries,
                 self.message_properties.clone(),
             )
             .await?;
@@ -283,12 +291,6 @@ impl ScratchPadAgent {
             .send(EnvironmentEventType::Human(HumanMessage::Anchor(
                 cloned_anchored_request,
             )));
-
-        // keep track of the user request in our state
-        {
-            let mut user_queries = self.previous_user_queries.lock().await;
-            user_queries.push(anchor_request.to_string());
-        }
 
         // we start making the edits
         {

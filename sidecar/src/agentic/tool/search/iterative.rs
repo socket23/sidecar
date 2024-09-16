@@ -1,13 +1,12 @@
 use llm_client::clients::types::{LLMClientError, LLMType};
 use serde_xml_rs::to_string;
+use tokio::sync::mpsc::error::SendError;
 
 use std::time::Instant;
 use std::{path::PathBuf, time::Duration};
 use thiserror::Error;
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-
+use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::{
     agentic::{
         symbol::events::message_event::SymbolEventMessageProperties,
@@ -22,13 +21,15 @@ use crate::{
     repomap::types::RepoMap,
     user_context::types::UserContextError,
 };
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use super::{
     big_search::IterativeSearchSeed, decide::DecideResponse, google_studio::GoogleStudioLLM,
     identify::IdentifyResponse, relevant_files::QueryRelevantFilesResponse, repository::Repository,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum IterativeSearchEvent {
     SearchStarted,
     SeedApplied(Duration),
@@ -42,7 +43,7 @@ pub enum IterativeSearchEvent {
 }
 
 pub trait IterativeSearchEventHandler: Send + Sync {
-    fn handle_event(&self, event: IterativeSearchEvent);
+    fn handle_event(&self, event: IterativeSearchEvent) -> Result<(), IterativeSearchError>;
 }
 
 pub struct UIEventHandler {
@@ -53,17 +54,25 @@ impl UIEventHandler {
     pub fn new(message_properties: SymbolEventMessageProperties) -> Self {
         Self { message_properties }
     }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
+    }
 }
 
 impl IterativeSearchEventHandler for UIEventHandler {
-    fn handle_event(&self, event: IterativeSearchEvent) {
+    fn handle_event(&self, event: IterativeSearchEvent) -> Result<(), IterativeSearchError> {
         match event {
-            IterativeSearchEvent::SearchStarted => println!("Search started"),
-            IterativeSearchEvent::SeedApplied(duration) => {
-                println!("Seed applied in {:?}", duration)
-            }
-            _ => todo!(), // todo(zi);
-                          // ... handle other events
+            IterativeSearchEvent::SearchStarted => Ok(self.message_properties().ui_sender().send(
+                UIEventWithID::search_iteration_event(
+                    self.message_properties()
+                        .request_id()
+                        .root_request_id() // todo(zi) or should this just be request id?
+                        .to_owned(),
+                    event,
+                ),
+            )?),
+            _ => todo!(),
         }
     }
 }
@@ -216,6 +225,9 @@ pub enum IterativeSearchError {
 
     #[error("No tags found for file: {0}")]
     NoTagsForFile(PathBuf),
+
+    #[error("Send error: {0}")]
+    SendError(#[from] SendError<UIEventWithID>),
 }
 
 impl SearchQuery {

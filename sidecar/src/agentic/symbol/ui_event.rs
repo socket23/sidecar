@@ -4,7 +4,10 @@
 
 use std::collections::HashMap;
 
-use crate::{agentic::tool::ref_filter::ref_filter::Location, chunking::text_document::Range};
+use crate::{
+    agentic::tool::{ref_filter::ref_filter::Location, search::iterative::IterativeSearchEvent},
+    chunking::text_document::Range,
+};
 
 use super::{
     identifier::SymbolIdentifier,
@@ -298,6 +301,13 @@ impl UIEventWithID {
         Self {
             request_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::GroupedReferences(references)),
+        }
+    }
+
+    pub fn search_iteration_event(request_id: String, event: IterativeSearchEvent) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::SearchIteration(event)),
         }
     }
 }
@@ -765,4 +775,5 @@ pub enum FrameworkEvent {
     ReferenceFound(FoundReference),
     RelevantReference(RelevantReference), // this naming sucks ass
     GroupedReferences(GroupedReferences),
+    SearchIteration(IterativeSearchEvent),
 }

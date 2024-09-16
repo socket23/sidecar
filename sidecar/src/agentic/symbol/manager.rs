@@ -390,7 +390,7 @@ impl SymbolManager {
         let ui_sender = input_event.ui_sender();
         let request_id = input_event.request_id().to_owned();
         let is_full_edit = input_event.full_symbol_edit();
-        let is_big_search = input_event.big_search();
+        let is_big_search = input_event.big_search(); // this is currently false
         let swe_bench_id = input_event.swe_bench_instance_id();
         let swe_bench_git_dname = input_event.get_swe_bench_git_dname();
         let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();

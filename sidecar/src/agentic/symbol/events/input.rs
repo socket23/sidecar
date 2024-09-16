@@ -247,6 +247,7 @@ impl SymbolInputEvent {
                                 Some(root_directory),
                                 self.request_id.root_request_id().to_string(),
                                 SearchType::Both,
+                                message_properties,
                             )));
                         }
                     }

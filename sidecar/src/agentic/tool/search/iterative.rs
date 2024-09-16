@@ -9,12 +9,15 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    agentic::tool::{
-        code_symbol::important::{
-            CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+    agentic::{
+        symbol::events::message_event::SymbolEventMessageProperties,
+        tool::{
+            code_symbol::important::{
+                CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+            },
+            file::types::SerdeError,
+            human::{error::CommunicationError, qa::GenerateHumanQuestionResponse},
         },
-        file::types::SerdeError,
-        human::{error::CommunicationError, qa::GenerateHumanQuestionResponse},
     },
     repomap::types::RepoMap,
     user_context::types::UserContextError,
@@ -240,16 +243,23 @@ pub struct IterativeSearchSystem<T: LLMOperations> {
     llm_ops: T,
     complete: bool,
     seed: Option<IterativeSearchSeed>,
+    message_properties: SymbolEventMessageProperties,
 }
 
 impl<T: LLMOperations> IterativeSearchSystem<T> {
-    pub fn new(context: IterativeSearchContext, repository: Repository, llm_ops: T) -> Self {
+    pub fn new(
+        context: IterativeSearchContext,
+        repository: Repository,
+        llm_ops: T,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Self {
         Self {
             context,
             repository,
             llm_ops,
             complete: false,
             seed: None,
+            message_properties,
         }
     }
 
@@ -260,6 +270,10 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
     fn context(&self) -> &IterativeSearchContext {
         &self.context
+    }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
     }
 
     pub async fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {

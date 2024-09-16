@@ -319,9 +319,9 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         self.event_handlers.push(handler);
     }
 
-    fn _emit_event(&self, event: IterativeSearchEvent) {
+    fn emit_event(&self, event: IterativeSearchEvent) {
         for handler in &self.event_handlers {
-            handler.handle_event(event.to_owned());
+            let _ = handler.handle_event(event.to_owned());
         }
     }
 
@@ -352,9 +352,12 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
         let start_time = Instant::now();
+        self.emit_event(IterativeSearchEvent::SearchStarted);
 
+        let seed_start = Instant::now();
         self.apply_seed().await?;
-        println!("Seed applied in {:?}", start_time.elapsed());
+        self.emit_event(IterativeSearchEvent::SeedApplied(seed_start.elapsed()));
+        println!("Seed applied in {:?}", seed_start.elapsed());
 
         let mut count = 0;
         while !self.complete && count < 3 {
@@ -363,19 +366,34 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("search loop #{}", count);
             println!("===========");
 
-            // event: generating search
+            let search_query_start = Instant::now();
             let search_queries = self.generate_search_query().await?;
-            println!("Search queries generated in {:?}", loop_start.elapsed());
+            self.emit_event(IterativeSearchEvent::SearchQueriesGenerated(
+                search_queries.clone(),
+                search_query_start.elapsed(),
+            ));
+            println!(
+                "Search queries generated in {:?}",
+                search_query_start.elapsed()
+            );
 
             let search_start = Instant::now();
             let search_results: Vec<SearchResult> = search_queries
                 .iter()
                 .flat_map(|q| self.repository.execute_search(q))
                 .collect();
+            self.emit_event(IterativeSearchEvent::SearchExecuted(
+                search_results.clone(),
+                search_start.elapsed(),
+            ));
             println!("Search executed in {:?}", search_start.elapsed());
 
             let identify_start = Instant::now();
             let identify_results = self.identify(&search_results).await?;
+            self.emit_event(IterativeSearchEvent::IdentificationCompleted(
+                identify_results.clone(),
+                identify_start.elapsed(),
+            ));
             println!("Identification completed in {:?}", identify_start.elapsed());
 
             self.context
@@ -400,6 +418,9 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                     })
                     .collect(),
             );
+            self.emit_event(IterativeSearchEvent::FileOutlineGenerated(
+                generate_file_outline.elapsed(),
+            ));
             println!(
                 "File outline generation completed in {:?}",
                 generate_file_outline.elapsed()
@@ -407,6 +428,10 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             let decision_start = Instant::now();
             let decision = self.decide().await?;
+            self.emit_event(IterativeSearchEvent::DecisionMade(
+                decision.clone(),
+                decision_start.elapsed(),
+            ));
             println!("Decision made in {:?}", decision_start.elapsed());
 
             self.context.update_scratch_pad(decision.suggestions());
@@ -417,40 +442,11 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("Suggestions: {}", decision.suggestions());
             println!("===========");
 
-            // todo(zi): proper condition
-            // if true {
-            //     let cli = CliCommunicator {};
-
-            //     let human_tool = Human::new(cli);
-
-            //     let question: Question = self
-            //         .llm_ops
-            //         .generate_human_question(&self.context)
-            //         .await?
-            //         .into();
-
-            //     let answer = human_tool.ask(&question)?;
-            //     let choice_id = answer.choice_id();
-
-            //     let answer_text = question
-            //         .get_choice(choice_id)
-            //         .map(|choice| choice.text())
-            //         .ok_or_else(|| {
-            //             IterativeSearchError::MissingQuestionChoiceError(choice_id.to_string())
-            //         })?;
-
-            //     let scratch_pad_entry = format!(
-            //         r#"- Critical information to solving the issue:
-            // Question: {}
-            // Answer: {}"#,
-            //         question.text(),
-            //         answer_text
-            //     );
-
-            //     self.context.extend_scratch_pad(&scratch_pad_entry);
-            // }
-
             count += 1;
+            self.emit_event(IterativeSearchEvent::LoopCompleted(
+                count,
+                loop_start.elapsed(),
+            ));
             println!("===========");
             println!("Loop {} completed in {:?}", count, loop_start.elapsed());
             println!("Scratch_pad: {}", self.context.scratch_pad());
@@ -473,6 +469,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
         let response = CodeSymbolImportantResponse::new(symbols, ordered_symbols);
 
+        self.emit_event(IterativeSearchEvent::SearchCompleted(start_time.elapsed()));
         println!("Total execution time: {:?}", start_time.elapsed());
 
         Ok(response)

@@ -6,11 +6,28 @@
 use std::{collections::HashSet, pin::Pin, sync::Arc};
 
 use futures::{stream, Stream, StreamExt};
+use llm_client::{
+    clients::types::LLMType,
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 
 use crate::{
-    agentic::symbol::{events::types::SymbolEvent, ui_event::UIEventWithID},
-    chunking::text_document::{Position, Range},
+    agentic::{
+        symbol::{
+            events::{
+                initial_request::{InitialRequestData, SymbolEditedItem},
+                types::SymbolEvent,
+            },
+            identifier::LLMProperties,
+            ui_event::{InitialSearchSymbolInformation, UIEventWithID},
+        },
+        tool::{output::ToolOutput, r#type::Tool},
+    },
+    chunking::{
+        languages::TSLanguageParsing,
+        text_document::{Position, Range},
+    },
 };
 
 use super::{
@@ -18,7 +35,8 @@ use super::{
     events::{
         edit::SymbolToEdit,
         environment_event::{EditorStateChangeRequest, EnvironmentEventType},
-        human::{HumanAnchorRequest, HumanMessage},
+        human::{HumanAgenticRequest, HumanAnchorRequest, HumanMessage},
+        input::SymbolInputEvent,
         lsp::{LSPDiagnosticError, LSPSignal},
         message_event::{SymbolEventMessage, SymbolEventMessageProperties},
     },
@@ -230,6 +248,9 @@ impl ScratchPadAgent {
     async fn handle_human_message(&self, human_message: HumanMessage) -> Result<(), SymbolError> {
         match human_message {
             HumanMessage::Anchor(anchor_request) => self.human_message_anchor(anchor_request).await,
+            HumanMessage::Agentic(agentic_request) => {
+                self.human_message_agentic(agentic_request).await
+            }
             HumanMessage::Followup(_followup_request) => Ok(()),
         }
     }
@@ -239,8 +260,292 @@ impl ScratchPadAgent {
             HumanMessage::Anchor(anchor_request) => {
                 let _ = self._handle_user_anchor_request(anchor_request).await;
             }
+            HumanMessage::Agentic(_) => {}
             HumanMessage::Followup(_followup_request) => {}
         }
+        Ok(())
+    }
+
+    async fn human_message_agentic(
+        &self,
+        human_agentic_request: HumanAgenticRequest,
+    ) -> Result<(), SymbolError> {
+        let user_context = human_agentic_request.user_context().clone();
+        let user_query = human_agentic_request.user_query().to_owned();
+        let root_directory = human_agentic_request.root_directory().to_owned();
+        let codebase_search = human_agentic_request.codebase_search();
+        let edit_request_id = self.message_properties.request_id_str().to_owned();
+        let ui_sender = self.message_properties.ui_sender();
+        let start_instant = std::time::Instant::now();
+        let input_event = SymbolInputEvent::new(
+            user_context,
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            user_query,
+            edit_request_id.to_owned(),
+            edit_request_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            true,
+            Some(root_directory),
+            None,
+            codebase_search, // big search
+            ui_sender,
+        );
+        let ui_sender = input_event.ui_sender();
+        let request_id = input_event.request_id().to_owned();
+        let is_full_edit = input_event.full_symbol_edit();
+        let is_big_search = input_event.big_search();
+        let _swe_bench_id = input_event.swe_bench_instance_id();
+        let _swe_bench_git_dname = input_event.get_swe_bench_git_dname();
+        let swe_bench_test_endpoint = input_event.get_swe_bench_test_endpoint();
+        let swe_bench_code_editing_model = input_event.get_swe_bench_code_editing();
+        let swe_bench_gemini_properties = input_event.get_swe_bench_gemini_llm_properties();
+        let swe_bench_long_context_editing = input_event.get_swe_bench_long_context_editing();
+        let full_symbol_edit = input_event.full_symbol_edit();
+        let fast_code_symbol_llm = input_event.get_fast_code_symbol_llm();
+        let tool_properties = ToolProperties::new()
+            .set_swe_bench_endpoint(swe_bench_test_endpoint.clone())
+            .set_swe_bench_code_editing_llm(swe_bench_code_editing_model)
+            .set_swe_bench_reranking_llm(swe_bench_gemini_properties)
+            .set_long_context_editing_llm(swe_bench_long_context_editing)
+            .set_full_symbol_request(full_symbol_edit)
+            .set_fast_code_symbol_search(fast_code_symbol_llm);
+        let user_query = input_event.user_query().to_owned();
+        let tool_input = input_event
+            .tool_use_on_initial_invocation(self.tool_box.clone(), self.message_properties.clone())
+            .await;
+        let tool_output = if let Some(tool_input) = tool_input {
+            {
+                if tool_input.is_repo_map_search() {
+                    let _ = ui_sender.send(UIEventWithID::start_long_context_search(
+                        request_id.to_owned(),
+                    ));
+                    let result = self
+                        .tool_box
+                        .tools()
+                        .invoke(tool_input)
+                        .await
+                        .map_err(|e| SymbolError::ToolError(e));
+                    let _ = ui_sender.send(UIEventWithID::finish_long_context_search(
+                        request_id.to_owned(),
+                    ));
+                    result?
+                } else {
+                    self.tool_box
+                        .tools()
+                        .invoke(tool_input)
+                        .await
+                        .map_err(|e| SymbolError::ToolError(e))?
+                }
+            }
+        } else {
+            println!("no tool found for the agentic editing start, this is super fucked");
+            return Ok(());
+        };
+
+        if let ToolOutput::ImportantSymbols(important_symbols)
+        | ToolOutput::RepoMapSearch(important_symbols)
+        | ToolOutput::BigSearch(important_symbols) = tool_output
+        {
+            // The fix symbol name here helps us get the top-level symbol name
+            // if the LLM decides to have fun and spit out a.b.c instead of a or b or c individually
+            // as it can with python where it will tell class.method_name instead of just class or just
+            // method_name
+            let llm_properties = LLMProperties::new(
+                LLMType::ClaudeSonnet,
+                LLMProvider::Anthropic,
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            );
+
+            let ts_parsing = Arc::new(TSLanguageParsing::init());
+
+            // should pass self.editorparsing <tsconfigs>
+            let important_symbols = important_symbols.fix_symbol_names(ts_parsing.clone());
+
+            // Debug printing
+            println!("Important symbols: {:?}", &important_symbols);
+
+            println!("symbol_manager::planning_before_editing");
+            let important_symbols = {
+                if is_full_edit && !is_big_search {
+                    important_symbols
+                } else {
+                    let important_symbols = self
+                        .tool_box
+                        .planning_before_code_editing(
+                            &important_symbols,
+                            &user_query,
+                            llm_properties.clone(),
+                            is_big_search,
+                            self.message_properties.clone(),
+                        )
+                        .await?
+                        .fix_symbol_names(ts_parsing);
+                    important_symbols
+                }
+            };
+
+            println!("symbol_manager::plan_finished_before_editing");
+
+            let updated_tool_properties = important_symbols.ordered_symbols_to_plan();
+            let tool_properties = tool_properties
+                .clone()
+                .set_plan_for_input(Some(updated_tool_properties));
+            let tool_properties_ref = &tool_properties;
+            println!(
+                "symbol_manager::tool_box::important_symbols::search({})",
+                important_symbols
+                    .ordered_symbols()
+                    .into_iter()
+                    .map(|code_symbol| code_symbol.code_symbol())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+
+            // Lets first start another round of COT over here to figure out
+            // how to go about making the changes, I know this is a bit orthodox
+            // and goes against our plans of making the agents better, but
+            // this feels useful to have, since the previous iteration
+            // does not even see the code and what changes need to be made
+            let mut symbols = self
+                .tool_box
+                .important_symbols(&important_symbols, self.message_properties.clone())
+                .await
+                .map_err(|e| e.into())?;
+
+            // send a UI event to the frontend over here
+            let mut initial_symbol_search_information = vec![];
+            for (symbol, _) in symbols.iter() {
+                initial_symbol_search_information.push(InitialSearchSymbolInformation::new(
+                    symbol.symbol_name().to_owned(),
+                    // TODO(codestory): umm.. how can we have a file path for a symbol
+                    // which does not exist if is_new is true
+                    Some(symbol.fs_file_path().to_owned()),
+                    symbol.is_new(),
+                    symbol.steps().await.join("\n"),
+                    symbol
+                        .get_snippet()
+                        .await
+                        .map(|snippet| snippet.range().clone()),
+                ));
+            }
+            let _ = ui_sender.send(UIEventWithID::initial_search_symbol_event(
+                request_id.to_owned(),
+                initial_symbol_search_information,
+            ));
+            // TODO(skcd): Another check over here is that we can search for the exact variable
+            // and then ask for the edit
+            println!(
+                "symbol_manager::initial_request::symbols::({})",
+                symbols
+                    .iter()
+                    .map(|(symbol, _)| symbol.symbol_name().to_owned())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+
+            let symbols_edited_list = important_symbols
+                .ordered_symbols()
+                .into_iter()
+                .map(|symbol| {
+                    SymbolEditedItem::new(
+                        symbol.code_symbol().to_owned(),
+                        symbol.file_path().to_owned(),
+                        symbol.is_new(),
+                        symbol.steps().to_vec().join("\n"),
+                    )
+                })
+                .collect::<Vec<_>>();
+            // TODO(skcd): the symbol here might belong to a class or it might be a global function
+            // we want to grab the largest node containing the symbol here instead of using
+            // the symbol directly since our algorithm would not work otherwise
+            // we would also need to de-duplicate the symbols which we have to process right over here
+            // otherwise it might lead to errors
+            if symbols.is_empty() {
+                println!("symbol_manager::grab_symbols_using_search");
+                symbols = self
+                    .tool_box
+                    .grab_symbol_using_search(important_symbols, self.message_properties.clone())
+                    .await
+                    .map_err(|e| e.into())?;
+            }
+
+            println!("symbol_manager::symbols_len::({})", symbols.len());
+
+            // This is where we are creating all the symbols
+            let _ =
+                stream::iter(
+                    // we are loosing context about the changes which we want to make
+                    // to the symbol over here
+                    symbols.into_iter().map(|symbol| {
+                        (
+                            symbol,
+                            user_query.to_owned(),
+                            symbols_edited_list.to_vec(),
+                            self.message_properties.clone(),
+                        )
+                    }),
+                )
+                .map(
+                    |(
+                        (symbol_request, steps),
+                        user_query,
+                        symbols_edited_list,
+                        message_properties,
+                    )| async move {
+                        let symbol_identifier = symbol_request.to_symbol_identifier();
+                        {
+                            let symbol_event_request = SymbolEventRequest::new(
+                                symbol_identifier.clone(),
+                                SymbolEvent::InitialRequest(InitialRequestData::new(
+                                    user_query.to_owned(),
+                                    steps.join("\n"),
+                                    // empty history when symbol manager sends the initial
+                                    // request
+                                    vec![],
+                                    full_symbol_edit,
+                                    Some(symbols_edited_list),
+                                    is_big_search,
+                                )),
+                                tool_properties_ref.clone(),
+                            );
+                            let (sender, receiver) = tokio::sync::oneshot::channel();
+                            println!(
+                                "symbol_manager::initial_request::sending_request({})",
+                                symbol_identifier.symbol_name()
+                            );
+                            let symbol_event = SymbolEventMessage::message_with_properties(
+                                symbol_event_request,
+                                message_properties.clone(),
+                                sender,
+                            );
+                            let _ = self.symbol_event_sender.send(symbol_event);
+                            let response = receiver.await;
+                            println!(
+                                "symbol_manager::initial_request::response::({})::({:?})",
+                                symbol_identifier.symbol_name(),
+                                &response
+                            );
+                        }
+                    },
+                )
+                .buffered(1)
+                .collect::<Vec<_>>()
+                .await;
+        }
+        println!("scratch_pad_agent::agentic_editing::finish");
+        println!(
+            "scratch_pad::agentic_editing::time_taken({}ms)",
+            start_instant.elapsed().as_millis()
+        );
+        let _ = ui_sender.send(UIEventWithID::finish_edit_request(request_id));
         Ok(())
     }
 

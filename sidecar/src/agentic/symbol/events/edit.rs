@@ -90,6 +90,10 @@ impl SymbolToEdit {
         self.symbol_edited_list.clone()
     }
 
+    pub fn previous_user_queries(&self) -> &[String] {
+        self.previous_user_queries.as_slice()
+    }
+
     pub fn original_user_query(&self) -> &str {
         &self.original_user_query
     }

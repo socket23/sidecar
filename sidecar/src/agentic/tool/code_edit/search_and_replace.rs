@@ -77,6 +77,8 @@ pub struct SearchAndReplaceEditingRequest {
     // its a vec of string here so we can select the cache points as required
     // and optimise for that
     diff_recent_changes: Option<DiffRecentChanges>,
+    // previous user queries which have been part of the same edit sequence
+    previous_user_queries: Vec<String>,
     // use a is_warmup field
     is_warmup: bool,
 }
@@ -100,6 +102,7 @@ impl SearchAndReplaceEditingRequest {
         // Indicates whether this is a warmup request to prepare the LLM
         editor_url: String,
         diff_recent_changes: Option<DiffRecentChanges>,
+        previous_user_queries: Vec<String>,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
     ) -> Self {
         Self {
@@ -118,6 +121,7 @@ impl SearchAndReplaceEditingRequest {
             user_context,
             editor_url,
             diff_recent_changes,
+            previous_user_queries,
             is_warmup,
         }
     }
@@ -341,6 +345,22 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#
         // TODO(skcd): We should enforce a cache endpoint over here, what we ideally want is tiers
         // of memory over here
         let mut user_message = "".to_owned();
+        // also show the previous user requests if any
+        if !context.previous_user_queries.is_empty() {
+            let previous_queries = context
+                .previous_user_queries
+                .into_iter()
+                .map(|user_query| format!("- {}", user_query))
+                .collect::<Vec<_>>()
+                .join("\n");
+            user_message = user_message
+                + &format!(
+                    r#"My previous requests for edits which you worked on are listed out below:
+<previous_user_queries>
+{previous_queries}
+</previous_user_queries>"#
+                )
+        }
         if let Some(extra_symbols) = context.new_symbols.clone() {
             user_message = user_message
                 + &format!(

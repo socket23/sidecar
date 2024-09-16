@@ -5417,6 +5417,7 @@ FILEPATH: {fs_file_path}
             user_provided_context,
             message_properties.editor_url(),
             recent_edits,
+            sub_symbol.previous_user_queries().to_vec(),
             false,
         ));
         println!(
@@ -7901,6 +7902,7 @@ FILEPATH: {fs_file_path}
         user_query: &str,
         user_provided_context: Option<String>,
         recent_diff_changes: DiffRecentChanges,
+        previous_user_queries: Vec<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
         println!(
@@ -7960,7 +7962,7 @@ FILEPATH: {fs_file_path}
                         user_provided_context.to_owned(),
                         false, // disable followups - keep false to enable followups
                         Some(recent_diff_changes.clone()),
-                        vec![],
+                        previous_user_queries.to_vec(),
                     )],
                     symbol_identifier.clone(),
                     vec![],
@@ -8319,6 +8321,7 @@ FILEPATH: {fs_file_path}
             LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
         );
 
+        // TODO(skcd): Figure out how to maximise the prompt cache hit over here
         let search_and_replace_request = SearchAndReplaceEditingRequest::new(
             "".to_owned(),
             Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
@@ -8335,6 +8338,7 @@ FILEPATH: {fs_file_path}
             file_paths_to_user_context,
             editor_url,
             None,
+            vec![],
             true,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);

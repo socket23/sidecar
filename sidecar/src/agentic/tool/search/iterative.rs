@@ -28,6 +28,7 @@ use super::{
     identify::IdentifyResponse, relevant_files::QueryRelevantFilesResponse, repository::Repository,
 };
 
+#[derive(Clone, Debug)]
 pub enum IterativeSearchEvent {
     SearchStarted,
     SeedApplied(Duration),
@@ -40,8 +41,23 @@ pub enum IterativeSearchEvent {
     SearchCompleted(Duration),
 }
 
-pub trait SearchEventHandler {
+pub trait IterativeSearchEventHandler: Send + Sync {
     fn handle_event(&self, event: IterativeSearchEvent);
+}
+
+pub struct UIEventHandler;
+
+impl IterativeSearchEventHandler for UIEventHandler {
+    fn handle_event(&self, event: IterativeSearchEvent) {
+        match event {
+            IterativeSearchEvent::SearchStarted => println!("Search started"),
+            IterativeSearchEvent::SeedApplied(duration) => {
+                println!("Seed applied in {:?}", duration)
+            }
+            _ => todo!(), // todo(zi);
+                          // ... handle other events
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -131,13 +147,13 @@ impl File {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SearchToolType {
     File,
     Keyword,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SearchQuery {
     #[serde(default)]
     pub thinking: String,
@@ -260,6 +276,7 @@ pub struct IterativeSearchSystem<T: LLMOperations> {
     complete: bool,
     seed: Option<IterativeSearchSeed>,
     message_properties: SymbolEventMessageProperties,
+    event_handlers: Vec<Box<dyn IterativeSearchEventHandler>>,
 }
 
 impl<T: LLMOperations> IterativeSearchSystem<T> {
@@ -268,6 +285,7 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         repository: Repository,
         llm_ops: T,
         message_properties: SymbolEventMessageProperties,
+        event_handlers: Vec<Box<dyn IterativeSearchEventHandler>>,
     ) -> Self {
         Self {
             context,
@@ -276,6 +294,17 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             complete: false,
             seed: None,
             message_properties,
+            event_handlers,
+        }
+    }
+
+    pub fn add_event_handler(&mut self, handler: Box<dyn IterativeSearchEventHandler>) {
+        self.event_handlers.push(handler);
+    }
+
+    fn _emit_event(&self, event: IterativeSearchEvent) {
+        for handler in &self.event_handlers {
+            handler.handle_event(event.to_owned());
         }
     }
 

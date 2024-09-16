@@ -31,6 +31,8 @@ use crate::{
     tree_printer::tree::TreePrinter,
 };
 
+use super::iterative::UIEventHandler;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SearchType {
     Both,
@@ -166,11 +168,14 @@ impl BigSearchBroker {
             request.root_request_id().to_owned(),
         );
 
+        let ui_event_handler_for_iterative_search = UIEventHandler;
+
         Ok(IterativeSearchSystem::new(
             iterative_search_context,
             repository,
             google_studio_llm_config,
             request.message_properties.to_owned(),
+            vec![Box::new(ui_event_handler_for_iterative_search)],
         ))
     }
 }

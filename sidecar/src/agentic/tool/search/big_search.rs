@@ -203,10 +203,10 @@ impl Tool for BigSearchBroker {
 
         let mut system = self.create_search_system(repository, &request)?;
 
-        let results = system
-            .run()
-            .await
-            .map_err(|e| ToolError::IterativeSearchError(e))?;
+        let results = system.run().await.map_err(|e| {
+            dbg!(&e); // needs error logging at this level dude
+            ToolError::IterativeSearchError(e)
+        })?;
 
         let duration = start.elapsed();
         println!("BigSearchBroker::invoke::duration: {:?}", duration);

@@ -63,7 +63,7 @@ impl UIEventHandler {
 impl IterativeSearchEventHandler for UIEventHandler {
     fn handle_event(&self, event: IterativeSearchEvent) -> Result<(), IterativeSearchError> {
         match event {
-            IterativeSearchEvent::SearchStarted => Ok(self.message_properties().ui_sender().send(
+            _ => Ok(self.message_properties().ui_sender().send(
                 UIEventWithID::search_iteration_event(
                     self.message_properties()
                         .request_id()
@@ -72,7 +72,6 @@ impl IterativeSearchEventHandler for UIEventHandler {
                     event,
                 ),
             )?),
-            _ => todo!(),
         }
     }
 }
@@ -181,7 +180,7 @@ pub struct SearchQuery {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "search_requests")]
 pub struct SearchRequests {
-    #[serde(rename = "request")]
+    #[serde(rename = "request", default)] // todo(zi) this pattern needs more use across big search
     pub requests: Vec<SearchQuery>,
 }
 
@@ -321,7 +320,12 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
     fn emit_event(&self, event: IterativeSearchEvent) {
         for handler in &self.event_handlers {
-            let _ = handler.handle_event(event.to_owned());
+            if let Err(e) = handler.handle_event(event.clone()) {
+                eprintln!(
+                    "IterativeSearchSystem::emit_event::error: Error handling event: {}",
+                    e
+                );
+            }
         }
     }
 

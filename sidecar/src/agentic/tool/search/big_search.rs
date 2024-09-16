@@ -168,13 +168,13 @@ impl BigSearchBroker {
             request.root_request_id().to_owned(),
         );
 
-        let ui_event_handler_for_iterative_search = UIEventHandler;
+        let ui_event_handler_for_iterative_search =
+            UIEventHandler::new(request.message_properties().to_owned());
 
         Ok(IterativeSearchSystem::new(
             iterative_search_context,
             repository,
             google_studio_llm_config,
-            request.message_properties.to_owned(),
             vec![Box::new(ui_event_handler_for_iterative_search)],
         ))
     }

@@ -45,7 +45,15 @@ pub trait IterativeSearchEventHandler: Send + Sync {
     fn handle_event(&self, event: IterativeSearchEvent);
 }
 
-pub struct UIEventHandler;
+pub struct UIEventHandler {
+    message_properties: SymbolEventMessageProperties,
+}
+
+impl UIEventHandler {
+    pub fn new(message_properties: SymbolEventMessageProperties) -> Self {
+        Self { message_properties }
+    }
+}
 
 impl IterativeSearchEventHandler for UIEventHandler {
     fn handle_event(&self, event: IterativeSearchEvent) {
@@ -275,7 +283,6 @@ pub struct IterativeSearchSystem<T: LLMOperations> {
     llm_ops: T,
     complete: bool,
     seed: Option<IterativeSearchSeed>,
-    message_properties: SymbolEventMessageProperties,
     event_handlers: Vec<Box<dyn IterativeSearchEventHandler>>,
 }
 
@@ -284,7 +291,6 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
         context: IterativeSearchContext,
         repository: Repository,
         llm_ops: T,
-        message_properties: SymbolEventMessageProperties,
         event_handlers: Vec<Box<dyn IterativeSearchEventHandler>>,
     ) -> Self {
         Self {
@@ -293,7 +299,6 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             llm_ops,
             complete: false,
             seed: None,
-            message_properties,
             event_handlers,
         }
     }
@@ -315,10 +320,6 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
     fn context(&self) -> &IterativeSearchContext {
         &self.context
-    }
-
-    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
-        &self.message_properties
     }
 
     pub async fn apply_seed(&mut self) -> Result<(), IterativeSearchError> {

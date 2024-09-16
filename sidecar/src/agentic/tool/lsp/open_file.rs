@@ -20,7 +20,7 @@ impl OpenFileRequest {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFileResponse {
     fs_file_path: String,
     file_contents: String,

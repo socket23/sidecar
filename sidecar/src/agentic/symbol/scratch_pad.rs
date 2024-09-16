@@ -3,7 +3,13 @@
 //! This way the agent can look at all the events and the requests which are happening
 //! and take a decision based on them on what should happen next
 
-use std::{collections::HashSet, path::PathBuf, pin::Pin, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    pin::Pin,
+    sync::Arc,
+    time::Instant,
+};
 
 use futures::{stream, Stream, StreamExt};
 use llm_client::{
@@ -36,6 +42,7 @@ use crate::{
 use super::{
     errors::SymbolError,
     events::{
+        agent::{AgentIntentMessage, AgentMessage},
         edit::SymbolToEdit,
         environment_event::{EditorStateChangeRequest, EnvironmentEventType},
         human::{HumanAgenticRequest, HumanAnchorRequest, HumanMessage},
@@ -269,6 +276,9 @@ impl ScratchPadAgent {
                     // scratchpad can react to it, so for now do not do anything
                     // we might have to split the events later down the line
                 }
+                EnvironmentEventType::Agent(agent_message) => {
+                    let _ = self.handle_agent_message(agent_message).await;
+                }
                 EnvironmentEventType::ShutDown => {
                     println!("scratch_pad_agent::shut_down");
                     let _ = self.reaction_sender.send(EnvironmentEventType::ShutDown);
@@ -293,6 +303,14 @@ impl ScratchPadAgent {
         }
     }
 
+    async fn handle_agent_message(&self, agent_message: AgentMessage) -> Result<(), SymbolError> {
+        match agent_message {
+            AgentMessage::ReferenceCheck(reference_check) => {
+                self.agent_reference_check(reference_check).await
+            }
+        }
+    }
+
     async fn handle_human_message(&self, human_message: HumanMessage) -> Result<(), SymbolError> {
         match human_message {
             HumanMessage::Anchor(anchor_request) => self.human_message_anchor(anchor_request).await,
@@ -311,6 +329,116 @@ impl ScratchPadAgent {
             HumanMessage::Agentic(_) => {}
             HumanMessage::Followup(_followup_request) => {}
         }
+        Ok(())
+    }
+
+    async fn agent_reference_check(
+        &self,
+        agent_message: AgentIntentMessage,
+    ) -> Result<(), SymbolError> {
+        let start = Instant::now();
+        let user_query = agent_message.get_user_intent().to_owned();
+        let anchored_symbols = agent_message.anchor_symbols();
+
+        let references = stream::iter(anchored_symbols.into_iter())
+            .flat_map(|anchored_symbol| {
+                let symbol_names = anchored_symbol.sub_symbol_names().to_vec();
+                let symbol_identifier = anchored_symbol.identifier().to_owned();
+                let toolbox = self.tool_box.clone();
+                let message_properties = self.message_properties.clone();
+                let request_id = self.message_properties.request_id_str().to_owned();
+                let range = anchored_symbol.possible_range().clone();
+                stream::iter(symbol_names.into_iter().filter_map(move |symbol_name| {
+                    symbol_identifier.fs_file_path().map(|path| {
+                        (
+                            anchored_symbol.clone(),
+                            path,
+                            symbol_name,
+                            toolbox.clone(),
+                            message_properties.clone(),
+                            request_id.clone(),
+                            range.clone(),
+                        )
+                    })
+                }))
+            })
+            .map(
+                |(
+                    original_symbol,
+                    path,
+                    symbol_name,
+                    toolbox,
+                    message_properties,
+                    request_id,
+                    range,
+                )| async move {
+                    println!("getting references for {}-{}", &path, &symbol_name);
+                    let refs = toolbox
+                        .get_symbol_references(
+                            path,
+                            symbol_name.to_owned(),
+                            range,
+                            message_properties.clone(),
+                            request_id,
+                        )
+                        .await;
+
+                    match refs {
+                        Ok(references) => {
+                            toolbox
+                                .anchored_references_for_locations(
+                                    references.as_slice(),
+                                    original_symbol,
+                                    message_properties,
+                                )
+                                .await
+                        }
+                        Err(e) => {
+                            println!("{:?}", e);
+                            vec![]
+                        }
+                    }
+                },
+            )
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        println!("total references: {}", references.len());
+        println!("collect references time elapsed: {:?}", start.elapsed());
+
+        // send UI event with grouped references
+        let grouped: HashMap<String, usize> =
+            references
+                .clone()
+                .into_iter()
+                .fold(HashMap::new(), |mut acc, anchored_reference| {
+                    let reference_len = anchored_reference.reference_locations().len();
+                    acc.entry(
+                        anchored_reference
+                            .fs_file_path_for_outline_node()
+                            .to_string(),
+                    )
+                    .and_modify(|count| *count += reference_len)
+                    .or_insert(1);
+                    acc
+                });
+
+        let _ = self
+            .message_properties
+            .ui_sender()
+            .send(UIEventWithID::found_reference(
+                self.message_properties.request_id_str().to_owned(),
+                grouped,
+            ));
+
+        let _ = self
+            .tool_box
+            .reference_filtering(&user_query, references, self.message_properties.clone())
+            .await;
         Ok(())
     }
 

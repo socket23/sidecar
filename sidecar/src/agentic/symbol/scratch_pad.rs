@@ -82,6 +82,9 @@ pub struct ScratchPadAgent {
     // signals and have to pay utmost attention to the current task we are workign on
     focussing: Arc<Mutex<bool>>,
     fixing: Arc<Mutex<bool>>,
+    // we store the previous user queries as a vec<string> here so we can show that to
+    // the llm when its running inference
+    previous_user_queries: Arc<Mutex<Vec<String>>>,
     symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     // This is the cache which we have to send with every request
     _files_context: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
@@ -107,6 +110,7 @@ impl ScratchPadAgent {
             symbol_event_sender,
             focussing: Arc::new(Mutex::new(false)),
             fixing: Arc::new(Mutex::new(false)),
+            previous_user_queries: Arc::new(Mutex::new(vec![])),
             _files_context: Arc::new(Mutex::new(vec![])),
             _extra_context: Arc::new(Mutex::new(user_provided_context.unwrap_or_default())),
             reaction_sender,
@@ -264,6 +268,12 @@ impl ScratchPadAgent {
             .send(EnvironmentEventType::Human(HumanMessage::Anchor(
                 cloned_anchored_request,
             )));
+
+        // keep track of the user request in our state
+        {
+            let mut user_queries = self.previous_user_queries.lock().await;
+            user_queries.push(anchor_request.to_string());
+        }
 
         // we start making the edits
         {

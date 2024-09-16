@@ -742,9 +742,6 @@ pub async fn code_editing(
         active_window_data,
         root_directory,
         codebase_search,
-        // this is not properly hooked up yet, we need to figure out
-        // how to handle this better on the editor side, right now our proxy
-        // is having a selection item in the user_context
         anchor_editing,
         enable_import_nodes,
     }): Json<AgenticCodeEditing>,

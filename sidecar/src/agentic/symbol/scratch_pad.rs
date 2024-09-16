@@ -3,7 +3,7 @@
 //! This way the agent can look at all the events and the requests which are happening
 //! and take a decision based on them on what should happen next
 
-use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashSet, pin::Pin, sync::Arc};
 
 use futures::{stream, Stream, StreamExt};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
@@ -30,15 +30,15 @@ use super::{
 
 #[derive(Debug, Clone)]
 struct ScratchPadFilesActive {
-    file_content: String,
-    file_path: String,
+    _file_content: String,
+    _file_path: String,
 }
 
 impl ScratchPadFilesActive {
-    fn new(file_content: String, file_path: String) -> Self {
+    fn _new(file_content: String, file_path: String) -> Self {
         Self {
-            file_content,
-            file_path,
+            _file_content: file_content,
+            _file_path: file_path,
         }
     }
 }
@@ -75,7 +75,7 @@ impl ScratchPadFilesActive {
 
 #[derive(Clone)]
 pub struct ScratchPadAgent {
-    storage_fs_path: String,
+    _storage_fs_path: String,
     message_properties: SymbolEventMessageProperties,
     tool_box: Arc<ToolBox>,
     // if the scratch-pad agent is right now focussed, then we can't react to other
@@ -84,10 +84,10 @@ pub struct ScratchPadAgent {
     fixing: Arc<Mutex<bool>>,
     symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     // This is the cache which we have to send with every request
-    files_context: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
+    _files_context: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
     // This is the extra context which we send everytime with each request
     // this also helps with the prompt cache hits
-    extra_context: Arc<Mutex<String>>,
+    _extra_context: Arc<Mutex<String>>,
     reaction_sender: UnboundedSender<EnvironmentEventType>,
 }
 
@@ -101,17 +101,17 @@ impl ScratchPadAgent {
     ) -> Self {
         let (reaction_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let scratch_pad_agent = Self {
-            storage_fs_path: scratch_pad_path,
+            _storage_fs_path: scratch_pad_path,
             message_properties,
             tool_box,
             symbol_event_sender,
             focussing: Arc::new(Mutex::new(false)),
             fixing: Arc::new(Mutex::new(false)),
-            files_context: Arc::new(Mutex::new(vec![])),
-            extra_context: Arc::new(Mutex::new(user_provided_context.unwrap_or_default())),
+            _files_context: Arc::new(Mutex::new(vec![])),
+            _extra_context: Arc::new(Mutex::new(user_provided_context.unwrap_or_default())),
             reaction_sender,
         };
-        let cloned_scratch_pad_agent = scratch_pad_agent.clone();
+        // let cloned_scratch_pad_agent = scratch_pad_agent.clone();
         let mut reaction_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
 
         // we also want a timer event here which can fetch lsp signals ad-hoc and as required
@@ -120,9 +120,10 @@ impl ScratchPadAgent {
                 if reaction_event.is_shutdown() {
                     break;
                 }
-                let _ = cloned_scratch_pad_agent
-                    .react_to_event(reaction_event)
-                    .await;
+                // we are not going to react the events right now
+                // let _ = cloned_scratch_pad_agent
+                //     .react_to_event(reaction_event)
+                //     .await;
             }
         });
         scratch_pad_agent
@@ -140,20 +141,7 @@ impl ScratchPadAgent {
 
         // this is our filtering thread which will run in the background
         let cloned_self = self.clone();
-        let cloned_self_second = self.clone();
 
-        // create a background thread which pings every 2 seconds and gets the lsp
-        // signals
-        let _ = tokio::spawn(async move {
-            let _cloned_self = cloned_self_second;
-            let mut interval_stream = tokio_stream::wrappers::IntervalStream::new(
-                tokio::time::interval(Duration::from_millis(2000)),
-            );
-            // do not send lsp signals at intervals for now
-            while let Some(_) = interval_stream.next().await {
-                // cloned_self.grab_diagnostics().await;
-            }
-        });
         let _ = tokio::spawn(async move {
             let cloned_sender = sender;
             // damn borrow-checker got hands
@@ -220,16 +208,16 @@ impl ScratchPadAgent {
         }
     }
 
-    async fn react_to_event(&self, event: EnvironmentEventType) {
+    async fn _react_to_event(&self, event: EnvironmentEventType) {
         match event {
             EnvironmentEventType::Human(human_event) => {
-                let _ = self.react_to_human_event(human_event).await;
+                let _ = self._react_to_human_event(human_event).await;
             }
             EnvironmentEventType::EditorStateChange(editor_state_change) => {
-                self.react_to_edits(editor_state_change).await;
+                self._react_to_edits(editor_state_change).await;
             }
             EnvironmentEventType::LSP(lsp_signal) => {
-                self.react_to_lsp_signal(lsp_signal).await;
+                self._react_to_lsp_signal(lsp_signal).await;
             }
             _ => {}
         }
@@ -242,10 +230,10 @@ impl ScratchPadAgent {
         }
     }
 
-    async fn react_to_human_event(&self, human_event: HumanMessage) -> Result<(), SymbolError> {
+    async fn _react_to_human_event(&self, human_event: HumanMessage) -> Result<(), SymbolError> {
         match human_event {
             HumanMessage::Anchor(anchor_request) => {
-                let _ = self.handle_user_anchor_request(anchor_request).await;
+                let _ = self._handle_user_anchor_request(anchor_request).await;
             }
             HumanMessage::Followup(_followup_request) => {}
         }
@@ -340,7 +328,7 @@ impl ScratchPadAgent {
         Ok(())
     }
 
-    async fn handle_user_anchor_request(&self, anchor_request: HumanAnchorRequest) {
+    async fn _handle_user_anchor_request(&self, anchor_request: HumanAnchorRequest) {
         println!("scratch_pad::handle_user_anchor_request");
         // we are busy with the edits going on, so we can discard lsp signals for a while
         // figure out what to do over here
@@ -365,7 +353,7 @@ impl ScratchPadAgent {
                     let file_path = file_contents.fs_file_path();
                     let language = file_contents.language();
                     let content = file_contents.contents_ref();
-                    ScratchPadFilesActive::new(
+                    ScratchPadFilesActive::_new(
                         format!(
                             r#"<file>
 <fs_file_path>
@@ -385,22 +373,22 @@ impl ScratchPadAgent {
         }
         // update our cache over here
         {
-            let mut files_context = self.files_context.lock().await;
+            let mut files_context = self._files_context.lock().await;
             *files_context = user_context_files.to_vec();
         }
         let file_paths_interested = user_context_files
             .iter()
-            .map(|context_file| context_file.file_path.to_owned())
+            .map(|context_file| context_file._file_path.to_owned())
             .collect::<Vec<_>>();
         let user_context_files = user_context_files
             .into_iter()
-            .map(|context_file| context_file.file_content)
+            .map(|context_file| context_file._file_content)
             .collect::<Vec<_>>();
         println!("scratch_pad_agent::tool_box::agent_human_request");
         let _ = self
             .tool_box
             .scratch_pad_agent_human_request(
-                self.storage_fs_path.to_owned(),
+                self._storage_fs_path.to_owned(),
                 anchor_request.user_query().to_owned(),
                 user_context_files,
                 file_paths_interested,
@@ -432,30 +420,30 @@ impl ScratchPadAgent {
 
     /// We want to react to the various edits which have happened and the request they were linked to
     /// and come up with next steps and try to understand what we can do to help the developer
-    async fn react_to_edits(&self, editor_state_change: EditorStateChangeRequest) {
+    async fn _react_to_edits(&self, editor_state_change: EditorStateChangeRequest) {
         println!("scratch_pad::react_to_edits");
         // figure out what to do over here
         let user_context_files;
         {
-            let files_context = self.files_context.lock().await;
+            let files_context = self._files_context.lock().await;
             user_context_files = (*files_context).to_vec();
         }
         let file_paths_in_focus = user_context_files
             .iter()
-            .map(|context_file| context_file.file_path.to_owned())
+            .map(|context_file| context_file._file_path.to_owned())
             .collect::<Vec<String>>();
         let user_context_files = user_context_files
             .into_iter()
-            .map(|context_file| context_file.file_content)
+            .map(|context_file| context_file._file_content)
             .collect::<Vec<_>>();
         let user_query = editor_state_change.user_query().to_owned();
         let edits_made = editor_state_change.consume_edits_made();
         let extra_context;
         {
-            extra_context = (*self.extra_context.lock().await).to_owned();
+            extra_context = (*self._extra_context.lock().await).to_owned();
         }
         {
-            let mut extra_context = self.extra_context.lock().await;
+            let mut extra_context = self._extra_context.lock().await;
             *extra_context = (*extra_context).to_owned()
                 + "\n"
                 + &edits_made
@@ -467,7 +455,7 @@ impl ScratchPadAgent {
         let _ = self
             .tool_box
             .scratch_pad_edits_made(
-                &self.storage_fs_path,
+                &self._storage_fs_path,
                 &user_query,
                 &extra_context,
                 file_paths_in_focus,
@@ -484,16 +472,16 @@ impl ScratchPadAgent {
         // or via the files we are observing, there are race conditions here which
         // we want to tackle for sure
         // check for diagnostic_symbols
-        let cloned_self = self.clone();
-        let _ = tokio::spawn(async move {
-            // sleep for 2 seconds before getting the signals
-            let _ = tokio::time::sleep(Duration::from_secs(2)).await;
-            cloned_self.grab_diagnostics().await;
-        });
+        // let cloned_self = self.clone();
+        // let _ = tokio::spawn(async move {
+        //     // sleep for 2 seconds before getting the signals
+        //     let _ = tokio::time::sleep(Duration::from_secs(2)).await;
+        //     cloned_self.grab_diagnostics().await;
+        // });
     }
 
     /// We get to react to the lsp signal over here
-    async fn react_to_lsp_signal(&self, lsp_signal: LSPSignal) {
+    async fn _react_to_lsp_signal(&self, lsp_signal: LSPSignal) {
         let focussed;
         {
             focussed = *(self.focussing.lock().await);
@@ -503,12 +491,12 @@ impl ScratchPadAgent {
         }
         match lsp_signal {
             LSPSignal::Diagnostics(diagnostics) => {
-                self.react_to_diagnostics(diagnostics).await;
+                self._react_to_diagnostics(diagnostics).await;
             }
         }
     }
 
-    async fn react_to_diagnostics(&self, diagnostics: Vec<LSPDiagnosticError>) {
+    async fn _react_to_diagnostics(&self, diagnostics: Vec<LSPDiagnosticError>) {
         // we are busy fixing 🧘‍♂️
         {
             let mut fixing = self.fixing.lock().await;
@@ -517,11 +505,11 @@ impl ScratchPadAgent {
         let file_paths_focussed;
         {
             file_paths_focussed = self
-                .files_context
+                ._files_context
                 .lock()
                 .await
                 .iter()
-                .map(|file_content| file_content.file_path.to_owned())
+                .map(|file_content| file_content._file_path.to_owned())
                 .collect::<HashSet<String>>();
         }
         let diagnostic_messages = diagnostics
@@ -550,25 +538,25 @@ impl ScratchPadAgent {
         println!("scratch_pad::reacting_to_diagnostics");
         let files_context;
         {
-            files_context = (*self.files_context.lock().await).to_vec();
+            files_context = (*self._files_context.lock().await).to_vec();
         }
         let extra_context;
         {
-            extra_context = (*self.extra_context.lock().await).to_owned();
+            extra_context = (*self._extra_context.lock().await).to_owned();
         }
         let interested_file_paths = files_context
             .iter()
-            .map(|file_context| file_context.file_path.to_owned())
+            .map(|file_context| file_context._file_path.to_owned())
             .collect::<Vec<_>>();
         let _ = self
             .tool_box
             .scratch_pad_diagnostics(
-                &self.storage_fs_path,
+                &self._storage_fs_path,
                 diagnostic_messages,
                 interested_file_paths,
                 files_context
                     .into_iter()
-                    .map(|files_context| files_context.file_content)
+                    .map(|files_context| files_context._file_content)
                     .collect::<Vec<_>>(),
                 extra_context,
                 self.message_properties.clone(),
@@ -576,7 +564,7 @@ impl ScratchPadAgent {
             .await;
 
         // we try to make code edits to fix the diagnostics
-        let _ = self.code_edit_for_diagnostics().await;
+        let _ = self._code_edit_for_diagnostics().await;
 
         // we are done fixing so start skipping
         {
@@ -587,7 +575,7 @@ impl ScratchPadAgent {
 
     // Now that we have reacted to the update on the scratch-pad we can start
     // thinking about making code edits for this
-    async fn code_edit_for_diagnostics(&self) {
+    async fn _code_edit_for_diagnostics(&self) {
         // we want to give the scratch-pad as input to the agent and the files
         // which are visible as the context where it can make the edits
         // we can be a bit smarter and make the eidts over the file one after
@@ -599,7 +587,7 @@ impl ScratchPadAgent {
         let scratch_pad_content = self
             .tool_box
             .file_open(
-                self.storage_fs_path.to_owned(),
+                self._storage_fs_path.to_owned(),
                 self.message_properties.clone(),
             )
             .await;
@@ -611,11 +599,11 @@ impl ScratchPadAgent {
         let active_file_paths;
         {
             active_file_paths = self
-                .files_context
+                ._files_context
                 .lock()
                 .await
                 .iter()
-                .map(|file_context| file_context.file_path.to_owned())
+                .map(|file_context| file_context._file_path.to_owned())
                 .collect::<Vec<_>>();
         }
         // we should optimse for cache hit over here somehow
@@ -698,15 +686,15 @@ Please help me out by making the necessary code edits"#
             ));
     }
 
-    async fn grab_diagnostics(&self) {
+    async fn _grab_diagnostics(&self) {
         let files_focussed;
         {
             files_focussed = self
-                .files_context
+                ._files_context
                 .lock()
                 .await
                 .iter()
-                .map(|file| file.file_path.to_owned())
+                .map(|file| file._file_path.to_owned())
                 .collect::<Vec<_>>();
         }
         let diagnostics = self

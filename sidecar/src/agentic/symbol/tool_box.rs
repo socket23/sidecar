@@ -8308,12 +8308,12 @@ FILEPATH: {fs_file_path}
     /// keep the cache warm
     pub async fn warmup_context(
         &self,
-        file_paths: Vec<String>,
+        file_paths: Vec<OpenFileResponse>,
         grab_import_nodes: bool,
         message_properties: SymbolEventMessageProperties,
     ) {
         let file_paths_to_user_context = self
-            .file_paths_to_user_context(file_paths, grab_import_nodes, message_properties.clone())
+            .file_paths_to_user_context(file_paths.into_iter().map(|file_path| file_path.fs_file_path().to_owned()).collect(), grab_import_nodes, message_properties.clone())
             .await
             .ok();
         let sender = message_properties.ui_sender();

@@ -31,6 +31,7 @@ use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::input::ToolInput;
+use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
 use crate::chunking::text_document::Range;
@@ -124,6 +125,10 @@ impl AnchoredEditingMetadata {
 }
 
 pub struct AnchoredEditingTracker {
+    // right now our cache is made up of file path to the file content and this is the cache
+    // which we pass to the agents when we startup
+    // we update the cache only when we have a hit on a new request
+    cache_right_now: Arc<Mutex<Vec<OpenFileResponse>>>,
     running_requests_properties: Arc<Mutex<HashMap<String, AnchoredEditingMetadata>>>,
     running_requests: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
 }
@@ -131,6 +136,7 @@ pub struct AnchoredEditingTracker {
 impl AnchoredEditingTracker {
     pub fn new() -> Self {
         Self {
+            cache_right_now: Arc::new(Mutex::new(vec![])),
             running_requests_properties: Arc::new(Mutex::new(HashMap::new())),
             running_requests: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -214,6 +220,9 @@ impl AnchoredEditingTracker {
                 )));
             })
     }
+
+    // Update the cache which we are sending over to the agent
+    pub async fn update_cache(&self) {}
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -482,9 +491,41 @@ pub async fn code_sculpting_warmup(
         sender,
         editor_url,
     );
+    let files_already_in_cache;
+    {
+        files_already_in_cache = app
+            .anchored_request_tracker
+            .cache_right_now
+            .lock()
+            .await
+            .iter()
+            .map(|open_file_response| open_file_response.fs_file_path().to_owned())
+            .collect::<Vec<_>>();
+    }
+    // if the order of files which we are tracking is the same and there is no difference
+    // then we should not update our cache
+    if files_already_in_cache == file_paths {
+        return Ok(json_result(CodeSculptingWarmupResponse { done: true }));
+    }
+    let mut file_cache_vec = vec![];
+    for file_path in file_paths.into_iter() {
+        let file_content = app
+            .tool_box
+            .file_open(file_path, message_properties.clone())
+            .await;
+        if let Ok(file_content) = file_content {
+            file_cache_vec.push(file_content);
+        }
+    }
+
+    // Now we put this in our cache over here
+    {
+        let mut file_caches = app.anchored_request_tracker.cache_right_now.lock().await;
+        *file_caches = file_cache_vec.to_vec();
+    }
     let _ = app
         .tool_box
-        .warmup_context(file_paths, grab_import_nodes, message_properties)
+        .warmup_context(file_cache_vec, grab_import_nodes, message_properties)
         .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }

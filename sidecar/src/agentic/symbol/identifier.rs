@@ -912,7 +912,10 @@ impl MechaCodeSymbolThinking {
             )
             .await;
 
-        println!("refresh_state::snippet::details::snippet_is_ok({})", snippet.is_ok());
+        println!(
+            "refresh_state::snippet::details::snippet_is_ok({})",
+            snippet.is_ok()
+        );
 
         if let Ok(snippet) = snippet {
             self.set_snippet(snippet.clone()).await;
@@ -923,7 +926,10 @@ impl MechaCodeSymbolThinking {
                     SymbolLocation::new(self.to_symbol_identifier().clone(), snippet.clone()),
                 ));
 
-            println!("refresh_state::snippet::outline_node_type({:?})", snippet.outline_node_content().outline_node_type());
+            println!(
+                "refresh_state::snippet::outline_node_type({:?})",
+                snippet.outline_node_content().outline_node_type()
+            );
 
             // Check if the snippet is of OutlineNodeType::File
             if snippet.outline_node_content().outline_node_type() == &OutlineNodeType::File {
@@ -1096,6 +1102,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     None,
                                     false, // should we disable the followups
+                                    None,
                                 )],
                                 self.to_symbol_identifier(),
                                 history,
@@ -1127,6 +1134,7 @@ impl MechaCodeSymbolThinking {
                                 false,
                                 None,
                                 false, // should we disable followups and correctness check
+                                None,
                             ))
                         } else {
                             None
@@ -1276,6 +1284,7 @@ impl MechaCodeSymbolThinking {
                                     false,
                                     None,
                                     false, // should we disable followups and correctness check
+                                    None,
                                 )
                             })
                             .collect::<Vec<_>>(),
@@ -1401,6 +1410,7 @@ Reason to edit:
                                         false,
                                         None,
                                         false, // should we disable followups and correctness check
+                                        None,
                                     ))
                                 } else {
                                     println!("mecha_code_symbol_thinking::initial_request::no_symbol_found_in_range::({:?})::({:?})", &range, &fs_file_path);

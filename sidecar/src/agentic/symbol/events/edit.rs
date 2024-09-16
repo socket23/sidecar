@@ -1,4 +1,9 @@
-use crate::{agentic::symbol::identifier::SymbolIdentifier, chunking::text_document::Range};
+use crate::{
+    agentic::{
+        symbol::identifier::SymbolIdentifier, tool::helpers::diff_recent_changes::DiffRecentChanges,
+    },
+    chunking::text_document::Range,
+};
 
 use super::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 
@@ -22,6 +27,7 @@ pub struct SymbolToEdit {
     disable_followups_and_correctness: bool,
     // if we should apply the edits directly
     apply_edits_directly: bool,
+    diff_recent_changes: Option<DiffRecentChanges>,
 }
 
 impl SymbolToEdit {
@@ -38,6 +44,7 @@ impl SymbolToEdit {
         gather_definitions_for_editing: bool,
         user_provided_context: Option<String>,
         disable_followups_and_correctness: bool,
+        diff_recent_changes: Option<DiffRecentChanges>,
     ) -> Self {
         Self {
             symbol_name,
@@ -53,6 +60,7 @@ impl SymbolToEdit {
             user_provided_context,
             disable_followups_and_correctness,
             apply_edits_directly: false,
+            diff_recent_changes,
         }
     }
 

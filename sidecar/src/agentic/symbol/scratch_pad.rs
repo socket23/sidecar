@@ -251,12 +251,27 @@ impl ScratchPadAgent {
         let start_instant = std::time::Instant::now();
         println!("scratch_pad_agent::human_message_anchor::start");
         let anchored_symbols = anchor_request.anchored_symbols();
+
+        // These are the recent edits which have happened ordered by timestamp
+        // with the files which we are interested in as part of the l1 cache
+        let recent_edits = self
+            .tool_box
+            .recently_edited_files(
+                anchored_symbols
+                    .iter()
+                    .filter_map(|anchor_symbol| anchor_symbol.fs_file_path())
+                    .collect(),
+                self.message_properties.clone(),
+            )
+            .await?;
+
         let symbols_to_edit_request = self
             .tool_box
             .symbol_to_edit_request(
                 anchored_symbols,
                 anchor_request.user_query(),
                 anchor_request.anchor_request_context(),
+                recent_edits,
                 self.message_properties.clone(),
             )
             .await?;
@@ -664,6 +679,7 @@ Please help me out by making the necessary code edits"#
                     false,
                     Some(files_context.to_vec().join("\n")),
                     true,
+                    None,
                 ),
                 ToolProperties::new(),
             );

@@ -2248,6 +2248,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         true,
                         None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -2267,6 +2268,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     true,
                     None,
+                    vec![],
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),
@@ -2461,6 +2463,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         true,
                         None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -2554,6 +2557,7 @@ Please update this code to accommodate these changes. Consider:
                                             None,
                                             true,
                                             None,
+                                            vec![],
                                         ),
                                         SymbolIdentifier::with_file_path(
                                             class_symbol_name,
@@ -2590,6 +2594,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     true,
                     None,
+                    vec![],
                 ),
                 message_properties.clone(),
             )
@@ -2761,6 +2766,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         true,
                         None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -2780,6 +2786,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     true,
                     None,
+                    vec![],
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -2958,6 +2965,7 @@ Please update this code to accommodate these changes. Consider:
                                                     None,
                                                     true,
                                                     None,
+                                                    vec![],
                                                 ),
                                                 SymbolIdentifier::with_file_path(
                                                     changed_outline_node.name(),
@@ -3007,6 +3015,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     true,
                     None,
+                    vec![],
                 ),
                 message_properties.clone(),
             )
@@ -3077,6 +3086,7 @@ Please update this code to accommodate these changes. Consider:
                                     None,
                                     true,
                                     None,
+                                    vec![],
                                 ),
                                 SymbolIdentifier::with_file_path(
                                     class_implementation_name,
@@ -3214,6 +3224,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         true,
                         None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -3299,6 +3310,7 @@ Please update this code to accommodate these changes. Consider:
                                         None,
                                         true,
                                         None,
+                                        vec![],
                                     ),
                                     SymbolIdentifier::with_file_path(
                                         class_implementation_name,
@@ -3439,6 +3451,7 @@ Please update this code to accommodate these changes. Consider:
                         None,
                         true,
                         None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -3458,6 +3471,7 @@ Please update this code to accommodate these changes. Consider:
                     None,
                     true,
                     None,
+                    vec![],
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -4541,6 +4555,7 @@ Make the necessary changes if required making sure that nothing breaks"#
             None,
             true, // disable any kind of followups or correctness check
             None,
+            vec![],
         );
 
         let event = SymbolEventMessage::message_with_properties(
@@ -4647,6 +4662,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                 None,
                 true,
                 None,
+                vec![],
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -5364,15 +5380,6 @@ instruction:
         // TODO(skcd): This might not be the perfect place to get cache-hits we might
         // want to send over the static list of edits at the start of each iteration?
         let recent_edits = self.recently_edited_files(vec![fs_file_path.to_owned()].into_iter().collect(), message_properties.clone()).await.ok();
-        // disable inlay hints, cause it causes the LLM to mess up the code
-        // in_range_selection = self
-        //     .apply_inlay_hints(
-        //         fs_file_path,
-        //         &in_range_selection,
-        //         selection_range,
-        //         message_properties.clone(),
-        //     )
-        //     .await?;
         let symbols_to_edit = symbols_edited_list.map(|symbols| {
             symbols
                 .into_iter()
@@ -6362,6 +6369,7 @@ FILEPATH: {fs_file_path}
                     None,
                     true,
                     None,
+                    vec![],
                 ),
                 message_properties.clone(),
             )
@@ -7693,6 +7701,7 @@ FILEPATH: {fs_file_path}
                                                     None,
                                                     true, // should we disable followups and correctness check
                                                     None,
+                                                    vec![],
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -7733,6 +7742,7 @@ FILEPATH: {fs_file_path}
                                     None,
                                     true, // should we disable followups and correctness check
                                     None,
+                                    vec![],
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
@@ -7950,6 +7960,7 @@ FILEPATH: {fs_file_path}
                         user_provided_context.to_owned(),
                         false, // disable followups - keep false to enable followups
                         Some(recent_diff_changes.clone()),
+                        vec![],
                     )],
                     symbol_identifier.clone(),
                     vec![],
@@ -7997,6 +8008,7 @@ FILEPATH: {fs_file_path}
                                 user_provided_context.clone(),
                                 true, // should we disable followups and correctness check
                                 None,
+                                vec![],
                             ))
                         } else {
                             None
@@ -8022,6 +8034,7 @@ FILEPATH: {fs_file_path}
                                         user_provided_context.clone(),
                                         true, // should we disable followups and correctness check
                                         None,
+                                        vec![],
                                     ))
                                 } else {
                                     None

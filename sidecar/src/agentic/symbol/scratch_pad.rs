@@ -680,6 +680,7 @@ Please help me out by making the necessary code edits"#
                     Some(files_context.to_vec().join("\n")),
                     true,
                     None,
+                    vec![],
                 ),
                 ToolProperties::new(),
             );

@@ -27,7 +27,10 @@ pub struct SymbolToEdit {
     disable_followups_and_correctness: bool,
     // if we should apply the edits directly
     apply_edits_directly: bool,
+    // the recent changes which have happened in the editor ordered with priority
     diff_recent_changes: Option<DiffRecentChanges>,
+    // any previous user queries which the user has done
+    previous_user_queries: Vec<String>,
 }
 
 impl SymbolToEdit {
@@ -45,6 +48,7 @@ impl SymbolToEdit {
         user_provided_context: Option<String>,
         disable_followups_and_correctness: bool,
         diff_recent_changes: Option<DiffRecentChanges>,
+        previous_user_queries: Vec<String>,
     ) -> Self {
         Self {
             symbol_name,
@@ -61,6 +65,7 @@ impl SymbolToEdit {
             disable_followups_and_correctness,
             apply_edits_directly: false,
             diff_recent_changes,
+            previous_user_queries,
         }
     }
 

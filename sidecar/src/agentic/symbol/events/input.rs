@@ -251,9 +251,6 @@ impl SymbolInputEvent {
                             )));
                         }
                     }
-                    let outline_for_user_context = tool_box
-                        .outline_for_user_context(&self.context, message_properties.clone())
-                        .await;
                     let code_wide_search: CodeSymbolImportantWideSearch =
                         CodeSymbolImportantWideSearch::new(
                             self.context,
@@ -262,16 +259,16 @@ impl SymbolInputEvent {
                             llm_properties_for_symbol_search.provider().clone(),
                             llm_properties_for_symbol_search.api_key().clone(),
                             self.request_id.root_request_id().to_string(),
-                            outline_for_user_context,
+                            "".to_owned(),
                         );
                     // just symbol search instead for quick access
                     return Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search));
                 }
             }
         } else {
-            let outline_for_user_context = tool_box
-                .outline_for_user_context(&self.context, message_properties.clone())
-                .await;
+            // let outline_for_user_context = tool_box
+            //     .outline_for_user_context(&self.context, message_properties.clone())
+            //     .await;
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(
                     self.context,
@@ -280,7 +277,7 @@ impl SymbolInputEvent {
                     llm_properties_for_symbol_search.provider().clone(),
                     llm_properties_for_symbol_search.api_key().clone(),
                     self.request_id.root_request_id().to_string(),
-                    outline_for_user_context,
+                    "".to_owned(),
                 );
             // Now we try to generate the tool input for this
             Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search))

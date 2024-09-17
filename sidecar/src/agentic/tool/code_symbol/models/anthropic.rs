@@ -4855,7 +4855,36 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
             .await
             .map_err(|e| CodeSymbolError::UserContextError(e))?;
         // also send the user query here
-        Ok(context_string + "\n" + "<user_query>\n" + &user_query + "\n</user_query>")
+        let mut user_message =
+            context_string + "\n" + "<user_query>\n" + &user_query + "\n</user_query>";
+
+        // if this is a big message, the easiest proxy is to look at the number of lines
+        // and make sure that we send a reminder to it
+        if user_message.lines().collect::<Vec<_>>().len() > 2000 {
+            user_message = user_message
+                + "\n"
+                + r#"As a reminder, your output should strictly follow this format:
+<reply>
+<thinking>
+{your thoughts over here}
+</thinking>
+<step_by_step>
+<step_list>
+<name>
+{symbol name over here}
+</name>
+<file_path>
+{full_file_path for the symbol}
+</file_path>
+<step>
+{the edit instruction which you want to give to this symbol}
+</step>
+</step_list>
+{.. more <step_list> items}
+</step_by_step>
+</reply>"#;
+        }
+        Ok(user_message)
     }
 
     fn system_message_for_repo_map_search(

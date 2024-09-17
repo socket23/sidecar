@@ -1,29 +1,80 @@
 use llm_client::clients::types::{LLMClientError, LLMType};
 use serde_xml_rs::to_string;
+use tokio::sync::mpsc::error::SendError;
 
-use std::path::PathBuf;
 use std::time::Instant;
+use std::{path::PathBuf, time::Duration};
 use thiserror::Error;
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-
+use crate::agentic::symbol::ui_event::UIEventWithID;
 use crate::{
-    agentic::tool::{
-        code_symbol::important::{
-            CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+    agentic::{
+        symbol::events::message_event::SymbolEventMessageProperties,
+        tool::{
+            code_symbol::important::{
+                CodeSymbolImportantResponse, CodeSymbolWithSteps, CodeSymbolWithThinking,
+            },
+            file::types::SerdeError,
+            human::{error::CommunicationError, qa::GenerateHumanQuestionResponse},
         },
-        file::types::SerdeError,
-        human::{error::CommunicationError, qa::GenerateHumanQuestionResponse},
     },
     repomap::types::RepoMap,
     user_context::types::UserContextError,
 };
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use super::{
     big_search::IterativeSearchSeed, decide::DecideResponse, google_studio::GoogleStudioLLM,
     identify::IdentifyResponse, relevant_files::QueryRelevantFilesResponse, repository::Repository,
 };
+
+#[derive(Clone, Debug, Serialize)]
+pub enum IterativeSearchEvent {
+    SearchStarted,
+    SeedApplied(Duration),
+    SearchQueriesGenerated(Vec<SearchQuery>, Duration),
+    SearchExecuted(Vec<SearchResult>, Duration),
+    IdentificationCompleted(IdentifyResponse, Duration),
+    FileOutlineGenerated(Duration),
+    DecisionMade(DecideResponse, Duration),
+    LoopCompleted(usize, Duration),
+    SearchCompleted(Duration),
+}
+
+pub trait IterativeSearchEventHandler: Send + Sync {
+    fn handle_event(&self, event: IterativeSearchEvent) -> Result<(), IterativeSearchError>;
+}
+
+pub struct UIEventHandler {
+    message_properties: SymbolEventMessageProperties,
+}
+
+impl UIEventHandler {
+    pub fn new(message_properties: SymbolEventMessageProperties) -> Self {
+        Self { message_properties }
+    }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
+    }
+}
+
+impl IterativeSearchEventHandler for UIEventHandler {
+    fn handle_event(&self, event: IterativeSearchEvent) -> Result<(), IterativeSearchError> {
+        match event {
+            _ => Ok(self.message_properties().ui_sender().send(
+                UIEventWithID::search_iteration_event(
+                    self.message_properties()
+                        .request_id()
+                        .root_request_id() // todo(zi) or should this just be request id?
+                        .to_owned(),
+                    event,
+                ),
+            )?),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct IterativeSearchContext {
@@ -112,13 +163,13 @@ impl File {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SearchToolType {
     File,
     Keyword,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SearchQuery {
     #[serde(default)]
     pub thinking: String,
@@ -129,7 +180,7 @@ pub struct SearchQuery {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "search_requests")]
 pub struct SearchRequests {
-    #[serde(rename = "request")]
+    #[serde(rename = "request", default)] // todo(zi) this pattern needs more use across big search
     pub requests: Vec<SearchQuery>,
 }
 
@@ -173,6 +224,9 @@ pub enum IterativeSearchError {
 
     #[error("No tags found for file: {0}")]
     NoTagsForFile(PathBuf),
+
+    #[error("Send error: {0}")]
+    SendError(#[from] SendError<UIEventWithID>),
 }
 
 impl SearchQuery {
@@ -240,16 +294,38 @@ pub struct IterativeSearchSystem<T: LLMOperations> {
     llm_ops: T,
     complete: bool,
     seed: Option<IterativeSearchSeed>,
+    event_handlers: Vec<Box<dyn IterativeSearchEventHandler>>,
 }
 
 impl<T: LLMOperations> IterativeSearchSystem<T> {
-    pub fn new(context: IterativeSearchContext, repository: Repository, llm_ops: T) -> Self {
+    pub fn new(
+        context: IterativeSearchContext,
+        repository: Repository,
+        llm_ops: T,
+        event_handlers: Vec<Box<dyn IterativeSearchEventHandler>>,
+    ) -> Self {
         Self {
             context,
             repository,
             llm_ops,
             complete: false,
             seed: None,
+            event_handlers,
+        }
+    }
+
+    pub fn add_event_handler(&mut self, handler: Box<dyn IterativeSearchEventHandler>) {
+        self.event_handlers.push(handler);
+    }
+
+    fn emit_event(&self, event: IterativeSearchEvent) {
+        for handler in &self.event_handlers {
+            if let Err(e) = handler.handle_event(event.clone()) {
+                eprintln!(
+                    "IterativeSearchSystem::emit_event::error: Error handling event: {}",
+                    e
+                );
+            }
         }
     }
 
@@ -280,9 +356,12 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
     pub async fn run(&mut self) -> Result<CodeSymbolImportantResponse, IterativeSearchError> {
         let start_time = Instant::now();
+        self.emit_event(IterativeSearchEvent::SearchStarted);
 
+        let seed_start = Instant::now();
         self.apply_seed().await?;
-        println!("Seed applied in {:?}", start_time.elapsed());
+        self.emit_event(IterativeSearchEvent::SeedApplied(seed_start.elapsed()));
+        println!("Seed applied in {:?}", seed_start.elapsed());
 
         let mut count = 0;
         while !self.complete && count < 3 {
@@ -291,18 +370,34 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("search loop #{}", count);
             println!("===========");
 
-            let search_queries = self.search().await?;
-            println!("Search queries generated in {:?}", loop_start.elapsed());
+            let search_query_start = Instant::now();
+            let search_queries = self.generate_search_query().await?;
+            self.emit_event(IterativeSearchEvent::SearchQueriesGenerated(
+                search_queries.clone(),
+                search_query_start.elapsed(),
+            ));
+            println!(
+                "Search queries generated in {:?}",
+                search_query_start.elapsed()
+            );
 
             let search_start = Instant::now();
             let search_results: Vec<SearchResult> = search_queries
                 .iter()
                 .flat_map(|q| self.repository.execute_search(q))
                 .collect();
+            self.emit_event(IterativeSearchEvent::SearchExecuted(
+                search_results.clone(),
+                search_start.elapsed(),
+            ));
             println!("Search executed in {:?}", search_start.elapsed());
 
             let identify_start = Instant::now();
             let identify_results = self.identify(&search_results).await?;
+            self.emit_event(IterativeSearchEvent::IdentificationCompleted(
+                identify_results.clone(),
+                identify_start.elapsed(),
+            ));
             println!("Identification completed in {:?}", identify_start.elapsed());
 
             self.context
@@ -327,6 +422,9 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
                     })
                     .collect(),
             );
+            self.emit_event(IterativeSearchEvent::FileOutlineGenerated(
+                generate_file_outline.elapsed(),
+            ));
             println!(
                 "File outline generation completed in {:?}",
                 generate_file_outline.elapsed()
@@ -334,6 +432,10 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
             let decision_start = Instant::now();
             let decision = self.decide().await?;
+            self.emit_event(IterativeSearchEvent::DecisionMade(
+                decision.clone(),
+                decision_start.elapsed(),
+            ));
             println!("Decision made in {:?}", decision_start.elapsed());
 
             self.context.update_scratch_pad(decision.suggestions());
@@ -344,40 +446,11 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
             println!("Suggestions: {}", decision.suggestions());
             println!("===========");
 
-            // todo(zi): proper condition
-            // if true {
-            //     let cli = CliCommunicator {};
-
-            //     let human_tool = Human::new(cli);
-
-            //     let question: Question = self
-            //         .llm_ops
-            //         .generate_human_question(&self.context)
-            //         .await?
-            //         .into();
-
-            //     let answer = human_tool.ask(&question)?;
-            //     let choice_id = answer.choice_id();
-
-            //     let answer_text = question
-            //         .get_choice(choice_id)
-            //         .map(|choice| choice.text())
-            //         .ok_or_else(|| {
-            //             IterativeSearchError::MissingQuestionChoiceError(choice_id.to_string())
-            //         })?;
-
-            //     let scratch_pad_entry = format!(
-            //         r#"- Critical information to solving the issue:
-            // Question: {}
-            // Answer: {}"#,
-            //         question.text(),
-            //         answer_text
-            //     );
-
-            //     self.context.extend_scratch_pad(&scratch_pad_entry);
-            // }
-
             count += 1;
+            self.emit_event(IterativeSearchEvent::LoopCompleted(
+                count,
+                loop_start.elapsed(),
+            ));
             println!("===========");
             println!("Loop {} completed in {:?}", count, loop_start.elapsed());
             println!("Scratch_pad: {}", self.context.scratch_pad());
@@ -400,13 +473,14 @@ impl<T: LLMOperations> IterativeSearchSystem<T> {
 
         let response = CodeSymbolImportantResponse::new(symbols, ordered_symbols);
 
+        self.emit_event(IterativeSearchEvent::SearchCompleted(start_time.elapsed()));
         println!("Total execution time: {:?}", start_time.elapsed());
 
         Ok(response)
     }
 
     // this generates search queries
-    async fn search(&self) -> Result<Vec<SearchQuery>, IterativeSearchError> {
+    async fn generate_search_query(&self) -> Result<Vec<SearchQuery>, IterativeSearchError> {
         self.llm_ops.generate_search_query(self.context()).await
     }
 

@@ -13,7 +13,7 @@ use llm_client::{
 
 use crate::{
     agentic::{
-        symbol::identifier::LLMProperties,
+        symbol::{events::message_event::SymbolEventMessageProperties, identifier::LLMProperties},
         tool::{
             code_symbol::{important::CodeSymbolImportantResponse, types::CodeSymbolError},
             errors::ToolError,
@@ -31,12 +31,14 @@ use crate::{
     tree_printer::tree::TreePrinter,
 };
 
+use super::iterative::UIEventHandler;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SearchType {
     Both,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct BigSearchRequest {
     user_query: String,
     llm: LLMType,
@@ -45,6 +47,7 @@ pub struct BigSearchRequest {
     root_directory: Option<String>,
     root_request_id: String,
     search_type: SearchType,
+    message_properties: SymbolEventMessageProperties,
 }
 
 impl BigSearchRequest {
@@ -56,6 +59,7 @@ impl BigSearchRequest {
         root_directory: Option<String>,
         root_request_id: String,
         search_type: SearchType,
+        message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
             user_query,
@@ -65,6 +69,7 @@ impl BigSearchRequest {
             root_directory,
             root_request_id,
             search_type,
+            message_properties,
         }
     }
 
@@ -94,6 +99,10 @@ impl BigSearchRequest {
 
     pub fn search_type(&self) -> &SearchType {
         &self.search_type
+    }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
     }
 }
 
@@ -159,10 +168,14 @@ impl BigSearchBroker {
             request.root_request_id().to_owned(),
         );
 
+        let ui_event_handler_for_iterative_search =
+            UIEventHandler::new(request.message_properties().to_owned());
+
         Ok(IterativeSearchSystem::new(
             iterative_search_context,
             repository,
             google_studio_llm_config,
+            vec![Box::new(ui_event_handler_for_iterative_search)],
         ))
     }
 }
@@ -190,10 +203,10 @@ impl Tool for BigSearchBroker {
 
         let mut system = self.create_search_system(repository, &request)?;
 
-        let results = system
-            .run()
-            .await
-            .map_err(|e| ToolError::IterativeSearchError(e))?;
+        let results = system.run().await.map_err(|e| {
+            dbg!(&e); // needs error logging at this level dude
+            ToolError::IterativeSearchError(e)
+        })?;
 
         let duration = start.elapsed();
         println!("BigSearchBroker::invoke::duration: {:?}", duration);

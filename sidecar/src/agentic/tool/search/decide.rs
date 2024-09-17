@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename = "response")]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(rename = "response", default)]
 pub struct DecideResponse {
     #[serde(default)]
     suggestions: String,

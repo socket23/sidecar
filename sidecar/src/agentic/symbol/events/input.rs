@@ -194,7 +194,7 @@ impl SymbolInputEvent {
     // altho fuck complexity we ball
     pub async fn tool_use_on_initial_invocation(
         self,
-        tool_box: Arc<ToolBox>,
+        _tool_box: Arc<ToolBox>,
         message_properties: SymbolEventMessageProperties,
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better

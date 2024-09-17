@@ -207,7 +207,10 @@ impl UserContext {
     }
 
     pub fn file_paths(&self) -> Vec<String> {
-        self.file_content_map.iter().map(|file_content| file_content.file_path.to_owned()).collect::<Vec<_>>()
+        self.file_content_map
+            .iter()
+            .map(|file_content| file_content.file_path.to_owned())
+            .collect::<Vec<_>>()
     }
 
     /// Grabs the user provided context as a string which can be passed to LLMs for code editing

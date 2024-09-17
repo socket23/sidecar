@@ -72,7 +72,9 @@ use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClient
 use crate::agentic::tool::git::edited_files::EditedFilesRequest;
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::helpers::diff_recent_changes::DiffRecentChanges;
-use crate::agentic::tool::lsp::diagnostics::{DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput};
+use crate::agentic::tool::lsp::diagnostics::{
+    DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
+};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -90,11 +92,12 @@ use crate::agentic::tool::lsp::grep_symbol::{
 };
 use crate::agentic::tool::lsp::inlay_hints::InlayHintsRequest;
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
-use crate::agentic::tool::lsp::quick_fix::{GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
+use crate::agentic::tool::lsp::quick_fix::{
+    GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
-use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
 use crate::agentic::tool::r#type::Tool;
+use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
@@ -162,7 +165,13 @@ impl ToolBox {
             "tool_box::scratch_pad_agent_human_request::scratch_pad_present::({})",
             scratch_pad_content.is_ok()
         );
-        let recent_diff_with_priority = self.recently_edited_files(file_paths_interested.into_iter().collect(), message_properties.clone()).await.ok();
+        let recent_diff_with_priority = self
+            .recently_edited_files(
+                file_paths_interested.into_iter().collect(),
+                message_properties.clone(),
+            )
+            .await
+            .ok();
         if let Ok(scratch_pad_content) = scratch_pad_content {
             let _ = self
                 .tools
@@ -200,7 +209,13 @@ impl ToolBox {
         let scratch_pad_content = self
             .file_open(scratch_pad_path.to_owned(), message_properties.clone())
             .await;
-        let recently_edited_files_with_priority = self.recently_edited_files(file_paths_interested.into_iter().collect(), message_properties.clone()).await.ok();
+        let recently_edited_files_with_priority = self
+            .recently_edited_files(
+                file_paths_interested.into_iter().collect(),
+                message_properties.clone(),
+            )
+            .await
+            .ok();
         if let Ok(scratch_pad_content) = scratch_pad_content {
             let _ = self
                 .tools
@@ -241,7 +256,13 @@ impl ToolBox {
         let scratch_pad_content = self
             .file_open(scratch_pad_path.to_owned(), message_properties.clone())
             .await;
-        let recently_edited_files = self.recently_edited_files(files_interested.into_iter().collect(), message_properties.clone()).await.ok();
+        let recently_edited_files = self
+            .recently_edited_files(
+                files_interested.into_iter().collect(),
+                message_properties.clone(),
+            )
+            .await
+            .ok();
         if let Ok(scratch_pad_content) = scratch_pad_content {
             println!("tool_box::scratch_pad_edits_made::edits_made_tool_invocation::scratch_pad_content({})", scratch_pad_content.contents_ref());
             let _ = self
@@ -5038,7 +5059,9 @@ instruction:
             .collect::<Vec<_>>()
             .join("\n");
 
-        println!("======\ntool_box::check_code_correctness::diagnostics\n======\n{diagnostics_log}");
+        println!(
+            "======\ntool_box::check_code_correctness::diagnostics\n======\n{diagnostics_log}"
+        );
 
         // we open the file once, using it as reference to find snippets for diagnostics
         let fs_file_contents = self
@@ -5385,7 +5408,13 @@ instruction:
             split_file_content_into_parts(file_content, selection_range);
         // TODO(skcd): This might not be the perfect place to get cache-hits we might
         // want to send over the static list of edits at the start of each iteration?
-        let recent_edits = self.recently_edited_files(vec![fs_file_path.to_owned()].into_iter().collect(), message_properties.clone()).await.ok();
+        let recent_edits = self
+            .recently_edited_files(
+                vec![fs_file_path.to_owned()].into_iter().collect(),
+                message_properties.clone(),
+            )
+            .await
+            .ok();
         let symbols_to_edit = symbols_edited_list.map(|symbols| {
             symbols
                 .into_iter()
@@ -5734,25 +5763,31 @@ FILEPATH: {fs_file_path}
         .await;
 
         // now we want to parse the files which we are getting
-        stream::iter(file_paths.into_iter().map(|fs_file_path| (fs_file_path, message_properties.clone())))
-            .map(|(file_path, message_properties)| async move {
-                let outline_nodes = self.get_outline_nodes_from_editor(&file_path, message_properties.clone()).await;
-                (file_path, outline_nodes)
-            })
-            .buffer_unordered(4)
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .filter_map(|(_, outline_nodes)| outline_nodes)
-            .map(|outline_nodes| {
-                outline_nodes
-                    .into_iter()
-                    .filter_map(|outline_node| outline_node.get_outline_node_compressed())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+        stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_outline_nodes_from_editor(&file_path, message_properties.clone())
+                .await;
+            (file_path, outline_nodes)
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|(_, outline_nodes)| outline_nodes)
+        .map(|outline_nodes| {
+            outline_nodes
+                .into_iter()
+                .filter_map(|outline_node| outline_node.get_outline_node_compressed())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
     }
 
     async fn invoke_quick_action(
@@ -5963,40 +5998,68 @@ FILEPATH: {fs_file_path}
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<LSPDiagnosticError>, SymbolError> {
         let file_signals = stream::iter(
-            file_paths.into_iter().map(
-                |fs_file_path| (fs_file_path, message_properties.clone()))
-            ).map(|(fs_file_path, message_properties)| async move {
-                let diagnostics = self.get_lsp_diagnostics(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let diagnostics = self
+                .get_lsp_diagnostics(
                     &fs_file_path,
                     &Range::new(Position::new(0, 0, 0), Position::new(10000, 0, 0)),
                     message_properties.clone(),
-                ).await;
-                let file_contents = self.file_open(fs_file_path.to_owned(), message_properties).await;
-                if let Ok(file_contents) = file_contents {
-                    diagnostics.map(|diagnostics| diagnostics.remove_diagnostics().into_iter().filter_map(|diagnostic| DiagnosticWithSnippet::from_diagnostic_and_contents(diagnostic, file_contents.contents_ref(), fs_file_path.to_owned()).ok()).collect::<Vec<_>>())
-                } else {
-                diagnostics.map(
-                    |diagnostics| diagnostics
+                )
+                .await;
+            let file_contents = self
+                .file_open(fs_file_path.to_owned(), message_properties)
+                .await;
+            if let Ok(file_contents) = file_contents {
+                diagnostics.map(|diagnostics| {
+                    diagnostics
                         .remove_diagnostics()
                         .into_iter()
-                        .map(|diagnostic| DiagnosticWithSnippet::new(
-                            diagnostic.message().to_owned(),
-                            diagnostic.range().clone(),
-                            "".to_owned(),
-                            fs_file_path.to_owned(),
-                        )
-                    ).collect::<Vec<_>>()
-                )
+                        .filter_map(|diagnostic| {
+                            DiagnosticWithSnippet::from_diagnostic_and_contents(
+                                diagnostic,
+                                file_contents.contents_ref(),
+                                fs_file_path.to_owned(),
+                            )
+                            .ok()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            } else {
+                diagnostics.map(|diagnostics| {
+                    diagnostics
+                        .remove_diagnostics()
+                        .into_iter()
+                        .map(|diagnostic| {
+                            DiagnosticWithSnippet::new(
+                                diagnostic.message().to_owned(),
+                                diagnostic.range().clone(),
+                                "".to_owned(),
+                                fs_file_path.to_owned(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
             }
-            })
-            .buffer_unordered(100)
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .filter_map(|data| data.ok())
-            .flatten()
-            .map(|diagnostic| LSPDiagnosticError::new(diagnostic.range().clone(), diagnostic.snippet().to_owned(), diagnostic.fs_file_path().to_owned(), diagnostic.message().to_owned()))
-            .collect::<Vec<_>>();
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|data| data.ok())
+        .flatten()
+        .map(|diagnostic| {
+            LSPDiagnosticError::new(
+                diagnostic.range().clone(),
+                diagnostic.snippet().to_owned(),
+                diagnostic.fs_file_path().to_owned(),
+                diagnostic.message().to_owned(),
+            )
+        })
+        .collect::<Vec<_>>();
         Ok(file_signals)
     }
 
@@ -6763,6 +6826,96 @@ FILEPATH: {fs_file_path}
         Ok(response)
     }
 
+    /// CodeSymbolImportantResponse gets turned to a list of mechacodesymbolthinking
+    /// where each one of them is a file we want to edit
+    pub async fn important_symbols_per_file(
+        &self,
+        important_symbols: &CodeSymbolImportantResponse,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<(MechaCodeSymbolThinking, Vec<String>)>, SymbolError> {
+        let symbols = important_symbols.ordered_symbols();
+        let mut previous_file_path: Option<String> = None;
+        let mut previous_steps = vec![];
+        let mut file_paths_and_steps = vec![];
+        for symbol in symbols.into_iter() {
+            let steps = symbol
+                .steps()
+                .into_iter()
+                .map(|step| format!("- {}", step))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if let Some(ref previous_file_path_ref) = previous_file_path.clone() {
+                if *previous_file_path_ref == symbol.file_path() {
+                    previous_steps.push(steps);
+                } else {
+                    // add the current symbol fs_file_path and the step over here
+                    file_paths_and_steps
+                        .push((previous_file_path_ref.to_owned(), previous_steps.to_vec()));
+                    previous_file_path = Some(symbol.file_path().to_owned());
+                    previous_steps = vec![steps];
+                }
+            } else {
+                previous_file_path = Some(symbol.file_path().to_owned());
+                previous_steps.push(steps);
+            }
+        }
+
+        if let Some(previous_file_path) = previous_file_path {
+            file_paths_and_steps.push((previous_file_path, previous_steps));
+        }
+
+        // Now that we have the ordered list of file paths and the steps we want to create
+        // the mecha code symbol thinking
+        let unique_file_paths = file_paths_and_steps
+            .iter()
+            .map(|(fs_file_path, _)| fs_file_path.to_owned())
+            .collect::<HashSet<String>>();
+        let file_paths_to_content = stream::iter(
+            unique_file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let file_content = self
+                .file_open(fs_file_path.to_owned(), message_properties)
+                .await
+                .ok();
+            if let Some(file_content) = file_content {
+                Some((fs_file_path, (file_content.language().to_owned(), file_content.contents())))
+            } else {
+                None
+            }
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .collect::<HashMap<String, (String, String)>>();
+        
+        let mecha_code_symbol_thinking = file_paths_and_steps.into_iter().map(|(fs_file_path, steps)| {
+            let (language, file_content) = file_paths_to_content.get(&fs_file_path).map(|data| data.clone()).unwrap_or(("".to_owned(), "".to_owned()));
+            let range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
+            let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
+                fs_file_path.to_owned(),
+                vec![],
+                false,
+                fs_file_path.to_owned(),
+                Some(Snippet::new(
+                    fs_file_path.to_owned(),
+                    range.clone(),
+                    fs_file_path.to_owned(),
+                    file_content.to_owned(),
+                    OutlineNodeContent::file_symbol(fs_file_path.to_owned(), range, file_content.to_owned(), fs_file_path, language)
+                )),
+                vec![],
+                Arc::new(self.clone()),
+            );
+            (mecha_code_symbol_thinking, steps)
+        }).collect();
+        Ok(mecha_code_symbol_thinking)
+    }
+
     // TODO(skcd): We are not capturing the is_new symbols which might become
     // necessary later on
     pub async fn important_symbols(
@@ -7360,7 +7513,7 @@ FILEPATH: {fs_file_path}
 
     /// Grabs the repo wide `git-diff` which can be used
     /// as input for the agentic trigger
-    /// 
+    ///
     /// This is to warmup the cache and set the context for the
     /// agent
     pub async fn get_git_diff(
@@ -7832,7 +7985,10 @@ FILEPATH: {fs_file_path}
         // one, since we have a more precise selection anyways
         let intersecting_outline_nodes_len = intersecting_outline_nodes.len();
         if intersecting_outline_nodes_len > 1 {
-            intersecting_outline_nodes = intersecting_outline_nodes.into_iter().filter(|outline_node| !outline_node.is_file()).collect::<Vec<_>>();
+            intersecting_outline_nodes = intersecting_outline_nodes
+                .into_iter()
+                .filter(|outline_node| !outline_node.is_file())
+                .collect::<Vec<_>>();
         }
 
         let anchored_nodes: Vec<AnchoredSymbol> = intersecting_outline_nodes
@@ -8315,7 +8471,14 @@ FILEPATH: {fs_file_path}
         message_properties: SymbolEventMessageProperties,
     ) {
         let file_paths_to_user_context = self
-            .file_paths_to_user_context(file_paths.into_iter().map(|file_path| file_path.fs_file_path().to_owned()).collect(), grab_import_nodes, message_properties.clone())
+            .file_paths_to_user_context(
+                file_paths
+                    .into_iter()
+                    .map(|file_path| file_path.fs_file_path().to_owned())
+                    .collect(),
+                grab_import_nodes,
+                message_properties.clone(),
+            )
             .await
             .ok();
         let sender = message_properties.ui_sender();
@@ -8491,8 +8654,11 @@ FILEPATH: {fs_file_path}
         important_file_paths: HashSet<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<DiffRecentChanges, SymbolError> {
-        let input = ToolInput::EditedFiles(EditedFilesRequest::new(message_properties.editor_url()));
-        let mut recently_edited_files = self.tools.invoke(input)
+        let input =
+            ToolInput::EditedFiles(EditedFilesRequest::new(message_properties.editor_url()));
+        let mut recently_edited_files = self
+            .tools
+            .invoke(input)
             .await
             .map_err(|e| SymbolError::ToolError(e))?
             .recently_edited_files()
@@ -8501,9 +8667,19 @@ FILEPATH: {fs_file_path}
 
         // sort it in increasing order based on the updated timestamp
         recently_edited_files.sort_by_key(|edited_file| edited_file.updated_tiemstamp_ms());
-        let (l1_cache, l2_cache): (Vec<_>, Vec<_>) = recently_edited_files.into_iter().partition(|edited_file| important_file_paths.contains(edited_file.fs_file_path()));
-        let l1_cache = l1_cache.into_iter().map(|diff_file| diff_file.diff().to_owned()).collect::<Vec<_>>().join("\n");
-        let l2_cache = l2_cache.into_iter().map(|diff_file| diff_file.diff().to_owned()).collect::<Vec<_>>().join("\n");
+        let (l1_cache, l2_cache): (Vec<_>, Vec<_>) = recently_edited_files
+            .into_iter()
+            .partition(|edited_file| important_file_paths.contains(edited_file.fs_file_path()));
+        let l1_cache = l1_cache
+            .into_iter()
+            .map(|diff_file| diff_file.diff().to_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let l2_cache = l2_cache
+            .into_iter()
+            .map(|diff_file| diff_file.diff().to_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
         // now to create the diff-recent-changes we are going to remove the files
         // which exist in our important file paths and mark them as l1 cache
         // while keeping the other set of files as l2 cache
@@ -8539,7 +8715,8 @@ FILEPATH: {fs_file_path}
             references.clone(),
         );
         let llm_time = Instant::now();
-        let _relevant_references = match self.tools
+        let _relevant_references = match self
+            .tools
             .invoke(ToolInput::ReferencesFilter(request))
             .await
         {

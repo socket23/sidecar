@@ -455,6 +455,12 @@ impl MechaCodeSymbolThinking {
         self.is_new
     }
 
+    /// Populates the file path for the symbol identifier, not caring about
+    /// the fact if the symbol exists on the file path or not
+    pub fn to_symbol_identifier_with_file_path(&self) -> SymbolIdentifier {
+        SymbolIdentifier::with_file_path(&self.symbol_name, &self.file_path)
+    }
+
     pub fn to_symbol_identifier(&self) -> SymbolIdentifier {
         if self.is_new {
             SymbolIdentifier::new_symbol(&self.symbol_name)

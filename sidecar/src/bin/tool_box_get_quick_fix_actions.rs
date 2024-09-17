@@ -67,6 +67,7 @@ async fn main() {
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
+        tokio_util::sync::CancellationToken::new(),
     );
     let response = tool_box
         .get_quick_fix_actions(&fs_file_path, &lsp_range, "".to_owned(), event_properties)

@@ -33,7 +33,6 @@ fn default_index_dir() -> PathBuf {
     }
 }
 
-
 #[tokio::main]
 async fn main() {
     let editor_url = "http://localhost:59293".to_owned();
@@ -64,6 +63,7 @@ async fn main() {
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
+        tokio_util::sync::CancellationToken::new(),
     );
 
     let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));

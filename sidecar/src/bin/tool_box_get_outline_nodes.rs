@@ -70,6 +70,7 @@ async fn main() {
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
+        tokio_util::sync::CancellationToken::new(),
     );
     let response = tool_box
         .get_outline_nodes_using_editor(fs_file_path, event_properties)

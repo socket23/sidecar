@@ -17,6 +17,7 @@ ndarray = "0.15.6"
 smallvec = { version = "1.11.0", features = ["serde"]}
 ort = { git = "https://github.com/bloopai/ort", branch = "env-builder-telemetry" }
 tokio = { version = "1.32.0", features = ["full"] }
+tokio-util = "0.7.12"
 scc = { version = "1.8.3", features = ["serde"] }
 tokenizers = { version = "0.13.3", default-features = false, features = ["progressbar", "cli", "onig", "esaxx_fast"] }
 anyhow = "1.0.75"

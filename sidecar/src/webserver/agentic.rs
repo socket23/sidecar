@@ -38,7 +38,8 @@ pub struct ProbeRequestTracker {
     ///
     /// - Key: String representing the unique request ID.
     /// - Value: JoinHandle for the asynchronous task handling the request.
-    pub running_requests: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
+    pub running_requests:
+        Arc<Mutex<HashMap<String, (tokio_util::sync::CancellationToken, JoinHandle<()>)>>>,
 }
 
 impl ProbeRequestTracker {
@@ -48,15 +49,21 @@ impl ProbeRequestTracker {
         }
     }
 
-    async fn track_new_request(&self, request_id: &str, join_handle: JoinHandle<()>) {
+    async fn track_new_request(
+        &self,
+        request_id: &str,
+        cancellation_token: tokio_util::sync::CancellationToken,
+        join_handle: JoinHandle<()>,
+    ) {
         let mut running_requests = self.running_requests.lock().await;
-        running_requests.insert(request_id.to_owned(), join_handle);
+        running_requests.insert(request_id.to_owned(), (cancellation_token, join_handle));
     }
 
     async fn cancel_request(&self, request_id: &str) {
         let mut running_requests = self.running_requests.lock().await;
-        if let Some(response) = running_requests.get_mut(request_id) {
+        if let Some((cancellation_token, response)) = running_requests.get_mut(request_id) {
             // we abort the running requests
+            cancellation_token.cancel();
             response.abort();
         }
     }
@@ -85,6 +92,8 @@ struct AnchoredEditingMetadata {
     environment_event_sender: UnboundedSender<EnvironmentEvent>,
     /// the scratchpad agent which tracks the state of the request
     scratch_pad_agent: ScratchPadAgent,
+    /// current cancellation token for the ongoing query
+    cancellation_token: tokio_util::sync::CancellationToken,
 }
 
 impl AnchoredEditingMetadata {
@@ -96,6 +105,7 @@ impl AnchoredEditingMetadata {
         user_context_string: Option<String>,
         scratch_pad_agent: ScratchPadAgent,
         environment_event_sender: UnboundedSender<EnvironmentEvent>,
+        cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             message_properties,
@@ -105,6 +115,7 @@ impl AnchoredEditingMetadata {
             user_context_string,
             scratch_pad_agent,
             environment_event_sender,
+            cancellation_token,
         }
     }
 
@@ -214,6 +225,22 @@ impl AnchoredEditingTracker {
     //         })
     // }
 
+    /// Updates the ongoing cancellation request for this event
+    async fn update_cancellation_token(
+        &self,
+        request_id: &str,
+        cancellation_token: tokio_util::sync::CancellationToken,
+    ) {
+        if let Some(properties) = self
+            .running_requests_properties
+            .lock()
+            .await
+            .get_mut(request_id)
+        {
+            properties.cancellation_token = cancellation_token;
+        }
+    }
+
     pub async fn scratch_pad_agent(
         &self,
         request_id: &str,
@@ -256,6 +283,20 @@ impl AnchoredEditingTracker {
             .join("\n");
         cached_content
     }
+
+    pub async fn cancel_request(&self, request_id: &str) {
+        {
+            if let Some(properties) = self
+                .running_requests_properties
+                .lock()
+                .await
+                .get(request_id)
+            {
+                // cancel the ongoing request over here
+                properties.cancellation_token.cancel();
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -292,6 +333,8 @@ pub async fn probe_request_stop(
     println!("webserver::probe_request_stop");
     let probe_request_tracker = app.probe_request_tracker.clone();
     let _ = probe_request_tracker.cancel_request(&request_id).await;
+    let anchored_editing_tracker = app.anchored_request_tracker.clone();
+    let _ = anchored_editing_tracker.cancel_request(&request_id).await;
     Ok(Json(ProbeStopResponse { done: true }))
 }
 
@@ -315,6 +358,7 @@ pub async fn probe_request(
             active_window_data.language,
         );
     }
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
     let provider_keys = model_config
         .provider_for_slow_model()
         .map(|provider| provider.clone())
@@ -324,6 +368,7 @@ pub async fn probe_request(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),
         editor_url,
+        cancellation_token.clone(),
     );
 
     let symbol_manager = app.symbol_manager.clone();
@@ -336,7 +381,7 @@ pub async fn probe_request(
     });
 
     let _ = probe_request_tracker
-        .track_new_request(&request_id, join_handle)
+        .track_new_request(&request_id, cancellation_token, join_handle)
         .await;
 
     // Now we want to poll the future of the probe request we are sending
@@ -523,6 +568,7 @@ pub async fn code_sculpting_warmup(
         SymbolEventRequestId::new(warmup_request_id.to_owned(), warmup_request_id.to_owned()),
         sender,
         editor_url,
+        tokio_util::sync::CancellationToken::new(),
     );
     let files_already_in_cache;
     {
@@ -837,12 +883,14 @@ pub async fn code_editing(
     }
 
     let cached_content = app.anchored_request_tracker.cached_content().await;
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
 
     // we want to pass this message_properties everywhere and not the previous one
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),
         editor_url,
+        cancellation_token.clone(),
     );
 
     println!(
@@ -855,6 +903,9 @@ pub async fn code_editing(
         .scratch_pad_agent(&request_id)
         .await
     {
+        app.anchored_request_tracker
+            .update_cancellation_token(&request_id, cancellation_token)
+            .await;
         println!("webserver::code_editing_flow::same_request_id");
         scratch_pad_agent
     } else {
@@ -888,6 +939,7 @@ pub async fn code_editing(
                 None,
                 scratch_pad_agent.clone(),
                 environment_sender.clone(),
+                cancellation_token,
             )),
         );
         (scratch_pad_agent, environment_sender)
@@ -1027,85 +1079,4 @@ pub async fn push_diagnostics(
     //     .send_diagnostics_event(lsp_diagnostics)
     //     .await;
     Ok(json_result(AgenticDiagnosticsResponse { done: true }))
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AnchorSessionStart {
-    request_id: String,
-    user_context: UserContext,
-    editor_url: String,
-    active_window_data: Option<ProbeRequestActiveWindow>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AnchorSessionStartResponse {
-    done: bool,
-}
-
-impl ApiResponse for AnchorSessionStartResponse {}
-
-pub async fn anchor_session_start(
-    Extension(app): Extension<Application>,
-    Json(AnchorSessionStart {
-        request_id,
-        mut user_context,
-        editor_url,
-        active_window_data,
-    }): Json<AnchorSessionStart>,
-) -> Result<impl IntoResponse> {
-    println!(
-        "webserver::anchor_session_start::request_id({})",
-        &request_id
-    );
-
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    if let Some(active_window_data) = active_window_data {
-        user_context = user_context.update_file_content_map(
-            active_window_data.file_path,
-            active_window_data.file_content,
-            active_window_data.language,
-        );
-    }
-
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
-        sender.clone(),
-        editor_url,
-    );
-
-    println!(
-        "webserver::agentic::anchor_session_start::user_context::variables:\n{}",
-        user_context
-            .variables
-            .iter()
-            .map(|var| var.name.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-
-    let _symbol_to_anchor = app
-        .tool_box
-        .symbols_to_anchor(&user_context, message_properties.clone())
-        .await
-        .unwrap_or_default();
-
-    let event_stream = Sse::new(
-        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
-            sse::Event::default()
-                .json_data(event)
-                .map_err(anyhow::Error::new)
-        }),
-    );
-
-    Ok(event_stream.keep_alive(
-        sse::KeepAlive::new()
-            .interval(Duration::from_secs(3))
-            .event(
-                sse::Event::default()
-                    .json_data(json!({
-                        "keep_alive": "alive"
-                    }))
-                    .expect("json to not fail in keep alive"),
-            ),
-    ))
 }

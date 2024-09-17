@@ -101,6 +101,7 @@ async fn main() {
         SymbolEventRequestId::new(request_id_str.clone(), request_id_str.clone()),
         sender.clone(),
         editor_url.to_owned(),
+        tokio_util::sync::CancellationToken::new(),
     );
     let root_directory = "/Users/zi/codestory/testing/sidecar".to_owned();
     let fs_file_path =

@@ -768,16 +768,17 @@ impl ScratchPadAgent {
 
         // These are the recent edits which have happened ordered by timestamp
         // with the files which we are interested in as part of the l1 cache
-        let recent_edits = self
-            .tool_box
-            .recently_edited_files(
-                anchored_symbols
-                    .iter()
-                    .filter_map(|anchor_symbol| anchor_symbol.fs_file_path())
-                    .collect(),
-                message_properties.clone(),
-            )
-            .await?;
+        let recent_edits = dbg!(
+            self.tool_box
+                .recently_edited_files(
+                    anchored_symbols
+                        .iter()
+                        .filter_map(|anchor_symbol| anchor_symbol.fs_file_path())
+                        .collect(),
+                    message_properties.clone(),
+                )
+                .await
+        )?;
         // keep track of the user request in our state
         let previous_user_queries;
         {

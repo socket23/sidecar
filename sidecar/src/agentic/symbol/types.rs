@@ -1914,11 +1914,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                 let cloned_hub_sender = self.hub_sender.clone();
                 let cloned_tool_properties = self.tool_properties.clone();
                 let cloned_message_properties = message_properties.clone();
+                let cloned_cancellation_token = message_properties.cancellation_token();
+
                 // TODO(skcd): This is gonna bite us in the ass later on? maybe
                 let _ = tokio::spawn(async move {
                     tokio::time::sleep(Duration::from_secs(5)).await;
-                    if let Err(e) = cloned_tools
-                        .check_code_correctness(
+                    let _response = run_with_cancellation(
+                        cloned_cancellation_token,
+                        cloned_tools.check_code_correctness(
                             &parent_symbol_name,
                             &cloned_sub_symbol_to_edit,
                             cloned_symbol_identifier,
@@ -1929,11 +1932,14 @@ Satisfy the requirement either by making edits or gathering the required informa
                             vec![],
                             cloned_hub_sender,
                             cloned_message_properties,
-                        )
-                        .await
-                    {
-                        eprintln!("Error checking code correctness: {}", e);
-                    }
+                        ),
+                    )
+                    .await
+                    .map(|res| {
+                        if let Err(e) = res {
+                            eprintln!("Error checking code correctness: {}", e);
+                        }
+                    });
                 });
 
                 // 🪦 follow ups was here - lest we forget 🪦

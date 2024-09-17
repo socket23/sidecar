@@ -325,26 +325,39 @@ false
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        let response = self
-            .client
-            .stream_completion(
-                self.api_keys.to_owned(),
-                messages,
-                self.provider.to_owned(),
-                vec![
-                    (
-                        "event_type".to_owned(),
-                        "generate_search_tool_query".to_owned(),
-                    ),
-                    ("root_id".to_owned(), self.root_request_id.to_string()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
-
-        Ok(GoogleStudioLLM::parse_search_response(&response)?.requests)
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            match self
+                .client
+                .stream_completion(
+                    self.api_keys.to_owned(),
+                    messages.clone(),
+                    self.provider.to_owned(),
+                    vec![
+                        (
+                            "event_type".to_owned(),
+                            "generate_search_tool_query".to_owned(),
+                        ),
+                        ("root_id".to_owned(), self.root_request_id.to_string()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender.clone(),
+                )
+                .await
+            {
+                Ok(response) => {
+                    break Ok(GoogleStudioLLM::parse_search_response(&response)?.requests)
+                }
+                Err(e) if attempt < MAX_RETRIES => {
+                    eprintln!("Attempt {} failed: {:?}. Retrying...", attempt, e);
+                    sleep(RETRY_DELAY).await;
+                    continue;
+                }
+                Err(e) => break Err(IterativeSearchError::from(e)),
+            }
+        }
     }
 
     fn parse_search_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {

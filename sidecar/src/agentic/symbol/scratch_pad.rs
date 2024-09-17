@@ -701,7 +701,8 @@ impl ScratchPadAgent {
                         symbols_edited_list,
                         message_properties,
                     )| async move {
-                        let symbol_identifier = symbol_request.to_symbol_identifier();
+                        let symbol_identifier =
+                            symbol_request.to_symbol_identifier_with_file_path();
                         {
                             let symbol_event_request = SymbolEventRequest::new(
                                 symbol_identifier.clone(),

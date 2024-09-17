@@ -1,7 +1,6 @@
 use async_stream::stream;
-use futures::{pin_mut, stream::Stream};
+use futures::{pin_mut, stream::Stream, StreamExt};
 use tokio::time::{sleep, Duration};
-use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
@@ -66,8 +65,17 @@ Create a new struct CodeRequestStopResponse similar to ProbeStopResponse
 
     pin_mut!(stream);
 
+    let mut buffer = String::new();
     while let Some(chunk) = stream.next().await {
         println!("Received chunk: {}", chunk);
+        buffer.push_str(&chunk);
+
+        // Attempt to extract the thinking tag's content
+        if let Some(content) = extract_thinking_content(&buffer) {
+            println!("Extracted thinking content: {}", content);
+            // If only interested in the first occurrence, we can break here
+            break;
+        }
     }
 }
 
@@ -83,4 +91,19 @@ fn simulate_stream(input: String, chunk_size: usize) -> impl Stream<Item = Strin
             sleep(Duration::from_millis(200)).await;
         }
     }
+}
+
+fn extract_thinking_content(buffer: &str) -> Option<String> {
+    // Find the start tag
+    if let Some(start_index) = buffer.find("<thinking>") {
+        // Find the end tag starting from the end of the start tag
+        if let Some(end_index) = buffer[start_index..].find("</thinking>") {
+            // Extract content between the tags
+            let content_start = start_index + "<thinking>".len();
+            let content_end = start_index + end_index;
+            let content = &buffer[content_start..content_end];
+            return Some(content.to_string());
+        }
+    }
+    None
 }

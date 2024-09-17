@@ -187,6 +187,26 @@ impl OutlineNodeContent {
         }
     }
 
+    pub fn file_symbol(
+        name: String,
+        range: Range,
+        content: String,
+        fs_file_path: String,
+        language: String,
+    ) -> Self {
+        Self {
+            range: range.clone(),
+            name,
+            r#type: OutlineNodeType::File,
+            content,
+            fs_file_path,
+            identifier_range: range.clone(),
+            body_range: range,
+            language,
+            trait_implementation: None,
+        }
+    }
+
     pub fn class_implementation_symbol(
         name: String,
         range: Range,
@@ -399,7 +419,13 @@ impl OutlineNode {
     /// Gives back a unique string representation of the outline node which can be used
     /// to de-duplicate outline nodes
     pub fn unique_identifier(&self) -> String {
-        format!("{}-{}-{}-{}", self.content.name(), self.content.fs_file_path(), self.identifier_range().start_line(), self.identifier_range().end_line())
+        format!(
+            "{}-{}-{}-{}",
+            self.content.name(),
+            self.content.fs_file_path(),
+            self.identifier_range().start_line(),
+            self.identifier_range().end_line()
+        )
     }
 
     pub fn identifier_range(&self) -> &Range {

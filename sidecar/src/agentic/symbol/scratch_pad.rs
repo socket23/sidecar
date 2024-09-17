@@ -622,7 +622,7 @@ impl ScratchPadAgent {
             // does not even see the code and what changes need to be made
             let mut symbols = self
                 .tool_box
-                .important_symbols(&important_symbols, message_properties.clone())
+                .important_symbols_per_file(&important_symbols, message_properties.clone())
                 .await
                 .map_err(|e| e.into())?;
 

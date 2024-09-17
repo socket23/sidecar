@@ -4849,21 +4849,13 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
     ) -> Result<String, CodeSymbolError> {
         let user_query = code_symbol_search_context_wide.user_query().to_owned();
         let file_extension_filter = code_symbol_search_context_wide.file_extension_filters();
-        let outline = code_symbol_search_context_wide.symbol_outline().to_owned();
         let user_context = code_symbol_search_context_wide.remove_user_context();
         let context_string = user_context
             .to_xml(file_extension_filter)
             .await
             .map_err(|e| CodeSymbolError::UserContextError(e))?;
         // also send the user query here
-        Ok(context_string
-            + "\n"
-            + "<outline>\n"
-            + &outline
-            + "\n</outline>\n"
-            + "<user_query>\n"
-            + &user_query
-            + "\n</user_query>")
+        Ok(context_string + "\n" + "<user_query>\n" + &user_query + "\n</user_query>")
     }
 
     fn system_message_for_repo_map_search(

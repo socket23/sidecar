@@ -143,6 +143,7 @@ async fn main() {
         SymbolEventRequestId::new(instance_id.to_owned(), instance_id.to_owned()),
         sender.clone(),
         editor_url.to_owned(),
+        tokio_util::sync::CancellationToken::new(),
     );
 
     let _symbol_manager = SymbolManager::new(

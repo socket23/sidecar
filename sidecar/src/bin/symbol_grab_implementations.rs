@@ -102,6 +102,7 @@ async fn main() {
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         ui_sender,
         editor_url.to_owned(),
+        tokio_util::sync::CancellationToken::new(),
     );
 
     let symbol_identifier =

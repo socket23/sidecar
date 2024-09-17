@@ -14,6 +14,10 @@ pub struct SymbolEventMessageProperties {
     request_id: SymbolEventRequestId,
     ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
     editor_url: String,
+    // pass the cancellation token over here so we can cancel any on-going requests
+    // with this cancellation token (this is not for the full session but the current
+    // event which we are processing)
+    cancellation_token: tokio_util::sync::CancellationToken,
 }
 
 impl SymbolEventMessageProperties {
@@ -21,11 +25,13 @@ impl SymbolEventMessageProperties {
         request_id: SymbolEventRequestId,
         ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
         editor_url: String,
+        cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             request_id,
             ui_sender,
             editor_url,
+            cancellation_token,
         }
     }
 
@@ -71,11 +77,17 @@ impl SymbolEventMessage {
         request_id: SymbolEventRequestId,
         ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
         response_sender: tokio::sync::oneshot::Sender<SymbolEventResponse>,
+        cancellation_token: tokio_util::sync::CancellationToken,
         editor_url: String,
     ) -> Self {
         Self {
             symbol_event_request,
-            properties: SymbolEventMessageProperties::new(request_id, ui_sender, editor_url),
+            properties: SymbolEventMessageProperties::new(
+                request_id,
+                ui_sender,
+                editor_url,
+                cancellation_token,
+            ),
             response_sender,
         }
     }

@@ -167,10 +167,6 @@ fn agentic_router() -> Router {
             "/code_sculpting_heal",
             post(sidecar::webserver::agentic::code_sculpting_heal),
         )
-        .route(
-            "/anchor_session_start",
-            post(sidecar::webserver::agentic::anchor_session_start),
-        )
         // route for push events coming from the editor
         .route(
             "/diagnostics",

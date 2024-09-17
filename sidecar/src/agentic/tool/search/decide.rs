@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename = "response")]
 pub struct DecideResponse {
+    #[serde(default)]
     suggestions: String,
     complete: bool,
 }

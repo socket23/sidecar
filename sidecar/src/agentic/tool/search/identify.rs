@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename = "response")]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(rename = "response", default)]
 pub struct IdentifyResponse {
     #[serde(rename = "item")]
     pub items: Vec<IdentifiedFile>,

@@ -5,7 +5,8 @@ use llm_client::{
     provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 use serde_xml_rs::{from_str, to_string};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+use tokio::time::sleep;
 
 use crate::agentic::tool::{
     file::types::SerdeError,
@@ -595,6 +596,7 @@ Notice how each xml tag ends with a new line, follow this format strictly.
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
                 const MAX_RETRIES: usize = 3;
+                const RETRY_DELAY: Duration = Duration::from_secs(1);
                 let mut attempt = 0;
                 loop {
                     attempt += 1;
@@ -621,6 +623,7 @@ Notice how each xml tag ends with a new line, follow this format strictly.
                         }
                         Err(e) if attempt < MAX_RETRIES => {
                             eprintln!("Attempt {} failed: {:?}. Retrying...", attempt, e);
+                            sleep(RETRY_DELAY).await;
                             continue;
                         }
                         Err(e) => break Err(IterativeSearchError::from(e)),

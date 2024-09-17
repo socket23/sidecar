@@ -165,7 +165,7 @@ impl File {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum SearchToolType {
-    #[default] // arbitrary
+    #[default] // arbitrarily default to File
     File,
     Keyword,
 }

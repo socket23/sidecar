@@ -346,19 +346,15 @@ false
     fn parse_search_response(response: &str) -> Result<SearchRequests, IterativeSearchError> {
         let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
-        from_str::<SearchRequests>(&lines).map_err(|error| {
-            eprintln!("{:?}", error);
-            IterativeSearchError::SerdeError(SerdeError::new(error, lines))
-        })
+        from_str::<SearchRequests>(&lines)
+            .map_err(|error| IterativeSearchError::SerdeError(SerdeError::new(error, lines)))
     }
 
     fn parse_identify_response(response: &str) -> Result<IdentifyResponse, IterativeSearchError> {
         let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
-        from_str::<IdentifyResponse>(&lines).map_err(|error| {
-            eprintln!("{:?}", error);
-            IterativeSearchError::SerdeError(SerdeError::new(error, lines))
-        })
+        from_str::<IdentifyResponse>(&lines)
+            .map_err(|error| IterativeSearchError::SerdeError(SerdeError::new(error, lines)))
     }
 
     fn get_reply_tags_contents(response: &str) -> String {
@@ -374,10 +370,8 @@ false
     fn parse_decide_response(response: &str) -> Result<DecideResponse, IterativeSearchError> {
         let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
-        from_str::<DecideResponse>(&lines).map_err(|error| {
-            eprintln!("{:?}", error);
-            IterativeSearchError::SerdeError(SerdeError::new(error, lines))
-        })
+        from_str::<DecideResponse>(&lines)
+            .map_err(|error| IterativeSearchError::SerdeError(SerdeError::new(error, lines)))
     }
 
     fn parse_query_relevant_files_response(
@@ -385,10 +379,8 @@ false
     ) -> Result<QueryRelevantFilesResponse, IterativeSearchError> {
         let lines = GoogleStudioLLM::get_reply_tags_contents(response);
 
-        from_str::<QueryRelevantFilesResponse>(&lines).map_err(|e| {
-            eprintln!("{:?}", e);
-            IterativeSearchError::SerdeError(SerdeError::new(e, lines))
-        })
+        from_str::<QueryRelevantFilesResponse>(&lines)
+            .map_err(|e| IterativeSearchError::SerdeError(SerdeError::new(e, lines)))
     }
 
     pub async fn identify(
@@ -602,25 +594,38 @@ Notice how each xml tag ends with a new line, follow this format strictly.
 
                 let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-                let response = self
-                    .client
-                    .stream_completion(
-                        self.api_keys.to_owned(),
-                        messages,
-                        self.provider.to_owned(),
-                        vec![
-                            ("event_type".to_owned(), "query_relevant_files".to_owned()),
-                            ("root_id".to_owned(), self.root_request_id.to_string()),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        sender,
-                    )
-                    .await?;
-
-                Ok(GoogleStudioLLM::parse_query_relevant_files_response(
-                    &response,
-                )?)
+                const MAX_RETRIES: usize = 3;
+                let mut attempt = 0;
+                loop {
+                    attempt += 1;
+                    match self
+                        .client
+                        .stream_completion(
+                            self.api_keys.clone(),
+                            messages.clone(),
+                            self.provider.clone(),
+                            vec![
+                                ("event_type".to_string(), "query_relevant_files".to_string()),
+                                ("root_id".to_string(), self.root_request_id.to_string()),
+                            ]
+                            .into_iter()
+                            .collect(),
+                            sender.clone(),
+                        )
+                        .await
+                    {
+                        Ok(response) => {
+                            break Ok(GoogleStudioLLM::parse_query_relevant_files_response(
+                                &response,
+                            )?)
+                        }
+                        Err(e) if attempt < MAX_RETRIES => {
+                            eprintln!("Attempt {} failed: {:?}. Retrying...", attempt, e);
+                            continue;
+                        }
+                        Err(e) => break Err(IterativeSearchError::from(e)),
+                    }
+                }
             }
         }
     }

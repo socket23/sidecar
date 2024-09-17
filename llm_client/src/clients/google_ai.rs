@@ -302,6 +302,11 @@ impl LLMClient for GoogleAIStdioClient {
             .send()
             .await?;
         if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await?;
+
+            eprintln!("HTTP Error: {} {}", status.as_u16(), status.as_str());
+            eprintln!("Response body: {}", error_body);
             return Err(LLMClientError::FailedToGetResponse);
         }
 

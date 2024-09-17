@@ -3,17 +3,11 @@ use std::path::Path;
 
 #[tokio::main]
 async fn main() {
-    let full_path = Path::new("/Users/zi/codestory/sidecar/sidecar");
+    let full_path = Path::new("/Users/zi/codestory/sidecar/sidecar/src");
     let tag_index = TagIndex::from_path(full_path).await;
-    let repomap = RepoMap::new().with_map_tokens(1000);
+    let repomap = RepoMap::new().with_map_tokens(30_000);
 
-    // change this to the directory you want to generate a repomap for
-    // let dir = PathBuf::from(".");
-    // let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let repomap_string = repomap.get_repo_map(&tag_index).await.unwrap();
 
-    // let full_path = project_root.join(&dir);
-
-    let repomap = repomap.get_repo_map(&tag_index).await.unwrap();
-
-    println!("{}", repomap);
+    println!("{}", repomap_string);
 }

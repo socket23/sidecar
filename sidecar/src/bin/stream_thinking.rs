@@ -65,16 +65,18 @@ Create a new struct CodeRequestStopResponse similar to ProbeStopResponse
 
     pin_mut!(stream);
 
+    let mut result = vec![];
+
     let mut buffer = String::new();
     while let Some(chunk) = stream.next().await {
         println!("Received chunk: {}", chunk);
         buffer.push_str(&chunk);
 
         // Attempt to extract the thinking tag's content
-        if let Some(content) = extract_thinking_content(&buffer) {
+        if let Some(content) = extract_tag_content(&buffer, "thinking") {
             println!("Extracted thinking content: {}", content);
-            // If only interested in the first occurrence, we can break here
-            break;
+
+            result.push(content);
         }
     }
 }
@@ -93,13 +95,15 @@ fn simulate_stream(input: String, chunk_size: usize) -> impl Stream<Item = Strin
     }
 }
 
-fn extract_thinking_content(buffer: &str) -> Option<String> {
+fn extract_tag_content(buffer: &str, tag_name: &str) -> Option<String> {
+    let tag_start = format!("<{}>", tag_name);
+    let tag_end = format!("</{}>", tag_name);
     // Find the start tag
-    if let Some(start_index) = buffer.find("<thinking>") {
+    if let Some(start_index) = buffer.find(&tag_start) {
         // Find the end tag starting from the end of the start tag
-        if let Some(end_index) = buffer[start_index..].find("</thinking>") {
+        if let Some(end_index) = buffer[start_index..].find(&tag_end) {
             // Extract content between the tags
-            let content_start = start_index + "<thinking>".len();
+            let content_start = start_index + tag_start.len();
             let content_end = start_index + end_index;
             let content = &buffer[content_start..content_end];
             return Some(content.to_string());

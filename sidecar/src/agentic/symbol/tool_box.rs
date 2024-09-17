@@ -5183,7 +5183,7 @@ instruction:
                 Ok(())
             },
         )
-        .buffer_unordered(1) // one at a time for now todo(zi);
+        .buffer_unordered(20) // 20 at a time for now todo(zi);
         .collect::<Vec<Result<(), SymbolError>>>()
         .await;
         Ok(())

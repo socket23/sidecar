@@ -59,6 +59,10 @@ impl SymbolEventMessageProperties {
         self.request_id = self.request_id.set_request_id(request_id);
         self
     }
+
+    pub fn cancellation_token(&self) -> tokio_util::sync::CancellationToken {
+        self.cancellation_token.clone()
+    }
 }
 
 /// The properties which get sent along with a symbol request across
@@ -130,5 +134,9 @@ impl SymbolEventMessage {
 
     pub fn remove_response_sender(self) -> tokio::sync::oneshot::Sender<SymbolEventResponse> {
         self.response_sender
+    }
+
+    pub fn cancellation_token(&self) -> tokio_util::sync::CancellationToken {
+        self.properties.cancellation_token.clone()
     }
 }

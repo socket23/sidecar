@@ -127,6 +127,7 @@ async fn main() {
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender,
         response_sender,
+        tokio_util::sync::CancellationToken::new(),
         editor_url.to_owned(),
     );
     let mut probe_task =

@@ -409,23 +409,35 @@ false
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        let response = self
-            .client
-            .stream_completion(
-                self.api_keys.to_owned(),
-                messages,
-                self.provider.to_owned(),
-                vec![
-                    ("event_type".to_owned(), "identify".to_owned()),
-                    ("root_id".to_owned(), self.root_request_id.to_string()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
+        let mut attempt = 0;
 
-        Ok(GoogleStudioLLM::parse_identify_response(&response)?)
+        loop {
+            attempt += 1;
+            match self
+                .client
+                .stream_completion(
+                    self.api_keys.to_owned(),
+                    messages.clone(),
+                    self.provider.to_owned(),
+                    vec![
+                        ("event_type".to_owned(), "identify".to_owned()),
+                        ("root_id".to_owned(), self.root_request_id.to_string()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender.clone(),
+                )
+                .await
+            {
+                Ok(response) => break Ok(GoogleStudioLLM::parse_identify_response(&response)?),
+                Err(e) if attempt < MAX_RETRIES => {
+                    eprintln!("Attempt {} failed: {:?}. Retrying...", attempt, e);
+                    sleep(RETRY_DELAY).await;
+                    continue;
+                }
+                Err(e) => break Err(IterativeSearchError::from(e)),
+            }
+        }
     }
 
     pub async fn decide(

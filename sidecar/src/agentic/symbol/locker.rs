@@ -152,6 +152,7 @@ impl SymbolLocker {
                     request_id,
                     ui_sender,
                     sender,
+                    message_properties.cancellation_token(),
                     message_properties.editor_url(),
                 )) {
                     Ok(_) => {}

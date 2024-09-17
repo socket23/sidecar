@@ -4236,6 +4236,7 @@ Please update this code to accommodate these changes. Consider:
                                 .set_request_id(uuid::Uuid::new_v4().to_string()),
                             message_properties.ui_sender(),
                             sender,
+                            message_properties.cancellation_token(),
                             message_properties.editor_url(),
                         );
                         let _ = hub_sender.send(event);

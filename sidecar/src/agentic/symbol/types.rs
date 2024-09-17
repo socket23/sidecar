@@ -5,7 +5,7 @@
 //! keep track of and whenever a question is asked we forward it to all the implementations
 //! and select the ones which are necessary.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
 
 use derivative::Derivative;
 use futures::{future::Shared, stream, FutureExt, StreamExt};
@@ -1973,6 +1973,7 @@ Satisfy the requirement either by making edits or gathering the required informa
             .map(|symbol_event| (symbol_event, self.clone()))
             .map(|(symbol_event, symbol)| async move {
                 let ui_sender = symbol_event.ui_sender();
+                let cancellation_token = symbol_event.cancellation_token();
                 let symbol_event_request = symbol_event.symbol_event_request().clone();
                 let request_id_data = symbol_event.request_id_data().clone();
                 let message_properties = symbol_event.get_properties().clone();
@@ -1987,16 +1988,21 @@ Satisfy the requirement either by making edits or gathering the required informa
                     SymbolEvent::InitialRequest(initial_request) => {
                         println!("Symbol::inital_request: {}", symbol.symbol_name());
                         symbol.refresh_state(message_properties.clone()).await;
-                        let initial_request = symbol
-                            .generate_initial_request(initial_request, message_properties.clone())
-                            .await;
+                        let initial_request = run_with_cancellation(
+                            cancellation_token,
+                            symbol.generate_initial_request(
+                                initial_request,
+                                message_properties.clone(),
+                            ),
+                        )
+                        .await;
                         println!(
-                            "Symbol::initial_request::generated({}).is_ok({})",
+                            "Symbol::initial_request::generated({}).is_some({})",
                             symbol.symbol_name(),
-                            initial_request.is_ok(),
+                            initial_request.is_some(),
                         );
                         match initial_request {
-                            Ok(Some(initial_request)) => {
+                            Some(Ok(Some(initial_request))) => {
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
                                 let event = SymbolEventMessage::message_with_properties(
                                     initial_request.clone(),
@@ -2027,19 +2033,26 @@ Satisfy the requirement either by making edits or gathering the required informa
                                 ));
                                 Ok(())
                             }
-                            Ok(None) => {
+                            Some(Ok(None)) => {
                                 println!("symbol::run::initial_request::empy_response");
                                 let _ = response_sender.send(SymbolEventResponse::TaskDone(
                                     "initial request done".to_owned(),
                                 ));
                                 Ok(())
                             }
-                            Err(e) => {
+                            Some(Err(e)) => {
                                 println!("symbol::run::initial_request::({:?})", &e);
                                 let _ = response_sender.send(SymbolEventResponse::TaskDone(
                                     "initial request done".to_owned(),
                                 ));
                                 Err(e)
+                            }
+                            None => {
+                                println!("symbol::run::initial_request::cancelled");
+                                let _ = response_sender.send(SymbolEventResponse::TaskDone(
+                                    "initial request cancelled".to_owned(),
+                                ));
+                                Ok(())
                             }
                         }
                     }
@@ -2058,15 +2071,21 @@ Satisfy the requirement either by making edits or gathering the required informa
                             "symbol::types::symbol_event::edit::edit_implementations({})",
                             symbol.symbol_name()
                         );
-                        let response = symbol
-                            .edit_implementations(
+                        let response = run_with_cancellation(
+                            cancellation_token,
+                            symbol.edit_implementations(
                                 edit_request,
                                 message_properties.clone(),
                                 tool_properties.clone(),
-                            )
-                            .await;
-                        if let Ok(response) = response {
+                            ),
+                        )
+                        .await;
+                        if let Some(Ok(response)) = response {
                             let _ = response_sender.send(response);
+                        } else if let None = response {
+                            let _ = response_sender.send(SymbolEventResponse::TaskDone(
+                                "edit cancellation triggered".to_owned(),
+                            ));
                         } else {
                             let _ = response_sender
                                 .send(SymbolEventResponse::TaskDone("edit failed".to_owned()));
@@ -2155,5 +2174,18 @@ Satisfy the requirement either by making edits or gathering the required informa
             .collect::<Vec<_>>()
             .await;
         Ok(())
+    }
+}
+
+async fn run_with_cancellation<F, T>(
+    cancel_token: tokio_util::sync::CancellationToken,
+    future: F,
+) -> Option<T>
+where
+    F: Future<Output = T>,
+{
+    tokio::select! {
+        res = future => Some(res),               // Future completed successfully
+        _ = cancel_token.cancelled() => None,    // Cancellation token was triggered
     }
 }

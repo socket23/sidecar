@@ -31,7 +31,7 @@ use super::{
     errors::ToolError,
     file::file_finder::ImportantFilesFinderBroker,
     filtering::broker::CodeToEditFormatterBroker,
-    git::diff_client::GitDiffClient,
+    git::{diff_client::GitDiffClient, edited_files::EditedFiles},
     grep::file::FindInFile,
     input::ToolInput,
     lsp::{
@@ -383,6 +383,7 @@ impl ToolBroker {
             ToolType::ScratchPadAgent,
             Box::new(ScratchPadAgentBroker::new(llm_client)),
         );
+        tools.insert(ToolType::EditedFiles, Box::new(EditedFiles::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

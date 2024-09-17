@@ -447,23 +447,34 @@ false
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        let response = self
-            .client
-            .stream_completion(
-                self.api_keys.to_owned(),
-                messages,
-                self.provider.to_owned(),
-                vec![
-                    ("event_type".to_owned(), "decide".to_owned()),
-                    ("root_id".to_owned(), self.root_request_id.to_string()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
-
-        Ok(GoogleStudioLLM::parse_decide_response(&response)?)
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            match self
+                .client
+                .stream_completion(
+                    self.api_keys.to_owned(),
+                    messages.clone(),
+                    self.provider.to_owned(),
+                    vec![
+                        ("event_type".to_owned(), "decide".to_owned()),
+                        ("root_id".to_owned(), self.root_request_id.to_string()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender.clone(),
+                )
+                .await
+            {
+                Ok(response) => break Ok(GoogleStudioLLM::parse_decide_response(&response)?),
+                Err(e) if attempt < MAX_RETRIES => {
+                    eprintln!("Attempt {} failed: {:?}. Retrying...", attempt, e);
+                    sleep(RETRY_DELAY).await;
+                    continue;
+                }
+                Err(e) => break Err(IterativeSearchError::from(e)),
+            }
+        }
     }
 
     pub fn strip_xml_declaration(input: &str) -> &str {

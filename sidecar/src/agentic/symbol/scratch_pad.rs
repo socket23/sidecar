@@ -315,8 +315,13 @@ impl ScratchPadAgent {
     ) -> Result<(), SymbolError> {
         match agent_message {
             AgentMessage::ReferenceCheck(reference_check) => {
-                self.agent_reference_check(reference_check, message_properties)
-                    .await
+                let cloned_self = self.clone();
+                let _ = tokio::spawn(async move {
+                    cloned_self
+                        .agent_reference_check(reference_check, message_properties)
+                        .await
+                });
+                Ok(())
             }
         }
     }

@@ -5734,9 +5734,9 @@ FILEPATH: {fs_file_path}
         .await;
 
         // now we want to parse the files which we are getting
-        stream::iter(file_paths)
-            .map(|file_path| async move {
-                let outline_nodes = self.get_outline_nodes_grouped(&file_path).await;
+        stream::iter(file_paths.into_iter().map(|fs_file_path| (fs_file_path, message_properties.clone())))
+            .map(|(file_path, message_properties)| async move {
+                let outline_nodes = self.get_outline_nodes_from_editor(&file_path, message_properties.clone()).await;
                 (file_path, outline_nodes)
             })
             .buffer_unordered(4)

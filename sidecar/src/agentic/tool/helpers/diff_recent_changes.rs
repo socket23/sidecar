@@ -7,7 +7,7 @@ use llm_client::clients::types::LLMClientMessage;
 
 /// Contains the diff recent changes, with the caveat that the l1_changes are
 /// the variable one and the l2_changes are the static one
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct DiffRecentChanges {
     l1_changes: String,
     l2_changes: String,

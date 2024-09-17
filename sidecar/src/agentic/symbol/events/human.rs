@@ -1,6 +1,6 @@
 //! Contains the different kind of messages which are coming from the human
 
-use crate::agentic::symbol::anchored::AnchoredSymbol;
+use crate::{agentic::symbol::anchored::AnchoredSymbol, user_context::types::UserContext};
 
 #[derive(Debug, Clone)]
 pub struct HumanAnchorRequest {
@@ -33,10 +33,68 @@ impl HumanAnchorRequest {
     pub fn anchor_request_context(&self) -> Option<String> {
         self.anchor_request_context.clone()
     }
+
+    pub fn to_string(&self) -> String {
+        let query = &self.query;
+        let anchored_symbols_to_string = self
+            .anchored_symbols
+            .iter()
+            .map(|anchor_symbol| {
+                let name = anchor_symbol.name();
+                let fs_file_path = anchor_symbol.fs_file_path().unwrap_or_default();
+                format!("{name} at {fs_file_path}")
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "developer request:{query}
+edited: {anchored_symbols_to_string}"
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HumanAgenticRequest {
+    user_query: String,
+    root_directory: String,
+    codebase_search: bool,
+    user_context: UserContext,
+}
+
+impl HumanAgenticRequest {
+    pub fn new(
+        user_query: String,
+        root_directory: String,
+        codebase_search: bool,
+        user_context: UserContext,
+    ) -> Self {
+        Self {
+            user_context,
+            user_query,
+            root_directory,
+            codebase_search,
+        }
+    }
+    pub fn user_context(&self) -> UserContext {
+        self.user_context.clone()
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
+    }
+
+    pub fn root_directory(&self) -> &str {
+        &self.root_directory
+    }
+
+    pub fn codebase_search(&self) -> bool {
+        self.codebase_search
+    }
 }
 
 #[derive(Debug)]
 pub enum HumanMessage {
     Followup(String),
     Anchor(HumanAnchorRequest),
+    Agentic(HumanAgenticRequest),
 }

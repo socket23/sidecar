@@ -72,11 +72,13 @@ pub struct SearchAndReplaceEditingRequest {
     symbol_identifier: SymbolIdentifier,
     edit_request_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
-    user_context: Option<String>,
+    cache_contents: Option<String>,
     editor_url: String,
     // its a vec of string here so we can select the cache points as required
     // and optimise for that
     diff_recent_changes: Option<DiffRecentChanges>,
+    // previous user queries which have been part of the same edit sequence
+    previous_user_queries: Vec<String>,
     // use a is_warmup field
     is_warmup: bool,
 }
@@ -95,11 +97,12 @@ impl SearchAndReplaceEditingRequest {
         symbol_identifier: SymbolIdentifier, // Unique identifier for the symbol being edited
         edit_request_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
-        // Important: user_context provides essential information for the editing process
-        user_context: Option<String>,
+        // Important: cache_contents provides essential information for the editing process
+        cache_contents: Option<String>,
         // Indicates whether this is a warmup request to prepare the LLM
         editor_url: String,
         diff_recent_changes: Option<DiffRecentChanges>,
+        previous_user_queries: Vec<String>,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
     ) -> Self {
         Self {
@@ -115,9 +118,10 @@ impl SearchAndReplaceEditingRequest {
             symbol_identifier,
             edit_request_id,
             ui_sender,
-            user_context,
+            cache_contents,
             editor_url,
             diff_recent_changes,
+            previous_user_queries,
             is_warmup,
         }
     }
@@ -180,6 +184,8 @@ The most important principle is to keep it simple. Always opt for the simplest, 
 You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
 You will be presented with a single file and the code which you can EDIT will be given in a <code_to_edit_section>
+The previous EDITs done by the user are present in <diff_recent_changes>. You can use this to create correct EDIT and using the correct function or method.
+The previous intentions of the user are present in <previous_user_queries>. These include the intention of the user.
 You will be also provided with some extra data, which contains various definitions of symbols which you can use to use the call the correct functions and re-use existing functionality in the code, this will be provided to you in <user_provided_context>
 You are not to make changes in the <user_provided_context> ONLY EDIT the code in <code_to_edit_section>
 Take requests for changes to the supplied code.
@@ -274,14 +280,28 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
         )
     }
 
+    /// The user message structure looks like this:
+    ///
+    /// <cache_content>
+    /// </cache_content>                            : CACHE_POINT
+    /// <git_diff_ordered_by_timestamp_ms>
+    /// <disjoin_set_of_files_not_in_edit>
+    /// </disjoin_set_of_files_not_in_edit>         : CACHE_POINT
+    /// </git_diff_ordered_by_timestamp_ms>
+    /// <previous_user_intents>
+    /// </previous_user_intent>
+    /// <code_in_selection>
+    /// </code_in_selection>
+    /// <code_to_edit>
+    /// </code_to_edit>
     fn user_messages(&self, context: SearchAndReplaceEditingRequest) -> Vec<LLMClientMessage> {
         let mut messages = vec![];
-        let user_context = context.user_context;
+        let cache_contents = context.cache_contents;
         let extra_data = self.extra_data(&context.extra_data);
-        if let Some(user_context) = user_context {
+        if let Some(cache_contents) = cache_contents {
             let user_provided_context = LLMClientMessage::user(format!(
                 r#"<user_provided_context>
-{user_context}
+{cache_contents}
 </user_provided_context>
 {extra_data}
 As a reminder, once you understand the request you MUST:
@@ -341,6 +361,22 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#
         // TODO(skcd): We should enforce a cache endpoint over here, what we ideally want is tiers
         // of memory over here
         let mut user_message = "".to_owned();
+        // also show the previous user requests if any
+        if !context.previous_user_queries.is_empty() {
+            let previous_queries = context
+                .previous_user_queries
+                .into_iter()
+                .map(|user_query| format!("- {}", user_query))
+                .collect::<Vec<_>>()
+                .join("\n");
+            user_message = user_message
+                + &format!(
+                    r#"My previous requests for edits which you worked on are listed out below:
+<previous_user_queries>
+{previous_queries}
+</previous_user_queries>"#
+                )
+        }
         if let Some(extra_symbols) = context.new_symbols.clone() {
             user_message = user_message
                 + &format!(

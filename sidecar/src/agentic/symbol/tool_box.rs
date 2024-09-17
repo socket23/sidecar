@@ -93,6 +93,7 @@ use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::lsp::quick_fix::{GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
+use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
 use crate::chunking::editor_parsing::EditorParsing;
@@ -138,6 +139,10 @@ impl ToolBox {
             symbol_broker,
             editor_parsing,
         }
+    }
+
+    pub fn tools(&self) -> Arc<ToolBroker> {
+        self.tools.clone()
     }
 
     /// sends the user query to the scratch-pad agent
@@ -2247,6 +2252,8 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -2265,6 +2272,8 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
+                    vec![],
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),
@@ -2458,6 +2467,8 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -2550,6 +2561,8 @@ Please update this code to accommodate these changes. Consider:
                                             false,
                                             None,
                                             true,
+                                            None,
+                                            vec![],
                                         ),
                                         SymbolIdentifier::with_file_path(
                                             class_symbol_name,
@@ -2585,6 +2598,8 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
+                    vec![],
                 ),
                 message_properties.clone(),
             )
@@ -2755,6 +2770,8 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -2773,6 +2790,8 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
+                    vec![],
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -2950,6 +2969,8 @@ Please update this code to accommodate these changes. Consider:
                                                     false,
                                                     None,
                                                     true,
+                                                    None,
+                                                    vec![],
                                                 ),
                                                 SymbolIdentifier::with_file_path(
                                                     changed_outline_node.name(),
@@ -2998,6 +3019,8 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
+                    vec![],
                 ),
                 message_properties.clone(),
             )
@@ -3067,6 +3090,8 @@ Please update this code to accommodate these changes. Consider:
                                     false,
                                     None,
                                     true,
+                                    None,
+                                    vec![],
                                 ),
                                 SymbolIdentifier::with_file_path(
                                     class_implementation_name,
@@ -3203,6 +3228,8 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -3287,6 +3314,8 @@ Please update this code to accommodate these changes. Consider:
                                         false,
                                         None,
                                         true,
+                                        None,
+                                        vec![],
                                     ),
                                     SymbolIdentifier::with_file_path(
                                         class_implementation_name,
@@ -3426,6 +3455,8 @@ Please update this code to accommodate these changes. Consider:
                         false,
                         None,
                         true,
+                        None,
+                        vec![],
                     ),
                     message_properties.clone(),
                 )
@@ -3444,6 +3475,8 @@ Please update this code to accommodate these changes. Consider:
                     false,
                     None,
                     true,
+                    None,
+                    vec![],
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -4526,6 +4559,8 @@ Make the necessary changes if required making sure that nothing breaks"#
             false,
             None,
             true, // disable any kind of followups or correctness check
+            None,
+            vec![],
         );
 
         let event = SymbolEventMessage::message_with_properties(
@@ -4631,6 +4666,8 @@ Make the necessary changes if required making sure that nothing breaks"#
                 false,
                 None,
                 true,
+                None,
+                vec![],
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -5348,15 +5385,6 @@ instruction:
         // TODO(skcd): This might not be the perfect place to get cache-hits we might
         // want to send over the static list of edits at the start of each iteration?
         let recent_edits = self.recently_edited_files(vec![fs_file_path.to_owned()].into_iter().collect(), message_properties.clone()).await.ok();
-        // disable inlay hints, cause it causes the LLM to mess up the code
-        // in_range_selection = self
-        //     .apply_inlay_hints(
-        //         fs_file_path,
-        //         &in_range_selection,
-        //         selection_range,
-        //         message_properties.clone(),
-        //     )
-        //     .await?;
         let symbols_to_edit = symbols_edited_list.map(|symbols| {
             symbols
                 .into_iter()
@@ -5394,6 +5422,7 @@ FILEPATH: {fs_file_path}
             user_provided_context,
             message_properties.editor_url(),
             recent_edits,
+            sub_symbol.previous_user_queries().to_vec(),
             false,
         ));
         println!(
@@ -6345,6 +6374,8 @@ FILEPATH: {fs_file_path}
                     false,
                     None,
                     true,
+                    None,
+                    vec![],
                 ),
                 message_properties.clone(),
             )
@@ -7675,6 +7706,8 @@ FILEPATH: {fs_file_path}
                                                     true,
                                                     None,
                                                     true, // should we disable followups and correctness check
+                                                    None,
+                                                    vec![],
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -7714,6 +7747,8 @@ FILEPATH: {fs_file_path}
                                     true,
                                     None,
                                     true, // should we disable followups and correctness check
+                                    None,
+                                    vec![],
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
@@ -7871,6 +7906,8 @@ FILEPATH: {fs_file_path}
         anchored_symbols: &[AnchoredSymbol],
         user_query: &str,
         user_provided_context: Option<String>,
+        recent_diff_changes: DiffRecentChanges,
+        previous_user_queries: Vec<String>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<SymbolToEditRequest>, SymbolError> {
         println!(
@@ -7929,6 +7966,8 @@ FILEPATH: {fs_file_path}
                         false, // grab definitions
                         user_provided_context.to_owned(),
                         false, // disable followups - keep false to enable followups
+                        Some(recent_diff_changes.clone()),
+                        previous_user_queries.to_vec(),
                     )],
                     symbol_identifier.clone(),
                     vec![],
@@ -7975,6 +8014,8 @@ FILEPATH: {fs_file_path}
                                 false,
                                 user_provided_context.clone(),
                                 true, // should we disable followups and correctness check
+                                None,
+                                vec![],
                             ))
                         } else {
                             None
@@ -7999,6 +8040,8 @@ FILEPATH: {fs_file_path}
                                         false,
                                         user_provided_context.clone(),
                                         true, // should we disable followups and correctness check
+                                        None,
+                                        vec![],
                                     ))
                                 } else {
                                     None
@@ -8266,12 +8309,12 @@ FILEPATH: {fs_file_path}
     /// keep the cache warm
     pub async fn warmup_context(
         &self,
-        file_paths: Vec<String>,
+        file_paths: Vec<OpenFileResponse>,
         grab_import_nodes: bool,
         message_properties: SymbolEventMessageProperties,
     ) {
         let file_paths_to_user_context = self
-            .file_paths_to_user_context(file_paths, grab_import_nodes, message_properties.clone())
+            .file_paths_to_user_context(file_paths.into_iter().map(|file_path| file_path.fs_file_path().to_owned()).collect(), grab_import_nodes, message_properties.clone())
             .await
             .ok();
         let sender = message_properties.ui_sender();
@@ -8283,6 +8326,7 @@ FILEPATH: {fs_file_path}
             LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
         );
 
+        // TODO(skcd): Figure out how to maximise the prompt cache hit over here
         let search_and_replace_request = SearchAndReplaceEditingRequest::new(
             "".to_owned(),
             Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),
@@ -8299,6 +8343,7 @@ FILEPATH: {fs_file_path}
             file_paths_to_user_context,
             editor_url,
             None,
+            vec![],
             true,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
@@ -8462,5 +8507,52 @@ FILEPATH: {fs_file_path}
         // which exist in our important file paths and mark them as l1 cache
         // while keeping the other set of files as l2 cache
         Ok(DiffRecentChanges::new(l1_cache, l2_cache))
+    }
+
+    pub async fn reference_filtering(
+        &self,
+        user_query: &str,
+        references: Vec<AnchoredReference>,
+        message_properties: SymbolEventMessageProperties,
+    ) {
+        let start = std::time::Instant::now();
+        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+        let llm_properties = LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            anthropic_api_keys.clone(),
+        );
+        let references = references
+            .into_iter()
+            .take(10) // todo(zi): so we don't go crazy with 1000s of requests
+            .collect::<Vec<_>>();
+        println!(
+            "tool_box:reference_filtering::references.len({:?})",
+            &references.len()
+        );
+        let request = ReferenceFilterRequest::new(
+            user_query.to_owned(),
+            llm_properties.clone(),
+            message_properties.request_id_str().to_owned(),
+            message_properties.clone(),
+            references.clone(),
+        );
+        let llm_time = Instant::now();
+        let _relevant_references = match self.tools
+            .invoke(ToolInput::ReferencesFilter(request))
+            .await
+        {
+            Ok(ok_references) => ok_references.get_relevant_references().unwrap_or_default(),
+            Err(err) => {
+                eprintln!("Failed to filter references: {:?}", err);
+                Vec::new()
+            }
+        };
+        println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
+
+        println!(
+            "collect references async task total elapsed: {:?}",
+            start.elapsed()
+        );
     }
 }

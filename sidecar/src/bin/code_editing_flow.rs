@@ -121,15 +121,15 @@ async fn main() {
 
     let user_context = UserContext::new(vec![], vec![], None, vec![]);
 
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let event_properties = SymbolEventMessageProperties::new(
+    let _event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
     );
 
-    let symbol_manager = SymbolManager::new(
+    let _symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing,
@@ -170,7 +170,7 @@ async fn main() {
 
     let root_dir = "/Users/zi/codestory/sidecar/sidecar/src";
 
-    let initial_request = SymbolInputEvent::new(
+    let _initial_request = SymbolInputEvent::new(
         user_context,
         LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,
@@ -192,31 +192,31 @@ async fn main() {
         sender,
     );
 
-    let mut initial_request_task =
-        Box::pin(symbol_manager.initial_request(initial_request, event_properties));
+    // let mut initial_request_task =
+    //     Box::pin(symbol_manager.initial_request(initial_request, event_properties));
 
-    loop {
-        tokio::select! {
-            event = receiver.recv() => {
-                if let Some(_event) = event {
-                    // info!("event: {:?}", event);
-                } else {
-                    break; // Receiver closed, exit the loop
-                }
-            }
-            result = &mut initial_request_task => {
-                match result {
-                    Ok(_) => {
-                        // The task completed successfully
-                        // Handle the result if needed
-                    }
-                    Err(e) => {
-                        // An error occurred while running the task
-                        eprintln!("Error in initial_request_task: {}", e);
-                        // Handle the error appropriately (e.g., log, retry, or exit)
-                    }
-                }
-            }
-        }
-    }
+    // loop {
+    //     tokio::select! {
+    //         event = receiver.recv() => {
+    //             if let Some(_event) = event {
+    //                 // info!("event: {:?}", event);
+    //             } else {
+    //                 break; // Receiver closed, exit the loop
+    //             }
+    //         }
+    //         result = &mut initial_request_task => {
+    //             match result {
+    //                 Ok(_) => {
+    //                     // The task completed successfully
+    //                     // Handle the result if needed
+    //                 }
+    //                 Err(e) => {
+    //                     // An error occurred while running the task
+    //                     eprintln!("Error in initial_request_task: {}", e);
+    //                     // Handle the error appropriately (e.g., log, retry, or exit)
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 }

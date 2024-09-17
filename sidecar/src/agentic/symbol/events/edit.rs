@@ -1,4 +1,9 @@
-use crate::{agentic::symbol::identifier::SymbolIdentifier, chunking::text_document::Range};
+use crate::{
+    agentic::{
+        symbol::identifier::SymbolIdentifier, tool::helpers::diff_recent_changes::DiffRecentChanges,
+    },
+    chunking::text_document::Range,
+};
 
 use super::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 
@@ -22,6 +27,10 @@ pub struct SymbolToEdit {
     disable_followups_and_correctness: bool,
     // if we should apply the edits directly
     apply_edits_directly: bool,
+    // the recent changes which have happened in the editor ordered with priority
+    diff_recent_changes: Option<DiffRecentChanges>,
+    // any previous user queries which the user has done
+    previous_user_queries: Vec<String>,
 }
 
 impl SymbolToEdit {
@@ -38,6 +47,8 @@ impl SymbolToEdit {
         gather_definitions_for_editing: bool,
         user_provided_context: Option<String>,
         disable_followups_and_correctness: bool,
+        diff_recent_changes: Option<DiffRecentChanges>,
+        previous_user_queries: Vec<String>,
     ) -> Self {
         Self {
             symbol_name,
@@ -53,6 +64,8 @@ impl SymbolToEdit {
             user_provided_context,
             disable_followups_and_correctness,
             apply_edits_directly: false,
+            diff_recent_changes,
+            previous_user_queries,
         }
     }
 
@@ -75,6 +88,10 @@ impl SymbolToEdit {
 
     pub fn symbol_edited_list(&self) -> Option<Vec<SymbolEditedItem>> {
         self.symbol_edited_list.clone()
+    }
+
+    pub fn previous_user_queries(&self) -> &[String] {
+        self.previous_user_queries.as_slice()
     }
 
     pub fn original_user_query(&self) -> &str {

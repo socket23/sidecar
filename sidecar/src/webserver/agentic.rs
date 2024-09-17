@@ -1,51 +1,35 @@
 //! Contains the handler for agnetic requests and how they work
 
+use super::model_selection::LLMClientConfig;
 use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::{stream, StreamExt};
-use llm_client::provider::GoogleAIStudioKey;
-use llm_client::{
-    clients::types::LLMType,
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
-};
 use serde_json::json;
 use std::collections::HashMap;
-use std::time::Instant;
 use std::{sync::Arc, time::Duration};
-use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+use super::types::Result;
 use crate::agentic::symbol::anchored::AnchoredSymbol;
-use crate::agentic::symbol::events::environment_event::EnvironmentEventType;
+use crate::agentic::symbol::events::agent::AgentMessage;
+use crate::agentic::symbol::events::environment_event::{EnvironmentEvent, EnvironmentEventType};
+use crate::agentic::symbol::events::human::{HumanAgenticRequest, HumanMessage};
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
-use crate::agentic::symbol::events::lsp::{LSPDiagnosticError, LSPSignal};
+use crate::agentic::symbol::events::lsp::LSPDiagnosticError;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
 use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
-use crate::agentic::tool::broker::ToolBrokerConfiguration;
-use crate::agentic::tool::input::ToolInput;
-use crate::agentic::tool::r#type::Tool;
-use crate::agentic::tool::ref_filter::ref_filter::{ReferenceFilterBroker, ReferenceFilterRequest};
+use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::chunking::text_document::Range;
-use crate::{
-    agentic::{
-        symbol::{
-            events::input::SymbolInputEvent, identifier::LLMProperties, manager::SymbolManager,
-        },
-        tool::{broker::ToolBroker, code_edit::models::broker::CodeEditBroker},
-    },
-    application::application::Application,
-    user_context::types::UserContext,
-};
+use crate::{application::application::Application, user_context::types::UserContext};
 
 use super::types::ApiResponse;
-use super::{model_selection::LLMClientConfig, types::Result};
 
 /// Tracks and manages probe requests in a concurrent environment.
 /// This struct is responsible for keeping track of ongoing probe requests
@@ -80,7 +64,7 @@ impl ProbeRequestTracker {
 
 /// Contains all the data which we will need to trigger the edits
 /// Represents metadata for anchored editing operations.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct AnchoredEditingMetadata {
     /// Properties of the message event associated with this editing session.
     message_properties: SymbolEventMessageProperties,
@@ -98,7 +82,9 @@ struct AnchoredEditingMetadata {
     /// This can provide additional information or constraints for the editing process.
     user_context_string: Option<String>,
     /// environment events
-    environment_event_sender: UnboundedSender<EnvironmentEventType>,
+    environment_event_sender: UnboundedSender<EnvironmentEvent>,
+    /// the scratchpad agent which tracks the state of the request
+    scratch_pad_agent: ScratchPadAgent,
 }
 
 impl AnchoredEditingMetadata {
@@ -108,7 +94,8 @@ impl AnchoredEditingMetadata {
         previous_file_content: HashMap<String, String>,
         references: Vec<RelevantReference>,
         user_context_string: Option<String>,
-        environment_event_sender: UnboundedSender<EnvironmentEventType>,
+        scratch_pad_agent: ScratchPadAgent,
+        environment_event_sender: UnboundedSender<EnvironmentEvent>,
     ) -> Self {
         Self {
             message_properties,
@@ -116,6 +103,7 @@ impl AnchoredEditingMetadata {
             previous_file_content,
             references,
             user_context_string,
+            scratch_pad_agent,
             environment_event_sender,
         }
     }
@@ -130,6 +118,10 @@ impl AnchoredEditingMetadata {
 }
 
 pub struct AnchoredEditingTracker {
+    // right now our cache is made up of file path to the file content and this is the cache
+    // which we pass to the agents when we startup
+    // we update the cache only when we have a hit on a new request
+    cache_right_now: Arc<Mutex<Vec<OpenFileResponse>>>,
     running_requests_properties: Arc<Mutex<HashMap<String, AnchoredEditingMetadata>>>,
     running_requests: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
 }
@@ -137,6 +129,7 @@ pub struct AnchoredEditingTracker {
 impl AnchoredEditingTracker {
     pub fn new() -> Self {
         Self {
+            cache_right_now: Arc::new(Mutex::new(vec![])),
             running_requests_properties: Arc::new(Mutex::new(HashMap::new())),
             running_requests: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -148,7 +141,7 @@ impl AnchoredEditingTracker {
     }
 
     /// this replaces the existing references field
-    async fn add_reference(&self, request_id: &str, relevant_refs: &[RelevantReference]) {
+    async fn _add_reference(&self, request_id: &str, relevant_refs: &[RelevantReference]) {
         let mut running_request_properties = self.running_requests_properties.lock().await;
 
         if let Some(metadata) = running_request_properties.get_mut(request_id) {
@@ -203,22 +196,65 @@ impl AnchoredEditingTracker {
         }
     }
 
-    pub async fn send_diagnostics_event(&self, diagnostics: Vec<LSPDiagnosticError>) {
-        let environment_senders;
+    // pub async fn send_diagnostics_event(&self, diagnostics: Vec<LSPDiagnosticError>) {
+    //     let environment_senders;
+    //     {
+    //         let running_request_properties = self.running_requests_properties.lock().await;
+    //         environment_senders = running_request_properties
+    //             .iter()
+    //             .map(|running_properties| running_properties.1.environment_event_sender.clone())
+    //             .collect::<Vec<_>>();
+    //     }
+    //     environment_senders
+    //         .into_iter()
+    //         .for_each(|environment_sender| {
+    //             let _ = environment_sender.send(EnvironmentEventType::LSP(LSPSignal::diagnostics(
+    //                 diagnostics.to_vec(),
+    //             )));
+    //         })
+    // }
+
+    pub async fn scratch_pad_agent(
+        &self,
+        request_id: &str,
+    ) -> Option<(ScratchPadAgent, UnboundedSender<EnvironmentEvent>)> {
+        let scratch_pad_agent;
         {
-            let running_request_properties = self.running_requests_properties.lock().await;
-            environment_senders = running_request_properties
-                .iter()
-                .map(|running_properties| running_properties.1.environment_event_sender.clone())
-                .collect::<Vec<_>>();
+            scratch_pad_agent = self
+                .running_requests_properties
+                .lock()
+                .await
+                .get(request_id)
+                .map(|properties| {
+                    (
+                        properties.scratch_pad_agent.clone(),
+                        properties.environment_event_sender.clone(),
+                    )
+                });
         }
-        environment_senders
-            .into_iter()
-            .for_each(|environment_sender| {
-                let _ = environment_sender.send(EnvironmentEventType::LSP(LSPSignal::diagnostics(
-                    diagnostics.to_vec(),
-                )));
+        scratch_pad_agent
+    }
+
+    pub async fn cached_content(&self) -> String {
+        let cached_content = self
+            .cache_right_now
+            .lock()
+            .await
+            .iter()
+            .map(|open_file_response| {
+                let fs_file_path = open_file_response.fs_file_path();
+                let language_id = open_file_response.language();
+                let content = open_file_response.contents_ref();
+                format!(
+                    r#"FILEPATH: {fs_file_path}
+```{language_id}
+{content}
+```"#
+                )
             })
+            .collect::<Vec<_>>()
+            .join("\n");
+        cached_content
     }
 }
 
@@ -340,108 +376,116 @@ pub struct SWEBenchRequest {
     swe_bench_id: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SweBenchCompletionResponse {
+    done: bool,
+}
+
+impl ApiResponse for SweBenchCompletionResponse {}
+
 pub async fn swe_bench(
     axumQuery(SWEBenchRequest {
-        git_dname,
-        problem_statement,
-        editor_url,
-        test_endpoint,
-        repo_map_file,
+        git_dname: _git_dname,
+        problem_statement: _problem_statement,
+        editor_url: _editor_url,
+        test_endpoint: _test_endpoint,
+        repo_map_file: _repo_map_file,
         gcloud_access_token: _glcoud_access_token,
-        swe_bench_id,
+        swe_bench_id: _swe_bench_id,
     }): axumQuery<SWEBenchRequest>,
-    Extension(app): Extension<Application>,
+    Extension(_app): Extension<Application>,
 ) -> Result<impl IntoResponse> {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let tool_broker = Arc::new(ToolBroker::new(
-        app.llm_broker.clone(),
-        Arc::new(CodeEditBroker::new()),
-        app.symbol_tracker.clone(),
-        app.language_parsing.clone(),
-        // for swe-bench tests we do not care about tracking edits
-        ToolBrokerConfiguration::new(None, true),
-        LLMProperties::new(
-            LLMType::GeminiPro,
-            LLMProvider::GoogleAIStudio,
-            LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-            )),
-        ),
-    ));
-    let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
-    let model = LLMType::ClaudeSonnet;
-    let provider_type = LLMProvider::Anthropic;
-    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-    let symbol_manager = SymbolManager::new(
-        tool_broker,
-        app.symbol_tracker.clone(),
-        app.editor_parsing.clone(),
-        LLMProperties::new(
-            model.clone(),
-            provider_type.clone(),
-            anthropic_api_keys.clone(),
-        ),
-    );
+    // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    // let tool_broker = Arc::new(ToolBroker::new(
+    //     app.llm_broker.clone(),
+    //     Arc::new(CodeEditBroker::new()),
+    //     app.symbol_tracker.clone(),
+    //     app.language_parsing.clone(),
+    //     // for swe-bench tests we do not care about tracking edits
+    //     ToolBrokerConfiguration::new(None, true),
+    //     LLMProperties::new(
+    //         LLMType::GeminiPro,
+    //         LLMProvider::GoogleAIStudio,
+    //         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
+    //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    //         )),
+    //     ),
+    // ));
+    // let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
+    // let model = LLMType::ClaudeSonnet;
+    // let provider_type = LLMProvider::Anthropic;
+    // let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    // let symbol_manager = SymbolManager::new(
+    //     tool_broker,
+    //     app.symbol_tracker.clone(),
+    //     app.editor_parsing.clone(),
+    //     LLMProperties::new(
+    //         model.clone(),
+    //         provider_type.clone(),
+    //         anthropic_api_keys.clone(),
+    //     ),
+    // );
 
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(swe_bench_id.to_owned(), swe_bench_id.to_owned()),
-        sender.clone(),
-        editor_url.to_owned(),
-    );
+    // let message_properties = SymbolEventMessageProperties::new(
+    //     SymbolEventRequestId::new(swe_bench_id.to_owned(), swe_bench_id.to_owned()),
+    //     sender.clone(),
+    //     editor_url.to_owned(),
+    // );
 
     println!("we are getting a hit at this endpoint");
 
     // Now we send the original request over here and then await on the sender like
     // before
-    tokio::spawn(async move {
-        let _ = symbol_manager
-            .initial_request(
-                SymbolInputEvent::new(
-                    user_context,
-                    model,
-                    provider_type,
-                    anthropic_api_keys,
-                    problem_statement,
-                    "web_server_input".to_owned(),
-                    "web_server_input".to_owned(),
-                    Some(test_endpoint),
-                    repo_map_file,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    false,
-                    None,
-                    None,
-                    false,
-                    sender,
-                )
-                .set_swe_bench_id(swe_bench_id),
-                message_properties,
-            )
-            .await;
-    });
-    let event_stream = Sse::new(
-        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
-            sse::Event::default()
-                .json_data(event)
-                .map_err(anyhow::Error::new)
-        }),
-    );
+    // tokio::spawn(async move {
+    //     let _ = symbol_manager
+    //         .initial_request(
+    //             SymbolInputEvent::new(
+    //                 user_context,
+    //                 model,
+    //                 provider_type,
+    //                 anthropic_api_keys,
+    //                 problem_statement,
+    //                 "web_server_input".to_owned(),
+    //                 "web_server_input".to_owned(),
+    //                 Some(test_endpoint),
+    //                 repo_map_file,
+    //                 None,
+    //                 None,
+    //                 None,
+    //                 None,
+    //                 None,
+    //                 false,
+    //                 None,
+    //                 None,
+    //                 false,
+    //                 sender,
+    //             )
+    //             .set_swe_bench_id(swe_bench_id),
+    //             message_properties,
+    //         )
+    //         .await;
+    // });
+    // let event_stream = Sse::new(
+    //     tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
+    //         sse::Event::default()
+    //             .json_data(event)
+    //             .map_err(anyhow::Error::new)
+    //     }),
+    // );
 
-    // return the stream as a SSE event stream over here
-    Ok(event_stream.keep_alive(
-        sse::KeepAlive::new()
-            .interval(Duration::from_secs(3))
-            .event(
-                sse::Event::default()
-                    .json_data(json!({
-                        "keep_alive": "alive"
-                    }))
-                    .expect("json to not fail in keep alive"),
-            ),
-    ))
+    // // return the stream as a SSE event stream over here
+    // Ok(event_stream.keep_alive(
+    //     sse::KeepAlive::new()
+    //         .interval(Duration::from_secs(3))
+    //         .event(
+    //             sse::Event::default()
+    //                 .json_data(json!({
+    //                     "keep_alive": "alive"
+    //                 }))
+    //                 .expect("json to not fail in keep alive"),
+    //         ),
+    // ))
+    Ok(json_result(SweBenchCompletionResponse { done: true }))
 }
 
 /// Represents a request to warm up the code sculpting system.
@@ -480,9 +524,41 @@ pub async fn code_sculpting_warmup(
         sender,
         editor_url,
     );
+    let files_already_in_cache;
+    {
+        files_already_in_cache = app
+            .anchored_request_tracker
+            .cache_right_now
+            .lock()
+            .await
+            .iter()
+            .map(|open_file_response| open_file_response.fs_file_path().to_owned())
+            .collect::<Vec<_>>();
+    }
+    // if the order of files which we are tracking is the same and there is no difference
+    // then we should not update our cache
+    if files_already_in_cache == file_paths {
+        return Ok(json_result(CodeSculptingWarmupResponse { done: true }));
+    }
+    let mut file_cache_vec = vec![];
+    for file_path in file_paths.into_iter() {
+        let file_content = app
+            .tool_box
+            .file_open(file_path, message_properties.clone())
+            .await;
+        if let Ok(file_content) = file_content {
+            file_cache_vec.push(file_content);
+        }
+    }
+
+    // Now we put this in our cache over here
+    {
+        let mut file_caches = app.anchored_request_tracker.cache_right_now.lock().await;
+        *file_caches = file_cache_vec.to_vec();
+    }
     let _ = app
         .tool_box
-        .warmup_context(file_paths, grab_import_nodes, message_properties)
+        .warmup_context(file_cache_vec, grab_import_nodes, message_properties)
         .await;
     Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }
@@ -702,10 +778,14 @@ pub async fn code_sculpting(
             let anchored_symbols = anchor_properties.anchored_symbols;
             let user_provided_context = anchor_properties.user_context_string;
             let environment_sender = anchor_properties.environment_event_sender;
-            let _ = environment_sender.send(EnvironmentEventType::human_anchor_request(
-                instruction,
-                anchored_symbols,
-                user_provided_context,
+            let message_properties = anchor_properties.message_properties.clone();
+            let _ = environment_sender.send(EnvironmentEvent::event(
+                EnvironmentEventType::human_anchor_request(
+                    instruction,
+                    anchored_symbols,
+                    user_provided_context,
+                ),
+                message_properties,
             ));
         });
         {
@@ -742,15 +822,11 @@ pub async fn code_editing(
         active_window_data,
         root_directory,
         codebase_search,
-        // this is not properly hooked up yet, we need to figure out
-        // how to handle this better on the editor side, right now our proxy
-        // is having a selection item in the user_context
         anchor_editing,
-        enable_import_nodes,
+        enable_import_nodes: _enable_import_nodes,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start::request_id({})", &request_id);
-    let edit_request_tracker = app.probe_request_tracker.clone();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     if let Some(active_window_data) = active_window_data {
         user_context = user_context.update_file_content_map(
@@ -760,6 +836,9 @@ pub async fn code_editing(
         );
     }
 
+    let cached_content = app.anchored_request_tracker.cached_content().await;
+
+    // we want to pass this message_properties everywhere and not the previous one
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
         sender.clone(),
@@ -770,326 +849,88 @@ pub async fn code_editing(
         "webserver::code_editing_flow::endpoint_hit::anchor_editing({})",
         anchor_editing
     );
+
+    let (_scratch_pad_agent, environment_sender) = if let Some(scratch_pad_agent) = app
+        .anchored_request_tracker
+        .scratch_pad_agent(&request_id)
+        .await
+    {
+        println!("webserver::code_editing_flow::same_request_id");
+        scratch_pad_agent
+    } else {
+        println!(
+            "webserver::code_editing_flow::anchor_editing::({})",
+            anchor_editing
+        );
+        // the storage unit for the scratch pad path
+        // create this file path before we start editing it
+        // every anchored edit also has a reference followup action which happens
+        // this is also critical since we want to figure out whats the next action for fixes
+        // which we should take
+        let mut scratch_pad_file_path = app.config.scratch_pad().join(request_id.to_owned());
+        scratch_pad_file_path.set_extension("md");
+        let (scratch_pad_agent, environment_sender) = ScratchPadAgent::start_scratch_pad(
+            scratch_pad_file_path,
+            app.tool_box.clone(),
+            app.symbol_manager.hub_sender(),
+            message_properties.clone(),
+            Some(cached_content.to_owned()),
+        )
+        .await;
+        let _ = app.anchored_request_tracker.track_new_request(
+            &request_id,
+            None,
+            Some(AnchoredEditingMetadata::new(
+                message_properties.clone(),
+                vec![],
+                Default::default(),
+                vec![],
+                None,
+                scratch_pad_agent.clone(),
+                environment_sender.clone(),
+            )),
+        );
+        (scratch_pad_agent, environment_sender)
+    };
+
     if anchor_editing {
         println!(
             "webserver::code_editing_flow::anchor_editing::({})",
             anchor_editing
         );
+
+        println!("tracked new request");
+
         let symbols_to_anchor = app
             .tool_box
             .symbols_to_anchor(&user_context, message_properties.clone())
             .await
             .unwrap_or_default();
-        println!(
-            "webserver::code_editing_flow::anchor_symbols::({})",
-            symbols_to_anchor
-                .iter()
-                .map(|anchored_symbol| anchored_symbol.name())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-        let metadata_pregen = Instant::now();
-
-        let mut user_provided_context = app
-            .tool_box
-            .file_paths_to_user_context(
-                user_context.file_paths(),
-                enable_import_nodes,
-                message_properties.clone(),
-            )
-            .await
-            .ok();
-
-        // get the git diff of the repository at this state right now
-        // this is also passed as user context which goes into warmup and stays
-        // as context throughout the run of this request_id
-        // this will lead to broken output when we retrigger the anchor again
-        // we have to maintain this cache in a better way
-        // the storage has to be like:
-        // - L2: files_provided
-        // - L1: git_diff (can change on each invocation but not really, we should have
-        // a better delta detection)
-        // - register: active changes which we have made
-        let git_diff = app.tool_box.get_git_diff(&root_directory).await;
-        if let Ok(git_diff) = git_diff {
-            let git_diff = git_diff.new_version();
-            user_provided_context = user_provided_context.map(|user_context| {
-                format!(
-                    r#"{user_context}
-<diff_of_changes>
-{git_diff}
-</diff_of_changes>"#
-                )
-            });
-        }
-        let possibly_changed_files = symbols_to_anchor
-            .iter()
-            .filter_map(|anchored_symbol| anchored_symbol.fs_file_path())
-            .collect::<Vec<_>>();
-        let cloned_tools = app.tool_box.clone();
-
-        // consider whether this is necessary
-        let file_contents = stream::iter(
-            possibly_changed_files
-                .into_iter()
-                .map(|file_path| (file_path, cloned_tools.clone(), message_properties.clone())),
-        )
-        .map(|(fs_file_path, tools, message_properties)| async move {
-            let file_open_response = tools
-                .file_open(fs_file_path.to_owned(), message_properties)
-                .await;
-            file_open_response
-                .ok()
-                .map(|response| (fs_file_path, response.contents()))
-        })
-        .buffer_unordered(100)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .filter_map(|s| s)
-        .collect::<HashMap<_, _>>();
-
-        println!("metadata_pregen::elapsed({:?})", metadata_pregen.elapsed());
-
-        let (environment_sender, environment_receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        // the storage unit for the scratch pad path
-        // create this file path before we start editing it
-        let mut scratch_pad_file_path = app.config.scratch_pad().join(request_id.to_owned());
-        scratch_pad_file_path.set_extension("md");
-        let mut scratch_pad_file = tokio::fs::File::create(scratch_pad_file_path.clone())
-            .await
-            .expect("scratch_pad path created");
-        let _ = scratch_pad_file
-            .write_all("<scratchpad>\n</scratchpad>".as_bytes())
-            .await;
-        let _ = scratch_pad_file
-            .flush()
-            .await
-            .expect("initiating scratch pad failed");
-
-        let scratch_pad_path = scratch_pad_file_path
-            .into_os_string()
-            .into_string()
-            .expect("os_string to into_string to work");
-        let scratch_pad_agent = ScratchPadAgent::new(
-            scratch_pad_path,
-            message_properties.clone(),
-            app.tool_box.clone(),
-            app.symbol_manager.hub_sender(),
-            user_provided_context.clone(),
-        )
-        .await;
-
-        let _scratch_pad_handle = tokio::spawn(async move {
-            // spawning the scratch pad agent
-            scratch_pad_agent
-                .process_envrionment(Box::pin(
-                    tokio_stream::wrappers::UnboundedReceiverStream::new(environment_receiver),
-                ))
-                .await;
-        });
-
-        let editing_metadata = AnchoredEditingMetadata::new(
-            message_properties.clone(),
-            symbols_to_anchor.clone(),
-            file_contents,
-            vec![],
-            user_provided_context.clone(),
-            // we store the environment sender so we can use it later for
-            // sending the scratchpad some events
-            environment_sender.clone(),
-        );
-
-        println!("tracking new request");
-        // instantiates basic request tracker, with no join_handle, but basic metadata
-        let _ = app
-            .anchored_request_tracker
-            .track_new_request(&request_id, None, Some(editing_metadata))
-            .await;
-
-        println!("tracked new request");
-
-        // shit this should be cleaned up
-        let cloned_symbols_to_anchor = symbols_to_anchor.clone();
-        let cloned_message_properties = message_properties.clone();
-        let cloned_toolbox = app.tool_box.clone();
-        let cloned_request_id = request_id.clone();
-        let cloned_tracker = app.anchored_request_tracker.clone();
-        let cloned_user_query = user_query.clone();
 
         if !symbols_to_anchor.is_empty() {
-            let stream_symbols = cloned_symbols_to_anchor.clone();
-            let _references_join_handle = tokio::spawn(async move {
-                let start = Instant::now();
-
-                let references = stream::iter(stream_symbols.into_iter())
-                    .flat_map(|anchored_symbol| {
-                        let symbol_names = anchored_symbol.sub_symbol_names().to_vec();
-                        let symbol_identifier = anchored_symbol.identifier().to_owned();
-                        let toolbox = cloned_toolbox.clone();
-                        let message_properties = cloned_message_properties.clone();
-                        let request_id = cloned_request_id.clone();
-                        let range = anchored_symbol.possible_range().clone();
-                        stream::iter(symbol_names.into_iter().filter_map(move |symbol_name| {
-                            symbol_identifier.fs_file_path().map(|path| {
-                                (
-                                    anchored_symbol.clone(),
-                                    path,
-                                    symbol_name,
-                                    toolbox.clone(),
-                                    message_properties.clone(),
-                                    request_id.clone(),
-                                    range.clone(),
-                                )
-                            })
-                        }))
-                    })
-                    .map(
-                        |(
-                            original_symbol,
-                            path,
-                            symbol_name,
-                            toolbox,
-                            message_properties,
-                            request_id,
-                            range,
-                        )| async move {
-                            println!("getting references for {}-{}", &path, &symbol_name);
-                            let refs = toolbox
-                                .get_symbol_references(
-                                    path,
-                                    symbol_name.to_owned(),
-                                    range,
-                                    message_properties.clone(),
-                                    request_id.clone(),
-                                )
-                                .await;
-
-                            match refs {
-                                Ok(references) => {
-                                    toolbox
-                                        .anchored_references_for_locations(
-                                            references.as_slice(),
-                                            original_symbol,
-                                            message_properties,
-                                        )
-                                        .await
-                                }
-                                Err(e) => {
-                                    println!("{:?}", e);
-                                    vec![]
-                                }
-                            }
-                        },
-                    )
-                    .buffer_unordered(100)
-                    .collect::<Vec<_>>()
-                    .await
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
-
-                println!("total references: {}", references.len());
-                println!("collect references time elapsed: {:?}", start.elapsed());
-
-                // send UI event with grouped references
-                let grouped: HashMap<String, usize> = references.clone().into_iter().fold(
-                    HashMap::new(),
-                    |mut acc, anchored_reference| {
-                        let reference_len = anchored_reference.reference_locations().len();
-                        acc.entry(
-                            anchored_reference
-                                .fs_file_path_for_outline_node()
-                                .to_string(),
-                        )
-                        .and_modify(|count| *count += reference_len)
-                        .or_insert(1);
-                        acc
-                    },
-                );
-
-                let _ = cloned_message_properties.clone().ui_sender().send(
-                    UIEventWithID::found_reference(cloned_request_id.clone(), grouped),
-                );
-
-                let llm_broker = app.llm_broker;
-
-                let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-                let llm_properties = LLMProperties::new(
-                    LLMType::ClaudeSonnet,
-                    LLMProvider::Anthropic,
-                    anthropic_api_keys.clone(),
-                );
-
-                let reference_filter_broker =
-                    ReferenceFilterBroker::new(llm_broker, llm_properties.clone());
-
-                let references = references
-                    .into_iter()
-                    .take(10) // todo(zi): so we don't go crazy with 1000s of requests
-                    .collect::<Vec<_>>();
-
-                println!(
-                    "code_editing:reference_symbols.len({:?})",
-                    &references.len()
-                );
-
-                let request = ReferenceFilterRequest::new(
-                    cloned_user_query,
-                    llm_properties.clone(),
-                    cloned_request_id.clone(),
-                    cloned_message_properties.clone(),
-                    references.clone(),
-                );
-
-                let llm_time = Instant::now();
-                println!("ReferenceFilter::invoke::start");
-
-                let relevant_references = match reference_filter_broker
-                    .invoke(ToolInput::ReferencesFilter(request))
-                    .await
-                {
-                    Ok(ok_references) => {
-                        ok_references.get_relevant_references().unwrap_or_default()
-                    }
-                    Err(err) => {
-                        eprintln!("Failed to filter references: {:?}", err);
-                        Vec::new()
-                    }
-                };
-
-                let _ = cloned_tracker
-                    .add_reference(&cloned_request_id, &relevant_references)
-                    .await;
-
-                println!("ReferenceFilter::invoke::elapsed({:?})", llm_time.elapsed());
-
-                println!(
-                    "collect references async task total elapsed: {:?}",
-                    start.elapsed()
-                );
-                relevant_references
-            });
             // end of async task
 
-            let cloned_user_context = user_provided_context.clone();
             // no way to monitor the speed of response over here, which sucks but
             // we can figure that out later
             let cloned_environment_sender = environment_sender.clone();
 
-            let join_handle = tokio::spawn(async move {
-                let _ = cloned_environment_sender.send(EnvironmentEventType::human_anchor_request(
+            let _ = cloned_environment_sender.send(EnvironmentEvent::event(
+                EnvironmentEventType::Agent(AgentMessage::user_intent_for_references(
+                    user_query.to_owned(),
+                    symbols_to_anchor.to_vec(),
+                )),
+                message_properties.clone(),
+            ));
+
+            let _ = cloned_environment_sender.send(EnvironmentEvent::event(
+                EnvironmentEventType::human_anchor_request(
                     user_query,
                     symbols_to_anchor,
-                    cloned_user_context,
-                ));
-            });
+                    Some(cached_content.to_owned()),
+                ),
+                message_properties.clone(),
+            ));
 
-            let _ = app
-                .anchored_request_tracker
-                .add_join_handle(&request_id, join_handle)
-                .await;
             let properties_present = app
                 .anchored_request_tracker
                 .get_properties(&request_id)
@@ -1100,53 +941,19 @@ pub async fn code_editing(
                 &request_id,
                 properties_present.is_some()
             );
-
-            // there will never be references at this point, given this runs well before the join_handles can resolve
-            println!(
-                "webserver::anchored_edits::request_id({})::properties_present({}).references.len({})",
-                &request_id,
-                properties_present.is_some(),
-                properties_present.map_or(0, |p| p.references().len())
-            );
         }
     } else {
         println!("webserver::code_editing_flow::agentic_editing");
-        let edit_request_id = request_id.clone(); // Clone request_id before creating the closure
-                                                  // Now we send the original request over here and then await on the sender like
-                                                  // before
 
-        let symbol_manager = app.symbol_manager.clone();
-        let join_handle = tokio::spawn(async move {
-            let _ = symbol_manager
-            .initial_request(
-                SymbolInputEvent::new(
-                    user_context,
-                    LLMType::ClaudeSonnet,
-                    LLMProvider::Anthropic,
-                    LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-                    user_query,
-                    edit_request_id.to_owned(),
-                    edit_request_id,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    true,
-                    Some(root_directory),
-                    None,
-                    codebase_search, // big search
-                    sender,
-                ),
-                message_properties,
-            )
-            .await;
-        });
-        let _ = edit_request_tracker
-            .track_new_request(&request_id, join_handle)
-            .await;
+        let _ = environment_sender.send(EnvironmentEvent::event(
+            EnvironmentEventType::Human(HumanMessage::Agentic(HumanAgenticRequest::new(
+                user_query,
+                root_directory,
+                codebase_search,
+                user_context,
+            ))),
+            message_properties,
+        ));
     }
 
     let event_stream = Sse::new(
@@ -1193,7 +1000,7 @@ pub struct AgenticDiagnosticsResponse {
 impl ApiResponse for AgenticDiagnosticsResponse {}
 
 pub async fn push_diagnostics(
-    Extension(app): Extension<Application>,
+    Extension(_app): Extension<Application>,
     Json(AgenticDiagnostics {
         fs_file_path,
         diagnostics,
@@ -1202,7 +1009,7 @@ pub async fn push_diagnostics(
 ) -> Result<impl IntoResponse> {
     // implement this api endpoint properly and send events over to the right
     // scratch-pad agent
-    let lsp_diagnostics = diagnostics
+    let _ = diagnostics
         .into_iter()
         .map(|webserver_diagnostic| {
             LSPDiagnosticError::new(
@@ -1215,10 +1022,10 @@ pub async fn push_diagnostics(
         .collect::<Vec<_>>();
 
     // now look at all the active scratch-pad agents and send them this event
-    let _ = app
-        .anchored_request_tracker
-        .send_diagnostics_event(lsp_diagnostics)
-        .await;
+    // let _ = app
+    //     .anchored_request_tracker
+    //     .send_diagnostics_event(lsp_diagnostics)
+    //     .await;
     Ok(json_result(AgenticDiagnosticsResponse { done: true }))
 }
 

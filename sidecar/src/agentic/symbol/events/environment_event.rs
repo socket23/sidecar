@@ -7,9 +7,10 @@ use crate::agentic::symbol::{
 };
 
 use super::{
+    agent::AgentMessage,
     human::{HumanAnchorRequest, HumanMessage},
-    input::SymbolEventRequestId,
     lsp::LSPSignal,
+    message_event::SymbolEventMessageProperties,
 };
 
 pub struct EditorStateChangeRequest {
@@ -38,6 +39,7 @@ pub enum EnvironmentEventType {
     EditorStateChange(EditorStateChangeRequest),
     LSP(LSPSignal),
     Human(HumanMessage),
+    Agent(AgentMessage),
     ShutDown,
 }
 
@@ -60,16 +62,30 @@ impl EnvironmentEventType {
 }
 
 pub struct EnvironmentEvent {
-    _request_id: SymbolEventRequestId,
-    _event: EnvironmentEventType,
+    message_properties: SymbolEventMessageProperties,
+    event: EnvironmentEventType,
 }
 
 impl EnvironmentEvent {
-    /// Creates a lsp signal
-    pub fn lsp_signal(request_id: SymbolEventRequestId, signal: LSPSignal) -> Self {
+    pub fn event(
+        event: EnvironmentEventType,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Self {
         Self {
-            _request_id: request_id,
-            _event: EnvironmentEventType::LSP(signal),
+            event,
+            message_properties,
         }
+    }
+
+    pub fn message_properties(&self) -> SymbolEventMessageProperties {
+        self.message_properties.clone()
+    }
+
+    pub fn event_type(self) -> EnvironmentEventType {
+        self.event
+    }
+
+    pub fn is_lsp_event(&self) -> bool {
+        matches!(self.event, EnvironmentEventType::LSP(_))
     }
 }

@@ -147,7 +147,7 @@ impl Repository {
                         SearchResult::new(
                             t.fname.to_owned(),
                             &thinking_message,
-                            SearchResultSnippet::Tag(t.name.to_owned()),
+                            SearchResultSnippet::Tag(t.name.to_owned()), // why not the tag snippet?
                         )
                     })
                     .collect()

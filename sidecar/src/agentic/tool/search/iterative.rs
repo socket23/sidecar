@@ -163,24 +163,27 @@ impl File {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum SearchToolType {
+    #[default] // arbitrarily default to File
     File,
     Keyword,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct SearchQuery {
     #[serde(default)]
     pub thinking: String,
+    #[serde(default)]
     pub tool: SearchToolType,
     pub query: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename = "search_requests")]
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename = "search_requests", default)]
 pub struct SearchRequests {
-    #[serde(rename = "request", default)] // todo(zi) this pattern needs more use across big search
+    #[serde(rename = "request", default)]
     pub requests: Vec<SearchQuery>,
 }
 

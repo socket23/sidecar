@@ -72,11 +72,13 @@ impl Answer {
 #[serde(rename = "response")]
 pub struct GenerateHumanQuestionResponse {
     pub text: String,
+    #[serde(default)]
     pub choices: Choices,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Choices {
+    #[serde(default)]
     pub choice: Vec<Choice>,
 }
 

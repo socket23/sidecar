@@ -5288,7 +5288,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
             // todo(zi): with cancellable request?
-
             let stream_handle = tokio::spawn(async move {
                 cloned_llm_client
                     .stream_completion(
@@ -5318,7 +5317,10 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
 
                         if !thinking_extracted {
                             if let Some(content) = xml_processor.extract_tag_content("thinking") {
-                                println!("Extracted thinking content: {}", content);
+                                println!(
+                                    r#"context_wide_search::stream_thinking_and_step_list_handle::extract_tag_content("thinking"): {}"#,
+                                    content
+                                );
                                 thinking_extracted = true;
 
                                 let ui_event = UIEventWithID::agentic_top_level_thinking(
@@ -5329,14 +5331,17 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                             }
                         }
 
+                        // implicitly we track last processed position, so this will not duplicate.
+                        // it handles the case where a single chunk contains multiple step_list items.
                         let step_lists = xml_processor.extract_all_tag_contents("step_list");
                         for step_list in step_lists {
-                            println!("Extracted step_list content:\n{}", step_list);
-
                             let wrapped_step = XmlProcessor::wrap_xml("step_list", &step_list);
                             match from_str::<StepListItem>(&wrapped_step) {
                                 Ok(step_list_item) => {
-                                    println!("Parsed StepListItem: {:?}", step_list_item);
+                                    println!(
+                                        r#"context_wide_search::stream_thinking_and_step_list_handle::from_str("step_list_item"): {:?}"#,
+                                        step_list_item
+                                    );
                                     let ui_event = UIEventWithID::agentic_symbol_level_thinking(
                                         cloned_root_request_id_2.to_owned(),
                                         step_list_item,
@@ -5344,7 +5349,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                                     let _ = cloned_ui_sender.send(ui_event);
                                 }
                                 Err(e) => {
-                                    eprintln!("Failed to parse StepListItem: {:?}", e);
+                                    eprintln!("context_wide_search::stream_thinking_and_step_list_handle::from_str::error: {:?}", e);
                                 }
                             }
                         }
@@ -5363,7 +5368,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 }
                 Ok(Err(_)) => retries += 1,
                 Err(e) => {
-                    eprintln!("Stream handle join error: {:?}", e);
+                    eprintln!("context_wide_search::stream_handle::error: {:?}", e);
                 }
             }
         }

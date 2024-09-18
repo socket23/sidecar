@@ -878,6 +878,7 @@ pub async fn code_editing(
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start::request_id({})", &request_id);
+    println!("webserver::code_editing_start::user_query({})", &user_query);
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     if let Some(active_window_data) = active_window_data {
         user_context = user_context.update_file_content_map(

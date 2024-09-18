@@ -758,12 +758,7 @@ impl ScratchPadAgent {
                             sender,
                         );
                         let _ = self.symbol_event_sender.send(symbol_event);
-                        let response = receiver.await;
-                        println!(
-                            "symbol_manager::initial_request::response::({})::({:?})",
-                            symbol_identifier.symbol_name(),
-                            &response
-                        );
+                        let _ = receiver.await;
                     }
                 },
             )

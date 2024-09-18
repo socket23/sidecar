@@ -30,6 +30,8 @@ pub enum LLMType {
     Gpt4Turbo,
     /// o1 model
     O1Preview,
+    /// o1 mini model
+    O1Mini,
     /// DeepSeek Coder 1.3B Instruct model
     DeepSeekCoder1_3BInstruct,
     /// DeepSeek Coder 33B Instruct model
@@ -125,6 +127,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "GeminiProFlash" => Ok(LLMType::GeminiProFlash),
                     "DeepSeekCoderV2" => Ok(LLMType::DeepSeekCoderV2),
                     "o1-preview" => Ok(LLMType::O1Preview),
+                    "o1-mini" => Ok(LLMType::O1Mini),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }
@@ -148,7 +151,7 @@ impl LLMType {
     }
 
     pub fn is_o1_preview(&self) -> bool {
-        matches!(self, LLMType::O1Preview)
+        matches!(self, LLMType::O1Preview | LLMType::O1Mini)
     }
 
     pub fn is_custom(&self) -> bool {
@@ -213,6 +216,7 @@ impl fmt::Display for LLMType {
             LLMType::Llama3_1_70bInstruct => write!(f, "Llama3_1_70bInstruct"),
             LLMType::Gpt4OMini => write!(f, "Gpt4OMini"),
             LLMType::O1Preview => write!(f, "o1-preview"),
+            LLMType::O1Mini => write!(f, "o1-mini"),
             LLMType::Custom(s) => write!(f, "Custom({})", s),
         }
     }

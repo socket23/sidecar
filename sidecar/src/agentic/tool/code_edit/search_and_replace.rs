@@ -17,8 +17,12 @@ use crate::{
             ui_event::{EditedCodeStreamingRequest, UIEventWithID},
         },
         tool::{
-            errors::ToolError, helpers::diff_recent_changes::DiffRecentChanges, input::ToolInput,
-            lsp::open_file::OpenFileRequest, output::ToolOutput, r#type::Tool,
+            errors::ToolError,
+            helpers::diff_recent_changes::DiffRecentChanges,
+            input::ToolInput,
+            lsp::{diagnostics::DiagnosticWithSnippet, open_file::OpenFileRequest},
+            output::ToolOutput,
+            r#type::Tool,
         },
     },
     chunking::text_document::{Position, Range},
@@ -79,6 +83,7 @@ pub struct SearchAndReplaceEditingRequest {
     diff_recent_changes: Option<DiffRecentChanges>,
     // previous user queries which have been part of the same edit sequence
     previous_user_queries: Vec<String>,
+    lsp_errors: Vec<DiagnosticWithSnippet>,
     // use a is_warmup field
     is_warmup: bool,
 }
@@ -103,6 +108,7 @@ impl SearchAndReplaceEditingRequest {
         editor_url: String,
         diff_recent_changes: Option<DiffRecentChanges>,
         previous_user_queries: Vec<String>,
+        lsp_errors: Vec<DiagnosticWithSnippet>,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
     ) -> Self {
         Self {
@@ -122,6 +128,7 @@ impl SearchAndReplaceEditingRequest {
             editor_url,
             diff_recent_changes,
             previous_user_queries,
+            lsp_errors,
             is_warmup,
         }
     }
@@ -188,6 +195,7 @@ The previous EDITs done by the user are present in <diff_recent_changes>. You ca
 The previous intentions of the user are present in <previous_user_queries>. These include the intention of the user.
 You will be also provided with some extra data, which contains various definitions of symbols which you can use to use the call the correct functions and re-use existing functionality in the code, this will be provided to you in <user_provided_context>
 You are not to make changes in the <user_provided_context> ONLY EDIT the code in <code_to_edit_section>
+You are also show the language server errors in <lsp_diagnostic_errors> section, these are errors in the code which we are about to edit, ONLY fix them is they are part of the user query.
 Take requests for changes to the supplied code.
 If the request is ambiguous, ask questions.
 
@@ -272,6 +280,36 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
         }
     }
 
+    fn lsp_errors(&self, diagnostics: Vec<DiagnosticWithSnippet>) -> Option<String> {
+        if diagnostics.is_empty() {
+            None
+        } else {
+            let diagnostic_messages = diagnostics
+                .into_iter()
+                .map(|diagnostic| {
+                    let diagnostic_content = diagnostic.message();
+                    let snippet = diagnostic.snippet();
+                    format!(
+                        r#"<diagnostic>
+<snippet>
+{snippet}
+</snippet>
+<message>
+{diagnostic_content}
+</message>
+</diagnostic>"#
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            Some(format!(
+                r#"<lsp_diagnostic_errors>
+{diagnostic_messages}
+</lsp_diagnostic_errors>"#
+            ))
+        }
+    }
+
     fn selection_to_edit(&self, selection_to_edit: &str) -> String {
         format!(
             r#"<code_to_edit_selection>
@@ -288,6 +326,8 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
     /// <disjoin_set_of_files_not_in_edit>
     /// </disjoin_set_of_files_not_in_edit>         : CACHE_POINT
     /// </git_diff_ordered_by_timestamp_ms>
+    /// <lsp_errors>
+    /// </lsp_errors>
     /// <previous_user_intents>
     /// </previous_user_intent>
     /// <code_in_selection>
@@ -361,6 +401,12 @@ ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#
         // TODO(skcd): We should enforce a cache endpoint over here, what we ideally want is tiers
         // of memory over here
         let mut user_message = "".to_owned();
+
+        // also show the diagnostic messages which are present in the range which we are editing
+        let diagnostic_messages = self.lsp_errors(context.lsp_errors);
+        if let Some(diagnostic_messages) = diagnostic_messages {
+            user_message = diagnostic_messages + "\n";
+        }
         // also show the previous user requests if any
         if !context.previous_user_queries.is_empty() {
             let previous_queries = context

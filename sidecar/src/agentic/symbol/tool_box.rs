@@ -5432,6 +5432,14 @@ FILEPATH: {fs_file_path}
                 .collect::<Vec<_>>()
                 .join("\n")
         });
+        let lsp_diagnostic_with_content = self
+            .get_lsp_diagnostics_with_content(
+                sub_symbol.fs_file_path(),
+                selection_range,
+                message_properties.clone(),
+            )
+            .await
+            .unwrap_or_default();
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             selection_range.clone(),
@@ -5453,6 +5461,7 @@ FILEPATH: {fs_file_path}
             message_properties.editor_url(),
             recent_edits,
             sub_symbol.previous_user_queries().to_vec(),
+            lsp_diagnostic_with_content,
             false,
         ));
         println!(
@@ -8523,6 +8532,7 @@ FILEPATH: {fs_file_path}
             editor_url,
             None,
             vec![],
+            vec![],
             true,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
@@ -8659,9 +8669,37 @@ FILEPATH: {fs_file_path}
             .collect::<Vec<_>>()
     }
 
+    /// Get the diagnostics with content for the files which we are interested in
+    /// over here
+    ///
+    /// This way we are able to prompt the LLM a bit better
+    async fn get_lsp_diagnostics_with_content(
+        &self,
+        fs_file_path: &str,
+        range: &Range,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<DiagnosticWithSnippet>, SymbolError> {
+        let dignostics = self
+            .get_lsp_diagnostics(fs_file_path, range, message_properties.clone())
+            .await?;
+        let file_content = self
+            .file_open(fs_file_path.to_owned(), message_properties)
+            .await?;
+        let diagnotic_with_snippet = dignostics
+            .remove_diagnostics()
+            .into_iter()
+            .filter_map(|diagnostic| {
+                diagnostic
+                    .with_snippet_from_contents(file_content.contents_ref(), &fs_file_path)
+                    .ok()
+            })
+            .collect::<Vec<_>>();
+        Ok(diagnotic_with_snippet)
+    }
+
     /// Grabs the git-diff sorted by timestamp relative to the content if any
     /// we have seen before
-    /// 
+    ///
     /// This allows us to continously understand the changes which have happened
     /// in the editor and even if the final output of git-diff is nothing, the user
     /// might have made a change and then reverted it, but we are able to capture it
@@ -8671,7 +8709,10 @@ FILEPATH: {fs_file_path}
         diff_content_files: Vec<DiffFileContent>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<DiffRecentChanges, SymbolError> {
-        let input = ToolInput::EditedFiles(EditedFilesRequest::new(message_properties.editor_url(), diff_content_files));
+        let input = ToolInput::EditedFiles(EditedFilesRequest::new(
+            message_properties.editor_url(),
+            diff_content_files,
+        ));
         let mut recently_edited_files = self
             .tools
             .invoke(input)

@@ -68,16 +68,40 @@ Create a new struct CodeRequestStopResponse similar to ProbeStopResponse
     let mut result = vec![];
 
     let mut buffer = String::new();
+    let mut thinking_extracted = false;
+    let mut step_list_extracted = vec![];
+    let mut processed_up_to = 0;
+
     while let Some(chunk) = stream.next().await {
         println!("Received chunk: {}", chunk);
         buffer.push_str(&chunk);
 
         // Attempt to extract the thinking tag's content
-        if let Some(content) = extract_tag_content(&buffer, "thinking") {
-            println!("Extracted thinking content: {}", content);
-
-            result.push(content);
+        if !thinking_extracted {
+            if let Some(content) = extract_tag_content(&buffer, "thinking") {
+                println!("Extracted thinking content: {}", content);
+                result.push(content);
+                thinking_extracted = true;
+            }
         }
+
+        // Extract step_list items
+        let (step_lists, new_processed_up_to) =
+            extract_all_tag_contents(&buffer, "step_list", processed_up_to);
+        if !step_lists.is_empty() {
+            for step_list in step_lists {
+                println!("Extracted step_list content:\n{}", step_list);
+                // You can parse the step_list further here
+                step_list_extracted.push(step_list);
+            }
+        }
+        processed_up_to = new_processed_up_to;
+    }
+
+    // Now, step_list_extracted contains all the extracted <step_list> contents
+    println!("All extracted step_list items:");
+    for step in step_list_extracted {
+        println!("{}", step);
     }
 }
 
@@ -110,4 +134,39 @@ fn extract_tag_content(buffer: &str, tag_name: &str) -> Option<String> {
         }
     }
     None
+}
+
+// Function to extract all complete occurrences of a tag's content from the buffer
+fn extract_all_tag_contents(
+    buffer: &str,
+    tag_name: &str,
+    start_pos: usize,
+) -> (Vec<String>, usize) {
+    let tag_start = format!("<{}>", tag_name);
+    let tag_end = format!("</{}>", tag_name);
+    let mut contents = Vec::new();
+    let mut pos = start_pos;
+    let buffer_len = buffer.len();
+
+    while pos < buffer_len {
+        if let Some(start_index) = buffer[pos..].find(&tag_start) {
+            let start_index = pos + start_index;
+            if let Some(end_index) = buffer[start_index..].find(&tag_end) {
+                let content_start = start_index + tag_start.len();
+                let content_end = start_index + end_index;
+                let content = &buffer[content_start..content_end];
+                contents.push(content.to_string());
+                pos = content_end + tag_end.len();
+            } else {
+                // End tag not found, need more data
+                break;
+            }
+        } else {
+            // No more start tags found
+            break;
+        }
+    }
+
+    // Return the accumulated contents and new position
+    (contents, pos)
 }

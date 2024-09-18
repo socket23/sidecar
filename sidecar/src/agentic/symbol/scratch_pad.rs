@@ -211,35 +211,33 @@ impl ScratchPadAgent {
     /// which is being edited by the user, the real interface here will look like this
     pub async fn process_envrionment(
         self,
-        mut stream: Pin<Box<dyn Stream<Item = EnvironmentEvent> + Send + Sync>>,
+        stream: Pin<Box<dyn Stream<Item = EnvironmentEvent> + Send + Sync>>,
     ) {
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        // this is our filtering thread which will run in the background
         let cloned_self = self.clone();
 
-        let _ = tokio::spawn(async move {
-            let cloned_sender = sender;
-            // damn borrow-checker got hands
-            let cloned_self = cloned_self;
-            while let Some(event) = stream.next().await {
-                let is_lsp_event = event.is_lsp_event();
-                if is_lsp_event {
-                    // if we are fixing or focussing then skip the lsp signal
-                    if cloned_self.is_fixing().await {
-                        println!("scratchpad::discarding_lsp::busy_fixing");
-                        continue;
-                    }
-                    if cloned_self.is_focussing().await {
-                        println!("scratchpad::discarding_lsp::busy_focussing");
-                        continue;
+        let filtered_stream = stream
+            .filter_map(move |event| {
+                let cloned_self = cloned_self.clone();
+                async move {
+                    if event.is_lsp_event() {
+                        if cloned_self.is_fixing().await {
+                            println!("scratchpad::discarding_lsp::busy_fixing");
+                            None
+                        } else if cloned_self.is_focussing().await {
+                            println!("scratchpad::discarding_lsp::busy_focussing");
+                            None
+                        } else {
+                            Some(event)
+                        }
+                    } else {
+                        Some(event)
                     }
                 }
-                let _ = cloned_sender.send(event);
-            }
-        });
+            })
+            .boxed();
 
-        let mut stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+        let mut stream = filtered_stream;
+
         println!("scratch_pad_agent::start_processing_environment");
         while let Some(event) = stream.next().await {
             let message_properties = event.message_properties();

@@ -60,4 +60,7 @@ pub enum CodeSymbolError {
 
     #[error("No strategy found")]
     NoStrategyFound,
+
+    #[error("Cancelled")]
+    Cancelled,
 }

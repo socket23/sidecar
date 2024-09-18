@@ -2183,7 +2183,7 @@ Satisfy the requirement either by making edits or gathering the required informa
     }
 }
 
-async fn run_with_cancellation<F, T>(
+pub async fn run_with_cancellation<F, T>(
     cancel_token: tokio_util::sync::CancellationToken,
     future: F,
 ) -> Option<T>

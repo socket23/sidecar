@@ -1,17 +1,18 @@
 use async_trait::async_trait;
+use futures::StreamExt;
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+};
 use serde_xml_rs::from_str;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::info;
 
-use llm_client::{
-    broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
-};
-
 use crate::agentic::{
-    symbol::identifier::LLMProperties,
+    symbol::{identifier::LLMProperties, types::run_with_cancellation, ui_event::UIEventWithID},
     tool::{
+        code_edit::xml_processor::XmlProcessor,
         code_symbol::{
             correctness::{CodeCorrectness, CodeCorrectnessAction, CodeCorrectnessRequest},
             error_fix::{CodeEditingErrorRequest, CodeSymbolErrorFix},
@@ -5280,6 +5281,8 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let provider = code_symbols.llm_provider();
         let model = code_symbols.model().clone();
         let root_request_id = code_symbols.root_request_id().to_owned();
+        let ui_sender = code_symbols.message_properties().ui_sender();
+        let cancellation_token = code_symbols.message_properties().cancellation_token();
         let system_message = LLMClientMessage::system(self.system_message_context_wide());
         let user_message = LLMClientMessage::user(
             self.user_message_for_codebase_wide_search(code_symbols)
@@ -5291,8 +5294,8 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             0.0,
             None,
         );
+
         let mut retries = 0;
-        let root_request_id_ref = &root_request_id;
         loop {
             if retries >= 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
@@ -5307,34 +5310,107 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 (model.clone(), api_key.clone(), provider.clone())
             };
             let cloned_message = messages.clone().set_llm(llm);
-            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-            let response = self
-                .llm_client
-                .stream_completion(
-                    api_key.clone(),
-                    cloned_message.clone(),
-                    provider.clone(),
-                    vec![
-                        ("event_type".to_owned(), "context_wide_search".to_owned()),
-                        ("root_id".to_owned(), root_request_id_ref.to_owned()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    sender,
-                )
-                .await;
-            match response {
-                Ok(response) => {
-                    if let Ok(parsed_response) = Reply::parse_response(&response)
-                        .map(|reply| reply.to_code_symbol_important_response())
-                    {
-                        return Ok(parsed_response);
-                    } else {
-                        retries = retries + 1;
+            let cloned_llm_client = self.llm_client.clone();
+            let cloned_root_request_id = root_request_id.clone();
+            let cloned_root_request_id_2 = root_request_id.clone();
+            let cloned_ui_sender = ui_sender.clone();
+            let cloned_cancellation_token = cancellation_token.clone();
+            let cloned_cancellation_token_2 = cancellation_token.clone();
+
+            let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
+            let stream_handle = tokio::spawn(run_with_cancellation(
+                cloned_cancellation_token_2,
+                async move {
+                    cloned_llm_client
+                        .stream_completion(
+                            api_key.clone(),
+                            cloned_message.clone(),
+                            provider.clone(),
+                            vec![
+                                ("event_type".to_owned(), "context_wide_search".to_owned()), // but stream only for context_wide_search
+                                ("root_id".to_owned(), cloned_root_request_id.clone()),
+                            ]
+                            .into_iter()
+                            .collect(),
+                            sender,
+                        )
+                        .await
+                },
+            ));
+
+            let stream_thinking_and_step_list_handle = tokio::spawn(run_with_cancellation(
+                cloned_cancellation_token,
+                async move {
+                    let mut delta_stream =
+                        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+                    let mut xml_processor = XmlProcessor::new();
+                    let mut thinking_extracted = false;
+
+                    while let Some(stream_msg) = delta_stream.next().await {
+                        if let Some(delta) = stream_msg.delta() {
+                            xml_processor.append(&delta);
+
+                            if !thinking_extracted {
+                                if let Some(content) = xml_processor.extract_tag_content("thinking")
+                                {
+                                    println!(
+                                        r#"context_wide_search::stream_thinking_and_step_list_handle::extract_tag_content("thinking"): {}"#,
+                                        content
+                                    );
+                                    thinking_extracted = true;
+
+                                    let ui_event = UIEventWithID::agentic_top_level_thinking(
+                                        cloned_root_request_id_2.to_owned(),
+                                        &content,
+                                    );
+                                    let _ = cloned_ui_sender.send(ui_event);
+                                }
+                            }
+
+                            // implicitly we track last processed position, so this will not duplicate.
+                            // it handles the case where a single chunk contains multiple step_list items.
+                            let step_lists = xml_processor.extract_all_tag_contents("step_list");
+                            for step_list in step_lists {
+                                let wrapped_step = XmlProcessor::wrap_xml("step_list", &step_list);
+                                match from_str::<StepListItem>(&wrapped_step) {
+                                    Ok(step_list_item) => {
+                                        println!(
+                                            r#"context_wide_search::stream_thinking_and_step_list_handle::from_str("step_list_item"): {:?}"#,
+                                            step_list_item
+                                        );
+                                        let ui_event = UIEventWithID::agentic_symbol_level_thinking(
+                                            cloned_root_request_id_2.to_owned(),
+                                            step_list_item,
+                                        );
+                                        let _ = cloned_ui_sender.send(ui_event);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("context_wide_search::stream_thinking_and_step_list_handle::from_str::error: {:?}", e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            ));
+
+            // ensure streaming completes
+            let _ = stream_thinking_and_step_list_handle.await;
+
+            match stream_handle.await {
+                // Happy path
+                Ok(Some(Ok(result))) => {
+                    let s = Reply::parse_response(&result)
+                        .map(|reply| reply.to_code_symbol_important_response());
+                    match s {
+                        Ok(parsed_response) => return Ok(parsed_response),
+                        Err(_) => retries += 1,
                     }
                 }
                 _ => {
-                    retries = retries + 1;
+                    eprintln!("context_wide_search::stream_handle::error::retrying");
+                    retries += 1;
                 }
             }
         }

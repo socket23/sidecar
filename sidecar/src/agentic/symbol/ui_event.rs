@@ -5,7 +5,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    agentic::tool::{ref_filter::ref_filter::Location, search::iterative::IterativeSearchEvent},
+    agentic::tool::{
+        code_symbol::models::anthropic::StepListItem, ref_filter::ref_filter::Location,
+        search::iterative::IterativeSearchEvent,
+    },
     chunking::text_document::Range,
 };
 
@@ -308,6 +311,22 @@ impl UIEventWithID {
         Self {
             request_id,
             event: UIEvent::FrameworkEvent(FrameworkEvent::SearchIteration(event)),
+        }
+    }
+
+    pub fn agentic_top_level_thinking(request_id: String, thinking: &str) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::AgenticTopLevelThinking(
+                thinking.to_owned(),
+            )),
+        }
+    }
+
+    pub fn agentic_symbol_level_thinking(request_id: String, event: StepListItem) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::AgenticSymbolLevelThinking(event)),
         }
     }
 }
@@ -776,4 +795,6 @@ pub enum FrameworkEvent {
     RelevantReference(RelevantReference), // this naming sucks ass
     GroupedReferences(GroupedReferences),
     SearchIteration(IterativeSearchEvent),
+    AgenticTopLevelThinking(String),
+    AgenticSymbolLevelThinking(StepListItem),
 }

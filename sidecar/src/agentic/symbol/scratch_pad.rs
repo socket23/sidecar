@@ -737,7 +737,7 @@ impl ScratchPadAgent {
                                 None,
                                 false,
                                 Some(cache),
-                                true,
+                                false, // we want to have code correctness
                                 None,
                                 previous_user_queries,
                             )],

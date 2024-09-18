@@ -485,6 +485,11 @@ impl ScratchPadAgent {
         {
             previous_user_queries = self.previous_user_queries.lock().await.to_vec();
         }
+        let deep_reasoning = human_agentic_request.deep_reasoning();
+        println!(
+            "scratch_pad::human_message_agentic::deep_reasoning({})",
+            deep_reasoning
+        );
         let user_context = human_agentic_request.user_context().clone();
         let user_query = human_agentic_request.user_query().to_owned();
         let root_directory = human_agentic_request.root_directory().to_owned();

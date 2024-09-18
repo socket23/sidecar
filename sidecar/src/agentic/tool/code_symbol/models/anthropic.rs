@@ -5297,6 +5297,9 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
 
         let mut retries = 0;
         loop {
+            if cancellation_token.is_cancelled() {
+                return Err(CodeSymbolError::Cancelled);
+            }
             if retries >= 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
             }

@@ -21,15 +21,18 @@ impl XmlProcessor {
         let tag_start = format!("<{}>", tag_name);
         let tag_end = format!("</{}>", tag_name);
 
-        self.buffer.find(&tag_start).and_then(|start_index| {
-            self.buffer[start_index + tag_start.len()..]
-                .find(&tag_end)
-                .map(|end_index| {
-                    let content_start = start_index + tag_start.len();
-                    let content_end = content_start + end_index;
-                    self.buffer[content_start..content_end].to_string()
-                })
-        })
+        let start_index = self.buffer.find(&tag_start)?;
+        let content_start = start_index.checked_add(tag_start.len())?;
+
+        self.buffer
+            .get(content_start..)?
+            .find(&tag_end)
+            .and_then(|end_index| {
+                let content_end = content_start.checked_add(end_index)?;
+                self.buffer
+                    .get(content_start..content_end)
+                    .map(|content| content.to_string())
+            })
     }
 
     /// Extracts all contents of a specific tag from the buffer, starting from the last processed position.
@@ -37,17 +40,22 @@ impl XmlProcessor {
         let tag_start = format!("<{}>", tag_name);
         let tag_end = format!("</{}>", tag_name);
         let mut contents = Vec::new();
-        let mut pos = self.processed_up_to;
+        let mut pos: usize = self.processed_up_to;
 
         while let Some(start_index) = self.buffer[pos..].find(&tag_start) {
             let start_index = pos + start_index;
-            if let Some(end_index) = self.buffer[start_index + tag_start.len()..].find(&tag_end) {
-                let content_start = start_index + tag_start.len();
-                let content_end = content_start + end_index;
-                let content = &self.buffer[content_start..content_end];
-                contents.push(content.to_string());
+            let search_start = start_index + tag_start.len();
+            if let Some(end_index) = self.buffer[search_start..].find(&tag_end) {
+                let content_start = search_start;
+                let content_end = search_start + end_index;
+                if let Some(content) = self.buffer.get(content_start..content_end) {
+                    contents.push(content.to_string());
+                } else {
+                    println!("xmlprocessor::extract_all_tag_contents::buffer.get() - utf-related panic prevented");
+                    break;
+                }
                 pos = content_end + tag_end.len();
-                self.processed_up_to = pos; // Update the processed position
+                self.processed_up_to = pos;
             } else {
                 break;
             }

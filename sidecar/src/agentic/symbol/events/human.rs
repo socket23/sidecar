@@ -59,6 +59,7 @@ pub struct HumanAgenticRequest {
     root_directory: String,
     codebase_search: bool,
     user_context: UserContext,
+    deep_reasoning: bool,
 }
 
 impl HumanAgenticRequest {
@@ -67,12 +68,14 @@ impl HumanAgenticRequest {
         root_directory: String,
         codebase_search: bool,
         user_context: UserContext,
+        deep_reasoning: bool,
     ) -> Self {
         Self {
             user_context,
             user_query,
             root_directory,
             codebase_search,
+            deep_reasoning,
         }
     }
     pub fn user_context(&self) -> UserContext {
@@ -89,6 +92,10 @@ impl HumanAgenticRequest {
 
     pub fn codebase_search(&self) -> bool {
         self.codebase_search
+    }
+
+    pub fn deep_reasoning(&self) -> bool {
+        self.deep_reasoning
     }
 }
 

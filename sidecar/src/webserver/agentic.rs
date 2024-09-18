@@ -861,6 +861,8 @@ pub struct AgenticCodeEditing {
     // If we are editing based on an anchor position
     anchor_editing: bool,
     enable_import_nodes: bool,
+    // should we do deep reasoning
+    deep_reasoning: bool,
 }
 
 pub async fn code_editing(
@@ -875,6 +877,7 @@ pub async fn code_editing(
         codebase_search,
         anchor_editing,
         enable_import_nodes: _enable_import_nodes,
+        deep_reasoning,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start::request_id({})", &request_id);
@@ -1017,6 +1020,7 @@ pub async fn code_editing(
                 root_directory,
                 codebase_search,
                 user_context,
+                deep_reasoning,
             ))),
             message_properties,
         ));

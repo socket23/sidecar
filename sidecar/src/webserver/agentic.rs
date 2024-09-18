@@ -888,6 +888,10 @@ pub async fn code_editing(
     }
 
     let cached_content = app.anchored_request_tracker.cached_content().await;
+    println!(
+        "webserver::code_editing::cached_content::{}",
+        cached_content.len()
+    );
     let cancellation_token = tokio_util::sync::CancellationToken::new();
 
     // we want to pass this message_properties everywhere and not the previous one
@@ -986,6 +990,7 @@ pub async fn code_editing(
                 EnvironmentEventType::human_anchor_request(
                     user_query,
                     symbols_to_anchor,
+                    // not sure about this???
                     Some(cached_content.to_owned()),
                 ),
                 message_properties.clone(),

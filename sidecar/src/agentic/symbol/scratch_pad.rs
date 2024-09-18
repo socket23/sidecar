@@ -121,7 +121,7 @@ pub struct ScratchPadAgent {
     _files_context: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
     // This is the extra context which we send everytime with each request
     // this also helps with the prompt cache hits
-    _extra_context: Arc<Mutex<String>>,
+    extra_context: Arc<Mutex<String>>,
     reaction_sender: UnboundedSender<EnvironmentEventType>,
 }
 
@@ -141,7 +141,7 @@ impl ScratchPadAgent {
             fixing: Arc::new(Mutex::new(false)),
             previous_user_queries: Arc::new(Mutex::new(vec![])),
             _files_context: Arc::new(Mutex::new(vec![])),
-            _extra_context: Arc::new(Mutex::new(user_provided_context.unwrap_or_default())),
+            extra_context: Arc::new(Mutex::new(user_provided_context.unwrap_or_default())),
             reaction_sender,
         };
         // let cloned_scratch_pad_agent = scratch_pad_agent.clone();
@@ -713,6 +713,8 @@ impl ScratchPadAgent {
                         let symbol_identifier =
                             symbol_request.to_symbol_identifier_with_file_path();
                         {
+                            // TODO(codestory+caching): We should be sending the edit request directly
+                            // we are not providing any data over here
                             let symbol_event_request = SymbolEventRequest::new(
                                 symbol_identifier.clone(),
                                 SymbolEvent::InitialRequest(InitialRequestData::new(
@@ -995,10 +997,10 @@ impl ScratchPadAgent {
         let edits_made = editor_state_change.consume_edits_made();
         let extra_context;
         {
-            extra_context = (*self._extra_context.lock().await).to_owned();
+            extra_context = (*self.extra_context.lock().await).to_owned();
         }
         {
-            let mut extra_context = self._extra_context.lock().await;
+            let mut extra_context = self.extra_context.lock().await;
             *extra_context = (*extra_context).to_owned()
                 + "\n"
                 + &edits_made
@@ -1106,7 +1108,7 @@ impl ScratchPadAgent {
         }
         let extra_context;
         {
-            extra_context = (*self._extra_context.lock().await).to_owned();
+            extra_context = (*self.extra_context.lock().await).to_owned();
         }
         let interested_file_paths = files_context
             .iter()

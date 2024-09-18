@@ -7,7 +7,10 @@ use llm_client::{
     provider::{GeminiProAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
 };
 use sidecar::agentic::{
-    symbol::identifier::LLMProperties,
+    symbol::{
+        events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
+        identifier::LLMProperties,
+    },
     tool::{broker::ToolBrokerConfiguration, r#type::Tool},
 };
 use sidecar::{
@@ -59,6 +62,17 @@ async fn main() {
             )),
         ),
     ));
+
+    let editor_url = "http://localhost:42425".to_owned();
+    let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new("".to_owned(), "".to_owned()),
+        sender.clone(),
+        editor_url.to_owned(),
+        tokio_util::sync::CancellationToken::new(),
+    );
+
     let code_wide_search = ToolInput::RequestImportantSymbolsCodeWide(
         CodeSymbolImportantWideSearch::new(
             user_context,
@@ -68,6 +82,7 @@ async fn main() {
             gemini_pro_api_key,
             "".to_owned(),
             "".to_owned(),
+            message_properties,
         )
         .set_file_extension_fitler("py".to_owned()),
     );

@@ -18,7 +18,7 @@ use llm_client::{
 
 use crate::{
     agentic::{
-        symbol::identifier::LLMProperties,
+        symbol::{events::message_event::SymbolEventMessageProperties, identifier::LLMProperties},
         tool::{
             errors::ToolError,
             file::important::FileImportantResponse,
@@ -166,7 +166,7 @@ impl Tool for CodeSymbolImportantBroker {
                     either::Right(context) => {
                         if let Some(implementation) = self.llms.get(context.model()) {
                             return implementation
-                                .context_wide_search(context)
+                                .context_wide_search(context) // this needs message properties
                                 .await
                                 .map(|response| ToolOutput::important_symbols(response))
                                 .map_err(|e| ToolError::CodeSymbolError(e));
@@ -179,7 +179,7 @@ impl Tool for CodeSymbolImportantBroker {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug)]
 pub struct CodeSymbolImportantWideSearch {
     user_context: UserContext,
     user_query: String,
@@ -189,6 +189,7 @@ pub struct CodeSymbolImportantWideSearch {
     file_extension_filters: HashSet<String>,
     root_request_id: String,
     symbol_outline: String,
+    message_properties: SymbolEventMessageProperties,
 }
 
 impl CodeSymbolImportantWideSearch {
@@ -200,6 +201,7 @@ impl CodeSymbolImportantWideSearch {
         api_key: LLMProviderAPIKeys,
         root_request_id: String,
         symbol_outline: String,
+        message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
             user_context,
@@ -210,6 +212,7 @@ impl CodeSymbolImportantWideSearch {
             file_extension_filters: Default::default(),
             root_request_id,
             symbol_outline,
+            message_properties,
         }
     }
 
@@ -252,6 +255,10 @@ impl CodeSymbolImportantWideSearch {
 
     pub fn remove_user_context(self) -> UserContext {
         self.user_context
+    }
+
+    pub fn message_properties(&self) -> &SymbolEventMessageProperties {
+        &self.message_properties
     }
 }
 

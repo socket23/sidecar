@@ -260,6 +260,7 @@ impl SymbolInputEvent {
                             llm_properties_for_symbol_search.api_key().clone(),
                             self.request_id.root_request_id().to_string(),
                             "".to_owned(),
+                            message_properties,
                         );
                     // just symbol search instead for quick access
                     return Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search));
@@ -278,6 +279,7 @@ impl SymbolInputEvent {
                     llm_properties_for_symbol_search.api_key().clone(),
                     self.request_id.root_request_id().to_string(),
                     "".to_owned(),
+                    message_properties,
                 );
             // Now we try to generate the tool input for this
             Some(ToolInput::RequestImportantSymbolsCodeWide(code_wide_search))

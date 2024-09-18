@@ -202,6 +202,7 @@ impl SymbolManager {
                 )),
                 request_id_ref.root_request_id().to_owned(),
                 outline,
+                message_properties.to_owned(),
             ));
         let output = {
             match variables {

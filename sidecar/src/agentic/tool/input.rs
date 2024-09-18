@@ -48,6 +48,7 @@ use super::{
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
+    plan::reasoning::ReasoningRequest,
     r#type::ToolType,
     ref_filter::ref_filter::ReferenceFilterRequest,
     rerank::base::ReRankEntriesForBroker,
@@ -134,6 +135,8 @@ pub enum ToolInput {
     ScratchPadInput(ScratchPadAgentInput),
     // edited files ordered by timestamp
     EditedFiles(EditedFilesRequest),
+    // reasoning with just context
+    Reasoning(ReasoningRequest),
 }
 
 impl ToolInput {
@@ -198,6 +201,15 @@ impl ToolInput {
             ToolInput::ReferencesFilter(_) => ToolType::ReferencesFilter,
             ToolInput::ScratchPadInput(_) => ToolType::ScratchPadAgent,
             ToolInput::EditedFiles(_) => ToolType::EditedFiles,
+            ToolInput::Reasoning(_) => ToolType::Reasoning,
+        }
+    }
+
+    pub fn should_reasoning(self) -> Result<ReasoningRequest, ToolError> {
+        if let ToolInput::Reasoning(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::Reasoning))
         }
     }
 

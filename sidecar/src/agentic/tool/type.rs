@@ -103,6 +103,8 @@ pub enum ToolType {
     ScratchPadAgent,
     // edited files
     EditedFiles,
+    // Reasoning (This is just plain reasoning with no settings right now)
+    Reasoning,
 }
 
 impl std::fmt::Display for ToolType {
@@ -175,6 +177,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ReferencesFilter => write!(f, "Filters references"),
             ToolType::ScratchPadAgent => write!(f, "Scratch pad agent"),
             ToolType::EditedFiles => write!(f, "Edited files"),
+            ToolType::Reasoning => write!(f, "Reasoning"),
         }
     }
 }

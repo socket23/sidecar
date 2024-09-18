@@ -44,6 +44,7 @@ use super::{
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
+    plan::reasoning::ReasoningResponse,
     rerank::base::ReRankEntriesForBroker,
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
@@ -164,9 +165,15 @@ pub enum ToolOutput {
     ReferencesFilter(Vec<RelevantReference>),
     // edited files with timestamps (git-diff)
     EditedFiles(EditedFilesResponse),
+    // reasoning output
+    Reasoning(ReasoningResponse),
 }
 
 impl ToolOutput {
+    pub fn reasoning(response: ReasoningResponse) -> Self {
+        ToolOutput::Reasoning(response)
+    }
+
     pub fn edited_files(response: EditedFilesResponse) -> Self {
         ToolOutput::EditedFiles(response)
     }

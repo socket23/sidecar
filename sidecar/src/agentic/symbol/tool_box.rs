@@ -8397,9 +8397,9 @@ FILEPATH: {fs_file_path}
                     let language_id = file_content.language();
                     user_context_file_contents.push(format!(
                         r#"# FILEPATH: {fs_file_path}
-    ```{language_id}
-    {file_content_str}
-    ```"#
+```{language_id}
+{file_content_str}
+```"#
                     ));
                 }
             }

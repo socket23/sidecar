@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::StreamExt;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
@@ -11,6 +12,7 @@ use tracing::info;
 use crate::agentic::{
     symbol::identifier::LLMProperties,
     tool::{
+        code_edit::xml_processor::XmlProcessor,
         code_symbol::{
             correctness::{CodeCorrectness, CodeCorrectnessAction, CodeCorrectnessRequest},
             error_fix::{CodeEditingErrorRequest, CodeSymbolErrorFix},
@@ -5280,11 +5282,9 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
 
             let cloned_llm_client = self.llm_client.clone();
 
-            // let's make use of this receiver
             let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-            // todo(zi) ui_sender
-
+            // todo(zi): with cancellable request?
             let root_request_id_ref = root_request_id.clone();
             let stream_handle = tokio::spawn(async move {
                 cloned_llm_client
@@ -5303,45 +5303,49 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     .await
             });
 
-            // let mut delta_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-            // while let Some(stream_msg) = delta_stream.next().await {
-            //     dbg!(&stream_msg);
-            //     let delta = stream_msg.delta();
-            //     if let Some(delta) = delta {
-            //         // stream_answer.push_str(&delta);
-            //         // we have some delta over here which we can process
-            //         // search_and_replace_accumulator
-            //         //     .add_delta(delta.to_owned())
-            //         //     .await;
+            let _stream_thinking_and_step_list_handle = tokio::spawn(async move {
+                let mut delta_stream =
+                    tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+                let mut xml_processor = XmlProcessor::new();
+                let mut thinking_extracted = false;
+                let mut step_list_extracted = Vec::new();
 
-            //         // let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
-            //         //     root_request_id.to_owned(),
-            //         //     symbol_identifier.clone(),
-            //         //     search_and_replace_accumulator.answer_to_show.to_owned(),
-            //         //     edit_request_id.to_owned(),
-            //         // ));
-            //     }
-            // }
+                while let Some(stream_msg) = delta_stream.next().await {
+                    if let Some(delta) = stream_msg.delta() {
+                        xml_processor.append(&delta);
 
-            // match stream_handle.await {
-            //     Ok(result) => match result {
-            //         Ok(response) => {
-            //             if let Ok(parsed_response) = Reply::parse_response(&response)
-            //                 .map(|reply| reply.to_code_symbol_important_response())
-            //             {
-            //                 return Ok(parsed_response);
-            //             } else {
-            //                 retries = retries + 1;
-            //             }
-            //         }
-            //         _ => {
-            //             retries = retries + 1;
-            //         }
-            //     },
-            //     Err(e) => {
-            //         eprintln!("{:?}", e);
-            //     }
-            // }
+                        if !thinking_extracted {
+                            if let Some(content) = xml_processor.extract_tag_content("thinking") {
+                                println!("Extracted thinking content: {}", content);
+                                thinking_extracted = true;
+                                // TODO: Send UI event here
+                            }
+                        }
+
+                        let step_lists = xml_processor.extract_all_tag_contents("step_list");
+                        for step_list in step_lists {
+                            println!("Extracted step_list content:\n{}", step_list);
+                            step_list_extracted.push(step_list);
+                            // TODO: Send UI event here
+                        }
+                    }
+                }
+            });
+
+            match stream_handle.await {
+                Ok(Ok(response)) => {
+                    let s = Reply::parse_response(&response)
+                        .map(|reply| reply.to_code_symbol_important_response());
+                    match s {
+                        Ok(parsed_response) => return Ok(parsed_response),
+                        Err(_) => retries += 1,
+                    }
+                }
+                Ok(Err(_)) => retries += 1,
+                Err(e) => {
+                    eprintln!("Stream handle join error: {:?}", e);
+                }
+            }
         }
     }
 

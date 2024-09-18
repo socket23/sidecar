@@ -267,9 +267,7 @@ impl SymbolInputEvent {
                 }
             }
         } else {
-            // let outline_for_user_context = tool_box
-            //     .outline_for_user_context(&self.context, message_properties.clone())
-            //     .await;
+            //TODO(codestory+cache): we should cache this part of the call as well
             let code_wide_search: CodeSymbolImportantWideSearch =
                 CodeSymbolImportantWideSearch::new(
                     self.context,

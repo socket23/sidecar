@@ -1551,11 +1551,6 @@ Reason to edit:
                 Some(function_body)
             } else {
                 let implementations = self.get_implementations().await;
-                println!(
-                    "mecha_code_symbol_thinking::implementations_for_symbol::({})::symbol({})",
-                    &implementations.len(),
-                    self.symbol_name()
-                );
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
                 // Now we need to format this properly and send it back over to the LLM
                 let snippet_xml = snippets_ref
@@ -1636,11 +1631,6 @@ Reason to edit:
                 ))
             } else {
                 let implementations = self.get_implementations().await;
-                println!(
-                    "mecha_code_symbol_thinking::implementations_for_symbol::({:?})::symbol({})",
-                    &implementations,
-                    self.symbol_name()
-                );
                 let snippets_ref = implementations.iter().collect::<Vec<_>>();
                 // Now we need to format this properly and send it back over to the LLM
                 let snippet_xml = snippets_ref

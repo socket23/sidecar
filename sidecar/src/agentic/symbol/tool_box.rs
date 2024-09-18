@@ -5404,6 +5404,7 @@ instruction:
             sub_symbol.symbol_name(),
         );
         println!("============");
+        println!("tool_box::code_edit_search_and_replace::instructions({})", &instruction);
         let (_, _, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
         // TODO(skcd): This might not be the perfect place to get cache-hits we might

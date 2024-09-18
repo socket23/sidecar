@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for LLMType {
                     "Gpt4O" => Ok(LLMType::Gpt4O),
                     "GeminiProFlash" => Ok(LLMType::GeminiProFlash),
                     "DeepSeekCoderV2" => Ok(LLMType::DeepSeekCoderV2),
-                    "o1" => Ok(LLMType::O1Preview),
+                    "o1-preview" => Ok(LLMType::O1Preview),
                     _ => Ok(LLMType::Custom(value.to_string())),
                 }
             }

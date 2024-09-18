@@ -6,7 +6,7 @@ use tracing::info;
 
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+    clients::types::{LLMClientCompletionRequest, LLMClientError, LLMClientMessage},
 };
 
 use crate::agentic::{
@@ -5263,7 +5263,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             None,
         );
         let mut retries = 0;
-        let root_request_id_ref = &root_request_id;
+
         loop {
             if retries >= 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
@@ -5278,34 +5278,49 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 (model.clone(), api_key.clone(), provider.clone())
             };
             let cloned_message = messages.clone().set_llm(llm);
+
+            let cloned_llm_client = self.llm_client.clone();
+
+            // let's make use of this receiver
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-            let response = self
-                .llm_client
-                .stream_completion(
-                    api_key.clone(),
-                    cloned_message.clone(),
-                    provider.clone(),
-                    vec![
-                        ("event_type".to_owned(), "context_wide_search".to_owned()),
-                        ("root_id".to_owned(), root_request_id_ref.to_owned()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    sender,
-                )
-                .await;
-            match response {
-                Ok(response) => {
-                    if let Ok(parsed_response) = Reply::parse_response(&response)
-                        .map(|reply| reply.to_code_symbol_important_response())
-                    {
-                        return Ok(parsed_response);
-                    } else {
+
+            // todo(zi) ui_sender
+
+            let root_request_id_ref = root_request_id.clone();
+            let stream_handle = tokio::spawn(async move {
+                cloned_llm_client
+                    .stream_completion(
+                        api_key.clone(),
+                        cloned_message.clone(),
+                        provider.clone(),
+                        vec![
+                            ("event_type".to_owned(), "context_wide_search".to_owned()), // but stream only for context_wide_search
+                            ("root_id".to_owned(), root_request_id_ref),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        sender,
+                    )
+                    .await
+            });
+
+            match stream_handle.await {
+                Ok(result) => match result {
+                    Ok(response) => {
+                        if let Ok(parsed_response) = Reply::parse_response(&response)
+                            .map(|reply| reply.to_code_symbol_important_response())
+                        {
+                            return Ok(parsed_response);
+                        } else {
+                            retries = retries + 1;
+                        }
+                    }
+                    _ => {
                         retries = retries + 1;
                     }
-                }
-                _ => {
-                    retries = retries + 1;
+                },
+                Err(e) => {
+                    eprintln!("{:?}", e);
                 }
             }
         }

@@ -1,17 +1,24 @@
 //! The edited files and the git-diff which is ordered by timestamp
 //! The idea is that the file which we are editing can go last
 
-use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
+use crate::agentic::tool::{
+    errors::ToolError, helpers::diff_recent_changes::DiffFileContent, input::ToolInput,
+    output::ToolOutput, r#type::Tool,
+};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct EditedFilesRequest {
     editor_url: String,
+    diff_file_content: Vec<DiffFileContent>,
 }
 
 impl EditedFilesRequest {
-    pub fn new(editor_url: String) -> Self {
-        Self { editor_url }
+    pub fn new(editor_url: String, diff_file_content: Vec<DiffFileContent>) -> Self {
+        Self {
+            editor_url,
+            diff_file_content,
+        }
     }
 }
 
@@ -19,6 +26,7 @@ impl EditedFilesRequest {
 pub struct EditedGitDiffFile {
     fs_file_path: String,
     diff: String,
+    current_content: String,
     updated_timestamp_ms: i64,
 }
 
@@ -33,6 +41,10 @@ impl EditedGitDiffFile {
 
     pub fn updated_tiemstamp_ms(&self) -> i64 {
         self.updated_timestamp_ms
+    }
+
+    pub fn current_content(&self) -> &str {
+        &self.current_content
     }
 }
 

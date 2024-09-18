@@ -10,7 +10,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::agentic::{
-    symbol::identifier::LLMProperties,
+    symbol::{identifier::LLMProperties, ui_event::UIEventWithID},
     tool::{
         code_edit::xml_processor::XmlProcessor,
         code_symbol::{
@@ -5252,6 +5252,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let provider = code_symbols.llm_provider();
         let model = code_symbols.model().clone();
         let root_request_id = code_symbols.root_request_id().to_owned();
+        let ui_sender = code_symbols.message_properties().ui_sender();
         let system_message = LLMClientMessage::system(self.system_message_context_wide());
         let user_message = LLMClientMessage::user(
             self.user_message_for_codebase_wide_search(code_symbols)
@@ -5263,8 +5264,8 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             0.0,
             None,
         );
-        let mut retries = 0;
 
+        let mut retries = 0;
         loop {
             if retries >= 4 {
                 return Err(CodeSymbolError::ExhaustedRetries);
@@ -5279,13 +5280,15 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                 (model.clone(), api_key.clone(), provider.clone())
             };
             let cloned_message = messages.clone().set_llm(llm);
-
             let cloned_llm_client = self.llm_client.clone();
+            let cloned_root_request_id = root_request_id.clone();
+            let cloned_root_request_id_2 = root_request_id.clone();
+            let cloned_ui_sender = ui_sender.clone();
 
             let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
             // todo(zi): with cancellable request?
-            let root_request_id_ref = root_request_id.clone();
+
             let stream_handle = tokio::spawn(async move {
                 cloned_llm_client
                     .stream_completion(
@@ -5294,7 +5297,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                         provider.clone(),
                         vec![
                             ("event_type".to_owned(), "context_wide_search".to_owned()), // but stream only for context_wide_search
-                            ("root_id".to_owned(), root_request_id_ref),
+                            ("root_id".to_owned(), cloned_root_request_id.clone()),
                         ]
                         .into_iter()
                         .collect(),
@@ -5308,7 +5311,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
                 let mut xml_processor = XmlProcessor::new();
                 let mut thinking_extracted = false;
-                let mut step_list_extracted = Vec::new();
 
                 while let Some(stream_msg) = delta_stream.next().await {
                     if let Some(delta) = stream_msg.delta() {
@@ -5318,15 +5320,33 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                             if let Some(content) = xml_processor.extract_tag_content("thinking") {
                                 println!("Extracted thinking content: {}", content);
                                 thinking_extracted = true;
-                                // TODO: Send UI event here
+
+                                let ui_event = UIEventWithID::agentic_top_level_thinking(
+                                    cloned_root_request_id_2.to_owned(),
+                                    &content,
+                                );
+                                let _ = cloned_ui_sender.send(ui_event);
                             }
                         }
 
                         let step_lists = xml_processor.extract_all_tag_contents("step_list");
                         for step_list in step_lists {
                             println!("Extracted step_list content:\n{}", step_list);
-                            step_list_extracted.push(step_list);
-                            // TODO: Send UI event here
+
+                            let wrapped_step = XmlProcessor::wrap_xml("step_list", &step_list);
+                            match from_str::<StepListItem>(&wrapped_step) {
+                                Ok(step_list_item) => {
+                                    println!("Parsed StepListItem: {:?}", step_list_item);
+                                    let ui_event = UIEventWithID::agentic_symbol_level_thinking(
+                                        cloned_root_request_id_2.to_owned(),
+                                        step_list_item,
+                                    );
+                                    let _ = cloned_ui_sender.send(ui_event);
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to parse StepListItem: {:?}", e);
+                                }
+                            }
                         }
                     }
                 }

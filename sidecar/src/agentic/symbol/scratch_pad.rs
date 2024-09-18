@@ -58,20 +58,20 @@ use super::{
 
 #[derive(Debug, Clone)]
 struct ScratchPadFilesActive {
-    file_content: String,
-    file_path: String,
+    _file_content: String,
+    _file_path: String,
 }
 
 impl ScratchPadFilesActive {
-    fn new(file_content: String, file_path: String) -> Self {
+    fn _new(file_content: String, file_path: String) -> Self {
         Self {
-            file_content,
-            file_path,
+            _file_content: file_content,
+            _file_path: file_path,
         }
     }
 
-    fn to_diff_active_file(self) -> DiffFileContent {
-        DiffFileContent::new(self.file_path, self.file_content)
+    fn _to_diff_active_file(self) -> DiffFileContent {
+        DiffFileContent::new(self._file_path, self._file_content)
     }
 }
 
@@ -119,8 +119,6 @@ pub struct ScratchPadAgent {
     symbol_event_sender: UnboundedSender<SymbolEventMessage>,
     // This is the cache which we have to send with every request
     _files_context: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
-    // This is the cache for the git-diff of the various files we have seen before
-    files_seen_before: Arc<Mutex<Vec<ScratchPadFilesActive>>>,
     // This is the extra context which we send everytime with each request
     // this also helps with the prompt cache hits
     _extra_context: Arc<Mutex<String>>,
@@ -143,7 +141,6 @@ impl ScratchPadAgent {
             fixing: Arc::new(Mutex::new(false)),
             previous_user_queries: Arc::new(Mutex::new(vec![])),
             _files_context: Arc::new(Mutex::new(vec![])),
-            files_seen_before: Arc::new(Mutex::new(vec![])),
             _extra_context: Arc::new(Mutex::new(user_provided_context.unwrap_or_default())),
             reaction_sender,
         };
@@ -776,14 +773,6 @@ impl ScratchPadAgent {
         // We want to send the content of the files which we have seen before as they
         // are, this makes sure that we always get the latest git-diff, in case of reverts
         // which happen by the human outside of the scope of the files we are interested in
-        let files_seen_before;
-        {
-            files_seen_before = self.files_seen_before.lock().await.to_vec();
-        }
-        let files_seen_before = files_seen_before
-            .into_iter()
-            .map(|files_seen_before| files_seen_before.to_diff_active_file())
-            .collect::<Vec<_>>();
         let recent_edits = self
             .tool_box
             .recently_edited_files_with_content(
@@ -791,24 +780,10 @@ impl ScratchPadAgent {
                     .iter()
                     .filter_map(|anchor_symbol| anchor_symbol.fs_file_path())
                     .collect(),
-                files_seen_before,
+                vec![],
                 message_properties.clone(),
             )
             .await?;
-        // update our outlook of the world especially for the files which were edited
-        {
-            let mut files_seen_before = self.files_seen_before.lock().await;
-            *files_seen_before = recent_edits
-                .file_contents()
-                .iter()
-                .map(|file_information| {
-                    ScratchPadFilesActive::new(
-                        file_information.fs_file_path().to_owned(),
-                        file_information.file_content_latest().to_owned(),
-                    )
-                })
-                .collect::<Vec<_>>();
-        }
         // keep track of the user request in our state
         let previous_user_queries;
         {
@@ -928,7 +903,7 @@ impl ScratchPadAgent {
                     let file_path = file_contents.fs_file_path();
                     let language = file_contents.language();
                     let content = file_contents.contents_ref();
-                    ScratchPadFilesActive::new(
+                    ScratchPadFilesActive::_new(
                         format!(
                             r#"<file>
 <fs_file_path>
@@ -953,11 +928,11 @@ impl ScratchPadAgent {
         }
         let file_paths_interested = user_context_files
             .iter()
-            .map(|context_file| context_file.file_path.to_owned())
+            .map(|context_file| context_file._file_path.to_owned())
             .collect::<Vec<_>>();
         let user_context_files = user_context_files
             .into_iter()
-            .map(|context_file| context_file.file_content)
+            .map(|context_file| context_file._file_content)
             .collect::<Vec<_>>();
         println!("scratch_pad_agent::tool_box::agent_human_request");
         let _ = self
@@ -1009,11 +984,11 @@ impl ScratchPadAgent {
         }
         let file_paths_in_focus = user_context_files
             .iter()
-            .map(|context_file| context_file.file_path.to_owned())
+            .map(|context_file| context_file._file_path.to_owned())
             .collect::<Vec<String>>();
         let user_context_files = user_context_files
             .into_iter()
-            .map(|context_file| context_file.file_content)
+            .map(|context_file| context_file._file_content)
             .collect::<Vec<_>>();
         let user_query = editor_state_change.user_query().to_owned();
         let edits_made = editor_state_change.consume_edits_made();
@@ -1097,7 +1072,7 @@ impl ScratchPadAgent {
                 .lock()
                 .await
                 .iter()
-                .map(|file_content| file_content.file_path.to_owned())
+                .map(|file_content| file_content._file_path.to_owned())
                 .collect::<HashSet<String>>();
         }
         let diagnostic_messages = diagnostics
@@ -1134,7 +1109,7 @@ impl ScratchPadAgent {
         }
         let interested_file_paths = files_context
             .iter()
-            .map(|file_context| file_context.file_path.to_owned())
+            .map(|file_context| file_context._file_path.to_owned())
             .collect::<Vec<_>>();
         let _ = self
             .tool_box
@@ -1144,7 +1119,7 @@ impl ScratchPadAgent {
                 interested_file_paths,
                 files_context
                     .into_iter()
-                    .map(|files_context| files_context.file_content)
+                    .map(|files_context| files_context._file_content)
                     .collect::<Vec<_>>(),
                 extra_context,
                 message_properties.clone(),
@@ -1188,7 +1163,7 @@ impl ScratchPadAgent {
                 .lock()
                 .await
                 .iter()
-                .map(|file_context| file_context.file_path.to_owned())
+                .map(|file_context| file_context._file_path.to_owned())
                 .collect::<Vec<_>>();
         }
         // we should optimse for cache hit over here somehow
@@ -1281,7 +1256,7 @@ Please help me out by making the necessary code edits"#
                 .lock()
                 .await
                 .iter()
-                .map(|file| file.file_path.to_owned())
+                .map(|file| file._file_path.to_owned())
                 .collect::<Vec<_>>();
         }
         let diagnostics = self

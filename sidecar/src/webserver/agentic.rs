@@ -277,7 +277,7 @@ impl AnchoredEditingTracker {
                 let language_id = open_file_response.language();
                 let content = open_file_response.contents_ref();
                 format!(
-                    r#"FILEPATH: {fs_file_path}
+                    r#"# FILEPATH: {fs_file_path}
 ```{language_id}
 {content}
 ```"#

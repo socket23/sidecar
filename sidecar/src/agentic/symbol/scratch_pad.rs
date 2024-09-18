@@ -25,8 +25,7 @@ use crate::{
     agentic::{
         symbol::{
             events::{
-                initial_request::{InitialRequestData, SymbolEditedItem},
-                types::SymbolEvent,
+                edit::SymbolToEditRequest, initial_request::SymbolEditedItem, types::SymbolEvent,
             },
             identifier::LLMProperties,
             ui_event::{InitialSearchSymbolInformation, UIEventWithID},
@@ -480,6 +479,14 @@ impl ScratchPadAgent {
         human_agentic_request: HumanAgenticRequest,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
+        let cache;
+        {
+            cache = self.extra_context.lock().await.clone();
+        }
+        let previous_user_queries;
+        {
+            previous_user_queries = self.previous_user_queries.lock().await.to_vec();
+        }
         let user_context = human_agentic_request.user_context().clone();
         let user_query = human_agentic_request.user_query().to_owned();
         let root_directory = human_agentic_request.root_directory().to_owned();
@@ -690,69 +697,82 @@ impl ScratchPadAgent {
             println!("symbol_manager::symbols_len::({})", symbols.len());
 
             // This is where we are creating all the symbols
-            let _ =
-                stream::iter(
-                    // we are loosing context about the changes which we want to make
-                    // to the symbol over here
-                    symbols.into_iter().map(|symbol| {
-                        (
-                            symbol,
-                            user_query.to_owned(),
-                            symbols_edited_list.to_vec(),
+            let _ = stream::iter(
+                // we are loosing context about the changes which we want to make
+                // to the symbol over here
+                symbols.into_iter().map(|symbol| {
+                    (
+                        symbol,
+                        user_query.to_owned(),
+                        symbols_edited_list.to_vec(),
+                        cache.to_owned(),
+                        previous_user_queries.to_vec(),
+                        message_properties.clone(),
+                    )
+                }),
+            )
+            .map(
+                |(
+                    (symbol_request, steps),
+                    user_query,
+                    _symbols_edited_list,
+                    cache,
+                    previous_user_queries,
+                    message_properties,
+                )| async move {
+                    let symbol_identifier = symbol_request.to_symbol_identifier_with_file_path();
+                    {
+                        // TODO(codestory+caching): We should be sending the edit request directly
+                        // we are not providing any data over here
+                        let symbol_event = SymbolEvent::Edit(SymbolToEditRequest::new(
+                            vec![SymbolToEdit::new(
+                                symbol_identifier.symbol_name().to_owned(),
+                                Range::new(Position::new(0, 0, 0), Position::new(100000, 0, 0)),
+                                symbol_identifier.fs_file_path().unwrap_or_default(),
+                                steps,
+                                false,
+                                false,
+                                true,
+                                user_query.to_owned(),
+                                None,
+                                false,
+                                Some(cache),
+                                true,
+                                None,
+                                previous_user_queries,
+                            )],
+                            symbol_identifier.clone(),
+                            vec![],
+                        ));
+                        let symbol_event_request = SymbolEventRequest::new(
+                            symbol_identifier.clone(),
+                            symbol_event,
+                            tool_properties_ref.clone(),
+                        );
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        println!(
+                            "symbol_manager::initial_request::sending_request({})",
+                            symbol_identifier.symbol_name()
+                        );
+                        let symbol_event = SymbolEventMessage::message_with_properties(
+                            symbol_event_request,
                             message_properties.clone(),
-                        )
-                    }),
-                )
-                .map(
-                    |(
-                        (symbol_request, steps),
-                        user_query,
-                        symbols_edited_list,
-                        message_properties,
-                    )| async move {
-                        let symbol_identifier =
-                            symbol_request.to_symbol_identifier_with_file_path();
-                        {
-                            // TODO(codestory+caching): We should be sending the edit request directly
-                            // we are not providing any data over here
-                            let symbol_event_request = SymbolEventRequest::new(
-                                symbol_identifier.clone(),
-                                SymbolEvent::InitialRequest(InitialRequestData::new(
-                                    user_query.to_owned(),
-                                    steps.join("\n"),
-                                    // empty history when symbol manager sends the initial
-                                    // request
-                                    vec![],
-                                    full_symbol_edit,
-                                    Some(symbols_edited_list),
-                                    is_big_search,
-                                )),
-                                tool_properties_ref.clone(),
-                            );
-                            let (sender, receiver) = tokio::sync::oneshot::channel();
-                            println!(
-                                "symbol_manager::initial_request::sending_request({})",
-                                symbol_identifier.symbol_name()
-                            );
-                            let symbol_event = SymbolEventMessage::message_with_properties(
-                                symbol_event_request,
-                                message_properties.clone(),
-                                sender,
-                            );
-                            let _ = self.symbol_event_sender.send(symbol_event);
-                            let response = receiver.await;
-                            println!(
-                                "symbol_manager::initial_request::response::({})::({:?})",
-                                symbol_identifier.symbol_name(),
-                                &response
-                            );
-                        }
-                    },
-                )
-                // TODO(codestory): We should play with the parallelism over here
-                .buffered(1)
-                .collect::<Vec<_>>()
-                .await;
+                            sender,
+                        );
+                        let _ = self.symbol_event_sender.send(symbol_event);
+                        let response = receiver.await;
+                        println!(
+                            "symbol_manager::initial_request::response::({})::({:?})",
+                            symbol_identifier.symbol_name(),
+                            &response
+                        );
+                    }
+                },
+            )
+            // TODO(codestory): We should play with the parallelism over here
+            .buffered(1)
+            .collect::<Vec<_>>()
+            .await;
         }
         println!("scratch_pad_agent::agentic_editing::finish");
         println!(
@@ -1182,9 +1202,9 @@ impl ScratchPadAgent {
                 let contents = file_contents.contents_ref();
                 files_context.push(format!(
                     r#"# FILEPATH: {fs_file_path}
-    ```{language_id}
-    {contents}
-    ```"#
+```{language_id}
+{contents}
+```"#
                 ));
             }
         }

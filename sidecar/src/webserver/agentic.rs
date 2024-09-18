@@ -193,6 +193,10 @@ impl AnchoredEditingTracker {
             }
         }
         {
+            println!(
+                "anchored_editing_tracker::tracking_request::({})",
+                request_id
+            );
             let mut running_request_properties = self.running_requests_properties.lock().await;
             if let Some(metadata) = editing_metadata {
                 running_request_properties.insert(request_id.to_owned(), metadata);
@@ -292,6 +296,7 @@ impl AnchoredEditingTracker {
                 .await
                 .get(request_id)
             {
+                println!("anchored_editing_tracker::cancelling_request");
                 // cancel the ongoing request over here
                 properties.cancellation_token.cancel();
             }
@@ -910,8 +915,8 @@ pub async fn code_editing(
         scratch_pad_agent
     } else {
         println!(
-            "webserver::code_editing_flow::anchor_editing::({})",
-            anchor_editing
+            "webserver::code_editing_flow::anchor_editing::new::request_id({})::({})",
+            &request_id, anchor_editing
         );
         // the storage unit for the scratch pad path
         // create this file path before we start editing it
@@ -928,20 +933,23 @@ pub async fn code_editing(
             Some(cached_content.to_owned()),
         )
         .await;
-        let _ = app.anchored_request_tracker.track_new_request(
-            &request_id,
-            None,
-            Some(AnchoredEditingMetadata::new(
-                message_properties.clone(),
-                vec![],
-                Default::default(),
-                vec![],
+        let _ = app
+            .anchored_request_tracker
+            .track_new_request(
+                &request_id,
                 None,
-                scratch_pad_agent.clone(),
-                environment_sender.clone(),
-                cancellation_token,
-            )),
-        );
+                Some(AnchoredEditingMetadata::new(
+                    message_properties.clone(),
+                    vec![],
+                    Default::default(),
+                    vec![],
+                    None,
+                    scratch_pad_agent.clone(),
+                    environment_sender.clone(),
+                    cancellation_token,
+                )),
+            )
+            .await;
         (scratch_pad_agent, environment_sender)
     };
 

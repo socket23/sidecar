@@ -5375,10 +5375,6 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                                 let wrapped_step = XmlProcessor::wrap_xml("step_list", &step_list);
                                 match from_str::<StepListItem>(&wrapped_step) {
                                     Ok(step_list_item) => {
-                                        println!(
-                                            r#"context_wide_search::stream_thinking_and_step_list_handle::from_str("step_list_item"): {:?}"#,
-                                            step_list_item
-                                        );
                                         let ui_event = UIEventWithID::agentic_symbol_level_thinking(
                                             cloned_root_request_id_2.to_owned(),
                                             step_list_item,

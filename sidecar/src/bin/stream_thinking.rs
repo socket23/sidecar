@@ -1,5 +1,7 @@
 use async_stream::stream;
 use futures::{pin_mut, stream::Stream, StreamExt};
+use serde_xml_rs::from_str;
+use sidecar::agentic::tool::code_symbol::models::anthropic::StepListItem;
 use tokio::time::{sleep, Duration};
 
 #[tokio::main]
@@ -102,6 +104,10 @@ Create a new struct CodeRequestStopResponse similar to ProbeStopResponse
     println!("All extracted step_list items:");
     for step in step_list_extracted {
         println!("{}", step);
+        let wrapped_step = wrap_xml("step_list", &step);
+        let output = from_str::<StepListItem>(&wrapped_step);
+
+        dbg!(&output);
     }
 }
 
@@ -114,7 +120,7 @@ fn simulate_stream(input: String, chunk_size: usize) -> impl Stream<Item = Strin
             let chunk = &input[index..end];
             yield chunk.to_string();
             index = end;
-            sleep(Duration::from_millis(200)).await;
+            sleep(Duration::from_millis(50)).await;
         }
     }
 }
@@ -169,4 +175,8 @@ fn extract_all_tag_contents(
 
     // Return the accumulated contents and new position
     (contents, pos)
+}
+
+fn wrap_xml(root_tag: &str, raw_xml: &str) -> String {
+    format!("<{root_tag}>{raw_xml}</{root_tag}>")
 }

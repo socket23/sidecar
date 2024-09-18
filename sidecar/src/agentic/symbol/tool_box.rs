@@ -7968,7 +7968,6 @@ FILEPATH: {fs_file_path}
             variable.is_selection()
                 && !(variable.start_position.line() == 0 && variable.end_position.line() == 0)
         });
-        println!("tool_box::symbols_to_anchor::({:?})", &selection_variable);
         if selection_variable.is_none() {
             return Ok(vec![]);
         }

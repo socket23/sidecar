@@ -5,20 +5,53 @@
 
 use llm_client::clients::types::LLMClientMessage;
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DiffFileContent {
+    fs_file_path: String,
+    file_content_latest: String,
+}
+
+impl DiffFileContent {
+    pub fn new(fs_file_path: String, file_content_latest: String) -> Self {
+        Self {
+            fs_file_path,
+            file_content_latest,
+        }
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn file_content_latest(&self) -> &str {
+        &self.file_content_latest
+    }
+}
+
 /// Contains the diff recent changes, with the caveat that the l1_changes are
 /// the variable one and the l2_changes are the static one
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DiffRecentChanges {
     l1_changes: String,
     l2_changes: String,
+    file_contents: Vec<DiffFileContent>,
 }
 
 impl DiffRecentChanges {
-    pub fn new(l1_changes: String, l2_changes: String) -> Self {
+    pub fn new(
+        l1_changes: String,
+        l2_changes: String,
+        file_contents: Vec<DiffFileContent>,
+    ) -> Self {
         Self {
             l1_changes,
             l2_changes,
+            file_contents,
         }
+    }
+
+    pub fn file_contents(&self) -> &[DiffFileContent] {
+        self.file_contents.as_slice()
     }
 
     pub fn l1_changes(&self) -> &str {

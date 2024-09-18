@@ -71,7 +71,7 @@ use crate::agentic::tool::filtering::broker::{
 use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClientResponse};
 use crate::agentic::tool::git::edited_files::EditedFilesRequest;
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
-use crate::agentic::tool::helpers::diff_recent_changes::DiffRecentChanges;
+use crate::agentic::tool::helpers::diff_recent_changes::{DiffFileContent, DiffRecentChanges};
 use crate::agentic::tool::lsp::diagnostics::{
     DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
@@ -6881,7 +6881,10 @@ FILEPATH: {fs_file_path}
                 .await
                 .ok();
             if let Some(file_content) = file_content {
-                Some((fs_file_path, (file_content.language().to_owned(), file_content.contents())))
+                Some((
+                    fs_file_path,
+                    (file_content.language().to_owned(), file_content.contents()),
+                ))
             } else {
                 None
             }
@@ -6892,27 +6895,39 @@ FILEPATH: {fs_file_path}
         .into_iter()
         .filter_map(|s| s)
         .collect::<HashMap<String, (String, String)>>();
-        
-        let mecha_code_symbol_thinking = file_paths_and_steps.into_iter().map(|(fs_file_path, steps)| {
-            let (language, file_content) = file_paths_to_content.get(&fs_file_path).map(|data| data.clone()).unwrap_or(("".to_owned(), "".to_owned()));
-            let range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
-            let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
-                fs_file_path.to_owned(),
-                vec![],
-                false,
-                fs_file_path.to_owned(),
-                Some(Snippet::new(
+
+        let mecha_code_symbol_thinking = file_paths_and_steps
+            .into_iter()
+            .map(|(fs_file_path, steps)| {
+                let (language, file_content) = file_paths_to_content
+                    .get(&fs_file_path)
+                    .map(|data| data.clone())
+                    .unwrap_or(("".to_owned(), "".to_owned()));
+                let range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
+                let mecha_code_symbol_thinking = MechaCodeSymbolThinking::new(
                     fs_file_path.to_owned(),
-                    range.clone(),
+                    vec![],
+                    false,
                     fs_file_path.to_owned(),
-                    file_content.to_owned(),
-                    OutlineNodeContent::file_symbol(fs_file_path.to_owned(), range, file_content.to_owned(), fs_file_path, language)
-                )),
-                vec![],
-                Arc::new(self.clone()),
-            );
-            (mecha_code_symbol_thinking, steps)
-        }).collect();
+                    Some(Snippet::new(
+                        fs_file_path.to_owned(),
+                        range.clone(),
+                        fs_file_path.to_owned(),
+                        file_content.to_owned(),
+                        OutlineNodeContent::file_symbol(
+                            fs_file_path.to_owned(),
+                            range,
+                            file_content.to_owned(),
+                            fs_file_path,
+                            language,
+                        ),
+                    )),
+                    vec![],
+                    Arc::new(self.clone()),
+                );
+                (mecha_code_symbol_thinking, steps)
+            })
+            .collect();
         Ok(mecha_code_symbol_thinking)
     }
 
@@ -8644,18 +8659,19 @@ FILEPATH: {fs_file_path}
             .collect::<Vec<_>>()
     }
 
-    /// Grabs the git-diff sorted by the timestamp over here
-    /// If we are provided a set of files then this set comes at the very end
-    /// and is still ordered by the timestamp
-    /// Those which are not included in the file-set are arranged in the order
-    /// they appear in
-    pub async fn recently_edited_files(
+    /// Grabs the git-diff sorted by timestamp relative to the content if any
+    /// we have seen before
+    /// 
+    /// This allows us to continously understand the changes which have happened
+    /// in the editor and even if the final output of git-diff is nothing, the user
+    /// might have made a change and then reverted it, but we are able to capture it
+    pub async fn recently_edited_files_with_content(
         &self,
         important_file_paths: HashSet<String>,
+        diff_content_files: Vec<DiffFileContent>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<DiffRecentChanges, SymbolError> {
-        let input =
-            ToolInput::EditedFiles(EditedFilesRequest::new(message_properties.editor_url()));
+        let input = ToolInput::EditedFiles(EditedFilesRequest::new(message_properties.editor_url(), diff_content_files));
         let mut recently_edited_files = self
             .tools
             .invoke(input)
@@ -8664,6 +8680,16 @@ FILEPATH: {fs_file_path}
             .recently_edited_files()
             .ok_or(SymbolError::WrongToolOutput)?
             .changed_files();
+
+        let recently_edited_file_content = recently_edited_files
+            .iter()
+            .map(|recently_edited_file| {
+                DiffFileContent::new(
+                    recently_edited_file.fs_file_path().to_owned(),
+                    recently_edited_file.current_content().to_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
 
         // sort it in increasing order based on the updated timestamp
         recently_edited_files.sort_by_key(|edited_file| edited_file.updated_tiemstamp_ms());
@@ -8683,7 +8709,69 @@ FILEPATH: {fs_file_path}
         // now to create the diff-recent-changes we are going to remove the files
         // which exist in our important file paths and mark them as l1 cache
         // while keeping the other set of files as l2 cache
-        Ok(DiffRecentChanges::new(l1_cache, l2_cache))
+        Ok(DiffRecentChanges::new(
+            l1_cache,
+            l2_cache,
+            recently_edited_file_content,
+        ))
+    }
+
+    /// Grabs the git-diff sorted by the timestamp over here
+    /// If we are provided a set of files then this set comes at the very end
+    /// and is still ordered by the timestamp
+    /// Those which are not included in the file-set are arranged in the order
+    /// they appear in
+    pub async fn recently_edited_files(
+        &self,
+        important_file_paths: HashSet<String>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<DiffRecentChanges, SymbolError> {
+        let input =
+            // we don't have access to the our own state of the world over here so sending
+            // over an empty vec instead
+            ToolInput::EditedFiles(EditedFilesRequest::new(message_properties.editor_url(), vec![]));
+        let mut recently_edited_files = self
+            .tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .recently_edited_files()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .changed_files();
+
+        let recently_edited_file_content = recently_edited_files
+            .iter()
+            .map(|recently_edited_file| {
+                DiffFileContent::new(
+                    recently_edited_file.fs_file_path().to_owned(),
+                    recently_edited_file.current_content().to_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // sort it in increasing order based on the updated timestamp
+        recently_edited_files.sort_by_key(|edited_file| edited_file.updated_tiemstamp_ms());
+        let (l1_cache, l2_cache): (Vec<_>, Vec<_>) = recently_edited_files
+            .into_iter()
+            .partition(|edited_file| important_file_paths.contains(edited_file.fs_file_path()));
+        let l1_cache = l1_cache
+            .into_iter()
+            .map(|diff_file| diff_file.diff().to_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let l2_cache = l2_cache
+            .into_iter()
+            .map(|diff_file| diff_file.diff().to_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        // now to create the diff-recent-changes we are going to remove the files
+        // which exist in our important file paths and mark them as l1 cache
+        // while keeping the other set of files as l2 cache
+        Ok(DiffRecentChanges::new(
+            l1_cache,
+            l2_cache,
+            recently_edited_file_content,
+        ))
     }
 
     pub async fn reference_filtering(

@@ -1,13 +1,12 @@
 use async_trait::async_trait;
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+};
 use serde_xml_rs::from_str;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::info;
-
-use llm_client::{
-    broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientError, LLMClientMessage},
-};
 
 use crate::agentic::{
     symbol::identifier::LLMProperties,
@@ -5282,7 +5281,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             let cloned_llm_client = self.llm_client.clone();
 
             // let's make use of this receiver
-            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+            let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
             // todo(zi) ui_sender
 
@@ -5304,25 +5303,45 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                     .await
             });
 
-            match stream_handle.await {
-                Ok(result) => match result {
-                    Ok(response) => {
-                        if let Ok(parsed_response) = Reply::parse_response(&response)
-                            .map(|reply| reply.to_code_symbol_important_response())
-                        {
-                            return Ok(parsed_response);
-                        } else {
-                            retries = retries + 1;
-                        }
-                    }
-                    _ => {
-                        retries = retries + 1;
-                    }
-                },
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                }
-            }
+            // let mut delta_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+            // while let Some(stream_msg) = delta_stream.next().await {
+            //     dbg!(&stream_msg);
+            //     let delta = stream_msg.delta();
+            //     if let Some(delta) = delta {
+            //         // stream_answer.push_str(&delta);
+            //         // we have some delta over here which we can process
+            //         // search_and_replace_accumulator
+            //         //     .add_delta(delta.to_owned())
+            //         //     .await;
+
+            //         // let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
+            //         //     root_request_id.to_owned(),
+            //         //     symbol_identifier.clone(),
+            //         //     search_and_replace_accumulator.answer_to_show.to_owned(),
+            //         //     edit_request_id.to_owned(),
+            //         // ));
+            //     }
+            // }
+
+            // match stream_handle.await {
+            //     Ok(result) => match result {
+            //         Ok(response) => {
+            //             if let Ok(parsed_response) = Reply::parse_response(&response)
+            //                 .map(|reply| reply.to_code_symbol_important_response())
+            //             {
+            //                 return Ok(parsed_response);
+            //             } else {
+            //                 retries = retries + 1;
+            //             }
+            //         }
+            //         _ => {
+            //             retries = retries + 1;
+            //         }
+            //     },
+            //     Err(e) => {
+            //         eprintln!("{:?}", e);
+            //     }
+            // }
         }
     }
 

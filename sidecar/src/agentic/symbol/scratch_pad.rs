@@ -784,6 +784,7 @@ impl ScratchPadAgent {
                 message_properties.clone(),
             )
             .await?;
+        println!("scratch_pad_agent::human_message_anchor::recent_edits::done");
         // keep track of the user request in our state
         let previous_user_queries;
         {

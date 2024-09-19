@@ -46,6 +46,7 @@ use super::{
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
     },
     output::ToolOutput,
+    plan::reasoning::ReasoningClient,
     r#type::{Tool, ToolType},
     ref_filter::ref_filter::ReferenceFilterBroker,
     rerank::base::ReRankBroker,
@@ -381,9 +382,13 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::ScratchPadAgent,
-            Box::new(ScratchPadAgentBroker::new(llm_client)),
+            Box::new(ScratchPadAgentBroker::new(llm_client.clone())),
         );
         tools.insert(ToolType::EditedFiles, Box::new(EditedFiles::new()));
+        tools.insert(
+            ToolType::Reasoning,
+            Box::new(ReasoningClient::new(llm_client.clone())),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

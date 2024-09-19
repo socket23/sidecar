@@ -198,6 +198,7 @@ impl SymbolInputEvent {
     pub async fn tool_use_on_initial_invocation(
         self,
         recent_edits: String,
+        lsp_diagnostics: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
@@ -264,6 +265,7 @@ impl SymbolInputEvent {
                             self.request_id.root_request_id().to_string(),
                             "".to_owned(),
                             recent_edits,
+                            lsp_diagnostics,
                             message_properties,
                         );
                     // just symbol search instead for quick access
@@ -282,6 +284,7 @@ impl SymbolInputEvent {
                     self.request_id.root_request_id().to_string(),
                     "".to_owned(),
                     recent_edits,
+                    lsp_diagnostics,
                     message_properties,
                 );
             // Now we try to generate the tool input for this

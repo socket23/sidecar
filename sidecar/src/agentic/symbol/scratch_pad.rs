@@ -558,9 +558,17 @@ impl ScratchPadAgent {
             .tool_box
             .recently_edited_files(Default::default(), message_properties.clone())
             .await?;
+        let lsp_diagnostics = self
+            .tool_box
+            .get_lsp_diagnostics_prompt_format(
+                human_agentic_request.user_context().file_paths(),
+                message_properties.clone(),
+            )
+            .await?;
         let tool_input = input_event
             .tool_use_on_initial_invocation(
                 recent_edits.l2_changes().to_owned(),
+                lsp_diagnostics,
                 message_properties.clone(),
             )
             .await;

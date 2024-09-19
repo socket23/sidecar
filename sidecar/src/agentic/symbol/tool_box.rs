@@ -8701,6 +8701,69 @@ FILEPATH: {fs_file_path}
         Ok(diagnotic_with_snippet)
     }
 
+    /// This formats the diagnostics for the prompt and can be used as in as a drop
+    /// in replacement when sending lsp diagnostics to the prompt
+    async fn get_lsp_diagnostics_with_content_prompt_format(
+        &self,
+        fs_file_path: &str,
+        range: &Range,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<String, SymbolError> {
+        let lsp_diagnostics_with_content = self
+            .get_lsp_diagnostics_with_content(fs_file_path, range, message_properties)
+            .await?;
+        let diagnostics = lsp_diagnostics_with_content
+            .into_iter()
+            .map(|diagnostic| {
+                let content = diagnostic.snippet();
+                let message = diagnostic.message();
+                format!(
+                    r#"<diagnostic>
+<content>
+{content}
+</content>
+<message>
+{message}
+</message>
+</diagnostic>"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Ok(format!(
+            r#"# LSP Diagnostics on file: {fs_file_path}
+{diagnostics}"#
+        ))
+    }
+
+    pub async fn get_lsp_diagnostics_prompt_format(
+        &self,
+        file_paths: Vec<String>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<String, SymbolError> {
+        let diagnostics = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            self.get_lsp_diagnostics_with_content_prompt_format(
+                &fs_file_path,
+                &Range::new(Position::new(0, 0, 0), Position::new(100_000, 0, 0)),
+                message_properties,
+            )
+            .await
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s.ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+        Ok(diagnostics)
+    }
+
     /// Grabs the git-diff sorted by timestamp relative to the content if any
     /// we have seen before
     ///
@@ -8979,7 +9042,9 @@ FILEPATH: {fs_file_path}
             .join("\n");
 
         // scratch-pad path
-        let scratch_pad_content = self.file_open(scratch_pad_path.to_owned(), message_properties.clone()).await?;
+        let scratch_pad_content = self
+            .file_open(scratch_pad_path.to_owned(), message_properties.clone())
+            .await?;
         // for the recent edits made we want to grab the l2 cache over here
         let l2_cache = recente_edits_made.l2_changes();
         let tool_input = ToolInput::Reasoning(ReasoningRequest::new(

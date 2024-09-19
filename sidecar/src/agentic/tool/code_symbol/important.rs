@@ -189,6 +189,7 @@ pub struct CodeSymbolImportantWideSearch {
     file_extension_filters: HashSet<String>,
     root_request_id: String,
     symbol_outline: String,
+    recent_edits: String,
     message_properties: SymbolEventMessageProperties,
 }
 
@@ -201,6 +202,7 @@ impl CodeSymbolImportantWideSearch {
         api_key: LLMProviderAPIKeys,
         root_request_id: String,
         symbol_outline: String,
+        recent_edits: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
@@ -213,6 +215,7 @@ impl CodeSymbolImportantWideSearch {
             root_request_id,
             symbol_outline,
             message_properties,
+            recent_edits,
         }
     }
 
@@ -259,6 +262,10 @@ impl CodeSymbolImportantWideSearch {
 
     pub fn message_properties(&self) -> &SymbolEventMessageProperties {
         &self.message_properties
+    }
+
+    pub fn recent_edits(&self) -> &str {
+        &self.recent_edits
     }
 }
 

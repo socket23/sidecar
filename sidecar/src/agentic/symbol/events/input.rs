@@ -2,8 +2,6 @@
 //! convert between different types of inputs.. something like that
 //! or we can keep hardcoded actions somewhere.. we will figure it out as we go
 
-use std::sync::Arc;
-
 use llm_client::{
     clients::types::LLMType,
     provider::{GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys},
@@ -12,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     agentic::{
-        symbol::{identifier::LLMProperties, tool_box::ToolBox, ui_event::UIEventWithID},
+        symbol::{identifier::LLMProperties, ui_event::UIEventWithID},
         tool::{
             code_symbol::{
                 important::CodeSymbolImportantWideSearch, repo_map_search::RepoMapSearchQuery,
@@ -199,7 +197,7 @@ impl SymbolInputEvent {
     // altho fuck complexity we ball
     pub async fn tool_use_on_initial_invocation(
         self,
-        _tool_box: Arc<ToolBox>,
+        recent_edits: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Option<ToolInput> {
         // if its anthropic we purposefully override the llm here to be a better
@@ -265,6 +263,7 @@ impl SymbolInputEvent {
                             llm_properties_for_symbol_search.api_key().clone(),
                             self.request_id.root_request_id().to_string(),
                             "".to_owned(),
+                            recent_edits,
                             message_properties,
                         );
                     // just symbol search instead for quick access
@@ -282,6 +281,7 @@ impl SymbolInputEvent {
                     llm_properties_for_symbol_search.api_key().clone(),
                     self.request_id.root_request_id().to_string(),
                     "".to_owned(),
+                    recent_edits,
                     message_properties,
                 );
             // Now we try to generate the tool input for this

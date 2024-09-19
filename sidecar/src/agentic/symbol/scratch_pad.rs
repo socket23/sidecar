@@ -554,8 +554,15 @@ impl ScratchPadAgent {
             }
         }
         let user_query = input_event.user_query().to_owned();
+        let recent_edits = self
+            .tool_box
+            .recently_edited_files(Default::default(), message_properties.clone())
+            .await?;
         let tool_input = input_event
-            .tool_use_on_initial_invocation(self.tool_box.clone(), message_properties.clone())
+            .tool_use_on_initial_invocation(
+                recent_edits.l2_changes().to_owned(),
+                message_properties.clone(),
+            )
             .await;
         let tool_output = if let Some(tool_input) = tool_input {
             {

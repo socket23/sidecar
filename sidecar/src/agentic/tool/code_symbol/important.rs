@@ -190,6 +190,7 @@ pub struct CodeSymbolImportantWideSearch {
     root_request_id: String,
     symbol_outline: String,
     recent_edits: String,
+    lsp_diagnostics: String,
     message_properties: SymbolEventMessageProperties,
 }
 
@@ -203,6 +204,7 @@ impl CodeSymbolImportantWideSearch {
         root_request_id: String,
         symbol_outline: String,
         recent_edits: String,
+        lsp_diagnostics: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
@@ -215,8 +217,13 @@ impl CodeSymbolImportantWideSearch {
             root_request_id,
             symbol_outline,
             message_properties,
+            lsp_diagnostics,
             recent_edits,
         }
+    }
+
+    pub fn lsp_diagnostics(&self) -> &str {
+        &self.lsp_diagnostics
     }
 
     pub fn symbol_outline(&self) -> &str {

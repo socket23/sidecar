@@ -77,6 +77,66 @@ pub struct StepListItem {
     file_path: String,
 }
 
+impl StepListItem {
+    fn parse_from_str(response: &str) -> Option<StepListItem> {
+        // we have a string with
+        // <step_list>
+        // <name>
+        // {name}
+        // </name>
+        // <step>
+        // {step over here}
+        // </step>
+        // ...
+        let response_lines = response
+            .lines()
+            .into_iter()
+            .map(|line| line.to_owned())
+            .collect::<Vec<_>>();
+        let mut final_lines = vec![];
+        let mut inside_step = false;
+        let mut accumulate = vec![];
+        for line in response_lines.into_iter() {
+            if line == "<step>" {
+                inside_step = true;
+                final_lines.push("<step>".to_owned());
+                continue;
+            } else if line == "</step>" {
+                inside_step = false;
+                // some accumulated lines
+                // we want to escape this part right?
+                let accumulated_lines = accumulate.to_vec().join("\n");
+                accumulate = vec![];
+                let accumulated_lines = quick_xml::escape::escape(&accumulated_lines);
+                final_lines.push(accumulated_lines.to_string());
+                final_lines.push("</step>".to_owned());
+                continue;
+            } else {
+                if inside_step {
+                    accumulate.push(line);
+                } else {
+                    final_lines.push(line);
+                }
+            }
+        }
+        let final_response = final_lines.join("\n");
+        from_str::<StepListItem>(&final_response)
+            .map(|mut parsed_response| {
+                parsed_response.step = parsed_response
+                    .step
+                    .into_iter()
+                    .filter_map(|step| {
+                        quick_xml::escape::unescape(&step)
+                            .ok()
+                            .map(|output| output.to_string())
+                    })
+                    .collect::<Vec<_>>();
+                parsed_response
+            })
+            .ok()
+    }
+}
+
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename = "step_by_step")]
 pub struct StepList {
@@ -5389,16 +5449,16 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                             let step_lists = xml_processor.extract_all_tag_contents("step_list");
                             for step_list in step_lists {
                                 let wrapped_step = XmlProcessor::wrap_xml("step_list", &step_list);
-                                match from_str::<StepListItem>(&wrapped_step) {
-                                    Ok(step_list_item) => {
+                                match StepListItem::parse_from_str(&wrapped_step) {
+                                    Some(step_list_item) => {
                                         let ui_event = UIEventWithID::agentic_symbol_level_thinking(
                                             cloned_root_request_id_2.to_owned(),
                                             step_list_item,
                                         );
                                         let _ = cloned_ui_sender.send(ui_event);
                                     }
-                                    Err(e) => {
-                                        eprintln!("context_wide_search::stream_thinking_and_step_list_handle::from_str::error: {:?}", e);
+                                    None => {
+                                        eprintln!("context_wide_search::stream_thinking_and_step_list_handle::from_str::error");
                                     }
                                 }
                             }
@@ -5986,7 +6046,7 @@ impl RepoMapSearch for AnthropicCodeSymbolImportant {
 #[cfg(test)]
 mod tests {
 
-    use crate::agentic::tool::code_symbol::models::anthropic::Reply;
+    use crate::agentic::tool::code_symbol::models::anthropic::{Reply, StepListItem};
 
     use super::{CodeSymbolShouldAskQuestionsResponse, CodeSymbolToAskQuestionsResponse};
 
@@ -6315,5 +6375,31 @@ We need to add a new variant to SymbolEventSubStep enum and create corresponding
         let parsed_response = Reply::parse_response(response);
         println!("{:?}", parsed_response);
         assert!(parsed_response.is_ok());
+    }
+
+    #[test]
+    fn test_parsing_step_list_items() {
+        let response = r#"<step_list>
+<name>
+get_outline_node_from_snippet
+</name>
+<file_path>
+/Users/skcd/test_repo/sidecar/sidecar/src/agentic/symbol/tool_box.rs
+</file_path>
+<step>
+Update this method to use `self.get_outline_nodes_from_editor()`:
+
+```rust
+let symbols_outline = self.get_outline_nodes_from_editor(&fs_file_path, message_properties).await
+    .ok_or(SymbolError::OutlineNodeNotFound(fs_file_path.to_owned()))?
+    .into_iter()
+    .filter(|outline_node| outline_node.name() == snippet.symbol_name())
+    .collect::<Vec<_>>();
+```
+</step>
+</step_list>
+"#;
+        let parsed_response = StepListItem::parse_from_str(response);
+        assert!(parsed_response.is_some());
     }
 }

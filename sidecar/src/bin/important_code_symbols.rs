@@ -82,6 +82,7 @@ async fn main() {
             gemini_pro_api_key,
             "".to_owned(),
             "".to_owned(),
+            "".to_owned(),
             message_properties,
         )
         .set_file_extension_fitler("py".to_owned()),

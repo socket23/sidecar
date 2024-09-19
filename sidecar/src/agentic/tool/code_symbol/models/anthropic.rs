@@ -4542,6 +4542,7 @@ You will be given context which the user has selected in <user_context> and you 
 - The user might have selected some context manually in the form of <selection> these might be more important
 - You will be given files which contains a lot of code, you have to select the "code symbols" which are important
 - "code symbols" here referes to the different classes, functions, or constants which might be necessary to answer the user query.
+- The user also shows you the recent changes made to the codebase in a git-diff style output in <recent_edits> use this to understand the continuity of the work being done.
 - Now you will write a step by step process for making the code edit, this ensures that you lay down the plan before making the change, put this in an xml section called <step_by_step> where each step is in <step_list> section where each section has the name of the symbol on which the operation will happen, if no such symbol exists and you need to create a new one put a <new>true</new> inside the step section and after the symbols
 - In your step by step list make sure that the symbols are listed in the order in which we have to go about making the changes
 - If we are using absolute paths, make sure to use absolute paths in your reply.
@@ -4850,14 +4851,21 @@ Other LLM's are implementing FillInMiddleFormatter trait, grok will also require
     ) -> Result<String, CodeSymbolError> {
         let user_query = code_symbol_search_context_wide.user_query().to_owned();
         let file_extension_filter = code_symbol_search_context_wide.file_extension_filters();
+        let recent_edits = code_symbol_search_context_wide.recent_edits().to_owned();
         let user_context = code_symbol_search_context_wide.remove_user_context();
         let context_string = user_context
             .to_xml(file_extension_filter)
             .await
             .map_err(|e| CodeSymbolError::UserContextError(e))?;
-        // also send the user query here
-        let mut user_message =
-            context_string + "\n" + "<user_query>\n" + &user_query + "\n</user_query>";
+        let mut user_message = format!(
+            r#"{context_string}
+<recent_edits>
+{recent_edits}
+</recent_edits>
+<user_query>
+{user_query}
+</user_query>"#
+        );
 
         // if this is a big message, the easiest proxy is to look at the number of lines
         // and make sure that we send a reminder to it

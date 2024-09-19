@@ -189,6 +189,11 @@ impl SymbolInputEvent {
         self.big_search
     }
 
+    pub fn set_user_query(mut self, user_query: String) -> Self {
+        self.user_query = user_query;
+        self
+    }
+
     // here we can take an action based on the state we are in
     // on some states this might be wrong, I find it a bit easier to reason
     // altho fuck complexity we ball

@@ -497,12 +497,12 @@ impl ScratchPadAgent {
         let edit_request_id = message_properties.request_id_str().to_owned();
         let ui_sender = message_properties.ui_sender();
         let start_instant = std::time::Instant::now();
-        let input_event = SymbolInputEvent::new(
+        let mut input_event = SymbolInputEvent::new(
             user_context,
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,
             LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-            user_query,
+            user_query.to_owned(),
             edit_request_id.to_owned(),
             edit_request_id,
             None,
@@ -537,6 +537,22 @@ impl ScratchPadAgent {
             .set_long_context_editing_llm(swe_bench_long_context_editing)
             .set_full_symbol_request(full_symbol_edit)
             .set_fast_code_symbol_search(fast_code_symbol_llm);
+        // if we have deep reasoning then we should use o1 over here
+        // make this happen
+        if deep_reasoning {
+            let planned_out_reasoning = self
+                .tool_box
+                .reasoning(
+                    user_query,
+                    human_agentic_request.user_context().file_paths(),
+                    &self._storage_fs_path,
+                    message_properties.clone(),
+                )
+                .await;
+            if let Ok(planned_out_reasoning) = planned_out_reasoning {
+                input_event = input_event.set_user_query(planned_out_reasoning);
+            }
+        }
         let user_query = input_event.user_query().to_owned();
         let tool_input = input_event
             .tool_use_on_initial_invocation(self.tool_box.clone(), message_properties.clone())

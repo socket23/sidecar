@@ -96,6 +96,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
+use crate::agentic::tool::plan::reasoning::ReasoningRequest;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
@@ -5404,7 +5405,10 @@ instruction:
             sub_symbol.symbol_name(),
         );
         println!("============");
-        println!("tool_box::code_edit_search_and_replace::instructions({})", &instruction);
+        println!(
+            "tool_box::code_edit_search_and_replace::instructions({})",
+            &instruction
+        );
         let (_, _, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
         // TODO(skcd): This might not be the perfect place to get cache-hits we might
@@ -8861,5 +8865,142 @@ FILEPATH: {fs_file_path}
             "collect references async task total elapsed: {:?}",
             start.elapsed()
         );
+    }
+
+    /// We can ask the model to reason here and generate the reasoning trace
+    /// as required
+    ///
+    /// This is helpful to plan out big changes if required and that can be passed
+    /// to sonnet3.5 for the next steps
+    pub async fn reasoning(
+        &self,
+        user_query: String,
+        file_paths: Vec<String>,
+        scratch_pad_path: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<String, SymbolError> {
+        let file_contents = stream::iter(
+            file_paths
+                .to_vec()
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            (
+                fs_file_path.to_owned(),
+                self.file_open(fs_file_path, message_properties).await,
+            )
+        })
+        .buffer_unordered(1)
+        .collect::<Vec<_>>()
+        .await;
+
+        // now we get the lsp diagnostics which are on the file paths we are looking at
+        let lsp_diagnostics = stream::iter(
+            file_paths
+                .to_vec()
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            (
+                fs_file_path.to_owned(),
+                self.get_lsp_diagnostics_with_content(
+                    &fs_file_path,
+                    &Range::new(Position::new(0, 0, 0), Position::new(100_000, 0, 0)),
+                    message_properties,
+                )
+                .await,
+            )
+        })
+        .buffer_unordered(1)
+        .collect::<Vec<_>>()
+        .await;
+
+        // now we get the diff recent changes
+        let recente_edits_made = self
+            .recently_edited_files(Default::default(), message_properties.clone())
+            .await?;
+
+        // leave out code in selection for now
+        let code_in_selection = "".to_owned();
+
+        let file_contents = file_contents
+            .into_iter()
+            .filter_map(|(_, file_open_response)| {
+                file_open_response
+                    .map(|file_open_response| {
+                        let language_id = file_open_response.language();
+                        let fs_file_path = file_open_response.fs_file_path();
+                        let contents = file_open_response.contents_ref();
+                        format!(
+                            r#"# FILEPATH: {fs_file_path}
+```{language_id}
+{contents}
+```"#
+                        )
+                    })
+                    .ok()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let lsp_diagnostics = lsp_diagnostics
+            .into_iter()
+            .filter_map(|(fs_file_path, lsp_diagnostics)| {
+                lsp_diagnostics
+                    .map(|lsp_diagnostics| {
+                        let diagnostics = lsp_diagnostics
+                            .into_iter()
+                            .map(|diagnostic| {
+                                let message = diagnostic.message();
+                                let snippet = diagnostic.snippet();
+                                format!(
+                                    r#"<diagnostic>
+<message>
+{message}
+</message>
+<snippet>
+{snippet}
+</snippet>
+</diagnostic>"#
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        format!(
+                            r#"# LSP Diagnostics on file: {fs_file_path}
+{diagnostics}"#
+                        )
+                    })
+                    .ok()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // scratch-pad path
+        let scratch_pad_content = self.file_open(scratch_pad_path.to_owned(), message_properties.clone()).await?;
+        // for the recent edits made we want to grab the l2 cache over here
+        let l2_cache = recente_edits_made.l2_changes();
+        let tool_input = ToolInput::Reasoning(ReasoningRequest::new(
+            user_query,
+            file_contents,
+            code_in_selection,
+            lsp_diagnostics,
+            l2_cache.to_owned(),
+            message_properties.root_request_id().to_owned(),
+            scratch_pad_path.to_owned(),
+            scratch_pad_content.contents(),
+            message_properties.editor_url().to_owned(),
+        ));
+        let reasoning_output = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .reasoning_output()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .response();
+        Ok(reasoning_output)
     }
 }

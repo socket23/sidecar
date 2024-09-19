@@ -639,4 +639,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    pub fn reasoning_output(self) -> Option<ReasoningResponse> {
+        match self {
+            ToolOutput::Reasoning(response) => Some(response),
+            _ => None,
+        }
+    }
 }

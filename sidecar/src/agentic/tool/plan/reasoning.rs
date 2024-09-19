@@ -10,9 +10,15 @@ use llm_client::{
     provider::{LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 
-use crate::agentic::{
-    symbol::identifier::LLMProperties,
-    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+use crate::{
+    agentic::{
+        symbol::{identifier::LLMProperties, ui_event::EditedCodeStreamingRequest},
+        tool::{
+            code_edit::search_and_replace::StreamedEditingForEditor, errors::ToolError,
+            input::ToolInput, output::ToolOutput, r#type::Tool,
+        },
+    },
+    chunking::text_document::{Position, Range},
 };
 
 #[derive(Debug, Clone)]
@@ -34,6 +40,11 @@ pub struct ReasoningRequest {
     lsp_diagnostics: String,
     diff_recent_edits: String,
     root_request_id: String,
+    // These 2 are weird and not really required over here, we are using this
+    // as a proxy to output the plan to a file path
+    plan_output_path: String,
+    plan_output_content: String,
+    editor_url: String,
 }
 
 impl ReasoningRequest {
@@ -44,6 +55,9 @@ impl ReasoningRequest {
         lsp_diagnostics: String,
         diff_recent_edits: String,
         root_request_id: String,
+        plan_output_path: String,
+        plan_output_content: String,
+        editor_url: String,
     ) -> Self {
         Self {
             user_query,
@@ -52,6 +66,9 @@ impl ReasoningRequest {
             lsp_diagnostics,
             diff_recent_edits,
             root_request_id,
+            plan_output_path,
+            plan_output_content,
+            editor_url,
         }
     }
 }
@@ -61,6 +78,10 @@ pub struct ReasoningClient {
 }
 
 impl ReasoningClient {
+    pub fn new(llm_client: Arc<LLMBroker>) -> Self {
+        Self { llm_client }
+    }
+
     fn user_message(&self, context: ReasoningRequest) -> String {
         let user_query = context.user_query;
         let files_in_selection = context.files_in_selection;
@@ -101,6 +122,9 @@ The query I want help with:
 impl Tool for ReasoningClient {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.should_reasoning()?;
+        let editor_url = context.editor_url.to_owned();
+        let scratch_pad_path = context.plan_output_path.to_owned();
+        let scratch_pad_content = context.plan_output_content.to_owned();
         let root_id = context.root_request_id.to_owned();
         let request = LLMClientCompletionRequest::new(
             LLMType::O1Preview,
@@ -133,8 +157,94 @@ impl Tool for ReasoningClient {
                 sender,
             )
             .await;
-        response
-            .map(|response| ToolOutput::reasoning(ReasoningResponse { response }))
-            .map_err(|e| ToolError::LLMClientError(e))
+        let output = response
+            .map(|response| response)
+            .map_err(|e| ToolError::LLMClientError(e))?;
+
+        let scratch_pad_range = Range::new(
+            Position::new(0, 0, 0),
+            Position::new(
+                {
+                    let lines = scratch_pad_content
+                        .lines()
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                        .len();
+                    if lines == 0 {
+                        0
+                    } else {
+                        lines - 1
+                    }
+                },
+                1000,
+                0,
+            ),
+        );
+
+        // Now send this over for writing to the LLM
+        let edit_request_id = uuid::Uuid::new_v4().to_string();
+        let fs_file_path = scratch_pad_path.to_owned();
+        let streamed_edit_client = StreamedEditingForEditor::new();
+        streamed_edit_client
+            .send_edit_event(
+                editor_url.to_owned(),
+                EditedCodeStreamingRequest::start_edit(
+                    edit_request_id.to_owned(),
+                    scratch_pad_range.clone(),
+                    fs_file_path.to_owned(),
+                )
+                .set_apply_directly(),
+            )
+            .await;
+        streamed_edit_client
+            .send_edit_event(
+                editor_url.to_owned(),
+                EditedCodeStreamingRequest::delta(
+                    edit_request_id.to_owned(),
+                    scratch_pad_range.clone(),
+                    fs_file_path.to_owned(),
+                    "```\n".to_owned(),
+                )
+                .set_apply_directly(),
+            )
+            .await;
+        let _ = streamed_edit_client
+            .send_edit_event(
+                editor_url.to_owned(),
+                EditedCodeStreamingRequest::delta(
+                    edit_request_id.to_owned(),
+                    scratch_pad_range.clone(),
+                    fs_file_path.to_owned(),
+                    output.to_owned(),
+                )
+                .set_apply_directly(),
+            )
+            .await;
+        let _ = streamed_edit_client
+            .send_edit_event(
+                editor_url.to_owned(),
+                EditedCodeStreamingRequest::delta(
+                    edit_request_id.to_owned(),
+                    scratch_pad_range.clone(),
+                    fs_file_path.to_owned(),
+                    "\n```".to_owned(),
+                )
+                .set_apply_directly(),
+            )
+            .await;
+        let _ = streamed_edit_client
+            .send_edit_event(
+                editor_url.to_owned(),
+                EditedCodeStreamingRequest::end(
+                    edit_request_id.to_owned(),
+                    scratch_pad_range.clone(),
+                    fs_file_path.to_owned(),
+                )
+                .set_apply_directly(),
+            )
+            .await;
+        Ok(ToolOutput::reasoning(ReasoningResponse {
+            response: output,
+        }))
     }
 }

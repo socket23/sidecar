@@ -540,6 +540,7 @@ impl ScratchPadAgent {
         // if we have deep reasoning then we should use o1 over here
         // make this happen
         if deep_reasoning {
+            println!("scratch_pad_agent::planning_with_deep_reasoning");
             let planned_out_reasoning = self
                 .tool_box
                 .reasoning(
@@ -549,6 +550,10 @@ impl ScratchPadAgent {
                     message_properties.clone(),
                 )
                 .await;
+            println!(
+                "scratch_pad_agent::planning_with_deep_reasoning::reasoning({:?})",
+                &planned_out_reasoning
+            );
             if let Ok(planned_out_reasoning) = planned_out_reasoning {
                 input_event = input_event.set_user_query(planned_out_reasoning);
             }

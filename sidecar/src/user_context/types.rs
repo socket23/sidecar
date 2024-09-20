@@ -207,9 +207,17 @@ impl UserContext {
     }
 
     pub fn file_paths(&self) -> Vec<String> {
+        let mut alredy_seen_file_paths: HashSet<String> = Default::default();
         self.file_content_map
             .iter()
-            .map(|file_content| file_content.file_path.to_owned())
+            .filter_map(|file_content| {
+                if alredy_seen_file_paths.contains(&file_content.file_path) {
+                    None
+                } else {
+                    alredy_seen_file_paths.insert(file_content.file_path.to_owned());
+                    Some(file_content.file_path.to_owned())
+                }
+            })
             .collect::<Vec<_>>()
     }
 

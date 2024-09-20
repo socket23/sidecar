@@ -275,10 +275,19 @@ impl UserContext {
             .collect::<Vec<_>>()
             .join("\n");
         // read the file content as well from the file paths which were shared
+        let mut already_seen_files: HashSet<String> = Default::default();
         let file_prompt = self
             .file_content_map
             .into_iter()
-            .map(|file_content| file_content.to_xml())
+            .filter_map(|file_content| {
+                let file_path = file_content.file_path.to_owned();
+                if already_seen_files.contains(file_path.as_str()) {
+                    None
+                } else {
+                    already_seen_files.insert(file_path.to_owned());
+                    Some(file_content.to_xml())
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n");
         let folder_content = stream::iter(

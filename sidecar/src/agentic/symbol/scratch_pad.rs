@@ -551,8 +551,8 @@ impl ScratchPadAgent {
                 )
                 .await;
             println!(
-                "scratch_pad_agent::planning_with_deep_reasoning::reasoning({:?})",
-                &planned_out_reasoning
+                "scratch_pad_agent::planning_with_deep_reasoning::reasoning::is_ok({})",
+                planned_out_reasoning.is_ok()
             );
             if let Ok(planned_out_reasoning) = planned_out_reasoning {
                 input_event = input_event.set_user_query(planned_out_reasoning);

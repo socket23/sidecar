@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod context_event;
 pub mod edit;
 pub mod environment_event;
 pub mod human;

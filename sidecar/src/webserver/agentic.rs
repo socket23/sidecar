@@ -1098,3 +1098,32 @@ pub async fn push_diagnostics(
     //     .await;
     Ok(json_result(AgenticDiagnosticsResponse { done: true }))
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum AgenticContextGatheringEvent {
+    OpenFile,
+    LSPEvent,
+    SelectionEVent,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticContextGathering {
+    context_events: Vec<AgenticContextGatheringEvent>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticContextGatheringResponse {
+    done: bool,
+}
+
+impl ApiResponse for AgenticContextGatheringResponse {}
+
+pub async fn context_recording(
+    Extension(_app): Extension<Application>,
+    Json(AgenticContextGathering {
+        context_events: _context_events,
+    }): Json<AgenticContextGathering>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::endpoint::context_recording");
+    Ok(json_result(AgenticContextGatheringResponse { done: true }))
+}

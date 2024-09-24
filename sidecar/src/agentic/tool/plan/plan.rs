@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use super::plan_step::PlanStep;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Plan {
     steps: Vec<PlanStep>,
     initial_context: String, // needs to be a richer type
@@ -11,25 +11,23 @@ pub struct Plan {
 }
 
 impl Plan {
-    pub fn new(initial_context: String, user_query: String) -> Self {
+    pub fn new(initial_context: String, user_query: String, steps: &[PlanStep]) -> Self {
         let mut plan = Plan {
-            steps: Vec::new(),
+            steps: steps.to_vec(),
             initial_context,
             user_query,
             checkpoint: 0,
         };
-        // plan.generate_steps();
         plan
     }
 
-    // fn generate_steps(&mut self) {
-    //     // Placeholder for step generation logic
-    //     // In practice, this might involve parsing the user query and initial context
-    //     self.steps
-    //         .push(PlanStep::new("Initialize the project".to_string()));
-    //     self.steps
-    //         .push(PlanStep::new("Set up the main function".to_string()));
-    // }
+    pub fn add_step(&mut self, step: PlanStep) {
+        self.steps.push(step);
+    }
+
+    pub fn add_steps(&mut self, steps: &[PlanStep]) {
+        self.steps.extend(steps.to_vec())
+    }
 
     pub fn edit_step(&mut self, step_id: Uuid, new_content: String) {
         if let Some(step) = self.steps.iter_mut().find(|s| s.id() == step_id) {

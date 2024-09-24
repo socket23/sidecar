@@ -13,7 +13,7 @@ use crate::agentic::{
 
 use super::{plan::Plan, plan_step::PlanStep};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlanUpdateRequest {
     plan: Plan,
     new_context: String,
@@ -151,14 +151,12 @@ impl Tool for PlanUpdaterClient {
         let editor_url = context.editor_url.to_owned();
         let root_id = context.root_request_id.to_owned();
 
-        // construct messages
+        let messages = vec![
+            LLMClientMessage::system(self.system_message()),
+            LLMClientMessage::user(self.user_message(context)),
+        ];
 
-        let request = LLMClientCompletionRequest::new(
-            LLMType::ClaudeSonnet,
-            vec![LLMClientMessage::user(self.user_message(context))],
-            0.2,
-            None,
-        );
+        let request = LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None);
 
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
@@ -181,9 +179,9 @@ impl Tool for PlanUpdaterClient {
                 .collect(),
                 sender,
             )
-            .await;
+            .await?;
 
-        // LLM call
+        dbg!(response);
 
         // parse
         todo!()

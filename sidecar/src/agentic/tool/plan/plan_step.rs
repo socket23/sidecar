@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use crate::user_context::types::UserContext;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlanStep {
     id: Uuid,
     index: usize,

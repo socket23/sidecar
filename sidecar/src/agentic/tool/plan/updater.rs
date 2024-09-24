@@ -106,13 +106,15 @@ Based on the above, please update the steps after the checkpoint to incorporate 
 
     pub fn user_message(&self, context: PlanUpdateRequest) -> String {
         let plan = context.plan();
+        let steps = plan.steps();
+
         let checkpoint_index = context.checkpoint_index();
         let initial_context = plan.initial_context(); // original plan context
 
-        let steps_up_to_checkpoint = Self::format_steps(&plan.steps()[..checkpoint_index], 0);
+        let steps_up_to_checkpoint = Self::format_steps(&steps[..checkpoint_index], 0);
 
         let steps_after_checkpoint =
-            Self::format_steps(&plan.steps()[..checkpoint_index], checkpoint_index);
+            Self::format_steps(&steps[checkpoint_index..], checkpoint_index);
 
         format!(
             r#"You are an assistant that helps update a plan based on new information.

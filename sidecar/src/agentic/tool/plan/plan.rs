@@ -5,8 +5,8 @@ use super::plan_step::PlanStep;
 #[derive(Debug)]
 pub struct Plan {
     steps: Vec<PlanStep>,
-    initial_context: String,
-    user_query: String,
+    initial_context: String, // needs to be a richer type
+    user_query: String, // this may only be useful for initial plan generation. Steps better represent the overall direction?
     checkpoint: usize,
 }
 

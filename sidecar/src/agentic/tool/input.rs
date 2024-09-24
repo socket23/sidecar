@@ -48,7 +48,7 @@ use super::{
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
-    plan::reasoning::ReasoningRequest,
+    plan::{reasoning::ReasoningRequest, updater::PlanUpdateRequest},
     r#type::ToolType,
     ref_filter::ref_filter::ReferenceFilterRequest,
     rerank::base::ReRankEntriesForBroker,
@@ -137,6 +137,8 @@ pub enum ToolInput {
     EditedFiles(EditedFilesRequest),
     // reasoning with just context
     Reasoning(ReasoningRequest),
+    // update plan
+    UpdatePlan(PlanUpdateRequest),
 }
 
 impl ToolInput {
@@ -202,6 +204,7 @@ impl ToolInput {
             ToolInput::ScratchPadInput(_) => ToolType::ScratchPadAgent,
             ToolInput::EditedFiles(_) => ToolType::EditedFiles,
             ToolInput::Reasoning(_) => ToolType::Reasoning,
+            ToolInput::UpdatePlan(_) => ToolType::PlanUpdater,
         }
     }
 
@@ -752,6 +755,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::PlanningBeforeCodeEdit))
+        }
+    }
+
+    pub fn plan_updater(self) -> Result<PlanUpdateRequest, ToolError> {
+        if let ToolInput::UpdatePlan(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::PlanUpdater))
         }
     }
 }

@@ -105,6 +105,8 @@ pub enum ToolType {
     EditedFiles,
     // Reasoning (This is just plain reasoning with no settings right now)
     Reasoning,
+    // Plan updater
+    PlanUpdater,
 }
 
 impl std::fmt::Display for ToolType {
@@ -178,6 +180,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ScratchPadAgent => write!(f, "Scratch pad agent"),
             ToolType::EditedFiles => write!(f, "Edited files"),
             ToolType::Reasoning => write!(f, "Reasoning"),
+            ToolType::PlanUpdater => write!(f, "Plan Updater"),
         }
     }
 }

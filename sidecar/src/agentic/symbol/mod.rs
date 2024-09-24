@@ -5,7 +5,6 @@
 pub mod anchored;
 pub mod errors;
 pub mod events;
-pub mod galaxy_brain;
 pub mod helpers;
 pub mod identifier;
 pub mod locker;

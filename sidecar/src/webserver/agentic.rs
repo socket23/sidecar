@@ -15,6 +15,7 @@ use tokio::task::JoinHandle;
 use super::types::Result;
 use crate::agentic::symbol::anchored::AnchoredSymbol;
 use crate::agentic::symbol::events::agent::AgentMessage;
+use crate::agentic::symbol::events::context_event::ContextGatheringEvent;
 use crate::agentic::symbol::events::environment_event::{EnvironmentEvent, EnvironmentEventType};
 use crate::agentic::symbol::events::human::{HumanAgenticRequest, HumanMessage};
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
@@ -26,7 +27,7 @@ use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
-use crate::chunking::text_document::{Position, Range};
+use crate::chunking::text_document::Range;
 use crate::{application::application::Application, user_context::types::UserContext};
 
 use super::types::ApiResponse;
@@ -1100,35 +1101,8 @@ pub async fn push_diagnostics(
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticOpenFileContextEvent {
-    pub fs_file_path: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticLSPContextEvent {
-    pub fs_file_path: String,
-    pub position: Position,
-    pub event_type: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticSelectionContextEvent {
-    pub fs_file_path: String,
-    pub range: Range,
-}
-
-/// All the context-driven events which can happen in the editor that are useful
-/// and done by the user in a quest to provide additional context to the agent.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum AgenticContextGatheringEvent {
-    OpenFile(AgenticOpenFileContextEvent),
-    LSPContextEvent(AgenticLSPContextEvent),
-    Selection(AgenticSelectionContextEvent),
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticContextGathering {
-    context_events: Vec<AgenticContextGatheringEvent>,
+    context_events: Vec<ContextGatheringEvent>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

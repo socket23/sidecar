@@ -7,6 +7,7 @@ pub struct Plan {
     steps: Vec<PlanStep>,
     initial_context: String,
     user_query: String,
+    checkpoint: usize,
 }
 
 impl Plan {
@@ -15,6 +16,7 @@ impl Plan {
             steps: Vec::new(),
             initial_context,
             user_query,
+            checkpoint: 0,
         };
         // plan.generate_steps();
         plan
@@ -51,5 +53,9 @@ impl Plan {
 
     pub fn user_query(&self) -> &str {
         &self.user_query
+    }
+
+    pub fn checkpoint(&self) -> usize {
+        self.checkpoint
     }
 }

@@ -10,6 +10,8 @@ pub struct PlanStep {
     content: String, // we want to keep the step's edit as deterministic as possible
     context: Vec<String>,
     user_context: UserContext, // @symbols, @files, @last_edits etc.
+                               // possibly, edits made
+                               // i.e. step 1: edit x made in file y
 }
 
 impl PlanStep {

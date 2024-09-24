@@ -172,6 +172,10 @@ fn agentic_router() -> Router {
             "/diagnostics",
             post(sidecar::webserver::agentic::push_diagnostics),
         )
+        .route(
+            "/context_recording",
+            post(sidecar::webserver::agentic::context_recording),
+        )
         // SWE bench route
         // This route is for software engineering benchmarking
         .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))

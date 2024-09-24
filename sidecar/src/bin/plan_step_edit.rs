@@ -22,6 +22,7 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
+            plan::plan::Plan,
         },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
@@ -116,6 +117,13 @@ async fn main() {
         true, // big_search
         sender,
     );
+
+    let initial_context = "Create a CLI tool in Rust".to_string();
+    let user_query = "I want to build a todo list application".to_string();
+
+    let mut plan = Plan::new(initial_context, user_query);
+
+    // make md called plan.md
 
     // so we just want to use search and replace, right?
 

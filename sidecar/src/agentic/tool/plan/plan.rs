@@ -40,4 +40,16 @@ impl Plan {
             step.add_context(new_context);
         }
     }
+
+    pub fn steps(&self) -> &[PlanStep] {
+        &self.steps.as_slice()
+    }
+
+    pub fn initial_context(&self) -> &str {
+        &self.initial_context
+    }
+
+    pub fn user_query(&self) -> &str {
+        &self.user_query
+    }
 }

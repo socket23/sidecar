@@ -7,7 +7,7 @@ pub struct PlanStep {
     id: Uuid,
     index: usize,
     file_paths: Vec<String>,
-    content: String, // we want to keep the step's edit as deterministic as possible
+    description: String, // we want to keep the step's edit as deterministic as possible
     context: Vec<String>,
     user_context: UserContext, // @symbols, @files, @last_edits etc.
                                // possibly, edits made
@@ -16,7 +16,7 @@ pub struct PlanStep {
 
 impl PlanStep {
     pub fn new(
-        content: String,
+        description: String,
         index: usize,
         file_paths: Vec<String>,
         user_context: UserContext,
@@ -24,7 +24,7 @@ impl PlanStep {
         PlanStep {
             id: Uuid::new_v4(),
             index,
-            content,
+            description,
             context: Vec::new(),
             file_paths,
             user_context,
@@ -39,8 +39,12 @@ impl PlanStep {
         self.index
     }
 
-    pub fn edit_content(&mut self, new_content: String) {
-        self.content = new_content;
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    pub fn edit_description(&mut self, new_description: String) {
+        self.description = new_description;
     }
 
     pub fn add_context(&mut self, new_context: String) {

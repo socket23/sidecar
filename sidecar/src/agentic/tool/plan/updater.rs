@@ -11,14 +11,14 @@ use crate::agentic::{
     tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
 };
 
-use super::plan::Plan;
+use super::{plan::Plan, plan_step::PlanStep};
 
 #[derive(Debug)]
 pub struct PlanUpdateRequest {
     plan: Plan,
     new_context: String,
     checkpoint_index: usize,
-    user_query: String,
+    update_query: String,
     root_request_id: String,
     editor_url: String,
 }
@@ -28,7 +28,7 @@ impl PlanUpdateRequest {
         plan: Plan,
         new_context: String,
         checkpoint_index: usize,
-        user_query: String,
+        update_query: String,
         root_request_id: String,
         editor_url: String,
     ) -> Self {
@@ -36,7 +36,7 @@ impl PlanUpdateRequest {
             plan,
             new_context,
             checkpoint_index,
-            user_query,
+            update_query,
             root_request_id,
             editor_url,
         }
@@ -54,8 +54,8 @@ impl PlanUpdateRequest {
         self.checkpoint_index
     }
 
-    pub fn user_query(&self) -> &str {
-        &self.user_query
+    pub fn update_query(&self) -> &str {
+        &self.update_query
     }
 
     pub fn root_request_id(&self) -> &str {
@@ -74,6 +74,71 @@ pub struct PlanUpdaterClient {
 impl PlanUpdaterClient {
     pub fn new(llm_client: Arc<LLMBroker>) -> Self {
         Self { llm_client }
+    }
+
+    pub fn system_message(&self) -> String {
+        format!(
+            r#"You are an assistant that helps update a plan based on new information.
+
+**Initial Context**:
+
+**User Query**:
+
+**Edit History (Steps up to checkpoint)**:
+
+**Current Steps After Checkpoint**:
+
+**New Context**:
+
+Based on the above, please update the steps after the checkpoint to incorporate the new information and address the user's query. Provide the updated steps in a numbered list format.
+"#
+        )
+    }
+
+    fn format_steps(steps: &[PlanStep], start_index: usize) -> String {
+        steps
+            .iter()
+            .enumerate()
+            .map(|(i, step)| format!("{}. {}", start_index + i + 1, step.description()))
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    pub fn user_message(&self, context: PlanUpdateRequest) -> String {
+        let plan = context.plan();
+        let checkpoint_index = context.checkpoint_index();
+        let initial_context = plan.initial_context(); // original plan context
+
+        let steps_up_to_checkpoint = Self::format_steps(&plan.steps()[..checkpoint_index], 0);
+
+        let steps_after_checkpoint =
+            Self::format_steps(&plan.steps()[..checkpoint_index], checkpoint_index);
+
+        format!(
+            r#"You are an assistant that helps update a plan based on new information.
+
+**Initial Context**:
+{}
+
+**User Query**:
+{}
+
+**Edit History (Steps up to checkpoint)**:
+{}
+
+**Current Steps After Checkpoint**:
+{}
+
+**New Context**:
+{}
+
+Based on the above, please update the steps after the checkpoint to incorporate the new information and address the user's query. Provide the updated steps in a numbered list format."#,
+            initial_context,
+            context.update_query(),
+            steps_up_to_checkpoint,
+            steps_after_checkpoint,
+            context.new_context()
+        )
     }
 }
 

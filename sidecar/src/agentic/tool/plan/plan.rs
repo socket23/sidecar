@@ -33,7 +33,7 @@ impl Plan {
 
     pub fn edit_step(&mut self, step_id: Uuid, new_content: String) {
         if let Some(step) = self.steps.iter_mut().find(|s| s.id() == step_id) {
-            step.edit_content(new_content);
+            step.edit_description(new_content);
         }
     }
 

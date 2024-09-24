@@ -1140,10 +1140,9 @@ impl ApiResponse for AgenticContextGatheringResponse {}
 
 pub async fn context_recording(
     Extension(_app): Extension<Application>,
-    Json(AgenticContextGathering {
-        context_events: _context_events,
-    }): Json<AgenticContextGathering>,
+    Json(AgenticContextGathering { context_events }): Json<AgenticContextGathering>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::endpoint::context_recording");
+    println!("context_events::{:?}", &context_events);
     Ok(json_result(AgenticContextGatheringResponse { done: true }))
 }

@@ -1,18 +1,31 @@
-use crate::user_context::types::UserContext;
+use uuid::Uuid;
 
-struct PlanStep {
+#[derive(Debug)]
+pub struct PlanStep {
     // file_paths: Vec<String>,
+    id: Uuid,
+    index: usize,
     content: String,
     context: Vec<String>,
     // user_context: UserContext,
 }
 
 impl PlanStep {
-    pub fn new(content: String) -> Self {
+    pub fn new(content: String, index: usize) -> Self {
         PlanStep {
+            id: Uuid::new_v4(),
+            index,
             content,
             context: Vec::new(),
         }
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn index(&self) -> usize {
+        self.index
     }
 
     pub fn edit_content(&mut self, new_content: String) {

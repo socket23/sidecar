@@ -9,7 +9,7 @@ pub struct Plan {
     id: Uuid,
     name: String, // for UI label
     steps: Vec<PlanStep>,
-    initial_context: String, // todo(zi): what is this for...? Wouldn't user context encapsulate this?
+    initial_context: String, // this is here for testing, until we have better idea of what input context looks like
     user_context: Option<UserContext>, // originally provided user_context - may or may not be provided
     user_query: String, // this may only be useful for initial plan generation. Steps better represent the overall direction?
     checkpoint: usize,

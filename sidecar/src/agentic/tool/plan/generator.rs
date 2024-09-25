@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use quick_xml::de::from_str;
 use std::sync::Arc;
 
 use llm_client::{
@@ -67,18 +68,30 @@ impl StepGeneratorClient {
 
     pub fn plan_schema() -> String {
         format!(
-            r#"<steps>
+            r#"<response>
+<steps>
 <step>
-<index>
-0
-</index>
 <files_to_edit>
-<file>src/main.rs</file>
-<file>src/lib.rs</file>
+<file>/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lib.rs</file>
+<file>/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/main.rs</file>
 </files_to_edit>
-<description>Update the main function to include error handling</description>
+<title>Represent Execution State if Necessary</title>
+<description>If you need to track whether a step is paused, pending, or completed, you can introduce an ExecutionState enum:
+
+```rs
+pub struct PlanStep {{
+    // ... existing fields ...
+    execution_state: ExecutionState,
+}}
+```
+Reasons for this approach:
+
+State Management: Clearly represents the current state of the step's execution.
+Extensibility: Allows for additional states in the future if needed (e.g., Failed, Skipped).
+Separation of Concerns: Keeps execution state separate from other data, making the code cleaner and more maintainable.</description>
 </step>
-</steps>"#
+</steps>
+</response>"#
         )
     }
 
@@ -86,12 +99,13 @@ impl StepGeneratorClient {
         format!(
             r#"You are a senior software engineer, expert planner and system architect.
 
-Given a request and context, you will generate a step by step plan to accomplish it:
+Given a request and context, you will generate a step by step plan to accomplish it. Use prior art seen in context where applicable.
 
 Please ensure that each step includes all required fields and that the steps are logically ordered.
 
-The plan must be structured as per the following schema:
+Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify.
 
+Your response must strictly follow the following schema:
 {}
 "#,
             Self::plan_schema()
@@ -114,6 +128,23 @@ The plan must be structured as per the following schema:
 
         format!("Context:\n{}\n---\nRequest: {}", context_xml, user_query)
     }
+
+    // this should be on the response struct...
+    //     fn parse_response(response: &str) -> Result<Self, ToolError> {
+    //         let lines = response
+    //             .lines()
+    //             .skip_while(|line| !line.contains("<reply>"))
+    //             .skip(1)
+    //             .take_while(|line| !line.contains("</reply>"))
+    //             .collect::<Vec<_>>()
+    //             .join("\n");
+    //         let formatted_lines = format!(
+    //             r#"<reply>
+    // {lines}
+    // </reply>"#
+    //         );
+    //         from_str::<Self>(&formatted_lines).map_err(|_e| ToolError::SerdeConversionFailed)
+    //     }
 }
 
 #[async_trait]
@@ -149,7 +180,10 @@ impl Tool for StepGeneratorClient {
                 llm_properties.provider().clone(),
                 vec![
                     ("root_id".to_owned(), root_id),
-                    ("event_type".to_owned(), format!("update_plan").to_owned()),
+                    (
+                        "event_type".to_owned(),
+                        format!("generate_steps").to_owned(),
+                    ),
                 ]
                 .into_iter()
                 .collect(),

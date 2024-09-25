@@ -47,7 +47,15 @@ impl TextDocument {
 
 // These are always 0 indexed
 #[derive(
-    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq, std::hash::Hash,
+    Debug,
+    Clone,
+    Copy,
+    serde::Serialize,
+    serde::Deserialize,
+    PartialEq,
+    Eq,
+    std::hash::Hash,
+    Default,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct Position {

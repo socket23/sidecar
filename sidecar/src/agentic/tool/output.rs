@@ -167,6 +167,8 @@ pub enum ToolOutput {
     EditedFiles(EditedFilesResponse),
     // reasoning output
     Reasoning(ReasoningResponse),
+    // plan update output
+    PlanUpdater(),
 }
 
 impl ToolOutput {
@@ -646,4 +648,11 @@ impl ToolOutput {
             _ => None,
         }
     }
+
+    // pub fn plan_updater_output(self) -> Option<_> {
+    //     match self {
+    //         ToolOutput::PlanUpdater(response) => Some(response),
+    //         _ => None,
+    //     }
+    // }
 }

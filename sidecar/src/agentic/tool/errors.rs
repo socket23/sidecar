@@ -19,7 +19,7 @@ pub enum ToolError {
     WrongToolInput(ToolType),
 
     #[error("LLM Client call error: {0}")]
-    LLMClientError(LLMClientError),
+    LLMClientError(#[from] LLMClientError),
 
     #[error("Missing tool")]
     MissingTool,

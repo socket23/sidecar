@@ -186,6 +186,8 @@ impl Tool for PlanUpdaterClient {
         dbg!(response);
 
         // parse
-        todo!()
+        todo!() // todo(zi) holy shit careful here
+
+        // damn, this is actually unfinished
     }
 }

@@ -7,20 +7,27 @@ use crate::chunking::text_document::{Position, Range};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFileContextEvent {
-    pub fs_file_path: String,
+    fs_file_path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct LSPContextEventDestination {
+    fs_file_path: String,
+    position: Position,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LSPContextEvent {
-    pub fs_file_path: String,
-    pub position: Position,
-    pub event_type: String,
+    fs_file_path: String,
+    position: Position,
+    event_type: String,
+    destination: Option<LSPContextEventDestination>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SelectionContextEvent {
-    pub fs_file_path: String,
-    pub range: Range,
+    fs_file_path: String,
+    range: Range,
 }
 
 /// All the context-driven events which can happen in the editor that are useful

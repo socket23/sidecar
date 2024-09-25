@@ -6,28 +6,21 @@ use crate::user_context::types::UserContext;
 pub struct PlanStep {
     id: Uuid,
     index: usize,
-    file_paths: Vec<String>,
-    description: String, // we want to keep the step's edit as deterministic as possible
-    context: Vec<String>,
-    user_context: UserContext, // @symbols, @files, @last_edits etc.
-                               // possibly, edits made
-                               // i.e. step 1: edit x made in file y
+    file_paths: Vec<String>, // paths of files that step may execute against
+    description: String,     // we want to keep the step's edit as deterministic as possible
+    user_context: Option<UserContext>, // 'Some' if user provides step specific context
+    diff: Option<String>,    // `None` before execution, `Some(diff)` after execution
 }
 
 impl PlanStep {
-    pub fn new(
-        description: String,
-        index: usize,
-        file_paths: Vec<String>,
-        user_context: UserContext,
-    ) -> Self {
-        PlanStep {
+    pub fn new(index: usize, file_paths: Vec<String>, description: String) -> Self {
+        Self {
             id: Uuid::new_v4(),
             index,
-            description,
-            context: Vec::new(),
             file_paths,
-            user_context,
+            description,
+            user_context: None,
+            diff: None,
         }
     }
 
@@ -47,23 +40,16 @@ impl PlanStep {
         self.description = new_description;
     }
 
-    pub fn add_context(&mut self, new_context: String) {
-        self.context.push(new_context)
-    }
-
-    pub fn user_context(&self) -> &UserContext {
-        &self.user_context
+    pub fn user_context(&self) -> Option<&UserContext> {
+        self.user_context.as_ref()
     }
 
     pub fn file_paths(&self) -> &[String] {
         &self.file_paths.as_slice()
     }
+
+    pub fn with_user_context(mut self, user_context: UserContext) -> Self {
+        self.user_context = Some(user_context);
+        self
+    }
 }
-
-// given a step,
-
-// and whatever context,
-
-// the step should be updated
-
-// ren

@@ -35,12 +35,6 @@ impl Plan {
         }
     }
 
-    pub fn add_context_to_step(&mut self, step_id: Uuid, new_context: String) {
-        if let Some(step) = self.steps.iter_mut().find(|s| s.id() == step_id) {
-            step.add_context(new_context);
-        }
-    }
-
     pub fn steps(&self) -> &[PlanStep] {
         &self.steps.as_slice()
     }

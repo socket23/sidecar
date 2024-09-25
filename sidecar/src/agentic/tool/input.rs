@@ -48,7 +48,9 @@ use super::{
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
-    plan::{reasoning::ReasoningRequest, updater::PlanUpdateRequest},
+    plan::{
+        generator::StepGeneratorRequest, reasoning::ReasoningRequest, updater::PlanUpdateRequest,
+    },
     r#type::ToolType,
     ref_filter::ref_filter::ReferenceFilterRequest,
     rerank::base::ReRankEntriesForBroker,
@@ -139,6 +141,8 @@ pub enum ToolInput {
     Reasoning(ReasoningRequest),
     // update plan
     UpdatePlan(PlanUpdateRequest),
+    // Generate plan steps
+    GenerateStep(StepGeneratorRequest),
 }
 
 impl ToolInput {
@@ -205,6 +209,7 @@ impl ToolInput {
             ToolInput::EditedFiles(_) => ToolType::EditedFiles,
             ToolInput::Reasoning(_) => ToolType::Reasoning,
             ToolInput::UpdatePlan(_) => ToolType::PlanUpdater,
+            ToolInput::GenerateStep(_) => ToolType::StepGenerator,
         }
     }
 
@@ -763,6 +768,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::PlanUpdater))
+        }
+    }
+
+    pub fn step_generator(self) -> Result<StepGeneratorRequest, ToolError> {
+        if let ToolInput::GenerateStep(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::StepGenerator))
         }
     }
 }

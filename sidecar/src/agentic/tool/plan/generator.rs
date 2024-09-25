@@ -1,10 +1,17 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use llm_client::broker::LLMBroker;
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+};
 
 use crate::{
-    agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    agentic::{
+        symbol::identifier::LLMProperties,
+        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    },
     user_context::types::UserContext,
 };
 
@@ -42,6 +49,10 @@ impl StepGeneratorRequest {
     pub fn with_user_context(mut self, user_context: UserContext) -> Self {
         self.user_context = Some(user_context);
         self
+    }
+
+    pub fn user_context(&self) -> Option<&UserContext> {
+        self.user_context.as_ref()
     }
 }
 
@@ -108,6 +119,46 @@ The plan must be structured as per the following schema:
 #[async_trait]
 impl Tool for StepGeneratorClient {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
+        let context = ToolInput::step_generator(input)?;
+
+        let _editor_url = context.editor_url.to_owned();
+        let root_id = context.root_request_id.to_owned();
+
+        let messages = vec![
+            LLMClientMessage::system(Self::system_message()),
+            LLMClientMessage::user(
+                Self::user_message(context.user_query(), context.user_context()).await,
+            ),
+        ];
+
+        let request = LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None);
+
+        // todo(zi): this could be o1
+        let llm_properties = LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        );
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let response = self
+            .llm_client
+            .stream_completion(
+                llm_properties.api_key().clone(),
+                request,
+                llm_properties.provider().clone(),
+                vec![
+                    ("root_id".to_owned(), root_id),
+                    ("event_type".to_owned(), format!("update_plan").to_owned()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+
+        dbg!(response);
+
         todo!();
     }
 }

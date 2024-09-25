@@ -124,8 +124,9 @@ async fn main() {
 
     let user_context = UserContext::new(vec![], file_contents, None, vec![]); // this is big, should be passed using references
 
-    let step_generator_request = StepGeneratorRequest::new(user_query, request_id_str, editor_url)
-        .with_user_context(user_context);
+    let step_generator_request =
+        StepGeneratorRequest::new(user_query.clone(), request_id_str, editor_url)
+            .with_user_context(&user_context);
 
     let response = tool_broker
         .invoke(ToolInput::GenerateStep(step_generator_request))
@@ -136,14 +137,15 @@ async fn main() {
 
     dbg!(&plan_steps);
 
-    // let plan = Plan::new("test_plan".to_owned(), initial_context, user_query, &steps)
-    //     .with_user_context(user_context);
+    let plan = Plan::new(
+        "test_plan".to_owned(),
+        initial_context,
+        user_query.clone(),
+        &plan_steps,
+    )
+    .with_user_context(&user_context);
 
-    //     let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
-    //     let new_context = String::from(
-    //         r#"pub struct RepoMap {
-    //     map_tokens: usize,
-    // }
+    let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
 
     // const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 

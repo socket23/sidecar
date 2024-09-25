@@ -50,8 +50,8 @@ impl StepGeneratorRequest {
         &self.editor_url
     }
 
-    pub fn with_user_context(mut self, user_context: UserContext) -> Self {
-        self.user_context = Some(user_context);
+    pub fn with_user_context(mut self, user_context: &UserContext) -> Self {
+        self.user_context = Some(user_context.to_owned());
         self
     }
 

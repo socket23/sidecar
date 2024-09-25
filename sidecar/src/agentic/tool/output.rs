@@ -44,7 +44,7 @@ use super::{
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
-    plan::reasoning::ReasoningResponse,
+    plan::{generator::StepGeneratorResponse, plan_step::PlanStep, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
@@ -169,6 +169,8 @@ pub enum ToolOutput {
     Reasoning(ReasoningResponse),
     // plan update output
     PlanUpdater(),
+    // Step generator
+    StepGenerator(StepGeneratorResponse),
 }
 
 impl ToolOutput {
@@ -645,6 +647,13 @@ impl ToolOutput {
     pub fn reasoning_output(self) -> Option<ReasoningResponse> {
         match self {
             ToolOutput::Reasoning(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn plan_generator_output(self) -> Option<StepGeneratorResponse> {
+        match self {
+            ToolOutput::StepGenerator(response) => Some(response),
             _ => None,
         }
     }

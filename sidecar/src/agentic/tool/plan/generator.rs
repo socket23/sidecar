@@ -17,6 +17,8 @@ use crate::{
     user_context::types::UserContext,
 };
 
+use super::plan_step::PlanStep;
+
 // consider possibility of constraining number of steps
 #[derive(Debug, Clone)]
 pub struct StepGeneratorRequest {
@@ -66,6 +68,12 @@ pub struct StepGeneratorResponse {
 }
 
 impl StepGeneratorResponse {
+    pub fn into_steps(self) -> Vec<Step> {
+        self.step
+    }
+}
+
+impl StepGeneratorResponse {
     pub fn parse_response(response: &str) -> Result<Self, ToolError> {
         let response = response
             .lines()
@@ -83,15 +91,20 @@ impl StepGeneratorResponse {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Step {
-    // #[serde(rename = "files_to_edit")]
     pub files_to_edit: FilesToEdit,
     pub title: String,
     pub description: String,
 }
 
-#[derive(Debug, Deserialize)]
+impl Step {
+    pub fn into_plan_step(self, index: usize) -> PlanStep {
+        PlanStep::new(index, self.files_to_edit.file, self.title, self.description)
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct FilesToEdit {
     pub file: Vec<String>,
 }
@@ -229,11 +242,16 @@ impl Tool for StepGeneratorClient {
 
         let response = StepGeneratorResponse::parse_response(&response)?;
 
-        dbg!(response);
+        // let plan_steps = response
+        //     .into_steps()
+        //     .into_iter()
+        //     .enumerate()
+        //     .map(|(index, step)| step.into_plan_step(index))
+        //     .collect::<Vec<_>>();
 
         // then, turn this into vec PlanStep
 
-        todo!();
+        Ok(ToolOutput::StepGenerator(response))
     }
 }
 

@@ -6,6 +6,7 @@ use crate::user_context::types::UserContext;
 pub struct PlanStep {
     id: Uuid,
     index: usize,
+    title: String,
     files_to_edit: Vec<String>, // paths of files that step may execute against
     description: String,        // we want to keep the step's edit as deterministic as possible
     user_context: Option<UserContext>, // 'Some' if user provides step specific context
@@ -13,15 +14,29 @@ pub struct PlanStep {
 }
 
 impl PlanStep {
-    pub fn new(index: usize, files_to_edit: Vec<String>, description: String) -> Self {
+    pub fn new(
+        index: usize,
+        files_to_edit: Vec<String>,
+        title: String,
+        description: String,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             index,
+            title,
             files_to_edit,
             description,
             user_context: None,
             diff: None,
         }
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn edit_title(&mut self, new_title: String) {
+        self.title = new_title;
     }
 
     pub fn id(&self) -> Uuid {

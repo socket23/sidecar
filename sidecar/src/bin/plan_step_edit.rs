@@ -2223,15 +2223,14 @@ mod tests {
     .enumerate()
     .map(|(index, description)| {
         PlanStep::new(
-            description.to_owned(),
             index,
-            vec![],
-            UserContext::new(vec![], vec![], None, vec![]),
+            vec![], // this is key
+            description.to_owned(),
         )
     })
     .collect::<Vec<_>>();
 
-    let plan = Plan::new(initial_context, user_query, &steps);
+    let plan = Plan::new("test_plan".to_owned(), initial_context, user_query, &steps);
 
     let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
     let new_context = String::from(

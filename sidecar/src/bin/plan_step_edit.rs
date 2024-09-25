@@ -2222,14 +2222,16 @@ mod tests {
     .iter()
     .enumerate()
     .map(|(index, description)| {
-        PlanStep::new(
-            description.to_owned(),
-            index,
-            vec![],
-            UserContext::new(vec![], vec![], None, vec![]),
-        )
+        todo!("figure out the types over here")
+        // PlanStep::new(
+        //     description.to_owned(),
+        //     index,
+        //     "".to_owned(),
+        //     // vec![],
+        //     // UserContext::new(vec![], vec![], None, vec![]),
+        // )
     })
-    .collect::<Vec<_>>();
+    .collect::<Vec<PlanStep>>();
 
     let plan = Plan::new(initial_context, user_query, &steps);
 

@@ -71,6 +71,17 @@ impl StepGeneratorResponse {
     pub fn into_steps(self) -> Vec<Step> {
         self.step
     }
+
+    pub fn into_plan_steps(self) -> Vec<PlanStep> {
+        let plan_steps = self
+            .step
+            .into_iter()
+            .enumerate()
+            .map(|(index, step)| step.into_plan_step(index))
+            .collect::<Vec<_>>();
+
+        plan_steps
+    }
 }
 
 impl StepGeneratorResponse {
@@ -241,15 +252,6 @@ impl Tool for StepGeneratorClient {
             .await?;
 
         let response = StepGeneratorResponse::parse_response(&response)?;
-
-        // let plan_steps = response
-        //     .into_steps()
-        //     .into_iter()
-        //     .enumerate()
-        //     .map(|(index, step)| step.into_plan_step(index))
-        //     .collect::<Vec<_>>();
-
-        // then, turn this into vec PlanStep
 
         Ok(ToolOutput::StepGenerator(response))
     }

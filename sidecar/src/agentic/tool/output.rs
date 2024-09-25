@@ -651,7 +651,7 @@ impl ToolOutput {
         }
     }
 
-    pub fn plan_generator_output(self) -> Option<StepGeneratorResponse> {
+    pub fn step_generator_output(self) -> Option<StepGeneratorResponse> {
         match self {
             ToolOutput::StepGenerator(response) => Some(response),
             _ => None,

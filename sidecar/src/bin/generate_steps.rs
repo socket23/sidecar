@@ -132,7 +132,9 @@ async fn main() {
         .await
         .unwrap();
 
-    dbg!(response);
+    let plan_steps = response.step_generator_output().unwrap().into_plan_steps();
+
+    dbg!(&plan_steps);
 
     // let plan = Plan::new("test_plan".to_owned(), initial_context, user_query, &steps)
     //     .with_user_context(user_context);

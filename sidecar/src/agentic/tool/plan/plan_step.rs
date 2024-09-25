@@ -6,18 +6,18 @@ use crate::user_context::types::UserContext;
 pub struct PlanStep {
     id: Uuid,
     index: usize,
-    file_paths: Vec<String>, // paths of files that step may execute against
-    description: String,     // we want to keep the step's edit as deterministic as possible
+    files_to_edit: Vec<String>, // paths of files that step may execute against
+    description: String,        // we want to keep the step's edit as deterministic as possible
     user_context: Option<UserContext>, // 'Some' if user provides step specific context
-    diff: Option<String>,    // `None` before execution, `Some(diff)` after execution
+    diff: Option<String>,       // `None` before execution, `Some(diff)` after execution
 }
 
 impl PlanStep {
-    pub fn new(index: usize, file_paths: Vec<String>, description: String) -> Self {
+    pub fn new(index: usize, files_to_edit: Vec<String>, description: String) -> Self {
         Self {
             id: Uuid::new_v4(),
             index,
-            file_paths,
+            files_to_edit,
             description,
             user_context: None,
             diff: None,
@@ -44,8 +44,8 @@ impl PlanStep {
         self.user_context.as_ref()
     }
 
-    pub fn file_paths(&self) -> &[String] {
-        &self.file_paths.as_slice()
+    pub fn files_to_edit(&self) -> &[String] {
+        &self.files_to_edit.as_slice()
     }
 
     pub fn with_user_context(mut self, user_context: UserContext) -> Self {

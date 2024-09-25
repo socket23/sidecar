@@ -1,24 +1,53 @@
 use uuid::Uuid;
 
+use crate::user_context::types::UserContext;
+
 use super::plan_step::PlanStep;
 
 #[derive(Debug, Clone)]
 pub struct Plan {
+    id: Uuid,
+    name: String, // for UI label
     steps: Vec<PlanStep>,
-    initial_context: String, // needs to be a richer type
+    initial_context: String, // todo(zi): what is this for...? Wouldn't user context encapsulate this?
+    user_context: Option<UserContext>, // originally provided user_context - may or may not be provided
     user_query: String, // this may only be useful for initial plan generation. Steps better represent the overall direction?
     checkpoint: usize,
 }
 
 impl Plan {
-    pub fn new(initial_context: String, user_query: String, steps: &[PlanStep]) -> Self {
-        let mut plan = Plan {
+    pub fn new(
+        name: String,
+        initial_context: String,
+        user_query: String,
+        steps: &[PlanStep],
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            user_context: None,
             steps: steps.to_vec(),
             initial_context,
             user_query,
             checkpoint: 0,
-        };
-        plan
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn id(&self) -> &Uuid {
+        &self.id
+    }
+
+    pub fn with_user_context(mut self, user_context: UserContext) -> Self {
+        self.user_context = Some(user_context);
+        self
+    }
+
+    pub fn user_context(&self) -> Option<&UserContext> {
+        self.user_context.as_ref()
     }
 
     pub fn add_step(&mut self, step: PlanStep) {

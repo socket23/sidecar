@@ -103,7 +103,7 @@ impl LSPContextEvent {
                 return None;
             }
         };
-        let destination_prompt = match dbg!(destination_outline_node) {
+        let destination_prompt = match destination_outline_node {
             Some(destination_outline_node) => {
                 let file_path = destination_outline_node.fs_file_path();
                 let start_line = destination_outline_node.range().start_line();

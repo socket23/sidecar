@@ -21,6 +21,7 @@ use sidecar::{
             },
             identifier::LLMProperties,
             manager::SymbolManager,
+            tool_box::ToolBox,
         },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
@@ -97,9 +98,15 @@ async fn main() {
     let _symbol_manager = SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
-        editor_parsing,
+        editor_parsing.clone(),
         anthropic_llm_properties.clone(),
     );
+
+    let tool_box = Arc::new(ToolBox::new(
+        tool_broker.clone(),
+        symbol_broker.clone(),
+        editor_parsing.clone(),
+    ));
 
     let user_query =
         "Come up with a stepped plan to create a new Tool, similar to ReasoningClient, called StepGeneratorClient."
@@ -129,22 +136,21 @@ async fn main() {
 
     let plan_service = PlanService::new(
         tool_broker,
+        tool_box.clone(),
         anthropic_llm_properties,
-        ui_sender,
-        editor_url.clone(),
+        event_properties.clone(),
     );
 
     let plan = plan_service
-        .create_plan(
-            user_query,
-            user_context,
-            request_id_str.clone(),
-            editor_url.clone(),
-        )
+        .create_plan(user_query, user_context)
         .await
         .unwrap();
 
-    dbg!(&plan);
+    // execute a step
+    let response = plan_service
+        .execute_step(plan, 0, request_id_str)
+        .await
+        .unwrap();
 
     // let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
 

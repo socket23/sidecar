@@ -6,7 +6,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     agentic::{
         symbol::{
+            errors::SymbolError,
+            events::message_event::SymbolEventMessageProperties,
             identifier::{LLMProperties, SymbolIdentifier},
+            tool_box::ToolBox,
             ui_event::UIEventWithID,
         },
         tool::{
@@ -27,23 +30,23 @@ use super::{
 /// Operates on Plan
 pub struct PlanService {
     tool_broker: Arc<ToolBroker>,
+    tool_box: Arc<ToolBox>,
     llm_properties: LLMProperties,
-    ui_sender: UnboundedSender<UIEventWithID>,
-    editor_url: String,
+    message_properties: SymbolEventMessageProperties,
 }
 
 impl PlanService {
     pub fn new(
         tool_broker: Arc<ToolBroker>,
+        tool_box: Arc<ToolBox>,
         llm_properties: LLMProperties,
-        ui_sender: UnboundedSender<UIEventWithID>,
-        editor_url: String,
+        message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
             tool_broker,
+            tool_box,
             llm_properties,
-            ui_sender,
-            editor_url,
+            message_properties,
         }
     }
 
@@ -51,11 +54,11 @@ impl PlanService {
         &self,
         query: String,
         user_context: UserContext,
-        request_id: String,
-        editor_url: String,
     ) -> Result<Plan, ServiceError> {
+        let request_id = self.message_properties.request_id().request_id();
+        let editor_url = self.message_properties.editor_url();
         let step_generator_request =
-            StepGeneratorRequest::new(query.to_owned(), request_id, editor_url)
+            StepGeneratorRequest::new(query.to_owned(), request_id.to_owned(), editor_url)
                 .with_user_context(&user_context);
 
         let plan_steps = self
@@ -103,24 +106,31 @@ impl PlanService {
         let steps = plan.steps();
         let step_to_execute = steps.get(index).ok_or(ServiceError::StepNotFound(index))?;
         let context = self.step_execution_context(steps, index);
+        let instruction = step_to_execute.description();
 
         let fs_file_path = step_to_execute.file_to_edit();
 
+        let file_content = self
+            .tool_box
+            .file_open(fs_file_path.clone(), self.message_properties.clone())
+            .await?
+            .contents();
+
         let request = SearchAndReplaceEditingRequest::new(
-            fs_file_path,
+            fs_file_path.to_owned(),
             Range::default(),
-            "context_in_edit_selection".to_owned(),
-            "complete_file".to_owned(),
-            "extra_data".to_owned(),
+            "".to_owned(),
+            file_content,
+            "".to_owned(),
             self.llm_properties.clone(),
             None,
-            "instructions".to_owned(),
+            instruction.to_owned(),
             root_request_id,
-            SymbolIdentifier::with_file_path("symbol_name", "fs_file_path"),
-            "edit_request_id".to_owned(),
-            self.ui_sender.clone(),
+            SymbolIdentifier::with_file_path("New symbol incoming...!", &fs_file_path), // this is for ui event - consider what to pass for symbol_name
+            "edit_request_id".to_owned(), // check what this is
+            self.message_properties.ui_sender().clone(),
             None,
-            self.editor_url.clone(),
+            self.message_properties.editor_url().clone(),
             None,
             vec![],
             vec![],
@@ -142,6 +152,9 @@ impl PlanService {
 pub enum ServiceError {
     #[error("Tool Error: {0}")]
     ToolError(#[from] ToolError),
+
+    #[error("Tool Error: {0}")]
+    SymbolError(#[from] SymbolError),
 
     #[error("Wrong tool output")]
     WrongToolOutput(),

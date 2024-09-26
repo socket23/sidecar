@@ -1103,6 +1103,7 @@ pub async fn push_diagnostics(
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticContextGathering {
     context_events: Vec<ContextGatheringEvent>,
+    editor_url: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1113,10 +1114,33 @@ pub struct AgenticContextGatheringResponse {
 impl ApiResponse for AgenticContextGatheringResponse {}
 
 pub async fn context_recording(
-    Extension(_app): Extension<Application>,
-    Json(AgenticContextGathering { context_events }): Json<AgenticContextGathering>,
+    Extension(app): Extension<Application>,
+    Json(AgenticContextGathering {
+        context_events,
+        editor_url,
+    }): Json<AgenticContextGathering>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::endpoint::context_recording");
     println!("context_events::{:?}", &context_events);
+    // we can also print out the prompt which we will be generating from our recording over here
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(
+            "context_recording".to_owned(),
+            "context_recording".to_owned(),
+        ),
+        sender,
+        editor_url,
+        cancellation_token,
+    );
+    let context_recording_to_prompt = app
+        .tool_box
+        .context_recording_to_prompt(context_events, message_properties)
+        .await;
+    println!(
+        "context_recording_to_prompt::({:?})",
+        &context_recording_to_prompt
+    );
     Ok(json_result(AgenticContextGatheringResponse { done: true }))
 }

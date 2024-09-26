@@ -10,6 +10,7 @@ use llm_client::provider::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::agentic::symbol::events::context_event::SelectionContextEvent;
 use crate::agentic::symbol::helpers::{apply_inlay_hints_to_code, split_file_content_into_parts};
 use crate::agentic::symbol::identifier::{Snippet, SymbolIdentifier};
 use crate::agentic::tool::code_edit::filter_edit::{
@@ -113,6 +114,7 @@ use crate::{
 
 use super::anchored::AnchoredSymbol;
 use super::errors::SymbolError;
+use super::events::context_event::ContextGatheringEvent;
 use super::events::edit::{SymbolToEdit, SymbolToEditRequest};
 use super::events::initial_request::{SymbolEditedItem, SymbolRequestHistoryItem};
 use super::events::lsp::LSPDiagnosticError;
@@ -9067,5 +9069,76 @@ FILEPATH: {fs_file_path}
             .ok_or(SymbolError::WrongToolOutput)?
             .response();
         Ok(reasoning_output)
+    }
+
+    /// Convert the gathered context from the events to a prompt for the LLM/LRM
+    /// 
+    /// We might get consecutive selection ranges which can mess up the prompt
+    /// very quickly, we should be a bit more careful about that
+    pub async fn context_recording_to_prompt(&self, context_events: Vec<ContextGatheringEvent>, message_properties: SymbolEventMessageProperties) -> Result<String, SymbolError> {
+        let file_paths = context_events.iter().map(|context_event| match context_event {
+            ContextGatheringEvent::LSPContextEvent(lsp_event) => {
+                match lsp_event.destination_maybe() {
+                    Some(destination) => {
+                        vec![destination]
+                    }
+                    None => {
+                        vec![]
+                    }
+                }.into_iter().chain(vec![lsp_event.source_fs_file_path().to_owned()]).collect::<Vec<_>>()
+            }
+            ContextGatheringEvent::OpenFile(open_file) => {
+                vec![open_file.fs_file_path().to_owned()]
+            }
+            ContextGatheringEvent::Selection(selection) => {
+                vec![selection.fs_file_path().to_owned()]
+            }
+        }).flatten().collect::<HashSet<String>>();
+
+        let outline_nodes = stream::iter(file_paths.into_iter().map(|fs_file_path| (fs_file_path, message_properties.clone()))).map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self.get_outline_nodes_from_editor(&fs_file_path, message_properties).await;
+            outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
+        }).buffer_unordered(100).collect::<Vec<_>>().await.into_iter().filter_map(|s| s).collect::<HashMap<_, _>>();
+
+        // To handle the LSPEvent and the selection event this is what we want to do:
+        // - LSP event: We want to get the outline node where the user performed the clicked and on the destination make sure to include that outline node (if present)
+        // - Selection event: If its a selection event we want to make sure that we always keep track of the selection and deduplicate and merge any selections which are consecutive
+        // - we never show the full file unless its absolutely necessary
+
+        let mut final_prompt_parts: Vec<String> = vec![];
+        for context_event in context_events.into_iter() {
+            match context_event {
+                ContextGatheringEvent::LSPContextEvent(lsp_context_event) => {
+                    let source_file = lsp_context_event.source_fs_file_path();
+                    let destination = lsp_context_event.destination_maybe();
+                    let source_outline_nodes = outline_nodes.get(source_file).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default();
+                    let destination_outline_nodes = if let Some(destination) = destination {
+                        outline_nodes.get(&destination).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default()
+                    } else {
+                        vec![]
+                    };
+                    let prompt = lsp_context_event.lsp_context_event_to_prompt(source_outline_nodes, destination_outline_nodes);
+                    if let Some(prompt) = prompt {
+                        final_prompt_parts.push(prompt);
+                    }
+                }
+                ContextGatheringEvent::Selection(selection_event) => {
+                    let source_file = selection_event.fs_file_path();
+                    let source_outline_nodes = outline_nodes.get(source_file).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default();
+                    let prompt = SelectionContextEvent::to_prompt(vec![selection_event], source_outline_nodes);
+                    final_prompt_parts.push(prompt);
+                }
+                ContextGatheringEvent::OpenFile(_open_file) => {
+                    // keep going, we are not responding to these events
+                }
+            }
+        }
+        let joined_journey = final_prompt_parts.into_iter().enumerate().map(|(idx, prompt)| {
+            format!("## {idx}
+{prompt}")
+        }).collect::<Vec<_>>().join("\n");
+
+        Ok(format!("I am showing you all the steps I took and giving this to you as context:
+{joined_journey}"))
     }
 }

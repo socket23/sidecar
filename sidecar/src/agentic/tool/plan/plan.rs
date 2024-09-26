@@ -79,4 +79,12 @@ impl Plan {
     pub fn checkpoint(&self) -> usize {
         self.checkpoint
     }
+
+    pub fn increment_checkpoint(&mut self) {
+        self.checkpoint = self.checkpoint.saturating_add(1);
+    }
+
+    pub fn set_checkpoint(&mut self, index: usize) {
+        self.checkpoint = index;
+    }
 }

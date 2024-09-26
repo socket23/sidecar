@@ -100,10 +100,11 @@ impl PlanService {
 
     pub async fn execute_step(
         &self,
-        plan: Plan,
+        plan: &Plan,
         root_request_id: String,
     ) -> Result<(), ServiceError> {
         let checkpoint = plan.checkpoint();
+        println!("PlanService::execute_step::checkpoint({})", checkpoint);
 
         let steps = plan.steps();
         let step_to_execute = steps
@@ -111,7 +112,7 @@ impl PlanService {
             .ok_or(ServiceError::StepNotFound(checkpoint))?;
         let contexts = self.step_execution_context(steps, checkpoint);
 
-        // turn all of that into a fat context string...
+        // todo(zi) consider accumulating this in a context manager vs recomputing for each step (long)
         let full_context_as_string = stream::iter(contexts.iter().enumerate().map(
             |(index, context)| async move {
                 let context_string = context.to_string().await;
@@ -122,8 +123,6 @@ impl PlanService {
         .collect::<Vec<_>>()
         .await
         .join("\n");
-
-        // todo(zi) consider accumulating this in a context manager vs recomputing for each step (long)
 
         let instruction = step_to_execute.description();
 
@@ -161,9 +160,9 @@ impl PlanService {
             .invoke(ToolInput::SearchAndReplaceEditing(request))
             .await?;
 
-        dbg!(&response);
+        // todo(zi): surprisingly, there's not much to do after edit.
 
-        todo!()
+        Ok(())
     }
 }
 

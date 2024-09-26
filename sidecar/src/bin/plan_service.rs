@@ -141,16 +141,32 @@ async fn main() {
         event_properties.clone(),
     );
 
-    let plan = plan_service
+    let mut plan = plan_service
         .create_plan(user_query, user_context)
         .await
         .unwrap();
 
-    // execute a step
+    // execute a step, increment checkpoint (carefully)
     let response = plan_service
-        .execute_step(plan, request_id_str.to_owned())
+        .execute_step(&plan, request_id_str.to_owned())
         .await
         .unwrap();
+
+    plan.increment_checkpoint();
+
+    let response = plan_service
+        .execute_step(&plan, request_id_str.to_owned())
+        .await
+        .unwrap();
+
+    plan.increment_checkpoint();
+
+    let response = plan_service
+        .execute_step(&plan, request_id_str.to_owned())
+        .await
+        .unwrap();
+
+    plan.increment_checkpoint();
 
     // let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
 

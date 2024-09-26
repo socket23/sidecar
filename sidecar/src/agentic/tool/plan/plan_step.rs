@@ -66,3 +66,47 @@ impl PlanStep {
         self
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct StepExecutionContext {
+    description: String,
+    user_context: Option<UserContext>,
+}
+
+impl StepExecutionContext {
+    pub fn new(description: String, user_context: Option<UserContext>) -> Self {
+        Self {
+            description,
+            user_context,
+        }
+    }
+
+    pub fn from_plan_step(plan_step: &PlanStep) -> Self {
+        Self {
+            description: plan_step.description.clone(),
+            user_context: plan_step.user_context.clone(),
+        }
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    pub fn user_context(&self) -> Option<&UserContext> {
+        self.user_context.as_ref()
+    }
+
+    pub fn update_description(&mut self, new_description: String) {
+        self.description = new_description;
+    }
+
+    pub fn update_user_context(&mut self, new_user_context: Option<UserContext>) {
+        self.user_context = new_user_context;
+    }
+}
+
+impl From<&PlanStep> for StepExecutionContext {
+    fn from(plan_step: &PlanStep) -> Self {
+        Self::from_plan_step(plan_step)
+    }
+}

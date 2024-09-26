@@ -10,7 +10,10 @@ use crate::{
     user_context::types::UserContext,
 };
 
-use super::plan::Plan;
+use super::{
+    plan::Plan,
+    plan_step::{PlanStep, StepExecutionContext},
+};
 
 /// Operates on Plan
 pub struct PlanService {
@@ -29,20 +32,47 @@ impl PlanService {
         request_id: String,
         editor_url: String,
     ) -> Result<Plan, ServiceError> {
-        let step_generator_request = StepGeneratorRequest::new(query, request_id, editor_url)
-            .with_user_context(&user_context);
+        let step_generator_request =
+            StepGeneratorRequest::new(query.to_owned(), request_id, editor_url)
+                .with_user_context(&user_context);
 
-        let response = self
+        let plan_steps = self
             .tool_broker
             .invoke(ToolInput::GenerateStep(step_generator_request))
             .await?
             .step_generator_output()
-            .ok_or(ServiceError::WrongToolOutput())?;
+            .ok_or(ServiceError::WrongToolOutput())?
+            .into_plan_steps();
 
-        todo!()
+        Ok(Plan::new(
+            "Placeholder Title (to be computed)".to_owned(),
+            "".to_owned(),
+            query,
+            plan_steps,
+        ))
     }
 
     pub async fn update_plan(&self, plan: Plan, update_query: String) -> Result<(), ServiceError> {
+        todo!()
+    }
+
+    pub fn step_execution_context(
+        &self,
+        steps: &[PlanStep],
+        index: usize,
+    ) -> Vec<StepExecutionContext> {
+        let steps_to_now = &steps[..index];
+
+        let context_to_now = steps_to_now
+            .iter()
+            .map(|step| StepExecutionContext::from(step))
+            .collect::<Vec<_>>();
+
+        context_to_now
+    }
+
+    pub async fn execute_step(&self, plan: Plan, index: usize) -> Result<(), ServiceError> {
+        let context = self.step_execution_context(plan.steps(), index);
         todo!()
     }
 }

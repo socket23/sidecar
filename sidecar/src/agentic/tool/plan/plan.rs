@@ -20,13 +20,13 @@ impl Plan {
         name: String,
         initial_context: String,
         user_query: String,
-        steps: &[PlanStep],
+        steps: Vec<PlanStep>,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
             name,
             user_context: None,
-            steps: steps.to_vec(),
+            steps,
             initial_context,
             user_query,
             checkpoint: 0,

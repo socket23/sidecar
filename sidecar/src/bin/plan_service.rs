@@ -1,5 +1,11 @@
 use futures::future::try_join_all;
-use std::{fs, path::PathBuf, sync::Arc};
+use std::io::{self, Write};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -47,6 +53,21 @@ fn default_index_dir() -> PathBuf {
         Some(dirs) => dirs.data_dir().to_owned(),
         None => "codestory_sidecar".into(),
     }
+}
+
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(name = "plan_executor", about = "A simple plan execution tool")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Execute the next step in the plan
+    Next,
 }
 
 #[tokio::main]
@@ -141,74 +162,47 @@ async fn main() {
         event_properties.clone(),
     );
 
-    let mut plan = plan_service
-        .create_plan(user_query, user_context)
-        .await
-        .unwrap();
-
     let path = "/Users/zi/codestory/sidecar/sidecar/src/bin/plan.json";
+
+    let mut plan = if Path::new(path).exists() {
+        plan_service.load_plan(path).unwrap()
+    } else {
+        plan_service
+            .create_plan(user_query, user_context)
+            .await
+            .expect("Failed to create new plan")
+    };
+
+    let _ = plan_service.save_plan(&plan, path);
 
     // when adding variables to the JSON, just use file_content_map (copy what you see in global context)
 
-    let response = plan_service.save_plan(&plan, path);
+    loop {
+        println!("1. Next");
+        println!("2. Exit");
+        io::stdout().flush().unwrap();
 
-    // execute a step, increment checkpoint (carefully)
-    let response = plan_service.execute_step_from_fs(&path).await.unwrap();
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
 
-    plan.increment_checkpoint();
+        println!("executing checkpoint {}", plan.checkpoint());
+        match input.trim() {
+            "1" | "next" => match plan_service.execute_step_from_fs(path).await {
+                Ok(response) => {
+                    println!("Step {} executed: {:?}", plan.checkpoint(), response);
+                    plan.increment_checkpoint();
+                }
+                Err(e) => println!("Error executing step: {}", e),
+            },
+            "2" | "exit" => break,
+            _ => println!("Invalid command. Please try again."),
+        }
 
-    let response = plan_service.execute_step_from_fs(&path).await.unwrap();
+        println!("Checkpoint {} complete", plan.checkpoint());
+        println!(); // Add a blank line for readability
+    }
 
-    plan.increment_checkpoint();
-
-    let response = plan_service.execute_step_from_fs(&path).await.unwrap();
-
-    plan.increment_checkpoint();
-
-    // let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
-
-    // const REPOMAP_DEFAULT_TOKENS: usize = 1024;
-
-    // impl RepoMap {
-    //     pub fn new() -> Self {
-    //         Self {
-    //             map_tokens: REPOMAP_DEFAULT_TOKENS,
-    //         }
-    //     }
-
-    //     pub fn with_map_tokens(mut self, map_tokens: usize) -> Self {
-    //         self.map_tokens = map_tokens;
-    //         self
-    //     }
-
-    //     pub async fn get_repo_map(&self, tag_index: &TagIndex) -> Result<String, RepoMapError> {
-    //         let repomap = self.get_ranked_tags_map(self.map_tokens, tag_index).await?;
-
-    //         if repomap.is_empty() {
-    //             return Err(RepoMapError::TreeGenerationError(
-    //                 "No tree generated".to_string(),
-    //             ));
-    //         }
-
-    //         println!("Repomap: {}k tokens", self.get_token_count(&repomap) / 1024);
-
-    //         Ok(repomap)
-    //     }
-    // "#,
-    //     );
-
-    // let request = PlanUpdateRequest::new(
-    //     plan,
-    //     new_context,
-    //     0,
-    //     update_query,
-    //     request_id_str,
-    //     editor_url,
-    // );
-
-    // let _updater = tool_broker.invoke(ToolInput::UpdatePlan(request)).await;
-
-    // output / response boilerplate
+    println!("Exiting program. Goodbye!");
 }
 
 async fn read_file(path: PathBuf) -> Result<FileContentValue, std::io::Error> {

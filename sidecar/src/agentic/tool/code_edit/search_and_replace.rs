@@ -613,7 +613,6 @@ impl Tool for SearchAndReplaceEditing {
             let lsp_open_file = cloned_lsp_open_file;
             let fs_file_path = cloned_fs_file_path;
             let editor_url = cloned_editor_url;
-            println!("editor_url: {}", &editor_url);
             let streamed_edit_client = StreamedEditingForEditor::new();
             // figure out what to do over here
             #[allow(irrefutable_let_patterns)]

@@ -18,7 +18,7 @@ pub struct Plan {
 impl Plan {
     pub fn new(
         name: String,
-        initial_context: String,
+        initial_context: String, // todo(zi): consider whether this should be user_context or other.
         user_query: String,
         steps: Vec<PlanStep>,
     ) -> Self {
@@ -41,8 +41,8 @@ impl Plan {
         &self.id
     }
 
-    pub fn with_user_context(mut self, user_context: &UserContext) -> Self {
-        self.user_context = Some(user_context.to_owned());
+    pub fn with_user_context(mut self, user_context: UserContext) -> Self {
+        self.user_context = Some(user_context);
         self
     }
 

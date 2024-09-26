@@ -7,7 +7,7 @@ pub struct PlanStep {
     id: Uuid,
     index: usize,
     title: String,
-    files_to_edit: Vec<String>, // paths of files that step may execute against
+    files_to_edit: Vec<String>, // todo(zi): consider whether this should be constrained to just one; paths of files that step may execute against
     description: String,        // we want to keep the step's edit as deterministic as possible
     user_context: Option<UserContext>, // 'Some' if user provides step specific context
 }
@@ -59,6 +59,15 @@ impl PlanStep {
 
     pub fn files_to_edit(&self) -> &[String] {
         &self.files_to_edit.as_slice()
+    }
+
+    /// Returns first file in Vec. Temporary measure until we decide whether files_to_edit should be an vec.
+    pub fn file_to_edit(&self) -> String {
+        self.files_to_edit
+            .get(0)
+            .map(String::as_str)
+            .unwrap_or("")
+            .to_string()
     }
 
     pub fn with_user_context(mut self, user_context: UserContext) -> Self {

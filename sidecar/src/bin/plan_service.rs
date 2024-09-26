@@ -30,6 +30,7 @@ use sidecar::{
                 generator::StepGeneratorRequest,
                 plan::Plan,
                 plan_step::PlanStep,
+                service::PlanService,
                 updater::{PlanUpdateRequest, PlanUpdaterClient},
             },
             r#type::Tool,
@@ -86,7 +87,7 @@ async fn main() {
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let _event_properties = SymbolEventMessageProperties::new(
+    let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
@@ -124,28 +125,28 @@ async fn main() {
 
     let user_context = UserContext::new(vec![], file_contents, None, vec![]); // this is big, should be passed using references
 
-    let step_generator_request =
-        StepGeneratorRequest::new(user_query.clone(), request_id_str, editor_url)
-            .with_user_context(&user_context);
+    let ui_sender = event_properties.ui_sender();
 
-    let response = tool_broker
-        .invoke(ToolInput::GenerateStep(step_generator_request))
+    let plan_service = PlanService::new(
+        tool_broker,
+        anthropic_llm_properties,
+        ui_sender,
+        editor_url.clone(),
+    );
+
+    let plan = plan_service
+        .create_plan(
+            user_query,
+            user_context,
+            request_id_str.clone(),
+            editor_url.clone(),
+        )
         .await
         .unwrap();
 
-    let plan_steps = response.step_generator_output().unwrap().into_plan_steps();
+    dbg!(&plan);
 
-    dbg!(&plan_steps);
-
-    let plan = Plan::new(
-        "test_plan".to_owned(),
-        initial_context,
-        user_query.clone(),
-        plan_steps,
-    )
-    .with_user_context(user_context);
-
-    let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
+    // let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
 
     // const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 

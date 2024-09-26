@@ -171,7 +171,15 @@ impl Position {
 }
 
 #[derive(
-    Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq, std::hash::Hash,
+    Debug,
+    Clone,
+    Copy,
+    serde::Deserialize,
+    serde::Serialize,
+    PartialEq,
+    Eq,
+    std::hash::Hash,
+    Default,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct Range {

@@ -44,7 +44,7 @@ use super::{
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
     },
-    plan::{generator::StepGeneratorResponse, plan_step::PlanStep, reasoning::ReasoningResponse},
+    plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };

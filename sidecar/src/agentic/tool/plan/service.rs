@@ -3,12 +3,9 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::{
-    agentic::{
-        symbol::errors::SymbolError,
-        tool::{
-            broker::ToolBroker, errors::ToolError, input::ToolInput,
-            plan::generator::StepGeneratorRequest, r#type::Tool,
-        },
+    agentic::tool::{
+        broker::ToolBroker, errors::ToolError, input::ToolInput,
+        plan::generator::StepGeneratorRequest, r#type::Tool,
     },
     user_context::types::UserContext,
 };

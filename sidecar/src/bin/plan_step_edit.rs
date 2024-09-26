@@ -2225,6 +2225,7 @@ mod tests {
         PlanStep::new(
             index,
             vec![], // this is key
+            "title".to_owned(),
             description.to_owned(),
         )
     })

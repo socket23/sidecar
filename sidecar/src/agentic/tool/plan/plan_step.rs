@@ -10,7 +10,6 @@ pub struct PlanStep {
     files_to_edit: Vec<String>, // paths of files that step may execute against
     description: String,        // we want to keep the step's edit as deterministic as possible
     user_context: Option<UserContext>, // 'Some' if user provides step specific context
-    diff: Option<String>,       // `None` before execution, `Some(diff)` after execution
 }
 
 impl PlanStep {
@@ -27,7 +26,6 @@ impl PlanStep {
             files_to_edit,
             description,
             user_context: None,
-            diff: None,
         }
     }
 

@@ -9075,6 +9075,10 @@ FILEPATH: {fs_file_path}
     /// 
     /// We might get consecutive selection ranges which can mess up the prompt
     /// very quickly, we should be a bit more careful about that
+    /// 
+    /// TODO(skcd): We should deduplicate the outline nodes which are present
+    /// since we might be repeating a lot of context, an example is:
+    /// https://gist.github.com/theskcd/c710d77f223f21fac1525277d0bfa929
     pub async fn context_recording_to_prompt(&self, context_events: Vec<ContextGatheringEvent>, message_properties: SymbolEventMessageProperties) -> Result<String, SymbolError> {
         let file_paths = context_events.iter().map(|context_event| match context_event {
             ContextGatheringEvent::LSPContextEvent(lsp_event) => {

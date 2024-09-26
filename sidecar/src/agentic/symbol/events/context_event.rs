@@ -25,6 +25,7 @@ impl OpenFileContextEvent {
 struct LSPContextEventDestination {
     fs_file_path: String,
     position: Position,
+    line_content: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -32,6 +33,7 @@ pub struct LSPContextEvent {
     fs_file_path: String,
     position: Position,
     source_word: Option<String>,
+    source_line: String,
     event_type: String,
     destination: Option<LSPContextEventDestination>,
 }
@@ -85,6 +87,8 @@ impl LSPContextEvent {
         };
 
         let source_word = self.source_word.to_owned().unwrap_or_default();
+        // if we are unable to grab the outline node we should grab the line at the
+        // very least
         let source_prompt = match source_outline_node {
             Some(source_outline_node) => {
                 let file_path = source_outline_node.fs_file_path();
@@ -100,7 +104,15 @@ impl LSPContextEvent {
                 )
             }
             None => {
-                return None;
+                let file_path = &self.fs_file_path;
+                let source_line = &self.source_line;
+                let start_line = self.position.line();
+                format!(
+                    r#"FILEPATH: {file_path}-{start_line}:{start_line}
+```
+{source_line}
+```"#
+                )
             }
         };
         let destination_prompt = match destination_outline_node {
@@ -118,7 +130,21 @@ FILEPATH: {file_path}-{start_line}:{end_line}
 ```"#
                 ))
             }
-            None => None,
+            None => match self.destination.as_ref() {
+                Some(destination) => {
+                    let file_path = &destination.fs_file_path;
+                    let start_line = destination.position.line();
+                    let line_content = &destination.line_content;
+                    Some(format!(
+                        r#"I ended up here
+FILEPATH: {file_path}-{start_line}:{start_line}
+```
+{line_content}
+```"#
+                    ))
+                }
+                None => None,
+            },
         };
         let event = self.event_type.to_owned();
 

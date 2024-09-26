@@ -111,7 +111,8 @@ impl LSPContextEvent {
                 let content = destination_outline_node.content().content();
                 let language_id = destination_outline_node.content().language();
                 Some(format!(
-                    r#"FILEPATH: {file_path}-{start_line}:{end_line}
+                    r#"I ended up here
+FILEPATH: {file_path}-{start_line}:{end_line}
 ```{language_id}
 {content}
 ```"#

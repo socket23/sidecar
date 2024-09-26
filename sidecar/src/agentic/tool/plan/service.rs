@@ -5,9 +5,7 @@ use std::{
 };
 
 use futures::{stream, StreamExt};
-use quick_xml::de::from_str;
 use thiserror::Error;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     agentic::{
@@ -16,7 +14,6 @@ use crate::{
             events::message_event::SymbolEventMessageProperties,
             identifier::{LLMProperties, SymbolIdentifier},
             tool_box::ToolBox,
-            ui_event::UIEventWithID,
         },
         tool::{
             broker::ToolBroker, code_edit::search_and_replace::SearchAndReplaceEditingRequest,
@@ -57,7 +54,7 @@ impl PlanService {
     }
 
     pub fn save_plan(&self, plan: &Plan, path: &str) -> std::io::Result<()> {
-        let serialized = serde_xml_rs::to_string(plan).unwrap();
+        let serialized = serde_json::to_string(plan).unwrap();
         let mut file = File::create(path)?;
         file.write_all(serialized.as_bytes())?;
         Ok(())
@@ -65,7 +62,7 @@ impl PlanService {
 
     pub fn load_plan(&self, path: &str) -> std::io::Result<Plan> {
         let content = fs::read_to_string(path)?;
-        let plan: Plan = from_str(&content).unwrap();
+        let plan: Plan = serde_json::from_str(&content).unwrap();
         Ok(plan)
     }
 

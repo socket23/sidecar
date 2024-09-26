@@ -146,7 +146,9 @@ async fn main() {
         .await
         .unwrap();
 
-    let path = "/Users/zi/codestory/sidecar/sidecar/src/bin";
+    let path = "/Users/zi/codestory/sidecar/sidecar/src/bin/plan.json";
+
+    // when adding variables to the JSON, just use file_content_map (copy what you see in global context)
 
     let response = plan_service.save_plan(&plan, path);
 

@@ -1,10 +1,11 @@
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::user_context::types::UserContext;
 
 use super::plan_step::PlanStep;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Plan {
     id: Uuid,
     name: String, // for UI label

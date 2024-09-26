@@ -1,6 +1,11 @@
-use std::sync::Arc;
+use std::{
+    fs::{self, File},
+    io::Write,
+    sync::Arc,
+};
 
 use futures::{stream, StreamExt};
+use quick_xml::de::from_str;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -51,6 +56,19 @@ impl PlanService {
         }
     }
 
+    pub fn save_plan(&self, plan: &Plan, path: &str) -> std::io::Result<()> {
+        let serialized = serde_xml_rs::to_string(plan).unwrap();
+        let mut file = File::create(path)?;
+        file.write_all(serialized.as_bytes())?;
+        Ok(())
+    }
+
+    pub fn load_plan(&self, path: &str) -> std::io::Result<Plan> {
+        let content = fs::read_to_string(path)?;
+        let plan: Plan = from_str(&content).unwrap();
+        Ok(plan)
+    }
+
     pub async fn create_plan(
         &self,
         query: String,
@@ -98,11 +116,13 @@ impl PlanService {
         context_to_now
     }
 
-    pub async fn execute_step(
-        &self,
-        plan: &Plan,
-        root_request_id: String,
-    ) -> Result<(), ServiceError> {
+    /// this is temporary, only to be used with binary / cli
+    pub async fn execute_step_from_fs(&self, path: &str) -> Result<(), ServiceError> {
+        let plan = self.load_plan(path).unwrap(); // this unwrap is temporary, not to be taken seriously
+        self.execute_step(&plan).await
+    }
+
+    pub async fn execute_step(&self, plan: &Plan) -> Result<(), ServiceError> {
         let checkpoint = plan.checkpoint();
         println!("PlanService::execute_step::checkpoint({})", checkpoint);
 
@@ -143,7 +163,7 @@ impl PlanService {
             self.llm_properties.clone(),
             None,
             instruction.to_owned(),
-            root_request_id,
+            self.message_properties.root_request_id().to_owned(),
             SymbolIdentifier::with_file_path("New symbol incoming...!", &fs_file_path), // this is for ui event - consider what to pass for symbol_name
             uuid::Uuid::new_v4().to_string(),
             self.message_properties.ui_sender().clone(),

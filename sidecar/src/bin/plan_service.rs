@@ -146,25 +146,20 @@ async fn main() {
         .await
         .unwrap();
 
+    let path = "/Users/zi/codestory/sidecar/sidecar/src/bin";
+
+    let response = plan_service.save_plan(&plan, path);
+
     // execute a step, increment checkpoint (carefully)
-    let response = plan_service
-        .execute_step(&plan, request_id_str.to_owned())
-        .await
-        .unwrap();
+    let response = plan_service.execute_step_from_fs(&path).await.unwrap();
 
     plan.increment_checkpoint();
 
-    let response = plan_service
-        .execute_step(&plan, request_id_str.to_owned())
-        .await
-        .unwrap();
+    let response = plan_service.execute_step_from_fs(&path).await.unwrap();
 
     plan.increment_checkpoint();
 
-    let response = plan_service
-        .execute_step(&plan, request_id_str.to_owned())
-        .await
-        .unwrap();
+    let response = plan_service.execute_step_from_fs(&path).await.unwrap();
 
     plan.increment_checkpoint();
 

@@ -9111,10 +9111,12 @@ FILEPATH: {fs_file_path}
                 ContextGatheringEvent::LSPContextEvent(lsp_context_event) => {
                     let source_file = lsp_context_event.source_fs_file_path();
                     let destination = lsp_context_event.destination_maybe();
+                    println!("tool_box::context_recroding_to_prompt::lsp_context_event::source_file({})::destination({:?})", source_file, &destination);
                     let source_outline_nodes = outline_nodes.get(source_file).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default();
                     let destination_outline_nodes = if let Some(destination) = destination {
                         outline_nodes.get(&destination).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default()
                     } else {
+                        println!("tool_box::context_recording_to_prompt::no_destination_outline_node");
                         vec![]
                     };
                     let prompt = lsp_context_event.lsp_context_event_to_prompt(source_outline_nodes, destination_outline_nodes);
@@ -9136,7 +9138,7 @@ FILEPATH: {fs_file_path}
         let joined_journey = final_prompt_parts.into_iter().enumerate().map(|(idx, prompt)| {
             format!("## {idx}
 {prompt}")
-        }).collect::<Vec<_>>().join("\n");
+        }).collect::<Vec<_>>().join("\n\n");
 
         Ok(format!("I am showing you all the steps I took and giving this to you as context:
 {joined_journey}"))

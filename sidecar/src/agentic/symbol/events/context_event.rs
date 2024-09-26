@@ -65,6 +65,9 @@ impl LSPContextEvent {
         source_outline_nodes: Vec<OutlineNode>,
         destination_outline_nodes: Vec<OutlineNode>,
     ) -> Option<String> {
+        println!("tool_box::lsp_context_event_to_prompt");
+        // source outline node can be blank if we are clicking on a position which
+        // is part of the imports
         let source_outline_node = source_outline_nodes
             .into_iter()
             .filter(|outline_node| !outline_node.is_file())
@@ -100,7 +103,7 @@ impl LSPContextEvent {
                 return None;
             }
         };
-        let destination_prompt = match destination_outline_node {
+        let destination_prompt = match dbg!(destination_outline_node) {
             Some(destination_outline_node) => {
                 let file_path = destination_outline_node.fs_file_path();
                 let start_line = destination_outline_node.range().start_line();
@@ -194,7 +197,7 @@ impl SelectionContextEvent {
             .collect::<Vec<_>>()
             .join("\n");
         format!(
-            "I want you to pay attention to this:
+            "I am highlighting this section for you:
 {outline_nodes_prompt}"
         )
         // Figure out what we can show to the user

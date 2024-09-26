@@ -302,9 +302,27 @@ pub fn document_symbols_to_outline_nodes(
                     file_content,
                     document_symbol.children,
                 )),
+                // If we don't support the symbolkind, then just make it a class
                 _ => {
-                    // what do we do over here?
-                    None
+                    let class_node = OutlineNodeContent::class_implementation_symbol(
+                        name_from_selection_range(
+                            file_lines.as_slice(),
+                            document_symbol.selection_range.clone(),
+                        ),
+                        document_symbol.range(),
+                        file_lines[document_symbol.range().start_line()
+                            ..=document_symbol.range().end_line()]
+                            .to_vec()
+                            .join("\n"),
+                        fs_file_path.to_owned(),
+                        document_symbol.identifier_range(),
+                        language.to_owned(),
+                    );
+                    Some(vec![OutlineNode::new(
+                        class_node,
+                        vec![],
+                        language.to_owned(),
+                    )])
                 }
             }
         })

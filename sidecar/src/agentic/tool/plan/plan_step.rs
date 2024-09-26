@@ -112,6 +112,18 @@ impl StepExecutionContext {
     pub fn update_user_context(&mut self, new_user_context: Option<UserContext>) {
         self.user_context = new_user_context;
     }
+
+    pub async fn to_string(&self) -> String {
+        let context_string = match &self.user_context {
+            Some(context) => context.to_context_string().await.unwrap_or("".to_owned()),
+            None => "".to_owned(),
+        };
+
+        format!(
+            "Description: {}\n\nUser Context: {}",
+            self.description, context_string
+        )
+    }
 }
 
 impl From<&PlanStep> for StepExecutionContext {

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use futures::{stream, StreamExt};
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -100,12 +101,30 @@ impl PlanService {
     pub async fn execute_step(
         &self,
         plan: Plan,
-        index: usize,
         root_request_id: String,
     ) -> Result<(), ServiceError> {
+        let checkpoint = plan.checkpoint();
+
         let steps = plan.steps();
-        let step_to_execute = steps.get(index).ok_or(ServiceError::StepNotFound(index))?;
-        let context = self.step_execution_context(steps, index);
+        let step_to_execute = steps
+            .get(checkpoint)
+            .ok_or(ServiceError::StepNotFound(checkpoint))?;
+        let contexts = self.step_execution_context(steps, checkpoint);
+
+        // turn all of that into a fat context string...
+        let full_context_as_string = stream::iter(contexts.iter().enumerate().map(
+            |(index, context)| async move {
+                let context_string = context.to_string().await;
+                format!("Step {}:\n{}", index + 1, context_string)
+            },
+        ))
+        .buffer_unordered(3)
+        .collect::<Vec<_>>()
+        .await
+        .join("\n");
+
+        // todo(zi) consider accumulating this in a context manager vs recomputing for each step (long)
+
         let instruction = step_to_execute.description();
 
         let fs_file_path = step_to_execute.file_to_edit();
@@ -121,13 +140,13 @@ impl PlanService {
             Range::default(),
             "".to_owned(),
             file_content,
-            "".to_owned(),
+            full_context_as_string, // todo(zi): consider giving system_prompt more info about this being plan history
             self.llm_properties.clone(),
             None,
             instruction.to_owned(),
             root_request_id,
             SymbolIdentifier::with_file_path("New symbol incoming...!", &fs_file_path), // this is for ui event - consider what to pass for symbol_name
-            "edit_request_id".to_owned(), // check what this is
+            uuid::Uuid::new_v4().to_string(),
             self.message_properties.ui_sender().clone(),
             None,
             self.message_properties.editor_url().clone(),
@@ -161,4 +180,7 @@ pub enum ServiceError {
 
     #[error("Step not found: {0}")]
     StepNotFound(usize),
+
+    #[error("Invalid step execution request: {0}")]
+    InvalidStepExecution(usize),
 }

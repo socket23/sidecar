@@ -14,6 +14,7 @@ use super::{
         models::broker::CodeEditBroker, search_and_replace::SearchAndReplaceEditing,
         test_correction::TestCorrection, types::CodeEditingTool,
     },
+    lsp::create_file::LSPCreateFile,
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRange, correctness::CodeCorrectnessBroker,
         error_fix::CodeSymbolErrorFixBroker, find_file_for_new_symbol::FindFileForNewSymbol,
@@ -399,6 +400,7 @@ impl ToolBroker {
             ToolType::StepGenerator,
             Box::new(StepGeneratorClient::new(llm_client.clone())),
         );
+        tools.insert(ToolType::CreateFile, Box::new(LSPCreateFile::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

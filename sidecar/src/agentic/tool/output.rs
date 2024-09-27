@@ -34,6 +34,7 @@ use super::{
     git::{diff_client::GitDiffClientResponse, edited_files::EditedFilesResponse},
     grep::file::FindInFileResponse,
     lsp::{
+        create_file::CreateFileResponse,
         diagnostics::LSPDiagnosticsOutput,
         get_outline_nodes::OutlineNodesUsingEditorResponse,
         gotodefintion::GoToDefinitionResponse,
@@ -171,11 +172,17 @@ pub enum ToolOutput {
     PlanUpdater(),
     // Step generator
     StepGenerator(StepGeneratorResponse),
+    // File create
+    FileCreate(CreateFileResponse),
 }
 
 impl ToolOutput {
     pub fn reasoning(response: ReasoningResponse) -> Self {
         ToolOutput::Reasoning(response)
+    }
+
+    pub fn file_create(response: CreateFileResponse) -> Self {
+        ToolOutput::FileCreate(response)
     }
 
     pub fn edited_files(response: EditedFilesResponse) -> Self {
@@ -654,6 +661,13 @@ impl ToolOutput {
     pub fn step_generator_output(self) -> Option<StepGeneratorResponse> {
         match self {
             ToolOutput::StepGenerator(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_file_create_response(self) -> Option<CreateFileResponse> {
+        match self {
+            ToolOutput::FileCreate(response) => Some(response),
             _ => None,
         }
     }

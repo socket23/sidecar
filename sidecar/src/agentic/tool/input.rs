@@ -38,6 +38,7 @@ use super::{
     grep::file::FindInFileRequest,
     kw_search::tool::KeywordSearchQuery,
     lsp::{
+        create_file::CreateFileRequest,
         diagnostics::LSPDiagnosticsInput,
         get_outline_nodes::OutlineNodesUsingEditorRequest,
         gotodefintion::GoToDefinitionRequest,
@@ -143,6 +144,8 @@ pub enum ToolInput {
     UpdatePlan(PlanUpdateRequest),
     // Generate plan steps
     GenerateStep(StepGeneratorRequest),
+    // Create file
+    CreateFile(CreateFileRequest),
 }
 
 impl ToolInput {
@@ -210,6 +213,7 @@ impl ToolInput {
             ToolInput::Reasoning(_) => ToolType::Reasoning,
             ToolInput::UpdatePlan(_) => ToolType::PlanUpdater,
             ToolInput::GenerateStep(_) => ToolType::StepGenerator,
+            ToolInput::CreateFile(_) => ToolType::CreateFile,
         }
     }
 
@@ -776,6 +780,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::StepGenerator))
+        }
+    }
+
+    pub fn is_file_create(self) -> Result<CreateFileRequest, ToolError> {
+        if let ToolInput::CreateFile(create_file) = self {
+            Ok(create_file)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::CreateFile))
         }
     }
 }

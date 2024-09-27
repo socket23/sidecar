@@ -109,6 +109,8 @@ pub enum ToolType {
     PlanUpdater,
     // Step generator
     StepGenerator,
+    // Create a new file
+    CreateFile,
 }
 
 impl std::fmt::Display for ToolType {
@@ -184,6 +186,7 @@ impl std::fmt::Display for ToolType {
             ToolType::Reasoning => write!(f, "Reasoning"),
             ToolType::PlanUpdater => write!(f, "Plan Updater"),
             ToolType::StepGenerator => write!(f, "Step generator"),
+            ToolType::CreateFile => write!(f, "Create File"),
         }
     }
 }

@@ -121,7 +121,9 @@ impl StepExecutionContext {
         };
 
         format!(
-            "Description: {}\n\nUser Context: {}",
+            r#"Description: {}
+
+User Context: {}"#,
             self.description, context_string
         )
     }

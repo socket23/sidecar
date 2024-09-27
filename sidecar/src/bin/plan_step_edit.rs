@@ -2222,7 +2222,7 @@ mod tests {
             description.to_owned(),
         )
     })
-    .collect::<Vec<_>>();
+    .collect::<Vec<PlanStep>>();
 
     let plan = Plan::new("test_plan".to_owned(), initial_context, user_query, steps);
 

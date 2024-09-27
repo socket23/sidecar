@@ -1,5 +1,5 @@
 use futures::future::try_join_all;
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -7,18 +7,12 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{
-        AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
-        OpenAIProvider,
-    },
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
         symbol::{
-            events::{
-                input::{SymbolEventRequestId, SymbolInputEvent},
-                message_event::SymbolEventMessageProperties,
-            },
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
             identifier::LLMProperties,
             manager::SymbolManager,
         },
@@ -26,18 +20,13 @@ use sidecar::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
             input::ToolInput,
-            plan::{
-                generator::StepGeneratorRequest,
-                plan::Plan,
-                plan_step::PlanStep,
-                updater::{PlanUpdateRequest, PlanUpdaterClient},
-            },
+            plan::{generator::StepGeneratorRequest, plan::Plan},
             r#type::Tool,
         },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::{FileContentValue, UserContext, VariableInformation},
+    user_context::types::{FileContentValue, UserContext},
 };
 
 fn default_index_dir() -> PathBuf {
@@ -137,7 +126,7 @@ async fn main() {
 
     dbg!(&plan_steps);
 
-    let plan = Plan::new(
+    let _plan = Plan::new(
         "test_plan".to_owned(),
         initial_context,
         user_query.clone(),
@@ -145,7 +134,7 @@ async fn main() {
     )
     .with_user_context(user_context);
 
-    let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
+    let _update_query = String::from("I'd actually want the tool name to be 'Repomap'");
 
     // const REPOMAP_DEFAULT_TOKENS: usize = 1024;
 

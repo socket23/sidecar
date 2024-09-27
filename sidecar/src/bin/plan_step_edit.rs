@@ -4,10 +4,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{
-        AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
-        OpenAIProvider,
-    },
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
@@ -23,11 +20,7 @@ use sidecar::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
             input::ToolInput,
-            plan::{
-                plan::Plan,
-                plan_step::PlanStep,
-                updater::{PlanUpdateRequest, PlanUpdaterClient},
-            },
+            plan::{plan::Plan, plan_step::PlanStep, updater::PlanUpdateRequest},
             r#type::Tool,
         },
     },

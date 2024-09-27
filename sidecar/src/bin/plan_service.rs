@@ -1,7 +1,6 @@
 use futures::future::try_join_all;
 use std::io::{self, Write};
 use std::{
-    fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -13,18 +12,12 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{
-        AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
-        OpenAIProvider,
-    },
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
         symbol::{
-            events::{
-                input::{SymbolEventRequestId, SymbolInputEvent},
-                message_event::SymbolEventMessageProperties,
-            },
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
             identifier::LLMProperties,
             manager::SymbolManager,
             tool_box::ToolBox,
@@ -32,20 +25,12 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
-            input::ToolInput,
-            plan::{
-                generator::StepGeneratorRequest,
-                plan::Plan,
-                plan_step::PlanStep,
-                service::PlanService,
-                updater::{PlanUpdateRequest, PlanUpdaterClient},
-            },
-            r#type::Tool,
+            plan::service::PlanService,
         },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
-    user_context::types::{FileContentValue, UserContext, VariableInformation},
+    user_context::types::{FileContentValue, UserContext},
 };
 
 fn default_index_dir() -> PathBuf {
@@ -133,7 +118,7 @@ async fn main() {
         "Come up with a stepped plan to create a new Tool, similar to ReasoningClient, called KeyboardClient. You may write the struct in /Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/keyboard.rs"
             .to_string();
 
-    let initial_context = String::from("");
+    let _initial_context = String::from("");
 
     let context_files = vec![
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/input.rs",
@@ -154,7 +139,7 @@ async fn main() {
 
     let user_context = UserContext::new(vec![], file_contents, None, vec![]); // this is big, should be passed using references
 
-    let ui_sender = event_properties.ui_sender();
+    let _ui_sender = event_properties.ui_sender();
 
     let plan_service = PlanService::new(
         tool_broker,

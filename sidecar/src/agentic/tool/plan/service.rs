@@ -94,10 +94,6 @@ impl PlanService {
         .with_user_context(user_context))
     }
 
-    pub async fn update_plan(&self, plan: Plan, update_query: String) -> Result<(), ServiceError> {
-        todo!()
-    }
-
     pub fn step_execution_context(
         &self,
         steps: &[PlanStep],
@@ -174,7 +170,7 @@ impl PlanService {
             false,
         );
 
-        let response = self
+        let _response = self
             .tool_broker
             .invoke(ToolInput::SearchAndReplaceEditing(request))
             .await?;

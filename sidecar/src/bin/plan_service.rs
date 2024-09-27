@@ -130,7 +130,7 @@ async fn main() {
     ));
 
     let user_query =
-        "Come up with a stepped plan to create a new Tool, similar to ReasoningClient, called StepGeneratorClient."
+        "Come up with a stepped plan to create a new Tool, similar to ReasoningClient, called KeyboardClient. You may write the struct in /Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/keyboard.rs"
             .to_string();
 
     let initial_context = String::from("");
@@ -142,6 +142,7 @@ async fn main() {
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/errors.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/reasoning.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/broker.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/mod.rs",
     ];
 
     let file_futures: Vec<_> = context_files
@@ -191,6 +192,9 @@ async fn main() {
                 Ok(response) => {
                     println!("Step {} executed: {:?}", plan.checkpoint(), response);
                     plan.increment_checkpoint();
+                    if let Err(e) = plan_service.save_plan(&plan, path) {
+                        eprintln!("Error saving plan: {}", e)
+                    }
                 }
                 Err(e) => println!("Error executing step: {}", e),
             },

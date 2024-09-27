@@ -127,6 +127,9 @@ impl PlanService {
         let step_to_execute = steps
             .get(checkpoint)
             .ok_or(ServiceError::StepNotFound(checkpoint))?;
+
+        dbg!(&step_to_execute);
+
         let contexts = self.step_execution_context(steps, checkpoint);
 
         // todo(zi) consider accumulating this in a context manager vs recomputing for each step (long)
@@ -150,12 +153,11 @@ impl PlanService {
             .file_open(fs_file_path.clone(), self.message_properties.clone())
             .await?
             .contents();
-
         let request = SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             Range::default(),
-            "".to_owned(),
-            file_content,
+            file_content.to_owned(), // this is needed too?
+            file_content.to_owned(),
             full_context_as_string, // todo(zi): consider giving system_prompt more info about this being plan history
             self.llm_properties.clone(),
             None,

@@ -68,8 +68,10 @@ impl PlanService {
 
     pub async fn create_plan(
         &self,
+        plan_id: String,
         query: String,
         user_context: UserContext,
+        plan_storage_path: String,
     ) -> Result<Plan, ServiceError> {
         let request_id = self.message_properties.request_id().request_id();
         let editor_url = self.message_properties.editor_url();
@@ -86,10 +88,12 @@ impl PlanService {
             .into_plan_steps();
 
         Ok(Plan::new(
+            plan_id.to_owned(),
             "Placeholder Title (to be computed)".to_owned(),
             "".to_owned(),
             query,
             plan_steps,
+            plan_storage_path,
         )
         .with_user_context(user_context))
     }

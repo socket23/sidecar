@@ -126,11 +126,29 @@ async fn main() {
 
     dbg!(&plan_steps);
 
+    let mut plan_storage_path = default_index_dir();
+    plan_storage_path = plan_storage_path.join("plans");
+
+    // check if the plan_storage_path_exists
+    if tokio::fs::metadata(&plan_storage_path).await.is_err() {
+        tokio::fs::create_dir(&plan_storage_path)
+            .await
+            .expect("directory creation to not fail");
+    }
+
+    let plan_id = "test_plan::generate_steps".to_owned();
+    plan_storage_path = plan_storage_path.join(plan_id.to_owned());
+
     let _plan = Plan::new(
-        "test_plan".to_owned(),
+        plan_id.to_owned(),
+        plan_id.to_owned(),
         initial_context,
         user_query.clone(),
         plan_steps,
+        plan_storage_path
+            .to_str()
+            .map(|plan_str| plan_str.to_owned())
+            .expect("PathBuf to string conversion to work"),
     )
     .with_user_context(user_context);
 

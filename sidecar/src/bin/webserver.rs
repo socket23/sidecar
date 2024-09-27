@@ -265,5 +265,3 @@ fn inline_completion() -> Router {
             post(sidecar::webserver::inline_completion::symbol_history),
         )
 }
-
-// TODO(skcd): Figure out why we are passing the context in the suffix and not the prefix

@@ -2216,6 +2216,7 @@ mod tests {
     .enumerate()
     .map(|(index, description)| {
         PlanStep::new(
+            index.to_string(),
             index,
             vec![], // this is key
             "title".to_owned(),
@@ -2224,7 +2225,30 @@ mod tests {
     })
     .collect::<Vec<PlanStep>>();
 
-    let plan = Plan::new("test_plan".to_owned(), initial_context, user_query, steps);
+    let mut plan_storage_path = default_index_dir();
+    plan_storage_path = plan_storage_path.join("plans");
+
+    // check if the plan_storage_path_exists
+    if tokio::fs::metadata(&plan_storage_path).await.is_err() {
+        tokio::fs::create_dir(&plan_storage_path)
+            .await
+            .expect("directory creation to not fail");
+    }
+
+    let plan_id = "test_plan".to_owned();
+    plan_storage_path = plan_storage_path.join("test_plan");
+
+    let plan = Plan::new(
+        plan_id.to_owned(),
+        plan_id.to_owned(),
+        initial_context,
+        user_query,
+        steps,
+        plan_storage_path
+            .to_str()
+            .map(|plan_str| plan_str.to_owned())
+            .expect("PathBuf to string conversion should work on each platform"),
+    );
 
     let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
     let new_context = String::from(

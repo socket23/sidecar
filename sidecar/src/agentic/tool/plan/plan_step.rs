@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::user_context::types::UserContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanStep {
-    id: Uuid,
+    id: String,
     index: usize,
     title: String,
     files_to_edit: Vec<String>, // todo(zi): consider whether this should be constrained to just one; paths of files that step may execute against
@@ -15,13 +14,14 @@ pub struct PlanStep {
 
 impl PlanStep {
     pub fn new(
+        id: String,
         index: usize,
         files_to_edit: Vec<String>,
         title: String,
         description: String,
     ) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id,
             index,
             title,
             files_to_edit,
@@ -38,8 +38,8 @@ impl PlanStep {
         self.title = new_title;
     }
 
-    pub fn id(&self) -> Uuid {
-        self.id
+    pub fn id(&self) -> String {
+        self.id.to_owned()
     }
 
     pub fn index(&self) -> usize {

@@ -111,7 +111,13 @@ pub struct Step {
 
 impl Step {
     pub fn into_plan_step(self, index: usize) -> PlanStep {
-        PlanStep::new(index, self.files_to_edit.file, self.title, self.description)
+        PlanStep::new(
+            index.to_string(),
+            index,
+            self.files_to_edit.file,
+            self.title,
+            self.description,
+        )
     }
 }
 

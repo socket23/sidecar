@@ -1,9 +1,6 @@
 use futures::future::try_join_all;
 use std::io::{self, Write};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -92,6 +89,24 @@ async fn main() {
         ),
     ));
 
+    let mut plan_storage_path = default_index_dir();
+    plan_storage_path = plan_storage_path.join("plans");
+
+    // check if the plan_storage_path_exists
+    if tokio::fs::metadata(&plan_storage_path).await.is_err() {
+        tokio::fs::create_dir(&plan_storage_path)
+            .await
+            .expect("directory creation to not fail");
+    }
+
+    let (plan_storage_path, plan_id) = {
+        let mut plan_storage_path = plan_storage_path.clone();
+        // replace plan_id here with a static id if you want to reuse the plan loading
+        let plan_id = uuid::Uuid::new_v4().to_string();
+        plan_storage_path = plan_storage_path.join(plan_id.to_owned());
+        (plan_storage_path, plan_id)
+    };
+
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let event_properties = SymbolEventMessageProperties::new(
@@ -148,20 +163,35 @@ async fn main() {
         event_properties.clone(),
     );
 
-    let path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/plan.json";
+    // let path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/plan.json";
 
     // when adding variables to the JSON, just use file_content_map (copy what you see in global context)
 
-    let plan = if Path::new(path).exists() {
-        plan_service.load_plan(path).unwrap()
+    let plan_storage_path_str = plan_storage_path
+        .clone()
+        .to_str()
+        .expect("to work")
+        .to_owned();
+    let plan = if tokio::fs::metadata(plan_storage_path.clone()).await.is_ok() {
+        plan_service
+            .load_plan(plan_storage_path.to_str().expect("to work"))
+            .unwrap()
     } else {
         plan_service
-            .create_plan(user_query, user_context)
+            .create_plan(
+                plan_id,
+                user_query,
+                user_context,
+                plan_storage_path
+                    .to_str()
+                    .map(|plan_str| plan_str.to_owned())
+                    .expect("PathBuf to str conversion to not fail on platforms"),
+            )
             .await
             .expect("Failed to create new plan")
     };
 
-    let _ = plan_service.save_plan(&plan, path);
+    let _ = plan_service.save_plan(&plan, &plan_storage_path_str);
 
     println!("Welcome to Agentic Planning.");
     println!();
@@ -173,7 +203,7 @@ async fn main() {
     println!();
 
     loop {
-        let mut plan = plan_service.load_plan(path).unwrap();
+        let mut plan = plan_service.load_plan(&plan_storage_path_str).unwrap();
         let steps = plan.steps();
         let checkpoint = plan.checkpoint();
         let step_to_execute = steps.get(checkpoint).unwrap();
@@ -198,7 +228,7 @@ async fn main() {
                         plan.increment_checkpoint();
 
                         // save!
-                        if let Err(e) = plan_service.save_plan(&plan, path) {
+                        if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str) {
                             eprintln!("Error saving plan: {}", e)
                         }
                     }

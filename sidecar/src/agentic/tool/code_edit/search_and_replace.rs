@@ -797,6 +797,10 @@ impl SearchAndReplaceAccumulator {
         start_line: usize,
         sender: UnboundedSender<EditDelta>,
     ) -> Self {
+        println!(
+            "search_and_replace_accumulator::code_to_edit_lines::{}",
+            code_to_edit.lines().into_iter().collect::<Vec<_>>().len()
+        );
         Self {
             code_lines: code_to_edit
                 .lines()
@@ -881,27 +885,97 @@ impl SearchAndReplaceAccumulator {
                     }
                 }
                 SearchBlockStatus::BlockStart => {
-                    self.search_block_status =
-                        SearchBlockStatus::BlockAccumulate(answer_line_at_index.to_owned());
-                    let mut answer_lines = self
-                        .answer_to_show
-                        .lines()
-                        .into_iter()
-                        .map(|line| line.to_string())
-                        .collect::<Vec<_>>();
-                    answer_lines.push(answer_line_at_index.to_owned());
-                    answer_lines.push("```".to_owned());
-                    self.answer_to_show = answer_lines.join("\n");
+                    // in case of empty search blocks we will get the divider right about now
+                    // so we should check for that too
+                    if answer_line_at_index == divider {
+                        let (sender, receiver) = tokio::sync::oneshot::channel();
+                        let _result = self.sender.send(EditDelta::EditLockAcquire(sender));
+                        let file_contents = receiver.await.ok().flatten();
+                        if let Some(file_contents) = file_contents {
+                            self.code_lines = file_contents
+                                .lines()
+                                .into_iter()
+                                .map(|line| line.to_owned())
+                                .collect::<Vec<_>>();
+                        }
+                        // and hold the lock for a while until we have the replace block
+                        let range = get_range_for_search_block(
+                            &self.code_lines.join("\n"),
+                            self.start_line,
+                            "",
+                        );
+                        match range {
+                            Some(range) => {
+                                self.search_block_status =
+                                    SearchBlockStatus::BlockFound(("".to_owned(), range.clone()));
+                                let _ = self.sender.send(EditDelta::EditStarted(range));
+                                // If we have a range over here, we probably want to show it on the answer lines
+                                // to do this: we need to do the following:
+                                // - go back couple of steps here (or the line length of the accumulated block + 2 (for ```language and Locating relevant snippet...))
+                                // - and the replace those lines with a generating code thingy over here instead
+                                let accumualated_length =
+                                    "".lines().into_iter().collect::<Vec<_>>().len();
+                                let mut answer_lines = self
+                                    .answer_to_show
+                                    .to_owned()
+                                    .lines()
+                                    .into_iter()
+                                    .map(|answer_line| answer_line.to_owned())
+                                    .collect::<Vec<_>>();
+                                let answer_lines_len = answer_lines.len();
+                                // we want to remove the first line in our answer which is
+                                // locating relevant snippets
+                                // then the ```{language}
+                                // accumulated lines for the search block
+                                // and the last ``` which we leave for rendering purposes
+                                answer_lines.truncate(answer_lines_len - (accumualated_length + 3));
+                                answer_lines.push("Generating code....".to_owned());
+                                self.answer_to_show = answer_lines.join("\n");
+                            }
+                            None => {
+                                // TODO(codestory): release the lock immediately
+                                let _ = self.sender.send(EditDelta::EditLockRelease);
+
+                                self.search_block_status = SearchBlockStatus::NoBlock;
+                                // If we have a range over here, we probably want to show it on the answer lines
+                                // to do this: we need to do the following:
+                                // - go back couple of steps here (or the line length of the accumulated block + 3 (for ```language and Locating relevant snippet... and the last backticks which are present))
+                                // - and the replace those lines with a "No snippet found in the codebase"
+                                let accumualated_length =
+                                    "".lines().into_iter().collect::<Vec<_>>().len();
+                                let mut answer_lines = self
+                                    .answer_to_show
+                                    .to_owned()
+                                    .lines()
+                                    .into_iter()
+                                    .map(|answer_line| answer_line.to_owned())
+                                    .collect::<Vec<_>>();
+                                let answer_lines_len = answer_lines.len();
+                                answer_lines.truncate(answer_lines_len - (accumualated_length + 3));
+                                answer_lines
+                                    .push("Failed to find relevant code snippet...".to_owned());
+                                self.answer_to_show = answer_lines.join("\n");
+                            }
+                        };
+                    } else {
+                        self.search_block_status =
+                            SearchBlockStatus::BlockAccumulate(answer_line_at_index.to_owned());
+                        let mut answer_lines = self
+                            .answer_to_show
+                            .lines()
+                            .into_iter()
+                            .map(|line| line.to_string())
+                            .collect::<Vec<_>>();
+                        answer_lines.push(answer_line_at_index.to_owned());
+                        answer_lines.push("```".to_owned());
+                        self.answer_to_show = answer_lines.join("\n");
+                    }
                 }
                 SearchBlockStatus::BlockAccumulate(accumulated) => {
                     if answer_line_at_index == divider {
                         let (sender, receiver) = tokio::sync::oneshot::channel();
                         let _result = self.sender.send(EditDelta::EditLockAcquire(sender));
                         let file_contents = receiver.await.ok().flatten();
-                        let _time_now = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .expect("to work")
-                            .as_millis();
                         if let Some(file_contents) = file_contents {
                             self.code_lines = file_contents
                                 .lines()
@@ -1025,6 +1099,13 @@ impl SearchAndReplaceAccumulator {
     }
 
     fn update_code_lines(&mut self, block_range: &Range) {
+        // if the code lines are empty then we can be smart about how we update the range
+        if self.code_lines.len() == 0 {
+            if let Some(updated_answer) = self.updated_block.clone() {
+                self.code_lines = updated_answer.lines().map(|line| line.to_owned()).collect();
+            }
+            return;
+        }
         if let Some(updated_answer) = self.updated_block.clone() {
             let updated_range_start_line = block_range.start_line() - self.start_line;
             let updated_range_end_line = block_range.end_line() - self.start_line;
@@ -1091,6 +1172,15 @@ fn get_range_for_search_block(
         .map(|(idx, line)| (idx + start_line, line.to_owned()))
         .collect::<Vec<_>>();
 
+    println!(
+        "get_range_for_search_block::code_to_look_at_lines::{:?}",
+        code_to_look_at
+    );
+
+    if code_to_look_at == "" {
+        return Some(Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)));
+    }
+
     let search_block_lines = search_block.lines().into_iter().collect::<Vec<_>>();
     let search_block_len = search_block_lines.len();
     if code_to_look_at_lines.len() < search_block_len {
@@ -1116,8 +1206,6 @@ fn get_range_for_search_block(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::agentic::tool::{
         errors::ToolError, input::ToolInput, lsp::open_file::OpenFileResponse, output::ToolOutput,
         r#type::Tool,
@@ -1691,6 +1779,45 @@ blahblah2
             r#"something
 interesting
 blahblah2"#
+        );
+    }
+
+    #[tokio::test]
+    async fn test_empty_file_edits() {
+        let code = r#""#;
+        let edits = r#"Certainly! I'll create a main function to satisfy the LSP diagnostic and implement the add_numbers function as requested. Here's the *SEARCH/REPLACE* block to make these changes:
+
+/Users/skcd/scratch/sidecar/sidecar/src/bin/something.rs
+```rust
+<<<<<<< SEARCH
+=======
+fn main() {
+    let result = add_numbers(5, 7);
+    println!("The sum is: {}", result);
+}
+
+fn add_numbers(a: i32, b: i32) -> i32 {
+    a + b
+}
+>>>>>>> REPLACE
+```"#;
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut search_and_replace_accumulator =
+            SearchAndReplaceAccumulator::new(code.to_owned(), 0, sender);
+        search_and_replace_accumulator
+            .add_delta(edits.to_owned())
+            .await;
+        let final_code = search_and_replace_accumulator.code_lines.join("\n");
+        assert_eq!(
+            final_code,
+            r#"fn main() {
+    let result = add_numbers(5, 7);
+    println!("The sum is: {}", result);
+}
+
+fn add_numbers(a: i32, b: i32) -> i32 {
+    a + b
+}"#
         );
     }
 }

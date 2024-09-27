@@ -4,10 +4,7 @@ use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
     config::LLMBrokerConfiguration,
-    provider::{
-        AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
-        OpenAIProvider,
-    },
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 use sidecar::{
     agentic::{
@@ -23,11 +20,7 @@ use sidecar::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
             input::ToolInput,
-            plan::{
-                plan::Plan,
-                plan_step::PlanStep,
-                updater::{PlanUpdateRequest, PlanUpdaterClient},
-            },
+            plan::{plan::Plan, plan_step::PlanStep, updater::PlanUpdateRequest},
             r#type::Tool,
         },
     },
@@ -2222,18 +2215,16 @@ mod tests {
     .iter()
     .enumerate()
     .map(|(index, description)| {
-        todo!("figure out the types over here")
-        // PlanStep::new(
-        //     description.to_owned(),
-        //     index,
-        //     "".to_owned(),
-        //     // vec![],
-        //     // UserContext::new(vec![], vec![], None, vec![]),
-        // )
+        PlanStep::new(
+            index,
+            vec![], // this is key
+            "title".to_owned(),
+            description.to_owned(),
+        )
     })
     .collect::<Vec<PlanStep>>();
 
-    let plan = Plan::new(initial_context, user_query, &steps);
+    let plan = Plan::new("test_plan".to_owned(), initial_context, user_query, steps);
 
     let update_query = String::from("I'd actually want the tool name to be 'Repomap'");
     let new_context = String::from(

@@ -46,7 +46,9 @@ use super::{
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
     },
     output::ToolOutput,
-    plan::{reasoning::ReasoningClient, updater::PlanUpdaterClient},
+    plan::{
+        generator::StepGeneratorClient, reasoning::ReasoningClient, updater::PlanUpdaterClient,
+    },
     r#type::{Tool, ToolType},
     ref_filter::ref_filter::ReferenceFilterBroker,
     rerank::base::ReRankBroker,
@@ -392,6 +394,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::PlanUpdater,
             Box::new(PlanUpdaterClient::new(llm_client.clone())),
+        );
+        tools.insert(
+            ToolType::StepGenerator,
+            Box::new(StepGeneratorClient::new(llm_client.clone())),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

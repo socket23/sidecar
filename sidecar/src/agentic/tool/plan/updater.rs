@@ -150,7 +150,7 @@ impl Tool for PlanUpdaterClient {
         // check whether tool_input is for plan updater
         let context = input.plan_updater()?;
 
-        let editor_url = context.editor_url.to_owned();
+        let _editor_url = context.editor_url.to_owned();
         let root_id = context.root_request_id.to_owned();
 
         let messages = vec![
@@ -186,6 +186,8 @@ impl Tool for PlanUpdaterClient {
         dbg!(response);
 
         // parse
-        todo!()
+        todo!() // todo(zi) holy shit careful here
+
+        // damn, this is actually unfinished
     }
 }

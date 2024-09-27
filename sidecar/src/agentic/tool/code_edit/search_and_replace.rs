@@ -1176,11 +1176,6 @@ fn get_range_for_search_block(
         .map(|(idx, line)| (idx + start_line, line.to_owned()))
         .collect::<Vec<_>>();
 
-    println!(
-        "get_range_for_search_block::code_to_look_at_lines::{:?}",
-        code_to_look_at
-    );
-
     if code_to_look_at == "" {
         return Some(Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)));
     }

@@ -150,7 +150,9 @@ async fn main() {
 
     let path = "/Users/zi/codestory/sidecar/sidecar/src/bin/plan.json";
 
-    let mut plan = if Path::new(path).exists() {
+    // when adding variables to the JSON, just use file_content_map (copy what you see in global context)
+
+    let plan = if Path::new(path).exists() {
         plan_service.load_plan(path).unwrap()
     } else {
         plan_service
@@ -161,37 +163,56 @@ async fn main() {
 
     let _ = plan_service.save_plan(&plan, path);
 
-    // when adding variables to the JSON, just use file_content_map (copy what you see in global context)
+    println!("Welcome to Agentic Planning.");
+    println!();
+    println!(
+        "Your plan has {} steps. We are at checkpoint {}.",
+        &plan.steps().len(),
+        &plan.checkpoint()
+    );
+    println!();
 
     loop {
-        println!("1. Next");
-        println!("2. Exit");
+        let mut plan = plan_service.load_plan(path).unwrap();
+        let steps = plan.steps();
+        let checkpoint = plan.checkpoint();
+        let step_to_execute = steps.get(checkpoint).unwrap();
+        let context = plan_service.prepare_context(steps, checkpoint).await;
+
+        println!("Next step: {}", step_to_execute.title());
+
+        println!("[1] Execute");
+        println!("[2] Exit");
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
 
-        println!("executing checkpoint {}", plan.checkpoint());
         match input.trim() {
-            "1" | "next" => match plan_service.execute_step_from_fs(path).await {
-                Ok(response) => {
-                    println!("Step {} executed: {:?}", plan.checkpoint(), response);
-                    plan.increment_checkpoint();
-                    if let Err(e) = plan_service.save_plan(&plan, path) {
-                        eprintln!("Error saving plan: {}", e)
+            "1" | "next" => {
+                // using file as store for Plan
+
+                let _ = match plan_service.execute_step(step_to_execute, context).await {
+                    Ok(_) => {
+                        println!("Checkpoint {} complete", plan.checkpoint());
+                        plan.increment_checkpoint();
+
+                        // save!
+                        if let Err(e) = plan_service.save_plan(&plan, path) {
+                            eprintln!("Error saving plan: {}", e)
+                        }
                     }
-                }
-                Err(e) => println!("Error executing step: {}", e),
-            },
+                    Err(e) => println!("Error executing step: {}", e),
+                };
+            }
             "2" | "exit" => break,
             _ => println!("Invalid command. Please try again."),
         }
 
-        println!("Checkpoint {} complete", plan.checkpoint());
         println!(); // Add a blank line for readability
     }
 
-    println!("Exiting program. Goodbye!");
+    println!("Exiting program. Check plan's checkpoint value in JSON before next run");
 }
 
 async fn read_file(path: PathBuf) -> Result<FileContentValue, std::io::Error> {

@@ -109,25 +109,8 @@ impl PlanService {
         context_to_now
     }
 
-    /// this is temporary, only to be used with binary / cli
-    pub async fn execute_step_from_fs(&self, path: &str) -> Result<(), ServiceError> {
-        let plan = self.load_plan(path).unwrap(); // this unwrap is temporary, not to be taken seriously
-        self.execute_step(&plan).await
-    }
-
-    pub async fn execute_step(&self, plan: &Plan) -> Result<(), ServiceError> {
-        let checkpoint = plan.checkpoint();
-        println!("PlanService::execute_step::checkpoint({})", checkpoint);
-
-        let steps = plan.steps();
-        let step_to_execute = steps
-            .get(checkpoint)
-            .ok_or(ServiceError::StepNotFound(checkpoint))?;
-
-        dbg!(&step_to_execute);
-
+    pub async fn prepare_context(&self, steps: &[PlanStep], checkpoint: usize) -> String {
         let contexts = self.step_execution_context(steps, checkpoint);
-
         // todo(zi) consider accumulating this in a context manager vs recomputing for each step (long)
         let full_context_as_string = stream::iter(contexts.iter().enumerate().map(
             |(index, context)| async move {
@@ -140,9 +123,12 @@ impl PlanService {
         .await
         .join("\n");
 
-        let instruction = step_to_execute.description();
+        full_context_as_string
+    }
 
-        let fs_file_path = step_to_execute.file_to_edit();
+    pub async fn execute_step(&self, step: &PlanStep, context: String) -> Result<(), ServiceError> {
+        let instruction = step.description();
+        let fs_file_path = step.file_to_edit();
 
         let file_content = self
             .tool_box
@@ -154,7 +140,7 @@ impl PlanService {
             Range::default(),
             file_content.to_owned(), // this is needed too?
             file_content.to_owned(),
-            full_context_as_string, // todo(zi): consider giving system_prompt more info about this being plan history
+            context, // todo(zi): consider giving system_prompt more info about this being plan history
             self.llm_properties.clone(),
             None,
             instruction.to_owned(),

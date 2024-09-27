@@ -14,7 +14,6 @@ use super::{
         models::broker::CodeEditBroker, search_and_replace::SearchAndReplaceEditing,
         test_correction::TestCorrection, types::CodeEditingTool,
     },
-    lsp::create_file::LSPCreateFile,
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRange, correctness::CodeCorrectnessBroker,
         error_fix::CodeSymbolErrorFixBroker, find_file_for_new_symbol::FindFileForNewSymbol,
@@ -35,6 +34,7 @@ use super::{
     git::{diff_client::GitDiffClient, edited_files::EditedFiles},
     grep::file::FindInFile,
     input::ToolInput,
+    lsp::create_file::LSPCreateFile,
     lsp::{
         diagnostics::LSPDiagnostics,
         get_outline_nodes::OutlineNodesUsingEditorClient,

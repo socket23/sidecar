@@ -73,6 +73,7 @@ use crate::agentic::tool::git::diff_client::{GitDiffClientRequest, GitDiffClient
 use crate::agentic::tool::git::edited_files::EditedFilesRequest;
 use crate::agentic::tool::grep::file::{FindInFileRequest, FindInFileResponse};
 use crate::agentic::tool::helpers::diff_recent_changes::{DiffFileContent, DiffRecentChanges};
+use crate::agentic::tool::lsp::create_file::CreateFileRequest;
 use crate::agentic::tool::lsp::diagnostics::{
     DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
@@ -9072,37 +9073,61 @@ FILEPATH: {fs_file_path}
     }
 
     /// Convert the gathered context from the events to a prompt for the LLM/LRM
-    /// 
+    ///
     /// We might get consecutive selection ranges which can mess up the prompt
     /// very quickly, we should be a bit more careful about that
-    /// 
+    ///
     /// TODO(skcd): We should deduplicate the outline nodes which are present
     /// since we might be repeating a lot of context, an example is:
     /// https://gist.github.com/theskcd/c710d77f223f21fac1525277d0bfa929
-    pub async fn context_recording_to_prompt(&self, context_events: Vec<ContextGatheringEvent>, message_properties: SymbolEventMessageProperties) -> Result<String, SymbolError> {
-        let file_paths = context_events.iter().map(|context_event| match context_event {
-            ContextGatheringEvent::LSPContextEvent(lsp_event) => {
-                match lsp_event.destination_maybe() {
-                    Some(destination) => {
-                        vec![destination]
+    pub async fn context_recording_to_prompt(
+        &self,
+        context_events: Vec<ContextGatheringEvent>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<String, SymbolError> {
+        let file_paths = context_events
+            .iter()
+            .map(|context_event| match context_event {
+                ContextGatheringEvent::LSPContextEvent(lsp_event) => {
+                    match lsp_event.destination_maybe() {
+                        Some(destination) => {
+                            vec![destination]
+                        }
+                        None => {
+                            vec![]
+                        }
                     }
-                    None => {
-                        vec![]
-                    }
-                }.into_iter().chain(vec![lsp_event.source_fs_file_path().to_owned()]).collect::<Vec<_>>()
-            }
-            ContextGatheringEvent::OpenFile(open_file) => {
-                vec![open_file.fs_file_path().to_owned()]
-            }
-            ContextGatheringEvent::Selection(selection) => {
-                vec![selection.fs_file_path().to_owned()]
-            }
-        }).flatten().collect::<HashSet<String>>();
+                    .into_iter()
+                    .chain(vec![lsp_event.source_fs_file_path().to_owned()])
+                    .collect::<Vec<_>>()
+                }
+                ContextGatheringEvent::OpenFile(open_file) => {
+                    vec![open_file.fs_file_path().to_owned()]
+                }
+                ContextGatheringEvent::Selection(selection) => {
+                    vec![selection.fs_file_path().to_owned()]
+                }
+            })
+            .flatten()
+            .collect::<HashSet<String>>();
 
-        let outline_nodes = stream::iter(file_paths.into_iter().map(|fs_file_path| (fs_file_path, message_properties.clone()))).map(|(fs_file_path, message_properties)| async move {
-            let outline_nodes = self.get_outline_nodes_from_editor(&fs_file_path, message_properties).await;
+        let outline_nodes = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let outline_nodes = self
+                .get_outline_nodes_from_editor(&fs_file_path, message_properties)
+                .await;
             outline_nodes.map(|outline_nodes| (fs_file_path, outline_nodes))
-        }).buffer_unordered(100).collect::<Vec<_>>().await.into_iter().filter_map(|s| s).collect::<HashMap<_, _>>();
+        })
+        .buffer_unordered(100)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .collect::<HashMap<_, _>>();
 
         // To handle the LSPEvent and the selection event this is what we want to do:
         // - LSP event: We want to get the outline node where the user performed the clicked and on the destination make sure to include that outline node (if present)
@@ -9116,22 +9141,39 @@ FILEPATH: {fs_file_path}
                     let source_file = lsp_context_event.source_fs_file_path();
                     let destination = lsp_context_event.destination_maybe();
                     println!("tool_box::context_recroding_to_prompt::lsp_context_event::source_file({})::destination({:?})", source_file, &destination);
-                    let source_outline_nodes = outline_nodes.get(source_file).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default();
+                    let source_outline_nodes = outline_nodes
+                        .get(source_file)
+                        .map(|outline_nodes| outline_nodes.to_vec())
+                        .unwrap_or_default();
                     let destination_outline_nodes = if let Some(destination) = destination {
-                        outline_nodes.get(&destination).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default()
+                        outline_nodes
+                            .get(&destination)
+                            .map(|outline_nodes| outline_nodes.to_vec())
+                            .unwrap_or_default()
                     } else {
-                        println!("tool_box::context_recording_to_prompt::no_destination_outline_node");
+                        println!(
+                            "tool_box::context_recording_to_prompt::no_destination_outline_node"
+                        );
                         vec![]
                     };
-                    let prompt = lsp_context_event.lsp_context_event_to_prompt(source_outline_nodes, destination_outline_nodes);
+                    let prompt = lsp_context_event.lsp_context_event_to_prompt(
+                        source_outline_nodes,
+                        destination_outline_nodes,
+                    );
                     if let Some(prompt) = prompt {
                         final_prompt_parts.push(prompt);
                     }
                 }
                 ContextGatheringEvent::Selection(selection_event) => {
                     let source_file = selection_event.fs_file_path();
-                    let source_outline_nodes = outline_nodes.get(source_file).map(|outline_nodes| outline_nodes.to_vec()).unwrap_or_default();
-                    let prompt = SelectionContextEvent::to_prompt(vec![selection_event], source_outline_nodes);
+                    let source_outline_nodes = outline_nodes
+                        .get(source_file)
+                        .map(|outline_nodes| outline_nodes.to_vec())
+                        .unwrap_or_default();
+                    let prompt = SelectionContextEvent::to_prompt(
+                        vec![selection_event],
+                        source_outline_nodes,
+                    );
                     final_prompt_parts.push(prompt);
                 }
                 ContextGatheringEvent::OpenFile(_open_file) => {
@@ -9139,12 +9181,41 @@ FILEPATH: {fs_file_path}
                 }
             }
         }
-        let joined_journey = final_prompt_parts.into_iter().enumerate().map(|(idx, prompt)| {
-            format!("## {idx}
-{prompt}")
-        }).collect::<Vec<_>>().join("\n\n");
+        let joined_journey = final_prompt_parts
+            .into_iter()
+            .enumerate()
+            .map(|(idx, prompt)| {
+                format!(
+                    "## {idx}
+{prompt}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
 
-        Ok(format!("I am showing you all the steps I took and giving this to you as context:
-{joined_journey}"))
+        Ok(format!(
+            "I am showing you all the steps I took and giving this to you as context:
+{joined_journey}"
+        ))
+    }
+
+    /// Creates a file using the editor endpoint
+    pub async fn create_file(
+        &self,
+        fs_file_path: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        let tool_input = ToolInput::CreateFile(CreateFileRequest::new(
+            fs_file_path.to_owned(),
+            message_properties.editor_url(),
+        ));
+        let _ = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_file_create_response()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(())
     }
 }

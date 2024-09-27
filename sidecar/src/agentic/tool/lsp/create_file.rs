@@ -1,8 +1,8 @@
 //! Creates the file using the editor endpoint
 
-use serde::{Deserialize, Serialize};
 use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateFileRequest {
@@ -27,10 +27,7 @@ pub struct CreateFileResponse {
 
 impl CreateFileResponse {
     pub fn new(done: bool, fs_file_path: String) -> Self {
-        Self {
-            done,
-            fs_file_path,
-        }
+        Self { done, fs_file_path }
     }
 
     pub fn is_done(&self) -> bool {

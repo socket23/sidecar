@@ -347,13 +347,16 @@ async fn main() {
                     .await
                 {
                     Ok(_) => {
-                        println!("Checkpoint {} complete", plan.checkpoint());
-
-                        if plan.checkpoint() < plan.final_checkpoint() {
+                        if let Some(index) = plan.checkpoint() {
+                            println!("Checkpoint {} complete", index);
                             plan.increment_checkpoint();
-                        } else {
-                            println!("Reached final checkpoint. Plan execution complete.");
-                        }
+                        };
+
+                        // if plan.checkpoint() < plan.final_checkpoint() {
+
+                        // } else {
+                        //     println!("Reached final checkpoint. Plan execution complete.");
+                        // }
 
                         // save!
                         if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str).await

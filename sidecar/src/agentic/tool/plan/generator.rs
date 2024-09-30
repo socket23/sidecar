@@ -182,6 +182,8 @@ Separation of Concerns: Keeps execution state separate from other data, making t
 
 Given a request and context, you will generate a step by step plan to accomplish it. Use prior art seen in context where applicable.
 
+Your job is to be precise and effective, so avoid extraneous steps even if they offer convenience. Be judicious and conservative in your planning.
+
 Please ensure that each step includes all required fields and that the steps are logically ordered.
 
 Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify.

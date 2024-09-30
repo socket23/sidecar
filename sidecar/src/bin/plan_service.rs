@@ -22,6 +22,8 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
+            plan::plan::Plan,
+            plan::plan_step::PlanStep,
             plan::service::PlanService,
         },
     },
@@ -48,8 +50,69 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Execute the next step in the plan
-    Next,
+    Next,   // Execute the next step in the plan
+    Append, // Append a new step to the plan
+}
+
+fn edit_step(step: &mut PlanStep) {
+    println!("Current step title:");
+    println!("{}", step.title());
+    println!("\nEnter new title (press Enter to keep current title):");
+
+    let mut new_title = String::new();
+    io::stdin().read_line(&mut new_title).unwrap();
+    new_title = new_title.trim().to_string();
+
+    if !new_title.is_empty() {
+        step.edit_title(new_title);
+    }
+
+    println!("\nCurrent step description:");
+    println!("{}", step.description());
+    println!("\nEnter new description (press Enter twice to finish):");
+
+    let mut new_description = String::new();
+    loop {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        if input.trim().is_empty() {
+            break;
+        }
+        new_description.push_str(&input);
+    }
+
+    step.edit_description(new_description.trim().to_string());
+    println!("Step updated successfully.");
+}
+
+fn append_step(plan: &mut Plan) {
+    println!("Appending a new step to the plan.");
+
+    println!("Enter step title:");
+    let mut title = String::new();
+    io::stdin().read_line(&mut title).unwrap();
+    let title = title.trim().to_string();
+
+    println!("Enter step description:");
+    let mut description = String::new();
+    io::stdin().read_line(&mut description).unwrap();
+    let description = description.trim().to_string();
+
+    println!("Enter file to edit (path):");
+    let mut file_to_edit = String::new();
+    io::stdin().read_line(&mut file_to_edit).unwrap();
+    let file_to_edit = file_to_edit.trim().to_string();
+
+    let new_step = PlanStep::new(
+        uuid::Uuid::new_v4().to_string(),
+        plan.steps().len(),
+        vec![file_to_edit],
+        title,
+        description,
+    );
+
+    plan.add_step(new_step);
+    println!("New step appended successfully.");
 }
 
 #[tokio::main]
@@ -60,7 +123,7 @@ async fn main() {
         r#"https://app.parea.ai/logs?colViz=%7B%220%22%3Afalse%2C%221%22%3Afalse%2C%222%22%3Afalse%2C%223%22%3Afalse%2C%22error%22%3Afalse%2C%22deployment_id%22%3Afalse%2C%22feedback_score%22%3Afalse%2C%22time_to_first_token%22%3Afalse%2C%22scores%22%3Afalse%2C%22start_timestamp%22%3Afalse%2C%22user%22%3Afalse%2C%22session_id%22%3Afalse%2C%22target%22%3Afalse%2C%22experiment_uuid%22%3Afalse%2C%22dataset_references%22%3Afalse%2C%22in_dataset%22%3Afalse%2C%22event_type%22%3Afalse%2C%22request_type%22%3Afalse%2C%22evaluation_metric_names%22%3Afalse%2C%22request%22%3Afalse%2C%22calling_node%22%3Afalse%2C%22edges%22%3Afalse%2C%22metadata_evaluation_metric_names%22%3Afalse%2C%22metadata_event_type%22%3Afalse%2C%22metadata_0%22%3Afalse%2C%22metadata_calling_node%22%3Afalse%2C%22metadata_edges%22%3Afalse%2C%22metadata_root_id%22%3Afalse%7D&filter=%7B%22filter_field%22%3A%22meta_data%22%2C%22filter_operator%22%3A%22equals%22%2C%22filter_key%22%3A%22root_id%22%2C%22filter_value%22%3A%22{request_id_str}%22%7D&page=1&page_size=50&time_filter=1m"#
     );
     println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
-    let editor_url = "http://localhost:42428".to_owned();
+    let editor_url = "http://localhost:42427".to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
     let anthropic_llm_properties = LLMProperties::new(
         LLMType::ClaudeSonnet,
@@ -109,8 +172,17 @@ async fn main() {
         (plan_storage_path, plan_id)
     };
 
-    // toggle
+    // edit step
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/6e5eb8c1-054f-4510-aca4-61676c73168e.json");
+
+    // add step
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/c6580a8e-5d4f-4138-9fce-69d1a067bf72.json");
+
+    // fix lsp
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/c6580a8e-5d4f-4138-9fce-69d1a067bf72.json");
+
+    // add file_path field
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/65b85dcb-72e9-498f-912c-036b02845319.json");
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -135,10 +207,7 @@ async fn main() {
     ));
 
     let user_query =
-        "I want to modify my CLI in plan_service so that there is an Option to edit the current showing step.
-        The CLI edit flow should then go into a simple step edit flow, where the Step is printed, and the typed user message it what replaces that step.
-        Then, upon submission, the plan's step is updated and saved.
-        "
+        "I want to have a command that allows me to append a step to the plan. The 3 fields that are necessary are the title, description, and the File to Edit (path) only. The checkpoint is inferred through appending"
             .to_string();
 
     let _initial_context = String::from("");
@@ -201,32 +270,35 @@ async fn main() {
     println!("Welcome to Agentic Planning.");
     println!();
     println!(
-        "Your plan has {} steps. We are at checkpoint {}.",
+        "Your plan has {} steps. We are at step {}.",
         &plan.steps().len(),
-        &plan.checkpoint()
+        &plan.checkpoint() + 1,
     );
     println!();
 
     loop {
-        let mut plan = plan_service.load_plan(&plan_storage_path_str).unwrap();
-        let steps = plan.steps();
+        let plan = plan_service.load_plan(&plan_storage_path_str).unwrap();
         let checkpoint = plan.checkpoint();
-        let step_to_execute = steps.get(checkpoint).unwrap();
-        let context = plan_service.prepare_context(steps, checkpoint).await;
+        let context = plan_service.prepare_context(plan.steps(), checkpoint).await;
 
-        println!("Next step: {}", step_to_execute.title());
+        let mut plan = plan_service.load_plan(&plan_storage_path_str).unwrap();
+        let step_to_execute = plan.steps_mut().get_mut(checkpoint).unwrap();
+
+        println!("Next: {}", step_to_execute.title());
 
         println!("[1] Execute");
-        println!("[2] Exit");
+        println!("[2] Edit");
+        println!("[3] Show Description");
+        println!("[4] Append Step");
+        println!("[5] Exit");
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
 
         match input.trim() {
-            "1" | "next" => {
+            "1" | "execute" => {
                 // using file as store for Plan
-
                 let _ = match plan_service
                     .execute_step(step_to_execute, context, event_properties.clone())
                     .await
@@ -243,7 +315,24 @@ async fn main() {
                     Err(e) => println!("Error executing step: {}", e),
                 };
             }
-            "2" | "exit" => break,
+            "2" | "edit" => {
+                edit_step(step_to_execute);
+                if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str) {
+                    eprintln!("Error saving plan: {}", e);
+                }
+            }
+            "3" | "show" => {
+                println!("\nStep Description:");
+                println!("{}", step_to_execute.description());
+                println!(); // Add a blank line for readability
+            }
+            "4" | "append" => {
+                append_step(&mut plan);
+                if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str) {
+                    eprintln!("Error saving plan: {}", e);
+                }
+            }
+            "5" | "exit" => break,
             _ => println!("Invalid command. Please try again."),
         }
 

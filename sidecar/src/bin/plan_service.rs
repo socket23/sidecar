@@ -141,8 +141,14 @@ async fn main() {
         (plan_storage_path, plan_id)
     };
 
-    // toggle
-    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/6e5eb8c1-054f-4510-aca4-61676c73168e.json");
+    // edit step
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/6e5eb8c1-054f-4510-aca4-61676c73168e.json");
+
+    // add step
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/c6580a8e-5d4f-4138-9fce-69d1a067bf72.json");
+
+    // fix lsp
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/c6580a8e-5d4f-4138-9fce-69d1a067bf72.json");
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -167,10 +173,7 @@ async fn main() {
     ));
 
     let user_query =
-        "I want to modify my CLI in plan_service so that there is an Option to edit the current showing step.
-        The CLI edit flow should then go into a simple step edit flow, where the Step is printed, and the typed user message it what replaces that step.
-        Then, upon submission, the plan's step is updated and saved.
-        "
+        "I want to have a command that allows me to append a step to the plan. The two fields that are necessary are the title and description only. The checkpoint is inferred through appending"
             .to_string();
 
     let _initial_context = String::from("");

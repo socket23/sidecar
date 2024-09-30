@@ -50,6 +50,10 @@ impl PlanService {
         Ok(plan)
     }
 
+    // pub fn get_step_mut(&self, plan: &mut Plan, index: usize) -> Option<&mut PlanStep> {
+    //     plan.steps_mut().get_mut(index)
+    // }
+
     pub async fn create_plan(
         &self,
         plan_id: String,

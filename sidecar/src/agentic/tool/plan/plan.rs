@@ -95,4 +95,8 @@ impl Plan {
     pub fn set_checkpoint(&mut self, index: usize) {
         self.checkpoint = index;
     }
+
+    pub fn final_checkpoint(&self) -> usize {
+        &self.steps.len() - 1
+    }
 }

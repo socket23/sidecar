@@ -1,5 +1,6 @@
 use futures::future::try_join_all;
 use sidecar::agentic::tool::input::ToolInput;
+use sidecar::agentic::tool::lsp::file_diagnostics::{FileDiagnostics, FileDiagnosticsInput};
 use sidecar::agentic::tool::output::ToolOutput;
 use sidecar::agentic::tool::r#type::Tool;
 use std::io::{self, Write};
@@ -135,7 +136,7 @@ async fn main() {
         anthropic_api_keys.clone(),
     );
 
-    let _o1_properties = LLMProperties::new(
+    let o1_properties = LLMProperties::new(
         LLMType::O1Preview,
         LLMProvider::OpenAI,
         LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
@@ -196,8 +197,10 @@ async fn main() {
 
     // fetch lsp diags
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/93bdc6e5-4c22-4fe0-b341-b99e005d6f97.json");
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/4fa3986c-1c78-4381-b6a0-0be7f8f88512.json");
 
-    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/4fa3986c-1c78-4381-b6a0-0be7f8f88512.json");
+    // file_diag tool
+    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/848232c4-0c81-48a7-9901-967a1442b371.json");
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -221,18 +224,30 @@ async fn main() {
         editor_parsing.clone(),
     ));
 
+    // let user_query =
+    //     "add a command that fetches diagnostics for the last edited step's edited file path."
+    //         .to_string();
+
     let user_query =
-        "add a command that fetches diagnostics for the last edited step's edited file path."
+        "Similar to LSPDiagnostics in diagnostics.rs, add a new tool called FileDiagnostics in /Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/file_diagnostics.rs, updating all the places that depends on it."
             .to_string();
 
     let _initial_context = String::from("");
 
+    // let context_files = vec![
+    //     "/Users/zi/codestory/sidecar/sidecar/src/bin/get_diagnostics.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/service.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/bin/plan_service.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/diagnostics.rs",
+    // ];
+
     let context_files = vec![
-        "/Users/zi/codestory/sidecar/sidecar/src/bin/get_diagnostics.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/service.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/bin/plan_service.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/input.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/type.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/output.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/mod.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/diagnostics.rs",
     ];
 
@@ -331,7 +346,12 @@ async fn main() {
                 {
                     Ok(_) => {
                         println!("Checkpoint {} complete", plan.checkpoint());
-                        plan.increment_checkpoint();
+
+                        if plan.checkpoint() < plan.final_checkpoint() {
+                            plan.increment_checkpoint();
+                        } else {
+                            println!("Reached final checkpoint. Plan execution complete.");
+                        }
 
                         // save!
                         if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str).await
@@ -364,16 +384,15 @@ async fn main() {
                 if let Some(file_path) = step_to_execute.file_to_edit() {
                     println!("Fetching diagnostics for file: {}", file_path);
 
-                    let range = Range::default(); // You might want to adjust this range
-                    let lsp_diagnostics_input =
-                        LSPDiagnosticsInput::new(file_path.to_string(), range, editor_url.clone());
+                    let file_diagnostics_input =
+                        FileDiagnosticsInput::new(file_path.to_string(), editor_url.clone());
 
-                    let diagnostics_client = LSPDiagnostics::new();
+                    let diagnostics_client = FileDiagnostics::new();
                     match diagnostics_client
-                        .invoke(ToolInput::LSPDiagnostics(lsp_diagnostics_input))
+                        .invoke(ToolInput::FileDiagnostics(file_diagnostics_input))
                         .await
                     {
-                        Ok(ToolOutput::LSPDiagnostics(output)) => {
+                        Ok(ToolOutput::FileDiagnostics(output)) => {
                             let diagnostics = output.get_diagnostics();
                             if diagnostics.is_empty() {
                                 println!("No diagnostics found.");
@@ -390,12 +409,13 @@ async fn main() {
                             }
                         }
                         Err(e) => println!("Error fetching diagnostics: {}", e),
-                        _ => println!("Unexpected output type from LSPDiagnostics"),
+                        _ => println!("Unexpected output type from FileDiagnostics"),
                     }
                 } else {
                     println!("No file to edit available for the current step.");
                 }
             }
+
             "6" | "exit" => break,
             _ => println!("Invalid command. Please try again."),
         }

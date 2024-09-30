@@ -68,8 +68,12 @@ impl Plan {
         &self.steps.as_slice()
     }
 
-    pub fn steps_mut(&mut self) -> &mut [PlanStep] {
+    pub fn steps_mut(&mut self) -> &mut Vec<PlanStep> {
         &mut self.steps
+    }
+
+    pub fn step_count(&self) -> usize {
+        self.steps.len()
     }
 
     pub fn initial_context(&self) -> &str {

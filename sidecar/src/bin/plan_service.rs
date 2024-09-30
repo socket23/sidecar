@@ -22,6 +22,7 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
+            plan::plan::Plan,
             plan::plan_step::PlanStep,
             plan::service::PlanService,
         },
@@ -49,8 +50,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Execute the next step in the plan
-    Next,
+    Next,   // Execute the next step in the plan
+    Append, // Append a new step to the plan
 }
 
 fn edit_step(step: &mut PlanStep) {
@@ -82,6 +83,36 @@ fn edit_step(step: &mut PlanStep) {
 
     step.edit_description(new_description.trim().to_string());
     println!("Step updated successfully.");
+}
+
+fn append_step(plan: &mut Plan) {
+    println!("Appending a new step to the plan.");
+
+    println!("Enter step title:");
+    let mut title = String::new();
+    io::stdin().read_line(&mut title).unwrap();
+    let title = title.trim().to_string();
+
+    println!("Enter step description:");
+    let mut description = String::new();
+    io::stdin().read_line(&mut description).unwrap();
+    let description = description.trim().to_string();
+
+    println!("Enter file to edit (path):");
+    let mut file_to_edit = String::new();
+    io::stdin().read_line(&mut file_to_edit).unwrap();
+    let file_to_edit = file_to_edit.trim().to_string();
+
+    let new_step = PlanStep::new(
+        uuid::Uuid::new_v4().to_string(),
+        plan.steps().len(),
+        vec![file_to_edit],
+        title,
+        description,
+    );
+
+    plan.add_step(new_step);
+    println!("New step appended successfully.");
 }
 
 #[tokio::main]
@@ -150,6 +181,9 @@ async fn main() {
     // fix lsp
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/c6580a8e-5d4f-4138-9fce-69d1a067bf72.json");
 
+    // add file_path field
+    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/65b85dcb-72e9-498f-912c-036b02845319.json");
+
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let event_properties = SymbolEventMessageProperties::new(
@@ -173,7 +207,7 @@ async fn main() {
     ));
 
     let user_query =
-        "I want to have a command that allows me to append a step to the plan. The two fields that are necessary are the title and description only. The checkpoint is inferred through appending"
+        "I want to have a command that allows me to append a step to the plan. The 3 fields that are necessary are the title, description, and the File to Edit (path) only. The checkpoint is inferred through appending"
             .to_string();
 
     let _initial_context = String::from("");
@@ -255,7 +289,8 @@ async fn main() {
         println!("[1] Execute");
         println!("[2] Edit");
         println!("[3] Show Description");
-        println!("[4] Exit");
+        println!("[4] Append Step");
+        println!("[5] Exit");
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
@@ -291,7 +326,13 @@ async fn main() {
                 println!("{}", step_to_execute.description());
                 println!(); // Add a blank line for readability
             }
-            "4" | "exit" => break,
+            "4" | "append" => {
+                append_step(&mut plan);
+                if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str) {
+                    eprintln!("Error saving plan: {}", e);
+                }
+            }
+            "5" | "exit" => break,
             _ => println!("Invalid command. Please try again."),
         }
 

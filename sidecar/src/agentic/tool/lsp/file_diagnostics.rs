@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::diagnostics::{Diagnostic, LSPDiagnosticsOutput};
+use super::diagnostics::Diagnostic;
 use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
 
 pub struct FileDiagnostics {

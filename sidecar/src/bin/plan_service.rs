@@ -26,13 +26,12 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
-            lsp::diagnostics::{LSPDiagnostics, LSPDiagnosticsInput},
             plan::plan::Plan,
             plan::plan_step::PlanStep,
             plan::service::PlanService,
         },
     },
-    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing, text_document::Range},
+    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
     user_context::types::{FileContentValue, UserContext},
 };

@@ -99,4 +99,23 @@ impl Plan {
     pub fn final_checkpoint(&self) -> usize {
         &self.steps.len() - 1
     }
+
+    pub fn to_debug_message(&self) -> String {
+        self.steps
+            .iter()
+            .enumerate()
+            .map(|(idx, step)| {
+                let step_title = step.title();
+                let step_description = step.description();
+                format!(
+                    "## Plan step {idx}:
+### Title
+{step_title}
+### Description
+{step_description}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
 }

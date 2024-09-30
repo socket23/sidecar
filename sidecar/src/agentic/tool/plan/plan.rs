@@ -95,4 +95,23 @@ impl Plan {
     pub fn set_checkpoint(&mut self, index: usize) {
         self.checkpoint = index;
     }
+
+    pub fn to_debug_message(&self) -> String {
+        self.steps
+            .iter()
+            .enumerate()
+            .map(|(idx, step)| {
+                let step_title = step.title();
+                let step_description = step.description();
+                format!(
+                    "## Plan step {idx}:
+### Title
+{step_title}
+### Description
+{step_description}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
 }

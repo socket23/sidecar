@@ -303,19 +303,22 @@ async fn main() {
     println!(
         "Your plan has {} steps. We are at step {}.",
         &plan.steps().len(),
-        &plan.checkpoint() + 1,
+        &plan.checkpoint().unwrap_or_default() + 1,
     );
     println!();
 
     loop {
+        let plan = plan_service
+            .load_plan(&plan_storage_path_str)
+            .await
+            .unwrap();
+        let checkpoint = plan.checkpoint().unwrap_or_default();
+        let context = plan_service.prepare_context(plan.steps(), checkpoint).await;
+
         let mut plan = plan_service
             .load_plan(&plan_storage_path_str)
             .await
             .unwrap();
-        let steps = plan.steps();
-        let checkpoint = plan.checkpoint();
-        let context = plan_service.prepare_context(steps, checkpoint).await;
-
         let step_to_execute = plan.steps_mut().get_mut(checkpoint).unwrap();
 
         println!("Next: {}", step_to_execute.title());
@@ -364,7 +367,6 @@ async fn main() {
             "2" | "edit" => {
                 edit_step(step_to_execute);
                 if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str).await {
-                    // todo - remove await as LSP test case
                     eprintln!("Error saving plan: {}", e);
                 }
             }

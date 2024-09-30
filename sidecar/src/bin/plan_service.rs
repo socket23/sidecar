@@ -179,6 +179,7 @@ async fn main() {
     let plan = if tokio::fs::metadata(plan_storage_path.clone()).await.is_ok() {
         plan_service
             .load_plan(plan_storage_path.to_str().expect("to work"))
+            .await
             .unwrap()
     } else {
         plan_service
@@ -208,7 +209,10 @@ async fn main() {
     println!();
 
     loop {
-        let mut plan = plan_service.load_plan(&plan_storage_path_str).unwrap();
+        let mut plan = plan_service
+            .load_plan(&plan_storage_path_str)
+            .await
+            .unwrap();
         let steps = plan.steps();
         let checkpoint = plan.checkpoint();
         let step_to_execute = steps.get(checkpoint).unwrap();
@@ -236,7 +240,8 @@ async fn main() {
                         plan.increment_checkpoint();
 
                         // save!
-                        if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str) {
+                        if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str).await
+                        {
                             eprintln!("Error saving plan: {}", e)
                         }
                     }

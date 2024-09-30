@@ -103,6 +103,10 @@ impl Plan {
         self.checkpoint = Some(index);
     }
 
+    pub fn final_checkpoint(&self) -> usize {
+        &self.steps.len() - 1
+    }
+
     pub fn to_debug_message(&self) -> String {
         self.steps
             .iter()

@@ -117,7 +117,14 @@ impl PlanService {
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), ServiceError> {
         let instruction = step.description();
-        let fs_file_path = step.file_to_edit();
+        let fs_file_path = match step.file_to_edit() {
+            Some(path) => path,
+            None => {
+                return Err(ServiceError::AbsentFilePath(
+                    "No file path provided for editing".to_string(),
+                ))
+            }
+        };
 
         let file_content = self
             .tool_box
@@ -169,6 +176,9 @@ pub enum ServiceError {
 
     #[error("Step not found: {0}")]
     StepNotFound(usize),
+
+    #[error("Absent file path: {0}")]
+    AbsentFilePath(String),
 
     #[error("Invalid step execution request: {0}")]
     InvalidStepExecution(usize),

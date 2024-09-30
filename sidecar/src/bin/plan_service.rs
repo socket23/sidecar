@@ -130,6 +130,12 @@ async fn main() {
         LLMProvider::Anthropic,
         anthropic_api_keys.clone(),
     );
+
+    let _o1_properties = LLMProperties::new(
+        LLMType::O1Preview,
+        LLMProvider::OpenAI,
+        LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+    );
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -184,6 +190,11 @@ async fn main() {
     // add file_path field
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/65b85dcb-72e9-498f-912c-036b02845319.json");
 
+    // fetch lsp diags
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/93bdc6e5-4c22-4fe0-b341-b99e005d6f97.json");
+
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/b8bbb165-8cd9-43ab-8cbc-ad8e63ea2116.json");
+
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let event_properties = SymbolEventMessageProperties::new(
@@ -207,17 +218,18 @@ async fn main() {
     ));
 
     let user_query =
-        "I want to have a command that allows me to append a step to the plan. The 3 fields that are necessary are the title, description, and the File to Edit (path) only. The checkpoint is inferred through appending"
+        "add a command that fetches diagnostics for the last edited step's edited file path."
             .to_string();
 
     let _initial_context = String::from("");
 
     let context_files = vec![
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/generator.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/bin/get_diagnostics.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/service.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/bin/plan_service.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/diagnostics.rs",
     ];
 
     let file_futures: Vec<_> = context_files
@@ -243,7 +255,7 @@ async fn main() {
         .expect("to work")
         .to_owned();
 
-    println!("Plan Storage Path: {}", &plan_storage_path_str);
+    println!("Plan Storage Path:\n{}", &plan_storage_path_str);
 
     let plan = if tokio::fs::metadata(plan_storage_path.clone()).await.is_ok() {
         plan_service
@@ -266,7 +278,7 @@ async fn main() {
             .expect("Failed to create new plan")
     };
 
-    let _ = plan_service.save_plan(&plan, &plan_storage_path_str);
+    let _ = plan_service.save_plan(&plan, &plan_storage_path_str).await;
 
     println!("Welcome to Agentic Planning.");
     println!();
@@ -284,9 +296,8 @@ async fn main() {
             .unwrap();
         let steps = plan.steps();
         let checkpoint = plan.checkpoint();
-        let context = plan_service.prepare_context(plan.steps(), checkpoint).await;
+        let context = plan_service.prepare_context(steps, checkpoint).await;
 
-        let mut plan = plan_service.load_plan(&plan_storage_path_str).unwrap();
         let step_to_execute = plan.steps_mut().get_mut(checkpoint).unwrap();
 
         println!("Next: {}", step_to_execute.title());
@@ -323,7 +334,8 @@ async fn main() {
             }
             "2" | "edit" => {
                 edit_step(step_to_execute);
-                if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str) {
+                if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str).await {
+                    // todo - remove await as LSP test case
                     eprintln!("Error saving plan: {}", e);
                 }
             }
@@ -334,7 +346,7 @@ async fn main() {
             }
             "4" | "append" => {
                 append_step(&mut plan);
-                if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str) {
+                if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str).await {
                     eprintln!("Error saving plan: {}", e);
                 }
             }

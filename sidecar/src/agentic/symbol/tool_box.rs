@@ -77,6 +77,7 @@ use crate::agentic::tool::lsp::create_file::CreateFileRequest;
 use crate::agentic::tool::lsp::diagnostics::{
     DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
+use crate::agentic::tool::lsp::file_diagnostics::{FileDiagnosticsInput, FileDiagnosticsOutput};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -6011,6 +6012,24 @@ FILEPATH: {fs_file_path}
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    pub async fn get_file_diagnostics(
+        &self,
+        fs_file_path: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<FileDiagnosticsOutput, SymbolError> {
+        let input = ToolInput::FileDiagnostics(FileDiagnosticsInput::new(
+            fs_file_path.to_owned(),
+            message_properties.editor_url().to_owned(),
+        ));
+        self.tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_file_diagnostics()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    /// wait this method is actually epic
     pub async fn get_lsp_diagnostics_for_files(
         &self,
         file_paths: Vec<String>,
@@ -6023,9 +6042,8 @@ FILEPATH: {fs_file_path}
         )
         .map(|(fs_file_path, message_properties)| async move {
             let diagnostics = self
-                .get_lsp_diagnostics(
+                .get_file_diagnostics( 
                     &fs_file_path,
-                    &Range::new(Position::new(0, 0, 0), Position::new(10000, 0, 0)),
                     message_properties.clone(),
                 )
                 .await;

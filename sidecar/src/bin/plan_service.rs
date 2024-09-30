@@ -1,4 +1,8 @@
 use futures::future::try_join_all;
+use sidecar::agentic::tool::input::ToolInput;
+use sidecar::agentic::tool::lsp::file_diagnostics::{FileDiagnostics, FileDiagnosticsInput};
+use sidecar::agentic::tool::output::ToolOutput;
+use sidecar::agentic::tool::r#type::Tool;
 use std::io::{self, Write};
 use std::{path::PathBuf, sync::Arc};
 
@@ -130,6 +134,12 @@ async fn main() {
         LLMProvider::Anthropic,
         anthropic_api_keys.clone(),
     );
+
+    let o1_properties = LLMProperties::new(
+        LLMType::O1Preview,
+        LLMProvider::OpenAI,
+        LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+    );
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -184,6 +194,13 @@ async fn main() {
     // add file_path field
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/65b85dcb-72e9-498f-912c-036b02845319.json");
 
+    // fetch lsp diags
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/93bdc6e5-4c22-4fe0-b341-b99e005d6f97.json");
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/4fa3986c-1c78-4381-b6a0-0be7f8f88512.json");
+
+    // file_diag tool
+    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/848232c4-0c81-48a7-9901-967a1442b371.json");
+
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let event_properties = SymbolEventMessageProperties::new(
@@ -206,18 +223,31 @@ async fn main() {
         editor_parsing.clone(),
     ));
 
+    // let user_query =
+    //     "add a command that fetches diagnostics for the last edited step's edited file path."
+    //         .to_string();
+
     let user_query =
-        "I want to have a command that allows me to append a step to the plan. The 3 fields that are necessary are the title, description, and the File to Edit (path) only. The checkpoint is inferred through appending"
+        "Similar to LSPDiagnostics in diagnostics.rs, add a new tool called FileDiagnostics in /Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/file_diagnostics.rs, updating all the places that depends on it."
             .to_string();
 
     let _initial_context = String::from("");
 
+    // let context_files = vec![
+    //     "/Users/zi/codestory/sidecar/sidecar/src/bin/get_diagnostics.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/service.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/bin/plan_service.rs",
+    //     "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/diagnostics.rs",
+    // ];
+
     let context_files = vec![
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/generator.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/service.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/bin/plan_service.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/input.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/type.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/output.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/mod.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/diagnostics.rs",
     ];
 
     let file_futures: Vec<_> = context_files
@@ -243,7 +273,7 @@ async fn main() {
         .expect("to work")
         .to_owned();
 
-    println!("Plan Storage Path: {}", &plan_storage_path_str);
+    println!("Plan Storage Path:\n{}", &plan_storage_path_str);
 
     let plan = if tokio::fs::metadata(plan_storage_path.clone()).await.is_ok() {
         plan_service
@@ -266,14 +296,14 @@ async fn main() {
             .expect("Failed to create new plan")
     };
 
-    let _ = plan_service.save_plan(&plan, &plan_storage_path_str);
+    let _ = plan_service.save_plan(&plan, &plan_storage_path_str).await;
 
     println!("Welcome to Agentic Planning.");
     println!();
     println!(
         "Your plan has {} steps. We are at step {}.",
         &plan.steps().len(),
-        &plan.checkpoint() + 1,
+        &plan.checkpoint().unwrap_or_default() + 1,
     );
     println!();
 
@@ -283,7 +313,7 @@ async fn main() {
             .await
             .unwrap();
         let _steps = plan.steps();
-        let checkpoint = plan.checkpoint();
+        let checkpoint = plan.checkpoint().unwrap_or_default();
         let context = plan_service.prepare_context(plan.steps(), checkpoint).await;
 
         let mut plan = plan_service
@@ -298,7 +328,13 @@ async fn main() {
         println!("[2] Edit");
         println!("[3] Show Description");
         println!("[4] Append Step");
-        println!("[5] Exit");
+        println!(
+            "[5] Fetch Diagnostics for {}",
+            &step_to_execute
+                .file_to_edit()
+                .unwrap_or("No file to edit".to_owned())
+        );
+        println!("[6] Exit");
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
@@ -313,7 +349,12 @@ async fn main() {
                 {
                     Ok(_) => {
                         println!("Checkpoint {} complete", plan.checkpoint());
-                        plan.increment_checkpoint();
+
+                        if plan.checkpoint() < plan.final_checkpoint() {
+                            plan.increment_checkpoint();
+                        } else {
+                            println!("Reached final checkpoint. Plan execution complete.");
+                        }
 
                         // save!
                         if let Err(e) = plan_service.save_plan(&plan, &plan_storage_path_str).await
@@ -341,7 +382,43 @@ async fn main() {
                     eprintln!("Error saving plan: {}", e);
                 }
             }
-            "5" | "exit" => break,
+            "5" | "fetch" => {
+                if let Some(file_path) = step_to_execute.file_to_edit() {
+                    println!("Fetching diagnostics for file: {}", file_path);
+
+                    let file_diagnostics_input =
+                        FileDiagnosticsInput::new(file_path.to_string(), editor_url.clone());
+
+                    let diagnostics_client = FileDiagnostics::new();
+                    match diagnostics_client
+                        .invoke(ToolInput::FileDiagnostics(file_diagnostics_input))
+                        .await
+                    {
+                        Ok(ToolOutput::FileDiagnostics(output)) => {
+                            let diagnostics = output.get_diagnostics();
+                            if diagnostics.is_empty() {
+                                println!("No diagnostics found.");
+                            } else {
+                                println!("Diagnostics:");
+                                for (i, diagnostic) in diagnostics.iter().enumerate() {
+                                    println!(
+                                        "{}. {} (at {:?})",
+                                        i + 1,
+                                        diagnostic.message(),
+                                        diagnostic.range()
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => println!("Error fetching diagnostics: {}", e),
+                        _ => println!("Unexpected output type from FileDiagnostics"),
+                    }
+                } else {
+                    println!("No file to edit available for the current step.");
+                }
+            }
+
+            "6" | "exit" => break,
             _ => println!("Invalid command. Please try again."),
         }
 

@@ -12,7 +12,7 @@ pub struct Plan {
     initial_context: String, // this is here for testing, until we have better idea of what input context looks like
     user_context: Option<UserContext>, // originally provided user_context - may or may not be provided
     user_query: String, // this may only be useful for initial plan generation. Steps better represent the overall direction?
-    checkpoint: usize,
+    checkpoint: Option<usize>,
     storage_path: String,
 }
 
@@ -32,7 +32,7 @@ impl Plan {
             steps,
             initial_context,
             user_query,
-            checkpoint: 0,
+            checkpoint: None,
             storage_path,
         }
     }
@@ -84,16 +84,27 @@ impl Plan {
         &self.user_query
     }
 
-    pub fn checkpoint(&self) -> usize {
+    pub fn checkpoint(&self) -> Option<usize> {
         self.checkpoint
     }
 
     pub fn increment_checkpoint(&mut self) {
-        self.checkpoint = self.checkpoint.saturating_add(1);
+        match self.checkpoint {
+            None => {
+                self.checkpoint = Some(0);
+            }
+            Some(value) => {
+                self.checkpoint = Some(value + 1);
+            }
+        }
     }
 
     pub fn set_checkpoint(&mut self, index: usize) {
-        self.checkpoint = index;
+        self.checkpoint = Some(index);
+    }
+
+    pub fn final_checkpoint(&self) -> usize {
+        &self.steps.len() - 1
     }
 
     pub fn to_debug_message(&self) -> String {

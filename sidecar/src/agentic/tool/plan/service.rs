@@ -96,7 +96,7 @@ impl PlanService {
     pub async fn prepare_context(&self, steps: &[PlanStep], checkpoint: usize) -> String {
         let contexts = self.step_execution_context(steps, checkpoint);
         // todo(zi) consider accumulating this in a context manager vs recomputing for each step (long)
-        let full_context_as_string = stream::iter(contexts.iter().enumerate().map(
+        let full_context_as_string = stream::iter(contexts.to_vec().into_iter().enumerate().map(
             |(index, context)| async move {
                 let context_string = context.to_string().await;
                 format!("Step {}:\n{}", index + 1, context_string)
@@ -117,7 +117,14 @@ impl PlanService {
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), ServiceError> {
         let instruction = step.description();
-        let fs_file_path = step.file_to_edit();
+        let fs_file_path = match step.file_to_edit() {
+            Some(path) => path,
+            None => {
+                return Err(ServiceError::AbsentFilePath(
+                    "No file path provided for editing".to_string(),
+                ))
+            }
+        };
 
         let file_content = self
             .tool_box
@@ -169,6 +176,9 @@ pub enum ServiceError {
 
     #[error("Step not found: {0}")]
     StepNotFound(usize),
+
+    #[error("Absent file path: {0}")]
+    AbsentFilePath(String),
 
     #[error("Invalid step execution request: {0}")]
     InvalidStepExecution(usize),

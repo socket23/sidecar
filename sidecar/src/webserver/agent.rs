@@ -23,7 +23,9 @@ use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
-use crate::webserver::plan::{check_plan_storage_path, handle_create_plan};
+use crate::webserver::plan::{
+    check_plan_storage_path, handle_create_plan, handle_execute_plan_until,
+};
 
 use super::types::ApiResponse;
 use super::types::Result;
@@ -485,23 +487,37 @@ pub async fn followup_chat(
 
     // short-circuit over here:
     // check if we are in the process of generating a plan and the editor url is present
-    if editor_url.is_some() && user_context.is_plan_generation() {
+    if editor_url.is_some()
+        && (user_context.is_plan_generation() || user_context.is_plan_execution_until().is_some())
+    {
         println!("followup_chat::plan_generation_flow");
         let model = LLMType::ClaudeSonnet;
         let provider_type = LLMProvider::Anthropic;
         let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-        return handle_create_plan(
-            query,
-            user_context,
-            editor_url.clone().expect("is_some to hold"),
-            thread_id,
-            check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-            PlanService::new(
-                app.tool_box.clone(),
-                LLMProperties::new(model, provider_type, anthropic_api_keys),
-            ),
-        )
-        .await;
+        let plan_service = PlanService::new(
+            app.tool_box.clone(),
+            LLMProperties::new(model, provider_type, anthropic_api_keys),
+        );
+        if let Some(execution_until) = user_context.is_plan_execution_until() {
+            return handle_execute_plan_until(
+                execution_until,
+                thread_id,
+                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+                editor_url.clone().expect("is_some to hold"),
+                plan_service,
+            )
+            .await;
+        } else {
+            return handle_create_plan(
+                query,
+                user_context,
+                editor_url.clone().expect("is_some to hold"),
+                thread_id,
+                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+                plan_service,
+            )
+            .await;
+        }
         // generate the plan over here
     }
     // Here we do something special, if the user is asking a followup question

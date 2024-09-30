@@ -169,6 +169,7 @@ pub struct UserContext {
     folder_paths: Vec<String>,
     // These are all hacks for now, we will move them to proper strucutre later on
     is_plan_generation: bool,
+    is_plan_execution_until: Option<usize>,
 }
 
 impl UserContext {
@@ -184,7 +185,12 @@ impl UserContext {
             terminal_selection,
             folder_paths,
             is_plan_generation: false,
+            is_plan_execution_until: None,
         }
+    }
+
+    pub fn is_plan_execution_until(&self) -> Option<usize> {
+        self.is_plan_execution_until
     }
 
     pub fn is_plan_generation(&self) -> bool {

@@ -2,6 +2,8 @@ use super::agent_stream::generate_agent_stream;
 use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
+use llm_client::clients::types::LLMType;
+use llm_client::provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys};
 use llm_prompts::reranking::types::TERMINAL_OUTPUT;
 use std::collections::HashSet;
 
@@ -14,11 +16,14 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
+use crate::agentic::symbol::identifier::LLMProperties;
+use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
+use crate::webserver::plan::{check_plan_storage_path, handle_create_plan};
 
 use super::types::ApiResponse;
 use super::types::Result;
@@ -380,6 +385,7 @@ pub struct FollowupChatRequest {
     pub active_window_data: Option<ActiveWindowData>,
     pub model_config: LLMClientConfig,
     pub system_instruction: Option<String>,
+    pub editor_url: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -461,6 +467,7 @@ pub async fn followup_chat(
         active_window_data,
         model_config,
         system_instruction,
+        editor_url,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -469,6 +476,28 @@ pub async fn followup_chat(
     let _ = event.insert_prop("config", model_config.logging_config());
     let _ = event.insert_prop("user_id", user_id);
     let _ = app.posthog_client.capture(event).await;
+
+    // short-circuit over here:
+    // check if we are in the process of generating a plan and the editor url is present
+    if editor_url.is_some() && user_context.is_plan_generation() {
+        println!("followup_chat::plan_generation_flow");
+        let model = LLMType::ClaudeSonnet;
+        let provider_type = LLMProvider::Anthropic;
+        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+        return handle_create_plan(
+            query,
+            user_context,
+            editor_url.clone().expect("is_some to hold"),
+            thread_id,
+            check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+            PlanService::new(
+                app.tool_box.clone(),
+                LLMProperties::new(model, provider_type, anthropic_api_keys),
+            ),
+        )
+        .await;
+        // generate the plan over here
+    }
     // Here we do something special, if the user is asking a followup question
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future

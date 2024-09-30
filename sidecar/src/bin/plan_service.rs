@@ -103,9 +103,14 @@ async fn main() {
         let mut plan_storage_path = plan_storage_path.clone();
         // replace plan_id here with a static id if you want to reuse the plan loading
         let plan_id = uuid::Uuid::new_v4().to_string();
-        plan_storage_path = plan_storage_path.join(plan_id.to_owned());
+        plan_storage_path = plan_storage_path
+            .join(plan_id.to_owned())
+            .with_extension("json");
         (plan_storage_path, plan_id)
     };
+
+    // toggle
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/6e5eb8c1-054f-4510-aca4-61676c73168e.json");
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -130,19 +135,20 @@ async fn main() {
     ));
 
     let user_query =
-        "I want you to finish implementing the create file tool, follow what we are doing in open_file. the endpoint we want to hit is `create_file`"
+        "I want to modify my CLI in plan_service so that there is an Option to edit the current showing step.
+        The CLI edit flow should then go into a simple step edit flow, where the Step is printed, and the typed user message it what replaces that step.
+        Then, upon submission, the plan's step is updated and saved.
+        "
             .to_string();
 
     let _initial_context = String::from("");
 
     let context_files = vec![
-        "/Users/skcd/scratch/sidecar/sidecar/src/agentic/tool/input.rs",
-        "/Users/skcd/scratch/sidecar/sidecar/src/agentic/tool/output.rs",
-        "/Users/skcd/scratch/sidecar/sidecar/src/agentic/tool/type.rs",
-        "/Users/skcd/scratch/sidecar/sidecar/src/agentic/tool/errors.rs",
-        "/Users/skcd/scratch/sidecar/sidecar/src/agentic/tool/lsp/open_file.rs",
-        "/Users/skcd/scratch/sidecar/sidecar/src/agentic/tool/lsp/create_file.rs",
-        "/Users/skcd/scratch/sidecar/sidecar/src/agentic/tool/broker.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/generator.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/service.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/bin/plan_service.rs",
     ];
 
     let file_futures: Vec<_> = context_files
@@ -172,6 +178,9 @@ async fn main() {
         .to_str()
         .expect("to work")
         .to_owned();
+
+    println!("Plan Storage Path: {}", &plan_storage_path_str);
+
     let plan = if tokio::fs::metadata(plan_storage_path.clone()).await.is_ok() {
         plan_service
             .load_plan(plan_storage_path.to_str().expect("to work"))

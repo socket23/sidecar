@@ -167,6 +167,8 @@ pub struct UserContext {
     // These paths will be absolute and need to be used to get the
     // context of the folders here, we will output it properly
     folder_paths: Vec<String>,
+    // These are all hacks for now, we will move them to proper strucutre later on
+    is_plan_generation: bool,
 }
 
 impl UserContext {
@@ -181,7 +183,12 @@ impl UserContext {
             file_content_map,
             terminal_selection,
             folder_paths,
+            is_plan_generation: false,
         }
+    }
+
+    pub fn is_plan_generation(&self) -> bool {
+        self.is_plan_generation
     }
 
     pub fn update_file_content_map(

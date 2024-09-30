@@ -9,6 +9,7 @@ pub mod in_line_agent;
 pub mod in_line_agent_stream;
 pub mod inline_completion;
 pub mod model_selection;
+pub(crate) mod plan;
 pub mod repos;
 pub mod tree_sitter;
 pub mod types;

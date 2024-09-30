@@ -15,11 +15,7 @@ use crate::{
             identifier::{LLMProperties, SymbolIdentifier},
             tool_box::ToolBox,
         },
-        tool::{
-            broker::ToolBroker, code_edit::search_and_replace::SearchAndReplaceEditingRequest,
-            errors::ToolError, input::ToolInput, plan::generator::StepGeneratorRequest,
-            r#type::Tool,
-        },
+        tool::{code_edit::search_and_replace::SearchAndReplaceEditingRequest, errors::ToolError},
     },
     chunking::text_document::Range,
     user_context::types::UserContext,
@@ -32,19 +28,13 @@ use super::{
 
 /// Operates on Plan
 pub struct PlanService {
-    tool_broker: Arc<ToolBroker>,
     tool_box: Arc<ToolBox>,
     llm_properties: LLMProperties,
 }
 
 impl PlanService {
-    pub fn new(
-        tool_broker: Arc<ToolBroker>,
-        tool_box: Arc<ToolBox>,
-        llm_properties: LLMProperties,
-    ) -> Self {
+    pub fn new(tool_box: Arc<ToolBox>, llm_properties: LLMProperties) -> Self {
         Self {
-            tool_broker,
             tool_box,
             llm_properties,
         }
@@ -75,19 +65,10 @@ impl PlanService {
         plan_storage_path: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Plan, ServiceError> {
-        let request_id = message_properties.request_id().request_id();
-        let editor_url = message_properties.editor_url();
-        let step_generator_request =
-            StepGeneratorRequest::new(query.to_owned(), request_id.to_owned(), editor_url)
-                .with_user_context(&user_context);
-
         let plan_steps = self
-            .tool_broker
-            .invoke(ToolInput::GenerateStep(step_generator_request))
-            .await?
-            .step_generator_output()
-            .ok_or(ServiceError::WrongToolOutput())?
-            .into_plan_steps();
+            .tool_box
+            .generate_plan(&query, &user_context, message_properties)
+            .await?;
 
         Ok(Plan::new(
             plan_id.to_owned(),
@@ -167,9 +148,9 @@ impl PlanService {
             false,
         );
 
-        let _response = self
-            .tool_broker
-            .invoke(ToolInput::SearchAndReplaceEditing(request))
+        let _ = self
+            .tool_box
+            .execute_search_and_replace_edit(request)
             .await?;
 
         // todo(zi): surprisingly, there's not much to do after edit.

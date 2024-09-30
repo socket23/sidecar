@@ -182,7 +182,7 @@ async fn main() {
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/c6580a8e-5d4f-4138-9fce-69d1a067bf72.json");
 
     // add file_path field
-    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/65b85dcb-72e9-498f-912c-036b02845319.json");
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/65b85dcb-72e9-498f-912c-036b02845319.json");
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -231,7 +231,7 @@ async fn main() {
 
     let _ui_sender = event_properties.ui_sender();
 
-    let plan_service = PlanService::new(tool_broker, tool_box.clone(), anthropic_llm_properties);
+    let plan_service = PlanService::new(tool_box.clone(), anthropic_llm_properties);
 
     // let path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/plan.json";
 

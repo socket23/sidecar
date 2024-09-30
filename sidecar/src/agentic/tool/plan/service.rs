@@ -1,11 +1,8 @@
-use std::{
-    fs::{self, File},
-    io::Write,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use futures::{stream, StreamExt};
 use thiserror::Error;
+use tokio::io::AsyncWriteExt;
 
 use crate::{
     agentic::{
@@ -40,15 +37,15 @@ impl PlanService {
         }
     }
 
-    pub fn save_plan(&self, plan: &Plan, path: &str) -> std::io::Result<()> {
+    pub async fn save_plan(&self, plan: &Plan, path: &str) -> std::io::Result<()> {
         let serialized = serde_json::to_string(plan).unwrap();
-        let mut file = File::create(path)?;
-        file.write_all(serialized.as_bytes())?;
+        let mut file = tokio::fs::File::create(path).await?;
+        file.write_all(serialized.as_bytes()).await?;
         Ok(())
     }
 
-    pub fn load_plan(&self, path: &str) -> std::io::Result<Plan> {
-        let content = fs::read_to_string(path)?;
+    pub async fn load_plan(&self, path: &str) -> std::io::Result<Plan> {
+        let content = tokio::fs::read_to_string(path).await?;
         let plan: Plan = serde_json::from_str(&content).unwrap();
         Ok(plan)
     }

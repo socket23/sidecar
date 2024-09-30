@@ -477,6 +477,12 @@ pub async fn followup_chat(
     let _ = event.insert_prop("user_id", user_id);
     let _ = app.posthog_client.capture(event).await;
 
+    println!(
+        "followup_chat::editor_url::({})::is_plan_generation({})",
+        editor_url.is_some(),
+        user_context.is_plan_generation()
+    );
+
     // short-circuit over here:
     // check if we are in the process of generating a plan and the editor url is present
     if editor_url.is_some() && user_context.is_plan_generation() {

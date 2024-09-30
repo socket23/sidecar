@@ -50,7 +50,7 @@ pub async fn create_plan(
         cancellation_token,
     );
 
-    let _ = plan_service
+    let plan = plan_service
         .create_plan(
             plan_id_str,
             user_query,
@@ -60,19 +60,36 @@ pub async fn create_plan(
         )
         .await;
 
-    // send over a response that we are done generating the plan
-    let final_answer = format!(
-        "finished generating plan at [location]({})",
-        plan_storage_path
-    );
-    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
-        plan_id,
-        AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-            final_answer.to_owned(),
-            Some(final_answer.to_owned()),
-            "Custom".to_owned(),
-        )),
-    )));
+    match plan {
+        Ok(plan) => {
+            // send over a response that we are done generating the plan
+            let final_answer = format!(
+                "finished generating plan at [location]({})",
+                plan_storage_path
+            );
+            let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
+            let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+                plan_id,
+                AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                    final_answer.to_owned(),
+                    Some(final_answer.to_owned()),
+                    "Custom".to_owned(),
+                )),
+            )));
+        }
+        Err(e) => {
+            eprintln!("Failed to generate plan: {:?}", e);
+            let final_answer = "Failed to generate plan".to_owned();
+            let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+                plan_id,
+                AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                    final_answer.to_owned(),
+                    Some(final_answer.to_owned()),
+                    "Custom".to_owned(),
+                )),
+            )));
+        }
+    }
     // drop the sender over here
     drop(agent_sender);
 }

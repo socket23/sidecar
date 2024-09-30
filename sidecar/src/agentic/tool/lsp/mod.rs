@@ -2,6 +2,7 @@
 //! This way we can talk to the LSP running in the editor from the sidecar
 pub mod create_file;
 pub mod diagnostics;
+pub mod file_diagnostics;
 pub mod get_outline_nodes;
 pub mod gotodefintion;
 pub mod gotoimplementations;

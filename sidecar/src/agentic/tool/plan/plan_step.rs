@@ -63,12 +63,8 @@ impl PlanStep {
     }
 
     /// Returns first file in Vec. Temporary measure until we decide whether files_to_edit should be an vec.
-    pub fn file_to_edit(&self) -> String {
-        self.files_to_edit
-            .get(0)
-            .map(String::as_str)
-            .unwrap_or("")
-            .to_string()
+    pub fn file_to_edit(&self) -> Option<String> {
+        self.files_to_edit.first().map(|s| s.to_string())
     }
 
     pub fn with_user_context(mut self, user_context: UserContext) -> Self {

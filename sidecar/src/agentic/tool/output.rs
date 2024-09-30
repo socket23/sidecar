@@ -36,6 +36,7 @@ use super::{
     lsp::{
         create_file::CreateFileResponse,
         diagnostics::LSPDiagnosticsOutput,
+        file_diagnostics::FileDiagnosticsOutput,
         get_outline_nodes::OutlineNodesUsingEditorResponse,
         gotodefintion::GoToDefinitionResponse,
         gotoimplementations::GoToImplementationResponse,
@@ -174,6 +175,8 @@ pub enum ToolOutput {
     StepGenerator(StepGeneratorResponse),
     // File create
     FileCreate(CreateFileResponse),
+    // File diagnostics
+    FileDiagnostics(FileDiagnosticsOutput),
 }
 
 impl ToolOutput {
@@ -668,6 +671,17 @@ impl ToolOutput {
     pub fn get_file_create_response(self) -> Option<CreateFileResponse> {
         match self {
             ToolOutput::FileCreate(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn file_diagnostics(output: FileDiagnosticsOutput) -> Self {
+        ToolOutput::FileDiagnostics(output)
+    }
+
+    pub fn get_file_diagnostics(self) -> Option<FileDiagnosticsOutput> {
+        match self {
+            ToolOutput::FileDiagnostics(output) => Some(output),
             _ => None,
         }
     }

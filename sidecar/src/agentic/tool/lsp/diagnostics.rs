@@ -167,7 +167,6 @@ impl Tool for LSPDiagnostics {
             .send()
             .await
             .map_err(|_e| ToolError::ErrorCommunicatingWithEditor)?;
-
         let diagnostics_response: LSPDiagnosticsOutput = response
             .json()
             .await

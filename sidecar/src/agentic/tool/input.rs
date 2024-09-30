@@ -40,6 +40,7 @@ use super::{
     lsp::{
         create_file::CreateFileRequest,
         diagnostics::LSPDiagnosticsInput,
+        file_diagnostics::FileDiagnosticsInput,
         get_outline_nodes::OutlineNodesUsingEditorRequest,
         gotodefintion::GoToDefinitionRequest,
         gotoimplementations::GoToImplementationRequest,
@@ -146,6 +147,7 @@ pub enum ToolInput {
     GenerateStep(StepGeneratorRequest),
     // Create file
     CreateFile(CreateFileRequest),
+    FileDiagnostics(FileDiagnosticsInput),
 }
 
 impl ToolInput {
@@ -214,6 +216,15 @@ impl ToolInput {
             ToolInput::UpdatePlan(_) => ToolType::PlanUpdater,
             ToolInput::GenerateStep(_) => ToolType::StepGenerator,
             ToolInput::CreateFile(_) => ToolType::CreateFile,
+            ToolInput::FileDiagnostics(_) => ToolType::FileDiagnostics,
+        }
+    }
+
+    pub fn is_file_diagnostics(self) -> Result<FileDiagnosticsInput, ToolError> {
+        if let ToolInput::FileDiagnostics(input) = self {
+            Ok(input)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::FileDiagnostics))
         }
     }
 

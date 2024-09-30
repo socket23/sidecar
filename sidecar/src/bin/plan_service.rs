@@ -156,11 +156,7 @@ async fn main() {
 
     let _ui_sender = event_properties.ui_sender();
 
-    let plan_service = PlanService::new(
-        tool_broker,
-        tool_box.clone(),
-        anthropic_llm_properties,
-    );
+    let plan_service = PlanService::new(tool_box.clone(), anthropic_llm_properties);
 
     // let path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/plan.json";
 
@@ -222,7 +218,10 @@ async fn main() {
             "1" | "next" => {
                 // using file as store for Plan
 
-                let _ = match plan_service.execute_step(step_to_execute, context, event_properties.clone()).await {
+                let _ = match plan_service
+                    .execute_step(step_to_execute, context, event_properties.clone())
+                    .await
+                {
                     Ok(_) => {
                         println!("Checkpoint {} complete", plan.checkpoint());
                         plan.increment_checkpoint();

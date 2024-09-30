@@ -63,6 +63,10 @@ impl PlanService {
         Ok(plan)
     }
 
+    // pub fn get_step_mut(&self, plan: &mut Plan, index: usize) -> Option<&mut PlanStep> {
+    //     plan.steps_mut().get_mut(index)
+    // }
+
     pub async fn create_plan(
         &self,
         plan_id: String,
@@ -128,7 +132,12 @@ impl PlanService {
         full_context_as_string
     }
 
-    pub async fn execute_step(&self, step: &PlanStep, context: String, message_properties: SymbolEventMessageProperties) -> Result<(), ServiceError> {
+    pub async fn execute_step(
+        &self,
+        step: &PlanStep,
+        context: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), ServiceError> {
         let instruction = step.description();
         let fs_file_path = step.file_to_edit();
 

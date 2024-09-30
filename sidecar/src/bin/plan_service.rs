@@ -1,4 +1,7 @@
 use futures::future::try_join_all;
+use sidecar::agentic::tool::input::ToolInput;
+use sidecar::agentic::tool::output::ToolOutput;
+use sidecar::agentic::tool::r#type::Tool;
 use std::io::{self, Write};
 use std::{path::PathBuf, sync::Arc};
 
@@ -22,12 +25,13 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
+            lsp::diagnostics::{LSPDiagnostics, LSPDiagnosticsInput},
             plan::plan::Plan,
             plan::plan_step::PlanStep,
             plan::service::PlanService,
         },
     },
-    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
+    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing, text_document::Range},
     inline_completion::symbols_tracker::SymbolTrackerInline,
     user_context::types::{FileContentValue, UserContext},
 };
@@ -193,7 +197,7 @@ async fn main() {
     // fetch lsp diags
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/93bdc6e5-4c22-4fe0-b341-b99e005d6f97.json");
 
-    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/b8bbb165-8cd9-43ab-8cbc-ad8e63ea2116.json");
+    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/4fa3986c-1c78-4381-b6a0-0be7f8f88512.json");
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -306,7 +310,13 @@ async fn main() {
         println!("[2] Edit");
         println!("[3] Show Description");
         println!("[4] Append Step");
-        println!("[5] Exit");
+        println!(
+            "[5] Fetch Diagnostics for {}",
+            &step_to_execute
+                .file_to_edit()
+                .unwrap_or("No file to edit".to_owned())
+        );
+        println!("[6] Exit");
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
@@ -350,7 +360,43 @@ async fn main() {
                     eprintln!("Error saving plan: {}", e);
                 }
             }
-            "5" | "exit" => break,
+            "5" | "fetch" => {
+                if let Some(file_path) = step_to_execute.file_to_edit() {
+                    println!("Fetching diagnostics for file: {}", file_path);
+
+                    let range = Range::default(); // You might want to adjust this range
+                    let lsp_diagnostics_input =
+                        LSPDiagnosticsInput::new(file_path.to_string(), range, editor_url.clone());
+
+                    let diagnostics_client = LSPDiagnostics::new();
+                    match diagnostics_client
+                        .invoke(ToolInput::LSPDiagnostics(lsp_diagnostics_input))
+                        .await
+                    {
+                        Ok(ToolOutput::LSPDiagnostics(output)) => {
+                            let diagnostics = output.get_diagnostics();
+                            if diagnostics.is_empty() {
+                                println!("No diagnostics found.");
+                            } else {
+                                println!("Diagnostics:");
+                                for (i, diagnostic) in diagnostics.iter().enumerate() {
+                                    println!(
+                                        "{}. {} (at {:?})",
+                                        i + 1,
+                                        diagnostic.message(),
+                                        diagnostic.range()
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => println!("Error fetching diagnostics: {}", e),
+                        _ => println!("Unexpected output type from LSPDiagnostics"),
+                    }
+                } else {
+                    println!("No file to edit available for the current step.");
+                }
+            }
+            "6" | "exit" => break,
             _ => println!("Invalid command. Please try again."),
         }
 

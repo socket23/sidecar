@@ -64,8 +64,10 @@ pub async fn create_plan(
         Ok(plan) => {
             // send over a response that we are done generating the plan
             let final_answer = format!(
-                "finished generating plan at [location]({})",
-                plan_storage_path
+                r#"finished generating plan at [location]({})
+steps: {}"#,
+                plan_storage_path,
+                plan.step_count()
             );
             let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
             let _ = agent_sender.send(Ok(ConversationMessage::answer_update(

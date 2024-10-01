@@ -170,6 +170,7 @@ pub struct UserContext {
     // These are all hacks for now, we will move them to proper strucutre later on
     is_plan_generation: bool,
     is_plan_execution_until: Option<usize>,
+    is_plan_append: bool,
 }
 
 impl UserContext {
@@ -186,7 +187,12 @@ impl UserContext {
             folder_paths,
             is_plan_generation: false,
             is_plan_execution_until: None,
+            is_plan_append: false,
         }
+    }
+
+    pub fn is_plan_append(&self) -> bool {
+        self.is_plan_append
     }
 
     pub fn is_plan_execution_until(&self) -> Option<usize> {

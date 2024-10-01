@@ -39,6 +39,10 @@ impl Plan {
         }
     }
 
+    pub fn storage_path(&self) -> &str {
+        &self.storage_path
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -52,12 +56,20 @@ impl Plan {
         self.user_context.as_ref()
     }
 
+    pub fn initial_user_query(&self) -> &str {
+        &self.user_query
+    }
+
     pub fn add_step(&mut self, step: PlanStep) {
         self.steps.push(step);
     }
 
     pub fn add_steps(&mut self, steps: &[PlanStep]) {
         self.steps.extend(steps.to_vec())
+    }
+
+    pub fn add_steps_vec(&mut self, steps: Vec<PlanStep>) {
+        self.steps.extend(steps);
     }
 
     pub fn edit_step(&mut self, step_id: String, new_content: String) {
@@ -164,12 +176,21 @@ Plan up until now:
             .map(|(idx, step)| {
                 let step_title = step.title();
                 let step_description = step.description();
+                let files_to_edit = step
+                    .files_to_edit()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, files_to_edit)| format!("{} - {}", idx + 1, files_to_edit))
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 format!(
                     "## Plan step {idx}:
 ### Title
 {step_title}
 ### Description
-{step_description}"
+{step_description}
+### Files to edit
+{files_to_edit}"
                 )
             })
             .collect::<Vec<_>>()

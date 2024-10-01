@@ -55,7 +55,7 @@ impl PlanService {
     // }
 
     /// Appends the step to the point after the checkpoint
-    pub async fn append_step(
+    pub async fn append_steps(
         &self,
         mut plan: Plan,
         query: String,
@@ -75,9 +75,22 @@ impl PlanService {
                 .tool_box
                 .recently_edited_files(
                     files_until_checkpoint.into_iter().collect(),
+                    message_properties.clone(),
+                )
+                .await?;
+            let new_steps = self
+                .tool_box
+                .generate_new_steps_for_plan(
+                    plan_until_now,
+                    plan.initial_user_query().to_owned(),
+                    query,
+                    user_context,
+                    recent_edits,
                     message_properties,
                 )
                 .await?;
+            plan.add_steps_vec(new_steps);
+            let _ = self.save_plan(&plan, plan.storage_path()).await;
             // we want to get the new plan over here and insert it properly
         } else {
             // pushes the steps at the start of the plan

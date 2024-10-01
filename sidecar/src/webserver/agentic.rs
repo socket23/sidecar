@@ -1154,6 +1154,8 @@ pub struct AgenticReasoningThreadCreationRequest {
     thread_id: uuid::Uuid,
     editor_url: String,
     user_context: UserContext,
+    #[serde(default)]
+    is_deep_reasoning: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1172,6 +1174,7 @@ pub async fn reasoning_thread_create(
         thread_id,
         editor_url,
         user_context,
+        is_deep_reasoning,
     }): Json<AgenticReasoningThreadCreationRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agentic::reasoning_thread_create");
@@ -1184,6 +1187,7 @@ pub async fn reasoning_thread_create(
         thread_id,
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
         plan_service,
+        is_deep_reasoning,
         sender,
     )
     .await;

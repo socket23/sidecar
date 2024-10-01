@@ -113,8 +113,10 @@ async fn main() {
 
     let user_context = UserContext::new(vec![], file_contents, None, vec![]); // this is big, should be passed using references
 
+    // toggle this to true to use o1-preview for planning
+    let is_deep_reasoning = false;
     let step_generator_request =
-        StepGeneratorRequest::new(user_query.clone(), request_id_str, editor_url)
+        StepGeneratorRequest::new(user_query.clone(), is_deep_reasoning, request_id_str, editor_url)
             .with_user_context(&user_context);
 
     let response = tool_broker

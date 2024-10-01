@@ -109,12 +109,13 @@ impl PlanService {
         plan_id: String,
         query: String,
         user_context: UserContext,
+        is_deep_reasoning: bool,
         plan_storage_path: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Plan, PlanServiceError> {
         let plan_steps = self
             .tool_box
-            .generate_plan(&query, &user_context, message_properties)
+            .generate_plan(&query, &user_context, is_deep_reasoning, message_properties)
             .await?;
 
         Ok(Plan::new(

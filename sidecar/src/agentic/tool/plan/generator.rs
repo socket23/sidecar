@@ -6,7 +6,7 @@ use std::sync::Arc;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 
 use crate::{
@@ -24,16 +24,18 @@ use super::plan_step::PlanStep;
 pub struct StepGeneratorRequest {
     user_query: String,
     user_context: Option<UserContext>,
+    is_deep_reasoning: bool,
     root_request_id: String,
     editor_url: String,
 }
 
 impl StepGeneratorRequest {
-    pub fn new(user_query: String, root_request_id: String, editor_url: String) -> Self {
+    pub fn new(user_query: String, is_deep_reasoning: bool, root_request_id: String, editor_url: String) -> Self {
         Self {
             user_query,
             root_request_id,
             editor_url,
+            is_deep_reasoning,
             user_context: None,
         }
     }
@@ -222,6 +224,7 @@ impl Tool for StepGeneratorClient {
 
         let _editor_url = context.editor_url.to_owned();
         let root_id = context.root_request_id.to_owned();
+        let is_deep_reasoning = context.is_deep_reasoning;
 
         let messages = vec![
             LLMClientMessage::system(Self::system_message()),
@@ -233,11 +236,19 @@ impl Tool for StepGeneratorClient {
         let request = LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None);
 
         // todo(zi): this could be o1
-        let llm_properties = LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-        );
+        let llm_properties = if is_deep_reasoning {
+            LLMProperties::new(
+                LLMType::O1Preview,
+                LLMProvider::OpenAI,
+                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+            )    
+        } else {
+            LLMProperties::new(
+                LLMType::ClaudeSonnet,
+                LLMProvider::Anthropic,
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            )
+        };
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let response = self

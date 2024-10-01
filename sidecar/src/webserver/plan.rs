@@ -16,7 +16,11 @@ use crate::{
             input::SymbolEventRequestId, lsp::LSPDiagnosticError,
             message_event::SymbolEventMessageProperties,
         },
-        tool::{editor, lsp::diagnostics::DiagnosticWithSnippet, plan::service::PlanService},
+        tool::{
+            editor,
+            lsp::{diagnostics::DiagnosticWithSnippet, file_diagnostics::DiagnosticMap},
+            plan::{generator::StepGeneratorRequest, service::PlanService},
+        },
     },
     application::config::configuration::Configuration,
     user_context::types::UserContext,
@@ -253,20 +257,36 @@ pub async fn generate_steps_from_diagnostics(
     // get all diagnostics present on these files
     let file_lsp_diagnostics = plan_service
         .tool_box()
-        .get_lsp_diagnostics_for_files(edited_files, message_properties)
+        .get_lsp_diagnostics_for_files(edited_files, message_properties.clone())
         .await
         .unwrap_or(vec![]); // empty vec is acceptable
 
-    let errors_grouped_by_file: HashMap<String, Vec<LSPDiagnosticError>> = file_lsp_diagnostics
-        .into_iter()
-        .fold(HashMap::new(), |mut acc, error| {
-            acc.entry(error.fs_file_path().to_owned())
-                .or_insert_with(Vec::new)
-                .push(error);
-            acc
-        });
+    let diagnostics_grouped_by_file: DiagnosticMap =
+        file_lsp_diagnostics
+            .into_iter()
+            .fold(HashMap::new(), |mut acc, error| {
+                acc.entry(error.fs_file_path().to_owned())
+                    .or_insert_with(Vec::new)
+                    .push(error);
+                acc
+            });
 
-    dbg!(errors_grouped_by_file);
+    dbg!(&diagnostics_grouped_by_file);
+
+    let root_request_id = message_properties.root_request_id().to_owned();
+    let editor_url = message_properties.editor_url();
+    let user_query = "Fix these LSP errors.";
+
+    let response = plan_service
+        .tool_box()
+        .generate_steps_with_diagnostics(
+            user_query,
+            message_properties.clone(),
+            diagnostics_grouped_by_file,
+        )
+        .await;
+
+    // let response = plan_service.tool_box().
 
     // now we fix lsp errors, per file.
     // possibly, with a round of GtR's

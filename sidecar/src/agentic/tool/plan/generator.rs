@@ -12,7 +12,13 @@ use llm_client::{
 use crate::{
     agentic::{
         symbol::identifier::LLMProperties,
-        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+        tool::{
+            errors::ToolError,
+            input::ToolInput,
+            lsp::{diagnostics::Diagnostic, file_diagnostics::DiagnosticMap},
+            output::ToolOutput,
+            r#type::Tool,
+        },
     },
     user_context::types::UserContext,
 };
@@ -26,6 +32,7 @@ pub struct StepGeneratorRequest {
     user_context: Option<UserContext>,
     root_request_id: String,
     editor_url: String,
+    diagnostics: Option<DiagnosticMap>,
 }
 
 impl StepGeneratorRequest {
@@ -35,6 +42,7 @@ impl StepGeneratorRequest {
             root_request_id,
             editor_url,
             user_context: None,
+            diagnostics: None,
         }
     }
 
@@ -50,8 +58,17 @@ impl StepGeneratorRequest {
         &self.editor_url
     }
 
+    pub fn diagnostics(&self) -> Option<&DiagnosticMap> {
+        self.diagnostics.as_ref()
+    }
+
     pub fn with_user_context(mut self, user_context: &UserContext) -> Self {
         self.user_context = Some(user_context.to_owned());
+        self
+    }
+
+    pub fn with_diagnostics(mut self, diagnostics: DiagnosticMap) -> Self {
+        self.diagnostics = Some(diagnostics);
         self
     }
 
@@ -197,7 +214,13 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
         )
     }
 
-    pub async fn user_message(user_query: &str, user_context: Option<&UserContext>) -> String {
+    pub async fn user_message(
+        user_query: &str,
+        user_context: Option<&UserContext>,
+        diagnostics: Option<&DiagnosticMap>,
+    ) -> String {
+        // todo(zi): handle diagnostics map
+
         let context_xml_res = match user_context {
             Some(ctx) => ctx.to_owned().to_xml(Default::default()).await,
             None => Ok(String::from("No context")),
@@ -246,7 +269,12 @@ impl Tool for StepGeneratorClient {
         let messages = vec![
             LLMClientMessage::system(Self::system_message()),
             LLMClientMessage::user(
-                Self::user_message(context.user_query(), context.user_context()).await,
+                Self::user_message(
+                    context.user_query(),
+                    context.user_context(),
+                    context.diagnostics(),
+                )
+                .await,
             ),
         ];
 

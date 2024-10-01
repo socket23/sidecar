@@ -77,7 +77,7 @@ use crate::agentic::tool::lsp::create_file::CreateFileRequest;
 use crate::agentic::tool::lsp::diagnostics::{
     DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
-use crate::agentic::tool::lsp::file_diagnostics::{FileDiagnosticsInput, FileDiagnosticsOutput};
+use crate::agentic::tool::lsp::file_diagnostics::{DiagnosticMap, FileDiagnosticsInput, FileDiagnosticsOutput};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -9240,8 +9240,22 @@ FILEPATH: {fs_file_path}
     }
 
     /// Generates the steps for a plan
-    pub async fn generate_plan(&self, user_query: &str, user_context: &UserContext, message_properties: SymbolEventMessageProperties) -> Result<Vec<PlanStep>, SymbolError> {
+    pub async fn generate_steps(&self, user_query: &str, user_context: &UserContext, message_properties: SymbolEventMessageProperties) -> Result<Vec<PlanStep>, SymbolError> {
         let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_user_context(user_context);
+        let plan_steps = self
+            .tools
+            .invoke(ToolInput::GenerateStep(step_generator_request))
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .step_generator_output()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .into_plan_steps();
+        Ok(plan_steps)
+    }
+
+    /// Generates steps with diagnostics provided. This should also accept context one day.
+    pub async fn generate_steps_with_diagnostics(&self, user_query: &str, message_properties: SymbolEventMessageProperties, diagnostics: DiagnosticMap) -> Result<Vec<PlanStep>, SymbolError> {
+        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_diagnostics(diagnostics);
         let plan_steps = self
             .tools
             .invoke(ToolInput::GenerateStep(step_generator_request))

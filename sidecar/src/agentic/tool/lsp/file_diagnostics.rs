@@ -1,9 +1,14 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::diagnostics::Diagnostic;
-use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
+use crate::agentic::{
+    symbol::events::lsp::LSPDiagnosticError,
+    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+};
 
 pub struct FileDiagnostics {
     client: Client,
@@ -28,6 +33,9 @@ impl FileDiagnosticsInput {
 pub struct FileDiagnosticsOutput {
     diagnostics: Vec<Diagnostic>,
 }
+
+/// Diagnostics grouped by fs_file_path
+pub type DiagnosticMap = HashMap<String, Vec<LSPDiagnosticError>>;
 
 impl FileDiagnosticsOutput {
     pub fn get_diagnostics(&self) -> &[Diagnostic] {

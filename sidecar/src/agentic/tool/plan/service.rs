@@ -95,7 +95,7 @@ impl PlanService {
     ) -> Result<Plan, ServiceError> {
         let plan_steps = self
             .tool_box
-            .generate_plan(&query, &user_context, message_properties)
+            .generate_steps(&query, &user_context, message_properties)
             .await?;
 
         Ok(Plan::new(

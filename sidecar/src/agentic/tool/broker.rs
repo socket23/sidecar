@@ -37,6 +37,7 @@ use super::{
     lsp::{
         create_file::LSPCreateFile,
         diagnostics::LSPDiagnostics,
+        file_diagnostics::FileDiagnostics,
         get_outline_nodes::OutlineNodesUsingEditorClient,
         gotodefintion::LSPGoToDefinition,
         gotoimplementations::LSPGoToImplementation,
@@ -406,6 +407,7 @@ impl ToolBroker {
             ToolType::PlanStepAdd,
             Box::new(PlanAddStepClient::new(llm_client.clone())),
         );
+        tools.insert(ToolType::FileDiagnostics, Box::new(FileDiagnostics::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

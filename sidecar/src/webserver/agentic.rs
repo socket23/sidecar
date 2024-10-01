@@ -5,6 +5,8 @@ use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::{stream, StreamExt};
+use llm_client::clients::types::LLMType;
+use llm_client::provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys};
 use serde_json::json;
 use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
@@ -22,12 +24,16 @@ use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::lsp::LSPDiagnosticError;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
+use crate::agentic::symbol::identifier::LLMProperties;
 use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
+use crate::agentic::tool::plan::plan::Plan;
+use crate::agentic::tool::plan::service::PlanService;
 use crate::chunking::text_document::Range;
+use crate::webserver::plan::{check_plan_storage_path, create_plan};
 use crate::{application::application::Application, user_context::types::UserContext};
 
 use super::types::ApiResponse;
@@ -1143,4 +1149,65 @@ pub async fn context_recording(
         &context_recording_to_prompt
     );
     Ok(json_result(AgenticContextGatheringResponse { done: true }))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticReasoningThreadCreationRequest {
+    query: String,
+    thread_id: uuid::Uuid,
+    editor_url: String,
+    user_context: UserContext,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticReasoningThreadCreationResponse {
+    plan: Option<Plan>,
+    success: bool,
+    error_if_any: Option<String>,
+}
+
+impl ApiResponse for AgenticReasoningThreadCreationResponse {}
+
+pub async fn reasoning_thread_create(
+    Extension(app): Extension<Application>,
+    Json(AgenticReasoningThreadCreationRequest {
+        query,
+        thread_id,
+        editor_url,
+        user_context,
+    }): Json<AgenticReasoningThreadCreationRequest>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::agentic::reasoning_thread_create");
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        ),
+    );
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let plan_output = create_plan(
+        query,
+        user_context,
+        editor_url,
+        thread_id,
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+        plan_service,
+        sender,
+    )
+    .await;
+    let response = match plan_output {
+        Ok(plan) => AgenticReasoningThreadCreationResponse {
+            plan: Some(plan),
+            success: true,
+            error_if_any: None,
+        },
+        Err(e) => AgenticReasoningThreadCreationResponse {
+            plan: None,
+            success: false,
+            error_if_any: Some(format!("{:?}", e)),
+        },
+    };
+    Ok(json_result(response))
 }

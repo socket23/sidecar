@@ -15,7 +15,10 @@ use crate::{
         symbol::events::{
             input::SymbolEventRequestId, message_event::SymbolEventMessageProperties,
         },
-        tool::plan::service::PlanService,
+        tool::plan::{
+            plan::Plan,
+            service::{PlanService, PlanServiceError},
+        },
     },
     application::config::configuration::Configuration,
     user_context::types::UserContext,
@@ -174,7 +177,7 @@ pub async fn create_plan(
     plan_service: PlanService,
     // we can send events using this
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
-) {
+) -> Result<Plan, PlanServiceError> {
     let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
         plan_id.clone(),
         AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
@@ -203,7 +206,7 @@ pub async fn create_plan(
         )
         .await;
 
-    match plan {
+    match plan.as_ref() {
         Ok(plan) => {
             // send over a response that we are done generating the plan
             let final_answer = format!(
@@ -238,6 +241,8 @@ plan_information:
     }
     // drop the sender over here
     drop(agent_sender);
+    // return the plan at the end of the creation loop
+    plan
 }
 
 pub async fn handle_execute_plan_until(
@@ -399,7 +404,7 @@ pub async fn handle_create_plan(
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     // we let the plan creation happen in the background
     let _ = tokio::spawn(async move {
-        create_plan(
+        let _ = create_plan(
             user_query,
             user_context,
             editor_url,

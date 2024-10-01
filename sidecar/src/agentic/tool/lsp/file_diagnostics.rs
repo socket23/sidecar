@@ -58,7 +58,11 @@ impl Tool for FileDiagnostics {
             .json(&context)
             .send()
             .await
-            .map_err(|_e| ToolError::ErrorCommunicatingWithEditor)?;
+            .map_err(|e| {
+                eprintln!("{:?}", e);
+                ToolError::ErrorCommunicatingWithEditor
+            })?;
+
         let diagnostics_response: FileDiagnosticsOutput = response
             .json()
             .await

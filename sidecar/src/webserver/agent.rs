@@ -385,6 +385,7 @@ pub struct FollowupChatRequest {
     pub model_config: LLMClientConfig,
     pub system_instruction: Option<String>,
     pub editor_url: Option<String>,
+    pub is_deep_reasoning: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -467,6 +468,7 @@ pub async fn followup_chat(
         model_config,
         system_instruction,
         editor_url,
+        is_deep_reasoning,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -516,6 +518,7 @@ pub async fn followup_chat(
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 plan_service,
+                is_deep_reasoning,
             )
             .await;
         }

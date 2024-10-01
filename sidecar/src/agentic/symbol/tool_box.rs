@@ -9223,8 +9223,8 @@ FILEPATH: {fs_file_path}
     }
 
     /// Generates the steps for a plan
-    pub async fn generate_plan(&self, user_query: &str, user_context: &UserContext, message_properties: SymbolEventMessageProperties) -> Result<Vec<PlanStep>, SymbolError> {
-        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_user_context(user_context);
+    pub async fn generate_plan(&self, user_query: &str, user_context: &UserContext, is_deep_reasoning: bool, message_properties: SymbolEventMessageProperties) -> Result<Vec<PlanStep>, SymbolError> {
+        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), is_deep_reasoning, message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_user_context(user_context);
         let plan_steps = self
             .tools
             .invoke(ToolInput::GenerateStep(step_generator_request))

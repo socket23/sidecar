@@ -175,6 +175,7 @@ pub async fn create_plan(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
+    is_deep_reasoning: bool,
     // we can send events using this
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
 ) -> Result<Plan, PlanServiceError> {
@@ -201,6 +202,7 @@ pub async fn create_plan(
             plan_id_str,
             user_query,
             user_context,
+            is_deep_reasoning,
             plan_storage_path.to_owned(),
             message_properties,
         )
@@ -398,6 +400,7 @@ pub async fn handle_create_plan(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
+    is_deep_reasoning: bool,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -411,6 +414,7 @@ pub async fn handle_create_plan(
             plan_id,
             plan_storage_path,
             plan_service,
+            is_deep_reasoning,
             sender,
         )
         .await;

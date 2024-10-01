@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::user_context::types::UserContext;
@@ -105,6 +107,54 @@ impl Plan {
 
     pub fn final_checkpoint(&self) -> usize {
         &self.steps.len() - 1
+    }
+
+    pub fn plan_until_point(&self, checkpoint: usize) -> String {
+        let plan_steps = self
+            .steps
+            .iter()
+            .enumerate()
+            .filter(|(idx, _step)| *idx <= checkpoint)
+            .map(|(idx, step)| {
+                let index = idx + 1;
+                let title = step.title();
+                let description = step.description();
+                format!(
+                    r#"Plan step: {index}
+### Title
+{title}
+### Description
+{description}"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let user_query = self.user_query();
+        format!(
+            r#"Initial user query: {user_query}
+Plan up until now:
+{plan_steps}"#
+        )
+    }
+
+    /// The files which we have used to generate the context up until now
+    pub fn files_in_plan(&self, checkpoint: usize) -> Vec<String> {
+        let mut files_in_context = vec![];
+        let mut files_already_seen: HashSet<String> = Default::default();
+        self.steps
+            .iter()
+            .enumerate()
+            .filter(|(idx, _step)| *idx <= checkpoint)
+            .for_each(|(_, step)| {
+                step.files_to_edit().into_iter().for_each(|file_path| {
+                    if files_already_seen.contains(file_path.as_str()) {
+                        return;
+                    }
+                    files_already_seen.insert(file_path.to_owned());
+                    files_in_context.push(file_path.to_owned());
+                })
+            });
+        files_in_context
     }
 
     pub fn to_debug_message(&self) -> String {

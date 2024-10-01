@@ -195,6 +195,8 @@ Please ensure that each step includes all required fields and that the steps are
 
 Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify.
 
+DO NOT suggest any changes for the files which you can not see in your context.
+
 Your response must strictly follow the following schema:
 {}
 

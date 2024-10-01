@@ -248,10 +248,7 @@ impl Tool for StepGeneratorClient {
                 llm_properties.provider().clone(),
                 vec![
                     ("root_id".to_owned(), root_id),
-                    (
-                        "event_type".to_owned(),
-                        format!("generate_steps").to_owned(),
-                    ),
+                    ("event_type".to_owned(), "generate_steps".to_owned()),
                 ]
                 .into_iter()
                 .collect(),

@@ -61,7 +61,7 @@ impl PlanService {
         query: String,
         user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
-    ) -> Result<Plan, ServiceError> {
+    ) -> Result<Plan, PlanServiceError> {
         let plan_checkpoint = plan.checkpoint();
         if let Some(checkpoint) = plan_checkpoint {
             // append to post checkpoint
@@ -105,7 +105,7 @@ impl PlanService {
         user_context: UserContext,
         plan_storage_path: String,
         message_properties: SymbolEventMessageProperties,
-    ) -> Result<Plan, ServiceError> {
+    ) -> Result<Plan, PlanServiceError> {
         let plan_steps = self
             .tool_box
             .generate_plan(&query, &user_context, message_properties)
@@ -159,12 +159,12 @@ impl PlanService {
         step: &PlanStep,
         context: String,
         message_properties: SymbolEventMessageProperties,
-    ) -> Result<(), ServiceError> {
+    ) -> Result<(), PlanServiceError> {
         let instruction = step.description();
         let fs_file_path = match step.file_to_edit() {
             Some(path) => path,
             None => {
-                return Err(ServiceError::AbsentFilePath(
+                return Err(PlanServiceError::AbsentFilePath(
                     "No file path provided for editing".to_string(),
                 ))
             }
@@ -208,7 +208,7 @@ impl PlanService {
 }
 
 #[derive(Debug, Error)]
-pub enum ServiceError {
+pub enum PlanServiceError {
     #[error("Tool Error: {0}")]
     ToolError(#[from] ToolError),
 

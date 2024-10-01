@@ -21,6 +21,39 @@ use crate::{
     user_context::types::UserContext,
 };
 
+pub async fn append_to_plan(
+    plan_id: uuid::Uuid,
+    plan_storage_path: String,
+    plan_service: PlanService,
+    query: String,
+    user_context: UserContext,
+    message_properties: SymbolEventMessageProperties,
+    agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+) {
+    let plan = plan_service.load_plan(&plan_storage_path).await;
+    if let Err(_) = plan {
+        let final_answer = "failed to load plan from storage".to_owned();
+        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+            plan_id,
+            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                final_answer.to_owned(),
+                Some(final_answer.to_owned()),
+                "Custom".to_owned(),
+            )),
+        )));
+        return;
+    }
+    let plan = plan.expect("plan to be present");
+    if let Ok(plan) = plan_service
+        .append_step(plan, query, user_context, message_properties)
+        .await
+    {
+        let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
+    } else {
+        // errored to update the plan
+    }
+}
+
 /// Executes the plan until a checkpoint
 pub async fn execute_plan_until(
     // the checkpoint until which we want to execute the plan

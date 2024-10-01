@@ -692,6 +692,13 @@ impl ToolOutput {
         }
     }
 
+    pub fn get_plan_new_steps(self) -> Option<StepGeneratorResponse> {
+        match self {
+            ToolOutput::PlanAddStep(response) => Some(response),
+            _ => None,
+        }
+    }
+
     // pub fn plan_updater_output(self) -> Option<_> {
     //     match self {
     //         ToolOutput::PlanUpdater(response) => Some(response),

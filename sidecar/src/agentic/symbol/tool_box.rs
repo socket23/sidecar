@@ -98,8 +98,9 @@ use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
+use crate::agentic::tool::plan::add_steps::PlanAddRequest;
 use crate::agentic::tool::plan::generator::StepGeneratorRequest;
-use crate::agentic::tool::plan::plan_step::PlanStep;
+use crate::agentic::tool::plan::plan_step::{self, PlanStep};
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
@@ -9239,5 +9240,21 @@ FILEPATH: {fs_file_path}
     pub async fn execute_search_and_replace_edit(&self, request: SearchAndReplaceEditingRequest) -> Result<(), SymbolError> {
         let _ = self.tools.invoke(ToolInput::SearchAndReplaceEditing(request)).await.map_err(|e| SymbolError::ToolError(e))?;
         Ok(())
+    }
+
+    /// Creates new steps which can be added to the plan
+    pub async fn generate_new_steps_for_plan(&self, plan_up_until_now: String, initial_user_query: String, query: String, user_context: UserContext, recent_diff_changes: DiffRecentChanges, message_properties: SymbolEventMessageProperties) -> Result<Vec<PlanStep>, SymbolError> {
+        let plan_add_request = PlanAddRequest::new(
+            plan_up_until_now,
+            user_context,
+            initial_user_query,
+            query,
+            recent_diff_changes,
+            message_properties.editor_url(),
+            message_properties.root_request_id().to_owned(),
+        );
+        let tool_input = ToolInput::PlanStepAdd(plan_add_request);
+        let plan_steps = self.tools.invoke(tool_input).await.map_err(|e| SymbolError::ToolError(e))?.get_plan_new_steps().ok_or(SymbolError::WrongToolOutput)?.into_plan_steps();
+        Ok(plan_steps)
     }
 }

@@ -32,7 +32,7 @@ pub struct PlanAddRequest {
     initial_user_query: String,
     plan_add_query: String,
     recent_edits: DiffRecentChanges,
-    editor_url: String,
+    _editor_url: String,
     root_request_id: String,
 }
 
@@ -52,7 +52,7 @@ impl PlanAddRequest {
             initial_user_query,
             plan_add_query,
             recent_edits,
-            editor_url,
+            _editor_url: editor_url,
             root_request_id,
         }
     }

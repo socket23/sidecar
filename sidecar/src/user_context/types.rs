@@ -170,6 +170,7 @@ pub struct UserContext {
     // These are all hacks for now, we will move them to proper strucutre later on
     is_plan_generation: bool,
     is_plan_execution_until: Option<usize>,
+    #[serde(default)]
     is_plan_append: bool,
 }
 

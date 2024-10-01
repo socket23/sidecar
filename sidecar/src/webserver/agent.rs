@@ -488,7 +488,9 @@ pub async fn followup_chat(
     // short-circuit over here:
     // check if we are in the process of generating a plan and the editor url is present
     if editor_url.is_some()
-        && (user_context.is_plan_generation() || user_context.is_plan_execution_until().is_some())
+        && (user_context.is_plan_generation()
+            || user_context.is_plan_execution_until().is_some()
+            || user_context.is_lsp_run())
     {
         println!("followup_chat::plan_generation_flow");
         let model = LLMType::ClaudeSonnet;
@@ -507,6 +509,8 @@ pub async fn followup_chat(
                 plan_service,
             )
             .await;
+        } else if user_context.is_lsp_run() {
+            println!("hitting lsp");
         } else {
             return handle_create_plan(
                 query,

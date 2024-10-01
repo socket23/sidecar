@@ -170,6 +170,7 @@ pub struct UserContext {
     // These are all hacks for now, we will move them to proper strucutre later on
     is_plan_generation: bool,
     is_plan_execution_until: Option<usize>,
+    is_lsp_run: bool, // produces steps from lsp_diagnostics
 }
 
 impl UserContext {
@@ -186,7 +187,12 @@ impl UserContext {
             folder_paths,
             is_plan_generation: false,
             is_plan_execution_until: None,
+            is_lsp_run: false,
         }
+    }
+
+    pub fn is_lsp_run(&self) -> bool {
+        self.is_lsp_run
     }
 
     pub fn is_plan_execution_until(&self) -> Option<usize> {

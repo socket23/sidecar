@@ -24,7 +24,8 @@ use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::plan::{
-    check_plan_storage_path, handle_create_plan, handle_execute_plan_until,
+    check_plan_storage_path, handle_create_plan, handle_diagnostics_to_steps,
+    handle_execute_plan_until,
 };
 
 use super::types::ApiResponse;
@@ -511,6 +512,13 @@ pub async fn followup_chat(
             .await;
         } else if user_context.is_lsp_run() {
             println!("hitting lsp");
+            return handle_diagnostics_to_steps(
+                thread_id,
+                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+                editor_url.clone().expect("is_some to hold"),
+                plan_service,
+            )
+            .await;
         } else {
             return handle_create_plan(
                 query,

@@ -217,41 +217,17 @@ plan_information:
 }
 
 /// Converts diagnostics messages with snippet into PlanStep
-pub async fn diagnostic_to_steps(
-    diagnostics: Vec<DiagnosticWithSnippet>, // all diagnostics from edited files
+pub async fn generate_steps_from_diagnostics(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
     message_properties: SymbolEventMessageProperties,
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
 ) {
-}
-
-pub async fn handle_diagnostics_to_steps(
-    plan_id: uuid::Uuid,
-    plan_storage_path: String,
-    editor_url: String,
-    plan_service: PlanService,
-) -> Result<
-    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
-    (),
-> {
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
-    let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let plan_id_str = plan_id.to_string();
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(plan_id_str.to_owned(), plan_id_str.to_owned()),
-        ui_sender,
-        editor_url,
-        cancellation_token,
-    );
-
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
     let plan = plan_service.load_plan(&plan_storage_path).await;
     if let Err(_) = plan {
         let final_answer = "failed to load plan from stroage".to_owned();
-        let _ = sender.send(Ok(ConversationMessage::answer_update(
+        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
             plan_id,
             AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
                 final_answer.to_owned(),
@@ -259,7 +235,7 @@ pub async fn handle_diagnostics_to_steps(
                 "Custom".to_owned(),
             )),
         )));
-        return Err(()); // hacked error
+        return;
     };
     let mut plan = plan.expect("plan to be present");
 
@@ -267,7 +243,7 @@ pub async fn handle_diagnostics_to_steps(
         println!("webserver::plan::handle_diagnostics_to_steps::no_checkpoint");
 
         // ui event should be here
-        return Err(()); // hacked error
+        return;
     }
     let checkpoint = plan.checkpoint().expect("checkpoint to be present");
 
@@ -292,18 +268,43 @@ pub async fn handle_diagnostics_to_steps(
 
     dbg!(errors_grouped_by_file);
 
+    // now we fix lsp errors, per file.
+    // possibly, with a round of GtR's
+}
+
+/// handler akin to handle_execute_plan_until. Main purpose is to spawn generate_steps_from_diagnostics
+pub async fn handle_diagnostics_to_steps(
+    plan_id: uuid::Uuid,
+    plan_storage_path: String,
+    editor_url: String,
+    plan_service: PlanService,
+) -> Result<
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let plan_id_str = plan_id.to_string();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(plan_id_str.to_owned(), plan_id_str.to_owned()),
+        ui_sender,
+        editor_url,
+        cancellation_token,
+    );
+
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
     // this is the main thing to change.
-    // let _ = tokio::spawn(async move {
-    //     execute_plan_until(
-    //         execute_until,
-    //         plan_id,
-    //         plan_storage_path,
-    //         plan_service,
-    //         message_properties,
-    //         sender,
-    //     )
-    //     .await;
-    // });
+    let _ = tokio::spawn(async move {
+        generate_steps_from_diagnostics(
+            plan_id,
+            plan_storage_path,
+            plan_service,
+            message_properties,
+            sender,
+        )
+        .await;
+    });
+
     let conversation_message_stream =
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
     // TODO(skcd): Re-introduce this again when we have a better way to manage

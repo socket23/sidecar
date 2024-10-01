@@ -177,9 +177,15 @@ pub enum ToolOutput {
     FileCreate(CreateFileResponse),
     // File diagnostics
     FileDiagnostics(FileDiagnosticsOutput),
+    // Plan add step
+    PlanAddStep(StepGeneratorResponse),
 }
 
 impl ToolOutput {
+    pub fn plan_add_step(response: StepGeneratorResponse) -> Self {
+        ToolOutput::PlanAddStep(response)
+    }
+
     pub fn reasoning(response: ReasoningResponse) -> Self {
         ToolOutput::Reasoning(response)
     }

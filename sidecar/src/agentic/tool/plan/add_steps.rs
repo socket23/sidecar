@@ -3,19 +3,33 @@
 //!
 //! Open questions: should we even show the rest of the plan, or just the prefix of the plan up until a point
 
+use async_trait::async_trait;
 use std::sync::Arc;
 
-use llm_client::broker::LLMBroker;
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+};
 
 use crate::{
-    agentic::tool::helpers::diff_recent_changes::DiffRecentChanges,
+    agentic::{
+        symbol::identifier::LLMProperties,
+        tool::{
+            errors::ToolError, helpers::diff_recent_changes::DiffRecentChanges, input::ToolInput,
+            output::ToolOutput, r#type::Tool,
+        },
+    },
     user_context::types::UserContext,
 };
+
+use super::generator::StepGeneratorResponse;
 
 #[derive(Debug, Clone)]
 pub struct PlanAddRequest {
     plan_up_until_now: String,
     user_context: UserContext,
+    initial_user_query: String,
     plan_add_query: String,
     recent_edits: DiffRecentChanges,
     editor_url: String,
@@ -26,6 +40,7 @@ impl PlanAddRequest {
     pub fn new(
         plan_up_until_now: String,
         user_context: UserContext,
+        initial_user_query: String,
         plan_add_query: String,
         recent_edits: DiffRecentChanges,
         editor_url: String,
@@ -34,6 +49,7 @@ impl PlanAddRequest {
         Self {
             plan_up_until_now,
             user_context,
+            initial_user_query,
             plan_add_query,
             recent_edits,
             editor_url,
@@ -54,22 +70,158 @@ impl PlanAddStepClient {
     fn system_message(&self) -> String {
         format!(
             r#"You are an expert software engineer working alongside a developer, you take the user query and add the minimum number of steps to the plan to make sure that it satisfies the new user query.
+Your job is to be precise and effective, so avoid extraneous steps even if they offer convenience. Be judicious and conservative in your planning.
+Please ensure that each step includes all required fields and that the steps are logically ordered.
+Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify.
 - The previous part of the plan has already been executed, so we can not go back on that, we can only perform new operations.
 - You are provided with the following information, use this to understand the reasoning of the changes and how to help the user.
 - <initial_query> This is the initial user query for which we have generated and executed the plan.
 - <plan_executed_until_now> This is the plan which we have executed until now.
 - <recent_edits> These are the recent edits which we have made to the codebase already.
 - <user_context> This is the context the user has provided.
-- <user_current_query> This is the CURRENT USER QUERY which we want to add steps for."#
+- <user_current_query> This is the CURRENT USER QUERY which we want to add steps for.
+
+You have to generate the plan in strictly the following format:
+<response>
+<steps>
+{{There can be as many steps as you need}}
+<step>
+<files_to_edit>
+<file>
+{{File you want to edit}}
+</file>
+</files_to_edit>
+<title>
+<![CDATA[
+{{The title for the change you are about to make}}
+]]>
+</title>
+<description>
+<![CDATA[
+{{The description of the change you are about to make}}
+]]>
+</description>
+</step>
+</steps>
+</response>
+Note the use of CDATA sections within <description> and <title> to encapsulate XML-like content"#
         )
     }
 
-    /// Think of cache hits over here, whats the best way to get this?
-    /// 
     /// We want to create the update message over here and get the output in the same format
     /// For some reason this is not a core construct of ours which is weird, we should work on a structure
     /// for prompt and always parse it accordingly
-    fn user_message(&self, context: PlanAddRequest) -> String {
-        format!(r#""#)
+    ///
+    /// The format will look like this
+    /// <initial_query>
+    /// </initial_query>
+    /// <plan_right_now>
+    /// </plan_right_now>                        <- FIRST MESSAGE
+    /// <recent_edits>
+    /// </recent_edits>                          <- SECOND MESSAGE
+    /// <user_context>
+    /// </user_context>
+    /// <user_current_query>
+    /// </user_current_query>
+    /// <reminder_about_format>
+    /// </reminder_about_format>                 <- THIRD MESSAGE                 
+    async fn user_message(&self, context: PlanAddRequest) -> Vec<LLMClientMessage> {
+        let initial_query = context.initial_user_query;
+        let plan_right_now = context.plan_up_until_now;
+        let user_context = context
+            .user_context
+            .to_xml(Default::default())
+            .await
+            .unwrap_or("No user context provided".to_owned());
+        let plan_add_query = context.plan_add_query;
+        let recent_edits = context.recent_edits.to_llm_client_message();
+        vec![LLMClientMessage::user(format!(
+            r#"<initial_query>
+{initial_query}
+</initial_query>
+<plan_right_now>
+{plan_right_now}
+</plan_right_now>
+"#
+        ))]
+        .into_iter()
+        .chain(recent_edits)
+        .chain(vec![LLMClientMessage::user(format!(
+            r#"<user_context>
+{user_context}
+</user_context>
+<user_current_query>
+{plan_add_query}
+</user_current_query>
+<reminder_about_format>
+This is how the format should look like:
+<response>
+<steps>
+{{There can be as many steps as you need}}
+<step>
+<files_to_edit>
+<file>
+{{File you want to edit}}
+</file>
+</files_to_edit>
+<title>
+<![CDATA[
+{{The title for the change you are about to make}}
+]]>
+</title>
+<description>
+<![CDATA[
+{{The description of the change you are about to make}}
+]]>
+</description>
+</step>
+</steps>
+</response>
+Note the use of CDATA sections within <description> and <title> to encapsulate XML-like content
+</reminder_about_format>"#
+        ))])
+        .collect()
+    }
+}
+
+#[async_trait]
+impl Tool for PlanAddStepClient {
+    async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
+        let context = input.is_plan_step_add()?;
+        let root_id = context.root_request_id.to_owned();
+        let messages = vec![LLMClientMessage::system(self.system_message())]
+            .into_iter()
+            .chain(self.user_message(context).await)
+            .collect::<Vec<_>>();
+        let llm_properties = LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        );
+
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let request =
+            LLMClientCompletionRequest::new(llm_properties.llm().clone(), messages, 0.2, None);
+
+        let response = self
+            .llm_client
+            .stream_completion(
+                llm_properties.api_key().clone(),
+                request,
+                llm_properties.provider().clone(),
+                vec![
+                    ("root_id".to_owned(), root_id),
+                    ("event_type".to_owned(), "plan_add_step_client".to_owned()),
+                ]
+                .into_iter()
+                .collect(),
+                sender,
+            )
+            .await?;
+
+        let response = StepGeneratorResponse::parse_response(&response)?;
+
+        Ok(ToolOutput::plan_add_step(response))
     }
 }

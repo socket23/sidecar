@@ -34,8 +34,8 @@ use super::{
     git::{diff_client::GitDiffClient, edited_files::EditedFiles},
     grep::file::FindInFile,
     input::ToolInput,
-    lsp::create_file::LSPCreateFile,
     lsp::{
+        create_file::LSPCreateFile,
         diagnostics::LSPDiagnostics,
         get_outline_nodes::OutlineNodesUsingEditorClient,
         gotodefintion::LSPGoToDefinition,
@@ -48,7 +48,8 @@ use super::{
     },
     output::ToolOutput,
     plan::{
-        generator::StepGeneratorClient, reasoning::ReasoningClient, updater::PlanUpdaterClient,
+        add_steps::PlanAddStepClient, generator::StepGeneratorClient, reasoning::ReasoningClient,
+        updater::PlanUpdaterClient,
     },
     r#type::{Tool, ToolType},
     ref_filter::ref_filter::ReferenceFilterBroker,
@@ -401,6 +402,10 @@ impl ToolBroker {
             Box::new(StepGeneratorClient::new(llm_client.clone())),
         );
         tools.insert(ToolType::CreateFile, Box::new(LSPCreateFile::new()));
+        tools.insert(
+            ToolType::PlanStepAdd,
+            Box::new(PlanAddStepClient::new(llm_client.clone())),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

@@ -51,7 +51,8 @@ use super::{
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
     },
     plan::{
-        generator::StepGeneratorRequest, reasoning::ReasoningRequest, updater::PlanUpdateRequest,
+        add_steps::PlanAddRequest, generator::StepGeneratorRequest, reasoning::ReasoningRequest,
+        updater::PlanUpdateRequest,
     },
     r#type::ToolType,
     ref_filter::ref_filter::ReferenceFilterRequest,
@@ -148,6 +149,8 @@ pub enum ToolInput {
     // Create file
     CreateFile(CreateFileRequest),
     FileDiagnostics(FileDiagnosticsInput),
+    // Plan step add
+    PlanStepAdd(PlanAddRequest),
 }
 
 impl ToolInput {
@@ -217,6 +220,15 @@ impl ToolInput {
             ToolInput::GenerateStep(_) => ToolType::StepGenerator,
             ToolInput::CreateFile(_) => ToolType::CreateFile,
             ToolInput::FileDiagnostics(_) => ToolType::FileDiagnostics,
+            ToolInput::PlanStepAdd(_) => ToolType::PlanStepAdd,
+        }
+    }
+
+    pub fn is_plan_step_add(self) -> Result<PlanAddRequest, ToolError> {
+        if let ToolInput::PlanStepAdd(input) = self {
+            Ok(input)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::PlanStepAdd))
         }
     }
 

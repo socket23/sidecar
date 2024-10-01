@@ -312,6 +312,7 @@ async fn main() {
             .load_plan(&plan_storage_path_str)
             .await
             .unwrap();
+        let _steps = plan.steps();
         let checkpoint = plan.checkpoint().unwrap_or_default();
         let context = plan_service.prepare_context(plan.steps(), checkpoint).await;
 

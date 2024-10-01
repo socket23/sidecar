@@ -100,7 +100,7 @@ use crate::agentic::tool::lsp::quick_fix::{
 };
 use crate::agentic::tool::plan::add_steps::PlanAddRequest;
 use crate::agentic::tool::plan::generator::StepGeneratorRequest;
-use crate::agentic::tool::plan::plan_step::{self, PlanStep};
+use crate::agentic::tool::plan::plan_step::PlanStep;
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;

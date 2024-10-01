@@ -54,6 +54,37 @@ impl PlanService {
     //     plan.steps_mut().get_mut(index)
     // }
 
+    /// Appends the step to the point after the checkpoint
+    pub async fn append_step(
+        &self,
+        mut plan: Plan,
+        query: String,
+        user_context: UserContext,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Plan, ServiceError> {
+        let plan_checkpoint = plan.checkpoint();
+        if let Some(checkpoint) = plan_checkpoint {
+            // append to post checkpoint
+            // - gather the plan until the checkpoint
+            // - gather the git-diff we have until now
+            // - the files which we are present we keep that in the context
+            // - figure out the new steps which we want and insert them
+            let plan_until_now = plan.plan_until_point(checkpoint);
+            let files_until_checkpoint = plan.files_in_plan(checkpoint);
+            let recent_edits = self
+                .tool_box
+                .recently_edited_files(
+                    files_until_checkpoint.into_iter().collect(),
+                    message_properties,
+                )
+                .await?;
+            // we want to get the new plan over here and insert it properly
+        } else {
+            // pushes the steps at the start of the plan
+        }
+        Ok(plan)
+    }
+
     pub async fn create_plan(
         &self,
         plan_id: String,

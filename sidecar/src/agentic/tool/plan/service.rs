@@ -109,6 +109,14 @@ impl PlanService {
         .with_user_context(user_context))
     }
 
+    /// gets all files_to_edit from PlanSteps up to index
+    pub fn get_edited_files(&self, plan: &Plan, index: usize) -> Vec<String> {
+        plan.steps()[..index]
+            .iter()
+            .filter_map(|step| step.file_to_edit())
+            .collect::<Vec<_>>()
+    }
+
     pub fn step_execution_context(
         &self,
         steps: &[PlanStep],
@@ -139,6 +147,10 @@ impl PlanService {
         .join("\n");
 
         full_context_as_string
+    }
+
+    pub fn tool_box(&self) -> &ToolBox {
+        &self.tool_box
     }
 
     pub async fn execute_step(

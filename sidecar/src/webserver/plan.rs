@@ -1,6 +1,6 @@
 //! Contains the helper functions over here for the plan generation
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use super::types::Result;
 use axum::response::{sse, Sse};
@@ -13,9 +13,10 @@ use crate::{
     agent::types::{AgentAnswerStreamEvent, ConversationMessage},
     agentic::{
         symbol::events::{
-            input::SymbolEventRequestId, message_event::SymbolEventMessageProperties,
+            input::SymbolEventRequestId, lsp::LSPDiagnosticError,
+            message_event::SymbolEventMessageProperties,
         },
-        tool::{editor, plan::service::PlanService},
+        tool::{editor, lsp::diagnostics::DiagnosticWithSnippet, plan::service::PlanService},
     },
     application::config::configuration::Configuration,
     user_context::types::UserContext,
@@ -215,6 +216,17 @@ plan_information:
     drop(agent_sender);
 }
 
+/// Converts diagnostics messages with snippet into PlanStep
+pub async fn diagnostic_to_steps(
+    diagnostics: Vec<DiagnosticWithSnippet>, // all diagnostics from edited files
+    plan_id: uuid::Uuid,
+    plan_storage_path: String,
+    plan_service: PlanService,
+    message_properties: SymbolEventMessageProperties,
+    agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+) {
+}
+
 pub async fn handle_diagnostics_to_steps(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
@@ -222,6 +234,7 @@ pub async fn handle_diagnostics_to_steps(
     plan_service: PlanService,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+    (),
 > {
     let cancellation_token = tokio_util::sync::CancellationToken::new();
     let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -234,6 +247,50 @@ pub async fn handle_diagnostics_to_steps(
     );
 
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    let plan = plan_service.load_plan(&plan_storage_path).await;
+    if let Err(_) = plan {
+        let final_answer = "failed to load plan from stroage".to_owned();
+        let _ = sender.send(Ok(ConversationMessage::answer_update(
+            plan_id,
+            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                final_answer.to_owned(),
+                Some(final_answer.to_owned()),
+                "Custom".to_owned(),
+            )),
+        )));
+        return Err(()); // hacked error
+    };
+    let mut plan = plan.expect("plan to be present");
+
+    if let None = plan.checkpoint() {
+        println!("webserver::plan::handle_diagnostics_to_steps::no_checkpoint");
+
+        // ui event should be here
+        return Err(()); // hacked error
+    }
+    let checkpoint = plan.checkpoint().expect("checkpoint to be present");
+
+    // all files edited up to checkpoint
+    let edited_files = plan_service.get_edited_files(&plan, checkpoint);
+
+    // get all diagnostics present on these files
+    let file_lsp_diagnostics = plan_service
+        .tool_box()
+        .get_lsp_diagnostics_for_files(edited_files, message_properties)
+        .await
+        .unwrap_or(vec![]); // empty vec is acceptable
+
+    let errors_grouped_by_file: HashMap<String, Vec<LSPDiagnosticError>> = file_lsp_diagnostics
+        .into_iter()
+        .fold(HashMap::new(), |mut acc, error| {
+            acc.entry(error.fs_file_path().to_owned())
+                .or_insert_with(Vec::new)
+                .push(error);
+            acc
+        });
+
+    dbg!(errors_grouped_by_file);
 
     // this is the main thing to change.
     // let _ = tokio::spawn(async move {

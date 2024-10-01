@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use quick_xml::de::from_str;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 
 use crate::{
@@ -213,6 +213,26 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
 
         format!("Context:\n{}\n---\nRequest: {}", context_xml, user_query)
     }
+
+    pub async fn user_message_with_diagnostics(
+        user_query: &str,
+        diagnostics: &str,
+        user_context: Option<&UserContext>,
+    ) -> String {
+        let context_xml = match user_context {
+            Some(ctx) => ctx
+                .clone()
+                .to_xml(Default::default())
+                .await
+                .unwrap_or_else(|_| "No context".to_string()),
+            None => "No context".to_string(),
+        };
+
+        format!(
+            "Context:\n{}\nDiagnostics:\n{}\n---\nRequest: {}",
+            context_xml, diagnostics, user_query
+        )
+    }
 }
 
 #[async_trait]
@@ -230,15 +250,17 @@ impl Tool for StepGeneratorClient {
             ),
         ];
 
-        let request = LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None);
+        let request = LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None);
 
-        // todo(zi): this could be o1
         let llm_properties = LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            LLMType::O1Preview,
+            LLMProvider::OpenAI,
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
         );
+
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let start_time = Instant::now();
 
         let response = self
             .llm_client
@@ -255,6 +277,9 @@ impl Tool for StepGeneratorClient {
                 sender,
             )
             .await?;
+
+        let elapsed_time = start_time.elapsed();
+        println!("LLM request took: {:?}", elapsed_time);
 
         let response = StepGeneratorResponse::parse_response(&response)?;
 

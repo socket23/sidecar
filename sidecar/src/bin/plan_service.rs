@@ -210,12 +210,12 @@ async fn main() {
         tokio_util::sync::CancellationToken::new(),
     );
 
-    let _symbol_manager = SymbolManager::new(
+    let symbol_manager = Arc::new(SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing.clone(),
         anthropic_llm_properties.clone(),
-    );
+    ));
 
     let tool_box = Arc::new(ToolBox::new(
         tool_broker.clone(),
@@ -261,7 +261,7 @@ async fn main() {
 
     let _ui_sender = event_properties.ui_sender();
 
-    let plan_service = PlanService::new(tool_box.clone(), anthropic_llm_properties);
+    let plan_service = PlanService::new(tool_box.clone(), symbol_manager);
 
     // let path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/plan.json";
 

@@ -5,8 +5,6 @@ use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::{stream, StreamExt};
-use llm_client::clients::types::LLMType;
-use llm_client::provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys};
 use serde_json::json;
 use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
@@ -24,7 +22,6 @@ use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::lsp::LSPDiagnosticError;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
-use crate::agentic::symbol::identifier::LLMProperties;
 use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
@@ -1178,14 +1175,7 @@ pub async fn reasoning_thread_create(
     }): Json<AgenticReasoningThreadCreationRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agentic::reasoning_thread_create");
-    let plan_service = PlanService::new(
-        app.tool_box.clone(),
-        LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-        ),
-    );
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let plan_output = create_plan(
         query,

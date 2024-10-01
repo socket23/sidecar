@@ -2,8 +2,6 @@ use super::agent_stream::generate_agent_stream;
 use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
-use llm_client::clients::types::LLMType;
-use llm_client::provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys};
 use llm_prompts::reranking::types::TERMINAL_OUTPUT;
 use std::collections::HashSet;
 
@@ -16,7 +14,6 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
-use crate::agentic::symbol::identifier::LLMProperties;
 use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
@@ -491,13 +488,7 @@ pub async fn followup_chat(
         && (user_context.is_plan_generation() || user_context.is_plan_execution_until().is_some())
     {
         println!("followup_chat::plan_generation_flow");
-        let model = LLMType::ClaudeSonnet;
-        let provider_type = LLMProvider::Anthropic;
-        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-        let plan_service = PlanService::new(
-            app.tool_box.clone(),
-            LLMProperties::new(model, provider_type, anthropic_api_keys),
-        );
+        let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
         if let Some(execution_until) = user_context.is_plan_execution_until() {
             return handle_execute_plan_until(
                 execution_until,

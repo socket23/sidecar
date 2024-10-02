@@ -244,7 +244,7 @@ pub async fn generate_steps_from_diagnostics(
     let mut plan = plan.expect("plan to be present");
 
     if let None = plan.checkpoint() {
-        println!("webserver::plan::handle_diagnostics_to_steps::no_checkpoint");
+        println!("webserver::plan::generate_steps_from_diagnostics::no_checkpoint");
 
         // ui event should be here
         return;
@@ -253,6 +253,11 @@ pub async fn generate_steps_from_diagnostics(
 
     // all files edited up to checkpoint
     let edited_files = plan_service.get_edited_files(&plan, checkpoint);
+
+    println!(
+        "webserver::plan::generate_steps_from_diagnostics::edited_files: {}",
+        edited_files.join("\n")
+    );
 
     // get all diagnostics present on these files
     let file_lsp_diagnostics = plan_service

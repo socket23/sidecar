@@ -1,6 +1,6 @@
 //! Contains the helper functions over here for the plan generation
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use super::types::Result;
 use axum::response::{sse, Sse};
@@ -15,7 +15,6 @@ use crate::{
         symbol::events::{
             input::SymbolEventRequestId, message_event::SymbolEventMessageProperties,
         },
-        tool::lsp::file_diagnostics::DiagnosticMap,
         tool::plan::{
             plan::Plan,
             service::{PlanService, PlanServiceError},
@@ -49,11 +48,14 @@ async fn drop_plan(
     plan = plan.drop_plan_steps(drop_from);
     let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
     let debug_plan = plan.to_debug_message();
-    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(plan_id, AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-        debug_plan.to_owned(),
-        Some(debug_plan),
-        "Custom".to_owned(),
-    )))));
+    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+        plan_id,
+        AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+            debug_plan.to_owned(),
+            Some(debug_plan),
+            "Custom".to_owned(),
+        )),
+    )));
 }
 
 async fn append_to_plan(
@@ -286,161 +288,6 @@ plan_information:
     plan
 }
 
-/// Converts diagnostics messages with snippet into PlanStep
-pub async fn generate_steps_from_diagnostics(
-    plan_id: uuid::Uuid,
-    plan_storage_path: String,
-    plan_service: PlanService,
-    message_properties: SymbolEventMessageProperties,
-    agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
-    is_deep_reasoning: bool,
-) {
-    let plan = plan_service.load_plan(&plan_storage_path).await;
-    if let Err(_) = plan {
-        let final_answer = "failed to load plan from stroage".to_owned();
-        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
-            plan_id,
-            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-                final_answer.to_owned(),
-                Some(final_answer.to_owned()),
-                "Custom".to_owned(),
-            )),
-        )));
-        return;
-    };
-    let plan = plan.expect("plan to be present");
-
-    if let None = plan.checkpoint() {
-        println!("webserver::plan::generate_steps_from_diagnostics::no_checkpoint");
-
-        // ui event should be here
-        return;
-    }
-    let checkpoint = plan.checkpoint().expect("checkpoint to be present");
-
-    // all files edited up to checkpoint
-    let edited_files = plan_service.get_edited_files(&plan, checkpoint);
-
-    println!(
-        "webserver::plan::generate_steps_from_diagnostics::edited_files: {}",
-        edited_files.join("\n")
-    );
-
-    // get all diagnostics present on these files
-    let file_lsp_diagnostics = plan_service
-        .tool_box()
-        .get_lsp_diagnostics_for_files(edited_files, message_properties.clone())
-        .await
-        .unwrap_or(vec![]); // empty vec is acceptable
-
-    let diagnostics_grouped_by_file: DiagnosticMap =
-        file_lsp_diagnostics
-            .into_iter()
-            .fold(HashMap::new(), |mut acc, error| {
-                acc.entry(error.fs_file_path().to_owned())
-                    .or_insert_with(Vec::new)
-                    .push(error);
-                acc
-            });
-
-    dbg!(&diagnostics_grouped_by_file);
-
-    let _root_request_id = message_properties.root_request_id().to_owned();
-    let _editor_url = message_properties.editor_url();
-    let user_query = "Fix these LSP errors.";
-
-    let _response = plan_service
-        .tool_box()
-        .generate_steps_with_diagnostics(
-            user_query,
-            message_properties.clone(),
-            diagnostics_grouped_by_file,
-            is_deep_reasoning,
-        )
-        .await;
-
-    // let response = plan_service.tool_box().
-
-    // now we fix lsp errors, per file.
-    // possibly, with a round of GtR's
-}
-
-/// handler akin to handle_execute_plan_until. Main purpose is to spawn generate_steps_from_diagnostics
-pub async fn handle_diagnostics_to_steps(
-    plan_id: uuid::Uuid,
-    plan_storage_path: String,
-    editor_url: String,
-    plan_service: PlanService,
-    is_deep_reasoning: bool,
-) -> Result<
-    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
-> {
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
-    let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let plan_id_str = plan_id.to_string();
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(plan_id_str.to_owned(), plan_id_str.to_owned()),
-        ui_sender,
-        editor_url,
-        cancellation_token,
-    );
-
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-    // this is the main thing to change.
-    let _ = tokio::spawn(async move {
-        generate_steps_from_diagnostics(
-            plan_id,
-            plan_storage_path,
-            plan_service,
-            message_properties,
-            sender,
-            is_deep_reasoning,
-        )
-        .await;
-    });
-
-    let conversation_message_stream =
-        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-    // TODO(skcd): Re-introduce this again when we have a better way to manage
-    // server side events on the client side
-    let init_stream = futures::stream::once(async move {
-        Ok(sse::Event::default()
-            .json_data(json!({
-                "session_id": plan_id.to_owned(),
-            }))
-            // This should never happen, so we force an unwrap.
-            .expect("failed to serialize initialization object"))
-    });
-
-    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
-    let answer_stream = conversation_message_stream.map(
-        |conversation_message: anyhow::Result<ConversationMessage>| {
-            if let Err(e) = &conversation_message {
-                tracing::error!("error in conversation message stream: {}", e);
-            }
-            sse::Event::default()
-                .json_data(conversation_message.expect("should not fail deserialization"))
-                .map_err(anyhow::Error::new)
-        },
-    );
-
-    // TODO(skcd): Re-introduce this again when we have a better way to manage
-    // server side events on the client side
-    let done_stream = futures::stream::once(async move {
-        Ok(sse::Event::default()
-            .json_data(json!(
-                {"done": "[CODESTORY_DONE]".to_owned(),
-                "session_id": plan_id.to_owned(),
-            }))
-            .expect("failed to send done object"))
-    });
-
-    let stream = init_stream.chain(answer_stream).chain(done_stream);
-
-    Ok(Sse::new(Box::pin(stream)))
-}
-
 pub async fn handle_execute_plan_until(
     execute_until: usize,
     plan_id: uuid::Uuid,
@@ -519,20 +366,13 @@ pub async fn handle_plan_drop_from(
     plan_storage_path: String,
     plan_service: PlanService,
 ) -> Result<
-Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
     // we let the plan dropping happen in the background altho thats not really necessary
     let _ = tokio::spawn(async move {
-        drop_plan(
-            plan_id,
-            plan_storage_path,
-            plan_service,
-            drop_from,
-            sender,
-        )
-        .await;
+        drop_plan(plan_id, plan_storage_path, plan_service, drop_from, sender).await;
     });
 
     let conversation_message_stream =

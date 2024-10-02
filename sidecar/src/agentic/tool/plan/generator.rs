@@ -255,26 +255,6 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
 
         format!("Context:\n{}\n---\nRequest: {}", context_xml, user_query)
     }
-
-    pub async fn user_message_with_diagnostics(
-        user_query: &str,
-        diagnostics: &str,
-        user_context: Option<&UserContext>,
-    ) -> String {
-        let context_xml = match user_context {
-            Some(ctx) => ctx
-                .clone()
-                .to_xml(Default::default())
-                .await
-                .unwrap_or_else(|_| "No context".to_string()),
-            None => "No context".to_string(),
-        };
-
-        format!(
-            "Context:\n{}\nDiagnostics:\n{}\n---\nRequest: {}",
-            context_xml, diagnostics, user_query
-        )
-    }
 }
 
 #[async_trait]

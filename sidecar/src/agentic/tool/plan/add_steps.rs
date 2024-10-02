@@ -17,7 +17,7 @@ use crate::{
         symbol::identifier::LLMProperties,
         tool::{
             errors::ToolError, helpers::diff_recent_changes::DiffRecentChanges, input::ToolInput,
-            lsp::file_diagnostics::DiagnosticMap, output::ToolOutput, r#type::Tool,
+            output::ToolOutput, r#type::Tool,
         },
     },
     user_context::types::UserContext,
@@ -191,28 +191,6 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
 </reminder_about_format>"#
         ))])
         .collect()
-    }
-
-    fn format_diagnostics(diagnostics: &DiagnosticMap) -> String {
-        diagnostics
-            .iter()
-            .map(|(file, errors)| {
-                let formatted_errors = errors
-                    .iter()
-                    .map(|error| {
-                        format!(
-                            "Snippet: {}\nDiagnostic: {}",
-                            error.snippet(),
-                            error.diagnostic_message()
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-
-                format!("File: {}\n{}", file, formatted_errors)
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n")
     }
 }
 

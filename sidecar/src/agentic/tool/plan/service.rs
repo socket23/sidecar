@@ -18,10 +18,7 @@ use crate::{
             tool_properties::ToolProperties,
             types::SymbolEventRequest,
         },
-        tool::{
-            errors::ToolError,
-            lsp::{diagnostics, file_diagnostics::DiagnosticMap},
-        },
+        tool::{errors::ToolError, lsp::file_diagnostics::DiagnosticMap},
     },
     chunking::text_document::Range,
     user_context::types::UserContext,

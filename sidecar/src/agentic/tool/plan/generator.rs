@@ -30,7 +30,12 @@ pub struct StepGeneratorRequest {
 }
 
 impl StepGeneratorRequest {
-    pub fn new(user_query: String, is_deep_reasoning: bool, root_request_id: String, editor_url: String) -> Self {
+    pub fn new(
+        user_query: String,
+        is_deep_reasoning: bool,
+        root_request_id: String,
+        editor_url: String,
+    ) -> Self {
         Self {
             user_query,
             root_request_id,
@@ -235,13 +240,12 @@ impl Tool for StepGeneratorClient {
 
         let request = LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None);
 
-        // todo(zi): this could be o1
         let llm_properties = if is_deep_reasoning {
             LLMProperties::new(
                 LLMType::O1Preview,
                 LLMProvider::OpenAI,
                 LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
-            )    
+            )
         } else {
             LLMProperties::new(
                 LLMType::ClaudeSonnet,

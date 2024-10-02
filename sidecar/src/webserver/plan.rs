@@ -277,7 +277,7 @@ pub async fn generate_steps_from_diagnostics(
         )));
         return;
     };
-    let mut plan = plan.expect("plan to be present");
+    let plan = plan.expect("plan to be present");
 
     if let None = plan.checkpoint() {
         println!("webserver::plan::generate_steps_from_diagnostics::no_checkpoint");

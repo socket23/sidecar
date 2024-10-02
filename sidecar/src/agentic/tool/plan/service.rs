@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use futures::{stream, StreamExt};
 use thiserror::Error;
@@ -18,7 +18,7 @@ use crate::{
             tool_properties::ToolProperties,
             types::SymbolEventRequest,
         },
-        tool::errors::ToolError,
+        tool::{errors::ToolError, lsp::file_diagnostics::DiagnosticMap},
     },
     chunking::text_document::Range,
     user_context::types::UserContext,
@@ -60,7 +60,7 @@ impl PlanService {
     //     plan.steps_mut().get_mut(index)
     // }
 
-    /// Appends the step to the point after the checkpoint
+    /// Appends the step to the point after the checkpoint - diagnostics are included by default
     pub async fn append_steps(
         &self,
         mut plan: Plan,
@@ -81,10 +81,33 @@ impl PlanService {
             let recent_edits = self
                 .tool_box
                 .recently_edited_files(
-                    files_until_checkpoint.into_iter().collect(),
+                    files_until_checkpoint.clone().into_iter().collect(),
                     message_properties.clone(),
                 )
                 .await?;
+
+            // get all diagnostics present on these files
+            let file_lsp_diagnostics = self
+                .tool_box()
+                .get_lsp_diagnostics_for_files(
+                    files_until_checkpoint.clone(),
+                    message_properties.clone(),
+                )
+                .await
+                .unwrap_or(vec![]); // empty vec is acceptable
+
+            let diagnostics_grouped_by_file: DiagnosticMap =
+                file_lsp_diagnostics
+                    .into_iter()
+                    .fold(HashMap::new(), |mut acc, error| {
+                        acc.entry(error.fs_file_path().to_owned())
+                            .or_insert_with(Vec::new)
+                            .push(error);
+                        acc
+                    });
+
+            dbg!(&diagnostics_grouped_by_file);
+
             let new_steps = self
                 .tool_box
                 .generate_new_steps_for_plan(

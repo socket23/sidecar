@@ -67,6 +67,7 @@ impl PlanService {
         query: String,
         user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
+        is_deep_reasoning: bool,
     ) -> Result<Plan, PlanServiceError> {
         let plan_checkpoint = plan.checkpoint();
         if let Some(checkpoint) = plan_checkpoint {
@@ -93,6 +94,7 @@ impl PlanService {
                     user_context,
                     recent_edits,
                     message_properties,
+                    is_deep_reasoning,
                 )
                 .await?;
             plan.add_steps_vec(new_steps);

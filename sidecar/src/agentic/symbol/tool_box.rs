@@ -9302,6 +9302,7 @@ FILEPATH: {fs_file_path}
         user_context: UserContext,
         recent_diff_changes: DiffRecentChanges,
         message_properties: SymbolEventMessageProperties,
+        is_deep_reasoning: bool,
     ) -> Result<Vec<PlanStep>, SymbolError> {
         let plan_add_request = PlanAddRequest::new(
             plan_up_until_now,
@@ -9311,6 +9312,7 @@ FILEPATH: {fs_file_path}
             recent_diff_changes,
             message_properties.editor_url(),
             message_properties.root_request_id().to_owned(),
+            is_deep_reasoning,
         );
         let tool_input = ToolInput::PlanStepAdd(plan_add_request);
         let plan_steps = self

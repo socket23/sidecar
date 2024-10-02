@@ -33,6 +33,7 @@ async fn append_to_plan(
     user_context: UserContext,
     message_properties: SymbolEventMessageProperties,
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+    is_deep_reasoning: bool,
 ) {
     let plan = plan_service.load_plan(&plan_storage_path).await;
     if let Err(_) = plan {
@@ -57,7 +58,13 @@ async fn append_to_plan(
         )),
     )));
     if let Ok(plan) = plan_service
-        .append_steps(plan, query, user_context, message_properties)
+        .append_steps(
+            plan,
+            query,
+            user_context,
+            message_properties,
+            is_deep_reasoning,
+        )
         .await
     {
         let plan_debug_view = plan.to_debug_message();
@@ -482,6 +489,7 @@ pub async fn handle_append_plan(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
+    is_deep_reasoning: bool,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -505,6 +513,7 @@ pub async fn handle_append_plan(
             user_context,
             message_properties,
             sender,
+            is_deep_reasoning,
         )
         .await;
     });

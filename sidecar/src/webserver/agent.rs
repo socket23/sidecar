@@ -521,6 +521,7 @@ pub async fn followup_chat(
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 plan_service,
+                is_deep_reasoning,
             )
             .await;
         } else {

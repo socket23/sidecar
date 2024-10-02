@@ -17,7 +17,7 @@ use crate::{
         symbol::identifier::LLMProperties,
         tool::{
             errors::ToolError, helpers::diff_recent_changes::DiffRecentChanges, input::ToolInput,
-            output::ToolOutput, r#type::Tool,
+            lsp::file_diagnostics::DiagnosticMap, output::ToolOutput, r#type::Tool,
         },
     },
     user_context::types::UserContext,
@@ -34,6 +34,8 @@ pub struct PlanAddRequest {
     recent_edits: DiffRecentChanges,
     _editor_url: String,
     root_request_id: String,
+    diagnostics: Option<DiagnosticMap>,
+    is_deep_reasoning: bool,
 }
 
 impl PlanAddRequest {
@@ -45,6 +47,7 @@ impl PlanAddRequest {
         recent_edits: DiffRecentChanges,
         editor_url: String,
         root_request_id: String,
+        is_deep_reasoning: bool,
     ) -> Self {
         Self {
             plan_up_until_now,
@@ -54,7 +57,15 @@ impl PlanAddRequest {
             recent_edits,
             _editor_url: editor_url,
             root_request_id,
+            diagnostics: None, // default none
+            is_deep_reasoning,
         }
+    }
+
+    /// make request with diagnostics
+    pub fn with_diagnostics(mut self, diagnostics: DiagnosticMap) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
     }
 }
 

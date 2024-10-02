@@ -81,7 +81,6 @@ Please ensure that each step includes all required fields and that the steps are
 Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify.
 - The previous part of the plan has already been executed, so we can not go back on that, we can only perform new operations.
 - You are provided with the following information, use this to understand the reasoning of the changes and how to help the user.
-- <initial_query> This is the initial user query for which we have generated and executed the plan.
 - <plan_executed_until_now> This is the plan which we have executed until now.
 - <recent_edits> These are the recent edits which we have made to the codebase already.
 - <user_context> This is the context the user has provided.
@@ -119,8 +118,6 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
     /// for prompt and always parse it accordingly
     ///
     /// The format will look like this
-    /// <initial_query>
-    /// </initial_query>
     /// <plan_right_now>
     /// </plan_right_now>                        <- FIRST MESSAGE
     /// <recent_edits>
@@ -132,7 +129,6 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
     /// <reminder_about_format>
     /// </reminder_about_format>                 <- THIRD MESSAGE                 
     async fn user_message(&self, context: PlanAddRequest) -> Vec<LLMClientMessage> {
-        let initial_query = context.initial_user_query;
         let plan_right_now = context.plan_up_until_now;
         let user_context = context
             .user_context
@@ -143,18 +139,17 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
         let plan_add_query = context.plan_add_query;
         let recent_edits = context.recent_edits.to_llm_client_message();
         vec![LLMClientMessage::user(format!(
-            r#"<initial_query>
-{initial_query}
-</initial_query>
-<plan_right_now>
+            r#"<plan_right_now>
 {plan_right_now}
-</plan_right_now>
 "#
-        ))]
+        ))
+        // adding cache point to the <plan_right_now>
+        .cache_point()]
         .into_iter()
         .chain(recent_edits)
         .chain(vec![LLMClientMessage::user(format!(
-            r#"<user_context>
+            r#"</plan_right_now>
+<user_context>
 {user_context}
 </user_context>
 <diagnostics>

@@ -135,6 +135,11 @@ async fn main() {
         anthropic_api_keys.clone(),
     );
 
+    let _o1_properties = LLMProperties::new(
+        LLMType::O1Preview,
+        LLMProvider::OpenAI,
+        LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+    );
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -167,7 +172,7 @@ async fn main() {
             .expect("directory creation to not fail");
     }
 
-    let (plan_storage_path, plan_id) = {
+    let (_plan_storage_path, plan_id) = {
         let mut plan_storage_path = plan_storage_path.clone();
         // replace plan_id here with a static id if you want to reuse the plan loading
         let plan_id = uuid::Uuid::new_v4().to_string();
@@ -208,12 +213,12 @@ async fn main() {
         tokio_util::sync::CancellationToken::new(),
     );
 
-    let _symbol_manager = SymbolManager::new(
+    let symbol_manager = Arc::new(SymbolManager::new(
         tool_broker.clone(),
         symbol_broker.clone(),
         editor_parsing.clone(),
         anthropic_llm_properties.clone(),
-    );
+    ));
 
     let tool_box = Arc::new(ToolBox::new(
         tool_broker.clone(),
@@ -267,7 +272,7 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
 
     let _ui_sender = event_properties.ui_sender();
 
-    let plan_service = PlanService::new(tool_box.clone(), anthropic_llm_properties);
+    let plan_service = PlanService::new(tool_box.clone(), symbol_manager);
 
     // let path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/plan.json";
 
@@ -281,6 +286,9 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
 
     println!("Plan Storage Path:\n{}", &plan_storage_path_str);
 
+    // toggle this to use o1-preview
+    let is_deep_reasoning = false;
+
     let plan = if tokio::fs::metadata(plan_storage_path.clone()).await.is_ok() {
         plan_service
             .load_plan(plan_storage_path.to_str().expect("to work"))
@@ -292,6 +300,7 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
                 plan_id,
                 user_query,
                 user_context,
+                is_deep_reasoning,
                 plan_storage_path
                     .to_str()
                     .map(|plan_str| plan_str.to_owned())

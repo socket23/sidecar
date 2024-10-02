@@ -13,11 +13,8 @@ use crate::{
     agentic::{
         symbol::identifier::LLMProperties,
         tool::{
-            errors::ToolError,
-            input::ToolInput,
-            lsp::{diagnostics::Diagnostic, file_diagnostics::DiagnosticMap},
-            output::ToolOutput,
-            r#type::Tool,
+            errors::ToolError, input::ToolInput, lsp::file_diagnostics::DiagnosticMap,
+            output::ToolOutput, r#type::Tool,
         },
     },
     user_context::types::UserContext,
@@ -30,17 +27,24 @@ use super::plan_step::PlanStep;
 pub struct StepGeneratorRequest {
     user_query: String,
     user_context: Option<UserContext>,
+    is_deep_reasoning: bool,
     root_request_id: String,
     editor_url: String,
     diagnostics: Option<DiagnosticMap>,
 }
 
 impl StepGeneratorRequest {
-    pub fn new(user_query: String, root_request_id: String, editor_url: String) -> Self {
+    pub fn new(
+        user_query: String,
+        is_deep_reasoning: bool,
+        root_request_id: String,
+        editor_url: String,
+    ) -> Self {
         Self {
             user_query,
             root_request_id,
             editor_url,
+            is_deep_reasoning,
             user_context: None,
             diagnostics: None,
         }
@@ -205,6 +209,8 @@ Please ensure that each step includes all required fields and that the steps are
 
 Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify.
 
+DO NOT suggest any changes for the files which you can not see in your context.
+
 Your response must strictly follow the following schema:
 {}
 
@@ -292,6 +298,7 @@ impl Tool for StepGeneratorClient {
 
         let _editor_url = context.editor_url.to_owned();
         let root_id = context.root_request_id.to_owned();
+        let is_deep_reasoning = context.is_deep_reasoning;
 
         let messages = vec![
             LLMClientMessage::system(Self::system_message()),
@@ -305,21 +312,25 @@ impl Tool for StepGeneratorClient {
             ),
         ];
 
-        let request = LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None);
+        let request = if is_deep_reasoning {
+            LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)
+        } else {
+            LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None)
+        };
 
-        // let llm_properties = LLMProperties::new(
-        //     LLMType::O1Preview,
-        //     LLMProvider::OpenAI,
-        //     LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
-        // );
-
-        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-        let llm_properties = LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            anthropic_api_keys.clone(),
-        );
-
+        let llm_properties = if is_deep_reasoning {
+            LLMProperties::new(
+                LLMType::O1Preview,
+                LLMProvider::OpenAI,
+                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+            )
+        } else {
+            LLMProperties::new(
+                LLMType::ClaudeSonnet,
+                LLMProvider::Anthropic,
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            )
+        };
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let start_time = Instant::now();

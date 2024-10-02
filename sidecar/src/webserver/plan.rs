@@ -13,20 +13,19 @@ use crate::{
     agent::types::{AgentAnswerStreamEvent, ConversationMessage},
     agentic::{
         symbol::events::{
-            input::SymbolEventRequestId, lsp::LSPDiagnosticError,
-            message_event::SymbolEventMessageProperties,
+            input::SymbolEventRequestId, message_event::SymbolEventMessageProperties,
         },
-        tool::{
-            editor,
-            lsp::{diagnostics::DiagnosticWithSnippet, file_diagnostics::DiagnosticMap},
-            plan::{generator::StepGeneratorRequest, service::PlanService},
+        tool::lsp::file_diagnostics::DiagnosticMap,
+        tool::plan::{
+            plan::Plan,
+            service::{PlanService, PlanServiceError},
         },
     },
     application::config::configuration::Configuration,
     user_context::types::UserContext,
 };
 
-pub async fn append_to_plan(
+async fn append_to_plan(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
@@ -49,12 +48,37 @@ pub async fn append_to_plan(
         return;
     }
     let plan = plan.expect("plan to be present");
+    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+        plan_id,
+        AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+            "Generating new steps from the context".to_owned(),
+            Some("Generating new steps from the context".to_owned()),
+            "Custom".to_owned(),
+        )),
+    )));
     if let Ok(plan) = plan_service
-        .append_step(plan, query, user_context, message_properties)
+        .append_steps(plan, query, user_context, message_properties)
         .await
     {
+        let plan_debug_view = plan.to_debug_message();
+        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+            plan_id,
+            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                plan_debug_view.to_owned(),
+                Some(plan_debug_view),
+                "Custom".to_owned(),
+            )),
+        )));
         let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
     } else {
+        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+            plan_id,
+            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                "Failed to add new steps to the plan".to_owned(),
+                Some("Failed to add new steps to the plan".to_owned()),
+                "Custom".to_owned(),
+            )),
+        )));
         // errored to update the plan
     }
 }
@@ -152,9 +176,10 @@ pub async fn create_plan(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
+    is_deep_reasoning: bool,
     // we can send events using this
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
-) {
+) -> Result<Plan, PlanServiceError> {
     let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
         plan_id.clone(),
         AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
@@ -178,12 +203,13 @@ pub async fn create_plan(
             plan_id_str,
             user_query,
             user_context,
+            is_deep_reasoning,
             plan_storage_path.to_owned(),
             message_properties,
         )
         .await;
 
-    match plan {
+    match plan.as_ref() {
         Ok(plan) => {
             // send over a response that we are done generating the plan
             let final_answer = format!(
@@ -218,6 +244,8 @@ plan_information:
     }
     // drop the sender over here
     drop(agent_sender);
+    // return the plan at the end of the creation loop
+    plan
 }
 
 /// Converts diagnostics messages with snippet into PlanStep
@@ -227,6 +255,7 @@ pub async fn generate_steps_from_diagnostics(
     plan_service: PlanService,
     message_properties: SymbolEventMessageProperties,
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+    is_deep_reasoning: bool,
 ) {
     let plan = plan_service.load_plan(&plan_storage_path).await;
     if let Err(_) = plan {
@@ -278,16 +307,17 @@ pub async fn generate_steps_from_diagnostics(
 
     dbg!(&diagnostics_grouped_by_file);
 
-    let root_request_id = message_properties.root_request_id().to_owned();
-    let editor_url = message_properties.editor_url();
+    let _root_request_id = message_properties.root_request_id().to_owned();
+    let _editor_url = message_properties.editor_url();
     let user_query = "Fix these LSP errors.";
 
-    let response = plan_service
+    let _response = plan_service
         .tool_box()
         .generate_steps_with_diagnostics(
             user_query,
             message_properties.clone(),
             diagnostics_grouped_by_file,
+            is_deep_reasoning,
         )
         .await;
 
@@ -303,6 +333,7 @@ pub async fn handle_diagnostics_to_steps(
     plan_storage_path: String,
     editor_url: String,
     plan_service: PlanService,
+    is_deep_reasoning: bool,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -326,6 +357,7 @@ pub async fn handle_diagnostics_to_steps(
             plan_service,
             message_properties,
             sender,
+            is_deep_reasoning,
         )
         .await;
     });
@@ -443,7 +475,7 @@ pub async fn handle_execute_plan_until(
     Ok(Sse::new(Box::pin(stream)))
 }
 
-pub async fn handle_create_plan(
+pub async fn handle_append_plan(
     user_query: String,
     user_context: UserContext,
     editor_url: String,
@@ -454,15 +486,91 @@ pub async fn handle_create_plan(
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let plan_id_str = plan_id.to_string();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(plan_id_str.to_owned(), plan_id_str.to_owned()),
+        ui_sender,
+        editor_url,
+        cancellation_token,
+    );
     // we let the plan creation happen in the background
     let _ = tokio::spawn(async move {
-        create_plan(
+        append_to_plan(
+            plan_id,
+            plan_storage_path,
+            plan_service,
+            user_query,
+            user_context,
+            message_properties,
+            sender,
+        )
+        .await;
+    });
+    let conversation_message_stream =
+        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": plan_id.to_owned(),
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+
+    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    let answer_stream = conversation_message_stream.map(
+        |conversation_message: anyhow::Result<ConversationMessage>| {
+            if let Err(e) = &conversation_message {
+                tracing::error!("error in conversation message stream: {}", e);
+            }
+            sse::Event::default()
+                .json_data(conversation_message.expect("should not fail deserialization"))
+                .map_err(anyhow::Error::new)
+        },
+    );
+
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": plan_id.to_owned(),
+            }))
+            .expect("failed to send done object"))
+    });
+
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+
+    Ok(Sse::new(Box::pin(stream)))
+}
+
+pub async fn handle_create_plan(
+    user_query: String,
+    user_context: UserContext,
+    editor_url: String,
+    plan_id: uuid::Uuid,
+    plan_storage_path: String,
+    plan_service: PlanService,
+    is_deep_reasoning: bool,
+) -> Result<
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    // we let the plan creation happen in the background
+    let _ = tokio::spawn(async move {
+        let _ = create_plan(
             user_query,
             user_context,
             editor_url,
             plan_id,
             plan_storage_path,
             plan_service,
+            is_deep_reasoning,
             sender,
         )
         .await;

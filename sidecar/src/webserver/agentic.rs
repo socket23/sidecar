@@ -27,7 +27,10 @@ use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
+use crate::agentic::tool::plan::plan::Plan;
+use crate::agentic::tool::plan::service::PlanService;
 use crate::chunking::text_document::Range;
+use crate::webserver::plan::{check_plan_storage_path, create_plan};
 use crate::{application::application::Application, user_context::types::UserContext};
 
 use super::types::ApiResponse;
@@ -1143,4 +1146,62 @@ pub async fn context_recording(
         &context_recording_to_prompt
     );
     Ok(json_result(AgenticContextGatheringResponse { done: true }))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticReasoningThreadCreationRequest {
+    query: String,
+    thread_id: uuid::Uuid,
+    editor_url: String,
+    user_context: UserContext,
+    #[serde(default)]
+    is_deep_reasoning: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticReasoningThreadCreationResponse {
+    plan: Option<Plan>,
+    success: bool,
+    error_if_any: Option<String>,
+}
+
+impl ApiResponse for AgenticReasoningThreadCreationResponse {}
+
+pub async fn reasoning_thread_create(
+    Extension(app): Extension<Application>,
+    Json(AgenticReasoningThreadCreationRequest {
+        query,
+        thread_id,
+        editor_url,
+        user_context,
+        is_deep_reasoning,
+    }): Json<AgenticReasoningThreadCreationRequest>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::agentic::reasoning_thread_create");
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let plan_output = create_plan(
+        query,
+        user_context,
+        editor_url,
+        thread_id,
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+        plan_service,
+        is_deep_reasoning,
+        sender,
+    )
+    .await;
+    let response = match plan_output {
+        Ok(plan) => AgenticReasoningThreadCreationResponse {
+            plan: Some(plan),
+            success: true,
+            error_if_any: None,
+        },
+        Err(e) => AgenticReasoningThreadCreationResponse {
+            plan: None,
+            success: false,
+            error_if_any: Some(format!("{:?}", e)),
+        },
+    };
+    Ok(json_result(response))
 }

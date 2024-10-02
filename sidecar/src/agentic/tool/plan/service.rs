@@ -8,11 +8,17 @@ use crate::{
     agentic::{
         symbol::{
             errors::SymbolError,
-            events::message_event::SymbolEventMessageProperties,
-            identifier::{LLMProperties, SymbolIdentifier},
+            events::{
+                edit::SymbolToEdit,
+                message_event::{SymbolEventMessage, SymbolEventMessageProperties},
+            },
+            identifier::SymbolIdentifier,
+            manager::SymbolManager,
             tool_box::ToolBox,
+            tool_properties::ToolProperties,
+            types::SymbolEventRequest,
         },
-        tool::{code_edit::search_and_replace::SearchAndReplaceEditingRequest, errors::ToolError},
+        tool::errors::ToolError,
     },
     chunking::text_document::Range,
     user_context::types::UserContext,
@@ -26,14 +32,14 @@ use super::{
 /// Operates on Plan
 pub struct PlanService {
     tool_box: Arc<ToolBox>,
-    llm_properties: LLMProperties,
+    symbol_manager: Arc<SymbolManager>,
 }
 
 impl PlanService {
-    pub fn new(tool_box: Arc<ToolBox>, llm_properties: LLMProperties) -> Self {
+    pub fn new(tool_box: Arc<ToolBox>, symbol_manager: Arc<SymbolManager>) -> Self {
         Self {
             tool_box,
-            llm_properties,
+            symbol_manager,
         }
     }
 
@@ -55,13 +61,13 @@ impl PlanService {
     // }
 
     /// Appends the step to the point after the checkpoint
-    pub async fn append_step(
+    pub async fn append_steps(
         &self,
         mut plan: Plan,
         query: String,
         user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
-    ) -> Result<Plan, ServiceError> {
+    ) -> Result<Plan, PlanServiceError> {
         let plan_checkpoint = plan.checkpoint();
         if let Some(checkpoint) = plan_checkpoint {
             // append to post checkpoint
@@ -75,9 +81,22 @@ impl PlanService {
                 .tool_box
                 .recently_edited_files(
                     files_until_checkpoint.into_iter().collect(),
+                    message_properties.clone(),
+                )
+                .await?;
+            let new_steps = self
+                .tool_box
+                .generate_new_steps_for_plan(
+                    plan_until_now,
+                    plan.initial_user_query().to_owned(),
+                    query,
+                    user_context,
+                    recent_edits,
                     message_properties,
                 )
                 .await?;
+            plan.add_steps_vec(new_steps);
+            let _ = self.save_plan(&plan, plan.storage_path()).await;
             // we want to get the new plan over here and insert it properly
         } else {
             // pushes the steps at the start of the plan
@@ -90,12 +109,13 @@ impl PlanService {
         plan_id: String,
         query: String,
         user_context: UserContext,
+        is_deep_reasoning: bool,
         plan_storage_path: String,
         message_properties: SymbolEventMessageProperties,
-    ) -> Result<Plan, ServiceError> {
+    ) -> Result<Plan, PlanServiceError> {
         let plan_steps = self
             .tool_box
-            .generate_steps(&query, &user_context, message_properties)
+            .generate_plan(&query, &user_context, is_deep_reasoning, message_properties)
             .await?;
 
         Ok(Plan::new(
@@ -158,56 +178,57 @@ impl PlanService {
         step: &PlanStep,
         context: String,
         message_properties: SymbolEventMessageProperties,
-    ) -> Result<(), ServiceError> {
+    ) -> Result<(), PlanServiceError> {
         let instruction = step.description();
         let fs_file_path = match step.file_to_edit() {
             Some(path) => path,
             None => {
-                return Err(ServiceError::AbsentFilePath(
+                return Err(PlanServiceError::AbsentFilePath(
                     "No file path provided for editing".to_string(),
                 ))
             }
         };
 
-        let file_content = self
-            .tool_box
-            .file_open(fs_file_path.clone(), message_properties.clone())
-            .await?
-            .contents();
-        let request = SearchAndReplaceEditingRequest::new(
-            fs_file_path.to_owned(),
-            Range::default(),
-            file_content.to_owned(), // this is needed too?
-            file_content.to_owned(),
-            context, // todo(zi): consider giving system_prompt more info about this being plan history
-            self.llm_properties.clone(),
-            None,
-            instruction.to_owned(),
-            message_properties.root_request_id().to_owned(),
-            SymbolIdentifier::with_file_path("New symbol incoming...!", &fs_file_path), // this is for ui event - consider what to pass for symbol_name
-            uuid::Uuid::new_v4().to_string(),
-            message_properties.ui_sender().clone(),
-            None,
-            message_properties.editor_url().clone(),
-            None,
-            vec![],
-            vec![],
-            false,
-        );
+        let hub_sender = self.symbol_manager.hub_sender();
+        let (ui_sender, _ui_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (edit_done_sender, edit_done_receiver) = tokio::sync::oneshot::channel();
+        let _ = hub_sender.send(SymbolEventMessage::new(
+            SymbolEventRequest::simple_edit_request(
+                SymbolIdentifier::with_file_path(&fs_file_path, &fs_file_path),
+                SymbolToEdit::new(
+                    fs_file_path.to_owned(),
+                    Range::default(),
+                    fs_file_path.to_owned(),
+                    vec![instruction.to_owned()],
+                    false,
+                    false,
+                    true,
+                    instruction.to_owned(),
+                    None,
+                    false,
+                    Some(context),
+                    true,
+                    None,
+                    vec![],
+                ),
+                ToolProperties::new(),
+            ),
+            message_properties.request_id().clone(),
+            ui_sender,
+            edit_done_sender,
+            tokio_util::sync::CancellationToken::new(),
+            message_properties.editor_url(),
+        ));
 
-        let _ = self
-            .tool_box
-            .execute_search_and_replace_edit(request)
-            .await?;
-
-        // todo(zi): surprisingly, there's not much to do after edit.
+        // await on the edit to finish happening
+        let _ = edit_done_receiver.await;
 
         Ok(())
     }
 }
 
 #[derive(Debug, Error)]
-pub enum ServiceError {
+pub enum PlanServiceError {
     #[error("Tool Error: {0}")]
     ToolError(#[from] ToolError),
 

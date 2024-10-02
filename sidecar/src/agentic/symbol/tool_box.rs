@@ -99,6 +99,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
+use crate::agentic::tool::plan::add_steps::PlanAddRequest;
 use crate::agentic::tool::plan::generator::StepGeneratorRequest;
 use crate::agentic::tool::plan::plan_step::PlanStep;
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
@@ -9240,8 +9241,20 @@ FILEPATH: {fs_file_path}
     }
 
     /// Generates the steps for a plan
-    pub async fn generate_steps(&self, user_query: &str, user_context: &UserContext, message_properties: SymbolEventMessageProperties) -> Result<Vec<PlanStep>, SymbolError> {
-        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_user_context(user_context);
+    pub async fn generate_plan(
+        &self,
+        user_query: &str,
+        user_context: &UserContext,
+        is_deep_reasoning: bool,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<PlanStep>, SymbolError> {
+        let step_generator_request = StepGeneratorRequest::new(
+            user_query.to_owned(),
+            is_deep_reasoning,
+            message_properties.request_id_str().to_owned(),
+            message_properties.editor_url(),
+        )
+        .with_user_context(user_context);
         let plan_steps = self
             .tools
             .invoke(ToolInput::GenerateStep(step_generator_request))
@@ -9254,8 +9267,8 @@ FILEPATH: {fs_file_path}
     }
 
     /// Generates steps with diagnostics provided. This should also accept context one day.
-    pub async fn generate_steps_with_diagnostics(&self, user_query: &str, message_properties: SymbolEventMessageProperties, diagnostics: DiagnosticMap) -> Result<Vec<PlanStep>, SymbolError> {
-        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_diagnostics(diagnostics);
+    pub async fn generate_steps_with_diagnostics(&self, user_query: &str, message_properties: SymbolEventMessageProperties, diagnostics: DiagnosticMap, is_deep_reasoning: bool) -> Result<Vec<PlanStep>, SymbolError> {
+        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), is_deep_reasoning, message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_diagnostics(diagnostics);
         let plan_steps = self
             .tools
             .invoke(ToolInput::GenerateStep(step_generator_request))
@@ -9268,8 +9281,46 @@ FILEPATH: {fs_file_path}
     }
 
     /// Executes a serach and replace edit
-    pub async fn execute_search_and_replace_edit(&self, request: SearchAndReplaceEditingRequest) -> Result<(), SymbolError> {
-        let _ = self.tools.invoke(ToolInput::SearchAndReplaceEditing(request)).await.map_err(|e| SymbolError::ToolError(e))?;
+    pub async fn execute_search_and_replace_edit(
+        &self,
+        request: SearchAndReplaceEditingRequest,
+    ) -> Result<(), SymbolError> {
+        let _ = self
+            .tools
+            .invoke(ToolInput::SearchAndReplaceEditing(request))
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?;
         Ok(())
+    }
+
+    /// Creates new steps which can be added to the plan
+    pub async fn generate_new_steps_for_plan(
+        &self,
+        plan_up_until_now: String,
+        initial_user_query: String,
+        query: String,
+        user_context: UserContext,
+        recent_diff_changes: DiffRecentChanges,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<PlanStep>, SymbolError> {
+        let plan_add_request = PlanAddRequest::new(
+            plan_up_until_now,
+            user_context,
+            initial_user_query,
+            query,
+            recent_diff_changes,
+            message_properties.editor_url(),
+            message_properties.root_request_id().to_owned(),
+        );
+        let tool_input = ToolInput::PlanStepAdd(plan_add_request);
+        let plan_steps = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_plan_new_steps()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .into_plan_steps();
+        Ok(plan_steps)
     }
 }

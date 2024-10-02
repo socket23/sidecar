@@ -171,6 +171,8 @@ pub struct UserContext {
     is_plan_generation: bool,
     is_plan_execution_until: Option<usize>,
     is_lsp_run: bool, // produces steps from lsp_diagnostics
+    #[serde(default)]
+    is_plan_append: bool,
 }
 
 impl UserContext {
@@ -188,11 +190,16 @@ impl UserContext {
             is_plan_generation: false,
             is_plan_execution_until: None,
             is_lsp_run: false,
+            is_plan_append: false,
         }
     }
 
     pub fn is_lsp_run(&self) -> bool {
         self.is_lsp_run
+    }
+
+    pub fn is_plan_append(&self) -> bool {
+        self.is_plan_append
     }
 
     pub fn is_plan_execution_until(&self) -> Option<usize> {

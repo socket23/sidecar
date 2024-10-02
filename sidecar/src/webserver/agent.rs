@@ -2,8 +2,6 @@ use super::agent_stream::generate_agent_stream;
 use super::model_selection::LLMClientConfig;
 use super::types::json;
 use anyhow::Context;
-use llm_client::clients::types::LLMType;
-use llm_client::provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys};
 use llm_prompts::reranking::types::TERMINAL_OUTPUT;
 use std::collections::HashSet;
 
@@ -16,7 +14,6 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
-use crate::agentic::symbol::identifier::LLMProperties;
 use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
@@ -24,7 +21,7 @@ use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::plan::{
-    check_plan_storage_path, handle_create_plan, handle_diagnostics_to_steps,
+    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_diagnostics_to_steps,
     handle_execute_plan_until,
 };
 
@@ -389,6 +386,7 @@ pub struct FollowupChatRequest {
     pub model_config: LLMClientConfig,
     pub system_instruction: Option<String>,
     pub editor_url: Option<String>,
+    pub is_deep_reasoning: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -471,6 +469,7 @@ pub async fn followup_chat(
         model_config,
         system_instruction,
         editor_url,
+        is_deep_reasoning,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -494,13 +493,7 @@ pub async fn followup_chat(
             || user_context.is_lsp_run())
     {
         println!("followup_chat::plan_generation_flow");
-        let model = LLMType::ClaudeSonnet;
-        let provider_type = LLMProvider::Anthropic;
-        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
-        let plan_service = PlanService::new(
-            app.tool_box.clone(),
-            LLMProperties::new(model, provider_type, anthropic_api_keys),
-        );
+        let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
         if let Some(execution_until) = user_context.is_plan_execution_until() {
             return handle_execute_plan_until(
                 execution_until,
@@ -517,6 +510,17 @@ pub async fn followup_chat(
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 editor_url.clone().expect("is_some to hold"),
                 plan_service,
+                is_deep_reasoning,
+            )
+            .await;
+        } else if user_context.is_plan_append() {
+            return handle_append_plan(
+                query,
+                user_context,
+                editor_url.clone().expect("is_some to hold"),
+                thread_id,
+                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+                plan_service,
             )
             .await;
         } else {
@@ -527,6 +531,7 @@ pub async fn followup_chat(
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 plan_service,
+                is_deep_reasoning,
             )
             .await;
         }

@@ -21,8 +21,8 @@ use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::plan::{
-    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_diagnostics_to_steps,
-    handle_execute_plan_until,
+    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_execute_plan_until,
+    handle_plan_drop_from,
 };
 
 use super::types::ApiResponse;
@@ -487,11 +487,7 @@ pub async fn followup_chat(
 
     // short-circuit over here:
     // check if we are in the process of generating a plan and the editor url is present
-    if editor_url.is_some()
-        && (user_context.is_plan_generation()
-            || user_context.is_plan_execution_until().is_some()
-            || user_context.is_lsp_run())
-    {
+    if editor_url.is_some() && (user_context.is_plan_generation_flow()) {
         println!("followup_chat::plan_generation_flow");
         let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
         if let Some(execution_until) = user_context.is_plan_execution_until() {
@@ -503,14 +499,12 @@ pub async fn followup_chat(
                 plan_service,
             )
             .await;
-        } else if user_context.is_lsp_run() {
-            println!("hitting lsp");
-            return handle_diagnostics_to_steps(
+        } else if user_context.is_plan_drop_from().is_some() {
+            return handle_plan_drop_from(
+                user_context.is_plan_drop_from().expect("is_some to hold"),
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                editor_url.clone().expect("is_some to hold"),
                 plan_service,
-                is_deep_reasoning,
             )
             .await;
         } else if user_context.is_plan_append() {

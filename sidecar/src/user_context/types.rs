@@ -170,9 +170,10 @@ pub struct UserContext {
     // These are all hacks for now, we will move them to proper strucutre later on
     is_plan_generation: bool,
     is_plan_execution_until: Option<usize>,
-    is_lsp_run: bool, // produces steps from lsp_diagnostics
     #[serde(default)]
     is_plan_append: bool,
+    #[serde(default)]
+    is_plan_drop_from: Option<usize>,
 }
 
 impl UserContext {
@@ -189,13 +190,17 @@ impl UserContext {
             folder_paths,
             is_plan_generation: false,
             is_plan_execution_until: None,
-            is_lsp_run: false,
             is_plan_append: false,
+            is_plan_drop_from: None,
         }
     }
 
-    pub fn is_lsp_run(&self) -> bool {
-        self.is_lsp_run
+    /// If we are in any part of the plan generation flow over here
+    pub fn is_plan_generation_flow(&self) -> bool {
+        self.is_plan_append()
+            || self.is_plan_execution_until().is_some()
+            || self.is_plan_generation()
+            || self.is_plan_drop_from().is_some()
     }
 
     pub fn is_plan_append(&self) -> bool {
@@ -208,6 +213,10 @@ impl UserContext {
 
     pub fn is_plan_generation(&self) -> bool {
         self.is_plan_generation
+    }
+
+    pub fn is_plan_drop_from(&self) -> Option<usize> {
+        self.is_plan_drop_from
     }
 
     pub fn update_file_content_map(

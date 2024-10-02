@@ -61,6 +61,7 @@ impl SymbolLocker {
     }
 
     pub async fn process_request(&self, request_event: SymbolEventMessage) {
+        let _ = self.check_or_create_file(&request_event).await;
         let request = request_event.symbol_event_request().clone();
         let ui_sender = request_event.ui_sender().clone();
         let tool_properties = request.get_tool_properties().clone();
@@ -164,6 +165,25 @@ impl SymbolLocker {
                 eprintln!("Symbol not found: {:?}", &symbol_identifier);
             }
         }
+    }
+
+    /// Sanity checks if the codebase is ready to react to the symbol event
+    ///
+    /// Our main sanity check right now is:
+    /// - checking if the file exists on the disk
+    async fn check_or_create_file(
+        &self,
+        request_event: &SymbolEventMessage,
+    ) -> Result<(), SymbolError> {
+        let fs_file_path = request_event.symbol_event_request().symbol().fs_file_path();
+        if let Some(fs_file_path) = fs_file_path {
+            // check if file exists, if it does not exist then create it
+            let _ = self
+                .tools
+                .create_file(&fs_file_path, request_event.get_properties().clone())
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn create_symbol_agent(

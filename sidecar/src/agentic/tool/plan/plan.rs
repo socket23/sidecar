@@ -39,6 +39,17 @@ impl Plan {
         }
     }
 
+    /// Drops the steps which are present in the plan until a point
+    pub fn drop_plan_steps(mut self, drop_from: usize) -> Self {
+        if drop_from < self.steps.len() {
+            self.steps.truncate(drop_from);
+            if let Some(checkpoint) = self.checkpoint {
+                self.checkpoint = Some(checkpoint.min(drop_from));
+            }
+        }
+        self
+    }
+
     pub fn storage_path(&self) -> &str {
         &self.storage_path
     }

@@ -18,7 +18,10 @@ use crate::{
             tool_properties::ToolProperties,
             types::SymbolEventRequest,
         },
-        tool::{errors::ToolError, lsp::file_diagnostics::DiagnosticMap},
+        tool::{
+            errors::ToolError,
+            lsp::{diagnostics, file_diagnostics::DiagnosticMap},
+        },
     },
     chunking::text_document::Range,
     user_context::types::UserContext,
@@ -108,6 +111,8 @@ impl PlanService {
 
             dbg!(&diagnostics_grouped_by_file);
 
+            let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
+
             let new_steps = self
                 .tool_box
                 .generate_new_steps_for_plan(
@@ -118,6 +123,7 @@ impl PlanService {
                     recent_edits,
                     message_properties,
                     is_deep_reasoning,
+                    formatted_diagnostics,
                 )
                 .await?;
             plan.add_steps_vec(new_steps);
@@ -127,6 +133,28 @@ impl PlanService {
             // pushes the steps at the start of the plan
         }
         Ok(plan)
+    }
+
+    pub fn format_diagnostics(diagnostics: &DiagnosticMap) -> String {
+        diagnostics
+            .iter()
+            .map(|(file, errors)| {
+                let formatted_errors = errors
+                    .iter()
+                    .map(|error| {
+                        format!(
+                            "Snippet: {}\nDiagnostic: {}",
+                            error.snippet(),
+                            error.diagnostic_message()
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+
+                format!("File: {}\n{}", file, formatted_errors)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 
     pub async fn create_plan(

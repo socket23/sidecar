@@ -34,7 +34,7 @@ pub struct PlanAddRequest {
     recent_edits: DiffRecentChanges,
     _editor_url: String,
     root_request_id: String,
-    diagnostics: Option<DiagnosticMap>,
+    diagnostics: String,
     is_deep_reasoning: bool,
 }
 
@@ -48,6 +48,7 @@ impl PlanAddRequest {
         editor_url: String,
         root_request_id: String,
         is_deep_reasoning: bool,
+        diagnostics: String,
     ) -> Self {
         Self {
             plan_up_until_now,
@@ -57,15 +58,9 @@ impl PlanAddRequest {
             recent_edits,
             _editor_url: editor_url,
             root_request_id,
-            diagnostics: None, // default none
             is_deep_reasoning,
+            diagnostics,
         }
-    }
-
-    /// make request with diagnostics
-    pub fn with_diagnostics(mut self, diagnostics: DiagnosticMap) -> Self {
-        self.diagnostics = Some(diagnostics);
-        self
     }
 }
 
@@ -144,10 +139,7 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
             .to_xml(Default::default())
             .await
             .unwrap_or("No user context provided".to_owned());
-        let diagnostics_str = context
-            .diagnostics
-            .map(|diagnostic| Self::format_diagnostics(&diagnostic))
-            .unwrap_or_else(|| String::from("No diagnostics"));
+        let diagnostics_str = context.diagnostics;
         let plan_add_query = context.plan_add_query;
         let recent_edits = context.recent_edits.to_llm_client_message();
         vec![LLMClientMessage::user(format!(

@@ -5,20 +5,26 @@ use crate::chunking::text_document::Range;
 
 #[derive(Debug, Clone)]
 pub struct LSPDiagnosticError {
-    _range: Range,
+    range: Range,
     snippet: String,
     fs_file_path: String,
     diagnostic: String,
+    associated_files: Option<Vec<String>>,
 }
 
 impl LSPDiagnosticError {
     pub fn new(range: Range, snippet: String, fs_file_path: String, diagnostic: String) -> Self {
         Self {
-            _range: range,
+            range,
             snippet,
             fs_file_path,
             diagnostic,
+            associated_files: None,
         }
+    }
+
+    pub fn range(&self) -> &Range {
+        &self.range
     }
 
     pub fn diagnostic_message(&self) -> &str {
@@ -31,6 +37,14 @@ impl LSPDiagnosticError {
 
     pub fn snippet(&self) -> &str {
         &self.snippet
+    }
+
+    pub fn associated_files(&self) -> Option<&Vec<String>> {
+        self.associated_files.as_ref()
+    }
+
+    pub fn set_associated_files(&mut self, files: Vec<String>) {
+        self.associated_files = Some(files);
     }
 }
 

@@ -138,18 +138,20 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
         let diagnostics_str = context.diagnostics;
         let plan_add_query = context.plan_add_query;
         let recent_edits = context.recent_edits.to_llm_client_message();
-        vec![LLMClientMessage::user(format!(
-            r#"<plan_right_now>
+        vec![
+            LLMClientMessage::user(format!(
+                r#"<plan_right_now>
 {plan_right_now}
 "#
-        ))
-        // adding cache point to the <plan_right_now>
-        .cache_point()]
+            ))
+            // adding cache point to the <plan_right_now>
+            .cache_point(),
+            LLMClientMessage::user("</plan_right_now>\n".to_owned()),
+        ]
         .into_iter()
         .chain(recent_edits)
         .chain(vec![LLMClientMessage::user(format!(
-            r#"</plan_right_now>
-<user_context>
+            r#"<user_context>
 {user_context}
 </user_context>
 <diagnostics>

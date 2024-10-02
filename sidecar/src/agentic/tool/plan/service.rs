@@ -106,8 +106,6 @@ impl PlanService {
                         acc
                     });
 
-            dbg!(&diagnostics_grouped_by_file);
-
             let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
 
             let new_steps = self

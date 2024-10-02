@@ -220,35 +220,7 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
         )
     }
 
-    /// Formats diagnostics by file
-    fn format_diagnostics(diagnostics: &DiagnosticMap) -> String {
-        diagnostics
-            .iter()
-            .map(|(file, errors)| {
-                let formatted_errors = errors
-                    .iter()
-                    .map(|error| {
-                        format!(
-                            "Snippet: {}\nDiagnostic: {}",
-                            error.snippet(),
-                            error.diagnostic_message()
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-
-                format!("File: {}\n{}", file, formatted_errors)
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n")
-    }
-
-    /// todo(zi): add plan to this?
-    pub async fn user_message(
-        user_query: &str,
-        user_context: Option<&UserContext>,
-        diagnostics: Option<&DiagnosticMap>,
-    ) -> String {
+    pub async fn user_message(user_query: &str, user_context: Option<&UserContext>) -> String {
         let context_xml = match user_context {
             Some(ctx) => match ctx.to_owned().to_xml(Default::default()).await {
                 Ok(xml) => xml,
@@ -260,14 +232,7 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
             None => String::from("No context"),
         };
 
-        let diagnostics_str = diagnostics
-            .map(Self::format_diagnostics)
-            .unwrap_or_else(|| String::from("No diagnostics"));
-
-        format!(
-            "Context:\n{}\n---\nDiagnostics:\n{}\n---\nRequest: {}",
-            context_xml, diagnostics_str, user_query
-        )
+        format!("Context:\n{}\n---\nRequest: {}", context_xml, user_query)
     }
 
     pub async fn user_message_with_diagnostics(
@@ -303,12 +268,7 @@ impl Tool for StepGeneratorClient {
         let messages = vec![
             LLMClientMessage::system(Self::system_message()),
             LLMClientMessage::user(
-                Self::user_message(
-                    context.user_query(),
-                    context.user_context(),
-                    context.diagnostics(),
-                )
-                .await,
+                Self::user_message(context.user_query(), context.user_context()).await,
             ),
         ];
 

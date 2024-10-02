@@ -144,6 +144,10 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
             .to_xml(Default::default())
             .await
             .unwrap_or("No user context provided".to_owned());
+        let diagnostics_str = context
+            .diagnostics
+            .map(|diagnostic| Self::format_diagnostics(&diagnostic))
+            .unwrap_or_else(|| String::from("No diagnostics"));
         let plan_add_query = context.plan_add_query;
         let recent_edits = context.recent_edits.to_llm_client_message();
         vec![LLMClientMessage::user(format!(
@@ -161,6 +165,9 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
             r#"<user_context>
 {user_context}
 </user_context>
+<diagnostics>
+{diagnostics_str}
+</diagnostics>
 <user_current_query>
 {plan_add_query}
 </user_current_query>
@@ -192,6 +199,28 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
 </reminder_about_format>"#
         ))])
         .collect()
+    }
+
+    fn format_diagnostics(diagnostics: &DiagnosticMap) -> String {
+        diagnostics
+            .iter()
+            .map(|(file, errors)| {
+                let formatted_errors = errors
+                    .iter()
+                    .map(|error| {
+                        format!(
+                            "Snippet: {}\nDiagnostic: {}",
+                            error.snippet(),
+                            error.diagnostic_message()
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+
+                format!("File: {}\n{}", file, formatted_errors)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 }
 

@@ -94,7 +94,7 @@ impl DiagnosticWithSnippet {
 
         // Safely slice the vector
         let relevant_lines = lines
-            .get(start_line..end_line)
+            .get(start_line..=end_line)
             .ok_or(DiagnosticSnippetError::InvalidRange(range))?;
 
         let snippet = relevant_lines.join("\n").to_owned();

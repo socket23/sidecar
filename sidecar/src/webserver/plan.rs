@@ -48,11 +48,14 @@ async fn drop_plan(
     plan = plan.drop_plan_steps(drop_from);
     let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
     let debug_plan = plan.to_debug_message();
-    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(plan_id, AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-        debug_plan.to_owned(),
-        Some(debug_plan),
-        "Custom".to_owned(),
-    )))));
+    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+        plan_id,
+        AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+            debug_plan.to_owned(),
+            Some(debug_plan),
+            "Custom".to_owned(),
+        )),
+    )));
 }
 
 async fn append_to_plan(
@@ -63,6 +66,7 @@ async fn append_to_plan(
     user_context: UserContext,
     message_properties: SymbolEventMessageProperties,
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+    is_deep_reasoning: bool,
 ) {
     let plan = plan_service.load_plan(&plan_storage_path).await;
     if let Err(_) = plan {
@@ -87,7 +91,13 @@ async fn append_to_plan(
         )),
     )));
     if let Ok(plan) = plan_service
-        .append_steps(plan, query, user_context, message_properties)
+        .append_steps(
+            plan,
+            query,
+            user_context,
+            message_properties,
+            is_deep_reasoning,
+        )
         .await
     {
         let plan_debug_view = plan.to_debug_message();
@@ -356,20 +366,13 @@ pub async fn handle_plan_drop_from(
     plan_storage_path: String,
     plan_service: PlanService,
 ) -> Result<
-Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
     // we let the plan dropping happen in the background altho thats not really necessary
     let _ = tokio::spawn(async move {
-        drop_plan(
-            plan_id,
-            plan_storage_path,
-            plan_service,
-            drop_from,
-            sender,
-        )
-        .await;
+        drop_plan(plan_id, plan_storage_path, plan_service, drop_from, sender).await;
     });
 
     let conversation_message_stream =
@@ -420,6 +423,7 @@ pub async fn handle_append_plan(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
+    is_deep_reasoning: bool,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -443,6 +447,7 @@ pub async fn handle_append_plan(
             user_context,
             message_properties,
             sender,
+            is_deep_reasoning,
         )
         .await;
     });

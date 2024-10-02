@@ -199,7 +199,10 @@ async fn main() {
     // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/4fa3986c-1c78-4381-b6a0-0be7f8f88512.json");
 
     // file_diag tool
-    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/848232c4-0c81-48a7-9901-967a1442b371.json");
+    // let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/848232c4-0c81-48a7-9901-967a1442b371.json");
+
+    // massive dooby incoming
+    let plan_storage_path = PathBuf::from("/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/1bd5c95c-c4e6-4b4b-9ca1-d4269635afa7.json");
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -228,7 +231,14 @@ async fn main() {
     //         .to_string();
 
     let user_query =
-        "Similar to LSPDiagnostics in diagnostics.rs, add a new tool called FileDiagnostics in /Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/file_diagnostics.rs, updating all the places that depends on it."
+        "I want to fetch the lsp errors from each step's files_to_edit field (just take the first in the vec).
+
+Then, we should use the generator.rs logic to generate steps. Write a convenience method somewhere to handle a LSP-based input to the user_message, updating followup_chat in agent.rs accordingly. UserContext should have a new boolean field to communicate that we are doing an LSP-related run.
+
+Additionally, we need to do some wiring in webserver.rs, to create endpoint.
+
+overall, we need an endpoint that, when hit, fetchs all diagnostic messages present in the files_to_edit of the steps up to checkpoint, then feed that into a user_query for generator.rs in order to generate new steps from this context.
+"
             .to_string();
 
     let _initial_context = String::from("");
@@ -243,11 +253,12 @@ async fn main() {
     // ];
 
     let context_files = vec![
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/input.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/type.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/output.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/mod.rs",
-        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/diagnostics.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/bin/webserver.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/webserver/agent.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/user_context/types.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/generator.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/lsp/file_diagnostics.rs",
+        "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/service.rs",
     ];
 
     let file_futures: Vec<_> = context_files
@@ -355,7 +366,9 @@ async fn main() {
                         if let Some(index) = plan.checkpoint() {
                             println!("Checkpoint {} complete", index);
                             plan.increment_checkpoint();
-                        };
+                        } else {
+                            plan.set_checkpoint(1) // this is a hack
+                        }
 
                         // if plan.checkpoint() < plan.final_checkpoint() {
 

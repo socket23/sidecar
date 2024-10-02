@@ -9,7 +9,7 @@ use std::sync::Arc;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
 };
 
 use crate::{
@@ -34,6 +34,8 @@ pub struct PlanAddRequest {
     recent_edits: DiffRecentChanges,
     _editor_url: String,
     root_request_id: String,
+    diagnostics: String,
+    is_deep_reasoning: bool,
 }
 
 impl PlanAddRequest {
@@ -45,6 +47,8 @@ impl PlanAddRequest {
         recent_edits: DiffRecentChanges,
         editor_url: String,
         root_request_id: String,
+        is_deep_reasoning: bool,
+        diagnostics: String,
     ) -> Self {
         Self {
             plan_up_until_now,
@@ -54,6 +58,8 @@ impl PlanAddRequest {
             recent_edits,
             _editor_url: editor_url,
             root_request_id,
+            is_deep_reasoning,
+            diagnostics,
         }
     }
 }
@@ -133,6 +139,7 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
             .to_xml(Default::default())
             .await
             .unwrap_or("No user context provided".to_owned());
+        let diagnostics_str = context.diagnostics;
         let plan_add_query = context.plan_add_query;
         let recent_edits = context.recent_edits.to_llm_client_message();
         vec![LLMClientMessage::user(format!(
@@ -150,6 +157,9 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
             r#"<user_context>
 {user_context}
 </user_context>
+<diagnostics>
+{diagnostics_str}
+</diagnostics>
 <user_current_query>
 {plan_add_query}
 </user_current_query>
@@ -188,21 +198,34 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
 impl Tool for PlanAddStepClient {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.is_plan_step_add()?;
+        let is_deep_reasoning = context.is_deep_reasoning;
         let root_id = context.root_request_id.to_owned();
         let messages = vec![LLMClientMessage::system(self.system_message())]
             .into_iter()
             .chain(self.user_message(context).await)
             .collect::<Vec<_>>();
-        let llm_properties = LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-        );
+
+        let request = if is_deep_reasoning {
+            LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)
+        } else {
+            LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None)
+        };
+
+        let llm_properties = if is_deep_reasoning {
+            LLMProperties::new(
+                    LLMType::O1Preview,
+                    LLMProvider::OpenAI,
+                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+                )
+        } else {
+            LLMProperties::new(
+                    LLMType::ClaudeSonnet,
+                    LLMProvider::Anthropic,
+                    LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                )
+        };
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let request =
-            LLMClientCompletionRequest::new(llm_properties.llm().clone(), messages, 0.2, None);
 
         let response = self
             .llm_client

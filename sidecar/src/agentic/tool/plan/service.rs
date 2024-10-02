@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use futures::{stream, StreamExt};
 use thiserror::Error;
@@ -18,7 +18,7 @@ use crate::{
             tool_properties::ToolProperties,
             types::SymbolEventRequest,
         },
-        tool::errors::ToolError,
+        tool::{errors::ToolError, lsp::file_diagnostics::DiagnosticMap},
     },
     chunking::text_document::Range,
     user_context::types::UserContext,
@@ -60,13 +60,14 @@ impl PlanService {
     //     plan.steps_mut().get_mut(index)
     // }
 
-    /// Appends the step to the point after the checkpoint
+    /// Appends the step to the point after the checkpoint - diagnostics are included by default
     pub async fn append_steps(
         &self,
         mut plan: Plan,
         query: String,
         user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
+        is_deep_reasoning: bool,
     ) -> Result<Plan, PlanServiceError> {
         let plan_checkpoint = plan.checkpoint();
         if let Some(checkpoint) = plan_checkpoint {
@@ -80,10 +81,33 @@ impl PlanService {
             let recent_edits = self
                 .tool_box
                 .recently_edited_files(
-                    files_until_checkpoint.into_iter().collect(),
+                    files_until_checkpoint.clone().into_iter().collect(),
                     message_properties.clone(),
                 )
                 .await?;
+
+            // get all diagnostics present on these files
+            let file_lsp_diagnostics = self
+                .tool_box()
+                .get_lsp_diagnostics_for_files(
+                    files_until_checkpoint.clone(),
+                    message_properties.clone(),
+                )
+                .await
+                .unwrap_or(vec![]); // empty vec is acceptable
+
+            let diagnostics_grouped_by_file: DiagnosticMap =
+                file_lsp_diagnostics
+                    .into_iter()
+                    .fold(HashMap::new(), |mut acc, error| {
+                        acc.entry(error.fs_file_path().to_owned())
+                            .or_insert_with(Vec::new)
+                            .push(error);
+                        acc
+                    });
+
+            let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
+
             let new_steps = self
                 .tool_box
                 .generate_new_steps_for_plan(
@@ -93,6 +117,8 @@ impl PlanService {
                     user_context,
                     recent_edits,
                     message_properties,
+                    is_deep_reasoning,
+                    formatted_diagnostics,
                 )
                 .await?;
             plan.add_steps_vec(new_steps);
@@ -102,6 +128,28 @@ impl PlanService {
             // pushes the steps at the start of the plan
         }
         Ok(plan)
+    }
+
+    pub fn format_diagnostics(diagnostics: &DiagnosticMap) -> String {
+        diagnostics
+            .iter()
+            .map(|(file, errors)| {
+                let formatted_errors = errors
+                    .iter()
+                    .map(|error| {
+                        format!(
+                            "Snippet: {}\nDiagnostic: {}",
+                            error.snippet(),
+                            error.diagnostic_message()
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+
+                format!("File: {}\n{}", file, formatted_errors)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 
     pub async fn create_plan(
@@ -127,6 +175,14 @@ impl PlanService {
             plan_storage_path,
         )
         .with_user_context(user_context))
+    }
+
+    /// gets all files_to_edit from PlanSteps up to index
+    pub fn get_edited_files(&self, plan: &Plan, index: usize) -> Vec<String> {
+        plan.steps()[..index]
+            .iter()
+            .filter_map(|step| step.file_to_edit())
+            .collect::<Vec<_>>()
     }
 
     pub fn step_execution_context(
@@ -159,6 +215,10 @@ impl PlanService {
         .join("\n");
 
         full_context_as_string
+    }
+
+    pub fn tool_box(&self) -> &ToolBox {
+        &self.tool_box
     }
 
     pub async fn execute_step(

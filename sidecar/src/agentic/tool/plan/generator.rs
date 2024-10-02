@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use quick_xml::de::from_str;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use llm_client::{
     broker::LLMBroker,
@@ -12,7 +12,10 @@ use llm_client::{
 use crate::{
     agentic::{
         symbol::identifier::LLMProperties,
-        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+        tool::{
+            errors::ToolError, input::ToolInput, lsp::file_diagnostics::DiagnosticMap,
+            output::ToolOutput, r#type::Tool,
+        },
     },
     user_context::types::UserContext,
 };
@@ -27,6 +30,7 @@ pub struct StepGeneratorRequest {
     is_deep_reasoning: bool,
     root_request_id: String,
     editor_url: String,
+    diagnostics: Option<DiagnosticMap>,
 }
 
 impl StepGeneratorRequest {
@@ -42,6 +46,7 @@ impl StepGeneratorRequest {
             editor_url,
             is_deep_reasoning,
             user_context: None,
+            diagnostics: None,
         }
     }
 
@@ -57,8 +62,17 @@ impl StepGeneratorRequest {
         &self.editor_url
     }
 
+    pub fn diagnostics(&self) -> Option<&DiagnosticMap> {
+        self.diagnostics.as_ref()
+    }
+
     pub fn with_user_context(mut self, user_context: &UserContext) -> Self {
         self.user_context = Some(user_context.to_owned());
+        self
+    }
+
+    pub fn with_diagnostics(mut self, diagnostics: DiagnosticMap) -> Self {
+        self.diagnostics = Some(diagnostics);
         self
     }
 
@@ -228,17 +242,15 @@ Note the use of CDATA sections within <description> and <title> to encapsulate X
     }
 
     pub async fn user_message(user_query: &str, user_context: Option<&UserContext>) -> String {
-        let context_xml_res = match user_context {
-            Some(ctx) => ctx.to_owned().to_xml(Default::default()).await,
-            None => Ok(String::from("No context")),
-        };
-
-        let context_xml = match context_xml_res {
-            Ok(xml) => xml,
-            Err(e) => {
-                println!("step_generator_client::user_message::err(Failed to convert context to XML: {:?})", e);
-                String::from("No context")
-            }
+        let context_xml = match user_context {
+            Some(ctx) => match ctx.to_owned().to_xml(Default::default()).await {
+                Ok(xml) => xml,
+                Err(e) => {
+                    eprintln!("Failed to convert context to XML: {:?}", e);
+                    String::from("No context")
+                }
+            },
+            None => String::from("No context"),
         };
 
         format!("Context:\n{}\n---\nRequest: {}", context_xml, user_query)
@@ -282,6 +294,8 @@ impl Tool for StepGeneratorClient {
         };
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
+        let start_time = Instant::now();
+
         let response = self
             .llm_client
             .stream_completion(
@@ -297,6 +311,9 @@ impl Tool for StepGeneratorClient {
                 sender,
             )
             .await?;
+
+        let elapsed_time = start_time.elapsed();
+        println!("LLM request took: {:?}", elapsed_time);
 
         let response = StepGeneratorResponse::parse_response(&response)?;
 

@@ -77,6 +77,7 @@ use crate::agentic::tool::lsp::create_file::CreateFileRequest;
 use crate::agentic::tool::lsp::diagnostics::{
     DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
+use crate::agentic::tool::lsp::file_diagnostics::{DiagnosticMap, FileDiagnosticsInput, FileDiagnosticsOutput};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -6012,6 +6013,24 @@ FILEPATH: {fs_file_path}
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    pub async fn get_file_diagnostics(
+        &self,
+        fs_file_path: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<FileDiagnosticsOutput, SymbolError> {
+        let input = ToolInput::FileDiagnostics(FileDiagnosticsInput::new(
+            fs_file_path.to_owned(),
+            message_properties.editor_url().to_owned(),
+        ));
+        self.tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_file_diagnostics()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    /// wait this method is actually epic
     pub async fn get_lsp_diagnostics_for_files(
         &self,
         file_paths: Vec<String>,
@@ -6024,9 +6043,8 @@ FILEPATH: {fs_file_path}
         )
         .map(|(fs_file_path, message_properties)| async move {
             let diagnostics = self
-                .get_lsp_diagnostics(
+                .get_file_diagnostics( 
                     &fs_file_path,
-                    &Range::new(Position::new(0, 0, 0), Position::new(10000, 0, 0)),
                     message_properties.clone(),
                 )
                 .await;
@@ -9248,6 +9266,20 @@ FILEPATH: {fs_file_path}
         Ok(plan_steps)
     }
 
+    /// Generates steps with diagnostics provided. This should also accept context one day.
+    pub async fn generate_steps_with_diagnostics(&self, user_query: &str, message_properties: SymbolEventMessageProperties, diagnostics: DiagnosticMap, is_deep_reasoning: bool) -> Result<Vec<PlanStep>, SymbolError> {
+        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), is_deep_reasoning, message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_diagnostics(diagnostics);
+        let plan_steps = self
+            .tools
+            .invoke(ToolInput::GenerateStep(step_generator_request))
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .step_generator_output()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .into_plan_steps();
+        Ok(plan_steps)
+    }
+
     /// Executes a serach and replace edit
     pub async fn execute_search_and_replace_edit(
         &self,
@@ -9270,6 +9302,8 @@ FILEPATH: {fs_file_path}
         user_context: UserContext,
         recent_diff_changes: DiffRecentChanges,
         message_properties: SymbolEventMessageProperties,
+        is_deep_reasoning: bool,
+        diagnostics: String,
     ) -> Result<Vec<PlanStep>, SymbolError> {
         let plan_add_request = PlanAddRequest::new(
             plan_up_until_now,
@@ -9279,6 +9313,8 @@ FILEPATH: {fs_file_path}
             recent_diff_changes,
             message_properties.editor_url(),
             message_properties.root_request_id().to_owned(),
+            is_deep_reasoning,
+            diagnostics,
         );
         let tool_input = ToolInput::PlanStepAdd(plan_add_request);
         let plan_steps = self

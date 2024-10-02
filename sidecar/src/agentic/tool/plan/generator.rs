@@ -246,7 +246,6 @@ impl Tool for StepGeneratorClient {
             LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None)
         };
 
-        // todo(zi): this could be o1
         let llm_properties = if is_deep_reasoning {
             LLMProperties::new(
                 LLMType::O1Preview,

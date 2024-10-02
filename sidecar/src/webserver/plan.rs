@@ -24,6 +24,37 @@ use crate::{
     user_context::types::UserContext,
 };
 
+async fn drop_plan(
+    plan_id: uuid::Uuid,
+    plan_storage_path: String,
+    plan_service: PlanService,
+    drop_from: usize,
+    agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+) {
+    let plan = plan_service.load_plan(&plan_storage_path).await;
+    if let Err(_) = plan {
+        let final_answer = "failed to load plan from storage".to_owned();
+        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+            plan_id,
+            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                final_answer.to_owned(),
+                Some(final_answer.to_owned()),
+                "Custom".to_owned(),
+            )),
+        )));
+        return;
+    }
+    let mut plan = plan.expect("if let Err to hold above");
+    plan = plan.drop_plan_steps(drop_from);
+    let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
+    let debug_plan = plan.to_debug_message();
+    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(plan_id, AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+        debug_plan.to_owned(),
+        Some(debug_plan),
+        "Custom".to_owned(),
+    )))));
+}
+
 async fn append_to_plan(
     plan_id: uuid::Uuid,
     plan_storage_path: String,
@@ -156,8 +187,8 @@ pub async fn execute_plan_until(
         let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
             plan_id,
             AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-                format!("Finished executing until: {}", idx).to_owned(),
-                Some(format!("Finished executing until: {}", idx).to_owned()),
+                format!("Finished executing until: {}\n", idx).to_owned(),
+                Some(format!("Finished executing until: {}\n", idx).to_owned()),
                 "Custom".to_owned(),
             )),
         )));
@@ -278,6 +309,69 @@ pub async fn handle_execute_plan_until(
         )
         .await;
     });
+    let conversation_message_stream =
+        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": plan_id.to_owned(),
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+
+    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    let answer_stream = conversation_message_stream.map(
+        |conversation_message: anyhow::Result<ConversationMessage>| {
+            if let Err(e) = &conversation_message {
+                tracing::error!("error in conversation message stream: {}", e);
+            }
+            sse::Event::default()
+                .json_data(conversation_message.expect("should not fail deserialization"))
+                .map_err(anyhow::Error::new)
+        },
+    );
+
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": plan_id.to_owned(),
+            }))
+            .expect("failed to send done object"))
+    });
+
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+
+    Ok(Sse::new(Box::pin(stream)))
+}
+
+pub async fn handle_plan_drop_from(
+    drop_from: usize,
+    plan_id: uuid::Uuid,
+    plan_storage_path: String,
+    plan_service: PlanService,
+) -> Result<
+Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    // we let the plan dropping happen in the background altho thats not really necessary
+    let _ = tokio::spawn(async move {
+        drop_plan(
+            plan_id,
+            plan_storage_path,
+            plan_service,
+            drop_from,
+            sender,
+        )
+        .await;
+    });
+
     let conversation_message_stream =
         tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
     // TODO(skcd): Re-introduce this again when we have a better way to manage

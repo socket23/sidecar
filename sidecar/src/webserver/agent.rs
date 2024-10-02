@@ -21,7 +21,7 @@ use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::plan::{
-    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_execute_plan_until,
+    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_execute_plan_until, handle_plan_drop_from,
 };
 
 use super::types::ApiResponse;
@@ -500,6 +500,13 @@ pub async fn followup_chat(
                 plan_service,
             )
             .await;
+        } else if user_context.is_plan_drop_from().is_some() {
+            return handle_plan_drop_from(
+                user_context.is_plan_drop_from().expect("is_some to hold"),
+                thread_id,
+                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+                plan_service,
+            ).await;
         } else if user_context.is_plan_append() {
             return handle_append_plan(
                 query,

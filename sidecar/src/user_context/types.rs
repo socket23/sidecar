@@ -172,6 +172,8 @@ pub struct UserContext {
     is_plan_execution_until: Option<usize>,
     #[serde(default)]
     is_plan_append: bool,
+    #[serde(default)]
+    is_plan_drop_from: Option<usize>,
 }
 
 impl UserContext {
@@ -189,6 +191,7 @@ impl UserContext {
             is_plan_generation: false,
             is_plan_execution_until: None,
             is_plan_append: false,
+            is_plan_drop_from: None,
         }
     }
 
@@ -202,6 +205,10 @@ impl UserContext {
 
     pub fn is_plan_generation(&self) -> bool {
         self.is_plan_generation
+    }
+
+    pub fn is_plan_drop_from(&self) -> Option<usize> {
+        self.is_plan_drop_from
     }
 
     pub fn update_file_content_map(

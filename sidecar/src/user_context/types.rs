@@ -195,6 +195,14 @@ impl UserContext {
         }
     }
 
+    /// If we are in any part of the plan generation flow over here
+    pub fn is_plan_generation_flow(&self) -> bool {
+        self.is_plan_append()
+            || self.is_plan_execution_until().is_some()
+            || self.is_plan_generation()
+            || self.is_plan_drop_from().is_some()
+    }
+
     pub fn is_plan_append(&self) -> bool {
         self.is_plan_append
     }

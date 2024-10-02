@@ -21,7 +21,8 @@ use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::plan::{
-    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_execute_plan_until, handle_plan_drop_from,
+    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_execute_plan_until,
+    handle_plan_drop_from,
 };
 
 use super::types::ApiResponse;
@@ -486,9 +487,7 @@ pub async fn followup_chat(
 
     // short-circuit over here:
     // check if we are in the process of generating a plan and the editor url is present
-    if editor_url.is_some()
-        && (user_context.is_plan_generation() || user_context.is_plan_execution_until().is_some())
-    {
+    if editor_url.is_some() && (user_context.is_plan_generation_flow()) {
         println!("followup_chat::plan_generation_flow");
         let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
         if let Some(execution_until) = user_context.is_plan_execution_until() {
@@ -506,7 +505,8 @@ pub async fn followup_chat(
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 plan_service,
-            ).await;
+            )
+            .await;
         } else if user_context.is_plan_append() {
             return handle_append_plan(
                 query,

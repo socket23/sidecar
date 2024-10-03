@@ -206,7 +206,7 @@ Separation of Concerns: Keeps execution state separate from other data, making t
 - Please ensure that each step includes all required fields and that the steps are logically ordered.
 - Each step you suggest must only change a single file and must be a logical unit of work, logic units of work are defined as code changes where the change is complete and encapsulates a logical step forward.
 For example, if you have to import a helper function and use it in the code, it should be combined to a single step instead of it being 2 steps, one which imports the helper function and another which makes the changes.
-- Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify.
+- Since an editing system will depend your exact instructions, they must be precise. Include abridged code snippets and reasoning if it helps clarify but make sure the changes are complete and never leave core part of the logic or `// .. rest of the code` in the output
 - DO NOT suggest any changes for the files which you can not see in your context.
 - Your response must strictly follow the following schema:
 <response>

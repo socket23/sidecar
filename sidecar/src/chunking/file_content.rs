@@ -30,5 +30,6 @@ pub fn file_content_language_config() -> TSLanguageConfig {
         language_str: "*".to_owned(),
         object_qualifier: "".to_owned(),
         file_definitions_query: "".to_owned(),
+        required_parameter_types_for_functions: "".to_owned(),
     }
 }

@@ -129,6 +129,9 @@ pub struct TSLanguageConfig {
 
     /// Used to get the definitions for the file
     pub file_definitions_query: String,
+
+    /// Required parameters of functions query
+    pub required_parameter_types_for_functions: String,
 }
 
 impl TSLanguageConfig {

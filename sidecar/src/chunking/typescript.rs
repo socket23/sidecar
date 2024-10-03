@@ -276,6 +276,11 @@ pub fn typescript_language_config() -> TSLanguageConfig {
           
           (enum_declaration
             name: (identifier) @name.definition.enum) @definition.enum
-        "#.to_owned(),  
+        "#.to_owned(),
+        required_parameter_types_for_functions: r#"
+(required_parameter
+  type: (type_annotation) @type_annotation?
+)
+        "#.to_owned(),
     }
 }

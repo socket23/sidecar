@@ -29,7 +29,7 @@ use super::generator::StepGeneratorResponse;
 pub struct PlanAddRequest {
     plan_up_until_now: String,
     user_context: UserContext,
-    initial_user_query: String,
+    _initial_user_query: String,
     plan_add_query: String,
     recent_edits: DiffRecentChanges,
     _editor_url: String,
@@ -53,7 +53,7 @@ impl PlanAddRequest {
         Self {
             plan_up_until_now,
             user_context,
-            initial_user_query,
+            _initial_user_query: initial_user_query,
             plan_add_query,
             recent_edits,
             _editor_url: editor_url,

@@ -69,29 +69,31 @@ impl PlanService {
             .await
             .unwrap_or_default();
 
-        stream::iter(file_lsp_diagnostics)
-            .map(|mut diagnostic| async {
-                if let Ok(response) = self
-                    .tool_box
-                    .go_to_references(
-                        diagnostic.fs_file_path().to_owned(),
-                        diagnostic.range().start_position().clone(),
-                        message_properties.clone(),
-                    )
-                    .await
-                {
-                    let associated_files: Vec<String> = response
-                        .locations()
-                        .into_iter()
-                        .map(|location| location.fs_file_path().to_owned())
-                        .collect();
-                    diagnostic.set_associated_files(associated_files);
-                }
-                diagnostic
-            })
-            .buffer_unordered(10) // will this kill editor?
-            .collect::<Vec<_>>()
-            .await
+        // Do not expand over the lsp diagnostics yet
+        file_lsp_diagnostics
+        // stream::iter(file_lsp_diagnostics)
+        //     .map(|mut diagnostic| async {
+        //         if let Ok(response) = self
+        //             .tool_box
+        //             .go_to_references(
+        //                 diagnostic.fs_file_path().to_owned(),
+        //                 diagnostic.range().start_position().clone(),
+        //                 message_properties.clone(),
+        //             )
+        //             .await
+        //         {
+        //             let associated_files: Vec<String> = response
+        //                 .locations()
+        //                 .into_iter()
+        //                 .map(|location| location.fs_file_path().to_owned())
+        //                 .collect();
+        //             diagnostic.set_associated_files(associated_files);
+        //         }
+        //         diagnostic
+        //     })
+        //     .buffer_unordered(10) // will this kill editor? yep 💀
+        //     .collect::<Vec<_>>()
+        //     .await
     }
 
     /// Appends the step to the point after the checkpoint - diagnostics are included by default

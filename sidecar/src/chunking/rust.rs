@@ -217,5 +217,10 @@ pub fn rust_language_config() -> TSLanguageConfig {
             !trait) @reference.implementation
         "#
         .to_owned(),
+        required_parameter_types_for_functions: r#"
+(parameter
+    type: (type_identifier) @type_annotation?
+)"#
+        .to_owned(),
     }
 }

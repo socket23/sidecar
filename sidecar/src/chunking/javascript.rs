@@ -281,5 +281,6 @@ pub fn javascript_language_config() -> TSLanguageConfig {
         
         "#
         .to_owned(),
+        required_parameter_types_for_functions: "".to_owned(),
     }
 }

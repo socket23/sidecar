@@ -109,18 +109,16 @@ Based on the above, please update the steps after the checkpoint to incorporate 
         let steps = plan.steps();
 
         let checkpoint_index = context.checkpoint_index();
-        let initial_context = plan.initial_context(); // original plan context
+        // let initial_context = plan.initial_context(); // original plan context
 
         let steps_up_to_checkpoint = Self::format_steps(&steps[..checkpoint_index], 0);
 
         let steps_after_checkpoint =
             Self::format_steps(&steps[checkpoint_index..], checkpoint_index);
 
+        // remove initial context over here for now
         format!(
             r#"You are an assistant that helps update a plan based on new information.
-
-**Initial Context**:
-{}
 
 **User Query**:
 {}
@@ -135,7 +133,7 @@ Based on the above, please update the steps after the checkpoint to incorporate 
 {}
 
 Based on the above, please update the steps after the checkpoint to incorporate the new information and address the user's query. Provide the updated steps in a numbered list format."#,
-            initial_context,
+            // initial_context,
             context.update_query(),
             steps_up_to_checkpoint,
             steps_after_checkpoint,

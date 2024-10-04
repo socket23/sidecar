@@ -82,6 +82,7 @@ impl PlanService {
         &self,
         mut plan: Plan,
         query: String,
+        // we have to update the plan update context appropriately to the plan
         mut user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
         is_deep_reasoning: bool,
@@ -258,12 +259,11 @@ impl PlanService {
         Ok(Plan::new(
             plan_id.to_owned(),
             "Placeholder Title (to be computed)".to_owned(),
-            "".to_owned(),
+            user_context,
             query,
             plan_steps,
             plan_storage_path,
-        )
-        .with_user_context(user_context))
+        ))
     }
 
     /// gets all files_to_edit from PlanSteps up to index

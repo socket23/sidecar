@@ -177,13 +177,19 @@ impl PlanService {
             .map(|(file, errors)| {
                 let formatted_errors = errors
                     .iter()
-                    .map(|error| {
+                    .enumerate()
+                    .map(|(index, error)| {
                         format!(
-                            r#"Snippet: {}
+                            r#"#{}:
+---
+Snippet: {}
 Diagnostic: {}
 Files Affected: {}
 Quick fixes: {}
-Parameter hints: {}"#,
+Parameter hints: {}
+---
+"#,
+                            index + 1,
                             error.snippet(),
                             error.diagnostic_message(),
                             error.associated_files().map_or_else(

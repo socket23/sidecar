@@ -12,9 +12,9 @@ async fn main() {
     let file_diagnostic_input = FileDiagnosticsInput::new(path.to_owned(), editor_url, true);
     let file_diagnostic_client = FileDiagnostics::new();
 
-    let response = file_diagnostic_client
+    let _response = file_diagnostic_client
         .invoke(ToolInput::FileDiagnostics(file_diagnostic_input))
         .await;
 
-    dbg!(response);
+    // dbg!(response);
 }

@@ -77,7 +77,9 @@ use crate::agentic::tool::lsp::create_file::CreateFileRequest;
 use crate::agentic::tool::lsp::diagnostics::{
     DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
-use crate::agentic::tool::lsp::file_diagnostics::{DiagnosticMap, FileDiagnosticsInput, FileDiagnosticsOutput};
+use crate::agentic::tool::lsp::file_diagnostics::{
+    DiagnosticMap, FileDiagnosticsInput, FileDiagnosticsOutput,
+};
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
@@ -6043,10 +6045,7 @@ FILEPATH: {fs_file_path}
         )
         .map(|(fs_file_path, message_properties)| async move {
             let diagnostics = self
-                .get_file_diagnostics( 
-                    &fs_file_path,
-                    message_properties.clone(),
-                )
+                .get_file_diagnostics(&fs_file_path, message_properties.clone())
                 .await;
             let file_contents = self
                 .file_open(fs_file_path.to_owned(), message_properties)
@@ -9267,8 +9266,20 @@ FILEPATH: {fs_file_path}
     }
 
     /// Generates steps with diagnostics provided. This should also accept context one day.
-    pub async fn generate_steps_with_diagnostics(&self, user_query: &str, message_properties: SymbolEventMessageProperties, diagnostics: DiagnosticMap, is_deep_reasoning: bool) -> Result<Vec<PlanStep>, SymbolError> {
-        let step_generator_request = StepGeneratorRequest::new(user_query.to_owned(), is_deep_reasoning, message_properties.request_id_str().to_owned(), message_properties.editor_url()).with_diagnostics(diagnostics);
+    pub async fn generate_steps_with_diagnostics(
+        &self,
+        user_query: &str,
+        message_properties: SymbolEventMessageProperties,
+        diagnostics: DiagnosticMap,
+        is_deep_reasoning: bool,
+    ) -> Result<Vec<PlanStep>, SymbolError> {
+        let step_generator_request = StepGeneratorRequest::new(
+            user_query.to_owned(),
+            is_deep_reasoning,
+            message_properties.request_id_str().to_owned(),
+            message_properties.editor_url(),
+        )
+        .with_diagnostics(diagnostics);
         let plan_steps = self
             .tools
             .invoke(ToolInput::GenerateStep(step_generator_request))
@@ -9326,5 +9337,81 @@ FILEPATH: {fs_file_path}
             .ok_or(SymbolError::WrongToolOutput)?
             .into_plan_steps();
         Ok(plan_steps)
+    }
+
+    /// Captures the deep user context when required by using tree-sitter
+    pub async fn generate_deep_user_context(
+        &self,
+        user_context: UserContext,
+        message_properties: SymbolEventMessageProperties,
+    ) -> UserContext {
+        let variables = user_context
+            .variables
+            .iter()
+            .filter(|variable| variable.is_selection() || variable.is_code_symbol())
+            .collect::<Vec<_>>();
+        let file_paths = variables
+            .iter()
+            .filter(|variable| variable.is_selection() || variable.is_code_symbol())
+            .map(|variable| variable.fs_file_path.to_owned())
+            .collect::<HashSet<String>>();
+        // file path to clickable nodes where we can go deeper to get more context
+        let file_paths_to_clickable_nodes = stream::iter(
+            file_paths
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(file_path, message_properties)| async move {
+            let open_file_path = self
+                .file_open(file_path.to_owned(), message_properties.clone())
+                .await;
+            let clickable_function_nodes = open_file_path.map(|file_open_response| {
+                let language_parsing = self
+                    .editor_parsing
+                    .for_file_path(file_open_response.fs_file_path());
+                match language_parsing {
+                    Some(language_parsing) => {
+                        Some(language_parsing.generate_function_insights(
+                            file_open_response.contents_ref().as_bytes(),
+                        ))
+                    }
+                    None => None,
+                }
+            });
+            let flattened_result = clickable_function_nodes.ok().flatten();
+            flattened_result.map(|result| (file_path, result))
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .collect::<HashMap<_, _>>();
+
+        // now that we have clickable nodes and then we need to filter it to the variables
+        // which we can click on
+        let _filetered_file_paths_to_clickable_nodes = file_paths_to_clickable_nodes
+            .into_iter()
+            .map(|(fs_file_path, mut clickable_nodes)| {
+                clickable_nodes = clickable_nodes
+                    .into_iter()
+                    .filter(|(_, clickable_range)| {
+                        let variable_contains = variables
+                            .iter()
+                            .filter(|variable| &variable.fs_file_path == &fs_file_path)
+                            .any(|variable| {
+                                let variable_line = variable.start_position.line();
+                                clickable_range.contains_line(variable_line)
+                            });
+                        variable_contains
+                    })
+                    .collect::<Vec<_>>();
+                (fs_file_path, clickable_nodes)
+            })
+            .collect::<HashMap<_, _>>();
+
+        // Now we try to get the definition of these nodes we have to click and then
+        // go to the implementations of this
+        user_context
     }
 }

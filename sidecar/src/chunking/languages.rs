@@ -674,6 +674,39 @@ impl TSLanguageConfig {
         result
     }
 
+    /// Generate the return types and the function parameters which we can go-to-definition
+    /// on to learn more about the types
+    pub fn generate_function_insights(&self, source_code: &[u8]) -> Vec<(String, Range)> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(grammar())
+            .expect("for lanaguage parser from tree_sitter should not fail");
+        let tree = parser.parse(source_code, None).unwrap();
+        let required_parameter_types_for_functions =
+            self.required_parameter_types_for_functions.to_owned();
+        let node = tree.root_node();
+        let query = tree_sitter::Query::new(grammar(), &required_parameter_types_for_functions)
+            .expect("to work");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let query_captures = cursor.captures(&query, node, source_code);
+        let mut function_clickable_insights: Vec<(String, Range)> = vec![];
+        let mut range_set: HashSet<Range> = Default::default();
+        let source_code_vec = source_code.to_vec();
+        query_captures.into_iter().for_each(|capture| {
+            capture.0.captures.into_iter().for_each(|capture| {
+                let range = Range::for_tree_node(&capture.node);
+                let node_name =
+                    get_string_from_bytes(&source_code_vec, range.start_byte(), range.end_byte());
+                if !range_set.contains(&range) {
+                    range_set.insert(range);
+                    function_clickable_insights.push((node_name, range));
+                }
+            })
+        });
+        function_clickable_insights
+    }
+
     /// This function generates the tree by parsing the source code and can be
     /// used when we do not have the tree sitter tree already created
     pub fn generate_import_identifiers_fresh(&self, source_code: &[u8]) -> Vec<(String, Range)> {
@@ -3812,5 +3845,25 @@ export type IAideProbeProgress =
         assert_eq!(outline_nodes.len(), 2);
         assert!(outline_nodes[0].is_class_definition());
         assert!(outline_nodes[1].is_class_definition());
+    }
+
+    #[test]
+    fn test_function_required_parameters() {
+        let source_code = r#"fn something(a: A, b: B) -> Result<C, E> {
+            // something
+        }"#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("rust")
+            .expect("language config to be present");
+        let function_clickable_nodes =
+            ts_language_config.generate_function_insights(source_code.as_bytes());
+        assert_eq!(
+            function_clickable_nodes
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>(),
+            vec!["A", "B", "Result", "C", "E"]
+        );
     }
 }

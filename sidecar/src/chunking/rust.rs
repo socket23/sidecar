@@ -218,13 +218,10 @@ pub fn rust_language_config() -> TSLanguageConfig {
         "#
         .to_owned(),
         required_parameter_types_for_functions: r#"
-(parameter
-    type: (type_identifier) @type_annotation?
-)
 (
-    (type_identifier) @type_annotation
-    (#has-ancestor? @type_id "return_type")
-    (#has-ancestor? @type_id "function_item")
+  (type_identifier) @type_id
+  (#has-ancestor? @type_id "return_type")
+  (#has-ancestor? @type_id "function_item")
 )"#
         .to_owned(),
     }

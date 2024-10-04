@@ -200,8 +200,9 @@ impl PlanService {
             println!("gathering::deep_context");
             user_context = self
                 .tool_box
-                .generate_deep_user_context(user_context, message_properties.clone())
-                .await;
+                .generate_deep_user_context(user_context.clone(), message_properties.clone())
+                .await
+                .unwrap_or(user_context);
         }
         let plan_steps = self
             .tool_box

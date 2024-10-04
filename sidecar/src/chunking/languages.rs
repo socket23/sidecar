@@ -3866,4 +3866,20 @@ export type IAideProbeProgress =
             vec!["A", "B", "Result", "C", "E"]
         );
     }
+
+    #[test]
+    fn test_outline_nodes_parsing_rust_with_decorators() {
+        let source_code = r#"#[derive(Debug, Clone)]
+struct Something {
+    a: String,
+}"#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("rust")
+            .expect("language config to be present");
+        let outline_nodes =
+            ts_language_config.generate_outline_fresh(source_code.as_bytes(), "/tmp/something.rs");
+        println!("{:?}", &outline_nodes);
+        assert!(false);
+    }
 }

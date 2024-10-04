@@ -224,5 +224,10 @@ pub fn rust_language_config() -> TSLanguageConfig {
   (#has-ancestor? @type_id "function_item")
 )"#
         .to_owned(),
+        function_call_path: Some(
+            r#"function: (field_expression) @field_expression
+function: (scoped_identifier) @field_expression"#
+                .to_owned(),
+        ),
     }
 }

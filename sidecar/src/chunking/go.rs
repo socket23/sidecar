@@ -204,5 +204,6 @@ pub fn go_language_config() -> TSLanguageConfig {
         required_parameter_types_for_functions: r#"
 (parameter_declaration type: (type_identifier) @type_identifier)
 (parameter_declaration type: (qualified_type) @type_identifier)"#.to_owned(),
+        function_call_path: None,
     }
 }

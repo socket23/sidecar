@@ -282,5 +282,6 @@ pub fn typescript_language_config() -> TSLanguageConfig {
   type: (type_annotation) @type_annotation?
 )
         "#.to_owned(),
+        function_call_path: None,
     }
 }

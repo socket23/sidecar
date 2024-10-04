@@ -133,5 +133,6 @@ pub fn python_language_config() -> TSLanguageConfig {
         .to_owned(),
         // leave python empty for now
         required_parameter_types_for_functions: "".to_owned(),
+        function_call_path: None,
     }
 }

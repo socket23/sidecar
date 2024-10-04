@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use crate::chunking::text_document::{Position, Range};
+use crate::chunking::{
+    text_document::{Position, Range},
+    types::OutlineNode,
+};
 use async_recursion::async_recursion;
 use futures::{stream, StreamExt};
 use thiserror::Error;
@@ -137,6 +140,20 @@ Code Symbol
                 )
             }
         }
+    }
+
+    pub fn from_outline_node(outline_node: &OutlineNode) -> Self {
+        VariableInformation::create_selection(
+            outline_node.range().clone(),
+            outline_node.fs_file_path().to_owned(),
+            if outline_node.is_class() || outline_node.is_class_definition() {
+                format!("Definition for {}", outline_node.name())
+            } else {
+                format!("Implementation for {}", outline_node.name())
+            },
+            outline_node.content().content().to_owned(),
+            outline_node.content().language().to_owned(),
+        )
     }
 }
 

@@ -279,6 +279,16 @@ impl UserContext {
             .collect::<Vec<_>>()
     }
 
+    /// Grabs the file paths from the variables
+    pub fn file_paths_from_variables(&self) -> Vec<String> {
+        self.variables
+            .iter()
+            .map(|variable| variable.fs_file_path.to_owned())
+            .collect::<HashSet<String>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+    }
+
     /// Grabs the user provided context as a string which can be passed to LLMs for code editing
     ///
     /// This also de-duplicates the context as much as possible making this efficient

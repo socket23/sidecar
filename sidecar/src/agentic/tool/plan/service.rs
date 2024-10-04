@@ -113,7 +113,19 @@ impl PlanService {
             // - the files which we are present we keep that in the context
             // - figure out the new steps which we want and insert them
             let plan_until_now = plan.plan_until_point(checkpoint);
-            let files_until_checkpoint = plan.files_in_plan(checkpoint);
+            let mut files_until_checkpoint = plan.files_in_plan(checkpoint);
+            // inclued files which are in the variables but not in the user context
+            let file_path_in_variables = user_context
+                .file_paths_from_variables()
+                .into_iter()
+                .filter(|file_path| {
+                    // filter out any file which we already have until the checkpoint
+                    !files_until_checkpoint
+                        .iter()
+                        .any(|file_until_checkpoint| file_until_checkpoint == file_path)
+                })
+                .collect::<Vec<_>>();
+            files_until_checkpoint.extend(file_path_in_variables);
             let recent_edits = self
                 .tool_box
                 .recently_edited_files(

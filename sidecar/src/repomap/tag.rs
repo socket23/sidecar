@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -94,6 +95,20 @@ impl TagIndex {
             file_to_tags: HashMap::new(),
             path: path.to_path_buf(),
         }
+    }
+
+    pub async fn from_files(root_path: &Path, file_paths: Vec<String>) -> Self {
+        let mut index = TagIndex::new(root_path);
+        let mut files = HashMap::new();
+
+        for path in file_paths {
+            let content = fs::read(&path).unwrap();
+            files.insert(path, content);
+        }
+
+        index.generate_tag_index(files).await;
+
+        index
     }
 
     pub fn get_files(root: &Path) -> Result<HashMap<String, Vec<u8>>, FileError> {

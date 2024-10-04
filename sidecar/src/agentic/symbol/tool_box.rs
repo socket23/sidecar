@@ -6542,7 +6542,7 @@ FILEPATH: {fs_file_path}
         position: Position,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<GoToDefinitionResponse, SymbolError> {
-        let request = ToolInput::GoToDefinition(GoToDefinitionRequest::new(
+        let request = ToolInput::GoToTypeDefinition(GoToDefinitionRequest::new(
             fs_file_path.to_owned(),
             message_properties.editor_url().to_owned(),
             position,
@@ -6552,7 +6552,7 @@ FILEPATH: {fs_file_path}
             .await
             .map_err(|e| SymbolError::ToolError(e))?
             .go_to_type_definition_response()
-            .ok_or(SymbolError::WrongToolOutput)        
+            .ok_or(SymbolError::WrongToolOutput)
     }
 
     pub async fn go_to_definition(
@@ -9600,13 +9600,15 @@ FILEPATH: {fs_file_path}
         if function_call_ranges.is_none() {
             return Ok(vec![]);
         }
-        let mut function_call_ranges = function_call_ranges.expect("is_none to hold");
-        function_call_ranges = function_call_ranges
+        let function_call_ranges = function_call_ranges.expect("is_none to hold");
+        let function_call_ranges_with_diagnostic_range = function_call_ranges
             .into_iter()
-            .filter(|(_click_word, click_range)| {
+            .filter_map(|(click_word, click_range)| {
                 lsp_diagnositcs
                     .iter()
-                    .any(|diagnostic| click_range.contains_check_line_column(diagnostic.range()))
+                    .find(|diagnostic| click_range.contains_check_line_column(diagnostic.range()))
+                    .map(|diagnostic| diagnostic.range().clone())
+                    .map(|diagnostic_range| (click_word, click_range, diagnostic_range))
             })
             .collect::<Vec<_>>();
 
@@ -9614,14 +9616,14 @@ FILEPATH: {fs_file_path}
         // since the function call diagnostics going wrong is a sign that the LLM does not see the outline node type
         // for the
         let previous_word_click_ranges = stream::iter(
-            function_call_ranges
+            function_call_ranges_with_diagnostic_range
                 .into_iter()
                 .map(|function_call_range| (function_call_range, message_properties.clone())),
         )
         .map(|(function_call_range, message_properties)| async move {
             let go_to_previous_word = ToolInput::GoToPreviousWord(GoToPreviousWordRequest::new(
                 fs_file_path.to_owned(),
-                function_call_range.1.start_position(),
+                function_call_range.2.start_position(),
                 message_properties.editor_url(),
             ));
             let tool_output = self.tools.invoke(go_to_previous_word).await;
@@ -9672,11 +9674,6 @@ FILEPATH: {fs_file_path}
                 continue;
             }
             let first_definition = first_definition.expect("is_none to hold");
-            println!(
-                "tool_box::grab_type_definitions_worthy_using_diagnostics::word({})::definition_path({})",
-                &click_word,
-                first_definition.file_path()
-            );
             // try to filter out things here which are very common: Vec, Arc, Box etc, these are present in rustlib
             let is_blocklisted_definition = vec!["rustlib/src"]
                 .into_iter()

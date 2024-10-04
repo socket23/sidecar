@@ -9,15 +9,15 @@ use async_trait::async_trait;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GoToPreviousWordRequest {
     fs_file_path: String,
-    position: Position,
+    current_position: Position,
     editor_url: String,
 }
 
 impl GoToPreviousWordRequest {
-    pub fn new(fs_file_path: String, position: Position, editor_url: String) -> Self {
+    pub fn new(fs_file_path: String, current_position: Position, editor_url: String) -> Self {
         Self {
             fs_file_path,
-            position,
+            current_position,
             editor_url,
         }
     }

@@ -140,15 +140,14 @@ impl PlanService {
             if with_lsp_enrichment {
                 println!("plan_service::lsp_dignostics::enriching_context_using_tree_sitter");
                 for (fs_file_path, lsp_diagnostics) in diagnostics_grouped_by_file.iter() {
-                    let extra_variables = dbg!(
-                        self.tool_box
-                            .grab_type_definition_worthy_positions_using_diagnostics(
-                                fs_file_path,
-                                lsp_diagnostics.to_vec(),
-                                message_properties.clone(),
-                            )
-                            .await
-                    );
+                    let extra_variables = self
+                        .tool_box
+                        .grab_type_definition_worthy_positions_using_diagnostics(
+                            fs_file_path,
+                            lsp_diagnostics.to_vec(),
+                            message_properties.clone(),
+                        )
+                        .await;
                     if let Ok(extra_variables) = extra_variables {
                         user_context = user_context.add_variables(extra_variables);
                     }

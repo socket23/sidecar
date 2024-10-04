@@ -127,6 +127,15 @@ impl LSPDiagnosticError {
         self.metadata.parameter_hints.as_ref()
     }
 
+    pub fn user_variables(&self) -> Option<Vec<String>> {
+        self.metadata.user_variables.clone().map(|user_variables| {
+            user_variables
+                .into_iter()
+                .map(|user_variable| user_variable.to_xml())
+                .collect::<Vec<_>>()
+        })
+    }
+
     pub fn set_user_variables(&mut self, user_variables: Vec<VariableInformation>) {
         self.metadata.set_user_variables(user_variables);
     }

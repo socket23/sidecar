@@ -38,6 +38,8 @@ impl LSPDiagnosticsInput {
 pub struct Diagnostic {
     message: String,
     range: Range,
+    quick_fix_labels: Option<Vec<String>>,
+    parameter_hints: Option<Vec<String>>,
 }
 
 impl Diagnostic {
@@ -85,7 +87,12 @@ impl DiagnosticWithSnippet {
         file_contents: &str,
         fs_file_path: String,
     ) -> Result<Self, DiagnosticSnippetError> {
-        let Diagnostic { range, message } = diagnostic;
+        let Diagnostic {
+            range,
+            message,
+            quick_fix_labels: _,
+            parameter_hints: _,
+        } = diagnostic;
 
         let start_line = range.start_line();
         let end_line = range.end_line();

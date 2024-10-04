@@ -1,13 +1,14 @@
 //! Contains the LSP signal which might be sent from the editor
 //! For now, its just the diagnostics when we detect a change in the editor
 
-use crate::chunking::text_document::Range;
+use crate::{chunking::text_document::Range, user_context::types::VariableInformation};
 
 #[derive(Debug, Clone)]
 pub struct LSPDiagnostiErrorMetadata {
     associated_files: Option<Vec<String>>,
     quick_fix_labels: Option<Vec<String>>,
     parameter_hints: Option<Vec<String>>,
+    user_variables: Option<Vec<VariableInformation>>,
 }
 
 impl LSPDiagnostiErrorMetadata {
@@ -20,6 +21,7 @@ impl LSPDiagnostiErrorMetadata {
             associated_files,
             quick_fix_labels,
             parameter_hints,
+            user_variables: None,
         }
     }
 
@@ -57,6 +59,16 @@ impl LSPDiagnostiErrorMetadata {
                 .unwrap_or(parameter_hints),
         );
         self
+    }
+
+    fn set_user_variables(&mut self, user_variables: Vec<VariableInformation>) {
+        self.user_variables.as_mut().map(|self_user_variables| {
+            self_user_variables.extend(user_variables.clone());
+            self_user_variables
+        });
+        if self.user_variables.is_none() {
+            self.user_variables.replace(user_variables);
+        }
     }
 }
 
@@ -113,6 +125,10 @@ impl LSPDiagnosticError {
 
     pub fn parameter_hints(&self) -> Option<&Vec<String>> {
         self.metadata.parameter_hints.as_ref()
+    }
+
+    pub fn set_user_variables(&mut self, user_variables: Vec<VariableInformation>) {
+        self.metadata.set_user_variables(user_variables);
     }
 }
 

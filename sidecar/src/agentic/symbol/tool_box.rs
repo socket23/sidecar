@@ -9621,7 +9621,7 @@ FILEPATH: {fs_file_path}
     pub async fn grab_type_definition_worthy_positions_using_diagnostics(
         &self,
         fs_file_path: &str,
-        lsp_diagnositcs: Vec<LSPDiagnosticError>,
+        mut lsp_diagnositcs: Vec<LSPDiagnosticError>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<VariableInformation>, SymbolError> {
         let language_properties = self.editor_parsing.for_file_path(fs_file_path);
@@ -9697,9 +9697,10 @@ FILEPATH: {fs_file_path}
 
         let mut additional_outline_node_ids = vec![];
         let mut outline_nodes: HashMap<String, OutlineNode> = Default::default();
-        for (_lsp_diagnostic_index, click_word, click_range) in
+        for (lsp_diagnostic_index, click_word, click_range) in
             previous_word_click_ranges.into_iter()
         {
+            let mut current_outline_nodes = vec![];
             // here we want to invoke to go to type definition
             // and then we want to invoke go to implementations over here
             // get the outline nodes which we are interested in and then merge them
@@ -9762,6 +9763,7 @@ FILEPATH: {fs_file_path}
 
             // update state variables like outline_nodes hashmap and addition_outline_node_ids which we want
             // to track
+            current_outline_nodes.push(outline_node_containing_range.unique_identifier());
             additional_outline_node_ids.push(outline_node_containing_range.unique_identifier());
             outline_nodes.insert(
                 outline_node_containing_range.unique_identifier(),
@@ -9793,28 +9795,34 @@ FILEPATH: {fs_file_path}
                         message_properties.clone(),
                     )
                     .await?;
+
+                // do some state management over here, we want to keep track of this for the current
+                // lsp diagnostic
+                current_outline_nodes.push(outline_node_containing_range.unique_identifier());
+                if !additional_outline_node_ids.contains(&outline_node_containing_range.unique_identifier()) {
+                    additional_outline_node_ids.push(outline_node_containing_range.unique_identifier());
+                }
                 outline_nodes.insert(
                     outline_node_containing_range.unique_identifier(),
                     outline_node_containing_range,
                 );
             }
+
+            // now update the lsp diagnostics with the information we generated
+            lsp_diagnositcs.get_mut(lsp_diagnostic_index).map(|lsp_diagnostic| {
+                lsp_diagnostic.set_user_variables(current_outline_nodes.into_iter().filter_map(|current_outline_node| outline_nodes.get(&current_outline_node)).map(|outline_node| VariableInformation::from_outline_node(outline_node)).collect::<Vec<_>>());
+            });
         }
+
+        // converts everything to a variable information
+        // this is the type we use in user context and we keep it structured to reflect
+        // it on the UI
         let additional_user_variables = additional_outline_node_ids
             .into_iter()
             .filter_map(|outline_node_id| {
                 let outline_node = outline_nodes.remove(&outline_node_id);
                 outline_node.map(|outline_node| {
-                    VariableInformation::create_selection(
-                        outline_node.range().clone(),
-                        outline_node.fs_file_path().to_owned(),
-                        if outline_node.is_class() || outline_node.is_class_definition() {
-                            format!("Definition for {}", outline_node.name())
-                        } else {
-                            format!("Implementation for {}", outline_node.name())
-                        },
-                        outline_node.content().content().to_owned(),
-                        outline_node.content().language().to_owned(),
-                    )
+                    VariableInformation::from_outline_node(&outline_node)
                 })
             })
             .collect::<Vec<_>>();

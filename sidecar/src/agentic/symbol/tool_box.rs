@@ -9400,8 +9400,8 @@ FILEPATH: {fs_file_path}
                             .iter()
                             .filter(|variable| &variable.fs_file_path == &fs_file_path)
                             .any(|variable| {
-                                let variable_line = variable.start_position.line();
-                                clickable_range.contains_line(variable_line)
+                                // check if the variable range contains the clickable node we are interested in
+                                Range::new(variable.start_position.clone(), variable.end_position.clone()).contains_check_line(clickable_range)
                             });
                         variable_contains
                     })
@@ -9412,6 +9412,7 @@ FILEPATH: {fs_file_path}
 
         // Now we try to get the definition of these nodes we have to click and then
         // go to the implementations of this
+        let mut already_seen_outline_nodes: HashSet<String> = Default::default();
         let mut additional_user_variables = vec![];
         for (fs_file_path, clickable_nodes) in filtered_file_paths_to_clickable_nodes.into_iter() {
             for (click_word, click_range) in clickable_nodes.into_iter() {
@@ -9433,15 +9434,26 @@ FILEPATH: {fs_file_path}
                     continue;
                 }
                 let first_definition = go_to_definition.definitions().remove(0);
+                println!("tool_box::generate_outline_for_click_word::word({})::definition_path({})", &click_word, first_definition.file_path());
+                // try to filter out things here which are very common: Vec, Arc, Box etc, these are present in rustlib
+                let is_blocklisted_definition = vec!["rustlib/src"].into_iter().any(|path_fragment| first_definition.file_path().contains(&path_fragment));
+                if is_blocklisted_definition {
+                    println!("tool_box::generate_outline_for_click_word::word({})::is_blocklisted", &click_word);
+                    continue;
+                }
                 // now we want to get the outline node which contains this definition
                 let mut variables_for_clickable_nodes = vec![];
                 let outline_node_containing_range = self
                     .get_outline_node_for_range(
                         first_definition.range(),
-                        &fs_file_path,
+                        first_definition.file_path(),
                         message_properties.clone(),
                     )
                     .await?;
+                if already_seen_outline_nodes.contains(&outline_node_containing_range.unique_identifier()) {
+                    continue;
+                }
+                already_seen_outline_nodes.insert(outline_node_containing_range.unique_identifier());
                 variables_for_clickable_nodes.push(VariableInformation::create_selection(
                     outline_node_containing_range.range().clone(),
                     outline_node_containing_range.fs_file_path().to_owned(),
@@ -9455,7 +9467,7 @@ FILEPATH: {fs_file_path}
                 // now we want to get the implementations for the outline node
                 let go_to_implementations_response = self
                     .go_to_implementations_exact(
-                        &fs_file_path,
+                        outline_node_containing_range.fs_file_path(),
                         &outline_node_containing_range
                             .identifier_range()
                             .start_position(),
@@ -9467,7 +9479,6 @@ FILEPATH: {fs_file_path}
                     go_to_implementations_response.remove_implementations_vec();
 
                 // keep track of already seen outline nodes
-                let mut already_seen_outline_nodes: HashSet<String> = Default::default();
                 let mut implementation_short_outline_nodes = vec![];
                 for implementation_location in implementation_locations.into_iter() {
                     // find the outline node which contains these implementations

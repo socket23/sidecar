@@ -19,6 +19,10 @@ impl GoToDefinitionRequest {
             position,
         }
     }
+
+    pub fn editor_url(&self) -> &str {
+        &self.editor_url
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

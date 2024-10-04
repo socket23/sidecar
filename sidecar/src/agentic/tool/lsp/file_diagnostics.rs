@@ -18,6 +18,7 @@ pub struct FileDiagnostics {
 pub struct FileDiagnosticsInput {
     fs_file_path: String,
     editor_url: String,
+    with_suggestions: bool,
 }
 
 impl FileDiagnosticsInput {
@@ -25,7 +26,13 @@ impl FileDiagnosticsInput {
         Self {
             fs_file_path,
             editor_url,
+            with_suggestions: false,
         }
+    }
+
+    pub fn with_suggestions(mut self) -> Self {
+        self.with_suggestions = true;
+        self
     }
 }
 

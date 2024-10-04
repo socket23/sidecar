@@ -6032,7 +6032,7 @@ FILEPATH: {fs_file_path}
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    /// wait this method is actually epic
+    /// gets diagnostics and their snippets
     pub async fn get_lsp_diagnostics_for_files(
         &self,
         file_paths: Vec<String>,

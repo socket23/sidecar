@@ -1,24 +1,20 @@
-use sidecar::{
-    agentic::tool::{
-        input::ToolInput,
-        lsp::diagnostics::{LSPDiagnostics, LSPDiagnosticsInput},
-        r#type::Tool,
-    },
-    chunking::text_document::{Position, Range},
+use sidecar::agentic::tool::{
+    input::ToolInput,
+    lsp::file_diagnostics::{FileDiagnostics, FileDiagnosticsInput},
+    r#type::Tool,
 };
 
 #[tokio::main]
 async fn main() {
-    let path = "/Users/zi/codestory/sidecar/sidecar/src/agentic/symbol/events/input.rs";
-    let range = Range::new(Position::new(28, 0, 0), Position::new(33, 1, 0));
+    let path = "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/plan/plan.rs";
     let editor_url = "http://localhost:42427".to_owned();
 
-    let diagnostics_client = LSPDiagnostics::new();
+    let file_diagnostic_input = FileDiagnosticsInput::new(path.to_owned(), editor_url, true);
+    let file_diagnostic_client = FileDiagnostics::new();
 
-    let lsp_diagnostics_input =
-        LSPDiagnosticsInput::new(path.to_string(), range, editor_url.to_string());
-
-    let _ = diagnostics_client
-        .invoke(ToolInput::LSPDiagnostics(lsp_diagnostics_input))
+    let _response = file_diagnostic_client
+        .invoke(ToolInput::FileDiagnostics(file_diagnostic_input))
         .await;
+
+    // dbg!(response);
 }

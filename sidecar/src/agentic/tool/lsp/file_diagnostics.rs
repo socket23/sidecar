@@ -18,13 +18,15 @@ pub struct FileDiagnostics {
 pub struct FileDiagnosticsInput {
     fs_file_path: String,
     editor_url: String,
+    with_enrichment: bool,
 }
 
 impl FileDiagnosticsInput {
-    pub fn new(fs_file_path: String, editor_url: String) -> Self {
+    pub fn new(fs_file_path: String, editor_url: String, with_enrichment: bool) -> Self {
         Self {
             fs_file_path,
             editor_url,
+            with_enrichment,
         }
     }
 }

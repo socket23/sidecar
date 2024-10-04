@@ -6019,10 +6019,12 @@ FILEPATH: {fs_file_path}
         &self,
         fs_file_path: &str,
         message_properties: SymbolEventMessageProperties,
+        with_enrichment: bool,
     ) -> Result<FileDiagnosticsOutput, SymbolError> {
         let input = ToolInput::FileDiagnostics(FileDiagnosticsInput::new(
             fs_file_path.to_owned(),
             message_properties.editor_url().to_owned(),
+            with_enrichment,
         ));
         self.tools
             .invoke(input)
@@ -6032,11 +6034,12 @@ FILEPATH: {fs_file_path}
             .ok_or(SymbolError::WrongToolOutput)
     }
 
-    /// wait this method is actually epic
+    /// gets diagnostics and their snippets
     pub async fn get_lsp_diagnostics_for_files(
         &self,
         file_paths: Vec<String>,
         message_properties: SymbolEventMessageProperties,
+        with_enrichment: bool,
     ) -> Result<Vec<LSPDiagnosticError>, SymbolError> {
         let file_signals = stream::iter(
             file_paths
@@ -6045,7 +6048,7 @@ FILEPATH: {fs_file_path}
         )
         .map(|(fs_file_path, message_properties)| async move {
             let diagnostics = self
-                .get_file_diagnostics(&fs_file_path, message_properties.clone())
+                .get_file_diagnostics(&fs_file_path, message_properties.clone(), with_enrichment)
                 .await;
             let file_contents = self
                 .file_open(fs_file_path.to_owned(), message_properties)
@@ -6094,6 +6097,8 @@ FILEPATH: {fs_file_path}
                 diagnostic.snippet().to_owned(),
                 diagnostic.fs_file_path().to_owned(),
                 diagnostic.message().to_owned(),
+                diagnostic.quick_fix_labels().to_owned(),
+                diagnostic.parameter_hints().to_owned()
             )
         })
         .collect::<Vec<_>>();

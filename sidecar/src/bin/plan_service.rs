@@ -407,7 +407,7 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
                     println!("Fetching diagnostics for file: {}", file_path);
 
                     let file_diagnostics_input =
-                        FileDiagnosticsInput::new(file_path.to_string(), editor_url.clone());
+                        FileDiagnosticsInput::new(file_path.to_string(), editor_url.clone(), true);
 
                     let diagnostics_client = FileDiagnostics::new();
                     match diagnostics_client

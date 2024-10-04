@@ -126,6 +126,12 @@ impl Plan {
         &self.steps.len() - 1
     }
 
+    /// Combine current user context with the additional user context
+    pub fn combine_user_context(mut self, user_context: UserContext) -> Self {
+        self.user_context = self.user_context.add_variables(user_context.variables);
+        self
+    }
+
     pub fn plan_until_point(&self, checkpoint: usize) -> String {
         let plan_steps = self
             .steps

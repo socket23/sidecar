@@ -77,7 +77,8 @@ impl PlanService {
         file_lsp_diagnostics
     }
 
-    /// Appends the step to the point after the checkpoint - diagnostics are included by default
+    /// Appends the step to the point after the checkpoint
+    /// - diagnostics are included by default
     pub async fn append_steps(
         &self,
         mut plan: Plan,
@@ -155,6 +156,9 @@ impl PlanService {
                 }
             }
 
+            // update the user context with the one from current run
+            plan = plan.combine_user_context(user_context);
+
             let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
 
             let new_steps = self
@@ -163,7 +167,7 @@ impl PlanService {
                     plan_until_now,
                     plan.initial_user_query().to_owned(),
                     query,
-                    user_context,
+                    plan.user_context().clone(),
                     recent_edits,
                     message_properties,
                     is_deep_reasoning,

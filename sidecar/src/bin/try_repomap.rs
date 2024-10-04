@@ -1,5 +1,5 @@
 use sidecar::repomap::{tag::TagIndex, types::RepoMap};
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 #[tokio::main]
 async fn main() {

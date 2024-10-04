@@ -15,15 +15,11 @@ use llm_client::{
 use sidecar::{
     agentic::{
         symbol::{
-            events::{
-                input::{SymbolEventRequestId, SymbolInputEvent},
-                message_event::SymbolEventMessageProperties,
-            },
+            events::{input::SymbolEventRequestId, message_event::SymbolEventMessageProperties},
             identifier::LLMProperties,
             manager::SymbolManager,
         },
         tool::{
-            self,
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
         },
@@ -94,7 +90,7 @@ async fn main() {
            // ),
     ));
 
-    let user_context = UserContext::new(vec![], vec![], None, vec![]);
+    let _user_context = UserContext::new(vec![], vec![], None, vec![]);
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 

@@ -132,6 +132,11 @@ pub struct TSLanguageConfig {
 
     /// Required parameters of functions query
     pub required_parameter_types_for_functions: String,
+
+    /// Grabs the span of a function call for example in rust: a.b.c.d(bllbbbbbb)
+    /// this query can capture a.b.c.d (very useful when catching errors llm make with
+    /// function hallucinations)
+    pub function_call_path: Option<String>,
 }
 
 impl TSLanguageConfig {
@@ -672,6 +677,42 @@ impl TSLanguageConfig {
         }
 
         result
+    }
+
+    /// Generates the function call paths completely so we can use that for better
+    /// tactics when trying to handle or preempt some kind of errors which can arise
+    /// when the LLM is writing code
+    pub fn generate_function_call_paths(&self, source_code: &[u8]) -> Option<Vec<(String, Range)>> {
+        let grammar = self.grammar;
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(grammar())
+            .expect("for lanaguage parser from tree_sitter should not fail");
+        let tree = parser.parse(source_code, None).unwrap();
+        let function_call_path = self.function_call_path.to_owned();
+        let node = tree.root_node();
+        if function_call_path.is_none() {
+            return None;
+        }
+        let function_call_path_query = function_call_path.expect("is_none to hold");
+        let query = tree_sitter::Query::new(grammar(), &function_call_path_query).expect("to work");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let query_captures = cursor.captures(&query, node, source_code);
+        let mut function_call_paths: Vec<(String, Range)> = vec![];
+        let mut range_set: HashSet<Range> = Default::default();
+        let source_code_vec = source_code.to_vec();
+        query_captures.into_iter().for_each(|capture| {
+            capture.0.captures.into_iter().for_each(|capture| {
+                let range = Range::for_tree_node(&capture.node);
+                let node_name =
+                    get_string_from_bytes(&source_code_vec, range.start_byte(), range.end_byte());
+                if !range_set.contains(&range) {
+                    range_set.insert(range);
+                    function_call_paths.push((node_name, range));
+                }
+            })
+        });
+        Some(function_call_paths)
     }
 
     /// Generate the return types and the function parameters which we can go-to-definition
@@ -3881,5 +3922,30 @@ struct Something {
             ts_language_config.generate_outline_fresh(source_code.as_bytes(), "/tmp/something.rs");
         println!("{:?}", &outline_nodes);
         assert!(false);
+    }
+
+    #[test]
+    fn test_function_call_paths_capturing() {
+        let source_code = r#"
+fn something() {
+    let a = b.c.d.e.f(sdfsdfsdf);
+    let b = A::b::c(sdfsfsdfsdf);
+}
+"#;
+        let tree_sitter_parsing = TSLanguageParsing::init();
+        let ts_language_config = tree_sitter_parsing
+            .for_lang("rust")
+            .expect("language config to be present");
+        let function_call_paths =
+            ts_language_config.generate_function_call_paths(source_code.as_bytes());
+        assert!(function_call_paths.is_some());
+        let function_call_paths = function_call_paths.expect("assert! to hold");
+        assert_eq!(
+            vec!["b.c.d.e.f", "A::b::c"],
+            function_call_paths
+                .into_iter()
+                .map(|(symbol, _)| symbol)
+                .collect::<Vec<_>>()
+        );
     }
 }

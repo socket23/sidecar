@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::chunking::text_document::Position;
+use crate::chunking::text_document::{Position, Range};
 use async_recursion::async_recursion;
 use futures::{stream, StreamExt};
 use thiserror::Error;
@@ -39,6 +39,24 @@ pub struct VariableInformation {
 }
 
 impl VariableInformation {
+    /// Helps create a new custom selection with name provided by the system
+    pub fn create_selection(
+        range: Range,
+        fs_file_path: String,
+        name: String,
+        content: String,
+        language: String,
+    ) -> Self {
+        Self {
+            start_position: range.start_position(),
+            end_position: range.end_position(),
+            fs_file_path,
+            name,
+            variable_type: VariableType::Selection,
+            content,
+            language,
+        }
+    }
     pub fn is_selection(&self) -> bool {
         self.variable_type == VariableType::Selection
     }
@@ -195,6 +213,11 @@ impl UserContext {
         }
     }
 
+    pub fn add_variables(mut self, variables: Vec<VariableInformation>) -> Self {
+        self.variables.extend(variables);
+        self
+    }
+
     /// If we are in any part of the plan generation flow over here
     pub fn is_plan_generation_flow(&self) -> bool {
         self.is_plan_append()
@@ -253,6 +276,16 @@ impl UserContext {
                     Some(file_content.file_path.to_owned())
                 }
             })
+            .collect::<Vec<_>>()
+    }
+
+    /// Grabs the file paths from the variables
+    pub fn file_paths_from_variables(&self) -> Vec<String> {
+        self.variables
+            .iter()
+            .map(|variable| variable.fs_file_path.to_owned())
+            .collect::<HashSet<String>>()
+            .into_iter()
             .collect::<Vec<_>>()
     }
 
